@@ -4,34 +4,8 @@ import { GraphView } from './GraphView';
 import { SqlView } from './SqlView';
 import { ColumnPanel } from './ColumnPanel';
 import { IssuesPanel } from './IssuesPanel';
+import { StatementSelector } from './StatementSelector';
 import type { LineageExplorerProps } from '../types';
-
-interface StatementTabsProps {
-  className?: string;
-}
-
-function StatementTabs({ className }: StatementTabsProps): JSX.Element {
-  const { state, actions } = useLineage();
-  const { result, selectedStatementIndex } = state;
-
-  if (!result || result.statements.length <= 1) {
-    return <></>;
-  }
-
-  return (
-    <div className={`flowscope-statement-tabs ${className || ''}`}>
-      {result.statements.map((stmt, idx) => (
-        <button
-          key={idx}
-          className={`flowscope-tab ${idx === selectedStatementIndex ? 'flowscope-tab-active' : ''}`}
-          onClick={() => actions.selectStatement(idx)}
-        >
-          {idx + 1}: {stmt.statementType}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 interface SummaryBarProps {
   className?: string;
@@ -91,7 +65,7 @@ function LineageExplorerInner({
   return (
     <div className="flowscope-explorer-inner">
       <SummaryBar />
-      <StatementTabs />
+      <StatementSelector />
       <div className="flowscope-main-layout">
         <div className="flowscope-left-panel">
           <SqlView editable={!!onSqlChange} onChange={onSqlChange} />

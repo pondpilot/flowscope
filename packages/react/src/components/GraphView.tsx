@@ -17,6 +17,7 @@ import '@xyflow/react/dist/style.css';
 import { useLineage } from '../context';
 import type { GraphViewProps, TableNodeData, ColumnNodeInfo } from '../types';
 import type { Node, StatementLineage } from '@pondpilot/flowscope-core';
+import { getLayoutedElements } from '../utils/layout';
 
 const colors = {
   table: {
@@ -201,37 +202,19 @@ function buildFlowNodes(
   }
 
   const flowNodes: FlowNode[] = [];
-  let yOffset = 0;
 
-  for (const node of nodesByType.table) {
+  for (const node of [...nodesByType.table, ...nodesByType.cte]) {
     flowNodes.push({
       id: node.id,
       type: 'tableNode',
-      position: { x: 50, y: yOffset },
+      position: { x: 0, y: 0 },
       data: {
         label: node.label,
-        nodeType: 'table',
+        nodeType: node.type === 'cte' ? 'cte' : 'table',
         columns: tableColumnMap.get(node.id) || [],
         isSelected: node.id === selectedNodeId,
       } satisfies TableNodeData,
     });
-    yOffset += 150;
-  }
-
-  let cteX = 400;
-  for (const node of nodesByType.cte) {
-    flowNodes.push({
-      id: node.id,
-      type: 'tableNode',
-      position: { x: cteX, y: 50 },
-      data: {
-        label: node.label,
-        nodeType: 'cte',
-        columns: tableColumnMap.get(node.id) || [],
-        isSelected: node.id === selectedNodeId,
-      } satisfies TableNodeData,
-    });
-    cteX += 250;
   }
 
   return flowNodes;
@@ -256,23 +239,21 @@ export function GraphView({ className, onNodeClick }: GraphViewProps): JSX.Eleme
 
   const statement = result?.statements[selectedStatementIndex];
 
-  const initialNodes = useMemo(
-    () => (statement ? buildFlowNodes(statement, selectedNodeId) : []),
-    [statement, selectedNodeId]
-  );
+  const { layoutedNodes, layoutedEdges } = useMemo(() => {
+    if (!statement) return { layoutedNodes: [], layoutedEdges: [] };
+    const rawNodes = buildFlowNodes(statement, selectedNodeId);
+    const rawEdges = buildFlowEdges(statement);
+    const { nodes: ln, edges: le } = getLayoutedElements(rawNodes, rawEdges, 'LR');
+    return { layoutedNodes: ln, layoutedEdges: le };
+  }, [statement, selectedNodeId]);
 
-  const initialEdges = useMemo(
-    () => (statement ? buildFlowEdges(statement) : []),
-    [statement]
-  );
-
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [nodes, setNodes, onNodesChange] = useNodesState(layoutedNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(layoutedEdges);
 
   useEffect(() => {
-    setNodes(initialNodes);
-    setEdges(initialEdges);
-  }, [initialNodes, initialEdges, setNodes, setEdges]);
+    setNodes(layoutedNodes);
+    setEdges(layoutedEdges);
+  }, [layoutedNodes, layoutedEdges, setNodes, setEdges]);
 
   const handleNodeClick = useCallback(
     (_event: React.MouseEvent, node: FlowNode) => {

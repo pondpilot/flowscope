@@ -4,6 +4,7 @@ export { SqlView } from './components/SqlView';
 export { ColumnPanel } from './components/ColumnPanel';
 export { IssuesPanel } from './components/IssuesPanel';
 export { LineageExplorer } from './components/LineageExplorer';
+export { StatementSelector } from './components/StatementSelector';
 
 // Context and hooks
 export {

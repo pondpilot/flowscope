@@ -711,16 +711,16 @@ This document provides a detailed, phase-by-phase implementation checklist for F
   - [x] Group by severity (errors, warnings, info)
   - [x] Show issue count badges
   - [x] Format issue messages
-  - [ ] Make issue clickable → highlight in SqlView
+  - [x] Make issue clickable → highlight in SqlView
   - [x] Style with appropriate colors (red, yellow, blue)
   - [ ] Write tests
 
-- [ ] **StatementSelector component**
-  - [ ] Display when multiple statements exist
-  - [ ] Show statement index and type
-  - [ ] Highlight selected statement
-  - [ ] Emit onStatementSelect event
-  - [ ] Style as tab bar or dropdown
+- [x] **StatementSelector component**
+  - [x] Display when multiple statements exist
+  - [x] Show statement index and type
+  - [x] Highlight selected statement
+  - [x] Emit onStatementSelect event
+  - [x] Style as tab bar
   - [ ] Write tests
 
 ### 3.3 Composite Components
@@ -729,7 +729,7 @@ This document provides a detailed, phase-by-phase implementation checklist for F
   - [x] Compose GraphView, SqlView, ColumnPanel, IssuesPanel
   - [x] Accept AnalyzeResult as prop
   - [x] Accept SQL string as prop
-  - [ ] Add StatementSelector when needed
+  - [x] Add StatementSelector when needed
   - [x] Wire up component interactions (selection sync)
   - [x] Add responsive layout (grid or flex)
   - [ ] Support theme prop (light/dark)
@@ -745,11 +745,11 @@ This document provides a detailed, phase-by-phase implementation checklist for F
   - [x] Provide helper methods (selectNode, selectStatement)
   - [ ] Write tests
 
-- [ ] **Graph layout utilities**
-  - [ ] Implement table-only layout mode
+- [x] **Graph layout utilities**
+  - [x] Implement dagre-based layout (LR direction)
   - [ ] Implement table+column layout mode
-  - [ ] Position nodes to minimize edge crossings
-  - [ ] Add padding and spacing constants
+  - [x] Position nodes to minimize edge crossings
+  - [x] Add padding and spacing constants
   - [ ] Write tests
 
 - [x] **Span highlighting utilities**
