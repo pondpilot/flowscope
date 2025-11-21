@@ -84,7 +84,7 @@ INNER JOIN public.orders o ON u.id = o.user_id
 
 ```bash
 cd ../../crates/flowscope-wasm
-wasm-pack build --target web --out-dir ../../examples/web-demo/public/wasm
+wasm-pack build --target web --out-dir ../../app/public/wasm
 ```
 
 ## Current Features (Phase 0)

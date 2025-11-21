@@ -259,7 +259,7 @@ yarn build
 ### Phase 4: Build Example App
 
 ```bash
-cd examples/web-demo
+cd app
 yarn build
 ```
 
@@ -333,7 +333,7 @@ cd crates/flowscope-wasm
 cargo watch -x 'build --target wasm32-unknown-unknown'
 
 # Run demo app with hot reload
-cd examples/web-demo
+cd app
 yarn dev
 ```
 
@@ -353,7 +353,7 @@ yarn test:unit
 yarn test:integration
 
 # E2E tests for demo app
-cd examples/web-demo
+cd app
 yarn test:e2e
 ```
 

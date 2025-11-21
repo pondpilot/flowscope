@@ -154,11 +154,11 @@ cargo test --workspace
 
 # Build WASM
 cd crates/flowscope-wasm
-wasm-pack build --target web --out-dir ../../examples/web-demo/public/wasm
+wasm-pack build --target web --out-dir ../../app/public/wasm
 ✅ SUCCESS (1.68 MB bundle)
 
 # Test demo
-cd examples/web-demo && node test.js
+cd app && node test.js
 ✅ 3/3 tests passing
 ```
 
@@ -183,7 +183,7 @@ cd examples/web-demo && node test.js
 - [x] Create root package.json with workspace configuration
 - [x] Set up packages/core/ with package.json
 - [x] Set up packages/react/ with package.json
-- [x] Set up examples/web-demo/ with package.json
+- [x] Set up app/ with package.json
 - [x] Create tsconfig.base.json
 - [x] Add essential config files
 - [x] .prettierrc (Prettier config)
@@ -230,7 +230,7 @@ cd examples/web-demo && node test.js
 
 ### 0.4 Minimal Web Demo ✅
 - [x] Set up basic HTML page
-- [x] Create examples/web-demo/index.html
+- [x] Create app/index.html
 - [x] Add textarea for SQL input
 - [x] Add button to trigger analysis
 - [x] Add div to display results
@@ -305,7 +305,7 @@ cat QUICKSTART.md
 # See TODO.md lines 129-477 for detailed tasks
 
 # 4. Keep the demo running
-cd examples/web-demo
+cd app
 python3 -m http.server 8080
 # Open http://localhost:8080
 ```

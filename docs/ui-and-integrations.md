@@ -90,7 +90,7 @@ Libraries like ElkJS, Dagre, or Cytoscape.js are acceptable; the actual choice c
   - Override color palette and fonts.
   - Provide custom node renderers (for advanced integration scenarios) if practical.
 
-## 2. Example Web App (`examples/web-demo`)
+## 2. Example Web App (`app`)
 
 ### 2.1 Purpose
 

@@ -32,7 +32,7 @@ This document provides a detailed, phase-by-phase implementation checklist for F
   - [x] Create root `package.json` with workspace configuration
   - [x] Set up `packages/core/` with package.json
   - [x] Set up `packages/react/` with package.json (minimal for now)
-  - [x] Set up `examples/web-demo/` with package.json
+  - [x] Set up `app/` with package.json
   - [x] Create `tsconfig.base.json`
   - [x] Verify `yarn install` succeeds
 
@@ -87,7 +87,7 @@ This document provides a detailed, phase-by-phase implementation checklist for F
 ### 0.4 Minimal Web Demo
 
 - [x] **Set up basic HTML page**
-  - [x] Create `examples/web-demo/index.html`
+  - [x] Create `app/index.html`
   - [x] Add textarea for SQL input
   - [x] Add button to trigger analysis
   - [x] Add div to display results

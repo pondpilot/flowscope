@@ -13,7 +13,7 @@ FlowScope is a SQL lineage analysis engine that runs in the browser using WebAss
 ### 1. Run the Web Demo
 
 ```bash
-cd examples/web-demo
+cd app
 python3 -m http.server 8080
 ```
 
@@ -34,7 +34,7 @@ SELECT * FROM users JOIN orders ON users.id = orders.user_id
 cargo test --workspace
 
 # Web demo tests
-cd examples/web-demo && node test.js
+cd app && node test.js
 ```
 
 ## What's Working (Phase 0)
@@ -81,10 +81,10 @@ cargo test
 
 # 3. Build WASM
 cd crates/flowscope-wasm
-wasm-pack build --target web --out-dir ../../examples/web-demo/public/wasm
+wasm-pack build --target web --out-dir ../../app/public/wasm
 
 # 4. Test the demo
-cd ../../examples/web-demo
+cd ../../app
 node test.js
 ```
 
@@ -102,10 +102,10 @@ node test.js
 cargo watch -x test
 
 # Rebuild WASM when needed
-cd crates/flowscope-wasm && wasm-pack build --target web --out-dir ../../examples/web-demo/public/wasm
+cd crates/flowscope-wasm && wasm-pack build --target web --out-dir ../../app/public/wasm
 
 # Run demo
-cd examples/web-demo && python3 -m http.server 8080
+cd app && python3 -m http.server 8080
 ```
 
 ## Common Commands

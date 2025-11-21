@@ -77,7 +77,7 @@ cargo fmt
 ### Running the Demo
 
 ```bash
-cd examples/web-demo
+cd app
 yarn dev
 ```
 

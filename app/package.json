@@ -1,9 +1,9 @@
 {
-  "name": "web-demo",
+  "name": "@pondpilot/flowscope-app",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "FlowScope web demo application",
+  "description": "FlowScope web application for SQL lineage visualization",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
@@ -13,8 +13,8 @@
     "lint:fix": "eslint src --fix"
   },
   "dependencies": {
-    "@pondpilot/flowscope-core": "file:../../packages/core",
-    "@pondpilot/flowscope-react": "file:../../packages/react",
+    "@pondpilot/flowscope-core": "file:../packages/core",
+    "@pondpilot/flowscope-react": "file:../packages/react",
     "@radix-ui/react-select": "^2.2.6",
     "@radix-ui/react-slot": "^1.2.4",
     "class-variance-authority": "^0.7.1",

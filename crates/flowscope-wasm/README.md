@@ -9,7 +9,7 @@ WebAssembly bindings for flowscope-core.
 ## Building
 
 ```bash
-wasm-pack build --target web --out-dir ../../examples/web-demo/public/wasm
+wasm-pack build --target web --out-dir ../../app/public/wasm
 ```
 
 This will generate:
@@ -60,7 +60,7 @@ console.log(JSON.parse(result));
 ## Testing
 
 ```bash
-cd examples/web-demo
+cd app
 node test.js
 ```
 

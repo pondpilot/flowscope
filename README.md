@@ -50,7 +50,7 @@ FlowScope is a small stack of components:
   - `@pondpilot/flowscope-react` – React components for lineage visualization.
 
 - **Examples**
-  - `examples/web-demo` – Single-page React app showing FlowScope end-to-end.
+  - `app` – Single-page React app showing FlowScope end-to-end.
 
 You can use just the engine (`@pondpilot/flowscope-core`) or add the viewer on top.
 

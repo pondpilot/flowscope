@@ -59,7 +59,7 @@ Phase 0 has been successfully completed. We have proven that the core technology
 **Build Configuration:**
 - Tool: wasm-pack v0.13.1
 - Target: web
-- Output: examples/web-demo/public/wasm/
+- Output: app/public/wasm/
 
 **Bundle Metrics:**
 ```
@@ -275,17 +275,17 @@ cargo test
 
 # Build WASM
 cd crates/flowscope-wasm
-wasm-pack build --target web --out-dir ../../examples/web-demo/public/wasm
+wasm-pack build --target web --out-dir ../../app/public/wasm
 ```
 
 ### Run Demo
 ```bash
 # Option 1: Node.js test
-cd examples/web-demo
+cd app
 node test.js
 
 # Option 2: Browser (requires HTTP server)
-cd examples/web-demo
+cd app
 python3 -m http.server 8080
 # Then open http://localhost:8080 in browser
 ```
@@ -296,7 +296,7 @@ python3 -m http.server 8080
 cargo test --workspace
 
 # Just the WASM test
-cd examples/web-demo && node test.js
+cd app && node test.js
 ```
 
 ---

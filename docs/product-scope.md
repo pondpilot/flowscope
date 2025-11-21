@@ -156,4 +156,4 @@ Build a **client-side SQL lineage engine** that:
   - `flowscope-wasm` (Rust crate providing WASM exports).
   - `@pondpilot/flowscope-core` (NPM package: WASM loader + TS wrapper).
   - `@pondpilot/flowscope-react` (NPM package: React components).
-  - `/examples/web-demo` (SPA).
+  - `/app` (SPA).
