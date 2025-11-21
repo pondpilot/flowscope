@@ -644,25 +644,25 @@ This document provides a detailed, phase-by-phase implementation checklist for F
 
 ---
 
-## Phase 3: React Viewer & Full Demo
+## Phase 3: React Viewer & Full Demo (IN PROGRESS)
 
 **Goal:** Build polished React UI components for lineage visualization
 
 ### 3.1 Package Setup (@pondpilot/flowscope-react)
 
-- [ ] **Initialize package**
-  - [ ] Create packages/react/ structure
-  - [ ] Set up package.json
-  - [ ] Configure TypeScript
-  - [ ] Configure Tailwind CSS
-  - [ ] Add React 18 and ReactFlow as dependencies
-  - [ ] Add @pondpilot/flowscope-core as peer dependency
+- [x] **Initialize package**
+  - [x] Create packages/react/ structure
+  - [x] Set up package.json
+  - [x] Configure TypeScript
+  - [ ] Configure Tailwind CSS (using inline styles instead)
+  - [x] Add React 18 and ReactFlow as dependencies
+  - [x] Add @pondpilot/flowscope-core as peer dependency
 
-- [ ] **Set up build**
-  - [ ] Configure bundler (Bun or Rollup)
-  - [ ] Set up CSS processing
-  - [ ] Generate types (.d.ts)
-  - [ ] Test build output
+- [x] **Set up build**
+  - [x] Configure bundler (tsc)
+  - [x] Set up CSS processing
+  - [x] Generate types (.d.ts)
+  - [x] Test build output
 
 - [ ] **Set up testing**
   - [ ] Configure Jest for React
@@ -672,47 +672,47 @@ This document provides a detailed, phase-by-phase implementation checklist for F
 
 ### 3.2 Core Components
 
-- [ ] **GraphView component**
-  - [ ] Set up ReactFlow
-  - [ ] Convert lineage nodes to ReactFlow nodes
-  - [ ] Convert lineage edges to ReactFlow edges
-  - [ ] Implement table node renderer (custom)
-  - [ ] Implement column node renderer (custom)
-  - [ ] Add zoom/pan controls
+- [x] **GraphView component**
+  - [x] Set up ReactFlow
+  - [x] Convert lineage nodes to ReactFlow nodes
+  - [x] Convert lineage edges to ReactFlow edges
+  - [x] Implement table node renderer (custom)
+  - [x] Implement column node renderer (custom)
+  - [x] Add zoom/pan controls
   - [ ] Add layout algorithm (Dagre or ELK)
-  - [ ] Handle node selection
-  - [ ] Emit onNodeSelect event
-  - [ ] Style nodes (tables, CTEs, columns distinct)
+  - [x] Handle node selection
+  - [x] Emit onNodeSelect event
+  - [x] Style nodes (tables, CTEs, columns distinct)
   - [ ] Write tests
 
-- [ ] **ColumnPanel component**
-  - [ ] Display selected column details
+- [x] **ColumnPanel component**
+  - [x] Display selected column details
   - [ ] Show upstream columns (sources)
   - [ ] Show downstream columns (consumers)
-  - [ ] Show expression text
+  - [x] Show expression text
   - [ ] Show data flow path (A → B → C)
-  - [ ] Handle no selection state
-  - [ ] Style with Tailwind
+  - [x] Handle no selection state
+  - [x] Style with inline styles
   - [ ] Write tests
 
-- [ ] **SqlView component**
-  - [ ] Integrate CodeMirror 6
-  - [ ] Display SQL with syntax highlighting
-  - [ ] Highlight selected node spans
+- [x] **SqlView component**
+  - [x] Integrate CodeMirror 6
+  - [x] Display SQL with syntax highlighting
+  - [x] Highlight selected node spans
   - [ ] Highlight issue spans (errors in red, warnings in yellow)
   - [ ] Handle click on highlighted spans (select node)
-  - [ ] Add line numbers
+  - [x] Add line numbers
   - [ ] Make read-only
-  - [ ] Style with Tailwind
+  - [x] Style with inline styles
   - [ ] Write tests
 
-- [ ] **IssuesPanel component**
-  - [ ] Display list of issues
-  - [ ] Group by severity (errors, warnings, info)
-  - [ ] Show issue count badges
-  - [ ] Format issue messages
+- [x] **IssuesPanel component**
+  - [x] Display list of issues
+  - [x] Group by severity (errors, warnings, info)
+  - [x] Show issue count badges
+  - [x] Format issue messages
   - [ ] Make issue clickable → highlight in SqlView
-  - [ ] Style with appropriate colors (red, yellow, blue)
+  - [x] Style with appropriate colors (red, yellow, blue)
   - [ ] Write tests
 
 - [ ] **StatementSelector component**
@@ -725,24 +725,24 @@ This document provides a detailed, phase-by-phase implementation checklist for F
 
 ### 3.3 Composite Components
 
-- [ ] **LineageExplorer component**
-  - [ ] Compose GraphView, SqlView, ColumnPanel, IssuesPanel
-  - [ ] Accept AnalyzeResult as prop
-  - [ ] Accept SQL string as prop
+- [x] **LineageExplorer component**
+  - [x] Compose GraphView, SqlView, ColumnPanel, IssuesPanel
+  - [x] Accept AnalyzeResult as prop
+  - [x] Accept SQL string as prop
   - [ ] Add StatementSelector when needed
-  - [ ] Wire up component interactions (selection sync)
-  - [ ] Add responsive layout (grid or flex)
+  - [x] Wire up component interactions (selection sync)
+  - [x] Add responsive layout (grid or flex)
   - [ ] Support theme prop (light/dark)
-  - [ ] Export as main public component
+  - [x] Export as main public component
   - [ ] Write integration tests
 
 ### 3.4 Hooks & Utilities
 
-- [ ] **useLineageExplorer hook**
-  - [ ] Manage selected statement
-  - [ ] Manage selected node
-  - [ ] Sync selection across sub-components
-  - [ ] Provide helper methods (selectNode, selectStatement)
+- [x] **useLineageExplorer hook**
+  - [x] Manage selected statement
+  - [x] Manage selected node
+  - [x] Sync selection across sub-components
+  - [x] Provide helper methods (selectNode, selectStatement)
   - [ ] Write tests
 
 - [ ] **Graph layout utilities**
@@ -752,29 +752,29 @@ This document provides a detailed, phase-by-phase implementation checklist for F
   - [ ] Add padding and spacing constants
   - [ ] Write tests
 
-- [ ] **Span highlighting utilities**
-  - [ ] Map span offsets to CodeMirror decorations
+- [x] **Span highlighting utilities**
+  - [x] Map span offsets to CodeMirror decorations
   - [ ] Handle overlapping spans
   - [ ] Support multiple highlight colors
   - [ ] Write tests
 
 ### 3.5 Styling & Theming
 
-- [ ] **Create Tailwind theme**
-  - [ ] Define color palette (primary, secondary, accent)
-  - [ ] Define spacing scale
-  - [ ] Define typography
-  - [ ] Support dark mode (optional for v1)
+- [x] **Create theme**
+  - [x] Define color palette (primary, secondary, accent)
+  - [x] Define spacing scale
+  - [x] Define typography
+  - [x] Support dark mode
 
-- [ ] **Style all components**
-  - [ ] Use Tailwind utility classes
-  - [ ] Keep consistent spacing
-  - [ ] Ensure good contrast (accessibility)
-  - [ ] Add hover states
+- [x] **Style all components**
+  - [x] Use inline styles for library components
+  - [x] Keep consistent spacing
+  - [x] Ensure good contrast (accessibility)
+  - [x] Add hover states
   - [ ] Add focus states (keyboard nav)
 
-- [ ] **Support customization**
-  - [ ] Accept className prop on all components
+- [x] **Support customization**
+  - [x] Accept className prop on all components
   - [ ] Accept theme prop on LineageExplorer
   - [ ] Document customization options
 
@@ -800,33 +800,29 @@ This document provides a detailed, phase-by-phase implementation checklist for F
 
 ### 3.7 Example Demo App (Enhanced)
 
-- [ ] **Update demo app to use React components**
-  - [ ] Replace JSON view with LineageExplorer
+- [x] **Update demo app to use React components**
+  - [x] Replace JSON view with LineageExplorer
   - [ ] Keep option to show raw JSON (collapsible)
   - [ ] Add schema input (JSON textarea or file upload)
-  - [ ] Add example query library (dropdown)
-  - [ ] Add dialect selector
-  - [ ] Add "Analyze" button with loading state
+  - [x] Add example query library (dropdown)
+  - [x] Add dialect selector
+  - [x] Add "Analyze" button with loading state
 
-- [ ] **Add example queries**
-  - [ ] Simple SELECT
-  - [ ] JOIN query
-  - [ ] CTE query
-  - [ ] INSERT INTO SELECT
+- [x] **Add example queries**
+  - [x] Simple SELECT
+  - [x] JOIN query
+  - [x] CTE query
+  - [x] INSERT INTO SELECT
   - [ ] Complex dbt-style model
 
-- [ ] **Polish UI**
-  - [ ] Add header with logo/title
-  - [ ] Add footer with links (GitHub, docs)
+- [x] **Polish UI**
+  - [x] Add header with logo/title
+  - [x] Add footer with links (GitHub, docs)
   - [ ] Responsive layout (mobile-friendly)
   - [ ] Add error boundaries
   - [ ] Add help tooltips
-
-- [ ] **Deploy demo app**
-  - [ ] Set up Vercel or Netlify deployment
-  - [ ] Configure custom domain (optional)
-  - [ ] Add analytics (optional)
-  - [ ] Test in production
+  - [x] Add dark mode toggle
+  - [x] Migrate to shadcn-ui components (Button, Select)
 
 ### 3.8 Testing
 
@@ -1239,4 +1235,4 @@ These are not prioritized but captured for future consideration:
 
 ---
 
-Last Updated: 2025-11-21 (Phase 2 Complete)
+Last Updated: 2025-11-21 (Phase 3 In Progress)

@@ -1,0 +1,452 @@
+/* FlowScope React Components Styles */
+
+/* Variables */
+:root {
+  --flowscope-primary: #667eea;
+  --flowscope-secondary: #764ba2;
+  --flowscope-bg: #f8f9fa;
+  --flowscope-text: #333;
+  --flowscope-text-muted: #666;
+  --flowscope-border: #e2e8f0;
+  --flowscope-error: #c53030;
+  --flowscope-warning: #c05621;
+  --flowscope-info: #2b6cb0;
+  --flowscope-success: #2f855a;
+}
+
+/* Explorer Container */
+.flowscope-explorer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 600px;
+  background: var(--flowscope-bg);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: var(--flowscope-text);
+}
+
+.flowscope-explorer-inner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* Summary Bar */
+.flowscope-summary-bar {
+  display: flex;
+  gap: 1.5rem;
+  padding: 0.75rem 1rem;
+  background: white;
+  border-bottom: 1px solid var(--flowscope-border);
+}
+
+.flowscope-stat {
+  font-size: 0.875rem;
+  color: var(--flowscope-text-muted);
+}
+
+.flowscope-stat strong {
+  color: var(--flowscope-text);
+  margin-right: 0.25rem;
+}
+
+.flowscope-stat-error strong {
+  color: var(--flowscope-error);
+}
+
+/* Statement Tabs */
+.flowscope-statement-tabs {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.5rem 1rem;
+  background: white;
+  border-bottom: 1px solid var(--flowscope-border);
+  overflow-x: auto;
+}
+
+.flowscope-tab {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--flowscope-border);
+  border-radius: 4px;
+  background: white;
+  font-size: 0.875rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.flowscope-tab:hover {
+  background: var(--flowscope-bg);
+}
+
+.flowscope-tab-active {
+  background: linear-gradient(135deg, var(--flowscope-primary), var(--flowscope-secondary));
+  color: white;
+  border-color: transparent;
+}
+
+/* Main Layout */
+.flowscope-main-layout {
+  display: grid;
+  grid-template-columns: 300px 1fr 280px;
+  gap: 1px;
+  flex: 1;
+  min-height: 0;
+  background: var(--flowscope-border);
+}
+
+.flowscope-left-panel,
+.flowscope-center-panel,
+.flowscope-right-panel {
+  background: white;
+  overflow: auto;
+}
+
+.flowscope-left-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Graph View */
+.flowscope-graph-view {
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+}
+
+.flowscope-graph-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--flowscope-text-muted);
+}
+
+/* Table Nodes */
+.flowscope-table-node {
+  background: white;
+  border: 2px solid var(--flowscope-primary);
+  border-radius: 8px;
+  min-width: 150px;
+  font-size: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.flowscope-node-cte {
+  border-color: var(--flowscope-secondary);
+}
+
+.flowscope-node-selected {
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.4);
+}
+
+.flowscope-node-header {
+  padding: 8px 12px;
+  background: linear-gradient(135deg, var(--flowscope-primary), var(--flowscope-secondary));
+  color: white;
+  border-radius: 6px 6px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.flowscope-node-cte .flowscope-node-header {
+  background: var(--flowscope-secondary);
+}
+
+.flowscope-node-type {
+  font-size: 10px;
+  text-transform: uppercase;
+  opacity: 0.8;
+  padding: 2px 4px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.flowscope-node-label {
+  font-weight: 600;
+}
+
+.flowscope-node-columns {
+  padding: 4px 0;
+  border-top: 1px solid var(--flowscope-border);
+}
+
+.flowscope-node-column {
+  padding: 4px 12px;
+  font-family: monospace;
+  color: var(--flowscope-text-muted);
+}
+
+.flowscope-node-column:hover {
+  background: var(--flowscope-bg);
+}
+
+/* Edges */
+.flowscope-edge-data_flow {
+  stroke: var(--flowscope-primary);
+}
+
+.flowscope-edge-derivation {
+  stroke: var(--flowscope-secondary);
+  stroke-dasharray: 4;
+}
+
+/* SQL View */
+.flowscope-sql-view {
+  flex: 1;
+  min-height: 200px;
+  border-bottom: 1px solid var(--flowscope-border);
+}
+
+.flowscope-codemirror {
+  height: 100%;
+}
+
+.flowscope-codemirror .cm-editor {
+  height: 100%;
+}
+
+.flowscope-sql-highlight {
+  background-color: rgba(102, 126, 234, 0.3);
+  border-radius: 2px;
+}
+
+/* Panels Common */
+.flowscope-panel-header {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--flowscope-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.flowscope-panel-header h3 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.flowscope-panel-content {
+  padding: 1rem;
+}
+
+.flowscope-panel-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--flowscope-text-muted);
+  height: 100%;
+}
+
+.flowscope-hint {
+  color: var(--flowscope-text-muted);
+  font-size: 0.875rem;
+  font-style: italic;
+}
+
+.flowscope-badge {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: var(--flowscope-bg);
+  color: var(--flowscope-text-muted);
+  text-transform: uppercase;
+}
+
+/* Column Panel */
+.flowscope-column-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.flowscope-detail {
+  margin-bottom: 0.75rem;
+}
+
+.flowscope-label {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--flowscope-text-muted);
+  margin-bottom: 0.25rem;
+}
+
+.flowscope-detail code {
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 0.8rem;
+  background: var(--flowscope-bg);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.flowscope-section {
+  margin-top: 1rem;
+}
+
+.flowscope-section h4 {
+  font-size: 0.75rem;
+  color: var(--flowscope-text-muted);
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+}
+
+.flowscope-column-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.flowscope-column-item {
+  padding: 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: monospace;
+  font-size: 0.875rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.flowscope-column-item:hover {
+  background: var(--flowscope-bg);
+}
+
+.flowscope-expression {
+  font-size: 0.75rem;
+  color: var(--flowscope-text-muted);
+  background: var(--flowscope-bg);
+  padding: 2px 4px;
+  border-radius: 2px;
+}
+
+/* Issues Panel */
+.flowscope-issues-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.flowscope-issue-counts {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+}
+
+.flowscope-count-error {
+  color: var(--flowscope-error);
+}
+
+.flowscope-count-warning {
+  color: var(--flowscope-warning);
+}
+
+.flowscope-count-info {
+  color: var(--flowscope-info);
+}
+
+.flowscope-count-success {
+  color: var(--flowscope-success);
+}
+
+.flowscope-issue-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.flowscope-issue {
+  padding: 0.75rem;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.flowscope-issue:hover {
+  transform: translateX(2px);
+}
+
+.flowscope-issue-error {
+  background: #fff5f5;
+  border: 1px solid #fc8181;
+}
+
+.flowscope-issue-warning {
+  background: #fffaf0;
+  border: 1px solid #f6ad55;
+}
+
+.flowscope-issue-info {
+  background: #ebf8ff;
+  border: 1px solid #63b3ed;
+}
+
+.flowscope-issue-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.flowscope-severity {
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.flowscope-severity-error {
+  background: var(--flowscope-error);
+  color: white;
+}
+
+.flowscope-severity-warning {
+  background: var(--flowscope-warning);
+  color: white;
+}
+
+.flowscope-severity-info {
+  background: var(--flowscope-info);
+  color: white;
+}
+
+.flowscope-issue-code {
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: var(--flowscope-text-muted);
+}
+
+.flowscope-issue-message {
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.flowscope-issue-location {
+  font-size: 0.75rem;
+  color: var(--flowscope-text-muted);
+  margin-top: 0.25rem;
+  display: block;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .flowscope-main-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 400px auto;
+  }
+
+  .flowscope-left-panel {
+    order: 1;
+  }
+
+  .flowscope-center-panel {
+    order: 2;
+  }
+
+  .flowscope-right-panel {
+    order: 3;
+  }
+}

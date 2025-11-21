@@ -14,13 +14,23 @@
   },
   "dependencies": {
     "@pondpilot/flowscope-core": "file:../../packages/core",
+    "@pondpilot/flowscope-react": "file:../../packages/react",
+    "@radix-ui/react-select": "^2.2.6",
+    "@radix-ui/react-slot": "^1.2.4",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.554.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@vitejs/plugin-react": "^4.2.0",
+    "autoprefixer": "^10.4.22",
+    "postcss": "^8.5.6",
+    "tailwindcss": "3.4.0",
     "typescript": "^5.0.0",
     "vite": "^5.0.0",
     "vite-plugin-top-level-await": "^1.6.0",

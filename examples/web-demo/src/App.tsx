@@ -1,6 +1,17 @@
 import { useState, useEffect } from 'react';
 import { initWasm, analyzeSql } from '@pondpilot/flowscope-core';
+import { LineageExplorer } from '@pondpilot/flowscope-react';
+import '@pondpilot/flowscope-react/styles.css';
 import type { AnalyzeResult, Dialect } from '@pondpilot/flowscope-core';
+import { Button } from './components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './components/ui/select';
+import { Play, Moon, Sun } from 'lucide-react';
 
 const EXAMPLE_QUERIES = [
   {
@@ -40,16 +51,27 @@ JOIN recent_orders ro ON au.id = ro.user_id`,
 function App() {
   const [sql, setSql] = useState(EXAMPLE_QUERIES[0].sql);
   const [dialect, setDialect] = useState<Dialect>('postgres');
+  const [selectedExample, setSelectedExample] = useState(EXAMPLE_QUERIES[0].name);
   const [result, setResult] = useState<AnalyzeResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [wasmReady, setWasmReady] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    return false;
+  });
 
   useEffect(() => {
     initWasm()
       .then(() => setWasmReady(true))
       .catch((err) => setError(`Failed to load WASM: ${err.message}`));
   }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', darkMode);
+  }, [darkMode]);
 
   const handleAnalyze = async () => {
     if (!wasmReady) return;
@@ -68,138 +90,101 @@ function App() {
     }
   };
 
+  const handleSqlChange = (newSql: string) => {
+    setSql(newSql);
+  };
+
+  const handleExampleChange = (name: string) => {
+    setSelectedExample(name);
+    const example = EXAMPLE_QUERIES.find((q) => q.name === name);
+    if (example) setSql(example.sql);
+    setResult(null);
+    setError(null);
+  };
+
   return (
-    <div className="app">
-      <header>
-        <h1>FlowScope</h1>
-        <p>SQL Lineage Analysis Engine</p>
+    <div className="flex flex-col h-full bg-background text-foreground">
+      <header className="flex items-center justify-between px-4 py-3 border-b border-border bg-background-secondary-light dark:bg-background-secondary-dark">
+        <div className="flex items-center gap-3">
+          <h1 className="text-lg font-semibold text-brand-blue-500 dark:text-brand-blue-400">
+            FlowScope
+          </h1>
+          <span className="text-sm text-text-secondary-light dark:text-text-secondary-dark">
+            SQL Lineage Analysis
+          </span>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setDarkMode(!darkMode)}
+          className="text-text-secondary-light dark:text-text-secondary-dark"
+        >
+          {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+        </Button>
       </header>
 
-      <main>
-        <div className="controls">
-          <div className="input-group">
-            <label htmlFor="dialect">Dialect:</label>
-            <select
-              id="dialect"
-              value={dialect}
-              onChange={(e) => setDialect(e.target.value as Dialect)}
-            >
-              <option value="generic">Generic</option>
-              <option value="postgres">PostgreSQL</option>
-              <option value="snowflake">Snowflake</option>
-              <option value="bigquery">BigQuery</option>
-            </select>
-          </div>
+      <div className="flex items-center gap-3 px-4 py-2 border-b border-border bg-background-secondary-light dark:bg-background-secondary-dark">
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-text-secondary-light dark:text-text-secondary-dark">
+            Dialect:
+          </label>
+          <Select value={dialect} onValueChange={(v) => setDialect(v as Dialect)}>
+            <SelectTrigger className="w-32 h-8">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="generic">Generic</SelectItem>
+              <SelectItem value="postgres">PostgreSQL</SelectItem>
+              <SelectItem value="snowflake">Snowflake</SelectItem>
+              <SelectItem value="bigquery">BigQuery</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
-          <div className="input-group">
-            <label htmlFor="examples">Examples:</label>
-            <select
-              id="examples"
-              onChange={(e) => {
-                const example = EXAMPLE_QUERIES.find((q) => q.name === e.target.value);
-                if (example) setSql(example.sql);
-              }}
-            >
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-text-secondary-light dark:text-text-secondary-dark">
+            Example:
+          </label>
+          <Select value={selectedExample} onValueChange={handleExampleChange}>
+            <SelectTrigger className="w-44 h-8">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
               {EXAMPLE_QUERIES.map((q) => (
-                <option key={q.name} value={q.name}>
+                <SelectItem key={q.name} value={q.name}>
                   {q.name}
-                </option>
+                </SelectItem>
               ))}
-            </select>
-          </div>
+            </SelectContent>
+          </Select>
         </div>
 
-        <div className="sql-input">
-          <label htmlFor="sql">SQL Query:</label>
-          <textarea
-            id="sql"
-            value={sql}
-            onChange={(e) => setSql(e.target.value)}
-            rows={10}
-            placeholder="Enter your SQL here..."
-          />
-        </div>
-
-        <button onClick={handleAnalyze} disabled={!wasmReady || loading}>
+        <Button onClick={handleAnalyze} disabled={!wasmReady || loading} size="sm" className="gap-1">
+          <Play className="h-4 w-4" />
           {loading ? 'Analyzing...' : 'Analyze'}
-        </button>
+        </Button>
+      </div>
 
-        {error && <div className="error">{error}</div>}
+      {error && (
+        <div className="px-4 py-2 bg-error-light/10 dark:bg-error-dark/10 text-error-light dark:text-error-dark text-sm">
+          {error}
+        </div>
+      )}
 
-        {result && (
-          <div className="results">
-            <h2>Analysis Results</h2>
-
-            <div className="summary">
-              <h3>Summary</h3>
-              <ul>
-                <li>Statements: {result.summary.statementCount}</li>
-                <li>Tables/CTEs: {result.summary.tableCount}</li>
-                <li>Errors: {result.summary.issueCount.errors}</li>
-                <li>Warnings: {result.summary.issueCount.warnings}</li>
-              </ul>
-            </div>
-
-            {result.issues.length > 0 && (
-              <div className="issues">
-                <h3>Issues</h3>
-                {result.issues.map((issue, i) => (
-                  <div key={i} className={`issue ${issue.severity}`}>
-                    <strong>[{issue.code}]</strong> {issue.message}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {result.statements.map((stmt, idx) => (
-              <div key={idx} className="statement">
-                <h3>
-                  Statement {idx + 1}: {stmt.statementType}
-                </h3>
-
-                <div className="nodes">
-                  <h4>Tables/CTEs ({stmt.nodes.length})</h4>
-                  <div className="node-list">
-                    {stmt.nodes.map((node) => (
-                      <span key={node.id} className={`node ${node.type}`}>
-                        {node.label}
-                        <span className="type">({node.type})</span>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                {stmt.edges.length > 0 && (
-                  <div className="edges">
-                    <h4>Edges ({stmt.edges.length})</h4>
-                    <ul>
-                      {stmt.edges.map((edge) => (
-                        <li key={edge.id}>
-                          {edge.from.split('_').pop()} → {edge.to.split('_').pop()}
-                          {edge.operation && <span className="op"> ({edge.operation})</span>}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            ))}
-
-            <details className="raw-json">
-              <summary>Raw JSON</summary>
-              <pre>{JSON.stringify(result, null, 2)}</pre>
-            </details>
-          </div>
-        )}
+      <main className="flex-1 overflow-hidden">
+        <LineageExplorer result={result} sql={sql} onSqlChange={handleSqlChange} />
       </main>
 
-      <footer>
-        <p>
-          FlowScope v0.1.0 | Built with Rust + WASM |{' '}
-          <a href="https://github.com/pondpilot/flowscope" target="_blank" rel="noreferrer">
-            GitHub
-          </a>
-        </p>
+      <footer className="px-4 py-2 border-t border-border text-xs text-text-tertiary-light dark:text-text-tertiary-dark bg-background-secondary-light dark:bg-background-secondary-dark">
+        FlowScope v0.1.0 | Built with Rust + WASM |{' '}
+        <a
+          href="https://github.com/pondpilot/flowscope"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-accent-light dark:text-accent-dark hover:underline"
+        >
+          GitHub
+        </a>
       </footer>
     </div>
   );

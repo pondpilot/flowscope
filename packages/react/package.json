@@ -2,19 +2,51 @@
   "name": "@pondpilot/flowscope-react",
   "version": "0.1.0",
   "description": "React components for FlowScope SQL lineage visualization",
+  "type": "module",
   "main": "dist/index.js",
+  "module": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./styles.css": {
+      "import": "./dist/styles.css",
+      "default": "./dist/styles.css"
+    }
+  },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "echo 'Build will be implemented in Phase 3'",
-    "test": "echo 'Tests will be implemented in Phase 3'",
+    "build": "tsc && cp src/styles.css dist/styles.css",
+    "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
   },
   "peerDependencies": {
     "react": ">=18.0.0",
+    "react-dom": ">=18.0.0",
     "@pondpilot/flowscope-core": "^0.1.0"
+  },
+  "dependencies": {
+    "@codemirror/autocomplete": "^6.18.0",
+    "@codemirror/lang-sql": "^6.8.0",
+    "@codemirror/language": "^6.10.0",
+    "@codemirror/lint": "^6.8.0",
+    "@codemirror/search": "^6.5.0",
+    "@codemirror/state": "^6.4.0",
+    "@codemirror/theme-one-dark": "^6.1.0",
+    "@codemirror/view": "^6.35.0",
+    "@uiw/react-codemirror": "^4.23.6",
+    "@xyflow/react": "^12.3.6",
+    "codemirror": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "typescript": "^5.0.0"
   },
   "keywords": [
     "sql",

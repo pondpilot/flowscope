@@ -1,265 +1,114 @@
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 99%;
+    --foreground: 220 7% 14%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 7% 14%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 7% 14%;
+    --primary: 232 46% 52%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 216 21% 96%;
+    --secondary-foreground: 220 7% 14%;
+    --muted: 216 21% 96%;
+    --muted-foreground: 220 7% 47%;
+    --accent: 232 46% 52%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 347 86% 61%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 7% 86%;
+    --input: 220 7% 86%;
+    --ring: 232 46% 52%;
+    --radius: 0.375rem;
+  }
+
+  .dark {
+    --background: 218 23% 17%;
+    --foreground: 0 0% 99%;
+    --card: 218 23% 17%;
+    --card-foreground: 0 0% 99%;
+    --popover: 218 23% 17%;
+    --popover-foreground: 0 0% 99%;
+    --primary: 231 100% 65%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 218 23% 25%;
+    --secondary-foreground: 0 0% 99%;
+    --muted: 218 23% 25%;
+    --muted-foreground: 215 21% 71%;
+    --accent: 231 100% 65%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 347 86% 61%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 215 27% 44%;
+    --input: 215 27% 44%;
+    --ring: 231 100% 65%;
+  }
 }
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: #f5f5f5;
-  color: #333;
-  line-height: 1.6;
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body,
+  #root {
+    @apply h-full m-0 p-0;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
 }
 
-.app {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 1rem;
+/* CodeMirror customizations */
+.cm-editor {
+  @apply bg-transparent;
+  font-family: 'IBM Plex Mono', monospace !important;
 }
 
-header {
-  text-align: center;
-  padding: 2rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border-radius: 8px;
-  margin-bottom: 2rem;
+.cm-content {
+  font-family: 'IBM Plex Mono', monospace !important;
 }
 
-header h1 {
-  font-size: 2.5rem;
-  margin-bottom: 0.5rem;
-}
-
-main {
-  background: white;
-  padding: 2rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.controls {
-  display: flex;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.input-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.input-group label {
-  font-weight: 600;
-  font-size: 0.9rem;
-}
-
-select {
-  padding: 0.5rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 1rem;
-}
-
-.sql-input {
-  margin-bottom: 1rem;
-}
-
-.sql-input label {
-  display: block;
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-}
-
-textarea {
-  width: 100%;
-  padding: 1rem;
-  font-family: 'Monaco', 'Menlo', monospace;
-  font-size: 0.9rem;
-  border: 2px solid #ddd;
-  border-radius: 4px;
-  resize: vertical;
-}
-
-textarea:focus {
+.cm-editor.cm-focused {
   outline: none;
-  border-color: #667eea;
 }
 
-button {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  padding: 0.75rem 2rem;
-  font-size: 1rem;
-  font-weight: 600;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: transform 0.2s, opacity 0.2s;
+.cm-gutterElement {
+  font-family: 'IBM Plex Mono', monospace;
+  padding-left: 10px !important;
 }
 
-button:hover:not(:disabled) {
-  transform: translateY(-1px);
+/* ReactFlow customizations */
+.react-flow__node {
+  @apply !cursor-grab active:!cursor-grabbing;
 }
 
-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.react-flow__handle {
+  @apply !w-2.5 !h-2.5 !bg-blue-500;
 }
 
-.error {
-  background: #fff5f5;
-  border: 1px solid #fc8181;
-  color: #c53030;
-  padding: 1rem;
-  border-radius: 4px;
-  margin-top: 1rem;
+.react-flow__minimap {
+  @apply !bg-background-secondary-light dark:!bg-background-secondary-dark !border !border-border-light dark:!border-border-dark rounded;
 }
 
-.results {
-  margin-top: 2rem;
+.react-flow__controls {
+  @apply !border !border-border-light dark:!border-border-dark !rounded !shadow-md;
 }
 
-.results h2 {
-  color: #667eea;
-  margin-bottom: 1rem;
+.react-flow__controls button {
+  @apply !bg-white dark:!bg-slate-800 !border-border-light dark:!border-border-dark hover:!bg-slate-100 dark:hover:!bg-slate-700;
 }
 
-.summary {
-  background: #f8f9fa;
-  padding: 1rem;
-  border-radius: 4px;
-  margin-bottom: 1rem;
+.react-flow__controls button svg {
+  @apply fill-slate-700 dark:fill-slate-300;
 }
 
-.summary h3 {
-  margin-bottom: 0.5rem;
-}
-
-.summary ul {
-  list-style: none;
-  display: flex;
-  gap: 2rem;
-}
-
-.issues {
-  margin-bottom: 1rem;
-}
-
-.issues h3 {
-  margin-bottom: 0.5rem;
-}
-
-.issue {
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
-  margin-bottom: 0.5rem;
-}
-
-.issue.error {
-  background: #fff5f5;
-  border: 1px solid #fc8181;
-  color: #c53030;
-}
-
-.issue.warning {
-  background: #fffaf0;
-  border: 1px solid #f6ad55;
-  color: #c05621;
-}
-
-.issue.info {
-  background: #ebf8ff;
-  border: 1px solid #63b3ed;
-  color: #2b6cb0;
-}
-
-.statement {
-  background: #f8f9fa;
-  padding: 1rem;
-  border-radius: 4px;
-  margin-bottom: 1rem;
-}
-
-.statement h3 {
-  color: #667eea;
-  margin-bottom: 0.5rem;
-}
-
-.nodes h4,
-.edges h4 {
-  font-size: 0.9rem;
-  color: #666;
-  margin-bottom: 0.5rem;
-}
-
-.node-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.node {
-  padding: 0.25rem 0.75rem;
-  border-radius: 4px;
-  font-family: monospace;
-  font-size: 0.9rem;
-}
-
-.node.table {
-  background: #667eea;
-  color: white;
-}
-
-.node.cte {
-  background: #764ba2;
-  color: white;
-}
-
-.node .type {
-  opacity: 0.7;
-  font-size: 0.8em;
-  margin-left: 0.25rem;
-}
-
-.edges ul {
-  list-style: none;
-  font-family: monospace;
-  font-size: 0.9rem;
-}
-
-.edges .op {
-  color: #666;
-  font-style: italic;
-}
-
-.raw-json {
-  margin-top: 1rem;
-}
-
-.raw-json summary {
-  cursor: pointer;
-  font-weight: 600;
-  color: #667eea;
-}
-
-.raw-json pre {
-  background: #2d3748;
-  color: #fff;
-  padding: 1rem;
-  border-radius: 4px;
-  overflow-x: auto;
-  font-size: 0.8rem;
-  margin-top: 0.5rem;
-}
-
-footer {
-  text-align: center;
-  padding: 2rem;
-  color: #666;
-}
-
-footer a {
-  color: #667eea;
+.react-flow__background {
+  @apply !bg-background-primary-light dark:!bg-background-primary-dark;
 }
