@@ -1,5 +1,8 @@
 # FlowScope – In-Browser SQL Lineage Engine
 
+[![CI](https://github.com/pondpilot/flowscope/actions/workflows/ci.yml/badge.svg)](https://github.com/pondpilot/flowscope/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
 FlowScope is a **client-side SQL lineage engine** that runs entirely in the browser using **Rust + WebAssembly**, with a **TypeScript API** and optional **React viewer components**.
 
 It parses SQL, understands your CTEs, joins, inserts, and unions, and returns a **lineage graph** (tables + columns + edges) that you can render or analyze in your own tools.
@@ -126,7 +129,7 @@ pnpm add @pondpilot/flowscope-react
 
 ### 1. Analyze a query
 
-This example shows how to analyze a simple Snowflake query in a browser app and inspect the result.
+This example shows how to analyze a simple query and inspect the result.
 
 ```ts
 import {
@@ -146,41 +149,34 @@ async function runExample(): Promise<void> {
   const request: AnalyzeRequest = {
     sql: `
       WITH recent_orders AS (
-        SELECT
-          o.order_id,
-          o.customer_id,
-          o.amount
-        FROM analytics.orders o
-        WHERE o.order_date >= DATEADD(day, -30, CURRENT_DATE)
+        SELECT order_id, customer_id, amount
+        FROM analytics.orders
+        WHERE order_date >= CURRENT_DATE - 30
       )
       INSERT INTO analytics.order_summary (customer_id, total_amount)
-      SELECT
-        r.customer_id,
-        SUM(r.amount) AS total_amount
-      FROM recent_orders r
-      GROUP BY r.customer_id;
+      SELECT customer_id, SUM(amount) AS total_amount
+      FROM recent_orders
+      GROUP BY customer_id;
     `,
-    options: {
-      dialect: "snowflake",           // "generic" | "postgres" | "snowflake" | "bigquery"
-      enableColumnLineage: true,
-    },
-    // Optional schema metadata – this allows FlowScope to expand "*" correctly.
-    // Keys are fully-qualified table names (pick a convention and stick to it).
+    dialect: "postgres",  // "generic" | "postgres" | "snowflake" | "bigquery"
+    // Optional schema metadata – this allows FlowScope to validate table references.
     schema: {
-      tables: {
-        "analytics.orders": ["order_id", "customer_id", "amount", "order_date"],
-        "analytics.order_summary": ["customer_id", "total_amount"],
-      },
+      defaultSchema: "analytics",
+      tables: [
+        { name: "orders", columns: [{ name: "order_id" }, { name: "customer_id" }, { name: "amount" }, { name: "order_date" }] },
+        { name: "order_summary", columns: [{ name: "customer_id" }, { name: "total_amount" }] },
+      ],
     },
   };
 
   // 3. Analyze the SQL.
   const result: AnalyzeResult = await analyzeSql(request);
 
-  // 4. Inspect the result (you can also pass this directly to a viewer).
+  // 4. Inspect the result.
   console.log("Summary:", result.summary);
   console.log("Issues:", result.issues);
-  console.log("First statement graph:", result.statements[0]?.lineage);
+  console.log("Statements:", result.statements.length);
+  console.log("Tables found:", result.statements[0]?.nodes.map(n => n.label));
 }
 
 // Call runExample() from your app bootstrap or a test harness.
@@ -190,8 +186,8 @@ void runExample();
 Key points:
 
 - `sql` is a free-form multi-statement string.
-- `options.dialect` controls which SQL dialect is used by the parser.
-- `schema` is optional but recommended for good column-level lineage with `*`.
+- `dialect` controls which SQL dialect is used by the parser.
+- `schema` is optional but helps with table validation and future column-level lineage.
 
 ---
 

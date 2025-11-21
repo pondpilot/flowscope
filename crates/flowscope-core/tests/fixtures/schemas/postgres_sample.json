@@ -1,0 +1,42 @@
+{
+  "defaultCatalog": null,
+  "defaultSchema": "public",
+  "tables": [
+    {
+      "name": "public.users",
+      "columns": [
+        { "name": "id" },
+        { "name": "name" },
+        { "name": "email" },
+        { "name": "active" },
+        { "name": "last_login" }
+      ]
+    },
+    {
+      "name": "public.orders",
+      "columns": [
+        { "name": "order_id" },
+        { "name": "user_id" },
+        { "name": "total" },
+        { "name": "order_date" }
+      ]
+    },
+    {
+      "name": "public.order_items",
+      "columns": [
+        { "name": "item_id" },
+        { "name": "order_id" },
+        { "name": "product_id" },
+        { "name": "quantity" }
+      ]
+    },
+    {
+      "name": "public.user_archive",
+      "columns": [
+        { "name": "id" },
+        { "name": "name" },
+        { "name": "archived_at" }
+      ]
+    }
+  ]
+}

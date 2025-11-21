@@ -1,5 +1,8 @@
+//! Legacy types for backwards compatibility.
+
 use serde::{Deserialize, Serialize};
 
+/// Legacy lineage result type (Phase 0).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LineageResult {
     pub tables: Vec<String>,

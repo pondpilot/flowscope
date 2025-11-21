@@ -1,0 +1,44 @@
+{
+  "defaultCatalog": "project",
+  "defaultSchema": "dataset",
+  "tables": [
+    {
+      "name": "project.dataset.users",
+      "columns": [
+        { "name": "id" },
+        { "name": "name" },
+        { "name": "email" },
+        { "name": "active" },
+        { "name": "profile" },
+        { "name": "events" },
+        { "name": "region" },
+        { "name": "lifetime_value" }
+      ]
+    },
+    {
+      "name": "project.dataset.orders",
+      "columns": [
+        { "name": "order_id" },
+        { "name": "user_id" },
+        { "name": "total" }
+      ]
+    },
+    {
+      "name": "project.dataset.events",
+      "columns": [
+        { "name": "event_id" },
+        { "name": "user_id" },
+        { "name": "event_timestamp" },
+        { "name": "revenue" }
+      ]
+    },
+    {
+      "name": "project.dataset.daily_metrics",
+      "columns": [
+        { "name": "metric_date" },
+        { "name": "active_users" },
+        { "name": "total_revenue" }
+      ]
+    }
+  ]
+}

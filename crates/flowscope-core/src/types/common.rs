@@ -1,0 +1,171 @@
+//! Common types shared between request and response.
+
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+
+/// Case sensitivity for identifier normalization.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum CaseSensitivity {
+    /// Use dialect default
+    #[default]
+    Dialect,
+    /// Lowercase normalization (Postgres)
+    Lower,
+    /// Uppercase normalization (Snowflake)
+    Upper,
+    /// Case-sensitive as-is (BigQuery)
+    Exact,
+}
+
+/// An issue encountered during SQL analysis (error, warning, or info).
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct Issue {
+    /// Severity level
+    pub severity: Severity,
+
+    /// Machine-readable issue code
+    pub code: String,
+
+    /// Human-readable error message
+    pub message: String,
+
+    /// Optional: location in source SQL where issue occurred
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub span: Option<Span>,
+
+    /// Optional: which statement index this issue relates to
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub statement_index: Option<usize>,
+}
+
+impl Issue {
+    pub fn error(code: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            severity: Severity::Error,
+            code: code.into(),
+            message: message.into(),
+            span: None,
+            statement_index: None,
+        }
+    }
+
+    pub fn warning(code: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            severity: Severity::Warning,
+            code: code.into(),
+            message: message.into(),
+            span: None,
+            statement_index: None,
+        }
+    }
+
+    pub fn info(code: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            severity: Severity::Info,
+            code: code.into(),
+            message: message.into(),
+            span: None,
+            statement_index: None,
+        }
+    }
+
+    pub fn with_span(mut self, span: Span) -> Self {
+        self.span = Some(span);
+        self
+    }
+
+    pub fn with_statement(mut self, index: usize) -> Self {
+        self.statement_index = Some(index);
+        self
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum Severity {
+    Error,
+    Warning,
+    Info,
+}
+
+/// A byte range in the source SQL string.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct Span {
+    /// Byte offset from start of SQL string (inclusive)
+    pub start: usize,
+    /// Byte offset from start of SQL string (exclusive)
+    pub end: usize,
+}
+
+impl Span {
+    pub fn new(start: usize, end: usize) -> Self {
+        Self { start, end }
+    }
+}
+
+/// Summary statistics for the analysis result.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Summary {
+    /// Total number of statements analyzed
+    pub statement_count: usize,
+
+    /// Total unique tables/CTEs discovered across all statements
+    pub table_count: usize,
+
+    /// Total columns in output (Phase 2+)
+    pub column_count: usize,
+
+    /// Issue counts by severity
+    pub issue_count: IssueCount,
+
+    /// Quick check: true if any errors were encountered
+    pub has_errors: bool,
+}
+
+/// Counts of issues by severity level.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct IssueCount {
+    /// Number of error-level issues
+    pub errors: usize,
+    /// Number of warning-level issues
+    pub warnings: usize,
+    /// Number of info-level issues
+    pub infos: usize,
+}
+
+/// Machine-readable issue codes.
+pub mod issue_codes {
+    pub const PARSE_ERROR: &str = "PARSE_ERROR";
+    pub const DIALECT_FALLBACK: &str = "DIALECT_FALLBACK";
+    pub const UNSUPPORTED_SYNTAX: &str = "UNSUPPORTED_SYNTAX";
+    pub const UNSUPPORTED_RECURSIVE_CTE: &str = "UNSUPPORTED_RECURSIVE_CTE";
+    pub const APPROXIMATE_LINEAGE: &str = "APPROXIMATE_LINEAGE";
+    pub const UNKNOWN_COLUMN: &str = "UNKNOWN_COLUMN";
+    pub const UNKNOWN_TABLE: &str = "UNKNOWN_TABLE";
+    pub const UNRESOLVED_REFERENCE: &str = "UNRESOLVED_REFERENCE";
+    pub const CANCELLED: &str = "CANCELLED";
+    pub const PAYLOAD_SIZE_WARNING: &str = "PAYLOAD_SIZE_WARNING";
+    pub const MEMORY_LIMIT_EXCEEDED: &str = "MEMORY_LIMIT_EXCEEDED";
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_issue_creation() {
+        let issue = Issue::error("PARSE_ERROR", "Unexpected token")
+            .with_span(Span::new(10, 20))
+            .with_statement(0);
+
+        assert_eq!(issue.severity, Severity::Error);
+        assert_eq!(issue.code, "PARSE_ERROR");
+        assert_eq!(issue.span.unwrap().start, 10);
+        assert_eq!(issue.statement_index, Some(0));
+    }
+}

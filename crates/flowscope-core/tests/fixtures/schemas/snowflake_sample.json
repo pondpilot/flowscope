@@ -1,0 +1,43 @@
+{
+  "defaultCatalog": null,
+  "defaultSchema": "analytics",
+  "tables": [
+    {
+      "name": "analytics.users",
+      "columns": [
+        { "name": "id" },
+        { "name": "name" },
+        { "name": "email" },
+        { "name": "region" },
+        { "name": "lifetime_value" },
+        { "name": "tags" }
+      ]
+    },
+    {
+      "name": "analytics.orders",
+      "columns": [
+        { "name": "order_id" },
+        { "name": "user_id" },
+        { "name": "total" },
+        { "name": "order_date" }
+      ]
+    },
+    {
+      "name": "analytics.events",
+      "columns": [
+        { "name": "event_id" },
+        { "name": "user_id" },
+        { "name": "event_date" },
+        { "name": "revenue" }
+      ]
+    },
+    {
+      "name": "analytics.daily_metrics",
+      "columns": [
+        { "name": "metric_date" },
+        { "name": "active_users" },
+        { "name": "total_revenue" }
+      ]
+    }
+  ]
+}

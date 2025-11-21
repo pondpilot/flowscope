@@ -4,11 +4,8 @@ pub fn extract_tables(statements: &[Statement]) -> Vec<String> {
     let mut tables = Vec::new();
 
     for statement in statements {
-        match statement {
-            Statement::Query(query) => {
-                extract_tables_from_query_body(&query.body, &mut tables);
-            }
-            _ => {}
+        if let Statement::Query(query) = statement {
+            extract_tables_from_query_body(&query.body, &mut tables);
         }
     }
 
@@ -53,7 +50,9 @@ fn extract_tables_from_table_factor(table_factor: &TableFactor, tables: &mut Vec
         TableFactor::TableFunction { .. } => {}
         TableFactor::Function { .. } => {}
         TableFactor::UNNEST { .. } => {}
-        TableFactor::NestedJoin { table_with_joins, .. } => {
+        TableFactor::NestedJoin {
+            table_with_joins, ..
+        } => {
             extract_tables_from_table_factor(&table_with_joins.relation, tables);
             for join in &table_with_joins.joins {
                 extract_tables_from_table_factor(&join.relation, tables);
