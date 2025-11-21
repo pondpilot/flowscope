@@ -11,7 +11,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@pondpilot/flowscope-react': path.resolve(__dirname, '../../packages/react/dist'),
+      '@pondpilot/flowscope-react': path.resolve(__dirname, '../packages/react/dist'),
     },
   },
   optimizeDeps: {
