@@ -1,0 +1,27 @@
+{
+  "name": "@pondpilot/flowscope-core",
+  "version": "0.1.0",
+  "description": "SQL lineage analysis engine for the browser",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "echo 'Build will be implemented in later phases'",
+    "test": "echo 'Tests will be implemented in later phases'",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "sql",
+    "lineage",
+    "data",
+    "wasm"
+  ],
+  "author": "PondPilot Team",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pondpilot/flowscope"
+  }
+}

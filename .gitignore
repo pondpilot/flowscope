@@ -1,0 +1,53 @@
+# Rust
+target/
+**/*.rs.bk
+*.pdb
+Cargo.lock
+
+# Node
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+
+# WASM build artifacts
+packages/core/src/wasm/
+*.wasm
+pkg/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Test artifacts
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Build output
+dist-ssr/
+*.local
+
+# Temporary files
+tmp/
+temp/

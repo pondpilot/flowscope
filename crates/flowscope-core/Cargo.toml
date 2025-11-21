@@ -1,0 +1,16 @@
+[package]
+name = "flowscope-core"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Core SQL lineage analysis engine"
+
+[dependencies]
+sqlparser.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+schemars.workspace = true
+
+[dev-dependencies]

@@ -1,0 +1,31 @@
+{
+  "name": "@pondpilot/flowscope-react",
+  "version": "0.1.0",
+  "description": "React components for FlowScope SQL lineage visualization",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "echo 'Build will be implemented in Phase 3'",
+    "test": "echo 'Tests will be implemented in Phase 3'",
+    "clean": "rm -rf dist"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "@pondpilot/flowscope-core": "^0.1.0"
+  },
+  "keywords": [
+    "sql",
+    "lineage",
+    "react",
+    "visualization"
+  ],
+  "author": "PondPilot Team",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pondpilot/flowscope"
+  }
+}

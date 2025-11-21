@@ -1,0 +1,32 @@
+{
+  "name": "flowscope",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "examples/*"
+  ],
+  "scripts": {
+    "build": "yarn build:rust && yarn build:ts",
+    "build:rust": "./scripts/build-rust.sh",
+    "build:ts": "yarn workspaces run build",
+    "test": "yarn test:rust && yarn test:ts",
+    "test:rust": "cargo test --workspace",
+    "test:ts": "yarn workspaces run test",
+    "test:integration": "yarn workspace web-demo test:integration",
+    "lint": "yarn workspaces run lint",
+    "typecheck": "yarn workspaces run typecheck",
+    "codegen": "./scripts/codegen.sh",
+    "clean": "yarn workspaces run clean && cargo clean"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "typescript": "^5.0.0",
+    "prettier": "^3.0.0",
+    "eslint": "^8.0.0"
+  },
+  "packageManager": "yarn@1.22.19",
+  "engines": {
+    "node": ">=18.0.0",
+    "yarn": ">=1.22.0"
+  }
+}
