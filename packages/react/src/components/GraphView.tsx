@@ -16,8 +16,9 @@ import '@xyflow/react/dist/style.css';
 
 import { useLineage } from '../context';
 import type { GraphViewProps, TableNodeData, ColumnNodeInfo } from '../types';
-import type { Node, StatementLineage } from '@pondpilot/flowscope-core';
+import type { Node, Edge, StatementLineage } from '@pondpilot/flowscope-core';
 import { getLayoutedElements } from '../utils/layout';
+import { sanitizeIdentifier } from '../utils/sanitize';
 
 const colors = {
   table: {
@@ -41,6 +42,7 @@ function TableNode({ data, selected }: NodeProps): JSX.Element {
   const nodeData = data as TableNodeData;
   const isCte = nodeData.nodeType === 'cte';
   const isSelected = selected || nodeData.isSelected;
+  const isHighlighted = nodeData.isHighlighted;
   const palette = isCte ? colors.cte : colors.table;
 
   return (
@@ -53,7 +55,7 @@ function TableNode({ data, selected }: NodeProps): JSX.Element {
           ? `0 0 0 2px ${colors.accent}40`
           : '0 1px 3px rgba(0,0,0,0.1)',
         overflow: 'hidden',
-        backgroundColor: palette.bg,
+        backgroundColor: isHighlighted ? 'hsl(var(--highlight))' : palette.bg,
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       }}
     >
@@ -90,7 +92,7 @@ function TableNode({ data, selected }: NodeProps): JSX.Element {
         >
           {nodeData.nodeType}
         </span>
-        <span style={{ fontWeight: 600 }}>{nodeData.label}</span>
+        <span style={{ fontWeight: 600 }}>{sanitizeIdentifier(nodeData.label)}</span>
       </div>
       {nodeData.columns.length > 0 && (
         <div style={{ padding: '6px 12px', maxHeight: 150, overflowY: 'auto' }}>
@@ -104,7 +106,7 @@ function TableNode({ data, selected }: NodeProps): JSX.Element {
                 borderRadius: 4,
               }}
             >
-              {col.name}
+              {sanitizeIdentifier(col.name)}
             </div>
           ))}
         </div>
@@ -167,10 +169,51 @@ const edgeTypes = {
   animated: AnimatedEdge,
 };
 
+/**
+ * Merges multiple statement lineages into a single unified view.
+ * Optimizes for the common single-statement case with early return.
+ * @param statements Array of statement lineages to merge
+ * @returns A single merged statement lineage
+ */
+function mergeStatements(statements: StatementLineage[]): StatementLineage {
+  // Early return optimization for single statement
+  if (statements.length === 1) {
+    return statements[0];
+  }
+
+  const mergedNodes = new Map<string, Node>();
+  const mergedEdges = new Map<string, Edge>();
+
+  statements.forEach((stmt) => {
+    stmt.nodes.forEach((node) => {
+       // For tables, we might want to deduplicate based on label if ID varies
+       // But assuming unique IDs for now or consistent naming
+       if (!mergedNodes.has(node.id)) {
+         mergedNodes.set(node.id, node);
+       }
+    });
+
+    stmt.edges.forEach((edge) => {
+      if (!mergedEdges.has(edge.id)) {
+        mergedEdges.set(edge.id, edge);
+      }
+    });
+  });
+
+  return {
+    statementIndex: 0,
+    statementType: 'SELECT', // Placeholder for merged view
+    nodes: Array.from(mergedNodes.values()),
+    edges: Array.from(mergedEdges.values()),
+  };
+}
+
 function buildFlowNodes(
   statement: StatementLineage,
-  selectedNodeId: string | null
+  selectedNodeId: string | null,
+  searchTerm: string
 ): FlowNode[] {
+  const lowerCaseSearchTerm = searchTerm.toLowerCase();
   const tableNodes = statement.nodes.filter((n) => n.type === 'table' || n.type === 'cte');
   const columnNodes = statement.nodes.filter((n) => n.type === 'column');
 
@@ -204,6 +247,13 @@ function buildFlowNodes(
   const flowNodes: FlowNode[] = [];
 
   for (const node of [...nodesByType.table, ...nodesByType.cte]) {
+    const columns = tableColumnMap.get(node.id) || [];
+    const isHighlighted = !!(
+      lowerCaseSearchTerm &&
+      (node.label.toLowerCase().includes(lowerCaseSearchTerm) ||
+        columns.some((col) => col.name.toLowerCase().includes(lowerCaseSearchTerm)))
+    );
+
     flowNodes.push({
       id: node.id,
       type: 'tableNode',
@@ -211,8 +261,9 @@ function buildFlowNodes(
       data: {
         label: node.label,
         nodeType: node.type === 'cte' ? 'cte' : 'table',
-        columns: tableColumnMap.get(node.id) || [],
+        columns: columns,
         isSelected: node.id === selectedNodeId,
+        isHighlighted: isHighlighted,
       } satisfies TableNodeData,
     });
   }
@@ -233,19 +284,23 @@ function buildFlowEdges(statement: StatementLineage): FlowEdge[] {
     }));
 }
 
-export function GraphView({ className, onNodeClick }: GraphViewProps): JSX.Element {
+export function GraphView({ className, onNodeClick, graphContainerRef }: GraphViewProps): JSX.Element {
   const { state, actions } = useLineage();
-  const { result, selectedStatementIndex, selectedNodeId } = state;
+  const { result, selectedNodeId, searchTerm } = state;
 
-  const statement = result?.statements[selectedStatementIndex];
+  // Merge all statements into one big graph
+  const statement = useMemo(() => {
+    if (!result || !result.statements) return null;
+    return mergeStatements(result.statements);
+  }, [result]);
 
   const { layoutedNodes, layoutedEdges } = useMemo(() => {
     if (!statement) return { layoutedNodes: [], layoutedEdges: [] };
-    const rawNodes = buildFlowNodes(statement, selectedNodeId);
+    const rawNodes = buildFlowNodes(statement, selectedNodeId, searchTerm);
     const rawEdges = buildFlowEdges(statement);
     const { nodes: ln, edges: le } = getLayoutedElements(rawNodes, rawEdges, 'LR');
     return { layoutedNodes: ln, layoutedEdges: le };
-  }, [statement, selectedNodeId]);
+  }, [statement, selectedNodeId, searchTerm]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(layoutedNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(layoutedEdges);
@@ -293,7 +348,7 @@ export function GraphView({ className, onNodeClick }: GraphViewProps): JSX.Eleme
   }
 
   return (
-    <div className={className} style={{ height: '100%' }}>
+    <div className={className} style={{ height: '100%' }} ref={graphContainerRef}>
       <ReactFlow
         nodes={nodes}
         edges={edges}

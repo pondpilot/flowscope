@@ -2,16 +2,49 @@
 
 /* Variables */
 :root {
-  --flowscope-primary: #667eea;
-  --flowscope-secondary: #764ba2;
-  --flowscope-bg: #f8f9fa;
-  --flowscope-text: #333;
-  --flowscope-text-muted: #666;
-  --flowscope-border: #e2e8f0;
-  --flowscope-error: #c53030;
-  --flowscope-warning: #c05621;
-  --flowscope-info: #2b6cb0;
-  --flowscope-success: #2f855a;
+  --flowscope-primary: #4957c1;
+  --flowscope-secondary: #4c61ff;
+  --flowscope-bg: #fdfdfd;
+  --flowscope-surface: #ffffff;
+  --flowscope-surface-muted: #f2f4f8;
+  --flowscope-text: #212328;
+  --flowscope-text-muted: #6f7785;
+  --flowscope-border: #dbdde1;
+  --flowscope-error: #ef486f;
+  --flowscope-warning: #f4a462;
+  --flowscope-info: #4c61ff;
+  --flowscope-success: #4cae4f;
+  --flowscope-issue-error-bg: #fde5eb;
+  --flowscope-issue-warning-bg: #fdf2e9;
+  --flowscope-issue-info-bg: #e5e7f6;
+  --flowscope-issue-error-border: #f37391;
+  --flowscope-issue-warning-border: #f7b987;
+  --flowscope-issue-info-border: #869fff;
+  --highlight: 233 49% 93%;
+  --highlight-foreground: 233 61% 38%;
+}
+
+.dark {
+  --flowscope-primary: #4c61ff;
+  --flowscope-secondary: #869fff;
+  --flowscope-bg: #242b35;
+  --flowscope-surface: #191d24;
+  --flowscope-surface-muted: #2f3644;
+  --flowscope-text: #fdfdfd;
+  --flowscope-text-muted: #a8b3c4;
+  --flowscope-border: #5b6b86;
+  --flowscope-error: #f37391;
+  --flowscope-warning: #f7b987;
+  --flowscope-info: #869fff;
+  --flowscope-success: #75c277;
+  --flowscope-issue-error-bg: #3a1f29;
+  --flowscope-issue-warning-bg: #3a2c16;
+  --flowscope-issue-info-bg: #1f2746;
+  --flowscope-issue-error-border: #f37391;
+  --flowscope-issue-warning-border: #f4a462;
+  --flowscope-issue-info-border: #4c61ff;
+  --highlight: 231 54% 37%;
+  --highlight-foreground: 0 0% 99%;
 }
 
 /* Explorer Container */
@@ -36,7 +69,7 @@
   display: flex;
   gap: 1.5rem;
   padding: 0.75rem 1rem;
-  background: white;
+  background: var(--flowscope-surface);
   border-bottom: 1px solid var(--flowscope-border);
 }
 
@@ -59,7 +92,7 @@
   display: flex;
   gap: 0.25rem;
   padding: 0.5rem 1rem;
-  background: white;
+  background: var(--flowscope-surface);
   border-bottom: 1px solid var(--flowscope-border);
   overflow-x: auto;
 }
@@ -68,7 +101,7 @@
   padding: 0.5rem 1rem;
   border: 1px solid var(--flowscope-border);
   border-radius: 4px;
-  background: white;
+  background: var(--flowscope-surface-muted);
   font-size: 0.875rem;
   cursor: pointer;
   white-space: nowrap;
@@ -98,7 +131,7 @@
 .flowscope-left-panel,
 .flowscope-center-panel,
 .flowscope-right-panel {
-  background: white;
+  background: var(--flowscope-surface);
   overflow: auto;
 }
 
@@ -123,7 +156,7 @@
 
 /* Table Nodes */
 .flowscope-table-node {
-  background: white;
+  background: var(--flowscope-surface);
   border: 2px solid var(--flowscope-primary);
   border-radius: 8px;
   min-width: 150px;
@@ -136,7 +169,7 @@
 }
 
 .flowscope-node-selected {
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 0 0 3px rgba(76, 97, 255, 0.35);
 }
 
 .flowscope-node-header {
@@ -207,7 +240,7 @@
 }
 
 .flowscope-sql-highlight {
-  background-color: rgba(102, 126, 234, 0.3);
+  background-color: rgba(76, 97, 255, 0.25);
   border-radius: 2px;
 }
 
@@ -369,18 +402,18 @@
 }
 
 .flowscope-issue-error {
-  background: #fff5f5;
-  border: 1px solid #fc8181;
+  background: var(--flowscope-issue-error-bg);
+  border: 1px solid var(--flowscope-issue-error-border);
 }
 
 .flowscope-issue-warning {
-  background: #fffaf0;
-  border: 1px solid #f6ad55;
+  background: var(--flowscope-issue-warning-bg);
+  border: 1px solid var(--flowscope-issue-warning-border);
 }
 
 .flowscope-issue-info {
-  background: #ebf8ff;
-  border: 1px solid #63b3ed;
+  background: var(--flowscope-issue-info-bg);
+  border: 1px solid var(--flowscope-issue-info-border);
 }
 
 .flowscope-issue-header {

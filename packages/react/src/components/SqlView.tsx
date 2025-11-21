@@ -5,7 +5,7 @@ import { EditorView, Decoration, type DecorationSet } from '@codemirror/view';
 import { StateField, StateEffect } from '@codemirror/state';
 
 import { useLineage } from '../context';
-import type { SqlViewProps, Span } from '../types';
+import type { SqlViewProps } from '../types';
 
 const setHighlight = StateEffect.define<{ from: number; to: number } | null>();
 
@@ -38,22 +38,28 @@ const baseTheme = EditorView.baseTheme({
   },
 });
 
-export function SqlView({ className, editable = false, onChange }: SqlViewProps): JSX.Element {
+export function SqlView({ className, editable = false, onChange, value }: SqlViewProps): JSX.Element {
   const { state, actions } = useLineage();
-  const { sql: sqlText, highlightedSpan } = state;
+  const isControlled = value !== undefined;
+  
+  const sqlText = isControlled ? value : state.sql;
+  const highlightedSpan = isControlled ? null : state.highlightedSpan;
+  
   const editorRef = useRef<ReactCodeMirrorRef>(null);
 
   const extensions = useMemo(
-    () => [sql(), highlightField, baseTheme, EditorView.lineWrapping],
-    []
+    () => [sql(), highlightField, baseTheme, EditorView.lineWrapping, EditorView.editable.of(editable)],
+    [editable]
   );
 
   const handleChange = useCallback(
-    (value: string) => {
-      actions.setSql(value);
-      onChange?.(value);
+    (val: string) => {
+      if (!isControlled) {
+        actions.setSql(val);
+      }
+      onChange?.(val);
     },
-    [actions, onChange]
+    [actions, onChange, isControlled]
   );
 
   useEffect(() => {

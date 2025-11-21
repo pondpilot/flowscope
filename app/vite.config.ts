@@ -11,11 +11,14 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@pondpilot/flowscope-react': path.resolve(__dirname, '../packages/react/dist'),
+      '@pondpilot/flowscope-core': path.resolve(__dirname, '../packages/core/src'),
+      '@pondpilot/flowscope-react': path.resolve(__dirname, '../packages/react/src'),
+      '@/components': path.resolve(__dirname, './src/components'),
+      '@/lib': path.resolve(__dirname, './src/lib'),
     },
   },
   optimizeDeps: {
-    exclude: ['@pondpilot/flowscope-core'],
+    exclude: ['@pondpilot/flowscope-core', '@pondpilot/flowscope-react'],
   },
   build: {
     target: 'esnext',

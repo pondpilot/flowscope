@@ -11,12 +11,30 @@ import type { LineageContextValue, LineageState, LineageActions } from './types'
 
 const LineageContext = createContext<LineageContextValue | null>(null);
 
+/**
+ * Props for the LineageProvider component.
+ */
 export interface LineageProviderProps {
+  /** Child components to render within the provider */
   children: ReactNode;
+  /** Initial analysis result to populate the context with */
   initialResult?: AnalyzeResult | null;
+  /** Initial SQL text to populate the context with */
   initialSql?: string;
 }
 
+/**
+ * Context provider for SQL lineage analysis state and actions.
+ * Manages global state for lineage visualization including result data,
+ * node selection, highlighting, and search functionality.
+ *
+ * @example
+ * ```tsx
+ * <LineageProvider initialResult={result} initialSql={sqlText}>
+ *   <YourComponents />
+ * </LineageProvider>
+ * ```
+ */
 export function LineageProvider({
   children,
   initialResult = null,
@@ -27,6 +45,7 @@ export function LineageProvider({
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedStatementIndex, setSelectedStatementIndex] = useState(0);
   const [highlightedSpan, setHighlightedSpan] = useState<Span | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const updateResult = useCallback(
     (nextResult: AnalyzeResult | null) => {
@@ -69,8 +88,9 @@ export function LineageProvider({
       selectedNodeId,
       selectedStatementIndex,
       highlightedSpan,
+      searchTerm,
     }),
-    [result, sql, selectedNodeId, selectedStatementIndex, highlightedSpan]
+    [result, sql, selectedNodeId, selectedStatementIndex, highlightedSpan, searchTerm]
   );
 
   const actions: LineageActions = useMemo(
@@ -80,8 +100,9 @@ export function LineageProvider({
       selectNode,
       selectStatement,
       highlightSpan,
+      setSearchTerm,
     }),
-    [updateResult, setSql, selectNode, selectStatement, highlightSpan]
+    [updateResult, setSql, selectNode, selectStatement, highlightSpan, setSearchTerm]
   );
 
   const value = useMemo(() => ({ state, actions }), [state, actions]);
@@ -89,6 +110,20 @@ export function LineageProvider({
   return <LineageContext.Provider value={value}>{children}</LineageContext.Provider>;
 }
 
+/**
+ * Hook to access the full lineage context including state and actions.
+ * Must be used within a LineageProvider.
+ *
+ * @returns The lineage context value containing state and actions
+ * @throws Error if used outside of a LineageProvider
+ *
+ * @example
+ * ```tsx
+ * const { state, actions } = useLineage();
+ * actions.setSearchTerm('users');
+ * console.log(state.searchTerm);
+ * ```
+ */
 export function useLineage(): LineageContextValue {
   const context = useContext(LineageContext);
   if (!context) {
@@ -97,10 +132,24 @@ export function useLineage(): LineageContextValue {
   return context;
 }
 
+/**
+ * Hook to access only the lineage state.
+ * Convenience hook for components that only need to read state.
+ *
+ * @returns The current lineage state
+ * @throws Error if used outside of a LineageProvider
+ */
 export function useLineageState(): LineageState {
   return useLineage().state;
 }
 
+/**
+ * Hook to access only the lineage actions.
+ * Convenience hook for components that only need to dispatch actions.
+ *
+ * @returns The lineage actions object
+ * @throws Error if used outside of a LineageProvider
+ */
 export function useLineageActions(): LineageActions {
   return useLineage().actions;
 }

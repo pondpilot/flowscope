@@ -5,14 +5,14 @@ import type { AnalyzeRequest, AnalyzeResult, Dialect } from './types';
 let analyzeSqlJson: ((request: string) => string) | null = null;
 
 async function ensureWasmReady(): Promise<void> {
+  const wasmModule = await initWasm();
+
   if (!isWasmInitialized()) {
-    await initWasm();
+    throw new Error('WASM module failed to initialize');
   }
 
-  // Dynamically import the WASM functions
   if (!analyzeSqlJson) {
-    const wasm = await import('../wasm/flowscope_wasm');
-    analyzeSqlJson = wasm.analyze_sql_json;
+    analyzeSqlJson = wasmModule.analyze_sql_json;
   }
 }
 

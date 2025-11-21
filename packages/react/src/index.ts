@@ -5,6 +5,8 @@ export { ColumnPanel } from './components/ColumnPanel';
 export { IssuesPanel } from './components/IssuesPanel';
 export { LineageExplorer } from './components/LineageExplorer';
 export { StatementSelector } from './components/StatementSelector';
+export { SummaryBar } from './components/SummaryBar';
+export { SchemaView } from './components/SchemaView';
 
 // Context and hooks
 export {
@@ -38,3 +40,11 @@ export type {
   Span,
   StatementLineage,
 } from './types';
+
+// Utilities
+export {
+  escapeHtml,
+  sanitizeSqlContent,
+  sanitizeErrorMessage,
+  sanitizeIdentifier,
+} from './utils/sanitize';
