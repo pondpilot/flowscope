@@ -1011,7 +1011,12 @@ impl<'a> Analyzer<'a> {
         // Check if this is a CTE reference
         let node_id = if ctx.cte_definitions.contains_key(table_name) {
             canonical_for_alias = Some(table_name.to_string());
-            ctx.cte_definitions.get(table_name).cloned()
+            let cte_id = ctx.cte_definitions.get(table_name).cloned();
+            if let Some(ref id) = cte_id {
+                ctx.table_node_ids
+                    .insert(table_name.to_string(), id.clone());
+            }
+            cte_id
         } else {
             // Regular table
             let resolution = self.canonicalize_table_reference(table_name);

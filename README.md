@@ -333,6 +333,57 @@ Unsupported syntax should be reported as issues, with partial lineage where poss
 
 ---
 
+## Lineage Test Suite
+
+The lineage engine ships with an integration suite. Additions should extend either the fixture directories under `crates/flowscope-core/tests/fixtures/**` or the scenarios in `crates/flowscope-core/tests/lineage_engine.rs`.
+
+Run the full suite (unit + integration) with:
+
+```bash
+cargo test -p flowscope-core --test lineage_engine
+```
+
+To generate a detailed test coverage report:
+
+```bash
+./scripts/generate_test_coverage.sh
+```
+
+This script provides:
+- Test pass/fail summary
+- Test categorization (ANSI, DML, column lineage, etc.)
+- Coverage breakdown by SQL feature (SELECT, JOIN, INSERT, etc.)
+
+| Scenario                               | SQL Constructs Exercised                                                                      | Tests / Fixtures                                                                                                                                                                                                                                                                                    | Status |
+|----------------------------------------|-----------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------|
+| ANSI core SELECT semantics             | Basic SELECT/WHERE, `GROUP BY`, `HAVING`, `VALUES` inline tables                             | `ansi_select_registers_single_table_and_columns`<br>`ansi_group_by_and_having_keep_single_table_reference`<br>`ansi_values_clause_requires_no_tables`                                                                                                                                              | ✅      |
+| ANSI joins & lateral sources           | INNER/LEFT/RIGHT/FULL/CROSS joins, `CROSS APPLY`, `UNNEST`                                   | `ansi_join_variants_capture_all_tables`<br>`ansi_cross_apply_tracks_lateral_sources`<br>`ansi_unnest_clause_keeps_base_table_lineage`                                                                                                                                                              | ✅      |
+| ANSI CTE + subquery graphing           | Multi-level CTEs, CTE reuse, scalar subqueries, correlated predicates, CTE shadowing         | `ansi_nested_ctes_register_each_virtual_table`<br>`ansi_reused_cte_is_deduplicated`<br>`ansi_scalar_subquery_introduces_additional_table`<br>`ansi_correlated_predicates_capture_all_sources`<br>`ansi_cte_shadowing_existing_table_prefers_cte`                                                 | ✅      |
+| ANSI column lineage semantics          | `SELECT *` expansion, schema-aware expansion, window functions, CASE expressions             | `ansi_star_without_schema_emits_approximate_lineage`<br>`ansi_star_with_schema_expands_columns`<br>`ansi_window_functions_produce_derivation_edges`<br>`ansi_case_expressions_emit_derivation_edges`                                                                                              | ✅      |
+| ANSI write statements & pipelines      | `INSERT ... SELECT`, CTAS, multi-statement flows producing cross-statement edges             | `ansi_insert_select_with_schema_flags_unknown_column`<br>`ansi_create_table_as_union_tracks_targets_and_sources`<br>`ansi_multi_statement_flow_updates_summary_and_cross_edges`                                                                                                                   | ✅      |
+| ANSI table factors & diagnostics       | Table functions (`TABLE()`), PIVOT/UNPIVOT warnings                                          | `ansi_table_function_emits_info_issue`<br>`ansi_pivot_usage_emits_warning`                                                                                                                                                                                                                         | ✅      |
+| Multi-dialect fixture sweep            | SELECT, JOIN, `WITH`, `INSERT`, `CREATE TABLE AS SELECT` across dialects                     | Fixture directories in `crates/flowscope-core/tests/fixtures/*/*.sql`<br>`multi_dialect_fixtures_cover_core_constructs`                                                                                                                                                                            | ✅      |
+| Cross-statement analytics pipeline     | Multi-CTE CTAS, staging table reuse, downstream `INSERT`/`SELECT`, global lineage edges      | `multi_stage_pipeline_emits_cross_statement_edges`                                                                                                                                                                                                                                                 | ✅      |
+| Recursive CTE guardrail                | `WITH RECURSIVE` detection + warning surfacing while keeping base table lineage intact       | `recursive_ctes_emit_warning_but_keep_lineage`                                                                                                                                                                                                                                                     | ✅      |
+| Virtual tables & deep subqueries       | Derived tables, EXISTS predicates, repeated table references, column-level graph edges       | `derived_tables_and_exists_predicates_produce_complete_lineage`                                                                                                                                                                                                                                    | ✅      |
+| Schema/search path resolution          | Default catalog/schema hints, search path ordering, column validation (`UNKNOWN_COLUMN`)     | `schema_metadata_and_search_path_resolve_identifiers`                                                                                                                                                                                                                                              | ✅      |
+| Set operations matrix                  | `UNION ALL`, `EXCEPT`, nested CTEs feeding unions with multiple physical sources             | `set_operations_track_all_source_tables`                                                                                                                                                                                                                                                           | ✅      |
+
+This matrix reflects the constructs already marked for coverage in `TODO.md` and doubles as a checklist for future statement types (MERGE, UPDATE, etc.).
+
+## Pending Support (Known Gaps)
+
+The following features are currently tracked by failing tests in the lineage suite and represent immediate roadmap priorities:
+
+| Feature Area                | Description                                                                                                | Failing Tests                                                                                                                                                                                                                                                                                   |
+|-----------------------------|------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **DML Lineage**             | Full support for `UPDATE`, `DELETE`, and `MERGE` statements, including source tables in `FROM`/`USING` clauses | `dml_delete_with_join_tracks_all_tables`<br>`dml_delete_with_subquery_identifies_dependencies`<br>`dml_merge_statement_tracks_target_and_source`<br>`dml_merge_with_complex_source_query`<br>`dml_update_with_from_clause_tracks_source_tables`<br>`dml_update_with_subquery_captures_lineage` |
+| **HAVING Clause Subqueries** | Lineage extraction from subqueries nested within `HAVING` clauses                                         | `ansi_having_subquery_lineage`                                                                                                                                                                                                                                                                  |
+| **Quoted Identifiers**      | Proper case-sensitive handling and normalization of quoted identifiers (e.g., `"Users"` vs `users`)       | `quoted_identifiers_and_case_sensitivity`                                                                                                                                                                                                                                                       |
+
+
+---
+
 ## Issues & Diagnostics
 
 FlowScope attaches structured **issues** to analysis results:

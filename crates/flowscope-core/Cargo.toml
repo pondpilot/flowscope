@@ -14,3 +14,4 @@ serde_json.workspace = true
 schemars.workspace = true
 
 [dev-dependencies]
+rstest = "0.22"
