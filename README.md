@@ -375,11 +375,10 @@ This matrix reflects the constructs already marked for coverage in `TODO.md` and
 
 The following features are currently tracked by failing tests in the lineage suite and represent immediate roadmap priorities:
 
-| Feature Area                | Description                                                                                                | Failing Tests                                                                                                                                                                                                                                                                                   |
-|-----------------------------|------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **DML Lineage**             | Full support for `UPDATE`, `DELETE`, and `MERGE` statements, including source tables in `FROM`/`USING` clauses | `dml_delete_with_join_tracks_all_tables`<br>`dml_delete_with_subquery_identifies_dependencies`<br>`dml_merge_statement_tracks_target_and_source`<br>`dml_merge_with_complex_source_query`<br>`dml_update_with_from_clause_tracks_source_tables`<br>`dml_update_with_subquery_captures_lineage` |
-| **HAVING Clause Subqueries** | Lineage extraction from subqueries nested within `HAVING` clauses                                         | `ansi_having_subquery_lineage`                                                                                                                                                                                                                                                                  |
-| **Quoted Identifiers**      | Proper case-sensitive handling and normalization of quoted identifiers (e.g., `"Users"` vs `users`)       | `quoted_identifiers_and_case_sensitivity`                                                                                                                                                                                                                                                       |
+| Feature Area | Description | Failing Tests |
+| --- | --- | --- |
+| **HAVING Clause Subqueries** | Lineage extraction from subqueries nested within `HAVING` clauses. | `ansi_having_subquery_lineage` |
+| **Quoted Identifiers** | Proper case-sensitive handling and normalization of quoted identifiers (e.g., `"Users"` vs `users`). | `quoted_identifiers_and_case_sensitivity` |
 
 
 ---

@@ -80,12 +80,14 @@ export function LineageProvider({
   const [highlightedSpan, setHighlightedSpan] = useState<Span | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewModeState] = useState<LineageViewMode>(() => loadViewMode());
+  const [collapsedNodeIds, setCollapsedNodeIds] = useState<Set<string>>(new Set());
 
   const updateResult = useCallback(
     (nextResult: AnalyzeResult | null) => {
       setResult(nextResult);
       setSelectedNodeId(null);
       setHighlightedSpan(null);
+      setCollapsedNodeIds(new Set());
       setSelectedStatementIndex((previousIndex) => {
         const statementCount = nextResult?.statements.length ?? 0;
         if (statementCount === 0) {
@@ -105,10 +107,23 @@ export function LineageProvider({
     }
   }, []);
 
+  const toggleNodeCollapse = useCallback((nodeId: string) => {
+    setCollapsedNodeIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(nodeId)) {
+        next.delete(nodeId);
+      } else {
+        next.add(nodeId);
+      }
+      return next;
+    });
+  }, []);
+
   const selectStatement = useCallback((index: number) => {
     setSelectedStatementIndex(index);
     setSelectedNodeId(null);
     setHighlightedSpan(null);
+    setCollapsedNodeIds(new Set());
   }, []);
 
   const highlightSpan = useCallback((span: Span | null) => {
@@ -129,8 +144,9 @@ export function LineageProvider({
       highlightedSpan,
       searchTerm,
       viewMode,
+      collapsedNodeIds,
     }),
-    [result, sql, selectedNodeId, selectedStatementIndex, highlightedSpan, searchTerm, viewMode]
+    [result, sql, selectedNodeId, selectedStatementIndex, highlightedSpan, searchTerm, viewMode, collapsedNodeIds]
   );
 
   const actions: LineageActions = useMemo(
@@ -138,12 +154,13 @@ export function LineageProvider({
       setResult: updateResult,
       setSql,
       selectNode,
+      toggleNodeCollapse,
       selectStatement,
       highlightSpan,
       setSearchTerm,
       setViewMode,
     }),
-    [updateResult, setSql, selectNode, selectStatement, highlightSpan, setSearchTerm, setViewMode]
+    [updateResult, setSql, selectNode, toggleNodeCollapse, selectStatement, highlightSpan, setSearchTerm, setViewMode]
   );
 
   const value = useMemo(() => ({ state, actions }), [state, actions]);

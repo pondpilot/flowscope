@@ -3,8 +3,8 @@ use crate::parser::parse_sql_with_dialect;
 use crate::types::*;
 use serde_json::json;
 use sqlparser::ast::{
-    self, Expr, FunctionArg, FunctionArgExpr, ObjectName, Query, SelectItem, SetExpr, Statement,
-    TableFactor, TableWithJoins,
+    self, Assignment, Expr, FromTable, FunctionArg, FunctionArgExpr, ObjectName, Query, SelectItem,
+    SetExpr, Statement, TableFactor, TableWithJoins,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -276,6 +276,36 @@ impl<'a> Analyzer<'a> {
                 } else {
                     "CREATE_TABLE".to_string()
                 }
+            }
+            Statement::Update {
+                table,
+                assignments,
+                from,
+                selection,
+                returning: _,
+            } => {
+                self.analyze_update(&mut ctx, table, assignments, from, selection);
+                "UPDATE".to_string()
+            }
+            Statement::Delete(delete) => {
+                self.analyze_delete(
+                    &mut ctx,
+                    &delete.tables,
+                    &delete.from,
+                    &delete.using,
+                    &delete.selection,
+                );
+                "DELETE".to_string()
+            }
+            Statement::Merge {
+                into,
+                table,
+                source,
+                on: _,
+                clauses: _,
+            } => {
+                self.analyze_merge(&mut ctx, *into, table, source);
+                "MERGE".to_string()
             }
             _ => {
                 self.issues.push(
@@ -848,8 +878,18 @@ impl<'a> Analyzer<'a> {
             return Some(tables_in_scope[0].clone());
         }
 
-        // Multiple tables - check schema to find which one has this column
         let normalized_col = self.normalize_identifier(column);
+
+        // 1. Check CTEs created in this statement
+        for table_canonical in &tables_in_scope {
+            if let Some(cte_cols) = ctx.cte_columns.get(*table_canonical) {
+                if cte_cols.iter().any(|c| c.name == normalized_col) {
+                    return Some((*table_canonical).clone());
+                }
+            }
+        }
+
+        // 2. Check schema metadata
         for table_canonical in &tables_in_scope {
             if let Some(schema_table) = self.schema_tables.get(*table_canonical) {
                 if schema_table
@@ -1189,6 +1229,176 @@ impl<'a> Analyzer<'a> {
                 });
             }
         }
+    }
+
+    fn analyze_expression(&mut self, ctx: &mut StatementContext, expr: &Expr) {
+        // 1. Traverse for subqueries
+        self.visit_expression_for_subqueries(ctx, expr);
+        // 2. Validate columns
+        self.extract_column_refs_for_validation(ctx, expr);
+    }
+
+    fn visit_expression_for_subqueries(&mut self, ctx: &mut StatementContext, expr: &Expr) {
+        match expr {
+            Expr::Subquery(query) => self.analyze_query(ctx, query, None),
+            Expr::InSubquery { subquery, .. } => self.analyze_query(ctx, subquery, None),
+            Expr::Exists { subquery, .. } => self.analyze_query(ctx, subquery, None),
+            Expr::BinaryOp { left, right, .. } => {
+                self.visit_expression_for_subqueries(ctx, left);
+                self.visit_expression_for_subqueries(ctx, right);
+            }
+            Expr::UnaryOp { expr, .. } => self.visit_expression_for_subqueries(ctx, expr),
+            Expr::Nested(expr) => self.visit_expression_for_subqueries(ctx, expr),
+            Expr::Case {
+                operand,
+                conditions,
+                results,
+                else_result,
+            } => {
+                if let Some(op) = operand {
+                    self.visit_expression_for_subqueries(ctx, op);
+                }
+                for cond in conditions {
+                    self.visit_expression_for_subqueries(ctx, cond);
+                }
+                for res in results {
+                    self.visit_expression_for_subqueries(ctx, res);
+                }
+                if let Some(el) = else_result {
+                    self.visit_expression_for_subqueries(ctx, el);
+                }
+            }
+            Expr::Function(func) => {
+                if let ast::FunctionArguments::List(args) = &func.args {
+                    for arg in &args.args {
+                        match arg {
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(e))
+                            | FunctionArg::Named {
+                                arg: FunctionArgExpr::Expr(e),
+                                ..
+                            } => self.visit_expression_for_subqueries(ctx, e),
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn analyze_update(
+        &mut self,
+        ctx: &mut StatementContext,
+        table: &TableWithJoins,
+        assignments: &[Assignment],
+        from: &Option<TableWithJoins>,
+        selection: &Option<Expr>,
+    ) {
+        // 1. Analyze the target table
+        self.analyze_table_with_joins(ctx, table, None);
+
+        // Register this table as being "produced" (modified)
+        if let TableFactor::Table { name, .. } = &table.relation {
+            let canonical = self.normalize_table_name(&name.to_string());
+            self.produced_tables.insert(canonical, ctx.statement_index);
+        }
+
+        // 2. Analyze FROM clause (Postgres style)
+        if let Some(from_table) = from {
+            self.analyze_table_with_joins(ctx, from_table, None);
+        }
+
+        // 3. Analyze assignments (SET clause)
+        for assignment in assignments {
+            self.analyze_expression(ctx, &assignment.value);
+        }
+
+        // 4. Analyze selection (WHERE clause)
+        if let Some(expr) = selection {
+            self.analyze_expression(ctx, expr);
+        }
+    }
+
+    fn analyze_delete(
+        &mut self,
+        ctx: &mut StatementContext,
+        tables: &[ObjectName],
+        from: &FromTable,
+        using: &Option<Vec<TableWithJoins>>,
+        selection: &Option<Expr>,
+    ) {
+        // 1. Analyze sources (FROM + USING)
+        match from {
+            FromTable::WithFromKeyword(ts) | FromTable::WithoutKeyword(ts) => {
+                for t in ts {
+                    self.analyze_table_with_joins(ctx, t, None);
+                }
+            }
+        }
+        if let Some(us) = using {
+            for t in us {
+                self.analyze_table_with_joins(ctx, t, None);
+            }
+        }
+
+        // 2. Identify and register targets
+        if !tables.is_empty() {
+            // MySQL multi-table delete syntax
+            for obj in tables {
+                let name = obj.to_string();
+                // Try to resolve against aliases found in FROM
+                let canonical = if let Some(c) = ctx.table_aliases.get(&name) {
+                    c.clone()
+                } else {
+                    self.canonicalize_table_reference(&name).canonical
+                };
+                self.produced_tables.insert(canonical, ctx.statement_index);
+            }
+        } else {
+            // Standard SQL: first table in FROM is target
+            if let FromTable::WithFromKeyword(ts) | FromTable::WithoutKeyword(ts) = from {
+                if let Some(first) = ts.first() {
+                    if let TableFactor::Table { name, alias, .. } = &first.relation {
+                        let table_name = name.to_string();
+                        let lookup = alias
+                            .as_ref()
+                            .map(|a| a.name.to_string())
+                            .unwrap_or(table_name.clone());
+
+                        let canonical = if let Some(c) = ctx.table_aliases.get(&lookup) {
+                            c.clone()
+                        } else {
+                            self.canonicalize_table_reference(&table_name).canonical
+                        };
+                        self.produced_tables.insert(canonical, ctx.statement_index);
+                    }
+                }
+            }
+        }
+
+        // 3. Analyze selection
+        if let Some(expr) = selection {
+            self.analyze_expression(ctx, expr);
+        }
+    }
+
+    fn analyze_merge(
+        &mut self,
+        ctx: &mut StatementContext,
+        _into: bool,
+        table: &TableFactor,
+        source: &TableFactor,
+    ) {
+        // 1. Analyze Target Table
+        self.analyze_table_factor(ctx, table, None);
+
+        if let TableFactor::Table { name, .. } = table {
+            let canonical = self.normalize_table_name(&name.to_string());
+            self.produced_tables.insert(canonical, ctx.statement_index);
+        }
+
+        // 2. Analyze Source Table
+        self.analyze_table_factor(ctx, source, None);
     }
 
     fn normalize_table_name(&self, name: &str) -> String {

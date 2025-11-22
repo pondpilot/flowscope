@@ -1,4 +1,4 @@
-import { useMemo, useCallback, useEffect } from 'react';
+import { useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   ReactFlow,
   Background,
@@ -9,12 +9,15 @@ import {
   Handle,
   Position,
   BaseEdge,
+  EdgeLabelRenderer,
   getBezierPath,
+  Panel,
 } from '@xyflow/react';
 import type { Node as FlowNode, Edge as FlowEdge, NodeProps, EdgeProps } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import * as Tooltip from '@radix-ui/react-tooltip';
 
-import { useLineage } from '../context';
+import { useLineage, useLineageActions } from '../context';
 import type {
   GraphViewProps,
   TableNodeData,
@@ -26,6 +29,9 @@ import { getLayoutedElements } from '../utils/layout';
 import { sanitizeIdentifier } from '../utils/sanitize';
 import { ScriptNode } from './ScriptNode';
 import { ColumnNode } from './ColumnNode';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { ExportMenu } from './ExportMenu';
 
 const colors = {
   table: {
@@ -42,15 +48,31 @@ const colors = {
     text: '#5B21B6',
     textSecondary: '#7C3AED',
   },
+  virtualOutput: {
+    bg: '#F0FDF4',
+    headerBg: '#DCFCE7',
+    border: '#6EE7B7',
+    text: '#047857',
+    textSecondary: '#065F46',
+  },
   accent: '#4C61FF',
 };
 
-function TableNode({ data, selected }: NodeProps): JSX.Element {
+function TableNode({ id, data, selected }: NodeProps): JSX.Element {
+  const { toggleNodeCollapse } = useLineageActions();
   const nodeData = data as TableNodeData;
   const isCte = nodeData.nodeType === 'cte';
+  const isVirtualOutput = nodeData.nodeType === 'virtualOutput';
   const isSelected = selected || nodeData.isSelected;
   const isHighlighted = nodeData.isHighlighted;
-  const palette = isCte ? colors.cte : colors.table;
+  const isCollapsed = nodeData.isCollapsed;
+
+  let palette = colors.table;
+  if (isCte) {
+    palette = colors.cte;
+  } else if (isVirtualOutput) {
+    palette = colors.virtualOutput;
+  }
 
   return (
     <div
@@ -71,35 +93,87 @@ function TableNode({ data, selected }: NodeProps): JSX.Element {
           padding: '8px 12px',
           fontSize: 12,
           fontWeight: 500,
-          borderBottom: `1px solid ${palette.border}`,
+          borderBottom: isCollapsed ? 'none' : `1px solid ${palette.border}`,
           backgroundColor: palette.headerBg,
           color: palette.text,
           display: 'flex',
           alignItems: 'center',
           gap: 8,
+          position: 'relative',
         }}
       >
-        <span
+        {/* Handles for collapsed state */}
+        {isCollapsed && (
+          <>
+            <Handle
+              type="target"
+              position={Position.Left}
+              style={{ opacity: 0, border: 'none', background: 'transparent' }}
+            />
+            <Handle
+              type="source"
+              position={Position.Right}
+              style={{ opacity: 0, border: 'none', background: 'transparent' }}
+            />
+          </>
+        )}
+        
+        <button
+          onClick={(e) => {
+            e.stopPropagation(); // Prevent node selection when toggling
+            toggleNodeCollapse(id);
+          }}
           style={{
-            textTransform: 'uppercase',
-            fontSize: 10,
-            opacity: 0.6,
-            fontWeight: 600,
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: 0,
+            display: 'flex',
+            alignItems: 'center',
+            color: palette.textSecondary,
           }}
         >
-          {nodeData.nodeType}
-        </span>
-        <span style={{ fontWeight: 600 }}>{sanitizeIdentifier(nodeData.label)}</span>
+          {isCollapsed ? (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M9 18l6-6-6-6" />
+            </svg>
+          ) : (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          )}
+        </button>
+
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              textTransform: 'uppercase',
+              fontSize: 10,
+              opacity: 0.6,
+              fontWeight: 600,
+              lineHeight: 1,
+              marginBottom: 2,
+            }}
+          >
+            {isVirtualOutput ? 'OUTPUT' : nodeData.nodeType}
+          </div>
+          <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {sanitizeIdentifier(nodeData.label)}
+          </div>
+        </div>
       </div>
-      {nodeData.columns.length > 0 && (
-        <div style={{ padding: '6px 12px', maxHeight: 150, overflowY: 'auto', position: 'relative' }}>
+      
+      {!isCollapsed && nodeData.columns.length > 0 && (
+        <div style={{ padding: '6px 12px', maxHeight: 1000, overflowY: 'auto', position: 'relative' }}>
           {nodeData.columns.map((col: ColumnNodeInfo) => {
             return (
               <div
                 key={col.id}
                 style={{
                   fontSize: 12,
-                  color: palette.textSecondary,
+                  color: col.isHighlighted ? colors.accent : palette.textSecondary,
+                  fontWeight: col.isHighlighted ? 600 : 400,
+                  backgroundColor: col.isHighlighted ? `${colors.accent}10` : 'transparent',
                   padding: '3px 4px',
                   borderRadius: 4,
                   position: 'relative',
@@ -113,11 +187,12 @@ function TableNode({ data, selected }: NodeProps): JSX.Element {
                   style={{
                     width: 8,
                     height: 8,
-                    backgroundColor: colors.accent,
-                    border: '2px solid white',
                     left: -4,
                     top: '50%',
                     transform: 'translateY(-50%)',
+                    opacity: 0, // Hide handle visually but keep functional
+                    border: 'none',
+                    background: 'transparent',
                   }}
                 />
                 {sanitizeIdentifier(col.name)}
@@ -129,11 +204,12 @@ function TableNode({ data, selected }: NodeProps): JSX.Element {
                   style={{
                     width: 8,
                     height: 8,
-                    backgroundColor: colors.accent,
-                    border: '2px solid white',
                     right: -4,
                     top: '50%',
                     transform: 'translateY(-50%)',
+                    opacity: 0, // Hide handle visually but keep functional
+                    border: 'none',
+                    background: 'transparent',
                   }}
                 />
               </div>
@@ -169,6 +245,7 @@ function AnimatedEdge({
   const expression = data?.expression as string | undefined;
   const sourceColumn = data?.sourceColumn as string | undefined;
   const targetColumn = data?.targetColumn as string | undefined;
+  const isHighlighted = data?.isHighlighted as boolean | undefined;
 
   // Build tooltip content
   let tooltipContent = '';
@@ -187,32 +264,77 @@ function AnimatedEdge({
         path={edgePath}
         markerEnd={markerEnd}
         style={{
-          stroke: colors.accent,
-          strokeWidth: 2,
+          stroke: isHighlighted ? colors.accent : (style?.stroke || '#b1b1b7'),
+          strokeWidth: isHighlighted ? 3 : 2,
+          opacity: isHighlighted ? 1 : 0.5,
           ...style,
         }}
       />
-      {/* Show marker badge on edges with expressions */}
+      {/* Use EdgeLabelRenderer to render HTML content on top of SVG */}
       {expression && (
-        <g transform={`translate(${labelX}, ${labelY})`} style={{ cursor: 'help' }}>
-          <title>{tooltipContent}</title>
-          {/* Background circle */}
-          <circle
-            r={10}
-            fill="#FFF"
-            stroke={colors.accent}
-            strokeWidth={2}
-          />
-          {/* Expression icon - bolt/lightning SVG */}
-          <g transform="translate(-6, -6)" style={{ pointerEvents: 'none' }}>
-            <path
-              d="M7 1L1 7h4l-0.5 4 5-6H5.5L7 1z"
-              fill={colors.accent}
-            />
-          </g>
-        </g>
+        <EdgeLabelRenderer>
+          <div
+            style={{
+              position: 'absolute',
+              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+              pointerEvents: 'all', // Re-enable pointer events for the tooltip trigger
+              zIndex: 1000, // Ensure it's above edges
+            }}
+          >
+            <Tooltip.Provider>
+              <Tooltip.Root delayDuration={0}>
+                <Tooltip.Trigger asChild>
+                  <div
+                    style={{
+                      cursor: 'help',
+                      backgroundColor: 'white',
+                      border: `2px solid ${colors.accent}`,
+                      borderRadius: '50%',
+                      width: 20,
+                      height: 20,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="none">
+                      <path
+                        d="M13 2L3 14H12L11 22L21 10H12L13 2Z"
+                        fill={colors.accent}
+                        stroke={colors.accent}
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </div>
+                </Tooltip.Trigger>
+                <Tooltip.Portal>
+                  <Tooltip.Content
+                    side="top"
+                    sideOffset={5}
+                    style={{
+                      backgroundColor: '#333',
+                      color: 'white',
+                      padding: '8px 12px',
+                      borderRadius: 4,
+                      fontSize: 12,
+                      whiteSpace: 'pre-wrap',
+                      maxWidth: 300,
+                      zIndex: 9999,
+                      boxShadow: '0 2px 10px rgba(0,0,0,0.2)',
+                    }}
+                  >
+                    {tooltipContent}
+                    <Tooltip.Arrow style={{ fill: '#333' }} />
+                  </Tooltip.Content>
+                </Tooltip.Portal>
+              </Tooltip.Root>
+            </Tooltip.Provider>
+          </div>
+        </EdgeLabelRenderer>
       )}
-      {/* Tooltip for all edges */}
+      {/* Simple title for non-expression edges, if needed, though typically less critical */}
       {!expression && tooltipContent && (
         <g transform={`translate(${labelX}, ${labelY})`}>
           <title>{tooltipContent}</title>
@@ -249,8 +371,6 @@ function mergeStatements(statements: StatementLineage[]): StatementLineage {
 
   statements.forEach((stmt) => {
     stmt.nodes.forEach((node) => {
-       // For tables, we might want to deduplicate based on label if ID varies
-       // But assuming unique IDs for now or consistent naming
        if (!mergedNodes.has(node.id)) {
          mergedNodes.set(node.id, node);
        }
@@ -265,7 +385,7 @@ function mergeStatements(statements: StatementLineage[]): StatementLineage {
 
   return {
     statementIndex: 0,
-    statementType: 'SELECT', // Placeholder for merged view
+    statementType: 'SELECT',
     nodes: Array.from(mergedNodes.values()),
     edges: Array.from(mergedEdges.values()),
   };
@@ -274,7 +394,8 @@ function mergeStatements(statements: StatementLineage[]): StatementLineage {
 function buildFlowNodes(
   statement: StatementLineage,
   selectedNodeId: string | null,
-  searchTerm: string
+  searchTerm: string,
+  collapsedNodeIds: Set<string>
 ): FlowNode[] {
   const lowerCaseSearchTerm = searchTerm.toLowerCase();
   const tableNodes = statement.nodes.filter((n) => n.type === 'table' || n.type === 'cte');
@@ -327,6 +448,7 @@ function buildFlowNodes(
         columns: columns,
         isSelected: node.id === selectedNodeId,
         isHighlighted: isHighlighted,
+        isCollapsed: collapsedNodeIds.has(node.id),
       } satisfies TableNodeData,
     });
   }
@@ -347,10 +469,6 @@ function buildFlowEdges(statement: StatementLineage): FlowEdge[] {
     }));
 }
 
-/**
- * Build script-level nodes and edges from multiple statements.
- * Groups statements by source_name and shows script-to-script relationships.
- */
 function buildScriptLevelGraph(
   statements: StatementLineage[],
   selectedNodeId: string | null,
@@ -358,7 +476,6 @@ function buildScriptLevelGraph(
 ): { nodes: FlowNode[]; edges: FlowEdge[] } {
   const lowerCaseSearchTerm = searchTerm.toLowerCase();
 
-  // Group statements by source_name
   const scriptMap = new Map<string, StatementLineage[]>();
   statements.forEach((stmt) => {
     const sourceName = (stmt as any).source_name || 'unknown';
@@ -369,7 +486,6 @@ function buildScriptLevelGraph(
 
   const flowNodes: FlowNode[] = [];
 
-  // Create script nodes
   scriptMap.forEach((stmts, sourceName) => {
     const tablesRead = new Set<string>();
     const tablesWritten = new Set<string>();
@@ -377,7 +493,6 @@ function buildScriptLevelGraph(
     stmts.forEach((stmt) => {
       stmt.nodes.forEach((node) => {
         if (node.type === 'table') {
-          // Determine if table is read or written based on edges
           const isWritten = stmt.edges.some((e) => e.to === node.id && e.type === 'data_flow');
           const isRead = stmt.edges.some((e) => e.from === node.id && e.type === 'data_flow');
 
@@ -411,7 +526,6 @@ function buildScriptLevelGraph(
     });
   });
 
-  // Create edges between scripts that share tables
   const flowEdges: FlowEdge[] = [];
   const edgeSet = new Set<string>();
 
@@ -443,7 +557,6 @@ function buildScriptLevelGraph(
         });
       });
 
-      // Find shared tables
       const sharedTables: string[] = [];
       producerTables.forEach((table) => {
         if (consumerTables.has(table)) {
@@ -470,15 +583,12 @@ function buildScriptLevelGraph(
   return { nodes: flowNodes, edges: flowEdges };
 }
 
-/**
- * Build column-level nodes and edges showing column-to-column lineage.
- * Tables are shown with embedded columns (like table view), but edges represent
- * column-to-column relationships instead of table-to-table relationships.
- */
 function buildColumnLevelGraph(
   statement: StatementLineage,
   selectedNodeId: string | null,
-  searchTerm: string
+  searchTerm: string,
+  pathHighlightIds: Set<string>,
+  collapsedNodeIds: Set<string>
 ): { nodes: FlowNode[]; edges: FlowEdge[] } {
   const lowerCaseSearchTerm = searchTerm.toLowerCase();
   const tableNodes = statement.nodes.filter((n) => n.type === 'table' || n.type === 'cte');
@@ -498,6 +608,7 @@ function buildColumnLevelGraph(
           id: childNode.id,
           name: childNode.label,
           expression: childNode.expression,
+          isHighlighted: pathHighlightIds.has(childNode.id),
         });
         tableColumnMap.set(parentNode.id, cols);
         columnToTableMap.set(childNode.id, parentNode.id);
@@ -516,6 +627,7 @@ function buildColumnLevelGraph(
         id: node.id,
         name: node.label,
         expression: node.expression,
+        isHighlighted: pathHighlightIds.has(node.id),
       });
     }
   }
@@ -536,8 +648,9 @@ function buildColumnLevelGraph(
         label: node.label,
         nodeType: node.type === 'cte' ? 'cte' : 'table',
         columns: columns,
-        isSelected: node.id === selectedNodeId,
+        isSelected: node.id === selectedNodeId || pathHighlightIds.has(node.id),
         isHighlighted: isHighlighted,
+        isCollapsed: collapsedNodeIds.has(node.id),
       } satisfies TableNodeData,
     });
   }
@@ -556,10 +669,11 @@ function buildColumnLevelGraph(
       position: { x: 0, y: 0 },
       data: {
         label: 'Output',
-        nodeType: 'table',
+        nodeType: 'virtualOutput',
         columns: outputColumns,
         isSelected: outputNodeId === selectedNodeId,
         isHighlighted,
+        isCollapsed: collapsedNodeIds.has(outputNodeId),
       } satisfies TableNodeData,
     });
 
@@ -571,39 +685,6 @@ function buildColumnLevelGraph(
 
   // Build one edge per column lineage connection
   const flowEdges: FlowEdge[] = [];
-
-  console.log('[Column View] All column lineage edges:',
-    statement.edges
-      .filter((e) => e.type === 'derivation' || e.type === 'data_flow')
-      .map(e => {
-        const from = columnNodes.find(c => c.id === e.from);
-        const to = columnNodes.find(c => c.id === e.to);
-        const fromTable = from ? columnToTableMap.get(from.id) : null;
-        const toTable = to ? columnToTableMap.get(to.id) : null;
-        return {
-          from: from?.label,
-          to: to?.label,
-          fromTable: tableNodes.find(t => t.id === fromTable)?.label,
-          toTable: tableNodes.find(t => t.id === toTable)?.label || (toTable === 'virtual:output' ? 'Output' : toTable),
-          type: e.type,
-          expression: e.expression
-        };
-      })
-  );
-
-  // Build a map of column name -> tables that have this column
-  // This helps us find the CORRECT source table when columns appear in multiple tables
-  const columnNameToTables = new Map<string, string[]>();
-  for (const [columnId, tableId] of columnToTableMap.entries()) {
-    const col = columnNodes.find(c => c.id === columnId);
-    if (col) {
-      const tables = columnNameToTables.get(col.label) || [];
-      if (!tables.includes(tableId)) {
-        tables.push(tableId);
-      }
-      columnNameToTables.set(col.label, tables);
-    }
-  }
 
   // Create one edge per column-to-column connection
   statement.edges
@@ -620,20 +701,27 @@ function buildColumnLevelGraph(
         if (sourceTableId && targetTableId && sourceTableId !== targetTableId) {
           const hasExpression = edge.expression || targetCol.expression;
           const isDerivedColumn = edge.type === 'derivation' || hasExpression;
+          const isEdgeHighlighted = pathHighlightIds.has(edge.id);
+
+          const isSourceCollapsed = collapsedNodeIds.has(sourceTableId);
+          const isTargetCollapsed = collapsedNodeIds.has(targetTableId);
 
           flowEdges.push({
             id: edge.id,
             source: sourceTableId,
             target: targetTableId,
-            sourceHandle: edge.from,
-            targetHandle: edge.to,
+            sourceHandle: isSourceCollapsed ? null : edge.from,
+            targetHandle: isTargetCollapsed ? null : edge.to,
             type: 'animated',
+            animated: isEdgeHighlighted,
+            zIndex: isEdgeHighlighted ? 1000 : 0,
             data: {
               type: edge.type,
               expression: edge.expression || targetCol.expression,
               sourceColumn: sourceCol.label,
               targetColumn: targetCol.label,
               isDerived: isDerivedColumn,
+              isHighlighted: isEdgeHighlighted,
             },
             style: {
               strokeDasharray: isDerivedColumn ? '5,5' : undefined,
@@ -646,9 +734,98 @@ function buildColumnLevelGraph(
   return { nodes: flowNodes, edges: flowEdges };
 }
 
+// --- Path Highlighting Logic ---
+
+/**
+ * Traverse the graph to find all connected elements (nodes/edges) upstream and downstream.
+ */
+function findConnectedElements(
+  startId: string,
+  edges: FlowEdge[]
+): Set<string> {
+  const visited = new Set<string>();
+  const queue: string[] = [startId];
+  visited.add(startId);
+
+  // Build adjacency list for simpler traversal
+  const downstreamMap = new Map<string, string[]>(); // source -> targets
+  const upstreamMap = new Map<string, string[]>();   // target -> sources
+  const edgeMap = new Map<string, FlowEdge>();
+
+  edges.forEach(edge => {
+    edgeMap.set(edge.id, edge);
+    
+    // Map using handles (column IDs) as these are the true nodes in column view
+    const source = edge.sourceHandle || edge.source;
+    const target = edge.targetHandle || edge.target;
+
+    if (!downstreamMap.has(source)) downstreamMap.set(source, []);
+    downstreamMap.get(source)?.push(edge.id);
+
+    if (!upstreamMap.has(target)) upstreamMap.set(target, []);
+    upstreamMap.get(target)?.push(edge.id);
+  });
+
+  // Forward traversal (Downstream)
+  const forwardQueue = [startId];
+  const forwardVisited = new Set<string>([startId]);
+  while (forwardQueue.length > 0) {
+    const currentId = forwardQueue.shift()!;
+    // If current is an edge ID, move to its target
+    if (edgeMap.has(currentId)) {
+      const edge = edgeMap.get(currentId)!;
+      const target = edge.targetHandle || edge.target;
+      if (!forwardVisited.has(target)) {
+        forwardVisited.add(target);
+        visited.add(target);
+        forwardQueue.push(target);
+      }
+    } else {
+      // Current is a node (column) ID, find outgoing edges
+      const outgoingEdges = downstreamMap.get(currentId) || [];
+      outgoingEdges.forEach(edgeId => {
+        if (!forwardVisited.has(edgeId)) {
+          forwardVisited.add(edgeId);
+          visited.add(edgeId);
+          forwardQueue.push(edgeId);
+        }
+      });
+    }
+  }
+
+  // Backward traversal (Upstream)
+  const backwardQueue = [startId];
+  const backwardVisited = new Set<string>([startId]);
+  while (backwardQueue.length > 0) {
+    const currentId = backwardQueue.shift()!;
+    // If current is an edge ID, move to its source
+    if (edgeMap.has(currentId)) {
+      const edge = edgeMap.get(currentId)!;
+      const source = edge.sourceHandle || edge.source;
+      if (!backwardVisited.has(source)) {
+        backwardVisited.add(source);
+        visited.add(source);
+        backwardQueue.push(source);
+      }
+    } else {
+      // Current is a node (column) ID, find incoming edges
+      const incomingEdges = upstreamMap.get(currentId) || [];
+      incomingEdges.forEach(edgeId => {
+        if (!backwardVisited.has(edgeId)) {
+          backwardVisited.add(edgeId);
+          visited.add(edgeId);
+          backwardQueue.push(edgeId);
+        }
+      });
+    }
+  }
+
+  return visited;
+}
+
 export function GraphView({ className, onNodeClick, graphContainerRef }: GraphViewProps): JSX.Element {
   const { state, actions } = useLineage();
-  const { result, selectedNodeId, searchTerm, viewMode } = state;
+  const { result, selectedNodeId, searchTerm, viewMode, collapsedNodeIds } = state;
 
   // Merge all statements into one big graph (for table and column modes)
   const statement = useMemo(() => {
@@ -656,6 +833,9 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
     return mergeStatements(result.statements);
   }, [result]);
 
+  // Memoize layout calculation separately from state updates to prevent "jumping"
+  // We only want to calculate layout when the underlying data structure changes,
+  // NOT when the user drags a node (which updates local node state).
   const { layoutedNodes, layoutedEdges } = useMemo(() => {
     if (!result || !result.statements) return { layoutedNodes: [], layoutedEdges: [] };
 
@@ -670,28 +850,85 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
       direction = 'LR';
     } else if (viewMode === 'column') {
       if (!statement) return { layoutedNodes: [], layoutedEdges: [] };
-      const graph = buildColumnLevelGraph(statement, selectedNodeId, searchTerm);
+      
+      // Pass 1: Build basic graph to get edges for highlight calculation
+      const tempGraph = buildColumnLevelGraph(statement, selectedNodeId, searchTerm, new Set(), collapsedNodeIds);
+      
+      let highlightIds = new Set<string>();
+      if (selectedNodeId) {
+        highlightIds = findConnectedElements(selectedNodeId, tempGraph.edges);
+      }
+
+      // Pass 2: Build graph with highlight info
+      const graph = buildColumnLevelGraph(statement, selectedNodeId, searchTerm, highlightIds, collapsedNodeIds);
       rawNodes = graph.nodes;
       rawEdges = graph.edges;
-      direction = 'TB';
+      direction = 'LR';
     } else {
       if (!statement) return { layoutedNodes: [], layoutedEdges: [] };
-      rawNodes = buildFlowNodes(statement, selectedNodeId, searchTerm);
+      rawNodes = buildFlowNodes(statement, selectedNodeId, searchTerm, collapsedNodeIds);
       rawEdges = buildFlowEdges(statement);
       direction = 'LR';
     }
 
     const { nodes: ln, edges: le } = getLayoutedElements(rawNodes, rawEdges, direction);
     return { layoutedNodes: ln, layoutedEdges: le };
-  }, [result, statement, selectedNodeId, searchTerm, viewMode]);
+  }, [result, statement, selectedNodeId, searchTerm, viewMode, collapsedNodeIds]);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(layoutedNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(layoutedEdges);
+  // Initialize local state with layouted nodes
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
+  // Ref to track if we have loaded initial layout
+  const isInitialized = useRef(false);
+  const lastResultId = useRef<string | null>(null);
+  const lastViewMode = useRef<string | null>(null);
+
+  // Update nodes/edges when layout changes, but ONLY if the underlying data structure
+  // or view mode has changed. This prevents resetting positions on simple re-renders.
   useEffect(() => {
+    const currentResultId = result ? JSON.stringify(result.summary) : null; // Simple content check
+    
+    const needsUpdate = 
+      !isInitialized.current || 
+      currentResultId !== lastResultId.current ||
+      viewMode !== lastViewMode.current;
+
+    if (needsUpdate && layoutedNodes.length > 0) {
+      setNodes(layoutedNodes);
+      setEdges(layoutedEdges);
+      isInitialized.current = true;
+      lastResultId.current = currentResultId;
+      lastViewMode.current = viewMode;
+    } else if (layoutedNodes.length > 0) {
+      // Even if structure didn't change, we might need to update styling (highlighting)
+      // We map over existing nodes to preserve positions but update data
+      setNodes((currentNodes) => {
+        return layoutedNodes.map((layoutNode) => {
+          const currentNode = currentNodes.find((n) => n.id === layoutNode.id);
+          if (currentNode) {
+            // Preserve position, update data/style
+            return {
+              ...layoutNode,
+              position: currentNode.position,
+            };
+          }
+          return layoutNode;
+        });
+      });
+      // Edges can always be replaced as they don't carry position state
+      setEdges(layoutedEdges);
+    }
+  }, [layoutedNodes, layoutedEdges, setNodes, setEdges, result, viewMode]);
+
+  // Force layout recalculation handler
+  const handleRearrange = useCallback(() => {
     setNodes(layoutedNodes);
     setEdges(layoutedEdges);
   }, [layoutedNodes, layoutedEdges, setNodes, setEdges]);
+
+  const internalGraphRef = useRef<HTMLDivElement>(null);
+  const finalRef = graphContainerRef || internalGraphRef;
 
   const handleNodeClick = useCallback(
     (_event: React.MouseEvent, node: FlowNode) => {
@@ -707,6 +944,13 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
       }
     },
     [actions, statement, onNodeClick]
+  );
+
+  const handleEdgeClick = useCallback(
+    (_event: React.MouseEvent, edge: FlowEdge) => {
+      actions.selectNode(edge.id);
+    },
+    [actions]
   );
 
   const handlePaneClick = useCallback(() => {
@@ -731,13 +975,14 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
   }
 
   return (
-    <div className={className} style={{ height: '100%' }} ref={graphContainerRef}>
+    <div className={className} style={{ height: '100%' }} ref={finalRef}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={handleNodeClick}
+        onEdgeClick={handleEdgeClick}
         onPaneClick={handlePaneClick}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
@@ -747,6 +992,27 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
       >
         <Background />
         <Controls />
+        <Panel position="top-left">
+          <div style={{ width: 250 }}>
+            <Input
+              placeholder="Search nodes..."
+              value={searchTerm}
+              onChange={(e) => actions.setSearchTerm(e.target.value)}
+              className="bg-white shadow-sm border-gray-200"
+            />
+          </div>
+        </Panel>
+        <Panel position="top-right" style={{ display: 'flex', gap: '8px' }}>
+          <ExportMenu graphRef={finalRef} />
+          <Button 
+            onClick={handleRearrange} 
+            variant="secondary" 
+            size="sm"
+            className="shadow-sm"
+          >
+            Rearrange
+          </Button>
+        </Panel>
         <MiniMap
           nodeColor={(node) => {
             const data = node.data as TableNodeData;

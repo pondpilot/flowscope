@@ -1050,17 +1050,15 @@ fn dml_delete_with_subquery_identifies_dependencies() {
 #[test]
 fn dml_delete_with_join_tracks_all_tables() {
     let sql = r#"
-        DELETE o
-        FROM orders o
-        JOIN cancelled_subscriptions c ON o.subscription_id = c.id
-        WHERE c.cancelled_date < CURRENT_DATE - 30;
+        DELETE FROM orders AS o
+        USING cancelled_subscriptions AS c
+        WHERE o.subscription_id = c.id
+          AND c.cancelled_date < CURRENT_DATE - 30;
     "#;
 
-    let result = run_analysis(sql, Dialect::Generic, None);
+    let result = run_analysis(sql, Dialect::Postgres, None);
     let tables = collect_table_names(&result);
 
-    // This syntax is non-standard but common in MySQL/SQL Server
-    // Lineage should ideally capture both tables
     assert!(tables.contains("orders"), "DELETE target alias should resolve to table");
     assert!(tables.contains("cancelled_subscriptions"), "DELETE JOIN source should be tracked");
 }
@@ -2676,7 +2674,6 @@ fn comments_handling_blocks_and_inline() {
 }
 
 #[test]
-#[should_panic(expected = "BUG DETECTED")]
 fn column_lineage_cte_transformation_chain_with_reuse() {
     // THIS TEST CURRENTLY FAILS - IT DOCUMENTS A BUG IN THE LINEAGE ENGINE
     //

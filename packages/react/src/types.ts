@@ -34,6 +34,8 @@ export interface LineageState {
   sql: string;
   /** ID of the currently selected node in the graph, or null if none selected */
   selectedNodeId: string | null;
+  /** Set of IDs for nodes that are currently collapsed */
+  collapsedNodeIds: Set<string>;
   /** Index of the currently selected SQL statement */
   selectedStatementIndex: number;
   /** The currently highlighted span in the SQL editor, or null if none */
@@ -55,6 +57,8 @@ export interface LineageActions {
   setSql: (sql: string) => void;
   /** Select a node by ID, or null to deselect */
   selectNode: (nodeId: string | null) => void;
+  /** Toggle the collapsed state of a node */
+  toggleNodeCollapse: (nodeId: string) => void;
   /** Select a statement by index */
   selectStatement: (index: number) => void;
   /** Highlight a span in the SQL editor, or null to clear */
@@ -161,12 +165,14 @@ export interface ScriptNodeData extends Record<string, unknown> {
 export interface TableNodeData extends Record<string, unknown> {
   /** Display name of the table or CTE */
   label: string;
-  /** Type of node: regular table or CTE */
-  nodeType: 'table' | 'cte';
+  /** Type of node: regular table, CTE, or virtual output */
+  nodeType: 'table' | 'cte' | 'virtualOutput';
   /** List of columns belonging to this table */
   columns: ColumnNodeInfo[];
   /** Whether this node is currently selected */
   isSelected: boolean;
+  /** Whether this node is collapsed */
+  isCollapsed: boolean;
   /** Whether this node matches the current search term */
   isHighlighted: boolean;
 }
@@ -181,6 +187,8 @@ export interface ColumnNodeInfo {
   name: string;
   /** Optional SQL expression for computed columns */
   expression?: string;
+  /** Whether this column is part of a highlighted path */
+  isHighlighted?: boolean;
 }
 
 /**
