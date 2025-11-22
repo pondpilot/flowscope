@@ -23,10 +23,12 @@ import type {
   TableNodeData,
   ColumnNodeInfo,
   ScriptNodeData,
+  StatementLineageWithSource,
 } from '../types';
 import type { Node, Edge, StatementLineage } from '@pondpilot/flowscope-core';
 import { getLayoutedElements } from '../utils/layout';
 import { sanitizeIdentifier } from '../utils/sanitize';
+import { findConnectedElements } from '../utils/graphTraversal';
 import { ScriptNode } from './ScriptNode';
 import { ColumnNode } from './ColumnNode';
 import { Button } from './ui/button';
@@ -57,6 +59,17 @@ const colors = {
   },
   accent: '#4C61FF',
 };
+
+const GRAPH_CONFIG = {
+  /** Maximum height for column containers to prevent scrolling for most tables */
+  MAX_COLUMN_HEIGHT: 1000,
+  /** Delay before showing tooltips in milliseconds */
+  TOOLTIP_DELAY: 0,
+  /** Z-index for highlighted edges to ensure they appear above non-highlighted edges */
+  HIGHLIGHTED_EDGE_Z_INDEX: 1000,
+  /** ID for the virtual output node in column view */
+  VIRTUAL_OUTPUT_NODE_ID: 'virtual:output',
+} as const;
 
 function TableNode({ id, data, selected }: NodeProps): JSX.Element {
   const { toggleNodeCollapse } = useLineageActions();
@@ -164,7 +177,7 @@ function TableNode({ id, data, selected }: NodeProps): JSX.Element {
       </div>
       
       {!isCollapsed && nodeData.columns.length > 0 && (
-        <div style={{ padding: '6px 12px', maxHeight: 1000, overflowY: 'auto', position: 'relative' }}>
+        <div style={{ padding: '6px 12px', maxHeight: GRAPH_CONFIG.MAX_COLUMN_HEIGHT, overflowY: 'auto', position: 'relative' }}>
           {nodeData.columns.map((col: ColumnNodeInfo) => {
             return (
               <div
@@ -282,9 +295,11 @@ function AnimatedEdge({
             }}
           >
             <Tooltip.Provider>
-              <Tooltip.Root delayDuration={0}>
+              <Tooltip.Root delayDuration={GRAPH_CONFIG.TOOLTIP_DELAY}>
                 <Tooltip.Trigger asChild>
-                  <div
+                  <button
+                    type="button"
+                    aria-label="View expression details"
                     style={{
                       cursor: 'help',
                       backgroundColor: 'white',
@@ -295,6 +310,7 @@ function AnimatedEdge({
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
+                      padding: 0,
                     }}
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="none">
@@ -307,7 +323,7 @@ function AnimatedEdge({
                         strokeLinejoin="round"
                       />
                     </svg>
-                  </div>
+                  </button>
                 </Tooltip.Trigger>
                 <Tooltip.Portal>
                   <Tooltip.Content
@@ -470,15 +486,15 @@ function buildFlowEdges(statement: StatementLineage): FlowEdge[] {
 }
 
 function buildScriptLevelGraph(
-  statements: StatementLineage[],
+  statements: StatementLineageWithSource[],
   selectedNodeId: string | null,
   searchTerm: string
 ): { nodes: FlowNode[]; edges: FlowEdge[] } {
   const lowerCaseSearchTerm = searchTerm.toLowerCase();
 
-  const scriptMap = new Map<string, StatementLineage[]>();
+  const scriptMap = new Map<string, StatementLineageWithSource[]>();
   statements.forEach((stmt) => {
-    const sourceName = (stmt as any).source_name || 'unknown';
+    const sourceName = stmt.source_name || 'unknown';
     const existing = scriptMap.get(sourceName) || [];
     existing.push(stmt);
     scriptMap.set(sourceName, existing);
@@ -587,7 +603,6 @@ function buildColumnLevelGraph(
   statement: StatementLineage,
   selectedNodeId: string | null,
   searchTerm: string,
-  pathHighlightIds: Set<string>,
   collapsedNodeIds: Set<string>
 ): { nodes: FlowNode[]; edges: FlowEdge[] } {
   const lowerCaseSearchTerm = searchTerm.toLowerCase();
@@ -608,7 +623,6 @@ function buildColumnLevelGraph(
           id: childNode.id,
           name: childNode.label,
           expression: childNode.expression,
-          isHighlighted: pathHighlightIds.has(childNode.id),
         });
         tableColumnMap.set(parentNode.id, cols);
         columnToTableMap.set(childNode.id, parentNode.id);
@@ -627,7 +641,6 @@ function buildColumnLevelGraph(
         id: node.id,
         name: node.label,
         expression: node.expression,
-        isHighlighted: pathHighlightIds.has(node.id),
       });
     }
   }
@@ -648,7 +661,7 @@ function buildColumnLevelGraph(
         label: node.label,
         nodeType: node.type === 'cte' ? 'cte' : 'table',
         columns: columns,
-        isSelected: node.id === selectedNodeId || pathHighlightIds.has(node.id),
+        isSelected: node.id === selectedNodeId,
         isHighlighted: isHighlighted,
         isCollapsed: collapsedNodeIds.has(node.id),
       } satisfies TableNodeData,
@@ -657,7 +670,7 @@ function buildColumnLevelGraph(
 
   // Add virtual "Output" table node if there are output columns
   if (outputColumns.length > 0) {
-    const outputNodeId = 'virtual:output';
+    const outputNodeId = GRAPH_CONFIG.VIRTUAL_OUTPUT_NODE_ID;
     const isHighlighted = !!(
       lowerCaseSearchTerm &&
       outputColumns.some((col) => col.name.toLowerCase().includes(lowerCaseSearchTerm))
@@ -701,7 +714,6 @@ function buildColumnLevelGraph(
         if (sourceTableId && targetTableId && sourceTableId !== targetTableId) {
           const hasExpression = edge.expression || targetCol.expression;
           const isDerivedColumn = edge.type === 'derivation' || hasExpression;
-          const isEdgeHighlighted = pathHighlightIds.has(edge.id);
 
           const isSourceCollapsed = collapsedNodeIds.has(sourceTableId);
           const isTargetCollapsed = collapsedNodeIds.has(targetTableId);
@@ -713,15 +725,12 @@ function buildColumnLevelGraph(
             sourceHandle: isSourceCollapsed ? null : edge.from,
             targetHandle: isTargetCollapsed ? null : edge.to,
             type: 'animated',
-            animated: isEdgeHighlighted,
-            zIndex: isEdgeHighlighted ? 1000 : 0,
             data: {
               type: edge.type,
               expression: edge.expression || targetCol.expression,
               sourceColumn: sourceCol.label,
               targetColumn: targetCol.label,
               isDerived: isDerivedColumn,
-              isHighlighted: isEdgeHighlighted,
             },
             style: {
               strokeDasharray: isDerivedColumn ? '5,5' : undefined,
@@ -737,90 +746,46 @@ function buildColumnLevelGraph(
 // --- Path Highlighting Logic ---
 
 /**
- * Traverse the graph to find all connected elements (nodes/edges) upstream and downstream.
+ * Applies path highlighting to an existing graph by updating node and edge data.
+ * @param graph The graph with nodes and edges to enhance
+ * @param highlightIds Set of IDs to highlight (nodes, columns, and edges)
+ * @returns Enhanced graph with highlighting applied
  */
-function findConnectedElements(
-  startId: string,
-  edges: FlowEdge[]
-): Set<string> {
-  const visited = new Set<string>();
-  const queue: string[] = [startId];
-  visited.add(startId);
+function enhanceGraphWithHighlights(
+  graph: { nodes: FlowNode[]; edges: FlowEdge[] },
+  highlightIds: Set<string>
+): { nodes: FlowNode[]; edges: FlowEdge[] } {
+  const enhancedNodes = graph.nodes.map(node => {
+    const nodeData = node.data as TableNodeData;
+    if (!nodeData.columns) return node;
 
-  // Build adjacency list for simpler traversal
-  const downstreamMap = new Map<string, string[]>(); // source -> targets
-  const upstreamMap = new Map<string, string[]>();   // target -> sources
-  const edgeMap = new Map<string, FlowEdge>();
+    // Update column highlighting
+    const enhancedColumns = nodeData.columns.map(col => ({
+      ...col,
+      isHighlighted: highlightIds.has(col.id),
+    }));
 
-  edges.forEach(edge => {
-    edgeMap.set(edge.id, edge);
-    
-    // Map using handles (column IDs) as these are the true nodes in column view
-    const source = edge.sourceHandle || edge.source;
-    const target = edge.targetHandle || edge.target;
-
-    if (!downstreamMap.has(source)) downstreamMap.set(source, []);
-    downstreamMap.get(source)?.push(edge.id);
-
-    if (!upstreamMap.has(target)) upstreamMap.set(target, []);
-    upstreamMap.get(target)?.push(edge.id);
+    return {
+      ...node,
+      data: {
+        ...nodeData,
+        columns: enhancedColumns,
+        isSelected: nodeData.isSelected || highlightIds.has(node.id),
+      },
+    };
   });
 
-  // Forward traversal (Downstream)
-  const forwardQueue = [startId];
-  const forwardVisited = new Set<string>([startId]);
-  while (forwardQueue.length > 0) {
-    const currentId = forwardQueue.shift()!;
-    // If current is an edge ID, move to its target
-    if (edgeMap.has(currentId)) {
-      const edge = edgeMap.get(currentId)!;
-      const target = edge.targetHandle || edge.target;
-      if (!forwardVisited.has(target)) {
-        forwardVisited.add(target);
-        visited.add(target);
-        forwardQueue.push(target);
-      }
-    } else {
-      // Current is a node (column) ID, find outgoing edges
-      const outgoingEdges = downstreamMap.get(currentId) || [];
-      outgoingEdges.forEach(edgeId => {
-        if (!forwardVisited.has(edgeId)) {
-          forwardVisited.add(edgeId);
-          visited.add(edgeId);
-          forwardQueue.push(edgeId);
-        }
-      });
-    }
-  }
+  const enhancedEdges = graph.edges.map(edge => ({
+    ...edge,
+    animated: highlightIds.has(edge.id),
+    zIndex: highlightIds.has(edge.id) ? GRAPH_CONFIG.HIGHLIGHTED_EDGE_Z_INDEX : 0,
+    data: {
+      ...edge.data,
+      isHighlighted: highlightIds.has(edge.id),
+    },
+  }));
 
-  // Backward traversal (Upstream)
-  const backwardQueue = [startId];
-  const backwardVisited = new Set<string>([startId]);
-  while (backwardQueue.length > 0) {
-    const currentId = backwardQueue.shift()!;
-    // If current is an edge ID, move to its source
-    if (edgeMap.has(currentId)) {
-      const edge = edgeMap.get(currentId)!;
-      const source = edge.sourceHandle || edge.source;
-      if (!backwardVisited.has(source)) {
-        backwardVisited.add(source);
-        visited.add(source);
-        backwardQueue.push(source);
-      }
-    } else {
-      // Current is a node (column) ID, find incoming edges
-      const incomingEdges = upstreamMap.get(currentId) || [];
-      incomingEdges.forEach(edgeId => {
-        if (!backwardVisited.has(edgeId)) {
-          backwardVisited.add(edgeId);
-          visited.add(edgeId);
-          backwardQueue.push(edgeId);
-        }
-      });
-    }
-  }
-
-  return visited;
+  return { nodes: enhancedNodes, edges: enhancedEdges };
 }
 
 export function GraphView({ className, onNodeClick, graphContainerRef }: GraphViewProps): JSX.Element {
@@ -837,32 +802,33 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
   // We only want to calculate layout when the underlying data structure changes,
   // NOT when the user drags a node (which updates local node state).
   const { layoutedNodes, layoutedEdges } = useMemo(() => {
-    if (!result || !result.statements) return { layoutedNodes: [], layoutedEdges: [] };
+    try {
+      if (!result || !result.statements) return { layoutedNodes: [], layoutedEdges: [] };
 
-    let rawNodes: FlowNode[];
-    let rawEdges: FlowEdge[];
-    let direction: 'LR' | 'TB' = 'LR';
+      let rawNodes: FlowNode[];
+      let rawEdges: FlowEdge[];
+      let direction: 'LR' | 'TB' = 'LR';
 
-    if (viewMode === 'script') {
+      if (viewMode === 'script') {
       const graph = buildScriptLevelGraph(result.statements, selectedNodeId, searchTerm);
       rawNodes = graph.nodes;
       rawEdges = graph.edges;
       direction = 'LR';
     } else if (viewMode === 'column') {
       if (!statement) return { layoutedNodes: [], layoutedEdges: [] };
-      
-      // Pass 1: Build basic graph to get edges for highlight calculation
-      const tempGraph = buildColumnLevelGraph(statement, selectedNodeId, searchTerm, new Set(), collapsedNodeIds);
-      
-      let highlightIds = new Set<string>();
-      if (selectedNodeId) {
-        highlightIds = findConnectedElements(selectedNodeId, tempGraph.edges);
-      }
 
-      // Pass 2: Build graph with highlight info
-      const graph = buildColumnLevelGraph(statement, selectedNodeId, searchTerm, highlightIds, collapsedNodeIds);
-      rawNodes = graph.nodes;
-      rawEdges = graph.edges;
+      // Build graph once
+      const graph = buildColumnLevelGraph(statement, selectedNodeId, searchTerm, collapsedNodeIds);
+
+      // Calculate highlights if a node is selected
+      const highlightIds = selectedNodeId
+        ? findConnectedElements(selectedNodeId, graph.edges)
+        : new Set<string>();
+
+      // Apply highlights to the graph
+      const enhancedGraph = enhanceGraphWithHighlights(graph, highlightIds);
+      rawNodes = enhancedGraph.nodes;
+      rawEdges = enhancedGraph.edges;
       direction = 'LR';
     } else {
       if (!statement) return { layoutedNodes: [], layoutedEdges: [] };
@@ -871,13 +837,17 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
       direction = 'LR';
     }
 
-    const { nodes: ln, edges: le } = getLayoutedElements(rawNodes, rawEdges, direction);
-    return { layoutedNodes: ln, layoutedEdges: le };
+      const { nodes: ln, edges: le } = getLayoutedElements(rawNodes, rawEdges, direction);
+      return { layoutedNodes: ln, layoutedEdges: le };
+    } catch (error) {
+      console.error('Graph layout calculation failed:', error);
+      return { layoutedNodes: [], layoutedEdges: [] };
+    }
   }, [result, statement, selectedNodeId, searchTerm, viewMode, collapsedNodeIds]);
 
   // Initialize local state with layouted nodes
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<FlowEdge>([]);
 
   // Ref to track if we have loaded initial layout
   const isInitialized = useRef(false);

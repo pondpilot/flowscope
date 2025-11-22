@@ -207,4 +207,13 @@ export interface ColumnNodeData extends Record<string, unknown> {
   isHighlighted: boolean;
 }
 
+/**
+ * Extended StatementLineage type with optional source_name field.
+ * The core StatementLineage may include source_name when analyzing multiple files.
+ */
+export interface StatementLineageWithSource extends StatementLineage {
+  /** Optional source file name or identifier */
+  source_name?: string;
+}
+
 export { AnalyzeResult, Node, Edge, Issue, Span, StatementLineage };
