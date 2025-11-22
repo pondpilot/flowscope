@@ -339,10 +339,14 @@ impl<'a> Analyzer<'a> {
 
             // Register CTE for resolution
             ctx.cte_definitions.insert(cte_name.clone(), cte_id.clone());
-            self.all_ctes.insert(cte_name);
+            self.all_ctes.insert(cte_name.clone());
 
             // Analyze CTE body
             self.analyze_query_body(ctx, &cte.query.body, Some(&cte_id));
+
+            // Capture CTE columns for lineage linking
+            let columns = std::mem::take(&mut ctx.output_columns);
+            ctx.cte_columns.insert(cte_name, columns);
         }
 
         // Analyze main query body
@@ -660,10 +664,23 @@ impl<'a> Analyzer<'a> {
             let resolved_table =
                 self.resolve_column_table(ctx, source.table.as_deref(), &source.column);
             if let Some(ref table_canonical) = resolved_table {
-                let source_col_id = generate_column_node_id(
-                    Some(&generate_node_id("table", table_canonical)),
-                    &self.normalize_identifier(&source.column),
-                );
+                let mut source_col_id = None;
+
+                // Try to find existing node ID if it's a known CTE
+                if let Some(cte_cols) = ctx.cte_columns.get(table_canonical) {
+                    let normalized_source_col = self.normalize_identifier(&source.column);
+                    if let Some(col) = cte_cols.iter().find(|c| c.name == normalized_source_col) {
+                        source_col_id = Some(col.node_id.clone());
+                    }
+                }
+
+                // Fallback to generating a new ID (standard table column)
+                let source_col_id = source_col_id.unwrap_or_else(|| {
+                    generate_column_node_id(
+                        Some(&generate_node_id("table", table_canonical)),
+                        &self.normalize_identifier(&source.column),
+                    )
+                });
 
                 // Check if source column exists in schema
                 self.validate_column(ctx, table_canonical, &source.column);

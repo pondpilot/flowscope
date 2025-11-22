@@ -1,4 +1,4 @@
-import { useMemo, useCallback, useEffect, useState } from 'react';
+import { useMemo, useCallback, useEffect } from 'react';
 import {
   ReactFlow,
   Background,
@@ -20,7 +20,6 @@ import type {
   TableNodeData,
   ColumnNodeInfo,
   ScriptNodeData,
-  ColumnNodeData,
 } from '../types';
 import type { Node, Edge, StatementLineage } from '@pondpilot/flowscope-core';
 import { getLayoutedElements } from '../utils/layout';
@@ -94,10 +93,7 @@ function TableNode({ data, selected }: NodeProps): JSX.Element {
       </div>
       {nodeData.columns.length > 0 && (
         <div style={{ padding: '6px 12px', maxHeight: 150, overflowY: 'auto', position: 'relative' }}>
-          {nodeData.columns.map((col: ColumnNodeInfo, index: number) => {
-            const totalColumns = nodeData.columns.length;
-            const handleTopPercent = ((index + 1) / (totalColumns + 1)) * 100;
-
+          {nodeData.columns.map((col: ColumnNodeInfo) => {
             return (
               <div
                 key={col.id}
@@ -159,7 +155,6 @@ function AnimatedEdge({
   targetPosition,
   markerEnd,
   data,
-  label,
   style,
 }: EdgeProps): JSX.Element {
   const [edgePath, labelX, labelY] = getBezierPath({
@@ -174,7 +169,6 @@ function AnimatedEdge({
   const expression = data?.expression as string | undefined;
   const sourceColumn = data?.sourceColumn as string | undefined;
   const targetColumn = data?.targetColumn as string | undefined;
-  const isDerived = data?.isDerived as boolean | undefined;
 
   // Build tooltip content
   let tooltipContent = '';
@@ -367,7 +361,7 @@ function buildScriptLevelGraph(
   // Group statements by source_name
   const scriptMap = new Map<string, StatementLineage[]>();
   statements.forEach((stmt) => {
-    const sourceName = stmt.source_name || 'unknown';
+    const sourceName = (stmt as any).source_name || 'unknown';
     const existing = scriptMap.get(sourceName) || [];
     existing.push(stmt);
     scriptMap.set(sourceName, existing);
@@ -611,28 +605,6 @@ function buildColumnLevelGraph(
     }
   }
 
-  // For columns that appear in multiple tables, we need to determine which one
-  // is the actual source based on the graph structure
-  const resolveSourceTable = (columnLabel: string, targetTableId: string): string | undefined => {
-    const possibleTables = columnNameToTables.get(columnLabel) || [];
-    if (possibleTables.length === 0) return undefined;
-    if (possibleTables.length === 1) return possibleTables[0];
-
-    // If multiple tables have this column, prefer CTEs over tables
-    // and prefer tables that appear "before" the target in dependency order
-    const ctes = possibleTables.filter(id => {
-      const node = tableNodes.find(n => n.id === id);
-      return node?.type === 'cte';
-    });
-
-    // If target is Output, prefer CTEs
-    if (targetTableId === 'virtual:output' && ctes.length > 0) {
-      return ctes[ctes.length - 1]; // Return last CTE (most recent in query)
-    }
-
-    return possibleTables[possibleTables.length - 1];
-  };
-
   // Create one edge per column-to-column connection
   statement.edges
     .filter((e) => e.type === 'derivation' || e.type === 'data_flow')
@@ -677,7 +649,6 @@ function buildColumnLevelGraph(
 export function GraphView({ className, onNodeClick, graphContainerRef }: GraphViewProps): JSX.Element {
   const { state, actions } = useLineage();
   const { result, selectedNodeId, searchTerm, viewMode } = state;
-  const [highlightedPath, setHighlightedPath] = useState<Set<string>>(new Set());
 
   // Merge all statements into one big graph (for table and column modes)
   const statement = useMemo(() => {
