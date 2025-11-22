@@ -11,7 +11,8 @@ pub fn fixtures_dir() -> PathBuf {
 /// Load a SQL fixture file by dialect and name
 pub fn load_sql_fixture(dialect: &str, name: &str) -> String {
     let path = fixtures_dir().join(dialect).join(name);
-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("Failed to load fixture {path:?}: {e}"))
+    std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("Failed to load fixture {path:?}: {e}"))
 }
 
 /// Load a schema JSON fixture by name
@@ -19,7 +20,8 @@ pub fn load_schema_fixture(name: &str) -> crate::SchemaMetadata {
     let path = fixtures_dir().join("schemas").join(name);
     let content = std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("Failed to load schema {path:?}: {e}"));
-    serde_json::from_str(&content).unwrap_or_else(|e| panic!("Failed to parse schema {path:?}: {e}"))
+    serde_json::from_str(&content)
+        .unwrap_or_else(|e| panic!("Failed to parse schema {path:?}: {e}"))
 }
 
 /// List all SQL fixtures for a given dialect

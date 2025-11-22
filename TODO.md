@@ -785,18 +785,7 @@ This document provides a detailed, phase-by-phase implementation checklist for F
   - [ ] Document all props
   - [ ] Add usage examples
 
-- [ ] **Create README**
-  - [ ] Installation instructions
-  - [ ] Quick start example
-  - [ ] Component API reference
-  - [ ] Styling guide
-  - [ ] Link to Storybook (if added)
 
-- [ ] **Set up Storybook (optional)**
-  - [ ] Install Storybook
-  - [ ] Create stories for each component
-  - [ ] Add example states (loading, error, success)
-  - [ ] Deploy Storybook to GitHub Pages
 
 ### 3.7 Example Demo App (Enhanced)
 
@@ -845,18 +834,6 @@ This document provides a detailed, phase-by-phase implementation checklist for F
   - [ ] Capture snapshots of components
   - [ ] Run on CI
 
-### 3.9 Release
-
-- [ ] **Version bump to 0.3.0**
-  - [ ] Update package.json
-  - [ ] Update CHANGELOG.md
-
-- [ ] **Publish**
-  - [ ] Build package
-  - [ ] Test package locally (npm pack, install in test project)
-  - [ ] Publish @pondpilot/flowscope-react to npm
-  - [ ] Create Git tag: v0.3.0
-  - [ ] Create GitHub release
 
 **Phase 3 Complete When:**
 - ✅ All React components built and tested
@@ -987,16 +964,6 @@ This document provides a detailed, phase-by-phase implementation checklist for F
   - [ ] Query size limits
   - [ ] Benchmarking guide
 
-### 4.6 Release
-
-- [ ] **Version bump to 0.4.0**
-  - [ ] Update versions
-  - [ ] Update CHANGELOG.md
-
-- [ ] **Publish**
-  - [ ] Publish updated packages
-  - [ ] Create Git tag: v0.4.0
-  - [ ] Create GitHub release
 
 **Phase 4 Complete When:**
 - ✅ Web Worker helper works reliably
@@ -1068,35 +1035,6 @@ This document provides a detailed, phase-by-phase implementation checklist for F
   - [ ] Document how it works
   - [ ] Publish to marketplace (optional)
 
-### 5.3 Community & Governance
-
-- [ ] **Set up issue templates**
-  - [ ] Bug report template
-  - [ ] Feature request template
-  - [ ] Dialect support request template
-  - [ ] Question template
-
-- [ ] **Create PR template**
-  - [ ] Checklist for contributors
-  - [ ] Require tests
-  - [ ] Require docs update
-
-- [ ] **Set up discussions**
-  - [ ] Enable GitHub Discussions
-  - [ ] Create categories (Q&A, Ideas, etc.)
-
-- [ ] **Create contributing guide**
-  - [ ] How to build the project
-  - [ ] How to run tests
-  - [ ] Code style guidelines
-  - [ ] PR process
-  - [ ] Release process
-
-- [ ] **Create roadmap**
-  - [ ] Document planned features
-  - [ ] Solicit community input
-  - [ ] Prioritize based on feedback
-
 ### 5.4 Release Automation
 
 - [ ] **Automate releases**
@@ -1112,37 +1050,6 @@ This document provides a detailed, phase-by-phase implementation checklist for F
   - [ ] Create release checklist
   - [ ] Assign release manager role
 
-### 5.5 Analytics & Monitoring (Optional)
-
-- [ ] **Add telemetry (opt-in)**
-  - [ ] Track usage metrics (anonymized)
-  - [ ] Track errors
-  - [ ] Track performance
-  - [ ] Document privacy policy
-
-- [ ] **Set up monitoring**
-  - [ ] Monitor demo app uptime
-  - [ ] Monitor docs site uptime
-  - [ ] Set up alerts
-
-### 5.6 Marketing & Adoption
-
-- [ ] **Create announcement materials**
-  - [ ] Blog post announcement
-  - [ ] Tweet thread
-  - [ ] Show HN post
-  - [ ] Reddit posts (r/programming, r/datascience)
-
-- [ ] **Create showcase**
-  - [ ] Add "Powered by FlowScope" badge
-  - [ ] Collect adopter logos
-  - [ ] Create case studies (if available)
-
-- [ ] **Engage community**
-  - [ ] Respond to issues promptly
-  - [ ] Review PRs
-  - [ ] Answer questions on Discussions
-  - [ ] Update docs based on feedback
 
 ### 5.7 Release
 
@@ -1190,15 +1097,8 @@ These are not prioritized but captured for future consideration:
 - [ ] Foreign key awareness
 
 ### Export Formats
-- [ ] OpenLineage JSON events
-- [ ] GraphML export
-- [ ] DOT format export
 - [ ] Mermaid diagram export
 
-### Performance
-- [ ] Incremental analysis (cache previous results)
-- [ ] Streaming analysis for very large SQL
-- [ ] Parallel statement analysis
 
 ### UI Enhancements
 - [ ] Graph diff view (compare two versions)
@@ -1207,11 +1107,6 @@ These are not prioritized but captured for future consideration:
 - [ ] Export graph as image (PNG/SVG)
 - [ ] Dark mode
 
-### Integrations
-- [ ] dbt integration (parse dbt models directly)
-- [ ] Airflow integration
-- [ ] Dagster integration
-- [ ] SQLMesh integration
 
 ---
 

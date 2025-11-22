@@ -73,6 +73,21 @@ export function ColumnPanel({ className }: ColumnPanelProps): JSX.Element {
     return [];
   }, [statement, selectedNode]);
 
+  const flowPath = useMemo(() => {
+    if (!selectedNode || !columnInfo) return [];
+    const upstreamLabels = columnInfo.upstream.map((node) => node.label);
+    const downstreamLabels = columnInfo.downstream.map((node) => node.label);
+    const segments: string[] = [];
+    if (upstreamLabels.length > 0) {
+      segments.push(...upstreamLabels);
+    }
+    segments.push(selectedNode.label);
+    if (downstreamLabels.length > 0) {
+      segments.push(...downstreamLabels);
+    }
+    return segments;
+  }, [selectedNode, columnInfo]);
+
   const handleColumnClick = (node: Node) => {
     actions.selectNode(node.id);
     if (node.span) {
@@ -186,6 +201,24 @@ export function ColumnPanel({ className }: ColumnPanelProps): JSX.Element {
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+
+        {flowPath.length > 1 && (
+          <div className="flowscope-section">
+            <h4>Data Flow</h4>
+            <div className="flowscope-flow-path">
+              {flowPath.map((label, idx) => (
+                <span key={`${label}-${idx}`} className="flowscope-flow-chip">
+                  {label}
+                  {idx < flowPath.length - 1 && (
+                    <span className="flowscope-flow-arrow" aria-hidden="true">
+                      →
+                    </span>
+                  )}
+                </span>
+              ))}
+            </div>
           </div>
         )}
       </div>

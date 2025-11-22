@@ -19,7 +19,7 @@
   ],
   "scripts": {
     "build": "tsc",
-    "test": "vitest run",
+    "test": "vitest run --pool=threads --poolOptions.threads.singleThread=true",
     "test:watch": "vitest",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",

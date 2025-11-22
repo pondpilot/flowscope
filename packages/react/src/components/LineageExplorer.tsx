@@ -54,10 +54,13 @@ export function LineageExplorer({
   sql,
   className,
   onSqlChange,
+  theme = 'light',
 }: LineageExplorerProps): JSX.Element {
+  const themeClass = theme === 'dark' ? 'dark' : '';
+
   return (
     <LineageProvider initialResult={result} initialSql={sql}>
-      <div className={`flowscope-explorer ${className || ''}`}>
+      <div className={`flowscope-explorer ${themeClass} ${className || ''}`.trim()}>
         <LineageExplorerInner result={result} sql={sql} onSqlChange={onSqlChange} />
       </div>
     </LineageProvider>

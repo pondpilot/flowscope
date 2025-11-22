@@ -1,6 +1,7 @@
 use crate::error::ParseError;
 use crate::parser::parse_sql_with_dialect;
 use crate::types::*;
+use serde_json::json;
 use sqlparser::ast::{
     self, Expr, FunctionArg, FunctionArgExpr, ObjectName, Query, SelectItem, SetExpr, Statement,
     TableFactor, TableWithJoins,
@@ -32,6 +33,24 @@ struct Analyzer<'a> {
     schema_tables: HashMap<String, SchemaTable>,
     /// Whether column lineage is enabled
     column_lineage_enabled: bool,
+    /// Default catalog for unqualified identifiers
+    default_catalog: Option<String>,
+    /// Default schema for unqualified identifiers
+    default_schema: Option<String>,
+    /// Ordered search path entries
+    search_path: Vec<SearchPathEntry>,
+}
+
+#[derive(Debug, Clone)]
+struct SearchPathEntry {
+    catalog: Option<String>,
+    schema: String,
+}
+
+#[derive(Debug, Clone)]
+struct TableResolution {
+    canonical: String,
+    matched_schema: bool,
 }
 
 impl<'a> Analyzer<'a> {
@@ -54,6 +73,9 @@ impl<'a> Analyzer<'a> {
             known_tables: HashSet::new(),
             schema_tables: HashMap::new(),
             column_lineage_enabled,
+            default_catalog: None,
+            default_schema: None,
+            search_path: Vec::new(),
         };
 
         analyzer.initialize_schema_metadata();
@@ -63,6 +85,29 @@ impl<'a> Analyzer<'a> {
 
     fn initialize_schema_metadata(&mut self) {
         if let Some(schema) = self.request.schema.as_ref() {
+            self.default_catalog = schema
+                .default_catalog
+                .as_ref()
+                .map(|c| self.normalize_identifier(c));
+            self.default_schema = schema
+                .default_schema
+                .as_ref()
+                .map(|s| self.normalize_identifier(s));
+            if let Some(search_path) = schema.search_path.as_ref() {
+                self.search_path = search_path
+                    .iter()
+                    .map(|hint| SearchPathEntry {
+                        catalog: hint.catalog.as_ref().map(|c| self.normalize_identifier(c)),
+                        schema: self.normalize_identifier(&hint.schema),
+                    })
+                    .collect();
+            } else if let Some(default_schema) = &self.default_schema {
+                self.search_path = vec![SearchPathEntry {
+                    catalog: self.default_catalog.clone(),
+                    schema: default_schema.clone(),
+                }];
+            }
+
             for table in &schema.tables {
                 let canonical = self.schema_table_key(table);
                 self.known_tables.insert(canonical.clone());
@@ -81,6 +126,103 @@ impl<'a> Analyzer<'a> {
         }
         parts.push(table.name.clone());
         self.normalize_table_name(&parts.join("."))
+    }
+
+    fn canonicalize_table_reference(&self, name: &str) -> TableResolution {
+        let parts = split_qualified_identifiers(name);
+        if parts.is_empty() {
+            return TableResolution {
+                canonical: String::new(),
+                matched_schema: false,
+            };
+        }
+
+        let normalized: Vec<String> = parts
+            .into_iter()
+            .map(|part| self.normalize_identifier(&part))
+            .collect();
+
+        match normalized.len() {
+            len if len >= 3 => {
+                let canonical = normalized.join(".");
+                let matched = self.known_tables.contains(&canonical);
+                TableResolution {
+                    canonical,
+                    matched_schema: matched,
+                }
+            }
+            2 => {
+                let canonical = normalized.join(".");
+                if self.known_tables.contains(&canonical) {
+                    return TableResolution {
+                        canonical,
+                        matched_schema: true,
+                    };
+                }
+                if let Some(default_catalog) = &self.default_catalog {
+                    let with_catalog = format!("{default_catalog}.{canonical}");
+                    if self.known_tables.contains(&with_catalog) {
+                        return TableResolution {
+                            canonical: with_catalog,
+                            matched_schema: true,
+                        };
+                    }
+                }
+                TableResolution {
+                    canonical,
+                    matched_schema: false,
+                }
+            }
+            _ => {
+                let table_only = normalized[0].clone();
+
+                if self.known_tables.contains(&table_only) {
+                    return TableResolution {
+                        canonical: table_only,
+                        matched_schema: true,
+                    };
+                }
+
+                if let Some(candidate) = self.resolve_via_search_path(&table_only) {
+                    return TableResolution {
+                        canonical: candidate,
+                        matched_schema: true,
+                    };
+                }
+
+                if let Some(schema) = &self.default_schema {
+                    let canonical = if let Some(catalog) = &self.default_catalog {
+                        format!("{catalog}.{schema}.{table_only}")
+                    } else {
+                        format!("{schema}.{table_only}")
+                    };
+                    let matched = self.known_tables.contains(&canonical);
+                    return TableResolution {
+                        canonical,
+                        matched_schema: matched,
+                    };
+                }
+
+                TableResolution {
+                    canonical: table_only.clone(),
+                    matched_schema: self.known_tables.contains(&table_only),
+                }
+            }
+        }
+    }
+
+    fn resolve_via_search_path(&self, table: &str) -> Option<String> {
+        for entry in &self.search_path {
+            let canonical = match (&entry.catalog, &entry.schema) {
+                (Some(catalog), schema) => format!("{catalog}.{schema}.{table}"),
+                (None, schema) => format!("{schema}.{table}"),
+            };
+
+            if self.known_tables.contains(&canonical) {
+                return Some(canonical);
+            }
+        }
+        None
     }
 
     fn analyze(&mut self) -> AnalyzeResult {
@@ -377,27 +519,25 @@ impl<'a> Analyzer<'a> {
             Expr::UnaryOp { expr, .. } => {
                 self.collect_column_refs(expr, refs);
             }
-            Expr::Function(func) => {
-                match &func.args {
-                    ast::FunctionArguments::List(arg_list) => {
-                        for arg in &arg_list.args {
-                            match arg {
-                                FunctionArg::Unnamed(FunctionArgExpr::Expr(e)) => {
+            Expr::Function(func) => match &func.args {
+                ast::FunctionArguments::List(arg_list) => {
+                    for arg in &arg_list.args {
+                        match arg {
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(e)) => {
+                                self.collect_column_refs(e, refs);
+                            }
+                            FunctionArg::Named { arg, .. } => {
+                                if let FunctionArgExpr::Expr(e) = arg {
                                     self.collect_column_refs(e, refs);
                                 }
-                                FunctionArg::Named { arg, .. } => {
-                                    if let FunctionArgExpr::Expr(e) = arg {
-                                        self.collect_column_refs(e, refs);
-                                    }
-                                }
-                                _ => {}
                             }
+                            _ => {}
                         }
                     }
-                    ast::FunctionArguments::Subquery(_) => {}
-                    ast::FunctionArguments::None => {}
                 }
-            }
+                ast::FunctionArguments::Subquery(_) => {}
+                ast::FunctionArguments::None => {}
+            },
             Expr::Case {
                 operand,
                 conditions,
@@ -466,9 +606,10 @@ impl<'a> Analyzer<'a> {
     fn derive_column_name(&self, expr: &Expr, index: usize) -> String {
         match expr {
             Expr::Identifier(ident) => ident.value.clone(),
-            Expr::CompoundIdentifier(parts) => {
-                parts.last().map(|i| i.value.clone()).unwrap_or_else(|| format!("col_{}", index))
-            }
+            Expr::CompoundIdentifier(parts) => parts
+                .last()
+                .map(|i| i.value.clone())
+                .unwrap_or_else(|| format!("col_{}", index)),
             Expr::Function(func) => func.name.to_string().to_lowercase(),
             _ => format!("col_{}", index),
         }
@@ -515,7 +656,8 @@ impl<'a> Analyzer<'a> {
 
         // Create data flow edges from source columns
         for source in &sources {
-            let resolved_table = self.resolve_column_table(ctx, source.table.as_deref(), &source.column);
+            let resolved_table =
+                self.resolve_column_table(ctx, source.table.as_deref(), &source.column);
             if let Some(ref table_canonical) = resolved_table {
                 let source_col_id = generate_column_node_id(
                     Some(&generate_node_id("table", table_canonical)),
@@ -599,8 +741,10 @@ impl<'a> Analyzer<'a> {
 
         for table_canonical in tables_to_expand {
             // First collect column info to avoid borrow conflict
-            let columns_to_add: Option<Vec<(String, String, String)>> =
-                self.schema_tables.get(&table_canonical).map(|schema_table| {
+            let columns_to_add: Option<Vec<(String, String, String)>> = self
+                .schema_tables
+                .get(&table_canonical)
+                .map(|schema_table| {
                     schema_table
                         .columns
                         .iter()
@@ -640,12 +784,16 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    fn resolve_table_alias(&self, ctx: &StatementContext, qualifier: Option<&str>) -> Option<String> {
+    fn resolve_table_alias(
+        &self,
+        ctx: &StatementContext,
+        qualifier: Option<&str>,
+    ) -> Option<String> {
         match qualifier {
             Some(q) => {
                 // Check if it's an alias
                 if let Some(canonical) = ctx.table_aliases.get(q) {
-                    Some(self.normalize_table_name(canonical))
+                    Some(canonical.clone())
                 } else if ctx.cte_definitions.contains_key(q) {
                     // CTE reference
                     Some(q.to_string())
@@ -654,7 +802,7 @@ impl<'a> Analyzer<'a> {
                     None
                 } else {
                     // Treat as table name
-                    Some(self.normalize_table_name(q))
+                    Some(self.canonicalize_table_reference(q).canonical)
                 }
             }
             None => None,
@@ -799,11 +947,11 @@ impl<'a> Analyzer<'a> {
             TableFactor::Table { name, alias, .. } => {
                 let table_name = name.to_string();
 
-                self.add_source_table(ctx, &table_name, target_node);
+                let canonical = self.add_source_table(ctx, &table_name, target_node);
 
                 // Register alias if present
-                if let Some(a) = alias {
-                    ctx.table_aliases.insert(a.name.to_string(), table_name);
+                if let (Some(a), Some(canonical_name)) = (alias, canonical) {
+                    ctx.table_aliases.insert(a.name.to_string(), canonical_name);
                 }
             }
             TableFactor::Derived {
@@ -856,43 +1004,52 @@ impl<'a> Analyzer<'a> {
         ctx: &mut StatementContext,
         table_name: &str,
         target_node: Option<&str>,
-    ) {
+    ) -> Option<String> {
+        let canonical_for_alias: Option<String>;
+
         // Check if this is a CTE reference
         let node_id = if ctx.cte_definitions.contains_key(table_name) {
-            // Reference to CTE defined in this statement
+            canonical_for_alias = Some(table_name.to_string());
             ctx.cte_definitions.get(table_name).cloned()
         } else {
             // Regular table
-            let canonical = self.normalize_table_name(table_name);
+            let resolution = self.canonicalize_table_reference(table_name);
+            let canonical = resolution.canonical.clone();
+            canonical_for_alias = Some(canonical.clone());
             let id = generate_node_id("table", &canonical);
 
-            // Check if table exists in schema metadata (only if schema is provided)
-            let is_known = self.known_tables.is_empty()
-                || self.known_tables.contains(&canonical)
-                || self.produced_tables.contains_key(&canonical);
+            let exists_in_schema = resolution.matched_schema;
+            let produced = self.produced_tables.contains_key(&canonical);
+            let is_known = exists_in_schema || produced || self.known_tables.is_empty();
 
             // Check if already added
             if !ctx.node_ids.contains(&id) {
-                ctx.add_node(Node {
-                    id: id.clone(),
-                    node_type: NodeType::Table,
-                    label: extract_simple_name(table_name),
-                    qualified_name: Some(canonical.clone()),
-                    expression: None,
-                    span: None,
-                    metadata: None,
-                });
-
-                // Emit warning if table not found in schema
-                if !is_known && !self.known_tables.is_empty() {
+                let mut metadata = None;
+                if !is_known {
+                    let mut meta = HashMap::new();
+                    meta.insert("placeholder".to_string(), json!(true));
+                    metadata = Some(meta);
                     self.issues.push(
                         Issue::warning(
-                            issue_codes::UNKNOWN_TABLE,
-                            format!("Table '{canonical}' not found in schema metadata"),
+                            issue_codes::UNRESOLVED_REFERENCE,
+                            format!(
+                                "Table '{}' could not be resolved using provided schema metadata or search path",
+                                canonical
+                            ),
                         )
                         .with_statement(ctx.statement_index),
                     );
                 }
+
+                ctx.add_node(Node {
+                    id: id.clone(),
+                    node_type: NodeType::Table,
+                    label: extract_simple_name(&canonical),
+                    qualified_name: Some(canonical.clone()),
+                    expression: None,
+                    span: None,
+                    metadata,
+                });
             }
 
             self.all_tables.insert(canonical.clone());
@@ -908,7 +1065,7 @@ impl<'a> Analyzer<'a> {
         };
 
         // Create edge to target if specified
-        if let (Some(target), Some(source_id)) = (target_node, node_id) {
+        if let (Some(target), Some(source_id)) = (target_node, node_id.clone()) {
             let edge_id = generate_edge_id(&source_id, target);
             if !ctx.edge_ids.contains(&edge_id) {
                 ctx.add_edge(Edge {
@@ -922,6 +1079,8 @@ impl<'a> Analyzer<'a> {
                 });
             }
         }
+
+        canonical_for_alias
     }
 
     fn analyze_insert(&mut self, ctx: &mut StatementContext, insert: &ast::Insert) {
@@ -1190,7 +1349,7 @@ struct StatementContext {
     edge_ids: HashSet<String>,
     /// CTE name -> node ID
     cte_definitions: HashMap<String, String>,
-    /// Alias -> original table name
+    /// Alias -> canonical table name
     table_aliases: HashMap<String, String>,
     /// Subquery aliases (for reference tracking)
     subquery_aliases: HashSet<String>,
@@ -1669,11 +1828,11 @@ mod tests {
         };
         let result = analyze(&request);
 
-        // Should emit UNKNOWN_TABLE warning
+        // Should emit UNRESOLVED_REFERENCE warning
         assert!(result
             .issues
             .iter()
-            .any(|i| i.code == issue_codes::UNKNOWN_TABLE));
+            .any(|i| i.code == issue_codes::UNRESOLVED_REFERENCE));
     }
 
     #[test]
@@ -1697,11 +1856,117 @@ mod tests {
         };
         let result = analyze(&request);
 
-        // Should NOT emit UNKNOWN_TABLE warning
+        // Should NOT emit UNRESOLVED_REFERENCE warning
         assert!(!result
             .issues
             .iter()
-            .any(|i| i.code == issue_codes::UNKNOWN_TABLE));
+            .any(|i| i.code == issue_codes::UNRESOLVED_REFERENCE));
+    }
+
+    #[test]
+    fn test_search_path_resolves_unqualified_table() {
+        let request = AnalyzeRequest {
+            sql: "SELECT * FROM orders".to_string(),
+            dialect: Dialect::Generic,
+            options: None,
+            schema: Some(crate::types::SchemaMetadata {
+                default_catalog: None,
+                default_schema: Some("analytics".to_string()),
+                search_path: Some(vec![crate::types::SchemaNamespaceHint {
+                    catalog: None,
+                    schema: "analytics".to_string(),
+                }]),
+                case_sensitivity: None,
+                tables: vec![crate::types::SchemaTable {
+                    catalog: None,
+                    schema: Some("analytics".to_string()),
+                    name: "orders".to_string(),
+                    columns: vec![],
+                }],
+            }),
+        };
+        let result = analyze(&request);
+
+        assert!(!result
+            .issues
+            .iter()
+            .any(|i| i.code == issue_codes::UNRESOLVED_REFERENCE));
+
+        let table_node = result.statements[0]
+            .nodes
+            .iter()
+            .find(|n| n.node_type == NodeType::Table)
+            .expect("table node");
+        assert_eq!(
+            table_node.qualified_name.as_deref(),
+            Some("analytics.orders")
+        );
+    }
+
+    #[test]
+    fn test_default_schema_used_without_search_path() {
+        let request = AnalyzeRequest {
+            sql: "SELECT * FROM orders".to_string(),
+            dialect: Dialect::Generic,
+            options: None,
+            schema: Some(crate::types::SchemaMetadata {
+                default_catalog: None,
+                default_schema: Some("analytics".to_string()),
+                search_path: None,
+                case_sensitivity: None,
+                tables: vec![crate::types::SchemaTable {
+                    catalog: None,
+                    schema: Some("analytics".to_string()),
+                    name: "orders".to_string(),
+                    columns: vec![],
+                }],
+            }),
+        };
+        let result = analyze(&request);
+
+        assert!(!result
+            .issues
+            .iter()
+            .any(|i| i.code == issue_codes::UNRESOLVED_REFERENCE));
+    }
+
+    #[test]
+    fn test_placeholder_node_marked_for_unresolved_table() {
+        let request = AnalyzeRequest {
+            sql: "SELECT * FROM missing_table".to_string(),
+            dialect: Dialect::Generic,
+            options: None,
+            schema: Some(crate::types::SchemaMetadata {
+                default_catalog: None,
+                default_schema: Some("analytics".to_string()),
+                search_path: None,
+                case_sensitivity: None,
+                tables: vec![crate::types::SchemaTable {
+                    catalog: None,
+                    schema: Some("analytics".to_string()),
+                    name: "orders".to_string(),
+                    columns: vec![],
+                }],
+            }),
+        };
+        let result = analyze(&request);
+
+        assert!(result
+            .issues
+            .iter()
+            .any(|i| i.code == issue_codes::UNRESOLVED_REFERENCE));
+
+        let placeholder = result.statements[0]
+            .nodes
+            .iter()
+            .find(|n| n.label == "missing_table")
+            .expect("missing table node");
+        let placeholder_flag = placeholder
+            .metadata
+            .as_ref()
+            .and_then(|m| m.get("placeholder"))
+            .and_then(|v| v.as_bool());
+        assert_eq!(placeholder_flag, Some(true));
     }
 
     #[test]
@@ -1870,7 +2135,8 @@ mod tests {
 
     #[test]
     fn test_column_lineage_with_expression() {
-        let request = make_request("SELECT CONCAT(first_name, ' ', last_name) AS full_name FROM users");
+        let request =
+            make_request("SELECT CONCAT(first_name, ' ', last_name) AS full_name FROM users");
         let result = analyze(&request);
 
         let column_nodes: Vec<_> = result.statements[0]
@@ -1935,9 +2201,8 @@ mod tests {
 
     #[test]
     fn test_column_lineage_join() {
-        let request = make_request(
-            "SELECT u.id, o.order_id FROM users u JOIN orders o ON u.id = o.user_id",
-        );
+        let request =
+            make_request("SELECT u.id, o.order_id FROM users u JOIN orders o ON u.id = o.user_id");
         let result = analyze(&request);
 
         let column_nodes: Vec<_> = result.statements[0]

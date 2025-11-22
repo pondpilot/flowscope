@@ -121,6 +121,8 @@ export interface LineageExplorerProps {
   className?: string;
   /** Callback when SQL content changes in editable mode */
   onSqlChange?: (sql: string) => void;
+  /** Visual theme (default: 'light') */
+  theme?: 'light' | 'dark';
 }
 
 /**

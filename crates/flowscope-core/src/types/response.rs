@@ -27,7 +27,6 @@ pub struct AnalyzeResult {
     pub summary: Summary,
 }
 
-
 impl AnalyzeResult {
     /// Create an error result with a single issue.
     /// Useful for returning errors from WASM boundary or other entry points.

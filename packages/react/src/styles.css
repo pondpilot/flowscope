@@ -239,8 +239,23 @@
   height: 100%;
 }
 
-.flowscope-sql-highlight {
+.flowscope-sql-highlight-active {
   background-color: rgba(76, 97, 255, 0.25);
+  border-radius: 2px;
+}
+
+.flowscope-sql-highlight-error {
+  background-color: rgba(239, 72, 111, 0.25);
+  border-radius: 2px;
+}
+
+.flowscope-sql-highlight-warning {
+  background-color: rgba(244, 164, 98, 0.25);
+  border-radius: 2px;
+}
+
+.flowscope-sql-highlight-info {
+  background-color: rgba(76, 97, 255, 0.15);
   border-radius: 2px;
 }
 
@@ -351,6 +366,30 @@
   background: var(--flowscope-bg);
   padding: 2px 4px;
   border-radius: 2px;
+}
+
+.flowscope-flow-path {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.flowscope-flow-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--flowscope-surface-muted);
+  color: var(--flowscope-text-muted);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.flowscope-flow-arrow {
+  font-size: 0.75rem;
+  opacity: 0.7;
 }
 
 /* Issues Panel */
