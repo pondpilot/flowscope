@@ -7,7 +7,40 @@ import {
   type ReactNode,
 } from 'react';
 import type { AnalyzeResult, Span } from '@pondpilot/flowscope-core';
-import type { LineageContextValue, LineageState, LineageActions } from './types';
+import type {
+  LineageContextValue,
+  LineageState,
+  LineageActions,
+  LineageViewMode,
+} from './types';
+
+const VIEW_MODE_STORAGE_KEY = 'flowscope-view-mode';
+
+/**
+ * Load the view mode from localStorage, defaulting to 'table' if not found or invalid.
+ */
+function loadViewMode(): LineageViewMode {
+  try {
+    const stored = localStorage.getItem(VIEW_MODE_STORAGE_KEY);
+    if (stored === 'script' || stored === 'table' || stored === 'column') {
+      return stored;
+    }
+  } catch {
+    // localStorage might not be available (SSR, etc.)
+  }
+  return 'table';
+}
+
+/**
+ * Save the view mode to localStorage.
+ */
+function saveViewMode(mode: LineageViewMode): void {
+  try {
+    localStorage.setItem(VIEW_MODE_STORAGE_KEY, mode);
+  } catch {
+    // localStorage might not be available
+  }
+}
 
 const LineageContext = createContext<LineageContextValue | null>(null);
 
@@ -46,6 +79,7 @@ export function LineageProvider({
   const [selectedStatementIndex, setSelectedStatementIndex] = useState(0);
   const [highlightedSpan, setHighlightedSpan] = useState<Span | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [viewMode, setViewModeState] = useState<LineageViewMode>(() => loadViewMode());
 
   const updateResult = useCallback(
     (nextResult: AnalyzeResult | null) => {
@@ -81,6 +115,11 @@ export function LineageProvider({
     setHighlightedSpan(span);
   }, []);
 
+  const setViewMode = useCallback((mode: LineageViewMode) => {
+    setViewModeState(mode);
+    saveViewMode(mode);
+  }, []);
+
   const state: LineageState = useMemo(
     () => ({
       result,
@@ -89,8 +128,9 @@ export function LineageProvider({
       selectedStatementIndex,
       highlightedSpan,
       searchTerm,
+      viewMode,
     }),
-    [result, sql, selectedNodeId, selectedStatementIndex, highlightedSpan, searchTerm]
+    [result, sql, selectedNodeId, selectedStatementIndex, highlightedSpan, searchTerm, viewMode]
   );
 
   const actions: LineageActions = useMemo(
@@ -101,8 +141,9 @@ export function LineageProvider({
       selectStatement,
       highlightSpan,
       setSearchTerm,
+      setViewMode,
     }),
-    [updateResult, setSql, selectNode, selectStatement, highlightSpan, setSearchTerm]
+    [updateResult, setSql, selectNode, selectStatement, highlightSpan, setSearchTerm, setViewMode]
   );
 
   const value = useMemo(() => ({ state, actions }), [state, actions]);

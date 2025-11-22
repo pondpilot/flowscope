@@ -5,7 +5,8 @@ import {
   IssuesPanel,
   SummaryBar,
   SchemaView,
-  ColumnPanel
+  ColumnPanel,
+  ViewModeSelector,
 } from '@pondpilot/flowscope-react';
 import {
   Tabs,
@@ -99,7 +100,8 @@ export function AnalysisView() {
         <div className="flex-1 font-medium text-sm text-muted-foreground">
           Lineage Graph
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          <ViewModeSelector />
           <div className="relative w-[200px]">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
             <Input

@@ -104,8 +104,11 @@ export function EditorArea({ wasmReady, className }: EditorAreaProps) {
       actions.setSql(sqlToAnalyze);
 
       const result = await analyzeSql({
-        sql: sqlToAnalyze, 
-        dialect: currentProject.dialect 
+        sql: sqlToAnalyze,
+        dialect: currentProject.dialect,
+        options: {
+          enableColumnLineage: true
+        }
       });
 
       actions.setResult(result);

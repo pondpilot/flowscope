@@ -10,6 +10,12 @@ import type {
 } from '@pondpilot/flowscope-core';
 
 /**
+ * View mode for the lineage graph visualization.
+ * Controls the level of detail displayed in the graph.
+ */
+export type LineageViewMode = 'script' | 'table' | 'column';
+
+/**
  * Props for the SchemaView component.
  */
 export interface SchemaViewProps {
@@ -34,6 +40,8 @@ export interface LineageState {
   highlightedSpan: Span | null;
   /** Search term for filtering/highlighting nodes in the graph */
   searchTerm: string;
+  /** Current view mode for the lineage graph */
+  viewMode: LineageViewMode;
 }
 
 /**
@@ -53,6 +61,8 @@ export interface LineageActions {
   highlightSpan: (span: Span | null) => void;
   /** Update the search term for node filtering */
   setSearchTerm: (term: string) => void;
+  /** Update the view mode for the lineage graph */
+  setViewMode: (mode: LineageViewMode) => void;
 }
 
 /**
@@ -126,6 +136,26 @@ export interface LineageExplorerProps {
 }
 
 /**
+ * Data structure for script/file nodes in the graph visualization (script-level view).
+ */
+export interface ScriptNodeData extends Record<string, unknown> {
+  /** Display name of the script or file */
+  label: string;
+  /** Source name (file path or identifier) */
+  sourceName: string;
+  /** Tables read by this script */
+  tablesRead: string[];
+  /** Tables written by this script */
+  tablesWritten: string[];
+  /** Number of statements in this script */
+  statementCount: number;
+  /** Whether this node is currently selected */
+  isSelected: boolean;
+  /** Whether this node matches the current search term */
+  isHighlighted: boolean;
+}
+
+/**
  * Data structure for table/CTE nodes in the graph visualization.
  */
 export interface TableNodeData extends Record<string, unknown> {
@@ -151,6 +181,22 @@ export interface ColumnNodeInfo {
   name: string;
   /** Optional SQL expression for computed columns */
   expression?: string;
+}
+
+/**
+ * Data structure for standalone column nodes in the graph visualization (column-level view).
+ */
+export interface ColumnNodeData extends Record<string, unknown> {
+  /** Display name of the column */
+  label: string;
+  /** Parent table name */
+  tableName: string;
+  /** Optional SQL expression for computed columns */
+  expression?: string;
+  /** Whether this node is currently selected */
+  isSelected: boolean;
+  /** Whether this node matches the current search term */
+  isHighlighted: boolean;
 }
 
 export { AnalyzeResult, Node, Edge, Issue, Span, StatementLineage };

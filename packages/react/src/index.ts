@@ -7,6 +7,7 @@ export { LineageExplorer } from './components/LineageExplorer';
 export { StatementSelector } from './components/StatementSelector';
 export { SummaryBar } from './components/SummaryBar';
 export { SchemaView } from './components/SchemaView';
+export { ViewModeSelector } from './components/ViewModeSelector';
 
 // Context and hooks
 export {
@@ -22,12 +23,15 @@ export type {
   LineageState,
   LineageActions,
   LineageContextValue,
+  LineageViewMode,
   GraphViewProps,
   SqlViewProps,
   ColumnPanelProps,
   IssuesPanelProps,
   LineageExplorerProps,
   TableNodeData,
+  ScriptNodeData,
+  ColumnNodeData,
   ColumnNodeInfo,
 } from './types';
 

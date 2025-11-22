@@ -22,16 +22,23 @@ export interface AnalyzeRequest {
   sql: string;
   /** SQL dialect */
   dialect: Dialect;
+  /** Optional source name (file path or script identifier) for grouping */
+  sourceName?: string;
   /** Optional analysis options */
   options?: AnalysisOptions;
   /** Optional schema metadata for accurate column resolution */
   schema?: SchemaMetadata;
 }
 
+/** Graph detail level for visualization. */
+export type GraphDetailLevel = 'script' | 'table' | 'column';
+
 /** Options controlling the analysis behavior. */
 export interface AnalysisOptions {
   /** Enable column-level lineage (default: true) */
   enableColumnLineage?: boolean;
+  /** Preferred graph detail level for visualization (does not affect analysis) */
+  graphDetailLevel?: GraphDetailLevel;
 }
 
 /**
@@ -95,6 +102,8 @@ export interface StatementLineage {
   statementIndex: number;
   /** Type of SQL statement */
   statementType: string;
+  /** Optional source name (file path or script identifier) for grouping */
+  source_name?: string;
   /** All nodes in the lineage graph for this statement */
   nodes: Node[];
   /** All edges connecting nodes in the lineage graph */

@@ -60,6 +60,10 @@ pub struct StatementLineage {
     /// Type of SQL statement
     pub statement_type: String,
 
+    /// Optional source name (file path or script identifier) for grouping
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_name: Option<String>,
+
     /// All nodes in the lineage graph for this statement
     pub nodes: Vec<Node>,
 
@@ -267,6 +271,7 @@ mod tests {
             statements: vec![StatementLineage {
                 statement_index: 0,
                 statement_type: "SELECT".to_string(),
+                source_name: None,
                 nodes: vec![Node {
                     id: "tbl_123".to_string(),
                     node_type: NodeType::Table,

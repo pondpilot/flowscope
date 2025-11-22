@@ -292,6 +292,7 @@ impl<'a> Analyzer<'a> {
         Ok(StatementLineage {
             statement_index: index,
             statement_type,
+            source_name: self.request.source_name.clone(),
             nodes: ctx.nodes,
             edges: ctx.edges,
             span: None,
@@ -1584,6 +1585,7 @@ mod tests {
         AnalyzeRequest {
             sql: sql.to_string(),
             dialect: Dialect::Generic,
+            source_name: None,
             options: None,
             schema: None,
         }
@@ -1749,6 +1751,7 @@ mod tests {
         let pg_request = AnalyzeRequest {
             sql: "SELECT * FROM Users".to_string(),
             dialect: Dialect::Postgres,
+            source_name: None,
             options: None,
             schema: None,
         };
@@ -1760,6 +1763,7 @@ mod tests {
         let sf_request = AnalyzeRequest {
             sql: "SELECT * FROM Users".to_string(),
             dialect: Dialect::Snowflake,
+            source_name: None,
             options: None,
             schema: None,
         };
@@ -1812,6 +1816,7 @@ mod tests {
         let request = AnalyzeRequest {
             sql: "SELECT * FROM unknown_table".to_string(),
             dialect: Dialect::Generic,
+            source_name: None,
             options: None,
             schema: Some(crate::types::SchemaMetadata {
                 default_catalog: None,
@@ -1840,6 +1845,7 @@ mod tests {
         let request = AnalyzeRequest {
             sql: "SELECT * FROM users".to_string(),
             dialect: Dialect::Generic,
+            source_name: None,
             options: None,
             schema: Some(crate::types::SchemaMetadata {
                 default_catalog: None,
@@ -1868,6 +1874,7 @@ mod tests {
         let request = AnalyzeRequest {
             sql: "SELECT * FROM orders".to_string(),
             dialect: Dialect::Generic,
+            source_name: None,
             options: None,
             schema: Some(crate::types::SchemaMetadata {
                 default_catalog: None,
@@ -1908,6 +1915,7 @@ mod tests {
         let request = AnalyzeRequest {
             sql: "SELECT * FROM orders".to_string(),
             dialect: Dialect::Generic,
+            source_name: None,
             options: None,
             schema: Some(crate::types::SchemaMetadata {
                 default_catalog: None,
@@ -1935,6 +1943,7 @@ mod tests {
         let request = AnalyzeRequest {
             sql: "SELECT * FROM missing_table".to_string(),
             dialect: Dialect::Generic,
+            source_name: None,
             options: None,
             schema: Some(crate::types::SchemaMetadata {
                 default_catalog: None,
@@ -2220,8 +2229,10 @@ mod tests {
         let request = AnalyzeRequest {
             sql: "SELECT id, name FROM users".to_string(),
             dialect: Dialect::Generic,
+            source_name: None,
             options: Some(AnalysisOptions {
                 enable_column_lineage: Some(false),
+                graph_detail_level: None,
             }),
             schema: None,
         };
@@ -2242,6 +2253,7 @@ mod tests {
         let request = AnalyzeRequest {
             sql: "SELECT id, name FROM users".to_string(),
             dialect: Dialect::Generic,
+            source_name: None,
             options: None,
             schema: Some(crate::types::SchemaMetadata {
                 default_catalog: None,
@@ -2287,6 +2299,7 @@ mod tests {
         let request = AnalyzeRequest {
             sql: "SELECT u.nonexistent FROM users u".to_string(),
             dialect: Dialect::Generic,
+            source_name: None,
             options: None,
             schema: Some(crate::types::SchemaMetadata {
                 default_catalog: None,
@@ -2318,6 +2331,7 @@ mod tests {
         let request = AnalyzeRequest {
             sql: "SELECT * FROM users".to_string(),
             dialect: Dialect::Generic,
+            source_name: None,
             options: None,
             schema: Some(crate::types::SchemaMetadata {
                 default_catalog: None,

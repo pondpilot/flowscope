@@ -18,6 +18,10 @@ pub struct AnalyzeRequest {
     /// SQL dialect
     pub dialect: Dialect,
 
+    /// Optional source name (file path or script identifier) for grouping
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_name: Option<String>,
+
     /// Optional analysis options
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub options: Option<AnalysisOptions>,
@@ -64,6 +68,21 @@ impl Dialect {
     }
 }
 
+/// Graph detail level for visualization.
+///
+/// Controls the granularity of the lineage graph returned by the analyzer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum GraphDetailLevel {
+    /// Script/file level: show relationships between scripts through shared tables
+    Script,
+    /// Table level: show tables and their relationships (default)
+    #[default]
+    Table,
+    /// Column level: show individual columns as separate graph nodes
+    Column,
+}
+
 /// Options controlling the analysis behavior.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "camelCase")]
@@ -71,6 +90,10 @@ pub struct AnalysisOptions {
     /// Enable column-level lineage (Phase 2+, default true when implemented)
     #[serde(default)]
     pub enable_column_lineage: Option<bool>,
+
+    /// Preferred graph detail level for visualization (does not affect analysis)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub graph_detail_level: Option<GraphDetailLevel>,
 }
 
 /// Schema metadata for accurate column and table resolution.
@@ -138,6 +161,7 @@ mod tests {
         let request = AnalyzeRequest {
             sql: "SELECT * FROM users".to_string(),
             dialect: Dialect::Postgres,
+            source_name: None,
             options: None,
             schema: None,
         };

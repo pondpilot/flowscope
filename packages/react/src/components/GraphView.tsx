@@ -1,4 +1,4 @@
-import { useMemo, useCallback, useEffect } from 'react';
+import { useMemo, useCallback, useEffect, useState } from 'react';
 import {
   ReactFlow,
   Background,
@@ -9,16 +9,24 @@ import {
   Handle,
   Position,
   BaseEdge,
-  getSmoothStepPath,
+  getBezierPath,
 } from '@xyflow/react';
 import type { Node as FlowNode, Edge as FlowEdge, NodeProps, EdgeProps } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
 import { useLineage } from '../context';
-import type { GraphViewProps, TableNodeData, ColumnNodeInfo } from '../types';
+import type {
+  GraphViewProps,
+  TableNodeData,
+  ColumnNodeInfo,
+  ScriptNodeData,
+  ColumnNodeData,
+} from '../types';
 import type { Node, Edge, StatementLineage } from '@pondpilot/flowscope-core';
 import { getLayoutedElements } from '../utils/layout';
 import { sanitizeIdentifier } from '../utils/sanitize';
+import { ScriptNode } from './ScriptNode';
+import { ColumnNode } from './ColumnNode';
 
 const colors = {
   table: {
@@ -59,16 +67,6 @@ function TableNode({ data, selected }: NodeProps): JSX.Element {
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       }}
     >
-      <Handle
-        type="target"
-        position={Position.Left}
-        style={{
-          width: 10,
-          height: 10,
-          backgroundColor: colors.accent,
-          border: '2px solid white',
-        }}
-      />
       <div
         style={{
           padding: '8px 12px',
@@ -95,32 +93,58 @@ function TableNode({ data, selected }: NodeProps): JSX.Element {
         <span style={{ fontWeight: 600 }}>{sanitizeIdentifier(nodeData.label)}</span>
       </div>
       {nodeData.columns.length > 0 && (
-        <div style={{ padding: '6px 12px', maxHeight: 150, overflowY: 'auto' }}>
-          {nodeData.columns.map((col: ColumnNodeInfo) => (
-            <div
-              key={col.id}
-              style={{
-                fontSize: 12,
-                color: palette.textSecondary,
-                padding: '3px 4px',
-                borderRadius: 4,
-              }}
-            >
-              {sanitizeIdentifier(col.name)}
-            </div>
-          ))}
+        <div style={{ padding: '6px 12px', maxHeight: 150, overflowY: 'auto', position: 'relative' }}>
+          {nodeData.columns.map((col: ColumnNodeInfo, index: number) => {
+            const totalColumns = nodeData.columns.length;
+            const handleTopPercent = ((index + 1) / (totalColumns + 1)) * 100;
+
+            return (
+              <div
+                key={col.id}
+                style={{
+                  fontSize: 12,
+                  color: palette.textSecondary,
+                  padding: '3px 4px',
+                  borderRadius: 4,
+                  position: 'relative',
+                }}
+              >
+                {/* Target handle (left side) for this column */}
+                <Handle
+                  type="target"
+                  position={Position.Left}
+                  id={col.id}
+                  style={{
+                    width: 8,
+                    height: 8,
+                    backgroundColor: colors.accent,
+                    border: '2px solid white',
+                    left: -4,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                  }}
+                />
+                {sanitizeIdentifier(col.name)}
+                {/* Source handle (right side) for this column */}
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id={col.id}
+                  style={{
+                    width: 8,
+                    height: 8,
+                    backgroundColor: colors.accent,
+                    border: '2px solid white',
+                    right: -4,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                  }}
+                />
+              </div>
+            );
+          })}
         </div>
       )}
-      <Handle
-        type="source"
-        position={Position.Right}
-        style={{
-          width: 10,
-          height: 10,
-          backgroundColor: colors.accent,
-          border: '2px solid white',
-        }}
-      />
     </div>
   );
 }
@@ -135,8 +159,10 @@ function AnimatedEdge({
   targetPosition,
   markerEnd,
   data,
+  label,
+  style,
 }: EdgeProps): JSX.Element {
-  const [edgePath] = getSmoothStepPath({
+  const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
     sourceY,
     sourcePosition,
@@ -145,24 +171,67 @@ function AnimatedEdge({
     targetPosition,
   });
 
-  const isDataFlow = data?.type === 'data_flow';
+  const expression = data?.expression as string | undefined;
+  const sourceColumn = data?.sourceColumn as string | undefined;
+  const targetColumn = data?.targetColumn as string | undefined;
+  const isDerived = data?.isDerived as boolean | undefined;
+
+  // Build tooltip content
+  let tooltipContent = '';
+  if (sourceColumn && targetColumn) {
+    tooltipContent += `${sourceColumn} → ${targetColumn}`;
+  }
+  if (expression) {
+    tooltipContent += tooltipContent ? '\n\n' : '';
+    tooltipContent += `Expression:\n${expression}`;
+  }
 
   return (
-    <BaseEdge
-      id={id}
-      path={edgePath}
-      markerEnd={markerEnd}
-      style={{
-        stroke: isDataFlow ? colors.accent : '#94a3b8',
-        strokeWidth: 2,
-        strokeDasharray: isDataFlow ? '5,5' : undefined,
-      }}
-    />
+    <>
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        markerEnd={markerEnd}
+        style={{
+          stroke: colors.accent,
+          strokeWidth: 2,
+          ...style,
+        }}
+      />
+      {/* Show marker badge on edges with expressions */}
+      {expression && (
+        <g transform={`translate(${labelX}, ${labelY})`} style={{ cursor: 'help' }}>
+          <title>{tooltipContent}</title>
+          {/* Background circle */}
+          <circle
+            r={10}
+            fill="#FFF"
+            stroke={colors.accent}
+            strokeWidth={2}
+          />
+          {/* Expression icon - bolt/lightning SVG */}
+          <g transform="translate(-6, -6)" style={{ pointerEvents: 'none' }}>
+            <path
+              d="M7 1L1 7h4l-0.5 4 5-6H5.5L7 1z"
+              fill={colors.accent}
+            />
+          </g>
+        </g>
+      )}
+      {/* Tooltip for all edges */}
+      {!expression && tooltipContent && (
+        <g transform={`translate(${labelX}, ${labelY})`}>
+          <title>{tooltipContent}</title>
+        </g>
+      )}
+    </>
   );
 }
 
 const nodeTypes = {
   tableNode: TableNode,
+  scriptNode: ScriptNode,
+  columnNode: ColumnNode,
 };
 
 const edgeTypes = {
@@ -284,23 +353,366 @@ function buildFlowEdges(statement: StatementLineage): FlowEdge[] {
     }));
 }
 
+/**
+ * Build script-level nodes and edges from multiple statements.
+ * Groups statements by source_name and shows script-to-script relationships.
+ */
+function buildScriptLevelGraph(
+  statements: StatementLineage[],
+  selectedNodeId: string | null,
+  searchTerm: string
+): { nodes: FlowNode[]; edges: FlowEdge[] } {
+  const lowerCaseSearchTerm = searchTerm.toLowerCase();
+
+  // Group statements by source_name
+  const scriptMap = new Map<string, StatementLineage[]>();
+  statements.forEach((stmt) => {
+    const sourceName = stmt.source_name || 'unknown';
+    const existing = scriptMap.get(sourceName) || [];
+    existing.push(stmt);
+    scriptMap.set(sourceName, existing);
+  });
+
+  const flowNodes: FlowNode[] = [];
+
+  // Create script nodes
+  scriptMap.forEach((stmts, sourceName) => {
+    const tablesRead = new Set<string>();
+    const tablesWritten = new Set<string>();
+
+    stmts.forEach((stmt) => {
+      stmt.nodes.forEach((node) => {
+        if (node.type === 'table') {
+          // Determine if table is read or written based on edges
+          const isWritten = stmt.edges.some((e) => e.to === node.id && e.type === 'data_flow');
+          const isRead = stmt.edges.some((e) => e.from === node.id && e.type === 'data_flow');
+
+          if (isWritten) {
+            tablesWritten.add(node.label);
+          }
+          if (isRead || (!isWritten && !isRead)) {
+            tablesRead.add(node.label);
+          }
+        }
+      });
+    });
+
+    const isHighlighted = !!(
+      lowerCaseSearchTerm && sourceName.toLowerCase().includes(lowerCaseSearchTerm)
+    );
+
+    flowNodes.push({
+      id: `script:${sourceName}`,
+      type: 'scriptNode',
+      position: { x: 0, y: 0 },
+      data: {
+        label: sourceName,
+        sourceName,
+        tablesRead: Array.from(tablesRead),
+        tablesWritten: Array.from(tablesWritten),
+        statementCount: stmts.length,
+        isSelected: `script:${sourceName}` === selectedNodeId,
+        isHighlighted,
+      } satisfies ScriptNodeData,
+    });
+  });
+
+  // Create edges between scripts that share tables
+  const flowEdges: FlowEdge[] = [];
+  const edgeSet = new Set<string>();
+
+  scriptMap.forEach((producerStmts, producerScript) => {
+    const producerTables = new Set<string>();
+    producerStmts.forEach((stmt) => {
+      stmt.nodes.forEach((node) => {
+        if (node.type === 'table') {
+          const isWritten = stmt.edges.some((e) => e.to === node.id);
+          if (isWritten) {
+            producerTables.add(node.label);
+          }
+        }
+      });
+    });
+
+    scriptMap.forEach((consumerStmts, consumerScript) => {
+      if (producerScript === consumerScript) return;
+
+      const consumerTables = new Set<string>();
+      consumerStmts.forEach((stmt) => {
+        stmt.nodes.forEach((node) => {
+          if (node.type === 'table') {
+            const isRead = stmt.edges.some((e) => e.from === node.id);
+            if (isRead) {
+              consumerTables.add(node.label);
+            }
+          }
+        });
+      });
+
+      // Find shared tables
+      const sharedTables: string[] = [];
+      producerTables.forEach((table) => {
+        if (consumerTables.has(table)) {
+          sharedTables.push(table);
+        }
+      });
+
+      if (sharedTables.length > 0) {
+        const edgeId = `${producerScript}->${consumerScript}`;
+        if (!edgeSet.has(edgeId)) {
+          edgeSet.add(edgeId);
+          flowEdges.push({
+            id: edgeId,
+            source: `script:${producerScript}`,
+            target: `script:${consumerScript}`,
+            type: 'animated',
+            label: sharedTables.slice(0, 2).join(', ') + (sharedTables.length > 2 ? '...' : ''),
+          });
+        }
+      }
+    });
+  });
+
+  return { nodes: flowNodes, edges: flowEdges };
+}
+
+/**
+ * Build column-level nodes and edges showing column-to-column lineage.
+ * Tables are shown with embedded columns (like table view), but edges represent
+ * column-to-column relationships instead of table-to-table relationships.
+ */
+function buildColumnLevelGraph(
+  statement: StatementLineage,
+  selectedNodeId: string | null,
+  searchTerm: string
+): { nodes: FlowNode[]; edges: FlowEdge[] } {
+  const lowerCaseSearchTerm = searchTerm.toLowerCase();
+  const tableNodes = statement.nodes.filter((n) => n.type === 'table' || n.type === 'cte');
+  const columnNodes = statement.nodes.filter((n) => n.type === 'column');
+
+  // Build table-to-columns map
+  const tableColumnMap = new Map<string, ColumnNodeInfo[]>();
+  const columnToTableMap = new Map<string, string>();
+
+  for (const edge of statement.edges) {
+    if (edge.type === 'ownership') {
+      const parentNode = tableNodes.find((n) => n.id === edge.from);
+      const childNode = columnNodes.find((n) => n.id === edge.to);
+      if (parentNode && childNode) {
+        const cols = tableColumnMap.get(parentNode.id) || [];
+        cols.push({
+          id: childNode.id,
+          name: childNode.label,
+          expression: childNode.expression,
+        });
+        tableColumnMap.set(parentNode.id, cols);
+        columnToTableMap.set(childNode.id, parentNode.id);
+      }
+    }
+  }
+
+  // Build table nodes with embedded columns (same as table view)
+  const flowNodes: FlowNode[] = [];
+
+  // Collect output columns (columns not owned by any table)
+  const outputColumns: ColumnNodeInfo[] = [];
+  for (const node of columnNodes) {
+    if (!columnToTableMap.has(node.id)) {
+      outputColumns.push({
+        id: node.id,
+        name: node.label,
+        expression: node.expression,
+      });
+    }
+  }
+
+  for (const node of tableNodes) {
+    const columns = tableColumnMap.get(node.id) || [];
+    const isHighlighted = !!(
+      lowerCaseSearchTerm &&
+      (node.label.toLowerCase().includes(lowerCaseSearchTerm) ||
+        columns.some((col) => col.name.toLowerCase().includes(lowerCaseSearchTerm)))
+    );
+
+    flowNodes.push({
+      id: node.id,
+      type: 'tableNode',
+      position: { x: 0, y: 0 },
+      data: {
+        label: node.label,
+        nodeType: node.type === 'cte' ? 'cte' : 'table',
+        columns: columns,
+        isSelected: node.id === selectedNodeId,
+        isHighlighted: isHighlighted,
+      } satisfies TableNodeData,
+    });
+  }
+
+  // Add virtual "Output" table node if there are output columns
+  if (outputColumns.length > 0) {
+    const outputNodeId = 'virtual:output';
+    const isHighlighted = !!(
+      lowerCaseSearchTerm &&
+      outputColumns.some((col) => col.name.toLowerCase().includes(lowerCaseSearchTerm))
+    );
+
+    flowNodes.push({
+      id: outputNodeId,
+      type: 'tableNode',
+      position: { x: 0, y: 0 },
+      data: {
+        label: 'Output',
+        nodeType: 'table',
+        columns: outputColumns,
+        isSelected: outputNodeId === selectedNodeId,
+        isHighlighted,
+      } satisfies TableNodeData,
+    });
+
+    // Update columnToTableMap for output columns
+    outputColumns.forEach((col) => {
+      columnToTableMap.set(col.id, outputNodeId);
+    });
+  }
+
+  // Build one edge per column lineage connection
+  const flowEdges: FlowEdge[] = [];
+
+  console.log('[Column View] All column lineage edges:',
+    statement.edges
+      .filter((e) => e.type === 'derivation' || e.type === 'data_flow')
+      .map(e => {
+        const from = columnNodes.find(c => c.id === e.from);
+        const to = columnNodes.find(c => c.id === e.to);
+        const fromTable = from ? columnToTableMap.get(from.id) : null;
+        const toTable = to ? columnToTableMap.get(to.id) : null;
+        return {
+          from: from?.label,
+          to: to?.label,
+          fromTable: tableNodes.find(t => t.id === fromTable)?.label,
+          toTable: tableNodes.find(t => t.id === toTable)?.label || (toTable === 'virtual:output' ? 'Output' : toTable),
+          type: e.type,
+          expression: e.expression
+        };
+      })
+  );
+
+  // Build a map of column name -> tables that have this column
+  // This helps us find the CORRECT source table when columns appear in multiple tables
+  const columnNameToTables = new Map<string, string[]>();
+  for (const [columnId, tableId] of columnToTableMap.entries()) {
+    const col = columnNodes.find(c => c.id === columnId);
+    if (col) {
+      const tables = columnNameToTables.get(col.label) || [];
+      if (!tables.includes(tableId)) {
+        tables.push(tableId);
+      }
+      columnNameToTables.set(col.label, tables);
+    }
+  }
+
+  // For columns that appear in multiple tables, we need to determine which one
+  // is the actual source based on the graph structure
+  const resolveSourceTable = (columnLabel: string, targetTableId: string): string | undefined => {
+    const possibleTables = columnNameToTables.get(columnLabel) || [];
+    if (possibleTables.length === 0) return undefined;
+    if (possibleTables.length === 1) return possibleTables[0];
+
+    // If multiple tables have this column, prefer CTEs over tables
+    // and prefer tables that appear "before" the target in dependency order
+    const ctes = possibleTables.filter(id => {
+      const node = tableNodes.find(n => n.id === id);
+      return node?.type === 'cte';
+    });
+
+    // If target is Output, prefer CTEs
+    if (targetTableId === 'virtual:output' && ctes.length > 0) {
+      return ctes[ctes.length - 1]; // Return last CTE (most recent in query)
+    }
+
+    return possibleTables[possibleTables.length - 1];
+  };
+
+  // Create one edge per column-to-column connection
+  statement.edges
+    .filter((e) => e.type === 'derivation' || e.type === 'data_flow')
+    .forEach((edge) => {
+      const sourceCol = columnNodes.find((c) => c.id === edge.from);
+      const targetCol = columnNodes.find((c) => c.id === edge.to);
+
+      if (sourceCol && targetCol) {
+        const sourceTableId = columnToTableMap.get(edge.from);
+        const targetTableId = columnToTableMap.get(edge.to);
+
+        // Only create edges between different tables (skip self-loops)
+        if (sourceTableId && targetTableId && sourceTableId !== targetTableId) {
+          const hasExpression = edge.expression || targetCol.expression;
+          const isDerivedColumn = edge.type === 'derivation' || hasExpression;
+
+          flowEdges.push({
+            id: edge.id,
+            source: sourceTableId,
+            target: targetTableId,
+            sourceHandle: edge.from,
+            targetHandle: edge.to,
+            type: 'animated',
+            data: {
+              type: edge.type,
+              expression: edge.expression || targetCol.expression,
+              sourceColumn: sourceCol.label,
+              targetColumn: targetCol.label,
+              isDerived: isDerivedColumn,
+            },
+            style: {
+              strokeDasharray: isDerivedColumn ? '5,5' : undefined,
+            },
+          });
+        }
+      }
+    });
+
+  return { nodes: flowNodes, edges: flowEdges };
+}
+
 export function GraphView({ className, onNodeClick, graphContainerRef }: GraphViewProps): JSX.Element {
   const { state, actions } = useLineage();
-  const { result, selectedNodeId, searchTerm } = state;
+  const { result, selectedNodeId, searchTerm, viewMode } = state;
+  const [highlightedPath, setHighlightedPath] = useState<Set<string>>(new Set());
 
-  // Merge all statements into one big graph
+  // Merge all statements into one big graph (for table and column modes)
   const statement = useMemo(() => {
     if (!result || !result.statements) return null;
     return mergeStatements(result.statements);
   }, [result]);
 
   const { layoutedNodes, layoutedEdges } = useMemo(() => {
-    if (!statement) return { layoutedNodes: [], layoutedEdges: [] };
-    const rawNodes = buildFlowNodes(statement, selectedNodeId, searchTerm);
-    const rawEdges = buildFlowEdges(statement);
-    const { nodes: ln, edges: le } = getLayoutedElements(rawNodes, rawEdges, 'LR');
+    if (!result || !result.statements) return { layoutedNodes: [], layoutedEdges: [] };
+
+    let rawNodes: FlowNode[];
+    let rawEdges: FlowEdge[];
+    let direction: 'LR' | 'TB' = 'LR';
+
+    if (viewMode === 'script') {
+      const graph = buildScriptLevelGraph(result.statements, selectedNodeId, searchTerm);
+      rawNodes = graph.nodes;
+      rawEdges = graph.edges;
+      direction = 'LR';
+    } else if (viewMode === 'column') {
+      if (!statement) return { layoutedNodes: [], layoutedEdges: [] };
+      const graph = buildColumnLevelGraph(statement, selectedNodeId, searchTerm);
+      rawNodes = graph.nodes;
+      rawEdges = graph.edges;
+      direction = 'TB';
+    } else {
+      if (!statement) return { layoutedNodes: [], layoutedEdges: [] };
+      rawNodes = buildFlowNodes(statement, selectedNodeId, searchTerm);
+      rawEdges = buildFlowEdges(statement);
+      direction = 'LR';
+    }
+
+    const { nodes: ln, edges: le } = getLayoutedElements(rawNodes, rawEdges, direction);
     return { layoutedNodes: ln, layoutedEdges: le };
-  }, [statement, selectedNodeId, searchTerm]);
+  }, [result, statement, selectedNodeId, searchTerm, viewMode]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(layoutedNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(layoutedEdges);
