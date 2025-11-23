@@ -6,54 +6,60 @@ use sqlparser::ast::{
     SetExpr, Statement, TableFactor, TableWithJoins,
 };
 use std::collections::{HashMap, HashSet};
+#[cfg(feature = "tracing")]
+use tracing::info_span;
 
 mod context;
-mod helpers;
+pub mod helpers;
 mod input;
+mod resolution;
+mod global;
+mod diagnostics;
 
 use context::{ColumnRef, OutputColumn, StatementContext};
 use helpers::{
     classify_query_type, extract_simple_name, generate_column_node_id, generate_edge_id,
-    generate_node_id, is_quoted_identifier, is_simple_column_ref, parse_canonical_name,
-    split_qualified_identifiers, unquote_identifier,
+    generate_node_id, is_simple_column_ref,
 };
 use input::{collect_statements, StatementInput};
 
 /// Main entry point for SQL analysis
 pub fn analyze(request: &AnalyzeRequest) -> AnalyzeResult {
+    #[cfg(feature = "tracing")]
+    let _span = info_span!("analyze_request", statement_count = %request.sql.matches(';').count() + 1).entered();
     let mut analyzer = Analyzer::new(request);
     analyzer.analyze()
 }
 
 /// Internal analyzer state
-struct Analyzer<'a> {
-    request: &'a AnalyzeRequest,
-    issues: Vec<Issue>,
-    statement_lineages: Vec<StatementLineage>,
+pub(super) struct Analyzer<'a> {
+    pub(super) request: &'a AnalyzeRequest,
+    pub(super) issues: Vec<Issue>,
+    pub(super) statement_lineages: Vec<StatementLineage>,
     /// Track which tables are produced by which statement (for cross-statement linking)
-    produced_tables: HashMap<String, usize>,
+    pub(super) produced_tables: HashMap<String, usize>,
     /// Track which tables are consumed by which statements
-    consumed_tables: HashMap<String, Vec<usize>>,
+    pub(super) consumed_tables: HashMap<String, Vec<usize>>,
     /// All discovered tables across statements (for global lineage)
-    all_tables: HashSet<String>,
+    pub(super) all_tables: HashSet<String>,
     /// All discovered CTEs
-    all_ctes: HashSet<String>,
+    pub(super) all_ctes: HashSet<String>,
     /// Known tables from schema metadata (for validation)
-    known_tables: HashSet<String>,
+    pub(super) known_tables: HashSet<String>,
     /// Schema lookup: table canonical name -> table schema info
-    schema_tables: HashMap<String, SchemaTable>,
+    pub(super) schema_tables: HashMap<String, SchemaTable>,
     /// Whether column lineage is enabled
-    column_lineage_enabled: bool,
+    pub(super) column_lineage_enabled: bool,
     /// Default catalog for unqualified identifiers
-    default_catalog: Option<String>,
+    pub(super) default_catalog: Option<String>,
     /// Default schema for unqualified identifiers
-    default_schema: Option<String>,
+    pub(super) default_schema: Option<String>,
     /// Ordered search path entries
-    search_path: Vec<SearchPathEntry>,
+    pub(super) search_path: Vec<SearchPathEntry>,
 }
 
 #[derive(Debug, Clone)]
-struct SearchPathEntry {
+pub(super) struct SearchPathEntry {
     catalog: Option<String>,
     schema: String,
 }
@@ -94,148 +100,6 @@ impl<'a> Analyzer<'a> {
         analyzer
     }
 
-    fn initialize_schema_metadata(&mut self) {
-        if let Some(schema) = self.request.schema.as_ref() {
-            self.default_catalog = schema
-                .default_catalog
-                .as_ref()
-                .map(|c| self.normalize_identifier(c));
-            self.default_schema = schema
-                .default_schema
-                .as_ref()
-                .map(|s| self.normalize_identifier(s));
-            if let Some(search_path) = schema.search_path.as_ref() {
-                self.search_path = search_path
-                    .iter()
-                    .map(|hint| SearchPathEntry {
-                        catalog: hint.catalog.as_ref().map(|c| self.normalize_identifier(c)),
-                        schema: self.normalize_identifier(&hint.schema),
-                    })
-                    .collect();
-            } else if let Some(default_schema) = &self.default_schema {
-                self.search_path = vec![SearchPathEntry {
-                    catalog: self.default_catalog.clone(),
-                    schema: default_schema.clone(),
-                }];
-            }
-
-            for table in &schema.tables {
-                let canonical = self.schema_table_key(table);
-                self.known_tables.insert(canonical.clone());
-                self.schema_tables.insert(canonical, table.clone());
-            }
-        }
-    }
-
-    fn schema_table_key(&self, table: &SchemaTable) -> String {
-        let mut parts = Vec::new();
-        if let Some(catalog) = &table.catalog {
-            parts.push(catalog.clone());
-        }
-        if let Some(schema) = &table.schema {
-            parts.push(schema.clone());
-        }
-        parts.push(table.name.clone());
-        self.normalize_table_name(&parts.join("."))
-    }
-
-    fn canonicalize_table_reference(&self, name: &str) -> TableResolution {
-        let parts = split_qualified_identifiers(name);
-        if parts.is_empty() {
-            return TableResolution {
-                canonical: String::new(),
-                matched_schema: false,
-            };
-        }
-
-        let normalized: Vec<String> = parts
-            .into_iter()
-            .map(|part| self.normalize_identifier(&part))
-            .collect();
-
-        match normalized.len() {
-            len if len >= 3 => {
-                let canonical = normalized.join(".");
-                let matched = self.known_tables.contains(&canonical);
-                TableResolution {
-                    canonical,
-                    matched_schema: matched,
-                }
-            }
-            2 => {
-                let canonical = normalized.join(".");
-                if self.known_tables.contains(&canonical) {
-                    return TableResolution {
-                        canonical,
-                        matched_schema: true,
-                    };
-                }
-                if let Some(default_catalog) = &self.default_catalog {
-                    let with_catalog = format!("{default_catalog}.{canonical}");
-                    if self.known_tables.contains(&with_catalog) {
-                        return TableResolution {
-                            canonical: with_catalog,
-                            matched_schema: true,
-                        };
-                    }
-                }
-                TableResolution {
-                    canonical,
-                    matched_schema: false,
-                }
-            }
-            _ => {
-                let table_only = normalized[0].clone();
-
-                if self.known_tables.contains(&table_only) {
-                    return TableResolution {
-                        canonical: table_only,
-                        matched_schema: true,
-                    };
-                }
-
-                if let Some(candidate) = self.resolve_via_search_path(&table_only) {
-                    return TableResolution {
-                        canonical: candidate,
-                        matched_schema: true,
-                    };
-                }
-
-                if let Some(schema) = &self.default_schema {
-                    let canonical = if let Some(catalog) = &self.default_catalog {
-                        format!("{catalog}.{schema}.{table_only}")
-                    } else {
-                        format!("{schema}.{table_only}")
-                    };
-                    let matched = self.known_tables.contains(&canonical);
-                    return TableResolution {
-                        canonical,
-                        matched_schema: matched,
-                    };
-                }
-
-                TableResolution {
-                    canonical: table_only.clone(),
-                    matched_schema: self.known_tables.contains(&table_only),
-                }
-            }
-        }
-    }
-
-    fn resolve_via_search_path(&self, table: &str) -> Option<String> {
-        for entry in &self.search_path {
-            let canonical = match (&entry.catalog, &entry.schema) {
-                (Some(catalog), schema) => format!("{catalog}.{schema}.{table}"),
-                (None, schema) => format!("{schema}.{table}"),
-            };
-
-            if self.known_tables.contains(&canonical) {
-                return Some(canonical);
-            }
-        }
-        None
-    }
-
     fn analyze(&mut self) -> AnalyzeResult {
         let (all_statements, mut preflight_issues) = collect_statements(self.request);
         self.issues.append(&mut preflight_issues);
@@ -246,6 +110,14 @@ impl<'a> Analyzer<'a> {
 
         // Analyze all statements
         for (index, StatementInput { statement, source_name }) in all_statements.into_iter().enumerate() {
+            #[cfg(feature = "tracing")]
+            let _stmt_span = info_span!(
+                "analyze_statement",
+                index,
+                source = source_name.as_deref().unwrap_or("inline"),
+                stmt_type = ?statement
+            )
+            .entered();
             match self.analyze_statement(index, &statement, source_name) {
                 Ok(lineage) => {
                     self.statement_lineages.push(lineage);
@@ -950,65 +822,6 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    fn validate_column(&mut self, ctx: &StatementContext, table_canonical: &str, column: &str) {
-        if let Some(schema_table) = self.schema_tables.get(table_canonical) {
-            let normalized_col = self.normalize_identifier(column);
-            let column_exists = schema_table
-                .columns
-                .iter()
-                .any(|c| self.normalize_identifier(&c.name) == normalized_col);
-
-            if !column_exists && !schema_table.columns.is_empty() {
-                self.issues.push(
-                    Issue::warning(
-                        issue_codes::UNKNOWN_COLUMN,
-                        format!(
-                            "Column '{}' not found in table '{}'",
-                            column, table_canonical
-                        ),
-                    )
-                    .with_statement(ctx.statement_index),
-                );
-            }
-        }
-    }
-
-    fn extract_column_refs_for_validation(&mut self, ctx: &StatementContext, expr: &Expr) {
-        let refs = self.extract_column_refs(expr);
-        for col_ref in refs {
-            if let Some(table) = col_ref.table.as_deref() {
-                let resolved = self.resolve_table_alias(ctx, Some(table));
-                if let Some(table_canonical) = resolved {
-                    self.validate_column(ctx, &table_canonical, &col_ref.column);
-                }
-            }
-        }
-    }
-
-    fn normalize_identifier(&self, name: &str) -> String {
-        let case_sensitivity = self
-            .request
-            .schema
-            .as_ref()
-            .and_then(|s| s.case_sensitivity)
-            .unwrap_or(CaseSensitivity::Dialect);
-
-        let effective_case = match case_sensitivity {
-            CaseSensitivity::Dialect => self.request.dialect.default_case_sensitivity(),
-            other => other,
-        };
-
-        if is_quoted_identifier(name) {
-            unquote_identifier(name)
-        } else {
-            match effective_case {
-                CaseSensitivity::Lower | CaseSensitivity::Dialect => name.to_lowercase(),
-                CaseSensitivity::Upper => name.to_uppercase(),
-                CaseSensitivity::Exact => name.to_string(),
-            }
-        }
-    }
-
     fn analyze_table_with_joins(
         &mut self,
         ctx: &mut StatementContext,
@@ -1512,176 +1325,6 @@ impl<'a> Analyzer<'a> {
         self.analyze_table_factor(ctx, source, None);
     }
 
-    fn normalize_table_name(&self, name: &str) -> String {
-        let case_sensitivity = self
-            .request
-            .schema
-            .as_ref()
-            .and_then(|s| s.case_sensitivity)
-            .unwrap_or(CaseSensitivity::Dialect);
-
-        let effective_case = match case_sensitivity {
-            CaseSensitivity::Dialect => self.request.dialect.default_case_sensitivity(),
-            other => other,
-        };
-
-        let parts = split_qualified_identifiers(name);
-        if parts.is_empty() {
-            return String::new();
-        }
-
-        let normalized: Vec<String> = parts
-            .into_iter()
-            .map(|part| {
-                if is_quoted_identifier(&part) {
-                    unquote_identifier(&part)
-                } else {
-                    match effective_case {
-                        CaseSensitivity::Lower | CaseSensitivity::Dialect => part.to_lowercase(),
-                        CaseSensitivity::Upper => part.to_uppercase(),
-                        CaseSensitivity::Exact => part,
-                    }
-                }
-            })
-            .collect();
-
-        normalized.join(".")
-    }
-
-    fn build_result(&self) -> AnalyzeResult {
-        let global_lineage = self.build_global_lineage();
-        let summary = self.build_summary(&global_lineage);
-
-        AnalyzeResult {
-            statements: self.statement_lineages.clone(),
-            global_lineage,
-            issues: self.issues.clone(),
-            summary,
-        }
-    }
-
-    fn build_global_lineage(&self) -> GlobalLineage {
-        let mut global_nodes: HashMap<String, GlobalNode> = HashMap::new();
-        let mut global_edges: Vec<GlobalEdge> = Vec::new();
-
-        // Collect all nodes from all statements
-        for lineage in &self.statement_lineages {
-            for node in &lineage.nodes {
-                let canonical = node.qualified_name.clone().unwrap_or(node.label.clone());
-                let canonical_name = parse_canonical_name(&canonical);
-
-                global_nodes
-                    .entry(node.id.clone())
-                    .and_modify(|existing| {
-                        existing.statement_refs.push(StatementRef {
-                            statement_index: lineage.statement_index,
-                            node_id: Some(node.id.clone()),
-                        });
-                    })
-                    .or_insert_with(|| GlobalNode {
-                        id: node.id.clone(),
-                        node_type: node.node_type,
-                        label: node.label.clone(),
-                        canonical_name,
-                        statement_refs: vec![StatementRef {
-                            statement_index: lineage.statement_index,
-                            node_id: Some(node.id.clone()),
-                        }],
-                        metadata: None,
-                    });
-            }
-
-            // Collect edges
-            for edge in &lineage.edges {
-                global_edges.push(GlobalEdge {
-                    id: edge.id.clone(),
-                    from: edge.from.clone(),
-                    to: edge.to.clone(),
-                    edge_type: edge.edge_type,
-                    producer_statement: Some(StatementRef {
-                        statement_index: lineage.statement_index,
-                        node_id: None,
-                    }),
-                    consumer_statement: None,
-                    metadata: None,
-                });
-            }
-        }
-
-        // Detect cross-statement edges
-        for (table_name, consumers) in &self.consumed_tables {
-            if let Some(&producer_idx) = self.produced_tables.get(table_name) {
-                for &consumer_idx in consumers {
-                    if consumer_idx > producer_idx {
-                        // This is a cross-statement dependency
-                        let edge_id = format!("cross_{producer_idx}_{consumer_idx}");
-                        global_edges.push(GlobalEdge {
-                            id: edge_id,
-                            from: generate_node_id("table", table_name),
-                            to: generate_node_id("table", table_name),
-                            edge_type: EdgeType::CrossStatement,
-                            producer_statement: Some(StatementRef {
-                                statement_index: producer_idx,
-                                node_id: None,
-                            }),
-                            consumer_statement: Some(StatementRef {
-                                statement_index: consumer_idx,
-                                node_id: None,
-                            }),
-                            metadata: None,
-                        });
-                    }
-                }
-            }
-        }
-
-        GlobalLineage {
-            nodes: global_nodes.into_values().collect(),
-            edges: global_edges,
-        }
-    }
-
-    fn build_summary(&self, global_lineage: &GlobalLineage) -> Summary {
-        let error_count = self
-            .issues
-            .iter()
-            .filter(|i| i.severity == Severity::Error)
-            .count();
-        let warning_count = self
-            .issues
-            .iter()
-            .filter(|i| i.severity == Severity::Warning)
-            .count();
-        let info_count = self
-            .issues
-            .iter()
-            .filter(|i| i.severity == Severity::Info)
-            .count();
-
-        let table_count = global_lineage
-            .nodes
-            .iter()
-            .filter(|n| n.node_type == NodeType::Table || n.node_type == NodeType::Cte)
-            .count();
-
-        let column_count = global_lineage
-            .nodes
-            .iter()
-            .filter(|n| n.node_type == NodeType::Column)
-            .count();
-
-        Summary {
-            statement_count: self.statement_lineages.len(),
-            table_count,
-            column_count,
-            issue_count: IssueCount {
-                errors: error_count,
-                warnings: warning_count,
-                infos: info_count,
-            },
-            has_errors: error_count > 0,
-        }
-    }
 }
 
 

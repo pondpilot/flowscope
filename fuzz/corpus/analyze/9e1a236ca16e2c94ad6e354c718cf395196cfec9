@@ -1,0 +1,1 @@
+SELECT(id, n=UINT8,RE|T5=UINT8S||T5``

@@ -3,6 +3,7 @@ let initPromise: Promise<typeof import('../wasm/flowscope_wasm')> | null = null;
 
 export interface InitWasmOptions {
   wasmUrl?: string;
+  enableTracing?: boolean;
 }
 
 /**
@@ -32,6 +33,10 @@ export async function initWasm(
       if (typeof wasm.default === 'function') {
         // Pass through custom URL when provided so host apps can control asset location
         await wasm.default(options.wasmUrl ?? undefined);
+        // Allow host apps to enable tracing via init option if supported by the build
+        if (options.enableTracing && typeof (wasm as any).enable_tracing === 'function') {
+          (wasm as any).enable_tracing();
+        }
       }
 
       // Verify that the module is actually initialized by checking for required functions

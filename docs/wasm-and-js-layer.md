@@ -182,6 +182,11 @@ Implementations can use a small internal dispatcher to match responses to Promis
 - Stick with wasm-bindgen defaults initially, but surface `initialMemory` / `maximumMemory` overrides via `initWasm` options so heavy hosts (e.g., VS Code) can bump limits.
 - Monitor memory usage via simple telemetry counters included in development builds.
 
+### 4.5 Tracing (optional)
+
+- When built with the `tracing` feature, the WASM module exposes `enable_tracing` (surfaced in TS via `initWasm({ enableTracing: true })`).
+- Default is off; enabling forwards tracing spans to the browser console (via `tracing-wasm`).
+
 ## 5. Environment Assumptions
 
 ### 4.1 Browser

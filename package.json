@@ -1,36 +1,15 @@
 {
-  "name": "flowscope",
+  "name": "flowscope-monorepo",
   "private": true,
+  "packageManager": "yarn@1.22.19",
   "workspaces": [
     "packages/*",
-    "app",
-    "examples/*"
+    "app"
   ],
   "scripts": {
-    "build": "yarn build:rust && yarn build:ts",
-    "build:rust": "./scripts/build-rust.sh",
-    "build:ts": "yarn workspaces run build",
-    "test": "yarn test:rust && yarn test:ts",
-    "test:rust": "cargo test --workspace",
-    "test:ts": "yarn workspaces run test",
-    "test:integration": "yarn workspace web-demo test:integration",
-    "lint": "yarn workspaces run lint",
-    "typecheck": "yarn workspaces run typecheck",
-    "codegen": "./scripts/codegen.sh",
-    "clean": "yarn workspaces run clean && cargo clean"
-  },
-  "devDependencies": {
-    "@types/node": "^18.0.0",
-    "@typescript-eslint/eslint-plugin": "^8.47.0",
-    "@typescript-eslint/parser": "^8.47.0",
-    "eslint": "^8.0.0",
-    "eslint-plugin-react": "^7.37.5",
-    "prettier": "^3.0.0",
-    "typescript": "^5.0.0"
-  },
-  "packageManager": "yarn@1.22.19",
-  "engines": {
-    "node": ">=18.0.0",
-    "yarn": ">=1.22.0"
+    "test": "yarn workspaces run test",
+    "check:schema": "cargo test -p flowscope-core --test schema_guard --locked && yarn workspace @pondpilot/flowscope-core test schema-compat.test.ts --silent",
+    "check:ts": "yarn workspace @pondpilot/flowscope-core test --silent",
+    "check:rust": "cargo test --workspace --locked"
   }
 }

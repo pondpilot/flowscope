@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
-    "lint:fix": "eslint src --fix"
+    "lint:fix": "eslint src --fix",
+    "test": "echo \"No tests defined for flowscope-app\""
   },
   "dependencies": {
     "@pondpilot/flowscope-core": "file:../packages/core",

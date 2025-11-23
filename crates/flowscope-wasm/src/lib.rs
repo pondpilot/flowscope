@@ -1,6 +1,15 @@
 use flowscope_core::{analyze, AnalyzeRequest, AnalyzeResult};
 use wasm_bindgen::prelude::*;
 
+/// Enable tracing logs to the browser console (requires `tracing` feature).
+#[wasm_bindgen]
+pub fn enable_tracing() {
+    #[cfg(feature = "tracing")]
+    {
+        let _ = tracing_wasm::set_as_global_default();
+    }
+}
+
 /// Main analysis entry point - accepts JSON request, returns JSON result
 /// This function never throws - errors are returned in the result's issues array
 #[wasm_bindgen]

@@ -33,13 +33,16 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Run Rust tests
-        run: cargo test --workspace
+        run: cargo test --workspace --locked
 
       - name: Run Clippy
-        run: cargo clippy --workspace -- -D warnings
+        run: cargo clippy --workspace --locked -- -D warnings
 
       - name: Check formatting
         run: cargo fmt --all -- --check
+
+      - name: Verify API schema snapshot
+        run: cargo test -p flowscope-core --test schema_guard --locked
 
   wasm-build:
     name: WASM Build
@@ -111,6 +114,29 @@ jobs:
 
       - name: Build web demo
         run: yarn workspace web-demo build
+
+  schema-compat:
+    name: Schema Compatibility (Rust ↔ TS)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'yarn'
+
+      - name: Install JS deps
+        run: cd packages/core && yarn install --frozen-lockfile
+
+      - name: Verify schema snapshots
+        run: |
+          cargo test -p flowscope-core --test schema_guard --locked
+          cd packages/core && yarn test schema-compat.test.ts --silent
 
   lint:
     name: Lint

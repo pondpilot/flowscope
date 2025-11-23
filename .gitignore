@@ -51,3 +51,11 @@ dist-ssr/
 # Temporary files
 tmp/
 temp/
+
+# Fuzzing and property test artifacts
+crates/flowscope-core/tests/property.proptest-regressions
+fuzz/target/
+fuzz/corpus/*/crash-*
+fuzz/corpus/*/leak-*
+fuzz/corpus/*/timeout-*
+fuzz/corpus/*/oom-*

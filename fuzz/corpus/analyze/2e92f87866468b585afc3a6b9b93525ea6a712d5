@@ -1,0 +1,1 @@
+SELECT id,ELCT id, n name FROM users;

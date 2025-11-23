@@ -7,14 +7,19 @@ license.workspace = true
 repository.workspace = true
 description = "WASM bindings for flowscope-core"
 
+[features]
+default = []
+tracing = ["flowscope-core/tracing", "tracing-wasm"]
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-flowscope-core = { path = "../flowscope-core" }
+flowscope-core = { path = "../flowscope-core", default-features = false }
 wasm-bindgen.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+tracing-wasm = { version = "0.2", optional = true }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"

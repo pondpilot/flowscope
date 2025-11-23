@@ -7,11 +7,17 @@ license.workspace = true
 repository.workspace = true
 description = "Core SQL lineage analysis engine"
 
+[features]
+default = []
+tracing = ["dep:tracing"]
+
 [dependencies]
 sqlparser.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 schemars.workspace = true
+tracing = { version = "0.1", optional = true }
 
 [dev-dependencies]
 rstest = "0.22"
+proptest = "1.4"

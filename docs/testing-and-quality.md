@@ -125,6 +125,9 @@ These schemas are used to verify:
 - Maintain a directory of **golden result snapshots**:
   - Input: SQL + schema + options.
   - Output: serialized lineage graphs + issues.
+- API schema snapshot enforced by `schema_guard` test (`docs/api_schema.json` kept in sync).
+- Property tests for stability (e.g., random simple joins).
+- Fuzz target (`cargo fuzz run analyze`) to guard against parser/analyzer panics.
 - Use regression tests to:
   - Diff new run outputs against golden snapshots.
   - Flag unexpected behavior changes.

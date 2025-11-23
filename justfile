@@ -62,6 +62,10 @@ dev:
 # Run linters
 lint: lint-rust lint-ts
 
+check-schema:
+    cargo test -p flowscope-core --test schema_guard --locked
+    cd packages/core && yarn test schema-compat.test.ts --silent
+
 # Run Rust clippy
 lint-rust:
     cargo clippy --workspace -- -D warnings
@@ -131,4 +135,10 @@ test-rust-release:
 run: build dev
 
 # Check everything is working (quick validation)
-check: fmt-check-rust lint typecheck test-rust
+check: fmt-check-rust lint typecheck test-rust check-schema
+
+# All checks (Rust + TS + schema compatibility)
+check-all:
+    cargo test --workspace --locked
+    yarn workspace @pondpilot/flowscope-core test --silent
+    just check-schema

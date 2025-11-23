@@ -6,6 +6,12 @@ pub mod parser;
 pub mod test_utils;
 pub mod types;
 
+// Internal helper exposure for tests only
+#[cfg(test)]
+pub mod analyzer_helpers {
+    pub use crate::analyzer::helpers;
+}
+
 // Re-export main types and functions
 pub use analyzer::analyze;
 pub use error::ParseError;
@@ -19,6 +25,7 @@ pub use types::{
     // Request types
     AnalysisOptions,
     AnalyzeRequest,
+    FileSource,
     // Response types
     AnalyzeResult,
     CanonicalName,
