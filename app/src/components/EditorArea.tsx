@@ -1,31 +1,13 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Play, FileText, AlertCircle, Loader2, ChevronDown } from 'lucide-react';
-import { useProject, Dialect, RunMode } from '../lib/project-store';
-import {SqlView} from '@pondpilot/flowscope-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { useLineage } from '@pondpilot/flowscope-react';
-import { analyzeSql } from '@pondpilot/flowscope-core';
+import { Loader2 } from 'lucide-react';
+import { SqlView } from '@pondpilot/flowscope-react';
 import { cn } from '@/lib/utils';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-} from "@/components/ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const MAX_FILE_COUNT = 100;
+import { useProject } from '@/lib/project-store';
+import { useAnalysis, useFileNavigation, useKeyboardShortcuts } from '@/hooks';
+import { EditorToolbar } from './EditorToolbar';
+import { Toast } from './ui/toast';
+import { DEFAULT_FILE_NAMES, KEYBOARD_SHORTCUTS } from '@/lib/constants';
+import type { Dialect, RunMode } from '@/lib/project-store';
 
 interface EditorAreaProps {
   wasmReady: boolean;
@@ -33,19 +15,27 @@ interface EditorAreaProps {
 }
 
 export function EditorArea({ wasmReady, className }: EditorAreaProps) {
-  const { currentProject, updateFile, renameFile, createFile, setProjectDialect, setRunMode } = useProject();
-  const { actions } = useLineage();
-  const [isRenaming, setIsRenaming] = useState(false);
-  const [fileName, setFileName] = useState('');
-  const [analyzing, setAnalyzing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  
+  const {
+    currentProject,
+    updateFile,
+    renameFile,
+    createFile,
+    setProjectDialect,
+    setRunMode,
+  } = useProject();
+
   const activeFile = currentProject?.files.find(f => f.id === currentProject.activeFileId);
 
-  // Ensure there's always a file in scratchpad mode
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [fileName, setFileName] = useState('');
+
+  const { isAnalyzing, error, runAnalysis, setError } = useAnalysis(wasmReady);
+
+  useFileNavigation();
+
   useEffect(() => {
     if (currentProject && currentProject.files.length === 0) {
-      createFile('scratchpad.sql');
+      createFile(DEFAULT_FILE_NAMES.SCRATCHPAD);
     }
   }, [currentProject, createFile]);
 
@@ -55,111 +45,31 @@ export function EditorArea({ wasmReady, className }: EditorAreaProps) {
     }
   }, [activeFile?.id, activeFile?.name]);
 
-  const handleRename = () => {
+  const handleRename = useCallback(() => {
     if (fileName.trim() && fileName !== activeFile?.name && activeFile) {
       renameFile(activeFile.id, fileName);
     }
     setIsRenaming(false);
-  };
+  }, [fileName, activeFile, renameFile]);
 
-  const handleAnalyze = useCallback(async () => {
-    if (!wasmReady || !currentProject) return;
-
-    setAnalyzing(true);
-    setError(null);
-
-    try {
-      let contextDescription = '';
-      let filesToAnalyze: { name: string; content: string }[] = [];
-      const runMode = currentProject.runMode;
-
-      if (runMode === 'current' && activeFile) {
-         filesToAnalyze = [{ name: activeFile.name, content: activeFile.content }];
-         contextDescription = `Analyzing file: ${activeFile.name}`;
-      } else if (runMode === 'custom') {
-        const selectedIds = currentProject.selectedFileIds || [];
-        const selectedFiles = currentProject.files.filter(f => selectedIds.includes(f.id) && f.name.endsWith('.sql'));
-        filesToAnalyze = selectedFiles.map(f => ({ name: f.name, content: f.content }));
-        contextDescription = `Analyzing selected: ${filesToAnalyze.length} files`;
-      } else {
-        // Project scope (all SQL files)
-        const sqlFiles = currentProject.files.filter(f => f.name.endsWith('.sql'));
-        filesToAnalyze = sqlFiles.map(f => ({ name: f.name, content: f.content }));
-        contextDescription = `Analyzing project: ${sqlFiles.length} files`;
-      }
-
-      if (filesToAnalyze.length === 0) {
-        // If custom mode is selected but nothing is checked, maybe warn?
-        if (runMode === 'custom') {
-           setError("No files selected for analysis.");
-           return;
-        }
-        // Should ideally not happen for other modes if project has files
-        if (currentProject.files.length > 0 && runMode !== 'current') {
-          setError("No .sql files found in project.");
-          return;
-        }
-        if (runMode === 'current' && !activeFile) return;
-      }
-
-      // Validate file count
-      if (filesToAnalyze.length > MAX_FILE_COUNT) {
-        setError(`Too many files selected (max ${MAX_FILE_COUNT}). Currently selected: ${filesToAnalyze.length} files.`);
-        return;
-      }
-
-      // Validate file sizes
-      for (const file of filesToAnalyze) {
-        if (file.content.length > MAX_FILE_SIZE) {
-          setError(`File "${file.name}" is too large (max ${MAX_FILE_SIZE / 1024 / 1024}MB). File size: ${(file.content.length / 1024 / 1024).toFixed(2)}MB.`);
-          return;
-        }
-      }
-
-      console.log(contextDescription);
-      
-      // Set a representative SQL string for the context (e.g. for display/debugging)
-      // This is less critical now that we have multi-file structure
-      const representativeSql = filesToAnalyze
-          .map(f => `-- File: ${f.name}\n${f.content}`)
-          .join('\n\n');
-      
-      actions.setSql(representativeSql);
-
-      const result = await analyzeSql({
-        sql: '', // Ignored when files are present
-        files: filesToAnalyze,
-        dialect: currentProject.dialect,
-        options: {
-          enableColumnLineage: true
-        }
-      });
-
-      actions.setResult(result);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Analysis failed');
-      console.error(err);
-    } finally {
-      setAnalyzing(false);
+  const handleAnalyze = useCallback(() => {
+    if (activeFile) {
+      runAnalysis(activeFile.content, activeFile.name);
     }
-  }, [wasmReady, currentProject, activeFile, actions]);
+  }, [activeFile, runAnalysis]);
 
-  // Keyboard shortcut for running analysis
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-        e.preventDefault();
-        handleAnalyze();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleAnalyze]);
+  useKeyboardShortcuts([
+    {
+      ...KEYBOARD_SHORTCUTS.RUN_ANALYSIS,
+      handler: handleAnalyze,
+      description: 'Run SQL analysis',
+    },
+  ]);
 
   if (!currentProject || !activeFile) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-muted-foreground bg-muted/5">
-         <Loader2 className="h-6 w-6 animate-spin opacity-50" />
+        <Loader2 className="h-6 w-6 animate-spin opacity-50" />
       </div>
     );
   }
@@ -168,125 +78,36 @@ export function EditorArea({ wasmReady, className }: EditorAreaProps) {
   const selectedCount = currentProject.selectedFileIds?.length || 0;
 
   return (
-    <div className={cn("flex flex-col h-full bg-background", className)}>
-      {/* Editor Toolbar */}
-      <div className="flex items-center justify-between px-4 py-2 border-b h-[50px] shrink-0 bg-background">
-        <div className="flex items-center gap-2 overflow-hidden">
-          <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-          {isRenaming ? (
-            <Input
-              value={fileName}
-              onChange={(e) => setFileName(e.target.value)}
-              onBlur={handleRename}
-              onKeyDown={(e) => e.key === 'Enter' && handleRename()}
-              className="h-7 w-48 text-sm"
-              autoFocus
-            />
-          ) : (
-            <span 
-              className="text-sm font-medium cursor-pointer hover:text-foreground text-muted-foreground truncate max-w-[200px]"
-              onDoubleClick={() => setIsRenaming(true)}
-              title="Double click to rename"
-            >
-              {activeFile.name}
-            </span>
-          )}
-        </div>
-        
-        <div className="flex items-center gap-2">
-          {/* Dialect Selector */}
-          <Select 
-            value={currentProject.dialect} 
-            onValueChange={(v) => setProjectDialect(currentProject.id, v as Dialect)}
-          >
-            <SelectTrigger className="h-8 w-[130px] text-xs">
-              <SelectValue placeholder="Dialect" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="generic">Generic SQL</SelectItem>
-              <SelectItem value="postgres">PostgreSQL</SelectItem>
-              <SelectItem value="snowflake">Snowflake</SelectItem>
-              <SelectItem value="bigquery">BigQuery</SelectItem>
-            </SelectContent>
-          </Select>
+    <div className={cn('flex flex-col h-full bg-background', className)}>
+      <EditorToolbar
+        fileName={fileName}
+        isRenaming={isRenaming}
+        onFileNameChange={setFileName}
+        onRenameStart={() => setIsRenaming(true)}
+        onRenameEnd={handleRename}
+        dialect={currentProject.dialect}
+        onDialectChange={(dialect: Dialect) => setProjectDialect(currentProject.id, dialect)}
+        runMode={currentProject.runMode}
+        onRunModeChange={(mode: RunMode) => setRunMode(currentProject.id, mode)}
+        isAnalyzing={isAnalyzing}
+        wasmReady={wasmReady}
+        onAnalyze={handleAnalyze}
+        allFileCount={allFileCount}
+        selectedCount={selectedCount}
+      />
 
-          {/* Run Button Group */}
-          <div className="flex items-center rounded-md border shadow-sm">
-            <Button 
-              onClick={handleAnalyze} 
-              disabled={!wasmReady || analyzing} 
-              size="sm" 
-              className="h-8 gap-2 bg-brand-blue-500 hover:bg-brand-blue-600 text-white font-medium rounded-r-none border-r border-white/20"
-            >
-              {analyzing ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Play className="h-3.5 w-3.5 fill-current" />
-              )}
-              <span className="hidden sm:inline">Run</span>
-              {currentProject.runMode === 'all' && <span className="text-xs opacity-80 ml-[-2px] hidden sm:inline">(All)</span>}
-              {currentProject.runMode === 'custom' && <span className="text-xs opacity-80 ml-[-2px] hidden sm:inline">({selectedCount})</span>}
-              {currentProject.runMode === 'current' && <span className="text-xs opacity-80 ml-[-2px] hidden sm:inline">(Active)</span>}
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  size="sm"
-                  className="h-8 px-2 bg-brand-blue-500 hover:bg-brand-blue-600 text-white rounded-l-none border-l border-black/10"
-                  disabled={!wasmReady || analyzing}
-                >
-                  <ChevronDown className="h-3 w-3" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Run Configuration</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuRadioGroup 
-                  value={currentProject.runMode} 
-                  onValueChange={(v) => setRunMode(currentProject.id, v as RunMode)}
-                >
-                  <DropdownMenuRadioItem value="all" className="text-xs">
-                    Run Project ({allFileCount} files)
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="custom" className="text-xs">
-                    Run Selected ({selectedCount} files)
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="current" className="text-xs">
-                    Run Active File Only
-                  </DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </div>
-
-      {/* Editor Content */}
       <div className="flex-1 overflow-hidden relative">
-        <SqlView 
-          value={activeFile.content} 
-          onChange={(val) => updateFile(activeFile.id, val)}
+        <SqlView
+          value={activeFile.content}
+          onChange={val => updateFile(activeFile.id, val)}
           className="h-full text-sm"
           editable={true}
         />
       </div>
-      
-      {/* Floating Error Toast */}
+
       {error && (
-        <div className="absolute bottom-4 left-4 right-4 mx-auto max-w-md bg-destructive text-destructive-foreground p-3 rounded-md shadow-lg text-sm flex items-start gap-2 animate-in slide-in-from-bottom-2 z-50">
-          <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-          <div className="flex-1">
-            <p className="font-semibold">Analysis Error</p>
-            <p className="opacity-90 text-xs mt-0.5 font-mono break-all">{error}</p>
-          </div>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            className="h-6 w-6 p-0 text-destructive-foreground/50 hover:text-destructive-foreground hover:bg-destructive-foreground/10"
-            onClick={() => setError(null)}
-          >
-            &times;
-          </Button>
+        <div className="absolute bottom-4 left-4 right-4 mx-auto max-w-md z-50">
+          <Toast type="error" title="Analysis Error" message={error} onClose={() => setError(null)} />
         </div>
       )}
     </div>

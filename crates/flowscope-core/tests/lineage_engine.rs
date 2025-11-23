@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 fn run_analysis(sql: &str, dialect: Dialect, schema: Option<SchemaMetadata>) -> AnalyzeResult {
     analyze(&AnalyzeRequest {
         sql: sql.trim().to_string(),
+        files: None,
         dialect,
         source_name: Some("integration_test".into()),
         options: None,
@@ -129,6 +130,7 @@ fn edges_by_type<'a>(lineage: &'a StatementLineage, edge_type: EdgeType) -> Vec<
         .collect()
 }
 
+#[allow(dead_code)]
 fn find_node_by_label<'a>(lineage: &'a StatementLineage, label: &str) -> Option<&'a Node> {
     lineage
         .nodes
@@ -153,6 +155,7 @@ fn find_table_node<'a>(lineage: &'a StatementLineage, name: &str) -> Option<&'a 
         })
 }
 
+#[allow(dead_code)]
 fn has_edge(lineage: &StatementLineage, from_label: &str, to_label: &str, edge_type: EdgeType) -> bool {
     let from_node = find_node_by_label(lineage, from_label);
     let to_node = find_node_by_label(lineage, to_label);

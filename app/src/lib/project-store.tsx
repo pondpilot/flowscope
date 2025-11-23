@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { STORAGE_KEYS, FILE_EXTENSIONS } from './constants';
+
 const uuidv4 = () => crypto.randomUUID();
 
 export type Dialect = 'generic' | 'postgres' | 'snowflake' | 'bigquery';
@@ -213,27 +215,38 @@ ORDER BY 2 DESC, 4 DESC;`
   ]
 };
 
-export function ProjectProvider({ children }: { children: React.ReactNode }) {
-  // Load from localStorage or use default
-  const [projects, setProjects] = useState<Project[]>(() => {
-    const saved = localStorage.getItem('flowscope-projects');
-    // Migration: if old projects exist without dialect, add default
+const loadProjectsFromStorage = (): Project[] => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEYS.PROJECTS);
     if (saved) {
       const parsed = JSON.parse(saved);
       return parsed.map((p: any) => ({
         ...p,
         dialect: p.dialect || 'generic',
         runMode: p.runMode || 'all',
-        selectedFileIds: p.selectedFileIds || []
+        selectedFileIds: p.selectedFileIds || [],
       }));
     }
-    return [DEFAULT_PROJECT];
-  });
-  
+  } catch (error) {
+    console.error('Failed to load projects from storage:', error);
+  }
+  return [DEFAULT_PROJECT];
+};
+
+const saveProjectsToStorage = (projects: Project[]) => {
+  try {
+    localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projects));
+  } catch (error) {
+    console.error('Failed to save projects to storage:', error);
+  }
+};
+
+export function ProjectProvider({ children }: { children: React.ReactNode }) {
+  const [projects, setProjects] = useState<Project[]>(loadProjectsFromStorage);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(projects[0]?.id || null);
 
   useEffect(() => {
-    localStorage.setItem('flowscope-projects', JSON.stringify(projects));
+    saveProjectsToStorage(projects);
   }, [projects]);
 
   const currentProject = projects.find(p => p.id === activeProjectId) || null;
@@ -294,24 +307,32 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
+  const getFileLanguage = (fileName: string): ProjectFile['language'] => {
+    if (fileName.endsWith(FILE_EXTENSIONS.JSON)) return 'json';
+    if (fileName.endsWith(FILE_EXTENSIONS.SQL)) return 'sql';
+    return 'text';
+  };
+
   const createFile = useCallback((name: string, content: string = '') => {
     if (!activeProjectId) return;
-    
+
     const newFile: ProjectFile = {
       id: uuidv4(),
       name,
       content,
-      language: name.endsWith('.json') ? 'json' : 'sql'
+      language: getFileLanguage(name),
     };
 
-    setProjects(prev => prev.map(p => {
-      if (p.id !== activeProjectId) return p;
-      return {
-        ...p,
-        files: [...p.files, newFile],
-        activeFileId: newFile.id
-      };
-    }));
+    setProjects(prev =>
+      prev.map(p => {
+        if (p.id !== activeProjectId) return p;
+        return {
+          ...p,
+          files: [...p.files, newFile],
+          activeFileId: newFile.id,
+        };
+      })
+    );
   }, [activeProjectId]);
 
   const updateFile = useCallback((fileId: string, content: string) => {
@@ -362,31 +383,36 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     }));
   }, [activeProjectId]);
 
-  const importFiles = useCallback(async (fileList: FileList) => {
-    if (!activeProjectId) return;
+  const importFiles = useCallback(
+    async (fileList: FileList) => {
+      if (!activeProjectId) return;
 
-    const newFiles: ProjectFile[] = [];
-    
-    for (let i = 0; i < fileList.length; i++) {
-      const file = fileList[i];
-      const content = await file.text();
-      newFiles.push({
-        id: uuidv4(),
-        name: file.name,
-        content,
-        language: file.name.endsWith('.json') ? 'json' : 'sql'
-      });
-    }
+      const newFiles: ProjectFile[] = [];
 
-    setProjects(prev => prev.map(p => {
-      if (p.id !== activeProjectId) return p;
-      return {
-        ...p,
-        files: [...p.files, ...newFiles],
-        activeFileId: newFiles[0]?.id || p.activeFileId
-      };
-    }));
-  }, [activeProjectId]);
+      for (let i = 0; i < fileList.length; i++) {
+        const file = fileList[i];
+        const content = await file.text();
+        newFiles.push({
+          id: uuidv4(),
+          name: file.name,
+          content,
+          language: getFileLanguage(file.name),
+        });
+      }
+
+      setProjects(prev =>
+        prev.map(p => {
+          if (p.id !== activeProjectId) return p;
+          return {
+            ...p,
+            files: [...p.files, ...newFiles],
+            activeFileId: newFiles[0]?.id || p.activeFileId,
+          };
+        })
+      );
+    },
+    [activeProjectId]
+  );
 
   const value = {
     projects,

@@ -365,9 +365,18 @@ function mergeStatements(statements: StatementLineage[]): StatementLineage {
   const mergedEdges = new Map<string, Edge>();
 
   statements.forEach((stmt) => {
+    const sourceName = stmt.sourceName;
     stmt.nodes.forEach((node) => {
        if (!mergedNodes.has(node.id)) {
-         mergedNodes.set(node.id, node);
+         // Preserve sourceName in metadata for navigation
+         const nodeWithSource = { ...node };
+         if (sourceName) {
+            nodeWithSource.metadata = { 
+              ...node.metadata, 
+              sourceName 
+            };
+         }
+         mergedNodes.set(node.id, nodeWithSource);
        }
     });
 
@@ -676,16 +685,186 @@ function buildScriptLevelGraph(
   searchTerm: string,
   showTables: boolean
 ): { nodes: FlowNode[]; edges: FlowEdge[] } {
-  const scriptMap = groupStatementsByScript(statements);
-  const scriptNodes = createScriptNodes(scriptMap, selectedNodeId, searchTerm);
+  const lowerCaseSearchTerm = searchTerm.toLowerCase();
+
+  const scriptMap = new Map<string, StatementLineageWithSource[]>();
+  statements.forEach((stmt) => {
+    const sourceName = stmt.sourceName || 'unknown';
+    const existing = scriptMap.get(sourceName) || [];
+    existing.push(stmt);
+    scriptMap.set(sourceName, existing);
+  });
+
+  const nodes: FlowNode[] = [];
+  const edges: FlowEdge[] = [];
+
+  // Helper to extract I/O for a script
+  const getScriptIO = (stmts: StatementLineageWithSource[]) => {
+    const reads = new Set<string>();
+    const writes = new Set<string>();
+    const readQualified = new Set<string>();
+    const writeQualified = new Set<string>();
+
+    stmts.forEach((stmt) => {
+      stmt.nodes.forEach((node) => {
+        if (node.type === 'table') {
+          const isWritten = 
+            stmt.edges.some((e) => e.to === node.id && e.type === 'data_flow') ||
+            (stmt.statementType === 'CREATE_TABLE');
+          const isRead = stmt.edges.some((e) => e.from === node.id && e.type === 'data_flow');
+
+          if (isWritten) {
+            writes.add(node.label);
+            writeQualified.add(node.qualifiedName || node.label);
+          }
+          if (isRead || (!isWritten && !isRead)) {
+            reads.add(node.label);
+            readQualified.add(node.qualifiedName || node.label);
+          }
+        }
+      });
+    });
+    return { reads, writes, readQualified, writeQualified };
+  };
+
+  // Create Script Nodes
+  scriptMap.forEach((stmts, sourceName) => {
+    const { reads, writes } = getScriptIO(stmts);
+    const isHighlighted = !!(
+      lowerCaseSearchTerm && sourceName.toLowerCase().includes(lowerCaseSearchTerm)
+    );
+
+    nodes.push({
+      id: `script:${sourceName}`,
+      type: 'scriptNode',
+      position: { x: 0, y: 0 },
+      data: {
+        label: sourceName,
+        sourceName,
+        tablesRead: Array.from(reads),
+        tablesWritten: Array.from(writes),
+        statementCount: stmts.length,
+        isSelected: `script:${sourceName}` === selectedNodeId,
+        isHighlighted,
+        // If showing tables as nodes, don't show them inline
+        showTables: false,
+      } satisfies ScriptNodeData,
+    });
+  });
 
   if (showTables) {
-    const { nodes: tableNodes, edges } = buildHybridGraph(scriptMap, selectedNodeId, searchTerm);
-    return { nodes: [...scriptNodes, ...tableNodes], edges };
+    // Mode 1: Hybrid Graph (Script -> Table -> Script)
+    const uniqueTables = new Map<string, { label: string; sourceName?: string }>();
+
+    scriptMap.forEach((stmts) => {
+      const { readQualified, writeQualified } = getScriptIO(stmts);
+      
+      // Collect unique table info, prioritizing the writer for sourceName
+      stmts.forEach(stmt => {
+        stmt.nodes.forEach(node => {
+          if (node.type === 'table') {
+             const qName = node.qualifiedName || node.label;
+             const isWritten = 
+                stmt.edges.some((e) => e.to === node.id && e.type === 'data_flow') ||
+                (stmt.statementType === 'CREATE_TABLE');
+             
+             // If this script writes the table, use its sourceName as the table's source
+             if (isWritten) {
+               uniqueTables.set(qName, { label: node.label, sourceName: stmt.sourceName });
+             } else if (!uniqueTables.has(qName)) {
+               // Otherwise just register it if not seen
+               uniqueTables.set(qName, { label: node.label });
+             }
+          }
+        });
+      });
+
+      const sourceId = `script:${stmts[0].sourceName || 'unknown'}`;
+
+      // Edges: Script -> Table (Writes)
+      writeQualified.forEach(qName => {
+        const edgeId = `${sourceId}->table:${qName}`;
+        edges.push({
+          id: edgeId,
+          source: sourceId,
+          target: `table:${qName}`,
+          type: 'animated',
+          data: { type: 'data_flow' }
+        });
+      });
+
+      // Edges: Table -> Script (Reads)
+      readQualified.forEach(qName => {
+        const edgeId = `table:${qName}->${sourceId}`;
+        edges.push({
+          id: edgeId,
+          source: `table:${qName}`,
+          target: sourceId,
+          type: 'animated',
+          data: { type: 'data_flow' }
+        });
+      });
+    });
+
+    // Create Table Nodes
+    uniqueTables.forEach((info, qName) => {
+      const isHighlighted = !!(lowerCaseSearchTerm && info.label.toLowerCase().includes(lowerCaseSearchTerm));
+      nodes.push({
+        id: `table:${qName}`,
+        type: 'simpleTableNode',
+        position: { x: 0, y: 0 },
+        data: {
+          label: info.label,
+          nodeType: 'table',
+          columns: [],
+          isSelected: `table:${qName}` === selectedNodeId,
+          isHighlighted,
+          isCollapsed: false,
+          sourceName: info.sourceName,
+        } satisfies TableNodeData
+      });
+    });
+
   } else {
-    const edges = buildDirectScriptGraph(scriptMap);
-    return { nodes: scriptNodes, edges };
+    // Mode 2: Script Graph (Script -> Script)
+    const edgeSet = new Set<string>();
+
+    scriptMap.forEach((producerStmts, producerScript) => {
+      const { writeQualified: producerWrites } = getScriptIO(producerStmts);
+
+      scriptMap.forEach((consumerStmts, consumerScript) => {
+        if (producerScript === consumerScript) return;
+
+        const { readQualified: consumerReads } = getScriptIO(consumerStmts);
+
+        // Find intersection
+        const sharedTables: string[] = [];
+        producerWrites.forEach(table => {
+          if (consumerReads.has(table)) {
+            // Convert to simple name for label
+            const simpleName = table.split('.').pop() || table;
+            sharedTables.push(simpleName);
+          }
+        });
+
+        if (sharedTables.length > 0) {
+          const edgeId = `${producerScript}->${consumerScript}`;
+          if (!edgeSet.has(edgeId)) {
+            edgeSet.add(edgeId);
+            edges.push({
+              id: edgeId,
+              source: `script:${producerScript}`,
+              target: `script:${consumerScript}`,
+              type: 'animated',
+              label: sharedTables.slice(0, 2).join(', ') + (sharedTables.length > 2 ? '...' : ''),
+            });
+          }
+        }
+      });
+    });
   }
+
+  return { nodes, edges };
 }
 
 function buildColumnLevelGraph(
@@ -1009,14 +1188,63 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
   const handleNodeClick = useCallback(
     (_event: React.MouseEvent, node: FlowNode) => {
       actions.selectNode(node.id);
+      
+      let sourceName: string | undefined;
+      let span: any | undefined;
+
+      // 1. Try to get source/span from node data (Script View / Hybrid View)
+      if (node.data && typeof node.data === 'object') {
+        if ('sourceName' in node.data && typeof node.data.sourceName === 'string') {
+          sourceName = node.data.sourceName;
+        }
+      }
+
+      // 2. Try to get from lineage statement (Table View / Column View)
       if (statement) {
         const lineageNode = statement.nodes.find((n) => n.id === node.id);
         if (lineageNode) {
           if (lineageNode.span) {
             actions.highlightSpan(lineageNode.span);
+            span = lineageNode.span;
           }
           onNodeClick?.(lineageNode);
+          
+          // If node doesn't have sourceName, use statement's sourceName OR metadata
+          if (!sourceName) {
+             if (lineageNode.metadata && typeof lineageNode.metadata.sourceName === 'string') {
+                sourceName = lineageNode.metadata.sourceName;
+             } else if (statement.sourceName) {
+                sourceName = statement.sourceName;
+             }
+          }
         }
+      }
+
+      // 3. Dispatch navigation request if we have a source file
+      if (sourceName) {
+        let targetType: 'table' | 'cte' | 'column' | 'script' | undefined;
+        const flowNodeType = node.type;
+        
+        if (flowNodeType === 'scriptNode') {
+          targetType = 'script';
+        } else if (flowNodeType === 'columnNode') {
+          targetType = 'column';
+        } else if (flowNodeType === 'tableNode' || flowNodeType === 'simpleTableNode') {
+          // Check if it's a CTE or Table
+          const data = node.data as TableNodeData;
+          if (data.nodeType === 'cte') targetType = 'cte';
+          else targetType = 'table';
+        }
+
+        // Use label as target name, ensuring it's a string
+        const targetName = typeof node.data?.label === 'string' ? node.data.label : undefined;
+
+        actions.requestNavigation({ 
+          sourceName, 
+          span,
+          targetName,
+          targetType
+        });
       }
     },
     [actions, statement, onNodeClick]

@@ -12,6 +12,7 @@ import type {
   LineageState,
   LineageActions,
   LineageViewMode,
+  NavigationRequest,
 } from './types';
 
 const VIEW_MODE_STORAGE_KEY = 'flowscope-view-mode';
@@ -81,6 +82,7 @@ export function LineageProvider({
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewModeState] = useState<LineageViewMode>(() => loadViewMode());
   const [showScriptTables, setShowScriptTables] = useState(false);
+  const [navigationRequest, setNavigationRequest] = useState<NavigationRequest | null>(null);
   const [collapsedNodeIds, setCollapsedNodeIds] = useState<Set<string>>(new Set());
 
   const updateResult = useCallback(
@@ -140,6 +142,10 @@ export function LineageProvider({
     setShowScriptTables((prev) => !prev);
   }, []);
 
+  const requestNavigation = useCallback((request: NavigationRequest | null) => {
+    setNavigationRequest(request);
+  }, []);
+
   const state: LineageState = useMemo(
     () => ({
       result,
@@ -151,8 +157,9 @@ export function LineageProvider({
       viewMode,
       collapsedNodeIds,
       showScriptTables,
+      navigationRequest,
     }),
-    [result, sql, selectedNodeId, selectedStatementIndex, highlightedSpan, searchTerm, viewMode, collapsedNodeIds, showScriptTables]
+    [result, sql, selectedNodeId, selectedStatementIndex, highlightedSpan, searchTerm, viewMode, collapsedNodeIds, showScriptTables, navigationRequest]
   );
 
   const actions: LineageActions = useMemo(
@@ -166,8 +173,9 @@ export function LineageProvider({
       setSearchTerm,
       setViewMode,
       toggleShowScriptTables,
+      requestNavigation,
     }),
-    [updateResult, setSql, selectNode, toggleNodeCollapse, selectStatement, highlightSpan, setSearchTerm, setViewMode, toggleShowScriptTables]
+    [updateResult, setSql, selectNode, toggleNodeCollapse, selectStatement, highlightSpan, setSearchTerm, setViewMode, toggleShowScriptTables, requestNavigation]
   );
 
   const value = useMemo(() => ({ state, actions }), [state, actions]);

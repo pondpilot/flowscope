@@ -11,7 +11,7 @@ pub fn analyze_sql_json(request_json: &str) -> String {
         Err(e) => {
             let result = AnalyzeResult::from_error(
                 "REQUEST_PARSE_ERROR",
-                "Invalid request format".to_string(),
+                format!("Invalid request format: {e}"),
             );
             return serde_json::to_string(&result)
                 .unwrap_or_else(|_| r#"{"error":"Failed to serialize error result"}"#.to_string());

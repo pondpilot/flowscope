@@ -24,6 +24,16 @@ export interface SchemaViewProps {
 }
 
 /**
+ * Request to navigate to a specific file and location.
+ */
+export interface NavigationRequest {
+  sourceName: string;
+  span?: Span;
+  targetName?: string;
+  targetType?: 'table' | 'cte' | 'column' | 'script';
+}
+
+/**
  * State shape for the lineage context.
  * Contains all the stateful values managed by the LineageProvider.
  */
@@ -46,6 +56,8 @@ export interface LineageState {
   viewMode: LineageViewMode;
   /** Whether to show table details in script nodes */
   showScriptTables: boolean;
+  /** Request to navigate to a specific file and location */
+  navigationRequest: NavigationRequest | null;
 }
 
 /**
@@ -71,6 +83,8 @@ export interface LineageActions {
   setViewMode: (mode: LineageViewMode) => void;
   /** Toggle showing tables in script nodes */
   toggleShowScriptTables: () => void;
+  /** Request navigation to a file/location */
+  requestNavigation: (request: NavigationRequest | null) => void;
 }
 
 /**
@@ -179,6 +193,8 @@ export interface TableNodeData extends Record<string, unknown> {
   isCollapsed: boolean;
   /** Whether this node matches the current search term */
   isHighlighted: boolean;
+  /** Optional source file name */
+  sourceName?: string;
 }
 
 /**
@@ -193,6 +209,8 @@ export interface ColumnNodeInfo {
   expression?: string;
   /** Whether this column is part of a highlighted path */
   isHighlighted?: boolean;
+  /** Optional source file name */
+  sourceName?: string;
 }
 
 /**
@@ -209,6 +227,8 @@ export interface ColumnNodeData extends Record<string, unknown> {
   isSelected: boolean;
   /** Whether this node matches the current search term */
   isHighlighted: boolean;
+  /** Optional source file name */
+  sourceName?: string;
 }
 
 /**

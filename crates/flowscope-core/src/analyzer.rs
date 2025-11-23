@@ -528,21 +528,21 @@ impl<'a> Analyzer<'a> {
 
         // Also extract column refs from WHERE, GROUP BY, HAVING for completeness
         if let Some(ref where_clause) = select.selection {
-            self.extract_column_refs_for_validation(ctx, where_clause);
+            self.analyze_expression(ctx, where_clause);
         }
 
         // Handle GROUP BY
         match &select.group_by {
             ast::GroupByExpr::Expressions(exprs, _) => {
                 for group_by in exprs {
-                    self.extract_column_refs_for_validation(ctx, group_by);
+                    self.analyze_expression(ctx, group_by);
                 }
             }
             ast::GroupByExpr::All(_) => {}
         }
 
         if let Some(ref having) = select.having {
-            self.extract_column_refs_for_validation(ctx, having);
+            self.analyze_expression(ctx, having);
         }
     }
 
@@ -889,7 +889,7 @@ impl<'a> Analyzer<'a> {
     /// Resolve which table a column belongs to.
     /// If qualifier is provided, resolve via alias. Otherwise, try to infer from tables in scope.
     fn resolve_column_table(
-        &self,
+        &mut self,
         ctx: &StatementContext,
         qualifier: Option<&str>,
         column: &str,
@@ -900,7 +900,7 @@ impl<'a> Analyzer<'a> {
         }
 
         // No qualifier - try to find which table owns this column
-        let tables_in_scope: Vec<_> = ctx.table_node_ids.keys().collect();
+        let tables_in_scope: Vec<_> = ctx.table_node_ids.keys().cloned().collect();
 
         // If only one table in scope, assume column belongs to it
         if tables_in_scope.len() == 1 {
@@ -909,30 +909,60 @@ impl<'a> Analyzer<'a> {
 
         let normalized_col = self.normalize_identifier(column);
 
-        // 1. Check CTEs created in this statement
+        // Collect candidates using CTE output columns and schema metadata
+        let mut candidate_tables: Vec<String> = Vec::new();
         for table_canonical in &tables_in_scope {
-            if let Some(cte_cols) = ctx.cte_columns.get(*table_canonical) {
+            if let Some(cte_cols) = ctx.cte_columns.get(table_canonical) {
                 if cte_cols.iter().any(|c| c.name == normalized_col) {
-                    return Some((*table_canonical).clone());
+                    candidate_tables.push(table_canonical.clone());
+                    continue;
                 }
             }
-        }
 
-        // 2. Check schema metadata
-        for table_canonical in &tables_in_scope {
-            if let Some(schema_table) = self.schema_tables.get(*table_canonical) {
+            if let Some(schema_table) = self.schema_tables.get(table_canonical) {
                 if schema_table
                     .columns
                     .iter()
                     .any(|c| self.normalize_identifier(&c.name) == normalized_col)
                 {
-                    return Some((*table_canonical).clone());
+                    candidate_tables.push(table_canonical.clone());
                 }
             }
         }
 
-        // Can't determine - pick first table (best effort)
-        tables_in_scope.first().map(|s| (*s).clone())
+        match candidate_tables.len() {
+            1 => candidate_tables.first().cloned(),
+            0 => {
+                // Ambiguous because we have multiple tables in scope but no way to disambiguate.
+                self.issues.push(
+                    Issue::warning(
+                        issue_codes::UNRESOLVED_REFERENCE,
+                        format!(
+                            "Column '{}' is ambiguous across tables in scope: {}",
+                            column,
+                            tables_in_scope.join(", ")
+                        ),
+                    )
+                    .with_statement(ctx.statement_index),
+                );
+                None
+            }
+            _ => {
+                // Column exists in multiple tables — require explicit qualifier.
+                self.issues.push(
+                    Issue::warning(
+                        issue_codes::UNRESOLVED_REFERENCE,
+                        format!(
+                            "Column '{}' exists in multiple tables in scope: {}. Qualify the column to disambiguate.",
+                            column,
+                            candidate_tables.join(", ")
+                        ),
+                    )
+                    .with_statement(ctx.statement_index),
+                );
+                None
+            }
+        }
     }
 
     fn validate_column(&mut self, ctx: &StatementContext, table_canonical: &str, column: &str) {
@@ -984,7 +1014,7 @@ impl<'a> Analyzer<'a> {
         };
 
         if is_quoted_identifier(name) {
-            name.to_string()
+            unquote_identifier(name)
         } else {
             match effective_case {
                 CaseSensitivity::Lower | CaseSensitivity::Dialect => name.to_lowercase(),
@@ -1451,22 +1481,23 @@ impl<'a> Analyzer<'a> {
             }
         } else {
             // Standard SQL: first table in FROM is target
-            if let FromTable::WithFromKeyword(ts) | FromTable::WithoutKeyword(ts) = from {
-                if let Some(first) = ts.first() {
-                    if let TableFactor::Table { name, alias, .. } = &first.relation {
-                        let table_name = name.to_string();
-                        let lookup = alias
-                            .as_ref()
-                            .map(|a| a.name.to_string())
-                            .unwrap_or(table_name.clone());
+            let ts = match from {
+                FromTable::WithFromKeyword(ts) | FromTable::WithoutKeyword(ts) => ts,
+            };
+            if let Some(first) = ts.first() {
+                if let TableFactor::Table { name, alias, .. } = &first.relation {
+                    let table_name = name.to_string();
+                    let lookup = alias
+                        .as_ref()
+                        .map(|a| a.name.to_string())
+                        .unwrap_or(table_name.clone());
 
-                        let canonical = if let Some(c) = ctx.table_aliases.get(&lookup) {
-                            c.clone()
-                        } else {
-                            self.canonicalize_table_reference(&table_name).canonical
-                        };
-                        self.produced_tables.insert(canonical, ctx.statement_index);
-                    }
+                    let canonical = if let Some(c) = ctx.table_aliases.get(&lookup) {
+                        c.clone()
+                    } else {
+                        self.canonicalize_table_reference(&table_name).canonical
+                    };
+                    self.produced_tables.insert(canonical, ctx.statement_index);
                 }
             }
         }
@@ -1518,7 +1549,7 @@ impl<'a> Analyzer<'a> {
             .into_iter()
             .map(|part| {
                 if is_quoted_identifier(&part) {
-                    part
+                    unquote_identifier(&part)
                 } else {
                     match effective_case {
                         CaseSensitivity::Lower | CaseSensitivity::Dialect => part.to_lowercase(),
@@ -1697,8 +1728,10 @@ struct OutputColumn {
     /// Alias or derived name for the column
     name: String,
     /// Source columns that contribute to this output
+    #[allow(dead_code)]
     sources: Vec<ColumnRef>,
     /// Expression text for computed columns
+    #[allow(dead_code)]
     expression: Option<String>,
     /// Node ID for this column
     node_id: String,
@@ -1712,6 +1745,7 @@ struct ColumnRef {
     /// Column name
     column: String,
     /// Resolved table canonical name (if known)
+    #[allow(dead_code)]
     resolved_table: Option<String>,
 }
 
@@ -1886,6 +1920,19 @@ fn is_quoted_identifier(part: &str) -> bool {
     )
 }
 
+fn unquote_identifier(part: &str) -> String {
+    let trimmed = part.trim();
+    if trimmed.len() < 2 {
+        return trimmed.to_string();
+    }
+
+    if is_quoted_identifier(trimmed) {
+        trimmed[1..trimmed.len() - 1].to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
 /// Classify the type of a query
 fn classify_query_type(query: &Query) -> String {
     if query.with.is_some() {
@@ -1911,6 +1958,7 @@ mod tests {
     fn make_request(sql: &str) -> AnalyzeRequest {
         AnalyzeRequest {
             sql: sql.to_string(),
+            files: None,
             dialect: Dialect::Generic,
             source_name: None,
             options: None,
@@ -2073,10 +2121,31 @@ mod tests {
     }
 
     #[test]
+    fn test_ambiguous_unqualified_column_emits_issue() {
+        let request = make_request(
+            r#"
+            SELECT id
+            FROM users u
+            JOIN orders o ON u.id = o.user_id
+        "#,
+        );
+        let result = analyze(&request);
+
+        assert!(
+            result
+                .issues
+                .iter()
+                .any(|i| i.code == issue_codes::UNRESOLVED_REFERENCE),
+            "expected ambiguous column to produce UNRESOLVED_REFERENCE warning"
+        );
+    }
+
+    #[test]
     fn test_dialect_case_sensitivity() {
         // Postgres normalizes to lowercase
         let pg_request = AnalyzeRequest {
             sql: "SELECT * FROM Users".to_string(),
+            files: None,
             dialect: Dialect::Postgres,
             source_name: None,
             options: None,
@@ -2089,6 +2158,7 @@ mod tests {
         // Snowflake normalizes to uppercase
         let sf_request = AnalyzeRequest {
             sql: "SELECT * FROM Users".to_string(),
+            files: None,
             dialect: Dialect::Snowflake,
             source_name: None,
             options: None,
@@ -2142,6 +2212,7 @@ mod tests {
     fn test_unknown_table_with_schema() {
         let request = AnalyzeRequest {
             sql: "SELECT * FROM unknown_table".to_string(),
+            files: None,
             dialect: Dialect::Generic,
             source_name: None,
             options: None,
@@ -2171,6 +2242,7 @@ mod tests {
     fn test_known_table_no_warning() {
         let request = AnalyzeRequest {
             sql: "SELECT * FROM users".to_string(),
+            files: None,
             dialect: Dialect::Generic,
             source_name: None,
             options: None,
@@ -2200,6 +2272,7 @@ mod tests {
     fn test_search_path_resolves_unqualified_table() {
         let request = AnalyzeRequest {
             sql: "SELECT * FROM orders".to_string(),
+            files: None,
             dialect: Dialect::Generic,
             source_name: None,
             options: None,
@@ -2241,6 +2314,7 @@ mod tests {
     fn test_default_schema_used_without_search_path() {
         let request = AnalyzeRequest {
             sql: "SELECT * FROM orders".to_string(),
+            files: None,
             dialect: Dialect::Generic,
             source_name: None,
             options: None,
@@ -2269,6 +2343,7 @@ mod tests {
     fn test_placeholder_node_marked_for_unresolved_table() {
         let request = AnalyzeRequest {
             sql: "SELECT * FROM missing_table".to_string(),
+            files: None,
             dialect: Dialect::Generic,
             source_name: None,
             options: None,
@@ -2555,6 +2630,7 @@ mod tests {
     fn test_column_lineage_disabled() {
         let request = AnalyzeRequest {
             sql: "SELECT id, name FROM users".to_string(),
+            files: None,
             dialect: Dialect::Generic,
             source_name: None,
             options: Some(AnalysisOptions {
@@ -2579,6 +2655,7 @@ mod tests {
     fn test_column_lineage_with_schema() {
         let request = AnalyzeRequest {
             sql: "SELECT id, name FROM users".to_string(),
+            files: None,
             dialect: Dialect::Generic,
             source_name: None,
             options: None,
@@ -2625,6 +2702,7 @@ mod tests {
     fn test_column_lineage_unknown_column() {
         let request = AnalyzeRequest {
             sql: "SELECT u.nonexistent FROM users u".to_string(),
+            files: None,
             dialect: Dialect::Generic,
             source_name: None,
             options: None,
@@ -2657,6 +2735,7 @@ mod tests {
     fn test_column_lineage_select_star_with_schema() {
         let request = AnalyzeRequest {
             sql: "SELECT * FROM users".to_string(),
+            files: None,
             dialect: Dialect::Generic,
             source_name: None,
             options: None,

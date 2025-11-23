@@ -171,6 +171,7 @@ mod tests {
     fn test_analyze_request_serialization() {
         let request = AnalyzeRequest {
             sql: "SELECT * FROM users".to_string(),
+            files: None,
             dialect: Dialect::Postgres,
             source_name: None,
             options: None,

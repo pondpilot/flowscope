@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { Plus, FileCode, Trash2, MoreVertical, FolderOpen, Upload, Check, Beaker } from 'lucide-react';
-import { useProject } from '../lib/project-store';
+import { useProject } from '@/lib/project-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { DEFAULT_FILE_NAMES, ACCEPTED_FILE_TYPES } from '@/lib/constants';
 
 
 export function FileExplorer() {
@@ -125,11 +126,11 @@ export function FileExplorer() {
 
       {/* File Actions */}
       <div className="px-3 py-2 flex items-center gap-2 border-b bg-muted/30">
-        <Button 
-          variant="secondary" 
-          size="sm" 
-          className="flex-1 h-7 text-xs bg-background shadow-sm hover:bg-accent" 
-          onClick={() => createFile('new_query.sql')}
+        <Button
+          variant="secondary"
+          size="sm"
+          className="flex-1 h-7 text-xs bg-background shadow-sm hover:bg-accent"
+          onClick={() => createFile(DEFAULT_FILE_NAMES.NEW_QUERY)}
         >
           <Plus className="h-3 w-3 mr-1" /> New File
         </Button>
@@ -142,12 +143,12 @@ export function FileExplorer() {
         >
           <Upload className="h-3 w-3" />
         </Button>
-        <input 
-          type="file" 
-          multiple 
-          ref={fileInputRef} 
-          className="hidden" 
-          accept=".sql,.json,.txt"
+        <input
+          type="file"
+          multiple
+          ref={fileInputRef}
+          className="hidden"
+          accept={ACCEPTED_FILE_TYPES}
           onChange={handleFileUpload}
         />
       </div>

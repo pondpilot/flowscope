@@ -13,8 +13,7 @@ export default defineConfig({
     alias: {
       '@pondpilot/flowscope-core': path.resolve(__dirname, '../packages/core/src'),
       '@pondpilot/flowscope-react': path.resolve(__dirname, '../packages/react/src'),
-      '@/components': path.resolve(__dirname, './src/components'),
-      '@/lib': path.resolve(__dirname, './src/lib'),
+      '@': path.resolve(__dirname, './src'),
     },
   },
   optimizeDeps: {
