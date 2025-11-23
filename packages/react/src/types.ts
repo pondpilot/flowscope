@@ -44,6 +44,8 @@ export interface LineageState {
   searchTerm: string;
   /** Current view mode for the lineage graph */
   viewMode: LineageViewMode;
+  /** Whether to show table details in script nodes */
+  showScriptTables: boolean;
 }
 
 /**
@@ -67,6 +69,8 @@ export interface LineageActions {
   setSearchTerm: (term: string) => void;
   /** Update the view mode for the lineage graph */
   setViewMode: (mode: LineageViewMode) => void;
+  /** Toggle showing tables in script nodes */
+  toggleShowScriptTables: () => void;
 }
 
 /**

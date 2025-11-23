@@ -15,7 +15,7 @@ import {
 } from '@xyflow/react';
 import type { Node as FlowNode, Edge as FlowEdge, NodeProps, EdgeProps } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Search, Network } from 'lucide-react';
+import { Search, Network, LayoutList } from 'lucide-react';
 
 import { useLineage, useLineageActions } from '../context';
 import type {
@@ -31,6 +31,7 @@ import { sanitizeIdentifier } from '../utils/sanitize';
 import { findConnectedElements } from '../utils/graphTraversal';
 import { ScriptNode } from './ScriptNode';
 import { ColumnNode } from './ColumnNode';
+import { SimpleTableNode } from './SimpleTableNode';
 import { Input } from './ui/input';
 import { ExportMenu } from './ExportMenu';
 import { ViewModeSelector } from './ViewModeSelector';
@@ -53,6 +54,16 @@ function isTableNodeData(data: unknown): data is TableNodeData {
     'nodeType' in data &&
     'columns' in data
   );
+}
+
+// Type guard for data with isSelected property
+interface SelectableNodeData {
+  isSelected?: boolean;
+  [key: string]: unknown;
+}
+
+function isSelectableNodeData(data: unknown): data is SelectableNodeData {
+  return typeof data === 'object' && data !== null;
 }
 
 // Constants are now imported from '../constants'
@@ -336,6 +347,7 @@ function AnimatedEdge({
 
 const nodeTypes = {
   tableNode: TableNode,
+  simpleTableNode: SimpleTableNode,
   scriptNode: ScriptNode,
   columnNode: ColumnNode,
 };
@@ -454,13 +466,43 @@ function buildFlowEdges(statement: StatementLineage): FlowEdge[] {
     }));
 }
 
-function buildScriptLevelGraph(
-  statements: StatementLineageWithSource[],
-  selectedNodeId: string | null,
-  searchTerm: string
-): { nodes: FlowNode[]; edges: FlowEdge[] } {
-  const lowerCaseSearchTerm = searchTerm.toLowerCase();
+/**
+ * Extract I/O tables for a set of statements from a script
+ */
+function getScriptIO(stmts: StatementLineageWithSource[]) {
+  const reads = new Set<string>();
+  const writes = new Set<string>();
+  const readQualified = new Set<string>();
+  const writeQualified = new Set<string>();
 
+  stmts.forEach((stmt) => {
+    stmt.nodes.forEach((node) => {
+      if (node.type === 'table') {
+        const isWritten =
+          stmt.edges.some((e) => e.to === node.id && e.type === 'data_flow') ||
+          stmt.statementType === 'CREATE_TABLE';
+        const isRead = stmt.edges.some((e) => e.from === node.id && e.type === 'data_flow');
+
+        if (isWritten) {
+          writes.add(node.label);
+          writeQualified.add(node.qualifiedName || node.label);
+        }
+        if (isRead || (!isWritten && !isRead)) {
+          reads.add(node.label);
+          readQualified.add(node.qualifiedName || node.label);
+        }
+      }
+    });
+  });
+  return { reads, writes, readQualified, writeQualified };
+}
+
+/**
+ * Group statements by their source script name
+ */
+function groupStatementsByScript(
+  statements: StatementLineageWithSource[]
+): Map<string, StatementLineageWithSource[]> {
   const scriptMap = new Map<string, StatementLineageWithSource[]>();
   statements.forEach((stmt) => {
     const sourceName = stmt.sourceName || 'unknown';
@@ -468,48 +510,35 @@ function buildScriptLevelGraph(
     existing.push(stmt);
     scriptMap.set(sourceName, existing);
   });
+  return scriptMap;
+}
 
-  const flowNodes: FlowNode[] = [];
+/**
+ * Create script node elements from script map
+ */
+function createScriptNodes(
+  scriptMap: Map<string, StatementLineageWithSource[]>,
+  selectedNodeId: string | null,
+  searchTerm: string
+): FlowNode[] {
+  const lowerCaseSearchTerm = searchTerm.toLowerCase();
+  const nodes: FlowNode[] = [];
 
   scriptMap.forEach((stmts, sourceName) => {
-    const tablesRead = new Set<string>();
-    const tablesWritten = new Set<string>();
-
-    stmts.forEach((stmt) => {
-      stmt.nodes.forEach((node) => {
-        if (node.type === 'table') {
-          // A table is written if it has incoming data flow edges
-          // OR if it's a CREATE_TABLE statement (which defines the table without data flow)
-          const isWritten = 
-            stmt.edges.some((e) => e.to === node.id && e.type === 'data_flow') ||
-            (stmt.statementType === 'CREATE_TABLE');
-
-          const isRead = stmt.edges.some((e) => e.from === node.id && e.type === 'data_flow');
-
-          // For display in tooltip, use human readable label
-          if (isWritten) {
-            tablesWritten.add(node.label);
-          }
-          if (isRead || (!isWritten && !isRead)) {
-            tablesRead.add(node.label);
-          }
-        }
-      });
-    });
-
+    const { reads, writes } = getScriptIO(stmts);
     const isHighlighted = !!(
       lowerCaseSearchTerm && sourceName.toLowerCase().includes(lowerCaseSearchTerm)
     );
 
-    flowNodes.push({
+    nodes.push({
       id: `script:${sourceName}`,
       type: 'scriptNode',
       position: { x: 0, y: 0 },
       data: {
         label: sourceName,
         sourceName,
-        tablesRead: Array.from(tablesRead),
-        tablesWritten: Array.from(tablesWritten),
+        tablesRead: Array.from(reads),
+        tablesWritten: Array.from(writes),
         statementCount: stmts.length,
         isSelected: `script:${sourceName}` === selectedNodeId,
         isHighlighted,
@@ -517,45 +546,105 @@ function buildScriptLevelGraph(
     });
   });
 
-  const flowEdges: FlowEdge[] = [];
-  const edgeSet = new Set<string>();
+  return nodes;
+}
 
-  scriptMap.forEach((producerStmts, producerScript) => {
-    const producerTables = new Set<string>();
-    producerStmts.forEach((stmt) => {
+/**
+ * Build hybrid graph with script and table nodes
+ */
+function buildHybridGraph(
+  scriptMap: Map<string, StatementLineageWithSource[]>,
+  selectedNodeId: string | null,
+  searchTerm: string
+): { nodes: FlowNode[]; edges: FlowEdge[] } {
+  const lowerCaseSearchTerm = searchTerm.toLowerCase();
+  const nodes: FlowNode[] = [];
+  const edges: FlowEdge[] = [];
+  const uniqueTables = new Map<string, { label: string }>();
+
+  scriptMap.forEach((stmts) => {
+    const { readQualified, writeQualified } = getScriptIO(stmts);
+
+    // Collect unique table info
+    stmts.forEach((stmt) => {
       stmt.nodes.forEach((node) => {
         if (node.type === 'table') {
-          const isWritten = 
-            stmt.edges.some((e) => e.to === node.id) ||
-            (stmt.statementType === 'CREATE_TABLE');
-            
-          if (isWritten) {
-            // Use qualifiedName for matching if available, else label
-            producerTables.add(node.qualifiedName || node.label);
+          const qName = node.qualifiedName || node.label;
+          if (readQualified.has(qName) || writeQualified.has(qName)) {
+            uniqueTables.set(qName, { label: node.label });
           }
         }
       });
     });
 
+    const sourceId = `script:${stmts[0].sourceName || 'unknown'}`;
+
+    // Edges: Script -> Table (Writes)
+    writeQualified.forEach((qName) => {
+      edges.push({
+        id: `${sourceId}->table:${qName}`,
+        source: sourceId,
+        target: `table:${qName}`,
+        type: 'animated',
+        data: { type: 'data_flow' },
+      });
+    });
+
+    // Edges: Table -> Script (Reads)
+    readQualified.forEach((qName) => {
+      edges.push({
+        id: `table:${qName}->${sourceId}`,
+        source: `table:${qName}`,
+        target: sourceId,
+        type: 'animated',
+        data: { type: 'data_flow' },
+      });
+    });
+  });
+
+  // Create Table Nodes
+  uniqueTables.forEach((info, qName) => {
+    const isHighlighted = !!(lowerCaseSearchTerm && info.label.toLowerCase().includes(lowerCaseSearchTerm));
+    nodes.push({
+      id: `table:${qName}`,
+      type: 'simpleTableNode',
+      position: { x: 0, y: 0 },
+      data: {
+        label: info.label,
+        nodeType: 'table',
+        columns: [],
+        isSelected: `table:${qName}` === selectedNodeId,
+        isHighlighted,
+        isCollapsed: false,
+      } satisfies TableNodeData,
+    });
+  });
+
+  return { nodes, edges };
+}
+
+/**
+ * Build direct script-to-script graph
+ */
+function buildDirectScriptGraph(
+  scriptMap: Map<string, StatementLineageWithSource[]>
+): FlowEdge[] {
+  const edges: FlowEdge[] = [];
+  const edgeSet = new Set<string>();
+
+  scriptMap.forEach((producerStmts, producerScript) => {
+    const { writeQualified: producerWrites } = getScriptIO(producerStmts);
+
     scriptMap.forEach((consumerStmts, consumerScript) => {
       if (producerScript === consumerScript) return;
 
-      const consumerTables = new Set<string>();
-      consumerStmts.forEach((stmt) => {
-        stmt.nodes.forEach((node) => {
-          if (node.type === 'table') {
-            const isRead = stmt.edges.some((e) => e.from === node.id);
-            if (isRead) {
-              consumerTables.add(node.qualifiedName || node.label);
-            }
-          }
-        });
-      });
+      const { readQualified: consumerReads } = getScriptIO(consumerStmts);
 
+      // Find intersection
       const sharedTables: string[] = [];
-      producerTables.forEach((table) => {
-        if (consumerTables.has(table)) {
-          // Convert back to simple name for label if it looks like a qualified name
+      producerWrites.forEach((table) => {
+        if (consumerReads.has(table)) {
+          // Convert to simple name for label
           const simpleName = table.split('.').pop() || table;
           sharedTables.push(simpleName);
         }
@@ -565,19 +654,38 @@ function buildScriptLevelGraph(
         const edgeId = `${producerScript}->${consumerScript}`;
         if (!edgeSet.has(edgeId)) {
           edgeSet.add(edgeId);
-          flowEdges.push({
+          const maxTables = UI_CONSTANTS.MAX_EDGE_LABEL_TABLES;
+          edges.push({
             id: edgeId,
             source: `script:${producerScript}`,
             target: `script:${consumerScript}`,
             type: 'animated',
-            label: sharedTables.slice(0, 2).join(', ') + (sharedTables.length > 2 ? '...' : ''),
+            label: sharedTables.slice(0, maxTables).join(', ') + (sharedTables.length > maxTables ? '...' : ''),
           });
         }
       }
     });
   });
 
-  return { nodes: flowNodes, edges: flowEdges };
+  return edges;
+}
+
+function buildScriptLevelGraph(
+  statements: StatementLineageWithSource[],
+  selectedNodeId: string | null,
+  searchTerm: string,
+  showTables: boolean
+): { nodes: FlowNode[]; edges: FlowEdge[] } {
+  const scriptMap = groupStatementsByScript(statements);
+  const scriptNodes = createScriptNodes(scriptMap, selectedNodeId, searchTerm);
+
+  if (showTables) {
+    const { nodes: tableNodes, edges } = buildHybridGraph(scriptMap, selectedNodeId, searchTerm);
+    return { nodes: [...scriptNodes, ...tableNodes], edges };
+  } else {
+    const edges = buildDirectScriptGraph(scriptMap);
+    return { nodes: scriptNodes, edges };
+  }
 }
 
 function buildColumnLevelGraph(
@@ -729,22 +837,33 @@ function enhanceGraphWithHighlights(
   highlightIds: Set<string>
 ): { nodes: FlowNode[]; edges: FlowEdge[] } {
   const enhancedNodes = graph.nodes.map(node => {
-    if (!isTableNodeData(node.data)) return node;
+    const isHighlighted = highlightIds.has(node.id);
+    
+    // Handle Table Nodes with columns
+    if (isTableNodeData(node.data)) {
+      const nodeData = node.data;
+      const enhancedColumns = nodeData.columns.map(col => ({
+        ...col,
+        isHighlighted: highlightIds.has(col.id),
+      }));
 
-    const nodeData = node.data;
-    if (!nodeData.columns) return node;
+      return {
+        ...node,
+        data: {
+          ...nodeData,
+          columns: enhancedColumns,
+          isSelected: nodeData.isSelected || isHighlighted,
+        },
+      };
+    }
 
-    const enhancedColumns = nodeData.columns.map(col => ({
-      ...col,
-      isHighlighted: highlightIds.has(col.id),
-    }));
-
+    // Handle Script Nodes and generic nodes
+    const currentIsSelected = isSelectableNodeData(node.data) ? node.data.isSelected : false;
     return {
       ...node,
       data: {
-        ...nodeData,
-        columns: enhancedColumns,
-        isSelected: nodeData.isSelected || highlightIds.has(node.id),
+        ...node.data,
+        isSelected: currentIsSelected || isHighlighted,
       },
     };
   });
@@ -764,23 +883,21 @@ function enhanceGraphWithHighlights(
 
 export function GraphView({ className, onNodeClick, graphContainerRef }: GraphViewProps): JSX.Element {
   const { state, actions } = useLineage();
-  const { result, selectedNodeId, searchTerm, viewMode, collapsedNodeIds } = state;
+  const { result, selectedNodeId, searchTerm, viewMode, collapsedNodeIds, showScriptTables } = state;
 
-  // Local state for debounced search input
+  // Local search state with debouncing
   const [localSearchTerm, setLocalSearchTerm] = useState(searchTerm);
 
-  // Debounce search updates to global state
+  // Debounce search term updates
   useEffect(() => {
     const handler = setTimeout(() => {
       actions.setSearchTerm(localSearchTerm);
     }, UI_CONSTANTS.SEARCH_DEBOUNCE_DELAY);
 
-    return () => {
-      clearTimeout(handler);
-    };
+    return () => clearTimeout(handler);
   }, [localSearchTerm, actions]);
 
-  // Sync local state if global state changes externally
+  // Sync local state when external searchTerm changes
   useEffect(() => {
     setLocalSearchTerm(searchTerm);
   }, [searchTerm]);
@@ -793,39 +910,52 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
   const { layoutedNodes, layoutedEdges } = useMemo(() => {
     if (!result || !result.statements) return { layoutedNodes: [], layoutedEdges: [] };
 
-    let rawNodes: FlowNode[];
-    let rawEdges: FlowEdge[];
-    let direction: 'LR' | 'TB' = 'LR';
+    try {
+      let rawNodes: FlowNode[];
+      let rawEdges: FlowEdge[];
+      let direction: 'LR' | 'TB' = 'LR';
 
-    if (viewMode === 'script') {
-      const graph = buildScriptLevelGraph(result.statements, selectedNodeId, searchTerm);
-      rawNodes = graph.nodes;
-      rawEdges = graph.edges;
-      direction = 'LR';
-    } else if (viewMode === 'column') {
-      if (!statement) return { layoutedNodes: [], layoutedEdges: [] };
+      if (viewMode === 'script') {
+        const tempGraph = buildScriptLevelGraph(result.statements, selectedNodeId, searchTerm, showScriptTables);
 
-      const graph = buildColumnLevelGraph(statement, selectedNodeId, searchTerm, collapsedNodeIds);
+        let highlightIds = new Set<string>();
+        if (selectedNodeId) {
+          highlightIds = findConnectedElements(selectedNodeId, tempGraph.edges);
+        }
 
-      let highlightIds = new Set<string>();
-      if (selectedNodeId) {
-        highlightIds = findConnectedElements(selectedNodeId, graph.edges);
+        const enhancedGraph = enhanceGraphWithHighlights(tempGraph, highlightIds);
+        rawNodes = enhancedGraph.nodes;
+        rawEdges = enhancedGraph.edges;
+        direction = 'LR';
+      } else if (viewMode === 'column') {
+        if (!statement) return { layoutedNodes: [], layoutedEdges: [] };
+
+        const tempGraph = buildColumnLevelGraph(statement, selectedNodeId, searchTerm, new Set());
+
+        let highlightIds = new Set<string>();
+        if (selectedNodeId) {
+          highlightIds = findConnectedElements(selectedNodeId, tempGraph.edges);
+        }
+
+        const graph = buildColumnLevelGraph(statement, selectedNodeId, searchTerm, collapsedNodeIds);
+        const enhancedGraph = enhanceGraphWithHighlights(graph, highlightIds);
+        rawNodes = enhancedGraph.nodes;
+        rawEdges = enhancedGraph.edges;
+        direction = 'LR';
+      } else {
+        if (!statement) return { layoutedNodes: [], layoutedEdges: [] };
+        rawNodes = buildFlowNodes(statement, selectedNodeId, searchTerm, collapsedNodeIds);
+        rawEdges = buildFlowEdges(statement);
+        direction = 'LR';
       }
 
-      const enhancedGraph = enhanceGraphWithHighlights(graph, highlightIds);
-      rawNodes = enhancedGraph.nodes;
-      rawEdges = enhancedGraph.edges;
-      direction = 'LR';
-    } else {
-      if (!statement) return { layoutedNodes: [], layoutedEdges: [] };
-      rawNodes = buildFlowNodes(statement, selectedNodeId, searchTerm, collapsedNodeIds);
-      rawEdges = buildFlowEdges(statement);
-      direction = 'LR';
+      const { nodes: ln, edges: le } = getLayoutedElements(rawNodes, rawEdges, direction);
+      return { layoutedNodes: ln, layoutedEdges: le };
+    } catch (error) {
+      console.error('Graph building failed:', error);
+      return { layoutedNodes: [], layoutedEdges: [] };
     }
-
-    const { nodes: ln, edges: le } = getLayoutedElements(rawNodes, rawEdges, direction);
-    return { layoutedNodes: ln, layoutedEdges: le };
-  }, [result, statement, selectedNodeId, searchTerm, viewMode, collapsedNodeIds]);
+  }, [result, statement, selectedNodeId, searchTerm, viewMode, collapsedNodeIds, showScriptTables]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<FlowEdge>([]);
@@ -833,6 +963,7 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
   const isInitialized = useRef(false);
   const lastResultId = useRef<string | null>(null);
   const lastViewMode = useRef<string | null>(null);
+  const lastShowTables = useRef<boolean | null>(null);
 
   useEffect(() => {
     const currentResultId = result ? JSON.stringify(result.summary) : null;
@@ -840,7 +971,8 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
     const needsUpdate = 
       !isInitialized.current || 
       currentResultId !== lastResultId.current ||
-      viewMode !== lastViewMode.current;
+      viewMode !== lastViewMode.current ||
+      showScriptTables !== lastShowTables.current;
 
     if (needsUpdate && layoutedNodes.length > 0) {
       setNodes(layoutedNodes);
@@ -848,6 +980,7 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
       isInitialized.current = true;
       lastResultId.current = currentResultId;
       lastViewMode.current = viewMode;
+      lastShowTables.current = showScriptTables;
     } else if (layoutedNodes.length > 0) {
       setNodes((currentNodes) => {
         return layoutedNodes.map((layoutNode) => {
@@ -863,7 +996,7 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
       });
       setEdges(layoutedEdges);
     }
-  }, [layoutedNodes, layoutedEdges, setNodes, setEdges, result, viewMode, collapsedNodeIds]);
+  }, [layoutedNodes, layoutedEdges, setNodes, setEdges, result, viewMode, collapsedNodeIds, showScriptTables]);
 
   const handleRearrange = useCallback(() => {
     setNodes(layoutedNodes);
@@ -936,8 +1069,38 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
         <Background />
         <Controls />
         <Panel position="top-left" className="flex gap-3">
-          <div className="flex items-center rounded-lg border border-slate-200/60 bg-white px-1 py-1 shadow-sm backdrop-blur-sm">
+          <div className="flex items-center gap-3 rounded-lg border border-slate-200/60 bg-white px-1 py-1 shadow-sm backdrop-blur-sm">
             <ViewModeSelector />
+            
+            {viewMode === 'script' && (
+              <>
+                <div className="h-5 w-px bg-slate-300" />
+                <GraphTooltipProvider>
+                  <GraphTooltip delayDuration={300}>
+                    <GraphTooltipTrigger asChild>
+                      <button
+                        onClick={actions.toggleShowScriptTables}
+                        className={`
+                          flex h-8 w-8 shrink-0 items-center justify-center rounded transition-colors
+                          ${showScriptTables ? 'bg-slate-200 text-slate-900' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}
+                          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40
+                        `}
+                        aria-label="Toggle table details"
+                        aria-pressed={showScriptTables}
+                      >
+                        <LayoutList className="h-4 w-4" strokeWidth={showScriptTables ? 2.5 : 1.5} />
+                      </button>
+                    </GraphTooltipTrigger>
+                    <GraphTooltipPortal>
+                      <GraphTooltipContent side="bottom">
+                        <p>{showScriptTables ? 'Hide tables' : 'Show tables'}</p>
+                        <GraphTooltipArrow />
+                      </GraphTooltipContent>
+                    </GraphTooltipPortal>
+                  </GraphTooltip>
+                </GraphTooltipProvider>
+              </>
+            )}
           </div>
           <div className="relative flex items-center rounded-lg border border-slate-200/60 bg-white px-2 py-1 shadow-sm backdrop-blur-sm" style={{ minWidth: UI_CONSTANTS.SEARCH_MIN_WIDTH }}>
             <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" strokeWidth={1.5} />
@@ -952,7 +1115,7 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
         <Panel position="top-right" className="flex gap-3">
           <div className="flex items-center rounded-lg border border-slate-200/60 bg-white px-1 py-1 shadow-sm backdrop-blur-sm">
             <GraphTooltipProvider>
-              <GraphTooltip delayDuration={UI_CONSTANTS.TOOLTIP_DELAY}>
+              <GraphTooltip delayDuration={300}>
                 <GraphTooltipTrigger asChild>
                   <button
                     onClick={handleRearrange}

@@ -80,6 +80,7 @@ export function LineageProvider({
   const [highlightedSpan, setHighlightedSpan] = useState<Span | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewModeState] = useState<LineageViewMode>(() => loadViewMode());
+  const [showScriptTables, setShowScriptTables] = useState(false);
   const [collapsedNodeIds, setCollapsedNodeIds] = useState<Set<string>>(new Set());
 
   const updateResult = useCallback(
@@ -135,6 +136,10 @@ export function LineageProvider({
     saveViewMode(mode);
   }, []);
 
+  const toggleShowScriptTables = useCallback(() => {
+    setShowScriptTables((prev) => !prev);
+  }, []);
+
   const state: LineageState = useMemo(
     () => ({
       result,
@@ -145,8 +150,9 @@ export function LineageProvider({
       searchTerm,
       viewMode,
       collapsedNodeIds,
+      showScriptTables,
     }),
-    [result, sql, selectedNodeId, selectedStatementIndex, highlightedSpan, searchTerm, viewMode, collapsedNodeIds]
+    [result, sql, selectedNodeId, selectedStatementIndex, highlightedSpan, searchTerm, viewMode, collapsedNodeIds, showScriptTables]
   );
 
   const actions: LineageActions = useMemo(
@@ -159,8 +165,9 @@ export function LineageProvider({
       highlightSpan,
       setSearchTerm,
       setViewMode,
+      toggleShowScriptTables,
     }),
-    [updateResult, setSql, selectNode, toggleNodeCollapse, selectStatement, highlightSpan, setSearchTerm, setViewMode]
+    [updateResult, setSql, selectNode, toggleNodeCollapse, selectStatement, highlightSpan, setSearchTerm, setViewMode, toggleShowScriptTables]
   );
 
   const value = useMemo(() => ({ state, actions }), [state, actions]);

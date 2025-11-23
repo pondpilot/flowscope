@@ -10,6 +10,7 @@ import {
   GraphTooltipArrow,
   GraphTooltipPortal,
 } from './ui/graph-tooltip';
+import { UI_CONSTANTS } from '../constants';
 
 /**
  * React Flow node component for rendering script/file nodes in script-level view.
@@ -18,13 +19,13 @@ import {
 function ScriptNodeComponent({ data, selected }: NodeProps): JSX.Element {
   const nodeData = data as ScriptNodeData;
   const { label, tablesRead, tablesWritten, statementCount, isSelected, isHighlighted } = nodeData;
-  
+
   // Determine selection state from either prop or data
   const active = selected || isSelected;
 
   return (
     <GraphTooltipProvider>
-      <GraphTooltip delayDuration={200}>
+      <GraphTooltip delayDuration={UI_CONSTANTS.TOOLTIP_DELAY_NODE}>
         <GraphTooltipTrigger asChild>
           <div
             className={`
@@ -34,9 +35,9 @@ function ScriptNodeComponent({ data, selected }: NodeProps): JSX.Element {
             `}
           >
             <Handle type="target" position={Position.Left} className="!bg-transparent !border-none" />
-            
+
             <div className="flex items-center gap-2 px-3 py-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded bg-purple-50 text-purple-600">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-purple-50 text-purple-600">
                 <FileCode className="h-4 w-4" strokeWidth={1.5} />
               </div>
               <div className="flex-1 overflow-hidden">
@@ -68,8 +69,10 @@ function ScriptNodeComponent({ data, selected }: NodeProps): JSX.Element {
                     Reads ({tablesRead.length})
                   </div>
                   <div className="text-gray-600 pl-2.5 leading-relaxed">
-                    {tablesRead.slice(0, 5).join(', ')}
-                    {tablesRead.length > 5 && <span className="text-gray-400"> +{tablesRead.length - 5} more</span>}
+                    {tablesRead.slice(0, UI_CONSTANTS.MAX_TOOLTIP_TABLES).join(', ')}
+                    {tablesRead.length > UI_CONSTANTS.MAX_TOOLTIP_TABLES && (
+                      <span className="text-gray-400"> +{tablesRead.length - UI_CONSTANTS.MAX_TOOLTIP_TABLES} more</span>
+                    )}
                   </div>
                 </div>
               )}
@@ -81,8 +84,10 @@ function ScriptNodeComponent({ data, selected }: NodeProps): JSX.Element {
                     Writes ({tablesWritten.length})
                   </div>
                   <div className="text-gray-600 pl-2.5 leading-relaxed">
-                    {tablesWritten.slice(0, 5).join(', ')}
-                    {tablesWritten.length > 5 && <span className="text-gray-400"> +{tablesWritten.length - 5} more</span>}
+                    {tablesWritten.slice(0, UI_CONSTANTS.MAX_TOOLTIP_TABLES).join(', ')}
+                    {tablesWritten.length > UI_CONSTANTS.MAX_TOOLTIP_TABLES && (
+                      <span className="text-gray-400"> +{tablesWritten.length - UI_CONSTANTS.MAX_TOOLTIP_TABLES} more</span>
+                    )}
                   </div>
                 </div>
               )}

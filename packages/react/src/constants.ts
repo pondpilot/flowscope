@@ -6,6 +6,9 @@ export const UI_CONSTANTS = {
   /** Delay in milliseconds before showing tooltips */
   TOOLTIP_DELAY: 300,
 
+  /** Delay in milliseconds for node tooltips (fast display) */
+  TOOLTIP_DELAY_NODE: 200,
+
   /** Delay in milliseconds for debouncing search input */
   SEARCH_DEBOUNCE_DELAY: 300,
 
@@ -20,6 +23,12 @@ export const UI_CONSTANTS = {
 
   /** Delay in milliseconds for tooltip display (fast display) */
   TOOLTIP_DELAY_FAST: 0,
+
+  /** Maximum number of tables to show in tooltips before truncating */
+  MAX_TOOLTIP_TABLES: 5,
+
+  /** Maximum number of shared tables to show in edge labels */
+  MAX_EDGE_LABEL_TABLES: 2,
 } as const;
 
 /**
