@@ -3371,7 +3371,7 @@ lru-cache@^5.1.1:
 
 lucide-react@^0.554.0:
   version "0.554.0"
-  resolved "https://registry.npmjs.org/lucide-react/-/lucide-react-0.554.0.tgz"
+  resolved "https://registry.yarnpkg.com/lucide-react/-/lucide-react-0.554.0.tgz#85ee9855d43cfa83f6077125fe9dbe2521bdf37d"
   integrity sha512-St+z29uthEJVx0Is7ellNkgTEhaeSoA42I7JjOCBCrc5X6LYMGSv0P/2uS5HDLTExP5tpiqRD2PyUEOS6s9UXA==
 
 lz-string@^1.5.0:

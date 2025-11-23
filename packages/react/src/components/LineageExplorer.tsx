@@ -2,10 +2,7 @@ import { useEffect } from 'react';
 import { LineageProvider, useLineage } from '../context';
 import { GraphView } from './GraphView';
 import { SqlView } from './SqlView';
-import { ColumnPanel } from './ColumnPanel';
 import { IssuesPanel } from './IssuesPanel';
-import { StatementSelector } from './StatementSelector';
-import { SummaryBar } from './SummaryBar';
 import type { LineageExplorerProps } from '../types';
 
 interface LineageExplorerInnerProps {
@@ -31,8 +28,6 @@ function LineageExplorerInner({
 
   return (
     <div className="flowscope-explorer-inner">
-      <SummaryBar />
-      <StatementSelector />
       <div className="flowscope-main-layout">
         <div className="flowscope-left-panel">
           <SqlView editable={!!onSqlChange} onChange={onSqlChange} />
@@ -41,9 +36,10 @@ function LineageExplorerInner({
         <div className="flowscope-center-panel">
           <GraphView />
         </div>
-        <div className="flowscope-right-panel">
+        {/* ColumnPanel is removed as 'Details' tab is deprecated */}
+        {/* <div className="flowscope-right-panel">
           <ColumnPanel />
-        </div>
+        </div> */}
       </div>
     </div>
   );

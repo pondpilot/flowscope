@@ -12,7 +12,6 @@ export function findConnectedElements(
   edges: FlowEdge[]
 ): Set<string> {
   const visited = new Set<string>();
-  const queue: string[] = [startId];
   visited.add(startId);
 
   // Build adjacency maps for efficient graph traversal

@@ -15,6 +15,10 @@ pub struct AnalyzeRequest {
     /// The SQL code to analyze (UTF-8 string, multi-statement supported)
     pub sql: String,
 
+    /// Optional list of source files to analyze (alternative to single `sql` field)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub files: Option<Vec<FileSource>>,
+
     /// SQL dialect
     pub dialect: Dialect,
 
@@ -29,6 +33,13 @@ pub struct AnalyzeRequest {
     /// Optional schema metadata for accurate column resolution
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub schema: Option<SchemaMetadata>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct FileSource {
+    pub name: String,
+    pub content: String,
 }
 
 /// SQL dialect for parsing and analysis.

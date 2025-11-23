@@ -1,21 +1,38 @@
+import { FileCode, Table2, Columns3 } from 'lucide-react';
 import { useLineage } from '../context';
 import type { LineageViewMode } from '../types';
+import {
+  GraphTooltip,
+  GraphTooltipContent,
+  GraphTooltipProvider,
+  GraphTooltipTrigger,
+  GraphTooltipArrow,
+  GraphTooltipPortal,
+} from './ui/graph-tooltip';
 
-const VIEW_MODES: Array<{ value: LineageViewMode; label: string; description: string }> = [
+const VIEW_MODES: Array<{
+  value: LineageViewMode;
+  label: string;
+  description: string;
+  icon: React.ElementType;
+}> = [
   {
     value: 'script',
     label: 'Script',
     description: 'Show relationships between scripts through shared tables',
+    icon: FileCode,
   },
   {
     value: 'table',
     label: 'Table',
     description: 'Show tables with relationships (default view)',
+    icon: Table2,
   },
   {
     value: 'column',
     label: 'Column',
     description: 'Show individual columns with full lineage paths',
+    icon: Columns3,
   },
 ];
 
@@ -29,36 +46,49 @@ export function ViewModeSelector(): JSX.Element {
   const { setViewMode } = actions;
 
   return (
-    <div className="inline-flex rounded-md border border-border" role="group">
-      {VIEW_MODES.map((mode, index) => {
-        const isActive = viewMode === mode.value;
-        const isFirst = index === 0;
-        const isLast = index === VIEW_MODES.length - 1;
+    <GraphTooltipProvider>
+      <div className="flex items-center" role="radiogroup" aria-label="Select lineage view mode">
+        {VIEW_MODES.map((mode, index) => {
+          const isActive = viewMode === mode.value;
+          const Icon = mode.icon;
 
-        return (
-          <button
-            key={mode.value}
-            type="button"
-            onClick={() => setViewMode(mode.value)}
-            title={mode.description}
-            className={`
-              px-3 py-1 text-xs font-medium
-              ${
-                isActive
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-background text-foreground hover:bg-muted'
-              }
-              ${isFirst ? 'rounded-l-sm' : ''}
-              ${isLast ? 'rounded-r-sm' : ''}
-              ${!isFirst ? 'border-l border-border' : ''}
-              focus:z-10 focus:outline-none focus:ring-2 focus:ring-ring
-              transition-colors duration-150
-            `}
-          >
-            {mode.label}
-          </button>
-        );
-      })}
-    </div>
+          return (
+            <div key={mode.value} className="flex items-center">
+              <GraphTooltip delayDuration={300}>
+                <GraphTooltipTrigger asChild>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={isActive}
+                    aria-label={mode.label}
+                    onClick={() => setViewMode(mode.value)}
+                    className={`
+                      flex h-8 w-8 shrink-0 items-center justify-center rounded transition-colors
+                      ${
+                        isActive
+                          ? 'bg-slate-200 text-slate-900'
+                          : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                      }
+                      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40
+                    `}
+                  >
+                    <Icon className="h-4 w-4" strokeWidth={isActive ? 2.5 : 1.5} />
+                  </button>
+                </GraphTooltipTrigger>
+                <GraphTooltipPortal>
+                  <GraphTooltipContent side="bottom">
+                    <p>{mode.description}</p>
+                    <GraphTooltipArrow />
+                  </GraphTooltipContent>
+                </GraphTooltipPortal>
+              </GraphTooltip>
+              {index < VIEW_MODES.length - 1 && (
+                <div className="h-5 w-px bg-slate-300 mx-0.5" />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </GraphTooltipProvider>
   );
 }

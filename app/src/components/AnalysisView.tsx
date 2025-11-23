@@ -1,12 +1,10 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef } from 'react';
 import { useLineage } from '@pondpilot/flowscope-react';
 import {
   GraphView,
   IssuesPanel,
-  SummaryBar,
   SchemaView,
-  ColumnPanel,
-  ViewModeSelector,
+  GraphErrorBoundary,
 } from '@pondpilot/flowscope-react';
 import {
   Tabs,
@@ -14,9 +12,6 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/components/ui/tabs';
-import { Input } from '@/components/ui/input';
-import { ExportMenu } from '@/components/ExportMenu';
-import { Search } from 'lucide-react';
 import type { SchemaTable } from '@pondpilot/flowscope-core';
 
 const MOCK_SCHEMA: SchemaTable[] = [
@@ -50,35 +45,11 @@ const MOCK_SCHEMA: SchemaTable[] = [
 
 /**
  * Main analysis view component showing lineage graph, schema, and details.
- * Implements debounced search for optimal performance with large graphs.
  */
 export function AnalysisView() {
-  const { state, actions } = useLineage();
-  const { searchTerm, result } = state;
+  const { state } = useLineage();
+  const { result } = state;
   const graphContainerRef = useRef<HTMLDivElement>(null);
-
-  // Local state for immediate input feedback
-  const [localSearchTerm, setLocalSearchTerm] = useState(searchTerm);
-
-  // Debounce the search term update to avoid performance issues on large graphs
-  useEffect(() => {
-    const debounceTimer = setTimeout(() => {
-      actions.setSearchTerm(localSearchTerm);
-    }, 300); // 300ms debounce delay
-
-    return () => {
-      clearTimeout(debounceTimer);
-    };
-  }, [localSearchTerm, actions]);
-
-  // Sync local state when external searchTerm changes
-  useEffect(() => {
-    setLocalSearchTerm(searchTerm);
-  }, [searchTerm]);
-
-  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setLocalSearchTerm(event.target.value);
-  };
 
   if (!result) {
     return (
@@ -93,77 +64,65 @@ export function AnalysisView() {
     );
   }
 
+  const { summary } = result;
+  const hasIssues = summary.issueCount.errors > 0 || summary.issueCount.warnings > 0;
+
   return (
     <div className="flex flex-col h-full bg-background">
-      {/* Analysis Header */}
-      <div className="border-b px-4 py-2 flex items-center justify-between bg-muted/10">
-        <div className="flex-1 font-medium text-sm text-muted-foreground">
-          Lineage Graph
-        </div>
-        <div className="flex items-center gap-3">
-          <ViewModeSelector />
-          <div className="relative w-[200px]">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="Search nodes..."
-              className="pl-8 h-7 text-xs"
-              value={localSearchTerm}
-              onChange={handleSearchChange}
-            />
-          </div>
-          <ExportMenu graphContainerRef={graphContainerRef} />
-        </div>
-      </div>
-
-      <SummaryBar />
-
       <Tabs defaultValue="lineage" className="flex-1 flex flex-col min-h-0">
-        <div className="px-4 border-b">
-          <TabsList className="h-9 w-full justify-start bg-transparent p-0">
+        <div className="px-4 border-b flex items-center justify-between bg-muted/10">
+          <TabsList className="h-10 w-auto justify-start bg-transparent p-0">
             <TabsTrigger 
               value="lineage" 
-              className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4"
+              className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4 h-full"
             >
               Lineage
             </TabsTrigger>
             <TabsTrigger 
-              value="details" 
-              className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4"
-            >
-              Details
-            </TabsTrigger>
-            <TabsTrigger 
               value="schema" 
-              className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4"
+              className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4 h-full"
             >
               Schema
             </TabsTrigger>
-             <TabsTrigger 
-              value="issues" 
-              className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4"
-            >
-              Issues
-            </TabsTrigger>
+            {hasIssues && (
+              <TabsTrigger 
+                value="issues" 
+                className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4 h-full text-yellow-600 data-[state=active]:text-yellow-700"
+              >
+                Issues ({summary.issueCount.errors + summary.issueCount.warnings})
+              </TabsTrigger>
+            )}
           </TabsList>
+
+          {/* Summary Stats Right Aligned */}
+          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1">
+              <span className="font-semibold text-foreground">{summary.tableCount}</span>
+              <span>tables</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="font-semibold text-foreground">{summary.columnCount}</span>
+              <span>columns</span>
+            </div>
+          </div>
         </div>
 
         <div className="flex-1 overflow-hidden relative">
           <TabsContent value="lineage" className="h-full mt-0 p-0 absolute inset-0">
-             <GraphView graphContainerRef={graphContainerRef} className="h-full w-full" />
-          </TabsContent>
-          
-          <TabsContent value="details" className="h-full mt-0 overflow-auto p-0 absolute inset-0">
-             <ColumnPanel />
+            <GraphErrorBoundary>
+              <GraphView graphContainerRef={graphContainerRef} className="h-full w-full" />
+            </GraphErrorBoundary>
           </TabsContent>
 
           <TabsContent value="schema" className="h-full mt-0 p-0 absolute inset-0">
             <SchemaView schema={MOCK_SCHEMA} />
           </TabsContent>
-          
-          <TabsContent value="issues" className="h-full mt-0 overflow-auto p-0 absolute inset-0">
-            <IssuesPanel />
-          </TabsContent>
+
+          {hasIssues && (
+            <TabsContent value="issues" className="h-full mt-0 overflow-auto p-0 absolute inset-0">
+              <IssuesPanel />
+            </TabsContent>
+          )}
         </div>
       </Tabs>
     </div>

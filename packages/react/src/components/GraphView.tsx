@@ -1,4 +1,4 @@
-import { useMemo, useCallback, useEffect, useRef } from 'react';
+import { useMemo, useCallback, useEffect, useRef, useState } from 'react';
 import {
   ReactFlow,
   Background,
@@ -15,7 +15,7 @@ import {
 } from '@xyflow/react';
 import type { Node as FlowNode, Edge as FlowEdge, NodeProps, EdgeProps } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import * as Tooltip from '@radix-ui/react-tooltip';
+import { Search, Network } from 'lucide-react';
 
 import { useLineage, useLineageActions } from '../context';
 import type {
@@ -31,56 +31,49 @@ import { sanitizeIdentifier } from '../utils/sanitize';
 import { findConnectedElements } from '../utils/graphTraversal';
 import { ScriptNode } from './ScriptNode';
 import { ColumnNode } from './ColumnNode';
-import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { ExportMenu } from './ExportMenu';
+import { ViewModeSelector } from './ViewModeSelector';
+import {
+  GraphTooltip,
+  GraphTooltipContent,
+  GraphTooltipProvider,
+  GraphTooltipTrigger,
+  GraphTooltipArrow,
+  GraphTooltipPortal,
+} from './ui/graph-tooltip';
+import { UI_CONSTANTS, GRAPH_CONFIG, COLORS } from '../constants';
 
-const colors = {
-  table: {
-    bg: '#FFFFFF',
-    headerBg: '#F2F4F8',
-    border: '#DBDDE1',
-    text: '#212328',
-    textSecondary: '#6F7785',
-  },
-  cte: {
-    bg: '#F5F3FF',
-    headerBg: '#EDE9FE',
-    border: '#C4B5FD',
-    text: '#5B21B6',
-    textSecondary: '#7C3AED',
-  },
-  virtualOutput: {
-    bg: '#F0FDF4',
-    headerBg: '#DCFCE7',
-    border: '#6EE7B7',
-    text: '#047857',
-    textSecondary: '#065F46',
-  },
-  accent: '#4C61FF',
-};
+// Type guards for safer type checking
+function isTableNodeData(data: unknown): data is TableNodeData {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'label' in data &&
+    'nodeType' in data &&
+    'columns' in data
+  );
+}
 
-const GRAPH_CONFIG = {
-  /** Maximum height for column containers to prevent scrolling for most tables */
-  MAX_COLUMN_HEIGHT: 1000,
-  /** Delay before showing tooltips in milliseconds */
-  TOOLTIP_DELAY: 0,
-  /** Z-index for highlighted edges to ensure they appear above non-highlighted edges */
-  HIGHLIGHTED_EDGE_Z_INDEX: 1000,
-  /** ID for the virtual output node in column view */
-  VIRTUAL_OUTPUT_NODE_ID: 'virtual:output',
-} as const;
+// Constants are now imported from '../constants'
+const colors = COLORS;
 
 function TableNode({ id, data, selected }: NodeProps): JSX.Element {
   const { toggleNodeCollapse } = useLineageActions();
-  const nodeData = data as TableNodeData;
+
+  if (!isTableNodeData(data)) {
+    console.error('Invalid node data type for TableNode', data);
+    return <div>Invalid node data</div>;
+  }
+
+  const nodeData = data;
   const isCte = nodeData.nodeType === 'cte';
   const isVirtualOutput = nodeData.nodeType === 'virtualOutput';
   const isSelected = selected || nodeData.isSelected;
   const isHighlighted = nodeData.isHighlighted;
   const isCollapsed = nodeData.isCollapsed;
 
-  let palette = colors.table;
+  let palette: typeof colors.table | typeof colors.cte | typeof colors.virtualOutput = colors.table;
   if (isCte) {
     palette = colors.cte;
   } else if (isVirtualOutput) {
@@ -115,7 +108,6 @@ function TableNode({ id, data, selected }: NodeProps): JSX.Element {
           position: 'relative',
         }}
       >
-        {/* Handles for collapsed state */}
         {isCollapsed && (
           <>
             <Handle
@@ -133,17 +125,20 @@ function TableNode({ id, data, selected }: NodeProps): JSX.Element {
         
         <button
           onClick={(e) => {
-            e.stopPropagation(); // Prevent node selection when toggling
+            e.stopPropagation();
             toggleNodeCollapse(id);
           }}
           style={{
             background: 'none',
             border: 'none',
             cursor: 'pointer',
-            padding: 0,
+            padding: 8,
+            margin: -8,
             display: 'flex',
             alignItems: 'center',
+            justifyContent: 'center',
             color: palette.textSecondary,
+            borderRadius: 4,
           }}
         >
           {isCollapsed ? (
@@ -192,7 +187,6 @@ function TableNode({ id, data, selected }: NodeProps): JSX.Element {
                   position: 'relative',
                 }}
               >
-                {/* Target handle (left side) for this column */}
                 <Handle
                   type="target"
                   position={Position.Left}
@@ -203,13 +197,12 @@ function TableNode({ id, data, selected }: NodeProps): JSX.Element {
                     left: -4,
                     top: '50%',
                     transform: 'translateY(-50%)',
-                    opacity: 0, // Hide handle visually but keep functional
+                    opacity: 0,
                     border: 'none',
                     background: 'transparent',
                   }}
                 />
                 {sanitizeIdentifier(col.name)}
-                {/* Source handle (right side) for this column */}
                 <Handle
                   type="source"
                   position={Position.Right}
@@ -220,7 +213,7 @@ function TableNode({ id, data, selected }: NodeProps): JSX.Element {
                     right: -4,
                     top: '50%',
                     transform: 'translateY(-50%)',
-                    opacity: 0, // Hide handle visually but keep functional
+                    opacity: 0,
                     border: 'none',
                     background: 'transparent',
                   }}
@@ -260,7 +253,6 @@ function AnimatedEdge({
   const targetColumn = data?.targetColumn as string | undefined;
   const isHighlighted = data?.isHighlighted as boolean | undefined;
 
-  // Build tooltip content
   let tooltipContent = '';
   if (sourceColumn && targetColumn) {
     tooltipContent += `${sourceColumn} → ${targetColumn}`;
@@ -283,20 +275,19 @@ function AnimatedEdge({
           ...style,
         }}
       />
-      {/* Use EdgeLabelRenderer to render HTML content on top of SVG */}
       {expression && (
         <EdgeLabelRenderer>
           <div
             style={{
               position: 'absolute',
               transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
-              pointerEvents: 'all', // Re-enable pointer events for the tooltip trigger
-              zIndex: 1000, // Ensure it's above edges
+              pointerEvents: 'all',
+              zIndex: 1000,
             }}
           >
-            <Tooltip.Provider>
-              <Tooltip.Root delayDuration={GRAPH_CONFIG.TOOLTIP_DELAY}>
-                <Tooltip.Trigger asChild>
+            <GraphTooltipProvider>
+              <GraphTooltip delayDuration={GRAPH_CONFIG.TOOLTIP_DELAY}>
+                <GraphTooltipTrigger asChild>
                   <button
                     type="button"
                     aria-label="View expression details"
@@ -324,33 +315,16 @@ function AnimatedEdge({
                       />
                     </svg>
                   </button>
-                </Tooltip.Trigger>
-                <Tooltip.Portal>
-                  <Tooltip.Content
-                    side="top"
-                    sideOffset={5}
-                    style={{
-                      backgroundColor: '#333',
-                      color: 'white',
-                      padding: '8px 12px',
-                      borderRadius: 4,
-                      fontSize: 12,
-                      whiteSpace: 'pre-wrap',
-                      maxWidth: 300,
-                      zIndex: 9999,
-                      boxShadow: '0 2px 10px rgba(0,0,0,0.2)',
-                    }}
-                  >
-                    {tooltipContent}
-                    <Tooltip.Arrow style={{ fill: '#333' }} />
-                  </Tooltip.Content>
-                </Tooltip.Portal>
-              </Tooltip.Root>
-            </Tooltip.Provider>
+                </GraphTooltipTrigger>
+                <GraphTooltipContent side="top">
+                  {tooltipContent}
+                  <GraphTooltipArrow />
+                </GraphTooltipContent>
+              </GraphTooltip>
+            </GraphTooltipProvider>
           </div>
         </EdgeLabelRenderer>
       )}
-      {/* Simple title for non-expression edges, if needed, though typically less critical */}
       {!expression && tooltipContent && (
         <g transform={`translate(${labelX}, ${labelY})`}>
           <title>{tooltipContent}</title>
@@ -370,14 +344,7 @@ const edgeTypes = {
   animated: AnimatedEdge,
 };
 
-/**
- * Merges multiple statement lineages into a single unified view.
- * Optimizes for the common single-statement case with early return.
- * @param statements Array of statement lineages to merge
- * @returns A single merged statement lineage
- */
 function mergeStatements(statements: StatementLineage[]): StatementLineage {
-  // Early return optimization for single statement
   if (statements.length === 1) {
     return statements[0];
   }
@@ -454,6 +421,8 @@ function buildFlowNodes(
         columns.some((col) => col.name.toLowerCase().includes(lowerCaseSearchTerm)))
     );
 
+    const isCollapsed = collapsedNodeIds.has(node.id);
+
     flowNodes.push({
       id: node.id,
       type: 'tableNode',
@@ -464,7 +433,7 @@ function buildFlowNodes(
         columns: columns,
         isSelected: node.id === selectedNodeId,
         isHighlighted: isHighlighted,
-        isCollapsed: collapsedNodeIds.has(node.id),
+        isCollapsed: isCollapsed,
       } satisfies TableNodeData,
     });
   }
@@ -494,7 +463,7 @@ function buildScriptLevelGraph(
 
   const scriptMap = new Map<string, StatementLineageWithSource[]>();
   statements.forEach((stmt) => {
-    const sourceName = stmt.source_name || 'unknown';
+    const sourceName = stmt.sourceName || 'unknown';
     const existing = scriptMap.get(sourceName) || [];
     existing.push(stmt);
     scriptMap.set(sourceName, existing);
@@ -509,9 +478,15 @@ function buildScriptLevelGraph(
     stmts.forEach((stmt) => {
       stmt.nodes.forEach((node) => {
         if (node.type === 'table') {
-          const isWritten = stmt.edges.some((e) => e.to === node.id && e.type === 'data_flow');
+          // A table is written if it has incoming data flow edges
+          // OR if it's a CREATE_TABLE statement (which defines the table without data flow)
+          const isWritten = 
+            stmt.edges.some((e) => e.to === node.id && e.type === 'data_flow') ||
+            (stmt.statementType === 'CREATE_TABLE');
+
           const isRead = stmt.edges.some((e) => e.from === node.id && e.type === 'data_flow');
 
+          // For display in tooltip, use human readable label
           if (isWritten) {
             tablesWritten.add(node.label);
           }
@@ -550,9 +525,13 @@ function buildScriptLevelGraph(
     producerStmts.forEach((stmt) => {
       stmt.nodes.forEach((node) => {
         if (node.type === 'table') {
-          const isWritten = stmt.edges.some((e) => e.to === node.id);
+          const isWritten = 
+            stmt.edges.some((e) => e.to === node.id) ||
+            (stmt.statementType === 'CREATE_TABLE');
+            
           if (isWritten) {
-            producerTables.add(node.label);
+            // Use qualifiedName for matching if available, else label
+            producerTables.add(node.qualifiedName || node.label);
           }
         }
       });
@@ -567,7 +546,7 @@ function buildScriptLevelGraph(
           if (node.type === 'table') {
             const isRead = stmt.edges.some((e) => e.from === node.id);
             if (isRead) {
-              consumerTables.add(node.label);
+              consumerTables.add(node.qualifiedName || node.label);
             }
           }
         });
@@ -576,7 +555,9 @@ function buildScriptLevelGraph(
       const sharedTables: string[] = [];
       producerTables.forEach((table) => {
         if (consumerTables.has(table)) {
-          sharedTables.push(table);
+          // Convert back to simple name for label if it looks like a qualified name
+          const simpleName = table.split('.').pop() || table;
+          sharedTables.push(simpleName);
         }
       });
 
@@ -743,23 +724,16 @@ function buildColumnLevelGraph(
   return { nodes: flowNodes, edges: flowEdges };
 }
 
-// --- Path Highlighting Logic ---
-
-/**
- * Applies path highlighting to an existing graph by updating node and edge data.
- * @param graph The graph with nodes and edges to enhance
- * @param highlightIds Set of IDs to highlight (nodes, columns, and edges)
- * @returns Enhanced graph with highlighting applied
- */
 function enhanceGraphWithHighlights(
   graph: { nodes: FlowNode[]; edges: FlowEdge[] },
   highlightIds: Set<string>
 ): { nodes: FlowNode[]; edges: FlowEdge[] } {
   const enhancedNodes = graph.nodes.map(node => {
-    const nodeData = node.data as TableNodeData;
+    if (!isTableNodeData(node.data)) return node;
+
+    const nodeData = node.data;
     if (!nodeData.columns) return node;
 
-    // Update column highlighting
     const enhancedColumns = nodeData.columns.map(col => ({
       ...col,
       isHighlighted: highlightIds.has(col.id),
@@ -792,24 +766,38 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
   const { state, actions } = useLineage();
   const { result, selectedNodeId, searchTerm, viewMode, collapsedNodeIds } = state;
 
-  // Merge all statements into one big graph (for table and column modes)
+  // Local state for debounced search input
+  const [localSearchTerm, setLocalSearchTerm] = useState(searchTerm);
+
+  // Debounce search updates to global state
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      actions.setSearchTerm(localSearchTerm);
+    }, UI_CONSTANTS.SEARCH_DEBOUNCE_DELAY);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [localSearchTerm, actions]);
+
+  // Sync local state if global state changes externally
+  useEffect(() => {
+    setLocalSearchTerm(searchTerm);
+  }, [searchTerm]);
+
   const statement = useMemo(() => {
     if (!result || !result.statements) return null;
     return mergeStatements(result.statements);
   }, [result]);
 
-  // Memoize layout calculation separately from state updates to prevent "jumping"
-  // We only want to calculate layout when the underlying data structure changes,
-  // NOT when the user drags a node (which updates local node state).
   const { layoutedNodes, layoutedEdges } = useMemo(() => {
-    try {
-      if (!result || !result.statements) return { layoutedNodes: [], layoutedEdges: [] };
+    if (!result || !result.statements) return { layoutedNodes: [], layoutedEdges: [] };
 
-      let rawNodes: FlowNode[];
-      let rawEdges: FlowEdge[];
-      let direction: 'LR' | 'TB' = 'LR';
+    let rawNodes: FlowNode[];
+    let rawEdges: FlowEdge[];
+    let direction: 'LR' | 'TB' = 'LR';
 
-      if (viewMode === 'script') {
+    if (viewMode === 'script') {
       const graph = buildScriptLevelGraph(result.statements, selectedNodeId, searchTerm);
       rawNodes = graph.nodes;
       rawEdges = graph.edges;
@@ -817,15 +805,13 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
     } else if (viewMode === 'column') {
       if (!statement) return { layoutedNodes: [], layoutedEdges: [] };
 
-      // Build graph once
       const graph = buildColumnLevelGraph(statement, selectedNodeId, searchTerm, collapsedNodeIds);
 
-      // Calculate highlights if a node is selected
-      const highlightIds = selectedNodeId
-        ? findConnectedElements(selectedNodeId, graph.edges)
-        : new Set<string>();
+      let highlightIds = new Set<string>();
+      if (selectedNodeId) {
+        highlightIds = findConnectedElements(selectedNodeId, graph.edges);
+      }
 
-      // Apply highlights to the graph
       const enhancedGraph = enhanceGraphWithHighlights(graph, highlightIds);
       rawNodes = enhancedGraph.nodes;
       rawEdges = enhancedGraph.edges;
@@ -837,27 +823,19 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
       direction = 'LR';
     }
 
-      const { nodes: ln, edges: le } = getLayoutedElements(rawNodes, rawEdges, direction);
-      return { layoutedNodes: ln, layoutedEdges: le };
-    } catch (error) {
-      console.error('Graph layout calculation failed:', error);
-      return { layoutedNodes: [], layoutedEdges: [] };
-    }
+    const { nodes: ln, edges: le } = getLayoutedElements(rawNodes, rawEdges, direction);
+    return { layoutedNodes: ln, layoutedEdges: le };
   }, [result, statement, selectedNodeId, searchTerm, viewMode, collapsedNodeIds]);
 
-  // Initialize local state with layouted nodes
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<FlowEdge>([]);
 
-  // Ref to track if we have loaded initial layout
   const isInitialized = useRef(false);
   const lastResultId = useRef<string | null>(null);
   const lastViewMode = useRef<string | null>(null);
 
-  // Update nodes/edges when layout changes, but ONLY if the underlying data structure
-  // or view mode has changed. This prevents resetting positions on simple re-renders.
   useEffect(() => {
-    const currentResultId = result ? JSON.stringify(result.summary) : null; // Simple content check
+    const currentResultId = result ? JSON.stringify(result.summary) : null;
     
     const needsUpdate = 
       !isInitialized.current || 
@@ -871,13 +849,10 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
       lastResultId.current = currentResultId;
       lastViewMode.current = viewMode;
     } else if (layoutedNodes.length > 0) {
-      // Even if structure didn't change, we might need to update styling (highlighting)
-      // We map over existing nodes to preserve positions but update data
       setNodes((currentNodes) => {
         return layoutedNodes.map((layoutNode) => {
           const currentNode = currentNodes.find((n) => n.id === layoutNode.id);
           if (currentNode) {
-            // Preserve position, update data/style
             return {
               ...layoutNode,
               position: currentNode.position,
@@ -886,12 +861,10 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
           return layoutNode;
         });
       });
-      // Edges can always be replaced as they don't carry position state
       setEdges(layoutedEdges);
     }
-  }, [layoutedNodes, layoutedEdges, setNodes, setEdges, result, viewMode]);
+  }, [layoutedNodes, layoutedEdges, setNodes, setEdges, result, viewMode, collapsedNodeIds]);
 
-  // Force layout recalculation handler
   const handleRearrange = useCallback(() => {
     setNodes(layoutedNodes);
     setEdges(layoutedEdges);
@@ -962,31 +935,52 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
       >
         <Background />
         <Controls />
-        <Panel position="top-left">
-          <div style={{ width: 250 }}>
+        <Panel position="top-left" className="flex gap-3">
+          <div className="flex items-center rounded-lg border border-slate-200/60 bg-white px-1 py-1 shadow-sm backdrop-blur-sm">
+            <ViewModeSelector />
+          </div>
+          <div className="relative flex items-center rounded-lg border border-slate-200/60 bg-white px-2 py-1 shadow-sm backdrop-blur-sm" style={{ minWidth: UI_CONSTANTS.SEARCH_MIN_WIDTH }}>
+            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" strokeWidth={1.5} />
             <Input
-              placeholder="Search nodes..."
-              value={searchTerm}
-              onChange={(e) => actions.setSearchTerm(e.target.value)}
-              className="bg-white shadow-sm border-gray-200"
+              placeholder="Search..."
+              value={localSearchTerm}
+              onChange={(e) => setLocalSearchTerm(e.target.value)}
+              className="h-8 border-0 bg-transparent pl-8 pr-2 text-sm shadow-none placeholder:text-slate-400 focus-visible:ring-0"
             />
           </div>
         </Panel>
-        <Panel position="top-right" style={{ display: 'flex', gap: '8px' }}>
-          <ExportMenu graphRef={finalRef} />
-          <Button 
-            onClick={handleRearrange} 
-            variant="secondary" 
-            size="sm"
-            className="shadow-sm"
-          >
-            Rearrange
-          </Button>
+        <Panel position="top-right" className="flex gap-3">
+          <div className="flex items-center rounded-lg border border-slate-200/60 bg-white px-1 py-1 shadow-sm backdrop-blur-sm">
+            <GraphTooltipProvider>
+              <GraphTooltip delayDuration={UI_CONSTANTS.TOOLTIP_DELAY}>
+                <GraphTooltipTrigger asChild>
+                  <button
+                    onClick={handleRearrange}
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                    aria-label="Rearrange graph layout"
+                  >
+                    <Network className="h-4 w-4" strokeWidth={1.5} />
+                  </button>
+                </GraphTooltipTrigger>
+                <GraphTooltipPortal>
+                  <GraphTooltipContent side="bottom">
+                    <p>Rearrange layout</p>
+                    <GraphTooltipArrow />
+                  </GraphTooltipContent>
+                </GraphTooltipPortal>
+              </GraphTooltip>
+            </GraphTooltipProvider>
+          </div>
+          <div className="flex items-center rounded-lg border border-slate-200/60 bg-white px-1 py-1 shadow-sm backdrop-blur-sm">
+            <ExportMenu graphRef={finalRef} />
+          </div>
         </Panel>
         <MiniMap
           nodeColor={(node) => {
-            const data = node.data as TableNodeData;
-            return data?.nodeType === 'cte' ? '#a855f7' : '#3b82f6';
+            if (isTableNodeData(node.data)) {
+              return node.data.nodeType === 'cte' ? '#a855f7' : '#3b82f6';
+            }
+            return '#3b82f6';
           }}
         />
       </ReactFlow>

@@ -20,6 +20,8 @@ export type CaseSensitivity = 'dialect' | 'lower' | 'upper' | 'exact';
 export interface AnalyzeRequest {
   /** The SQL code to analyze (UTF-8 string, multi-statement supported) */
   sql: string;
+  /** Optional list of source files to analyze (alternative to single `sql` field) */
+  files?: FileSource[];
   /** SQL dialect */
   dialect: Dialect;
   /** Optional source name (file path or script identifier) for grouping */
@@ -28,6 +30,11 @@ export interface AnalyzeRequest {
   options?: AnalysisOptions;
   /** Optional schema metadata for accurate column resolution */
   schema?: SchemaMetadata;
+}
+
+export interface FileSource {
+  name: string;
+  content: string;
 }
 
 /** Graph detail level for visualization. */
@@ -103,7 +110,7 @@ export interface StatementLineage {
   /** Type of SQL statement */
   statementType: string;
   /** Optional source name (file path or script identifier) for grouping */
-  source_name?: string;
+  sourceName?: string;
   /** All nodes in the lineage graph for this statement */
   nodes: Node[];
   /** All edges connecting nodes in the lineage graph */

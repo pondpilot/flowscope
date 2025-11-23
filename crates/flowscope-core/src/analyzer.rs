@@ -226,19 +226,42 @@ impl<'a> Analyzer<'a> {
     }
 
     fn analyze(&mut self) -> AnalyzeResult {
-        // Parse SQL
-        let statements = match parse_sql_with_dialect(&self.request.sql, self.request.dialect) {
-            Ok(stmts) => stmts,
-            Err(e) => {
-                self.issues
-                    .push(Issue::error(issue_codes::PARSE_ERROR, e.to_string()));
-                return self.build_result();
+        // Check if we have multiple files or single SQL
+        let mut all_statements = Vec::new();
+        
+        if let Some(files) = &self.request.files {
+            // Analyze each file
+            for file in files {
+                match parse_sql_with_dialect(&file.content, self.request.dialect) {
+                    Ok(stmts) => {
+                        for stmt in stmts {
+                            all_statements.push((stmt, Some(file.name.clone())));
+                        }
+                    }
+                    Err(e) => {
+                         self.issues.push(Issue::error(issue_codes::PARSE_ERROR, format!("Error parsing {}: {}", file.name, e)));
+                    }
+                }
             }
-        };
+        } else {
+            // Single SQL analysis
+            match parse_sql_with_dialect(&self.request.sql, self.request.dialect) {
+                Ok(stmts) => {
+                    for stmt in stmts {
+                        all_statements.push((stmt, self.request.source_name.clone()));
+                    }
+                }
+                Err(e) => {
+                    self.issues
+                        .push(Issue::error(issue_codes::PARSE_ERROR, e.to_string()));
+                    return self.build_result();
+                }
+            }
+        }
 
-        // Analyze each statement
-        for (index, statement) in statements.iter().enumerate() {
-            match self.analyze_statement(index, statement) {
+        // Analyze all statements
+        for (index, (statement, source_name)) in all_statements.into_iter().enumerate() {
+            match self.analyze_statement(index, &statement, source_name) {
                 Ok(lineage) => {
                     self.statement_lineages.push(lineage);
                 }
@@ -257,6 +280,7 @@ impl<'a> Analyzer<'a> {
         &mut self,
         index: usize,
         statement: &Statement,
+        source_name: Option<String>,
     ) -> Result<StatementLineage, ParseError> {
         let mut ctx = StatementContext::new(index);
 
@@ -274,8 +298,13 @@ impl<'a> Analyzer<'a> {
                     self.analyze_create_table_as(&mut ctx, &create.name, query);
                     "CREATE_TABLE_AS".to_string()
                 } else {
+                    self.analyze_create_table(&mut ctx, &create.name);
                     "CREATE_TABLE".to_string()
                 }
+            }
+            Statement::CreateView { name, query, .. } => {
+                self.analyze_create_view(&mut ctx, name, query);
+                "CREATE_VIEW".to_string()
             }
             Statement::Update {
                 table,
@@ -322,7 +351,7 @@ impl<'a> Analyzer<'a> {
         Ok(StatementLineage {
             statement_index: index,
             statement_type,
-            source_name: self.request.source_name.clone(),
+            source_name,
             nodes: ctx.nodes,
             edges: ctx.edges,
             span: None,
@@ -1203,6 +1232,72 @@ impl<'a> Analyzer<'a> {
 
         self.all_tables.insert(canonical.clone());
         self.produced_tables.insert(canonical, ctx.statement_index);
+
+        // Analyze source query
+        self.analyze_query(ctx, query, Some(&target_id));
+
+        // Create edges from all source tables to target
+        let source_nodes: Vec<_> = ctx
+            .nodes
+            .iter()
+            .filter(|n| n.id != target_id)
+            .map(|n| n.id.clone())
+            .collect();
+
+        for source_id in source_nodes {
+            let edge_id = generate_edge_id(&source_id, &target_id);
+            if !ctx.edge_ids.contains(&edge_id) {
+                ctx.add_edge(Edge {
+                    id: edge_id,
+                    from: source_id,
+                    to: target_id.clone(),
+                    edge_type: EdgeType::DataFlow,
+                    expression: None,
+                    operation: None,
+                    metadata: None,
+                });
+            }
+        }
+    }
+
+    fn analyze_create_table(&mut self, ctx: &mut StatementContext, name: &ObjectName) {
+        let target_name = name.to_string();
+        let canonical = self.normalize_table_name(&target_name);
+
+        // Create target table node
+        ctx.add_node(Node {
+            id: generate_node_id("table", &canonical),
+            node_type: NodeType::Table,
+            label: extract_simple_name(&target_name),
+            qualified_name: Some(canonical.clone()),
+            expression: None,
+            span: None,
+            metadata: None,
+        });
+
+        self.all_tables.insert(canonical.clone());
+        self.produced_tables
+            .insert(canonical, ctx.statement_index);
+    }
+
+    fn analyze_create_view(&mut self, ctx: &mut StatementContext, name: &ObjectName, query: &Query) {
+        let target_name = name.to_string();
+        let canonical = self.normalize_table_name(&target_name);
+
+        // Create target view/table node
+        let target_id = ctx.add_node(Node {
+            id: generate_node_id("table", &canonical),
+            node_type: NodeType::Table, // Represent views as tables for now
+            label: extract_simple_name(&target_name),
+            qualified_name: Some(canonical.clone()),
+            expression: None,
+            span: None,
+            metadata: None,
+        });
+
+        self.all_tables.insert(canonical.clone());
+        self.produced_tables
+            .insert(canonical, ctx.statement_index);
 
         // Analyze source query
         self.analyze_query(ctx, query, Some(&target_id));

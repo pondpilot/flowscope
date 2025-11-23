@@ -24,6 +24,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_FILE_COUNT = 100;
+
 interface EditorAreaProps {
   wasmReady: boolean;
   className?: string;
@@ -66,45 +69,66 @@ export function EditorArea({ wasmReady, className }: EditorAreaProps) {
     setError(null);
 
     try {
-      let sqlToAnalyze = '';
       let contextDescription = '';
+      let filesToAnalyze: { name: string; content: string }[] = [];
       const runMode = currentProject.runMode;
 
       if (runMode === 'current' && activeFile) {
-         sqlToAnalyze = `-- File: ${activeFile.name}\n${activeFile.content}`;
+         filesToAnalyze = [{ name: activeFile.name, content: activeFile.content }];
          contextDescription = `Analyzing file: ${activeFile.name}`;
       } else if (runMode === 'custom') {
         const selectedIds = currentProject.selectedFileIds || [];
-        const files = currentProject.files.filter(f => selectedIds.includes(f.id) && f.name.endsWith('.sql'));
-        sqlToAnalyze = files
-          .map(f => `-- File: ${f.name}\n${f.content}`)
-          .join('\n\n');
-        contextDescription = `Analyzing selected: ${files.length} files`;
+        const selectedFiles = currentProject.files.filter(f => selectedIds.includes(f.id) && f.name.endsWith('.sql'));
+        filesToAnalyze = selectedFiles.map(f => ({ name: f.name, content: f.content }));
+        contextDescription = `Analyzing selected: ${filesToAnalyze.length} files`;
       } else {
         // Project scope (all SQL files)
         const sqlFiles = currentProject.files.filter(f => f.name.endsWith('.sql'));
-        sqlToAnalyze = sqlFiles
-          .map(f => `-- File: ${f.name}\n${f.content}`)
-          .join('\n\n');
+        filesToAnalyze = sqlFiles.map(f => ({ name: f.name, content: f.content }));
         contextDescription = `Analyzing project: ${sqlFiles.length} files`;
       }
 
-      if (!sqlToAnalyze.trim()) {
+      if (filesToAnalyze.length === 0) {
         // If custom mode is selected but nothing is checked, maybe warn?
-        if (runMode === 'custom' && (!currentProject.selectedFileIds || currentProject.selectedFileIds.length === 0)) {
+        if (runMode === 'custom') {
            setError("No files selected for analysis.");
            return;
         }
-        if (!sqlToAnalyze.trim()) return;
+        // Should ideally not happen for other modes if project has files
+        if (currentProject.files.length > 0 && runMode !== 'current') {
+          setError("No .sql files found in project.");
+          return;
+        }
+        if (runMode === 'current' && !activeFile) return;
+      }
+
+      // Validate file count
+      if (filesToAnalyze.length > MAX_FILE_COUNT) {
+        setError(`Too many files selected (max ${MAX_FILE_COUNT}). Currently selected: ${filesToAnalyze.length} files.`);
+        return;
+      }
+
+      // Validate file sizes
+      for (const file of filesToAnalyze) {
+        if (file.content.length > MAX_FILE_SIZE) {
+          setError(`File "${file.name}" is too large (max ${MAX_FILE_SIZE / 1024 / 1024}MB). File size: ${(file.content.length / 1024 / 1024).toFixed(2)}MB.`);
+          return;
+        }
       }
 
       console.log(contextDescription);
       
-      // Set the SQL in lineage context
-      actions.setSql(sqlToAnalyze);
+      // Set a representative SQL string for the context (e.g. for display/debugging)
+      // This is less critical now that we have multi-file structure
+      const representativeSql = filesToAnalyze
+          .map(f => `-- File: ${f.name}\n${f.content}`)
+          .join('\n\n');
+      
+      actions.setSql(representativeSql);
 
       const result = await analyzeSql({
-        sql: sqlToAnalyze,
+        sql: '', // Ignored when files are present
+        files: filesToAnalyze,
         dialect: currentProject.dialect,
         options: {
           enableColumnLineage: true

@@ -20,6 +20,9 @@
       "@/*": [
         "./src/*"
       ],
+      "@pondpilot/flowscope-core": [
+        "../packages/core/src/index.ts"
+      ],
       "@pondpilot/flowscope-react": [
         "../packages/react/src/index.ts"
       ]
