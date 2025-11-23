@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { toPng } from 'html-to-image';
 import { Download, Image, FileJson, FileSpreadsheet } from 'lucide-react';
-import { useLineage } from '../context';
+import { useLineage } from '../store';
 import { UI_CONSTANTS } from '../constants';
 import {
   GraphTooltip,

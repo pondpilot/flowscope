@@ -1,5 +1,5 @@
 import { FileCode, Table2, Columns3 } from 'lucide-react';
-import { useLineage } from '../context';
+import { useLineage } from '../store';
 import type { LineageViewMode } from '../types';
 import {
   GraphTooltip,

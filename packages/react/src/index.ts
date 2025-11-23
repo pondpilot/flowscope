@@ -8,13 +8,16 @@ export { SchemaView } from './components/SchemaView';
 export { ViewModeSelector } from './components/ViewModeSelector';
 export { ErrorBoundary, GraphErrorBoundary } from './components/ErrorBoundary';
 
-// Context and hooks
+// Store and hooks (new Zustand-based)
 export {
-  LineageProvider,
+  useLineageStore,
   useLineage,
   useLineageState,
   useLineageActions,
-} from './context';
+} from './store';
+
+// Context (legacy, for backward compatibility - wraps Zustand store)
+export { LineageProvider } from './context';
 export type { LineageProviderProps } from './context';
 
 // Types

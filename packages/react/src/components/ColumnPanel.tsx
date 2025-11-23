@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useLineage } from '../context';
+import { useLineage } from '../store';
 import type { ColumnPanelProps } from '../types';
 import type { Node, Edge } from '@pondpilot/flowscope-core';
 

@@ -4,7 +4,7 @@ import { sql } from '@codemirror/lang-sql';
 import { EditorView, Decoration, type DecorationSet } from '@codemirror/view';
 import { StateField, StateEffect } from '@codemirror/state';
 
-import { useLineage } from '../context';
+import { useLineage } from '../store';
 import type { SqlViewProps } from '../types';
 
 type HighlightRange = { from: number; to: number; className: string };

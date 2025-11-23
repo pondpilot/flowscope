@@ -52,7 +52,8 @@
     "dagre": "^0.8.5",
     "html-to-image": "^1.11.13",
     "lucide-react": "^0.554.0",
-    "tailwind-merge": "^3.4.0"
+    "tailwind-merge": "^3.4.0",
+    "zustand": "^5.0.8"
   },
   "devDependencies": {
     "@testing-library/react": "^14.0.0",

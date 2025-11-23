@@ -1,4 +1,4 @@
-import { useLineage } from '../context';
+import { useLineage } from '../store';
 import type { IssuesPanelProps, Issue } from '../types';
 
 const SEVERITY_ORDER = { error: 0, warning: 1, info: 2 };

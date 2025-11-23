@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { LineageProvider, useLineage } from '../context';
+import { useLineage } from '../store';
+import { LineageProvider } from '../context';
 import { GraphView } from './GraphView';
 import { SqlView } from './SqlView';
 import { IssuesPanel } from './IssuesPanel';
