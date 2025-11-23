@@ -1,461 +1,363 @@
-# FlowScope – In-Browser SQL Lineage Engine
+# FlowScope
 
-[![CI](https://github.com/pondpilot/flowscope/actions/workflows/ci.yml/badge.svg)](https://github.com/pondpilot/flowscope/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)](https://www.rust-lang.org)
+[![TypeScript](https://img.shields.io/badge/typescript-5.0+-blue.svg)](https://www.typescriptlang.org)
+[![WebAssembly](https://img.shields.io/badge/wasm-ready-purple.svg)](https://webassembly.org)
 
-FlowScope is a **client-side SQL lineage engine** that runs entirely in the browser using **Rust + WebAssembly**, with a **TypeScript API** and optional **React viewer components**.
+FlowScope is a privacy-first SQL lineage engine that runs entirely in your browser. Built with Rust and WebAssembly, it analyzes SQL queries to produce detailed lineage graphs showing how tables, CTEs, and columns flow through your data transformations.
 
-It parses SQL, understands your CTEs, joins, inserts, and unions, and returns a **lineage graph** (tables + columns + edges) that you can render or analyze in your own tools.
+The engine is designed for embedding into web applications, browser extensions, and development tools where you need instant lineage analysis without sending queries to a server.
 
-> **Privacy-first.** Your SQL and schema metadata never leave the page.  
-> **Embeddable.** Drop it into web apps, browser extensions, and IDE plugins.  
-> **Multi-dialect.** Built on `sqlparser-rs` with common analytics dialects supported.
+## What's Inside
 
-FlowScope is a subproject of **PondPilot**, focused specifically on SQL parsing and lineage.
+This is a monorepo containing the complete FlowScope stack:
 
----
+**Core Engine** (`crates/`)
+- `flowscope-core` — Rust-based SQL parser and lineage analyzer built on sqlparser-rs
+- `flowscope-wasm` — WebAssembly bindings exposing the core engine to JavaScript
 
-## Features
+**NPM Packages** (`packages/`)
+- `@pondpilot/flowscope-core` — TypeScript API with WASM loader and type-safe interfaces
+- `@pondpilot/flowscope-react` — React components for interactive lineage visualization
 
-- **Fully client-side**  
-  Core engine is compiled to WebAssembly and runs in the browser (or other JS runtimes). No server, no telemetry.
+**Demo Application** (`app/`)
+- Full-featured web application showcasing FlowScope capabilities with multi-file project support
 
-- **Multi-dialect SQL parsing**  
-  Built on top of `sqlparser-rs`, with support for common analytics dialects (e.g. Snowflake, BigQuery, Postgres, Generic).
+## Why FlowScope
 
-- **Table & column-level lineage**  
-  Understand how tables, CTEs, and columns feed each other across `SELECT`, `WITH`, `INSERT ... SELECT`, `CREATE TABLE AS SELECT`, and basic set operations.
+**Privacy by Design**
+Your SQL queries and schema metadata never leave the browser. The entire analysis happens client-side using WebAssembly, making it suitable for sensitive data workflows and compliance-heavy environments.
 
-- **Schema-aware (when you want it)**  
-  Provide a simple JSON schema to expand `*` and validate column references, or run schema-less for quick explorations.
+**Drop-in Integration**
+The core package is a simple TypeScript import. No backend infrastructure, no API keys, no telemetry. Initialize the WASM module once and start analyzing queries immediately.
 
-- **Embeddable engine + React viewer**  
-  Core is exposed as an NPM package (e.g. `@pondpilot/flowscope-core`), with optional React components (e.g. `@pondpilot/flowscope-react`) that render graphs, column details, and SQL highlights.
+**Multi-Dialect Support**
+FlowScope understands SQL variations across PostgreSQL, Snowflake, BigQuery, and generic ANSI SQL, handling the nuances of each dialect's syntax and semantics.
 
-- **Issues & diagnostics**  
-  FlowScope reports parse errors, unsupported constructs, and approximate lineage (“we saw a `*` without schema”) as structured issues.
+**Table and Column Lineage**
+Track dependencies at both table and column levels. See how data flows through complex CTEs, joins, subqueries, window functions, and set operations. When you provide schema metadata, FlowScope expands wildcards and validates column references.
 
----
+**Developer-Friendly Output**
+Results come as structured JSON with typed interfaces, making it straightforward to build custom visualizations or integrate with existing tools. Issues and warnings include source spans for precise error highlighting.
 
-## Packages
+## Quick Start
 
-FlowScope is a small stack of components:
-
-- **Rust crates**
-  - `flowscope-core` – core SQL lineage engine (Rust).
-  - `flowscope-wasm` – WebAssembly bindings around `flowscope-core`.
-
-- **NPM packages**
-  - `@pondpilot/flowscope-core` – WASM loader + TypeScript API (analysis only).
-  - `@pondpilot/flowscope-react` – React components for lineage visualization.
-
-- **Examples**
-  - `app` – Single-page React app showing FlowScope end-to-end.
-
-You can use just the engine (`@pondpilot/flowscope-core`) or add the viewer on top.
-
----
-
-## High-Level Architecture
-
-```text
-[Your App / Extension / Plugin]
-      |
-      |  (SQL string + options + optional schema)
-      v
-[@pondpilot/flowscope-core]     (TypeScript)
-      |
-      |  (JSON request via WebAssembly boundary)
-      v
-[FlowScope WASM Module]         (Rust: flowscope-core + flowscope-wasm)
-      |
-      |  (JSON result: lineage graph + issues + summary)
-      v
-[@pondpilot/flowscope-core]     (typed AnalyzeResult)
-      |
-      v
-[Your UI or @pondpilot/flowscope-react components]
-```
-
-- The **core engine** is written in Rust and uses `sqlparser-rs` to parse SQL for multiple dialects.
-- The engine walks the AST to build a **lineage graph**:
-  - Nodes: tables, CTEs, columns (and optionally operations/statements).
-  - Edges: data flow, derivation, ownership.
-- The **WASM wrapper** exposes a small JSON-in / JSON-out interface.
-- The **TypeScript wrapper** (`@pondpilot/flowscope-core`) handles:
-  - WASM loading and initialization.
-  - Type-safe request/response models.
-  - Optional Web Worker integration.
-- The **React viewer** (`@pondpilot/flowscope-react`) renders graphs and SQL highlights but does not compute lineage itself.
-
----
-
-## Use Cases
-
-- Add a **“Lineage” button** next to the “Run” button in your SQL editor.
-- Build a **browser extension** that overlays lineage on Snowflake / BigQuery / dbt Cloud UIs.
-- Show **impact analysis** in an internal data platform: “If I change this column, what breaks?”
-- Inspect **dbt models or complex analytics queries** in a standalone web app.
-
----
-
-## Installation
-
-> Package names here use the `@pondpilot` scope as an example. Adjust the org scope to match your actual publishing setup.
-
-### Core engine (required)
+Install the core engine:
 
 ```bash
 npm install @pondpilot/flowscope-core
-# or
-yarn add @pondpilot/flowscope-core
-# or
-pnpm add @pondpilot/flowscope-core
 ```
 
-### React viewer (optional)
+Analyze your first query:
+
+```typescript
+import { initWasm, analyzeSql } from '@pondpilot/flowscope-core';
+
+await initWasm();
+
+const result = await analyzeSql({
+  sql: `
+    WITH active_users AS (
+      SELECT user_id, email, signup_date
+      FROM analytics.users
+      WHERE last_login >= CURRENT_DATE - 30
+    )
+    SELECT u.email, COUNT(o.order_id) as order_count
+    FROM active_users u
+    LEFT JOIN analytics.orders o ON u.user_id = o.user_id
+    GROUP BY u.email;
+  `,
+  dialect: 'postgres'
+});
+
+console.log('Tables referenced:', result.statements[0].nodes);
+console.log('Data flows:', result.statements[0].edges);
+console.log('Analysis issues:', result.issues);
+```
+
+The result includes a lineage graph with nodes representing tables, CTEs, and columns, plus edges showing ownership, data flow, and derivation relationships.
+
+## Adding Visualization
+
+For interactive graph visualization, add the React components:
 
 ```bash
 npm install @pondpilot/flowscope-react
-# or
-yarn add @pondpilot/flowscope-react
-# or
-pnpm add @pondpilot/flowscope-react
 ```
 
----
-
-## Quickstart (TypeScript)
-
-### 1. Analyze a query
-
-This example shows how to analyze a simple query and inspect the result.
-
-```ts
-import {
-  initWasm,
-  analyzeSql,
-  type AnalyzeRequest,
-  type AnalyzeResult,
-} from "@pondpilot/flowscope-core";
-
-async function runExample(): Promise<void> {
-  // 1. Initialize the WASM engine once at app bootstrap.
-  //    If you skip this, analyzeSql can perform lazy init instead –
-  //    but explicit init makes errors easier to diagnose.
-  await initWasm();
-
-  // 2. Prepare a request.
-  const request: AnalyzeRequest = {
-    sql: `
-      WITH recent_orders AS (
-        SELECT order_id, customer_id, amount
-        FROM analytics.orders
-        WHERE order_date >= CURRENT_DATE - 30
-      )
-      INSERT INTO analytics.order_summary (customer_id, total_amount)
-      SELECT customer_id, SUM(amount) AS total_amount
-      FROM recent_orders
-      GROUP BY customer_id;
-    `,
-    dialect: "postgres",  // "generic" | "postgres" | "snowflake" | "bigquery"
-    // Optional schema metadata – this allows FlowScope to validate table references.
-    schema: {
-      defaultSchema: "analytics",
-      tables: [
-        { name: "orders", columns: [{ name: "order_id" }, { name: "customer_id" }, { name: "amount" }, { name: "order_date" }] },
-        { name: "order_summary", columns: [{ name: "customer_id" }, { name: "total_amount" }] },
-      ],
-    },
-  };
-
-  // 3. Analyze the SQL.
-  const result: AnalyzeResult = await analyzeSql(request);
-
-  // 4. Inspect the result.
-  console.log("Summary:", result.summary);
-  console.log("Issues:", result.issues);
-  console.log("Statements:", result.statements.length);
-  console.log("Tables found:", result.statements[0]?.nodes.map(n => n.label));
-}
-
-// Call runExample() from your app bootstrap or a test harness.
-void runExample();
-```
-
-Key points:
-
-- `sql` is a free-form multi-statement string.
-- `dialect` controls which SQL dialect is used by the parser.
-- `schema` is optional but helps with table validation and future column-level lineage.
-
----
-
-## Using the React Viewer
-
-Once you have an `AnalyzeResult`, you can render it using the React components from `@pondpilot/flowscope-react`.
+Then render the lineage:
 
 ```tsx
-import React, { useState } from "react";
-import {
-  initWasm,
-  analyzeSql,
-  type AnalyzeResult,
-} from "@pondpilot/flowscope-core";
-import {
-  LineageExplorer,
-  type LineageExplorerProps,
-} from "@pondpilot/flowscope-react";
+import { LineageExplorer } from '@pondpilot/flowscope-react';
+import '@pondpilot/flowscope-react/styles.css';
 
-const SAMPLE_SQL = `
-SELECT
-  u.id,
-  u.email,
-  o.total_amount
-FROM public.users u
-JOIN public.orders o
-  ON u.id = o.user_id;
-`;
+function App() {
+  const [result, setResult] = useState(null);
 
-export function FlowScopeDemo(): JSX.Element {
-  const [sql, setSql] = useState<string>(SAMPLE_SQL);
-  const [result, setResult] = useState<AnalyzeResult | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
-
-  async function handleAnalyze(): Promise<void> {
-    setIsAnalyzing(true);
-    try {
-      await initWasm();
-      const analyzeResult = await analyzeSql({
-        sql,
-        options: { dialect: "postgres", enableColumnLineage: true },
-      });
-      setResult(analyzeResult);
-    } finally {
-      setIsAnalyzing(false);
-    }
-  }
-
-  const explorerProps: Partial<LineageExplorerProps> = result
-    ? {
-        result,
-        sql,
-        selectedStatementIndex: 0,
-      }
-    : {};
+  // ... analyze SQL and store result ...
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-      <textarea
-        rows={10}
-        value={sql}
-        onChange={(e) => setSql(e.target.value)}
-        style={{ width: "100%", fontFamily: "monospace" }}
+    <div style={{ height: '600px' }}>
+      <LineageExplorer
+        result={result}
+        sql={yourSqlQuery}
+        theme="light"
       />
-      <button onClick={handleAnalyze} disabled={isAnalyzing}>
-        {isAnalyzing ? "Analyzing..." : "Analyze SQL"}
-      </button>
-
-      {result && (
-        <div style={{ height: "500px", border: "1px solid #e5e7eb" }}>
-          <LineageExplorer
-            result={explorerProps.result!}
-            sql={explorerProps.sql!}
-            selectedStatementIndex={explorerProps.selectedStatementIndex}
-          />
-        </div>
-      )}
     </div>
   );
 }
 ```
 
-The `LineageExplorer` composite component typically includes:
+The `LineageExplorer` component provides a complete UI with an interactive graph view, SQL editor with syntax highlighting, issue diagnostics, and search capabilities.
 
-- A statement selector (if multiple statements).
-- A graph view (tables/CTEs/columns + arrows).
-- A SQL panel with highlights.
-- A column details panel.
-- An issues list.
+## Architecture
 
----
+FlowScope uses a layered architecture that separates parsing logic from presentation:
 
-## Schema Format
-
-FlowScope accepts a simple **schema metadata** object to improve column-level lineage:
-
-```ts
-const schema = {
-  tables: {
-    "analytics.orders": ["order_id", "customer_id", "amount", "order_date"],
-    "analytics.order_summary": ["customer_id", "total_amount"],
-  },
-};
+```
+┌─────────────────────────────────────┐
+│   Your Application                  │
+│   (Web App / Extension / IDE)       │
+└──────────────┬──────────────────────┘
+               │
+               ↓
+┌─────────────────────────────────────┐
+│   @pondpilot/flowscope-core         │
+│   TypeScript API + WASM Loader      │
+└──────────────┬──────────────────────┘
+               │ JSON Request
+               ↓
+┌─────────────────────────────────────┐
+│   WebAssembly Module                │
+│   (Rust: flowscope-core + wasm)     │
+└──────────────┬──────────────────────┘
+               │ JSON Response
+               ↓
+┌─────────────────────────────────────┐
+│   @pondpilot/flowscope-react        │
+│   (Optional) Visualization Layer    │
+└─────────────────────────────────────┘
 ```
 
-Guidelines:
+The core engine parses SQL into an abstract syntax tree using sqlparser-rs, then walks the AST to construct a lineage graph. The WASM boundary provides a clean serialization layer, while the TypeScript wrapper handles initialization and provides ergonomic types. React components are completely optional and focus solely on rendering.
 
-- Keys are strings representing fully qualified table names.
-- Values are arrays of column names (`string[]`).
-- FlowScope treats keys as opaque identifiers; pick a consistent convention (e.g. `db.schema.table` or `schema.table`) and stick with it.
-- With schema provided:
-  - `SELECT * FROM analytics.orders` will expand to explicit columns.
-  - Unknown columns will be flagged as issues.
-- Without schema:
-  - FlowScope still produces lineage for explicitly named columns.
-  - `*` and `table.*` will be treated as approximate, with warnings.
+## Schema Metadata
 
----
+FlowScope works without schema information, but providing metadata unlocks additional capabilities:
 
-## Dialects & Statement Coverage (MVP)
+```typescript
+const result = await analyzeSql({
+  sql: 'SELECT * FROM users JOIN orders ON users.id = orders.user_id',
+  dialect: 'postgres',
+  schema: {
+    defaultSchema: 'public',
+    tables: [
+      {
+        name: 'users',
+        columns: [
+          { name: 'id' },
+          { name: 'email' },
+          { name: 'created_at' }
+        ]
+      },
+      {
+        name: 'orders',
+        columns: [
+          { name: 'order_id' },
+          { name: 'user_id' },
+          { name: 'total' }
+        ]
+      }
+    ]
+  }
+});
+```
 
-Initial support focuses on **analytics-oriented SQL**:
+With schema metadata, FlowScope will expand `SELECT *` to explicit columns, validate column references, and provide more precise column-level lineage. Without it, the engine still produces useful table-level lineage and flags wildcards with approximate lineage warnings.
 
-- **Dialects**
-  - `generic`
-  - `postgres`
-  - `snowflake`
-  - `bigquery`
+## Supported SQL
 
-- **Statements**
-  - `SELECT` (joins, aliases, subqueries, basic window functions as expressions).
-  - `WITH` / CTEs.
-  - `INSERT INTO ... SELECT`.
-  - `CREATE TABLE ... AS SELECT`.
-  - `UNION` / `UNION ALL` and basic set operations.
+FlowScope focuses on analytics-oriented SQL with broad coverage of common patterns:
 
-FlowScope aims to provide:
+**Statement Types**
+SELECT queries with joins, aliases, and subqueries | WITH clauses and CTEs (including recursive with warnings) | INSERT INTO ... SELECT | CREATE TABLE ... AS SELECT | UNION, UNION ALL, EXCEPT, and INTERSECT
 
-- **Table-level lineage** for all of the above.
-- **Column-level lineage** for explicit columns always, and for `*` when schema metadata is available.
+**SQL Constructs**
+All join types (INNER, LEFT, RIGHT, FULL, CROSS) | Window functions and OVER clauses | CASE expressions and scalar subqueries | Derived tables and table functions | GROUP BY and HAVING clauses | Set operations with multiple sources
 
-Unsupported syntax should be reported as issues, with partial lineage where possible rather than hard failure.
+**Dialect Coverage**
+Generic ANSI SQL | PostgreSQL with specific extensions | Snowflake syntax variants | BigQuery Standard SQL
 
----
+The engine reports unsupported syntax as structured issues while still producing partial lineage where possible. Check the test suite in `crates/flowscope-core/tests/` for detailed coverage examples.
 
-## Lineage Test Suite
+## Development Setup
 
-The lineage engine ships with an integration suite. Additions should extend either the fixture directories under `crates/flowscope-core/tests/fixtures/**` or the scenarios in `crates/flowscope-core/tests/lineage_engine.rs`.
+FlowScope uses a monorepo structure with both Rust and TypeScript workspaces. You'll need Rust (1.70+), Node.js (18+), and Yarn.
 
-Run the full suite (unit + integration) with:
+Clone and install dependencies:
 
 ```bash
-cargo test -p flowscope-core --test lineage_engine
+git clone https://github.com/melonamin/flowscope.git
+cd flowscope
+yarn install
 ```
 
-To generate a detailed test coverage report:
+Build everything:
 
 ```bash
-./scripts/generate_test_coverage.sh
+just build
+# or individually:
+just build-rust    # Rust workspace
+just build-wasm    # WASM module
+just build-ts      # TypeScript packages
 ```
 
-This script provides:
-- Test pass/fail summary
-- Test categorization (ANSI, DML, column lineage, etc.)
-- Coverage breakdown by SQL feature (SELECT, JOIN, INSERT, etc.)
+Run tests:
 
-| Scenario                               | SQL Constructs Exercised                                                                      | Tests / Fixtures                                                                                                                                                                                                                                                                                    | Status |
-|----------------------------------------|-----------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------|
-| ANSI core SELECT semantics             | Basic SELECT/WHERE, `GROUP BY`, `HAVING`, `VALUES` inline tables                             | `ansi_select_registers_single_table_and_columns`<br>`ansi_group_by_and_having_keep_single_table_reference`<br>`ansi_values_clause_requires_no_tables`                                                                                                                                              | ✅      |
-| ANSI joins & lateral sources           | INNER/LEFT/RIGHT/FULL/CROSS joins, `CROSS APPLY`, `UNNEST`                                   | `ansi_join_variants_capture_all_tables`<br>`ansi_cross_apply_tracks_lateral_sources`<br>`ansi_unnest_clause_keeps_base_table_lineage`                                                                                                                                                              | ✅      |
-| ANSI CTE + subquery graphing           | Multi-level CTEs, CTE reuse, scalar subqueries, correlated predicates, CTE shadowing         | `ansi_nested_ctes_register_each_virtual_table`<br>`ansi_reused_cte_is_deduplicated`<br>`ansi_scalar_subquery_introduces_additional_table`<br>`ansi_correlated_predicates_capture_all_sources`<br>`ansi_cte_shadowing_existing_table_prefers_cte`                                                 | ✅      |
-| ANSI column lineage semantics          | `SELECT *` expansion, schema-aware expansion, window functions, CASE expressions             | `ansi_star_without_schema_emits_approximate_lineage`<br>`ansi_star_with_schema_expands_columns`<br>`ansi_window_functions_produce_derivation_edges`<br>`ansi_case_expressions_emit_derivation_edges`                                                                                              | ✅      |
-| ANSI write statements & pipelines      | `INSERT ... SELECT`, CTAS, multi-statement flows producing cross-statement edges             | `ansi_insert_select_with_schema_flags_unknown_column`<br>`ansi_create_table_as_union_tracks_targets_and_sources`<br>`ansi_multi_statement_flow_updates_summary_and_cross_edges`                                                                                                                   | ✅      |
-| ANSI table factors & diagnostics       | Table functions (`TABLE()`), PIVOT/UNPIVOT warnings                                          | `ansi_table_function_emits_info_issue`<br>`ansi_pivot_usage_emits_warning`                                                                                                                                                                                                                         | ✅      |
-| Multi-dialect fixture sweep            | SELECT, JOIN, `WITH`, `INSERT`, `CREATE TABLE AS SELECT` across dialects                     | Fixture directories in `crates/flowscope-core/tests/fixtures/*/*.sql`<br>`multi_dialect_fixtures_cover_core_constructs`                                                                                                                                                                            | ✅      |
-| Cross-statement analytics pipeline     | Multi-CTE CTAS, staging table reuse, downstream `INSERT`/`SELECT`, global lineage edges      | `multi_stage_pipeline_emits_cross_statement_edges`                                                                                                                                                                                                                                                 | ✅      |
-| Recursive CTE guardrail                | `WITH RECURSIVE` detection + warning surfacing while keeping base table lineage intact       | `recursive_ctes_emit_warning_but_keep_lineage`                                                                                                                                                                                                                                                     | ✅      |
-| Virtual tables & deep subqueries       | Derived tables, EXISTS predicates, repeated table references, column-level graph edges       | `derived_tables_and_exists_predicates_produce_complete_lineage`                                                                                                                                                                                                                                    | ✅      |
-| Schema/search path resolution          | Default catalog/schema hints, search path ordering, column validation (`UNKNOWN_COLUMN`)     | `schema_metadata_and_search_path_resolve_identifiers`                                                                                                                                                                                                                                              | ✅      |
-| Set operations matrix                  | `UNION ALL`, `EXCEPT`, nested CTEs feeding unions with multiple physical sources             | `set_operations_track_all_source_tables`                                                                                                                                                                                                                                                           | ✅      |
+```bash
+just test          # All tests
+just test-rust     # Rust unit + integration
+just test-ts       # TypeScript/Vitest
+just test-lineage  # Lineage engine only
+```
 
-This matrix reflects the constructs already marked for coverage in `TODO.md` and doubles as a checklist for future statement types (MERGE, UPDATE, etc.).
+Start the demo app:
 
-## Pending Support (Known Gaps)
+```bash
+just dev
+# Opens http://localhost:5173
+```
 
-The following features are currently tracked by failing tests in the lineage suite and represent immediate roadmap priorities:
+The project uses [Just](https://github.com/casey/just) as a task runner. Run `just` without arguments to see all available commands.
 
-| Feature Area | Description | Failing Tests |
-| --- | --- | --- |
-| **HAVING Clause Subqueries** | Lineage extraction from subqueries nested within `HAVING` clauses. | `ansi_having_subquery_lineage` |
-| **Quoted Identifiers** | Proper case-sensitive handling and normalization of quoted identifiers (e.g., `"Users"` vs `users`). | `quoted_identifiers_and_case_sensitivity` |
+## Project Structure
 
+```
+flowscope/
+├── crates/
+│   ├── flowscope-core/      # Core SQL analysis engine (Rust)
+│   │   ├── src/
+│   │   │   ├── analyzer.rs          # Main analysis orchestration
+│   │   │   ├── analyzer/            # Modular analysis components
+│   │   │   │   ├── context.rs       # Per-statement state
+│   │   │   │   ├── resolution.rs    # Name resolution
+│   │   │   │   ├── diagnostics.rs   # Issue reporting
+│   │   │   │   └── helpers/         # Utility functions
+│   │   │   ├── parser/              # SQL dialect handling
+│   │   │   └── types/               # Request/response types
+│   │   └── tests/                   # Comprehensive test suite
+│   └── flowscope-wasm/      # WebAssembly bindings
+│
+├── packages/
+│   ├── core/                # @pondpilot/flowscope-core
+│   │   ├── src/
+│   │   │   ├── analyzer.ts          # Public API
+│   │   │   ├── wasm-loader.ts       # WASM initialization
+│   │   │   └── types.ts             # TypeScript definitions
+│   │   └── tests/                   # API + integration tests
+│   │
+│   └── react/               # @pondpilot/flowscope-react
+│       ├── src/
+│       │   ├── components/          # React components
+│       │   │   ├── LineageExplorer.tsx
+│       │   │   ├── GraphView.tsx
+│       │   │   ├── SqlView.tsx
+│       │   │   └── ui/              # Reusable primitives
+│       │   ├── store.ts             # Zustand state management
+│       │   └── utils/               # Layout + graph builders
+│       └── tests/
+│
+├── app/                     # Demo web application
+│   └── src/
+│       ├── components/              # App-level components
+│       ├── hooks/                   # React hooks
+│       └── lib/                     # Project state management
+│
+└── docs/                    # Architecture and guides
+```
 
----
+## Testing
 
-## Issues & Diagnostics
+The Rust core has extensive integration tests covering SQL feature combinations across all supported dialects. Tests are organized by SQL construct and use fixture files for readability:
 
-FlowScope attaches structured **issues** to analysis results:
+```bash
+# Run full lineage test suite
+just test-lineage
 
-- Severity:
-  - `info`
-  - `warning`
-  - `error`
-- Example issue codes:
-  - `PARSE_ERROR`
-  - `UNSUPPORTED_SYNTAX`
-  - `APPROXIMATE_LINEAGE`
-- Each issue can include:
-  - A human-readable message.
-  - Optional `span` (start/end offsets) to highlight the relevant part of the SQL.
+# Run specific test pattern
+just test-lineage-filter "cte"
 
-UI components can use these to:
+# Generate coverage report
+just coverage
+```
 
-- Show an issues panel.
-- Highlight problematic tokens.
-- Explain when lineage is approximate.
+TypeScript packages include unit tests for the API layer and WASM loading. React component tests use Vitest with jsdom.
 
----
+## Diagnostics and Issues
 
-## Performance & Web Workers
+FlowScope attaches structured issues to analysis results rather than failing silently. Each issue includes a severity level (info, warning, error), a machine-readable code, and an optional source span:
 
-For small/moderate queries you can call `analyzeSql` directly.
+```typescript
+result.issues.forEach(issue => {
+  console.log(`${issue.severity}: ${issue.message}`);
+  if (issue.span) {
+    console.log(`  at characters ${issue.span.start}-${issue.span.end}`);
+  }
+});
+```
 
-For larger scripts (multi-hundred-line dbt models, for example), use the **Web Worker helper** from `@pondpilot/flowscope-core` to avoid blocking the UI thread. The helper:
-
-- Spawns a worker.
-- Initializes the WASM engine inside it.
-- Posts `AnalyzeRequest` messages and returns `AnalyzeResult` via Promises.
-
-Details and examples live in the `docs` directory and the worker helper module.
-
----
-
-## Roadmap (High-Level)
-
-- ✅ Rust core + WASM wrapper + TypeScript API.
-- ✅ Table- and column-level lineage for core analytics constructs.
-- ✅ React viewer components + web demo.
-- ⏳ Additional dialects (MySQL, Redshift, Databricks SQL, …).
-- ⏳ More statement types (`UPDATE`, `DELETE`, `MERGE`).
-- ⏳ Export to OpenLineage-style formats.
-- ⏳ Example integrations (browser extension, VS Code extension).
-
----
+Common issue codes include `PARSE_ERROR` for syntax problems, `UNSUPPORTED_SYNTAX` for constructs the engine doesn't handle yet, and `APPROXIMATE_LINEAGE` when wildcards are used without schema metadata. UI components can use spans to highlight problematic SQL fragments.
 
 ## Contributing
 
-FlowScope is designed as a **library-first** project:
+Contributions are welcome for new dialect support, additional statement types, improved lineage semantics, and viewer enhancements. The project follows standard Rust and TypeScript conventions:
 
-- Contributions are welcome for:
-  - New dialects.
-  - Additional statement coverage.
-  - Improved lineage semantics.
-  - Viewer UX and layouts.
-- Tests should cover:
-  - Core lineage behavior for new features.
-  - Regression cases for dialect-specific syntax.
-  - TS/React integration where applicable.
+**Before submitting:**
+- Run `just check` to validate formatting, linting, and tests
+- Add test coverage for new SQL constructs in `crates/flowscope-core/tests/`
+- Update type definitions if modifying the request/response structure
+- Ensure WASM builds successfully with `just build-wasm`
 
-See `docs/` for architecture, engine, and branding specs that govern how new features should be added.
+The architecture documentation in `docs/` provides context for understanding how the pieces fit together.
 
----
+## Use Cases
+
+**SQL Editor Integration**
+Add a lineage viewer alongside your query editor. Users can see table dependencies and column flows before running expensive queries.
+
+**Browser Extensions**
+Overlay lineage visualization on cloud data warehouse UIs (Snowflake, BigQuery, Databricks). Extract query text from the page, analyze it locally, and show results in a popup.
+
+**IDE Plugins**
+Build VS Code or JetBrains extensions that provide lineage-on-hover for SQL files, especially useful for dbt projects with complex model dependencies.
+
+**Impact Analysis Tools**
+Show downstream dependencies when proposing schema changes. FlowScope can batch-analyze multiple queries to build a comprehensive dependency graph.
+
+**Data Governance Platforms**
+Integrate into internal data catalogs to automatically document table relationships from query logs, all processed client-side for security.
+
+## Roadmap
+
+The core lineage engine and visualization components are production-ready. Current development focuses on:
+
+- Additional dialect support (MySQL, Redshift, Databricks SQL)
+- Extended statement coverage (UPDATE, DELETE, MERGE)
+- OpenLineage format export for ecosystem integration
+- Web Worker helper for processing large query files
+- Example integrations (browser extension, VS Code plugin)
 
 ## License
 
-License information will be specified at the repo level. The intention is:
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.
 
-- Core engine: a permissive open-source license (e.g. MIT/Apache-2.0).
-- UI components: same or compatible license.
+Copyright 2025 PondPilot Team
 
-Check the root `LICENSE` file in this repository for the authoritative terms.
+## Acknowledgments
+
+FlowScope builds on [sqlparser-rs](https://github.com/sqlparser-rs/sqlparser-rs), an excellent SQL parsing library with multi-dialect support. The visualization layer uses [@xyflow/react](https://reactflow.dev/) for graph rendering and [CodeMirror](https://codemirror.net/) for SQL editing.
+
+---
+
+Part of the [PondPilot](https://github.com/pondpilot/pondpilot) project.
