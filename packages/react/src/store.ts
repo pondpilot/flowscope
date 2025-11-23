@@ -1,4 +1,6 @@
-import { create } from 'zustand';
+import { createContext, createElement, useContext, type ReactNode } from 'react';
+import { useStore } from 'zustand';
+import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { AnalyzeResult, Span } from '@pondpilot/flowscope-core';
 import type { LineageViewMode, NavigationRequest } from './types';
 
@@ -59,79 +61,110 @@ export interface LineageState {
 }
 
 /**
- * Zustand store for SQL lineage analysis state.
- * Replaces the previous React Context implementation with better performance
- * and simpler API.
+ * Build a new, isolated Zustand store instance.
  */
-export const useLineageStore = create<LineageState>((set) => ({
-  // Initial state
-  result: null,
-  sql: '',
-  selectedNodeId: null,
-  selectedStatementIndex: 0,
-  highlightedSpan: null,
-  searchTerm: '',
-  viewMode: loadViewMode(),
-  collapsedNodeIds: new Set(),
-  showScriptTables: false,
-  navigationRequest: null,
+export function createLineageStore(initialState?: Partial<LineageState>): StoreApi<LineageState> {
+  const initialViewMode = initialState?.viewMode ?? loadViewMode();
 
-  // Actions
-  setResult: (result) =>
-    set((state) => {
-      const statementCount = result?.statements.length ?? 0;
-      const maxIndex = Math.max(0, statementCount - 1);
-      const newSelectedStatementIndex = Math.max(0, Math.min(state.selectedStatementIndex, maxIndex));
+  return createStore<LineageState>((set) => ({
+    // Initial state
+    result: null,
+    sql: '',
+    selectedNodeId: null,
+    selectedStatementIndex: 0,
+    highlightedSpan: null,
+    searchTerm: '',
+    viewMode: initialViewMode,
+    collapsedNodeIds: new Set(),
+    showScriptTables: false,
+    navigationRequest: null,
+    ...initialState,
 
-      return {
-        result,
+    // Actions
+    setResult: (result) =>
+      set((state) => {
+        const statementCount = result?.statements.length ?? 0;
+        const maxIndex = Math.max(0, statementCount - 1);
+        const newSelectedStatementIndex = Math.max(
+          0,
+          Math.min(state.selectedStatementIndex, maxIndex)
+        );
+
+        return {
+          result,
+          selectedNodeId: null,
+          highlightedSpan: null,
+          collapsedNodeIds: new Set(),
+          selectedStatementIndex: statementCount === 0 ? 0 : newSelectedStatementIndex,
+        };
+      }),
+
+    setSql: (sql) => set({ sql }),
+
+    selectNode: (nodeId) =>
+      set({
+        selectedNodeId: nodeId,
+        highlightedSpan: nodeId === null ? null : undefined,
+      }),
+
+    toggleNodeCollapse: (nodeId) =>
+      set((state) => {
+        const newCollapsedNodeIds = new Set(state.collapsedNodeIds);
+        if (newCollapsedNodeIds.has(nodeId)) {
+          newCollapsedNodeIds.delete(nodeId);
+        } else {
+          newCollapsedNodeIds.add(nodeId);
+        }
+        return { collapsedNodeIds: newCollapsedNodeIds };
+      }),
+
+    selectStatement: (index) =>
+      set({
+        selectedStatementIndex: index,
         selectedNodeId: null,
         highlightedSpan: null,
         collapsedNodeIds: new Set(),
-        selectedStatementIndex: statementCount === 0 ? 0 : newSelectedStatementIndex,
-      };
-    }),
+      }),
 
-  setSql: (sql) => set({ sql }),
+    highlightSpan: (span) => set({ highlightedSpan: span }),
 
-  selectNode: (nodeId) =>
-    set({
-      selectedNodeId: nodeId,
-      highlightedSpan: nodeId === null ? null : undefined,
-    }),
+    setSearchTerm: (term) => set({ searchTerm: term }),
 
-  toggleNodeCollapse: (nodeId) =>
-    set((state) => {
-      const newCollapsedNodeIds = new Set(state.collapsedNodeIds);
-      if (newCollapsedNodeIds.has(nodeId)) {
-        newCollapsedNodeIds.delete(nodeId);
-      } else {
-        newCollapsedNodeIds.add(nodeId);
-      }
-      return { collapsedNodeIds: newCollapsedNodeIds };
-    }),
+    setViewMode: (mode) => {
+      saveViewMode(mode);
+      set({ viewMode: mode });
+    },
 
-  selectStatement: (index) =>
-    set({
-      selectedStatementIndex: index,
-      selectedNodeId: null,
-      highlightedSpan: null,
-      collapsedNodeIds: new Set(),
-    }),
+    toggleShowScriptTables: () => set((state) => ({ showScriptTables: !state.showScriptTables })),
 
-  highlightSpan: (span) => set({ highlightedSpan: span }),
+    requestNavigation: (request) => set({ navigationRequest: request }),
+  }));
+}
 
-  setSearchTerm: (term) => set({ searchTerm: term }),
+const LineageStoreContext = createContext<StoreApi<LineageState> | null>(null);
 
-  setViewMode: (mode) => {
-    saveViewMode(mode);
-    set({ viewMode: mode });
-  },
+interface LineageStoreProviderProps {
+  store: StoreApi<LineageState>;
+  children: ReactNode;
+}
 
-  toggleShowScriptTables: () => set((state) => ({ showScriptTables: !state.showScriptTables })),
+export function LineageStoreProvider({ store, children }: LineageStoreProviderProps) {
+  return createElement(LineageStoreContext.Provider, { value: store, children });
+}
 
-  requestNavigation: (request) => set({ navigationRequest: request }),
-}));
+export function useLineageStore(): LineageState;
+export function useLineageStore<T>(selector: (state: LineageState) => T): T;
+export function useLineageStore<T>(selector?: (state: LineageState) => T) {
+  const store = useContext(LineageStoreContext);
+  if (!store) {
+    throw new Error('useLineageStore must be used within a LineageProvider');
+  }
+
+  if (selector) {
+    return useStore(store, selector);
+  }
+  return useStore(store);
+}
 
 /**
  * Hook to access the full lineage store.

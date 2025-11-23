@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useMemo } from 'react';
 import { useLineage } from '@pondpilot/flowscope-react';
 import {
   GraphView,
@@ -12,36 +12,52 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/components/ui/tabs';
-import type { SchemaTable } from '@pondpilot/flowscope-core';
+import type { SchemaTable, AnalyzeResult } from '@pondpilot/flowscope-core';
 
-const MOCK_SCHEMA: SchemaTable[] = [
-  {
-    name: 'users',
-    columns: [
-      { name: 'id', dataType: 'integer' },
-      { name: 'name', dataType: 'varchar' },
-      { name: 'email', dataType: 'varchar' },
-      { name: 'created_at', dataType: 'timestamp' },
-    ],
-  },
-  {
-    name: 'orders',
-    columns: [
-      { name: 'id', dataType: 'integer' },
-      { name: 'user_id', dataType: 'integer' },
-      { name: 'total', dataType: 'decimal' },
-      { name: 'created_at', dataType: 'timestamp' },
-    ],
-  },
-  {
-    name: 'products',
-    columns: [
-      { name: 'id', dataType: 'integer' },
-      { name: 'name', dataType: 'varchar' },
-      { name: 'price', dataType: 'decimal' },
-    ],
-  },
-];
+/**
+ * Extract schema tables from the analysis result by grouping columns by their parent tables.
+ */
+function extractSchemaFromResult(result: AnalyzeResult): SchemaTable[] {
+  const tableMap = new Map<string, Set<string>>();
+
+  // Collect all tables and their columns from the lineage nodes
+  for (const statement of result.statements) {
+    for (const node of statement.nodes) {
+      if (node.type === 'table' || node.type === 'cte') {
+        const tableName = node.qualifiedName || node.label;
+        if (!tableMap.has(tableName)) {
+          tableMap.set(tableName, new Set());
+        }
+      } else if (node.type === 'column') {
+        // Try to determine which table this column belongs to
+        // This is a simplified approach - in a real scenario, you'd need more metadata
+        const columnName = node.label;
+
+        // Find edges that connect this column to a table
+        const parentEdge = statement.edges.find(
+          edge => edge.to === node.id && edge.type === 'ownership'
+        );
+
+        if (parentEdge) {
+          const parentNode = statement.nodes.find(n => n.id === parentEdge.from);
+          if (parentNode && (parentNode.type === 'table' || parentNode.type === 'cte')) {
+            const tableName = parentNode.qualifiedName || parentNode.label;
+            if (!tableMap.has(tableName)) {
+              tableMap.set(tableName, new Set());
+            }
+            tableMap.get(tableName)!.add(columnName);
+          }
+        }
+      }
+    }
+  }
+
+  // Convert map to SchemaTable array
+  return Array.from(tableMap.entries()).map(([name, columnsSet]) => ({
+    name,
+    columns: Array.from(columnsSet).map(columnName => ({ name: columnName })),
+  }));
+}
 
 /**
  * Main analysis view component showing lineage graph, schema, and details.
@@ -50,6 +66,11 @@ export function AnalysisView() {
   const { state } = useLineage();
   const { result } = state;
   const graphContainerRef = useRef<HTMLDivElement>(null);
+
+  const schema = useMemo(() => {
+    if (!result) return [];
+    return extractSchemaFromResult(result);
+  }, [result]);
 
   if (!result) {
     return (
@@ -115,7 +136,7 @@ export function AnalysisView() {
           </TabsContent>
 
           <TabsContent value="schema" className="h-full mt-0 p-0 absolute inset-0">
-            <SchemaView schema={MOCK_SCHEMA} />
+            <SchemaView schema={schema} />
           </TabsContent>
 
           {hasIssues && (

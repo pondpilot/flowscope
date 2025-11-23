@@ -41,15 +41,16 @@ export async function analyzeSql(request: AnalyzeRequest): Promise<AnalyzeResult
   }
 
   // Validate request
-  const hasFiles = request.files && request.files.length > 0;
-  const hasSql = request.sql && typeof request.sql === 'string' && request.sql.trim().length > 0;
+  const hasFiles = Array.isArray(request.files) && request.files.length > 0;
+  const hasSqlString = typeof request.sql === 'string';
 
-  if (!hasFiles && !hasSql) {
-    throw new Error('Invalid request: must provide either non-empty sql string or files list');
-  }
-
-  if (request.sql && typeof request.sql !== 'string') {
-     throw new Error('Invalid request: sql must be a string');
+  if (!hasFiles) {
+    if (!hasSqlString) {
+      throw new Error('Invalid request: sql must be a string');
+    }
+    if (request.sql.trim().length === 0) {
+      throw new Error('Invalid request: sql must be a non-empty string');
+    }
   }
 
   if (!request.dialect) {

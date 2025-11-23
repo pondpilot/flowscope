@@ -1,6 +1,7 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import type { AnalyzeResult } from '@pondpilot/flowscope-core';
-import { useLineageStore } from './store';
+import { createLineageStore, LineageStoreProvider, type LineageState } from './store';
+import type { StoreApi } from 'zustand';
 
 /**
  * Props for the LineageProvider component.
@@ -36,21 +37,26 @@ export function LineageProvider({
   initialResult = null,
   initialSql = '',
 }: LineageProviderProps): JSX.Element {
-  const setResult = useLineageStore((state) => state.setResult);
-  const setSql = useLineageStore((state) => state.setSql);
+  const storeRef = useRef<StoreApi<LineageState>>();
+
+  if (!storeRef.current) {
+    storeRef.current = createLineageStore();
+  }
+
+  const store = storeRef.current;
 
   // Initialize store with initial values
   useEffect(() => {
     if (initialResult !== null) {
-      setResult(initialResult);
+      store.getState().setResult(initialResult);
     }
-  }, [initialResult, setResult]);
+  }, [initialResult, store]);
 
   useEffect(() => {
     if (initialSql) {
-      setSql(initialSql);
+      store.getState().setSql(initialSql);
     }
-  }, [initialSql, setSql]);
+  }, [initialSql, store]);
 
-  return <>{children}</>;
+  return <LineageStoreProvider store={store}>{children}</LineageStoreProvider>;
 }

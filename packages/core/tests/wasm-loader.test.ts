@@ -42,6 +42,14 @@ describe('wasm-loader', () => {
     expect(loader.isWasmInitialized()).toBe(true);
   });
 
+  it('forwards wasmUrl option to the wasm initializer', async () => {
+    const loader = await loadLoader();
+
+    await loader.initWasm({ wasmUrl: '/custom/flowscope.wasm' });
+
+    expect(wasmModuleMock.default).toHaveBeenCalledWith('/custom/flowscope.wasm');
+  });
+
   it('throws if analyze_sql_json is missing on the wasm exports', async () => {
     const originalAnalyze = wasmModuleMock.analyze_sql_json;
     (wasmModuleMock as unknown as { analyze_sql_json?: undefined }).analyze_sql_json = undefined;

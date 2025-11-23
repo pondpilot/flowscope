@@ -14,7 +14,7 @@ pub use common::{issue_codes, CaseSensitivity, Issue, IssueCount, Severity, Span
 pub use legacy::LineageResult;
 pub use request::{
     AnalysisOptions, AnalyzeRequest, ColumnSchema, Dialect, SchemaMetadata, SchemaNamespaceHint,
-    SchemaTable,
+    SchemaTable, FileSource,
 };
 pub use response::{
     AnalyzeResult, CanonicalName, Edge, EdgeType, GlobalEdge, GlobalLineage, GlobalNode, Node,

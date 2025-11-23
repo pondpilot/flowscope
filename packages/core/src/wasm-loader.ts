@@ -10,7 +10,7 @@ export interface InitWasmOptions {
  * Returns the initialized WASM module.
  */
 export async function initWasm(
-  _options: InitWasmOptions = {}
+  options: InitWasmOptions = {}
 ): Promise<typeof import('../wasm/flowscope_wasm')> {
   // Return cached module if already initialized
   if (wasmModule) {
@@ -30,7 +30,8 @@ export async function initWasm(
 
       // Explicitly initialize the WASM module
       if (typeof wasm.default === 'function') {
-        await wasm.default();
+        // Pass through custom URL when provided so host apps can control asset location
+        await wasm.default(options.wasmUrl ?? undefined);
       }
 
       // Verify that the module is actually initialized by checking for required functions

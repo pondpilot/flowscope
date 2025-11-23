@@ -1,5 +1,4 @@
 use crate::error::ParseError;
-use crate::parser::parse_sql_with_dialect;
 use crate::types::*;
 use serde_json::json;
 use sqlparser::ast::{
@@ -7,6 +6,18 @@ use sqlparser::ast::{
     SetExpr, Statement, TableFactor, TableWithJoins,
 };
 use std::collections::{HashMap, HashSet};
+
+mod context;
+mod helpers;
+mod input;
+
+use context::{ColumnRef, OutputColumn, StatementContext};
+use helpers::{
+    classify_query_type, extract_simple_name, generate_column_node_id, generate_edge_id,
+    generate_node_id, is_quoted_identifier, is_simple_column_ref, parse_canonical_name,
+    split_qualified_identifiers, unquote_identifier,
+};
+use input::{collect_statements, StatementInput};
 
 /// Main entry point for SQL analysis
 pub fn analyze(request: &AnalyzeRequest) -> AnalyzeResult {
@@ -226,41 +237,15 @@ impl<'a> Analyzer<'a> {
     }
 
     fn analyze(&mut self) -> AnalyzeResult {
-        // Check if we have multiple files or single SQL
-        let mut all_statements = Vec::new();
-        
-        if let Some(files) = &self.request.files {
-            // Analyze each file
-            for file in files {
-                match parse_sql_with_dialect(&file.content, self.request.dialect) {
-                    Ok(stmts) => {
-                        for stmt in stmts {
-                            all_statements.push((stmt, Some(file.name.clone())));
-                        }
-                    }
-                    Err(e) => {
-                         self.issues.push(Issue::error(issue_codes::PARSE_ERROR, format!("Error parsing {}: {}", file.name, e)));
-                    }
-                }
-            }
-        } else {
-            // Single SQL analysis
-            match parse_sql_with_dialect(&self.request.sql, self.request.dialect) {
-                Ok(stmts) => {
-                    for stmt in stmts {
-                        all_statements.push((stmt, self.request.source_name.clone()));
-                    }
-                }
-                Err(e) => {
-                    self.issues
-                        .push(Issue::error(issue_codes::PARSE_ERROR, e.to_string()));
-                    return self.build_result();
-                }
-            }
+        let (all_statements, mut preflight_issues) = collect_statements(self.request);
+        self.issues.append(&mut preflight_issues);
+
+        if all_statements.is_empty() {
+            return self.build_result();
         }
 
         // Analyze all statements
-        for (index, (statement, source_name)) in all_statements.into_iter().enumerate() {
+        for (index, StatementInput { statement, source_name }) in all_statements.into_iter().enumerate() {
             match self.analyze_statement(index, &statement, source_name) {
                 Ok(lineage) => {
                     self.statement_lineages.push(lineage);
@@ -1699,257 +1684,6 @@ impl<'a> Analyzer<'a> {
     }
 }
 
-/// Context for analyzing a single statement
-struct StatementContext {
-    statement_index: usize,
-    nodes: Vec<Node>,
-    edges: Vec<Edge>,
-    node_ids: HashSet<String>,
-    edge_ids: HashSet<String>,
-    /// CTE name -> node ID
-    cte_definitions: HashMap<String, String>,
-    /// Alias -> canonical table name
-    table_aliases: HashMap<String, String>,
-    /// Subquery aliases (for reference tracking)
-    subquery_aliases: HashSet<String>,
-    /// Last join/operation type for edge labeling
-    last_operation: Option<String>,
-    /// Table canonical name -> node ID (for column ownership)
-    table_node_ids: HashMap<String, String>,
-    /// Output columns for this statement (for column lineage)
-    output_columns: Vec<OutputColumn>,
-    /// CTE columns: CTE name -> list of output columns
-    cte_columns: HashMap<String, Vec<OutputColumn>>,
-}
-
-/// Represents an output column in the SELECT list
-#[derive(Debug, Clone)]
-struct OutputColumn {
-    /// Alias or derived name for the column
-    name: String,
-    /// Source columns that contribute to this output
-    #[allow(dead_code)]
-    sources: Vec<ColumnRef>,
-    /// Expression text for computed columns
-    #[allow(dead_code)]
-    expression: Option<String>,
-    /// Node ID for this column
-    node_id: String,
-}
-
-/// A reference to a source column
-#[derive(Debug, Clone)]
-struct ColumnRef {
-    /// Table name or alias
-    table: Option<String>,
-    /// Column name
-    column: String,
-    /// Resolved table canonical name (if known)
-    #[allow(dead_code)]
-    resolved_table: Option<String>,
-}
-
-impl StatementContext {
-    fn new(statement_index: usize) -> Self {
-        Self {
-            statement_index,
-            nodes: Vec::new(),
-            edges: Vec::new(),
-            node_ids: HashSet::new(),
-            edge_ids: HashSet::new(),
-            cte_definitions: HashMap::new(),
-            table_aliases: HashMap::new(),
-            subquery_aliases: HashSet::new(),
-            last_operation: None,
-            table_node_ids: HashMap::new(),
-            output_columns: Vec::new(),
-            cte_columns: HashMap::new(),
-        }
-    }
-
-    fn add_node(&mut self, node: Node) -> String {
-        let id = node.id.clone();
-        if self.node_ids.insert(id.clone()) {
-            self.nodes.push(node);
-        }
-        id
-    }
-
-    fn add_edge(&mut self, edge: Edge) {
-        let id = edge.id.clone();
-        if self.edge_ids.insert(id) {
-            self.edges.push(edge);
-        }
-    }
-}
-
-/// Generate a deterministic node ID based on type and name
-fn generate_node_id(node_type: &str, name: &str) -> String {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-
-    let mut hasher = DefaultHasher::new();
-    node_type.hash(&mut hasher);
-    name.hash(&mut hasher);
-    let hash = hasher.finish();
-
-    format!("{node_type}_{hash:016x}")
-}
-
-/// Generate a deterministic edge ID
-fn generate_edge_id(from: &str, to: &str) -> String {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-
-    let mut hasher = DefaultHasher::new();
-    from.hash(&mut hasher);
-    to.hash(&mut hasher);
-    let hash = hasher.finish();
-
-    format!("edge_{hash:016x}")
-}
-
-/// Generate a deterministic column node ID
-fn generate_column_node_id(parent_id: Option<&str>, column_name: &str) -> String {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-
-    let mut hasher = DefaultHasher::new();
-    "column".hash(&mut hasher);
-    if let Some(parent) = parent_id {
-        parent.hash(&mut hasher);
-    }
-    column_name.hash(&mut hasher);
-    let hash = hasher.finish();
-
-    format!("column_{hash:016x}")
-}
-
-/// Check if an expression is a simple column reference (no transformation)
-fn is_simple_column_ref(expr: &Expr) -> bool {
-    matches!(expr, Expr::Identifier(_) | Expr::CompoundIdentifier(_))
-}
-
-/// Extract simple name from potentially qualified name
-fn extract_simple_name(name: &str) -> String {
-    let mut parts = split_qualified_identifiers(name);
-    parts.pop().unwrap_or_else(|| name.to_string())
-}
-
-/// Parse a qualified name string into CanonicalName
-fn parse_canonical_name(name: &str) -> CanonicalName {
-    let parts = split_qualified_identifiers(name);
-    match parts.len() {
-        0 => CanonicalName::table(None, None, String::new()),
-        1 => CanonicalName::table(None, None, parts[0].clone()),
-        2 => CanonicalName::table(None, Some(parts[0].clone()), parts[1].clone()),
-        3 => CanonicalName::table(
-            Some(parts[0].clone()),
-            Some(parts[1].clone()),
-            parts[2].clone(),
-        ),
-        _ => CanonicalName::table(None, None, name.to_string()),
-    }
-}
-
-fn split_qualified_identifiers(name: &str) -> Vec<String> {
-    let mut parts = Vec::new();
-    let mut current = String::new();
-    let mut chars = name.chars().peekable();
-    let mut active_quote: Option<char> = None;
-
-    while let Some(ch) = chars.next() {
-        if let Some(q) = active_quote {
-            current.push(ch);
-            if ch == q {
-                if matches!(q, '"' | '\'' | '`') {
-                    if let Some(next) = chars.peek() {
-                        if *next == q {
-                            current.push(chars.next().unwrap());
-                            continue;
-                        }
-                    }
-                }
-                active_quote = None;
-            } else if q == ']' && ch == ']' {
-                active_quote = None;
-            }
-            continue;
-        }
-
-        match ch {
-            '"' | '\'' | '`' => {
-                active_quote = Some(ch);
-                current.push(ch);
-            }
-            '[' => {
-                active_quote = Some(']');
-                current.push(ch);
-            }
-            '.' => {
-                if !current.is_empty() {
-                    parts.push(current.trim().to_string());
-                    current.clear();
-                }
-            }
-            _ => current.push(ch),
-        }
-    }
-
-    if !current.is_empty() {
-        parts.push(current.trim().to_string());
-    }
-
-    if parts.is_empty() && !name.is_empty() {
-        vec![name.trim().to_string()]
-    } else {
-        parts
-    }
-}
-
-fn is_quoted_identifier(part: &str) -> bool {
-    let trimmed = part.trim();
-    if trimmed.len() < 2 {
-        return false;
-    }
-    let first = trimmed.chars().next().unwrap();
-    let last = trimmed.chars().last().unwrap();
-    matches!(
-        (first, last),
-        ('"', '"') | ('`', '`') | ('[', ']') | ('\'', '\'')
-    )
-}
-
-fn unquote_identifier(part: &str) -> String {
-    let trimmed = part.trim();
-    if trimmed.len() < 2 {
-        return trimmed.to_string();
-    }
-
-    if is_quoted_identifier(trimmed) {
-        trimmed[1..trimmed.len() - 1].to_string()
-    } else {
-        trimmed.to_string()
-    }
-}
-
-/// Classify the type of a query
-fn classify_query_type(query: &Query) -> String {
-    if query.with.is_some() {
-        "WITH".to_string()
-    } else {
-        match &*query.body {
-            SetExpr::Select(_) => "SELECT".to_string(),
-            SetExpr::SetOperation { op, .. } => match op {
-                ast::SetOperator::Union => "UNION".to_string(),
-                ast::SetOperator::Intersect => "INTERSECT".to_string(),
-                ast::SetOperator::Except => "EXCEPT".to_string(),
-            },
-            SetExpr::Values(_) => "VALUES".to_string(),
-            _ => "SELECT".to_string(),
-        }
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -2266,6 +2000,58 @@ mod tests {
             .issues
             .iter()
             .any(|i| i.code == issue_codes::UNRESOLVED_REFERENCE));
+    }
+
+    #[test]
+    fn test_invalid_request_without_sql_or_files() {
+        let request = AnalyzeRequest {
+            sql: "".to_string(),
+            files: Some(vec![]),
+            dialect: Dialect::Generic,
+            source_name: None,
+            options: None,
+            schema: None,
+        };
+
+        let result = analyze(&request);
+
+        assert!(result.summary.has_errors);
+        assert_eq!(result.statements.len(), 0);
+        assert!(result
+            .issues
+            .iter()
+            .any(|i| i.code == issue_codes::INVALID_REQUEST));
+    }
+
+    #[test]
+    fn test_files_can_partially_succeed_when_one_fails() {
+        let request = AnalyzeRequest {
+            sql: "".to_string(),
+            files: Some(vec![
+                crate::types::FileSource {
+                    name: "good.sql".to_string(),
+                    content: "SELECT * FROM users;".to_string(),
+                },
+                crate::types::FileSource {
+                    name: "bad.sql".to_string(),
+                    content: "SELECT FROM".to_string(),
+                },
+            ]),
+            dialect: Dialect::Generic,
+            source_name: None,
+            options: None,
+            schema: None,
+        };
+
+        let result = analyze(&request);
+
+        // One statement analyzed, one issue captured
+        assert_eq!(result.statements.len(), 1);
+        assert!(result
+            .issues
+            .iter()
+            .any(|i| i.code == issue_codes::PARSE_ERROR && i.message.contains("bad.sql")));
+        assert!(result.summary.has_errors);
     }
 
     #[test]

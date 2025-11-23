@@ -141,6 +141,7 @@ pub struct IssueCount {
 /// Machine-readable issue codes.
 pub mod issue_codes {
     pub const PARSE_ERROR: &str = "PARSE_ERROR";
+    pub const INVALID_REQUEST: &str = "INVALID_REQUEST";
     pub const DIALECT_FALLBACK: &str = "DIALECT_FALLBACK";
     pub const UNSUPPORTED_SYNTAX: &str = "UNSUPPORTED_SYNTAX";
     pub const UNSUPPORTED_RECURSIVE_CTE: &str = "UNSUPPORTED_RECURSIVE_CTE";

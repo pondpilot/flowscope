@@ -12,7 +12,7 @@ import type { Node as FlowNode, Edge as FlowEdge } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Search, Network, LayoutList } from 'lucide-react';
 
-import { useLineage, useLineageActions } from '../store';
+import { useLineage } from '../store';
 import type { GraphViewProps, TableNodeData } from '../types';
 import { getLayoutedElements } from '../utils/layout';
 import { findConnectedElements } from '../utils/graphTraversal';
