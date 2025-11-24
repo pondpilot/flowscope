@@ -16,6 +16,8 @@ export {
   useLineageActions,
 } from './store';
 
+export { useGraphSearch } from './hooks/useGraphSearch';
+
 // Context (legacy, for backward compatibility - wraps Zustand store)
 export { LineageProvider } from './context';
 export type { LineageProviderProps } from './context';

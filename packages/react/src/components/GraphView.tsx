@@ -28,9 +28,9 @@ import { ColumnNode } from './ColumnNode';
 import { SimpleTableNode } from './SimpleTableNode';
 import { TableNode } from './TableNode';
 import { AnimatedEdge } from './AnimatedEdge';
-import { Input } from './ui/input';
 import { ExportMenu } from './ExportMenu';
 import { ViewModeSelector } from './ViewModeSelector';
+import { GraphSearchControl } from './GraphSearchControl';
 import {
   GraphTooltip,
   GraphTooltipContent,
@@ -449,21 +449,10 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
               </>
             )}
           </div>
-          <div
-            className="relative flex items-center rounded-lg border border-slate-200/60 bg-white px-2 py-1 shadow-sm backdrop-blur-sm"
-            style={{ minWidth: UI_CONSTANTS.SEARCH_MIN_WIDTH }}
-          >
-            <Search
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400"
-              strokeWidth={1.5}
-            />
-            <Input
-              placeholder="Search..."
-              value={localSearchTerm}
-              onChange={(e) => setLocalSearchTerm(e.target.value)}
-              className="h-8 border-0 bg-transparent pl-8 pr-2 text-sm shadow-none placeholder:text-slate-400 focus-visible:ring-0"
-            />
-          </div>
+          <GraphSearchControl 
+            searchTerm={localSearchTerm} 
+            onSearchTermChange={setLocalSearchTerm} 
+          />
         </Panel>
         <Panel position="top-right" className="flex gap-3">
           <div className="flex items-center rounded-lg border border-slate-200/60 bg-white px-1 py-1 shadow-sm backdrop-blur-sm">
