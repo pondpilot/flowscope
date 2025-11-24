@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import type { GlobalNode } from '@pondpilot/flowscope-core';
 import { useLineageStore } from '../store';
 
 export interface SearchResultItem {

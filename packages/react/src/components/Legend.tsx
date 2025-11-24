@@ -1,0 +1,232 @@
+import { useState, type ReactNode } from 'react';
+import { ChevronDown, ChevronUp, Table2, Database, FileCode, Columns3 } from 'lucide-react';
+import { COLORS, EDGE_STYLES } from '../constants';
+
+interface LegendProps {
+  viewMode?: 'script' | 'table' | 'column';
+}
+
+/**
+ * Legend component explaining the visual elements in the lineage graph.
+ * Collapsible panel that shows in the bottom-left corner of the graph.
+ */
+export function Legend({ viewMode = 'table' }: LegendProps): JSX.Element {
+  const [isExpanded, setIsExpanded] = useState(true);
+
+  return (
+    <div
+      className="rounded-lg border bg-white shadow-sm transition-all duration-200"
+      style={{ borderColor: COLORS.nodes.table.border }}
+    >
+      {/* Header - always visible */}
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-sm font-medium hover:bg-gray-50"
+        style={{ color: COLORS.nodes.table.text }}
+      >
+        <span>Legend</span>
+        {isExpanded ? (
+          <ChevronDown className="h-4 w-4" />
+        ) : (
+          <ChevronUp className="h-4 w-4" />
+        )}
+      </button>
+
+      {/* Expanded content */}
+      {isExpanded && (
+        <div
+          className="border-t px-3 py-2 space-y-3"
+          style={{ borderColor: COLORS.nodes.table.border }}
+        >
+          {/* Nodes section */}
+          <div>
+            <div
+              className="text-xs font-semibold uppercase tracking-wider mb-2"
+              style={{ color: COLORS.nodes.table.textSecondary }}
+            >
+              Nodes
+            </div>
+            <div className="space-y-1.5">
+              <LegendNodeItem
+                icon={<Table2 className="h-3 w-3" />}
+                label="Table"
+                color={COLORS.nodes.table.accent}
+                bgColor={COLORS.nodes.table.headerBg}
+              />
+              <LegendNodeItem
+                icon={<Database className="h-3 w-3" />}
+                label="CTE"
+                sublabel="Temporary result"
+                color={COLORS.nodes.cte.accent}
+                bgColor={COLORS.nodes.cte.headerBg}
+              />
+              <LegendNodeItem
+                icon={<Columns3 className="h-3 w-3" />}
+                label="Output"
+                sublabel="Final result"
+                color={COLORS.nodes.virtualOutput.accent}
+                bgColor={COLORS.nodes.virtualOutput.headerBg}
+              />
+              {viewMode === 'script' && (
+                <LegendNodeItem
+                  icon={<FileCode className="h-3 w-3" />}
+                  label="Script"
+                  sublabel="SQL file"
+                  color={COLORS.nodes.script.accent}
+                  bgColor={COLORS.nodes.script.headerBg}
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Edges section */}
+          <div>
+            <div
+              className="text-xs font-semibold uppercase tracking-wider mb-2"
+              style={{ color: COLORS.nodes.table.textSecondary }}
+            >
+              Edges
+            </div>
+            <div className="space-y-1.5">
+              <LegendEdgeItem
+                style="solid"
+                color={EDGE_STYLES.dataFlow.stroke}
+                label="Data flow"
+                sublabel="Direct movement"
+              />
+              <LegendEdgeItem
+                style="dashed"
+                color={EDGE_STYLES.derivation.stroke}
+                label="Derivation"
+                sublabel="Transformation"
+              />
+            </div>
+          </div>
+
+          {/* States section */}
+          <div>
+            <div
+              className="text-xs font-semibold uppercase tracking-wider mb-2"
+              style={{ color: COLORS.nodes.table.textSecondary }}
+            >
+              States
+            </div>
+            <div className="space-y-1.5">
+              <LegendStateItem
+                color={COLORS.interactive.selection}
+                label="Selected"
+                filled
+              />
+              <LegendStateItem
+                color={COLORS.interactive.selection}
+                label="Related"
+                filled={false}
+              />
+              <LegendStateItem
+                color={COLORS.recursive}
+                label="Recursive"
+                filled={false}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface LegendNodeItemProps {
+  icon: ReactNode;
+  label: string;
+  sublabel?: string;
+  color: string;
+  bgColor: string;
+}
+
+function LegendNodeItem({ icon, label, sublabel, color, bgColor }: LegendNodeItemProps): JSX.Element {
+  return (
+    <div className="flex items-center gap-2">
+      <div
+        className="flex h-5 w-5 items-center justify-center rounded"
+        style={{ backgroundColor: bgColor, color }}
+      >
+        {icon}
+      </div>
+      <div className="flex flex-col">
+        <span className="text-xs font-medium" style={{ color: COLORS.nodes.table.text }}>
+          {label}
+        </span>
+        {sublabel && (
+          <span className="text-[10px]" style={{ color: COLORS.nodes.table.textSecondary }}>
+            {sublabel}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface LegendEdgeItemProps {
+  style: 'solid' | 'dashed' | 'dotted';
+  color: string;
+  label: string;
+  sublabel?: string;
+}
+
+function LegendEdgeItem({ style, color, label, sublabel }: LegendEdgeItemProps): JSX.Element {
+  const dashArray = style === 'dashed' ? '6 4' : style === 'dotted' ? '2 2' : undefined;
+
+  return (
+    <div className="flex items-center gap-2">
+      <svg width="24" height="12" className="shrink-0">
+        <line
+          x1="0"
+          y1="6"
+          x2="24"
+          y2="6"
+          stroke={color}
+          strokeWidth="2"
+          strokeDasharray={dashArray}
+        />
+        {/* Arrow marker */}
+        <polygon
+          points="24,6 18,3 18,9"
+          fill={color}
+        />
+      </svg>
+      <div className="flex flex-col">
+        <span className="text-xs font-medium" style={{ color: COLORS.nodes.table.text }}>
+          {label}
+        </span>
+        {sublabel && (
+          <span className="text-[10px]" style={{ color: COLORS.nodes.table.textSecondary }}>
+            {sublabel}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface LegendStateItemProps {
+  color: string;
+  label: string;
+  filled: boolean;
+}
+
+function LegendStateItem({ color, label, filled }: LegendStateItemProps): JSX.Element {
+  return (
+    <div className="flex items-center gap-2">
+      <div
+        className="h-3 w-3 rounded-full border-2"
+        style={{
+          borderColor: color,
+          backgroundColor: filled ? color : 'transparent',
+        }}
+      />
+      <span className="text-xs" style={{ color: COLORS.nodes.table.text }}>
+        {label}
+      </span>
+    </div>
+  );
+}

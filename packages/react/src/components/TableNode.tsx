@@ -19,7 +19,7 @@ function isTableNodeData(data: unknown): data is TableNodeData {
 }
 
 export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
-  const { toggleNodeCollapse, toggleTableExpansion } = useLineageActions();
+  const { toggleNodeCollapse, toggleTableExpansion, selectNode } = useLineageActions();
   const expandedTableIds = useLineageStore((state) => state.expandedTableIds);
 
   if (!isTableNodeData(data)) {
@@ -49,14 +49,14 @@ export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
       style={{
         minWidth: 180,
         borderRadius: 8,
-        border: `1px solid ${isSelected ? colors.accent : palette.border}`,
+        border: `1px solid ${isSelected ? colors.interactive.selection : palette.border}`,
         boxShadow: isSelected
-          ? `0 0 0 2px ${colors.accent}40`
+          ? `0 0 0 2px ${colors.interactive.selectionRing}`
           : isRecursive
             ? `0 0 0 2px ${colors.recursive}20`
             : '0 1px 3px rgba(0,0,0,0.1)',
         overflow: 'hidden',
-        backgroundColor: isHighlighted ? 'hsl(var(--highlight))' : palette.bg,
+        backgroundColor: isHighlighted ? colors.interactive.related : palette.bg,
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       }}
     >
@@ -250,14 +250,19 @@ export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
             return (
               <div
                 key={col.id}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  selectNode(col.id);
+                }}
                 style={{
                   fontSize: 12,
-                  color: col.isHighlighted ? colors.accent : palette.textSecondary,
+                  color: col.isHighlighted ? colors.interactive.selection : palette.textSecondary,
                   fontWeight: col.isHighlighted ? 600 : 400,
-                  backgroundColor: col.isHighlighted ? `${colors.accent}10` : 'transparent',
+                  backgroundColor: col.isHighlighted ? colors.interactive.hover : 'transparent',
                   padding: '3px 4px',
                   borderRadius: 4,
                   position: 'relative',
+                  cursor: 'pointer',
                 }}
               >
                 <Handle

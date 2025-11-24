@@ -6,6 +6,8 @@ export { IssuesPanel } from './components/IssuesPanel';
 export { LineageExplorer } from './components/LineageExplorer';
 export { SchemaView } from './components/SchemaView';
 export { ViewModeSelector } from './components/ViewModeSelector';
+export { Legend } from './components/Legend';
+export { type EdgeType } from './components/AnimatedEdge';
 export { ErrorBoundary, GraphErrorBoundary } from './components/ErrorBoundary';
 
 // Store and hooks (new Zustand-based)

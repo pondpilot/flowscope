@@ -10,7 +10,7 @@ import {
 } from '@xyflow/react';
 import type { Node as FlowNode, Edge as FlowEdge } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Search, Network, LayoutList } from 'lucide-react';
+import { Network, LayoutList } from 'lucide-react';
 
 import { useLineage } from '../store';
 import type { GraphViewProps, TableNodeData } from '../types';
@@ -31,6 +31,7 @@ import { AnimatedEdge } from './AnimatedEdge';
 import { ExportMenu } from './ExportMenu';
 import { ViewModeSelector } from './ViewModeSelector';
 import { GraphSearchControl } from './GraphSearchControl';
+import { Legend } from './Legend';
 import {
   GraphTooltip,
   GraphTooltipContent,
@@ -39,7 +40,7 @@ import {
   GraphTooltipArrow,
   GraphTooltipPortal,
 } from './ui/graph-tooltip';
-import { UI_CONSTANTS, GRAPH_CONFIG } from '../constants';
+import { UI_CONSTANTS, GRAPH_CONFIG, getMinimapNodeColor } from '../constants';
 
 // Type guard for safer type checking
 function isTableNodeData(data: unknown): data is TableNodeData {
@@ -483,11 +484,18 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
         <MiniMap
           nodeColor={(node) => {
             if (isTableNodeData(node.data)) {
-              return node.data.nodeType === 'cte' ? '#a855f7' : '#3b82f6';
+              return getMinimapNodeColor(node.data.nodeType || 'table');
             }
-            return '#3b82f6';
+            // For script nodes, check node type from id prefix
+            if (node.id.startsWith('script:')) {
+              return getMinimapNodeColor('script');
+            }
+            return getMinimapNodeColor('table');
           }}
         />
+        <Panel position="bottom-center" className="mb-8 !z-50">
+          <Legend viewMode={viewMode} />
+        </Panel>
       </ReactFlow>
     </div>
   );

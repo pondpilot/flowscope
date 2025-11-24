@@ -10,7 +10,9 @@ import {
   GraphTooltipArrow,
   GraphTooltipPortal,
 } from './ui/graph-tooltip';
-import { UI_CONSTANTS } from '../constants';
+import { UI_CONSTANTS, COLORS } from '../constants';
+
+const scriptColors = COLORS.nodes.script;
 
 /**
  * React Flow node component for rendering script/file nodes in script-level view.
@@ -28,23 +30,34 @@ function ScriptNodeComponent({ data, selected }: NodeProps): JSX.Element {
       <GraphTooltip delayDuration={UI_CONSTANTS.TOOLTIP_DELAY_NODE}>
         <GraphTooltipTrigger asChild>
           <div
-            className={`
-              min-w-[180px] rounded-lg border bg-white shadow-sm transition-all duration-200
-              ${active ? 'border-[#4C61FF] ring-2 ring-[#4C61FF]/20' : 'border-[#DBDDE1]'}
-              ${isHighlighted ? 'bg-[hsl(var(--highlight))]' : 'bg-white'}
-            `}
+            style={{
+              backgroundColor: isHighlighted ? 'hsl(var(--highlight))' : scriptColors.bg,
+              borderColor: active ? COLORS.interactive.selection : scriptColors.border,
+              boxShadow: active ? `0 0 0 2px ${COLORS.interactive.selectionRing}` : '0 1px 3px rgba(0,0,0,0.1)',
+            }}
+            className="min-w-[180px] rounded-lg border transition-all duration-200"
           >
             <Handle type="target" position={Position.Left} className="!bg-transparent !border-none" />
 
             <div className="flex items-center gap-2 px-3 py-2.5">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-purple-50 text-purple-600">
+              <div
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded"
+                style={{ backgroundColor: scriptColors.headerBg, color: scriptColors.accent }}
+              >
                 <FileCode className="h-4 w-4" strokeWidth={1.5} />
               </div>
               <div className="flex-1 overflow-hidden">
-                <div className="truncate text-xs font-medium text-gray-500 uppercase tracking-wider mb-0.5">
+                <div
+                  className="truncate text-xs font-medium uppercase tracking-wider mb-0.5"
+                  style={{ color: scriptColors.textSecondary }}
+                >
                   Script
                 </div>
-                <div className="truncate text-sm font-semibold text-gray-900" title={label}>
+                <div
+                  className="truncate text-sm font-semibold"
+                  style={{ color: scriptColors.text }}
+                  title={label}
+                >
                   {label}
                 </div>
               </div>
@@ -53,19 +66,27 @@ function ScriptNodeComponent({ data, selected }: NodeProps): JSX.Element {
             <Handle type="source" position={Position.Right} className="!bg-transparent !border-none" />
           </div>
         </GraphTooltipTrigger>
-        
+
         <GraphTooltipPortal>
           <GraphTooltipContent side="right" sideOffset={10} className="max-w-[300px] p-0 overflow-hidden bg-white text-gray-900 border border-gray-200 shadow-xl">
-            <div className="bg-gray-50 px-3 py-2 border-b border-gray-100">
-              <h4 className="font-semibold text-sm">{label}</h4>
-              <p className="text-xs text-gray-500">{statementCount} statement{statementCount !== 1 ? 's' : ''}</p>
+            <div
+              className="px-3 py-2 border-b"
+              style={{ backgroundColor: scriptColors.headerBg, borderColor: scriptColors.border }}
+            >
+              <h4 className="font-semibold text-sm" style={{ color: scriptColors.text }}>{label}</h4>
+              <p className="text-xs" style={{ color: scriptColors.textSecondary }}>
+                {statementCount} statement{statementCount !== 1 ? 's' : ''}
+              </p>
             </div>
-            
+
             <div className="p-3 space-y-3 text-xs">
               {tablesRead.length > 0 && (
                 <div>
-                  <div className="font-semibold text-green-700 mb-1 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                  <div className="font-semibold mb-1 flex items-center gap-1" style={{ color: COLORS.status.success }}>
+                    <span
+                      className="w-1.5 h-1.5 rounded-full"
+                      style={{ backgroundColor: COLORS.status.success }}
+                    />
                     Reads ({tablesRead.length})
                   </div>
                   <div className="text-gray-600 pl-2.5 leading-relaxed">
@@ -79,8 +100,11 @@ function ScriptNodeComponent({ data, selected }: NodeProps): JSX.Element {
 
               {tablesWritten.length > 0 && (
                 <div>
-                  <div className="font-semibold text-blue-700 mb-1 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                  <div className="font-semibold mb-1 flex items-center gap-1" style={{ color: COLORS.status.info }}>
+                    <span
+                      className="w-1.5 h-1.5 rounded-full"
+                      style={{ backgroundColor: COLORS.status.info }}
+                    />
                     Writes ({tablesWritten.length})
                   </div>
                   <div className="text-gray-600 pl-2.5 leading-relaxed">
@@ -91,7 +115,7 @@ function ScriptNodeComponent({ data, selected }: NodeProps): JSX.Element {
                   </div>
                 </div>
               )}
-              
+
               {tablesRead.length === 0 && tablesWritten.length === 0 && (
                 <div className="text-gray-400 italic">No table dependencies detected</div>
               )}

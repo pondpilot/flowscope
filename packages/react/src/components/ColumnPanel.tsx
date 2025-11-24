@@ -1,7 +1,9 @@
 import { useMemo } from 'react';
+import { ArrowRight, Columns3 } from 'lucide-react';
 import { useLineage } from '../store';
 import type { ColumnPanelProps } from '../types';
 import type { Node, Edge } from '@pondpilot/flowscope-core';
+import { COLORS } from '../constants';
 
 interface ColumnInfo {
   node: Node;
@@ -172,15 +174,40 @@ export function ColumnPanel({ className }: ColumnPanelProps): JSX.Element {
 
         {columnInfo && columnInfo.upstream.length > 0 && (
           <div className="flowscope-section">
-            <h4>Upstream ({columnInfo.upstream.length})</h4>
+            <h4 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span
+                style={{
+                  width: '16px',
+                  height: '2px',
+                  backgroundColor: COLORS.edges.dataFlow,
+                  borderRadius: '1px',
+                }}
+              />
+              Upstream ({columnInfo.upstream.length})
+            </h4>
             <ul className="flowscope-column-list">
               {columnInfo.upstream.map((node) => (
                 <li
                   key={node.id}
                   onClick={() => handleColumnClick(node)}
                   className="flowscope-column-item"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    cursor: 'pointer',
+                  }}
                 >
-                  {node.label}
+                  <Columns3 style={{ width: '12px', height: '12px', color: COLORS.nodes.table.textSecondary }} />
+                  <span>{node.label}</span>
+                  {node.qualifiedName && (() => {
+                    const prefix = node.qualifiedName.split('.').slice(0, -1).join('.');
+                    return prefix ? (
+                      <span style={{ fontSize: '10px', color: COLORS.nodes.table.textSecondary }}>
+                        ({prefix})
+                      </span>
+                    ) : null;
+                  })()}
                 </li>
               ))}
             </ul>
@@ -189,15 +216,32 @@ export function ColumnPanel({ className }: ColumnPanelProps): JSX.Element {
 
         {columnInfo && columnInfo.downstream.length > 0 && (
           <div className="flowscope-section">
-            <h4>Downstream ({columnInfo.downstream.length})</h4>
+            <h4 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span
+                style={{
+                  width: '16px',
+                  height: '2px',
+                  backgroundColor: COLORS.edges.derivation,
+                  borderRadius: '1px',
+                }}
+              />
+              Downstream ({columnInfo.downstream.length})
+            </h4>
             <ul className="flowscope-column-list">
               {columnInfo.downstream.map((node) => (
                 <li
                   key={node.id}
                   onClick={() => handleColumnClick(node)}
                   className="flowscope-column-item"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    cursor: 'pointer',
+                  }}
                 >
-                  {node.label}
+                  <Columns3 style={{ width: '12px', height: '12px', color: COLORS.nodes.table.textSecondary }} />
+                  <span>{node.label}</span>
                 </li>
               ))}
             </ul>
@@ -207,17 +251,34 @@ export function ColumnPanel({ className }: ColumnPanelProps): JSX.Element {
         {flowPath.length > 1 && (
           <div className="flowscope-section">
             <h4>Data Flow</h4>
-            <div className="flowscope-flow-path">
-              {flowPath.map((label, idx) => (
-                <span key={`${label}-${idx}`} className="flowscope-flow-chip">
-                  {label}
-                  {idx < flowPath.length - 1 && (
-                    <span className="flowscope-flow-arrow" aria-hidden="true">
-                      →
+            <div className="flowscope-flow-path" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px' }}>
+              {flowPath.map((label, idx) => {
+                const isSelected = label === selectedNode.label;
+                return (
+                  <span key={`${label}-${idx}`} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <span
+                      className="flowscope-flow-chip"
+                      style={{
+                        backgroundColor: isSelected ? COLORS.interactive.selection : 'var(--flowscope-surface-muted)',
+                        color: isSelected ? '#FFFFFF' : 'var(--flowscope-text)',
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        fontSize: '12px',
+                        fontWeight: isSelected ? 600 : 400,
+                      }}
+                    >
+                      {label}
                     </span>
-                  )}
-                </span>
-              ))}
+                    {idx < flowPath.length - 1 && (
+                      <ArrowRight
+                        className="flowscope-flow-arrow"
+                        style={{ width: '12px', height: '12px', color: COLORS.edges.dataFlow }}
+                        aria-hidden="true"
+                      />
+                    )}
+                  </span>
+                );
+              })}
             </div>
           </div>
         )}
