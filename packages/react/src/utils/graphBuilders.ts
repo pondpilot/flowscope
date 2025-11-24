@@ -520,6 +520,27 @@ export function buildColumnLevelGraph(
             },
           });
         }
+      } else {
+        // Fallback: Table-to-Table edge (e.g. UPDATE/DELETE/MERGE targets)
+        // Check if these are table nodes
+        const sourceTable = tableNodes.find(n => n.id === edge.from);
+        const targetTable = tableNodes.find(n => n.id === edge.to);
+
+        if (sourceTable && targetTable && sourceTable.id !== targetTable.id) {
+           flowEdges.push({
+            id: edge.id,
+            source: sourceTable.id,
+            target: targetTable.id,
+            // No handles needed for table-to-table (uses default handles)
+            sourceHandle: null,
+            targetHandle: null,
+            type: 'animated',
+            data: {
+              type: edge.type,
+              isDerived: false,
+            },
+          });
+        }
       }
     });
 

@@ -25,7 +25,6 @@ pub use types::{
     // Request types
     AnalysisOptions,
     AnalyzeRequest,
-    FileSource,
     // Response types
     AnalyzeResult,
     CanonicalName,
@@ -34,6 +33,7 @@ pub use types::{
     Dialect,
     Edge,
     EdgeType,
+    FileSource,
     GlobalEdge,
     GlobalLineage,
     GlobalNode,

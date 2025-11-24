@@ -13,8 +13,8 @@ mod response;
 pub use common::{issue_codes, CaseSensitivity, Issue, IssueCount, Severity, Span, Summary};
 pub use legacy::LineageResult;
 pub use request::{
-    AnalysisOptions, AnalyzeRequest, ColumnSchema, Dialect, SchemaMetadata, SchemaNamespaceHint,
-    SchemaTable, FileSource,
+    AnalysisOptions, AnalyzeRequest, ColumnSchema, Dialect, FileSource, SchemaMetadata,
+    SchemaNamespaceHint, SchemaTable,
 };
 pub use response::{
     AnalyzeResult, CanonicalName, Edge, EdgeType, GlobalEdge, GlobalLineage, GlobalNode, Node,

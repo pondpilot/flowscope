@@ -22,9 +22,9 @@ This document shows SQL feature support across different dialects in FlowScope.
 | `INSERT INTO ... SELECT` | ✅ | ✅ | ✅ | ✅ |
 | `CREATE TABLE AS SELECT` | ✅ | ✅ | ✅ | ✅ |
 | Subqueries in FROM | ✅ | ✅ | ✅ | ✅ |
-| `UPDATE` | ⏳ | ⏳ | ⏳ | ⏳ |
-| `DELETE` | ⏳ | ⏳ | ⏳ | ⏳ |
-| `MERGE` | ⏳ | ⏳ | ⏳ | ⏳ |
+| `UPDATE` | ✅ | ✅ | ✅ | ✅ |
+| `DELETE` | ✅ | ✅ | ✅ | ✅ |
+| `MERGE` | ✅ | ✅ | ✅ | ✅ |
 
 **Legend:** ✅ Supported | ⚠️ Partial | ⏳ Planned | ❌ Not Supported
 
@@ -57,7 +57,7 @@ This document shows SQL feature support across different dialects in FlowScope.
 | CTE referencing CTE | ✅ | ✅ | ✅ | ✅ |
 | Recursive CTE | ⚠️ | ⚠️ | ⚠️ | ⚠️ |
 
-**Note:** Recursive CTEs are parsed but generate `UNSUPPORTED_RECURSIVE_CTE` warning. Lineage for recursive references may be incomplete.
+**Note:** Recursive CTEs are parsed and emit a warning (`UNSUPPORTED_RECURSIVE_CTE`); lineage is incomplete.
 
 ## Dialect-Specific Syntax
 

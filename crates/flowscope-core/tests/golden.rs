@@ -57,7 +57,8 @@ fn collect_columns(result: &flowscope_core::AnalyzeResult) -> Vec<String> {
 #[test]
 fn golden_inline_select_tables_only() {
     let request = AnalyzeRequest {
-        sql: "SELECT u.id, o.total_amount FROM users u JOIN orders o ON u.id = o.user_id".to_string(),
+        sql: "SELECT u.id, o.total_amount FROM users u JOIN orders o ON u.id = o.user_id"
+            .to_string(),
         files: None,
         dialect: Dialect::Generic,
         source_name: None,

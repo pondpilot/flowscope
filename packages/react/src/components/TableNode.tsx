@@ -68,18 +68,37 @@ export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
           position: 'relative',
         }}
       >
+        {/* Always render default handles for table-level connections */}
+        <Handle
+          type="target"
+          position={Position.Left}
+          style={{ 
+            opacity: 0, 
+            border: 'none', 
+            background: 'transparent',
+            top: '50%',
+            left: 0,
+            transform: 'translate(-50%, -50%)',
+            zIndex: 10 
+          }}
+        />
+        <Handle
+          type="source"
+          position={Position.Right}
+          style={{ 
+            opacity: 0, 
+            border: 'none', 
+            background: 'transparent',
+            top: '50%',
+            right: 0,
+            transform: 'translate(50%, -50%)',
+            zIndex: 10
+          }}
+        />
+
         {isCollapsed && (
           <>
-            <Handle
-              type="target"
-              position={Position.Left}
-              style={{ opacity: 0, border: 'none', background: 'transparent' }}
-            />
-            <Handle
-              type="source"
-              position={Position.Right}
-              style={{ opacity: 0, border: 'none', background: 'transparent' }}
-            />
+            {/* Collapsed specific handles if needed, but the above covers it */}
           </>
         )}
 

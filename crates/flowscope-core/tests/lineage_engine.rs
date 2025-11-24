@@ -132,10 +132,7 @@ fn edges_by_type<'a>(lineage: &'a StatementLineage, edge_type: EdgeType) -> Vec<
 
 #[allow(dead_code)]
 fn find_node_by_label<'a>(lineage: &'a StatementLineage, label: &str) -> Option<&'a Node> {
-    lineage
-        .nodes
-        .iter()
-        .find(|node| node.label == label)
+    lineage.nodes.iter().find(|node| node.label == label)
 }
 
 fn find_column_node<'a>(lineage: &'a StatementLineage, label: &str) -> Option<&'a Node> {
@@ -146,24 +143,27 @@ fn find_column_node<'a>(lineage: &'a StatementLineage, label: &str) -> Option<&'
 }
 
 fn find_table_node<'a>(lineage: &'a StatementLineage, name: &str) -> Option<&'a Node> {
-    lineage
-        .nodes
-        .iter()
-        .find(|node| {
-            node.node_type == NodeType::Table
+    lineage.nodes.iter().find(|node| {
+        node.node_type == NodeType::Table
             && (node.label == name || node.qualified_name.as_deref() == Some(name))
-        })
+    })
 }
 
 #[allow(dead_code)]
-fn has_edge(lineage: &StatementLineage, from_label: &str, to_label: &str, edge_type: EdgeType) -> bool {
+fn has_edge(
+    lineage: &StatementLineage,
+    from_label: &str,
+    to_label: &str,
+    edge_type: EdgeType,
+) -> bool {
     let from_node = find_node_by_label(lineage, from_label);
     let to_node = find_node_by_label(lineage, to_label);
 
     if let (Some(from), Some(to)) = (from_node, to_node) {
-        lineage.edges.iter().any(|edge| {
-            edge.from == from.id && edge.to == to.id && edge.edge_type == edge_type
-        })
+        lineage
+            .edges
+            .iter()
+            .any(|edge| edge.from == from.id && edge.to == to.id && edge.edge_type == edge_type)
     } else {
         false
     }
@@ -1008,8 +1008,14 @@ fn dml_update_with_from_clause_tracks_source_tables() {
     let tables = collect_table_names(&result);
 
     // Expect both target and source tables
-    assert!(tables.contains("analytics.target"), "UPDATE target should be tracked");
-    assert!(tables.contains("analytics.staging"), "UPDATE source (FROM) should be tracked");
+    assert!(
+        tables.contains("analytics.target"),
+        "UPDATE target should be tracked"
+    );
+    assert!(
+        tables.contains("analytics.staging"),
+        "UPDATE source (FROM) should be tracked"
+    );
 }
 
 #[test]
@@ -1031,7 +1037,10 @@ fn dml_update_with_subquery_captures_lineage() {
     let tables = collect_table_names(&result);
 
     assert!(tables.contains("users"), "UPDATE target should be tracked");
-    assert!(tables.contains("orders"), "UPDATE subquery source should be tracked");
+    assert!(
+        tables.contains("orders"),
+        "UPDATE subquery source should be tracked"
+    );
 }
 
 #[test]
@@ -1047,7 +1056,10 @@ fn dml_delete_with_subquery_identifies_dependencies() {
     let tables = collect_table_names(&result);
 
     assert!(tables.contains("orders"), "DELETE target should be tracked");
-    assert!(tables.contains("deleted_users"), "DELETE subquery source should be tracked");
+    assert!(
+        tables.contains("deleted_users"),
+        "DELETE subquery source should be tracked"
+    );
 }
 
 #[test]
@@ -1062,8 +1074,14 @@ fn dml_delete_with_join_tracks_all_tables() {
     let result = run_analysis(sql, Dialect::Postgres, None);
     let tables = collect_table_names(&result);
 
-    assert!(tables.contains("orders"), "DELETE target alias should resolve to table");
-    assert!(tables.contains("cancelled_subscriptions"), "DELETE JOIN source should be tracked");
+    assert!(
+        tables.contains("orders"),
+        "DELETE target alias should resolve to table"
+    );
+    assert!(
+        tables.contains("cancelled_subscriptions"),
+        "DELETE JOIN source should be tracked"
+    );
 }
 
 #[test]
@@ -1082,8 +1100,14 @@ fn dml_merge_statement_tracks_target_and_source() {
     let result = run_analysis(sql, Dialect::Generic, None);
     let tables = collect_table_names(&result);
 
-    assert!(tables.contains("analytics.customer_metrics"), "MERGE target should be tracked");
-    assert!(tables.contains("analytics.daily_activity"), "MERGE source should be tracked");
+    assert!(
+        tables.contains("analytics.customer_metrics"),
+        "MERGE target should be tracked"
+    );
+    assert!(
+        tables.contains("analytics.daily_activity"),
+        "MERGE source should be tracked"
+    );
 }
 
 #[test]
@@ -1107,8 +1131,14 @@ fn dml_merge_with_complex_source_query() {
     let tables = collect_table_names(&result);
 
     assert!(tables.contains("target"), "MERGE target should be tracked");
-    assert!(tables.contains("source"), "MERGE subquery source 1 should be tracked");
-    assert!(tables.contains("dimensions"), "MERGE subquery source 2 should be tracked");
+    assert!(
+        tables.contains("source"),
+        "MERGE subquery source 1 should be tracked"
+    );
+    assert!(
+        tables.contains("dimensions"),
+        "MERGE subquery source 2 should be tracked"
+    );
 }
 
 // ============================================================================
@@ -2044,11 +2074,7 @@ fn scale_deeply_nested_ctes() {
     let result = run_analysis(sql, Dialect::Generic, None);
     let ctes = collect_cte_names(&result);
 
-    assert_eq!(
-        ctes.len(),
-        10,
-        "deeply nested CTEs should all be tracked"
-    );
+    assert_eq!(ctes.len(), 10, "deeply nested CTEs should all be tracked");
 
     let tables = collect_table_names(&result);
     assert!(
@@ -2062,16 +2088,17 @@ fn scale_wide_select_many_columns() {
     let columns: Vec<String> = (1..=50)
         .map(|i| format!("col{} AS output{}", i, i))
         .collect();
-    let sql = format!(
-        "SELECT {} FROM wide_table;",
-        columns.join(", ")
-    );
+    let sql = format!("SELECT {} FROM wide_table;", columns.join(", "));
 
     let result = run_analysis(&sql, Dialect::Generic, None);
     let stmt = first_statement(&result);
 
     assert!(
-        stmt.nodes.iter().filter(|n| n.node_type == NodeType::Column).count() >= 50,
+        stmt.nodes
+            .iter()
+            .filter(|n| n.node_type == NodeType::Column)
+            .count()
+            >= 50,
         "wide SELECT should track all columns"
     );
 }
@@ -2127,11 +2154,7 @@ fn scale_long_join_chain() {
     let result = run_analysis(sql, Dialect::Generic, None);
     let tables = collect_table_names(&result);
 
-    assert_eq!(
-        tables.len(),
-        6,
-        "long JOIN chain should track all tables"
-    );
+    assert_eq!(tables.len(), 6, "long JOIN chain should track all tables");
 }
 
 #[test]
@@ -2245,10 +2268,7 @@ fn column_ownership_edges_link_tables_to_columns() {
     // Verify column nodes exist
     for col_name in ["id", "name", "email"] {
         let col = find_column_node(stmt, col_name);
-        assert!(
-            col.is_some(),
-            "column {col_name} should exist as node"
-        );
+        assert!(col.is_some(), "column {col_name} should exist as node");
     }
 }
 
@@ -2336,8 +2356,14 @@ fn column_qualified_names_preserve_table_context() {
     }
 
     // Should have nodes for both tables
-    assert!(find_table_node(stmt, "orders").is_some(), "orders table should exist");
-    assert!(find_table_node(stmt, "users").is_some(), "users table should exist");
+    assert!(
+        find_table_node(stmt, "orders").is_some(),
+        "orders table should exist"
+    );
+    assert!(
+        find_table_node(stmt, "users").is_some(),
+        "users table should exist"
+    );
 }
 
 #[test]
@@ -2567,8 +2593,14 @@ fn column_union_combines_column_sets() {
 
     // Both source tables should be tracked
     let tables = collect_table_names(&result);
-    assert!(tables.contains("orders"), "first UNION branch table should be tracked");
-    assert!(tables.contains("payments"), "second UNION branch table should be tracked");
+    assert!(
+        tables.contains("orders"),
+        "first UNION branch table should be tracked"
+    );
+    assert!(
+        tables.contains("payments"),
+        "second UNION branch table should be tracked"
+    );
 }
 
 // ============================================================================
@@ -2590,7 +2622,10 @@ fn ansi_lateral_join_standard_syntax() {
     let result = run_analysis(sql, Dialect::Postgres, None);
     let tables = collect_table_names(&result);
 
-    assert!(tables.contains("users") && tables.contains("orders"), "LATERAL JOIN should track both tables");
+    assert!(
+        tables.contains("users") && tables.contains("orders"),
+        "LATERAL JOIN should track both tables"
+    );
 }
 
 #[test]
@@ -2608,7 +2643,10 @@ fn ansi_window_frame_clause_ignored_but_preserved() {
 
     let result = run_analysis(sql, Dialect::Generic, None);
     let tables = collect_table_names(&result);
-    assert!(tables.contains("transactions"), "Window frame should not break lineage");
+    assert!(
+        tables.contains("transactions"),
+        "Window frame should not break lineage"
+    );
 }
 
 #[test]
@@ -2625,7 +2663,10 @@ fn ansi_cast_syntax_variants() {
     let stmt = first_statement(&result);
     let derivations = edges_by_type(stmt, EdgeType::Derivation);
 
-    assert!(derivations.len() >= 3, "All cast variants should produce derivation edges");
+    assert!(
+        derivations.len() >= 3,
+        "All cast variants should produce derivation edges"
+    );
 }
 
 #[test]
@@ -2641,7 +2682,10 @@ fn ansi_having_subquery_lineage() {
     let tables = collect_table_names(&result);
 
     assert!(tables.contains("orders"));
-    assert!(tables.contains("sales_targets"), "Subquery in HAVING should be tracked");
+    assert!(
+        tables.contains("sales_targets"),
+        "Subquery in HAVING should be tracked"
+    );
 }
 
 #[test]
@@ -2731,17 +2775,29 @@ fn column_lineage_cte_transformation_chain_with_reuse() {
 
     // 1. TABLE LINEAGE: users -> transformed -> (final result)
     let tables = collect_table_names(&result);
-    assert!(tables.contains("users"), "source table 'users' should be tracked");
+    assert!(
+        tables.contains("users"),
+        "source table 'users' should be tracked"
+    );
 
     let ctes = collect_cte_names(&result);
-    assert!(ctes.contains("transformed"), "CTE 'transformed' should be tracked");
+    assert!(
+        ctes.contains("transformed"),
+        "CTE 'transformed' should be tracked"
+    );
 
     // Verify the path: users -> transformed via ownership edges
     let users_table = find_table_node(stmt, "users");
-    let transformed_cte = stmt.nodes.iter().find(|n| n.node_type == NodeType::Cte && n.label == "transformed");
+    let transformed_cte = stmt
+        .nodes
+        .iter()
+        .find(|n| n.node_type == NodeType::Cte && n.label == "transformed");
 
     assert!(users_table.is_some(), "users table node should exist");
-    assert!(transformed_cte.is_some(), "transformed CTE node should exist");
+    assert!(
+        transformed_cte.is_some(),
+        "transformed CTE node should exist"
+    );
 
     // Check ownership edges: Table owns its columns
     let ownership_edges = edges_by_type(stmt, EdgeType::Ownership);
@@ -2824,8 +2880,17 @@ fn column_lineage_cte_transformation_chain_with_reuse() {
     }
 
     eprintln!("\n=== COLUMN NODES (sample) ===");
-    for node in stmt.nodes.iter().filter(|n| n.node_type == NodeType::Column).take(8) {
-        eprintln!("Column: {} (expr: {:?})", node.label, node.expression.as_ref().map(|e| &e[..50.min(e.len())]));
+    for node in stmt
+        .nodes
+        .iter()
+        .filter(|n| n.node_type == NodeType::Column)
+        .take(8)
+    {
+        eprintln!(
+            "Column: {} (expr: {:?})",
+            node.label,
+            node.expression.as_ref().map(|e| &e[..50.min(e.len())])
+        );
     }
 
     eprintln!("\n=== EDGE PATHS (sample) ===");
@@ -2833,8 +2898,10 @@ fn column_lineage_cte_transformation_chain_with_reuse() {
         let from = stmt.nodes.iter().find(|n| n.id == edge.from);
         let to = stmt.nodes.iter().find(|n| n.id == edge.to);
         if let (Some(f), Some(t)) = (from, to) {
-            eprintln!("{:?}: {:?}({}) -> {:?}({})",
-                edge.edge_type, f.node_type, f.label, t.node_type, t.label);
+            eprintln!(
+                "{:?}: {:?}({}) -> {:?}({})",
+                edge.edge_type, f.node_type, f.label, t.node_type, t.label
+            );
         }
     }
 
@@ -2846,15 +2913,18 @@ fn column_lineage_cte_transformation_chain_with_reuse() {
     // EXPLICIT PATH VERIFICATION:
     // Verify table-level edge: users -> transformed
     if let (Some(users), Some(transformed)) = (users_table, transformed_cte) {
-        let table_to_cte_edge = stmt.edges.iter().find(|e| {
-            e.from == users.id && e.to == transformed.id
-        });
+        let table_to_cte_edge = stmt
+            .edges
+            .iter()
+            .find(|e| e.from == users.id && e.to == transformed.id);
         assert!(
             table_to_cte_edge.is_some(),
             "CRITICAL: should have direct edge from users table -> transformed CTE"
         );
-        eprintln!("\n✅ CONFIRMED TABLE PATH: users -> transformed (edge type: {:?})",
-            table_to_cte_edge.map(|e| e.edge_type));
+        eprintln!(
+            "\n✅ CONFIRMED TABLE PATH: users -> transformed (edge type: {:?})",
+            table_to_cte_edge.map(|e| e.edge_type)
+        );
 
         // Verify that users table owns columns
         let users_owns_cols: Vec<_> = ownership_edges
@@ -2882,7 +2952,8 @@ fn column_lineage_cte_transformation_chain_with_reuse() {
         eprintln!("\n=== COLUMN OWNERSHIP VERIFICATION ===");
 
         // Collect all column nodes by name
-        let mut columns_by_name: std::collections::HashMap<String, Vec<(&Node, Vec<&Node>)>> = std::collections::HashMap::new();
+        let mut columns_by_name: std::collections::HashMap<String, Vec<(&Node, Vec<&Node>)>> =
+            std::collections::HashMap::new();
 
         for node in &stmt.nodes {
             if node.node_type == NodeType::Column {
@@ -2892,7 +2963,8 @@ fn column_lineage_cte_transformation_chain_with_reuse() {
                     .filter_map(|e| stmt.nodes.iter().find(|n| n.id == e.from))
                     .collect();
 
-                columns_by_name.entry(node.label.clone())
+                columns_by_name
+                    .entry(node.label.clone())
                     .or_insert_with(Vec::new)
                     .push((node, owners));
             }
@@ -2902,10 +2974,14 @@ fn column_lineage_cte_transformation_chain_with_reuse() {
         for (col_name, instances) in &columns_by_name {
             eprintln!("\nColumn '{}': {} instance(s)", col_name, instances.len());
             for (i, (node, owners)) in instances.iter().enumerate() {
-                eprintln!("  [{}] id={}, owned by: {:?}",
+                eprintln!(
+                    "  [{}] id={}, owned by: {:?}",
                     i,
                     &node.id[..8],
-                    owners.iter().map(|n| format!("{:?}({})", n.node_type, n.label)).collect::<Vec<_>>()
+                    owners
+                        .iter()
+                        .map(|n| format!("{:?}({})", n.node_type, n.label))
+                        .collect::<Vec<_>>()
                 );
             }
         }
@@ -2931,7 +3007,8 @@ fn column_lineage_cte_transformation_chain_with_reuse() {
         }
 
         // 2. transformed CTE should ONLY own: id, name_upper, email_lower (its output columns)
-        let transformed_col_names: Vec<_> = transformed_owns_cols.iter()
+        let transformed_col_names: Vec<_> = transformed_owns_cols
+            .iter()
             .filter_map(|e| stmt.nodes.iter().find(|n| n.id == e.to))
             .map(|n| n.label.as_str())
             .collect();

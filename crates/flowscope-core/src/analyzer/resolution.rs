@@ -31,6 +31,7 @@ impl<'a> Analyzer<'a> {
             for table in &schema.tables {
                 let canonical = self.schema_table_key(table);
                 self.known_tables.insert(canonical.clone());
+                self.imported_tables.insert(canonical.clone());
                 self.schema_tables.insert(canonical, table.clone());
             }
         }

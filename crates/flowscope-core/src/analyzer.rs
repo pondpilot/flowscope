@@ -2,31 +2,34 @@ use crate::error::ParseError;
 use crate::types::*;
 use serde_json::json;
 use sqlparser::ast::{
-    self, Assignment, Expr, FromTable, FunctionArg, FunctionArgExpr, ObjectName, Query, SelectItem,
-    SetExpr, Statement, TableFactor, TableWithJoins,
+    self, Assignment, ColumnDef, Expr, FromTable, FunctionArg, FunctionArgExpr, MergeAction,
+    MergeClause, MergeInsertKind, ObjectName, Query, SelectItem, SetExpr, Statement, TableFactor,
+    TableWithJoins,
 };
 use std::collections::{HashMap, HashSet};
 #[cfg(feature = "tracing")]
-use tracing::info_span;
+use tracing::{info, info_span};
 
 mod context;
+mod diagnostics;
+mod global;
 pub mod helpers;
 mod input;
 mod resolution;
-mod global;
-mod diagnostics;
 
 use context::{ColumnRef, OutputColumn, StatementContext};
 use helpers::{
     classify_query_type, extract_simple_name, generate_column_node_id, generate_edge_id,
-    generate_node_id, is_simple_column_ref,
+    generate_node_id, is_simple_column_ref, split_qualified_identifiers,
 };
 use input::{collect_statements, StatementInput};
 
 /// Main entry point for SQL analysis
 pub fn analyze(request: &AnalyzeRequest) -> AnalyzeResult {
     #[cfg(feature = "tracing")]
-    let _span = info_span!("analyze_request", statement_count = %request.sql.matches(';').count() + 1).entered();
+    let _span =
+        info_span!("analyze_request", statement_count = %request.sql.matches(';').count() + 1)
+            .entered();
     let mut analyzer = Analyzer::new(request);
     analyzer.analyze()
 }
@@ -46,6 +49,8 @@ pub(super) struct Analyzer<'a> {
     pub(super) all_ctes: HashSet<String>,
     /// Known tables from schema metadata (for validation)
     pub(super) known_tables: HashSet<String>,
+    /// Tables from imported (user-provided) schema that should not be overwritten
+    pub(super) imported_tables: HashSet<String>,
     /// Schema lookup: table canonical name -> table schema info
     pub(super) schema_tables: HashMap<String, SchemaTable>,
     /// Whether column lineage is enabled
@@ -88,6 +93,7 @@ impl<'a> Analyzer<'a> {
             all_tables: HashSet::new(),
             all_ctes: HashSet::new(),
             known_tables: HashSet::new(),
+            imported_tables: HashSet::new(),
             schema_tables: HashMap::new(),
             column_lineage_enabled,
             default_catalog: None,
@@ -109,7 +115,14 @@ impl<'a> Analyzer<'a> {
         }
 
         // Analyze all statements
-        for (index, StatementInput { statement, source_name }) in all_statements.into_iter().enumerate() {
+        for (
+            index,
+            StatementInput {
+                statement,
+                source_name,
+            },
+        ) in all_statements.into_iter().enumerate()
+        {
             #[cfg(feature = "tracing")]
             let _stmt_span = info_span!(
                 "analyze_statement",
@@ -155,7 +168,7 @@ impl<'a> Analyzer<'a> {
                     self.analyze_create_table_as(&mut ctx, &create.name, query);
                     "CREATE_TABLE_AS".to_string()
                 } else {
-                    self.analyze_create_table(&mut ctx, &create.name);
+                    self.analyze_create_table(&mut ctx, &create.name, &create.columns);
                     "CREATE_TABLE".to_string()
                 }
             }
@@ -187,10 +200,10 @@ impl<'a> Analyzer<'a> {
                 into,
                 table,
                 source,
-                on: _,
-                clauses: _,
+                on,
+                clauses,
             } => {
-                self.analyze_merge(&mut ctx, *into, table, source);
+                self.analyze_merge(&mut ctx, *into, table, source, on, clauses);
                 "MERGE".to_string()
             }
             _ => {
@@ -215,6 +228,47 @@ impl<'a> Analyzer<'a> {
         })
     }
 
+    fn add_table_columns_from_schema(
+        &mut self,
+        ctx: &mut StatementContext,
+        table_canonical: &str,
+        table_node_id: &str,
+    ) {
+        if let Some(schema_table) = self.schema_tables.get(table_canonical) {
+            // We must clone columns to avoid borrowing self while iterating
+            let columns = schema_table.columns.clone();
+            for col in columns {
+                let col_node_id = generate_column_node_id(Some(table_node_id), &col.name);
+
+                // Add column node
+                let col_node = Node {
+                    id: col_node_id.clone(),
+                    node_type: NodeType::Column,
+                    label: col.name.clone(),
+                    qualified_name: Some(format!("{}.{}", table_canonical, col.name)),
+                    expression: None,
+                    span: None,
+                    metadata: None,
+                };
+                ctx.add_node(col_node);
+
+                // Add ownership edge from table to column
+                let edge_id = generate_edge_id(table_node_id, &col_node_id);
+                if !ctx.edge_ids.contains(&edge_id) {
+                    ctx.add_edge(Edge {
+                        id: edge_id,
+                        from: table_node_id.to_string(),
+                        to: col_node_id,
+                        edge_type: EdgeType::Ownership,
+                        expression: None,
+                        operation: None,
+                        metadata: None,
+                    });
+                }
+            }
+        }
+    }
+
     fn analyze_query(
         &mut self,
         ctx: &mut StatementContext,
@@ -228,19 +282,22 @@ impl<'a> Analyzer<'a> {
             .as_ref()
             .map(|w| &w.cte_tables)
             .unwrap_or(&empty_vec);
-        for cte in ctes {
-            let cte_name = cte.alias.name.to_string();
 
-            // Check for recursive CTE
-            if query.with.as_ref().map(|w| w.recursive).unwrap_or(false) {
+        // Check if this is a recursive CTE
+        if let Some(ref with) = query.with {
+            if with.recursive {
                 self.issues.push(
                     Issue::warning(
                         issue_codes::UNSUPPORTED_RECURSIVE_CTE,
-                        format!("Recursive CTE '{cte_name}' detected - lineage may be incomplete"),
+                        "Recursive CTE detected - lineage may be incomplete".to_string(),
                     )
                     .with_statement(ctx.statement_index),
                 );
             }
+        }
+
+        for cte in ctes {
+            let cte_name = cte.alias.name.to_string();
 
             // Create CTE node
             let cte_id = ctx.add_node(Node {
@@ -300,8 +357,13 @@ impl<'a> Analyzer<'a> {
                     ctx.last_operation = Some(op_name.to_string());
                 }
             }
-            SetExpr::Values(_) => {
-                // VALUES clause doesn't have table sources
+            SetExpr::Values(values) => {
+                // Analyze expressions in VALUES clause
+                for row in &values.rows {
+                    for expr in row {
+                        self.analyze_expression(ctx, expr);
+                    }
+                }
             }
             SetExpr::Insert(insert_stmt) => {
                 // Nested INSERT statement - analyze it
@@ -405,11 +467,11 @@ impl<'a> Analyzer<'a> {
 
     fn extract_column_refs(&self, expr: &Expr) -> Vec<ColumnRef> {
         let mut refs = Vec::new();
-        self.collect_column_refs(expr, &mut refs);
+        Self::collect_column_refs(expr, &mut refs);
         refs
     }
 
-    fn collect_column_refs(&self, expr: &Expr, refs: &mut Vec<ColumnRef>) {
+    fn collect_column_refs(expr: &Expr, refs: &mut Vec<ColumnRef>) {
         match expr {
             Expr::Identifier(ident) => {
                 refs.push(ColumnRef {
@@ -434,23 +496,24 @@ impl<'a> Analyzer<'a> {
                 }
             }
             Expr::BinaryOp { left, right, .. } => {
-                self.collect_column_refs(left, refs);
-                self.collect_column_refs(right, refs);
+                Self::collect_column_refs(left, refs);
+                Self::collect_column_refs(right, refs);
             }
             Expr::UnaryOp { expr, .. } => {
-                self.collect_column_refs(expr, refs);
+                Self::collect_column_refs(expr, refs);
             }
             Expr::Function(func) => match &func.args {
                 ast::FunctionArguments::List(arg_list) => {
                     for arg in &arg_list.args {
                         match arg {
                             FunctionArg::Unnamed(FunctionArgExpr::Expr(e)) => {
-                                self.collect_column_refs(e, refs);
+                                Self::collect_column_refs(e, refs);
                             }
-                            FunctionArg::Named { arg, .. } => {
-                                if let FunctionArgExpr::Expr(e) = arg {
-                                    self.collect_column_refs(e, refs);
-                                }
+                            FunctionArg::Named {
+                                arg: FunctionArgExpr::Expr(e),
+                                ..
+                            } => {
+                                Self::collect_column_refs(e, refs);
                             }
                             _ => {}
                         }
@@ -466,57 +529,57 @@ impl<'a> Analyzer<'a> {
                 else_result,
             } => {
                 if let Some(op) = operand {
-                    self.collect_column_refs(op, refs);
+                    Self::collect_column_refs(op, refs);
                 }
                 for cond in conditions {
-                    self.collect_column_refs(cond, refs);
+                    Self::collect_column_refs(cond, refs);
                 }
                 for res in results {
-                    self.collect_column_refs(res, refs);
+                    Self::collect_column_refs(res, refs);
                 }
                 if let Some(el) = else_result {
-                    self.collect_column_refs(el, refs);
+                    Self::collect_column_refs(el, refs);
                 }
             }
             Expr::Cast { expr, .. } => {
-                self.collect_column_refs(expr, refs);
+                Self::collect_column_refs(expr, refs);
             }
             Expr::Nested(inner) => {
-                self.collect_column_refs(inner, refs);
+                Self::collect_column_refs(inner, refs);
             }
             Expr::Subquery(_) => {
                 // Subquery columns are handled separately
             }
             Expr::InList { expr, list, .. } => {
-                self.collect_column_refs(expr, refs);
+                Self::collect_column_refs(expr, refs);
                 for item in list {
-                    self.collect_column_refs(item, refs);
+                    Self::collect_column_refs(item, refs);
                 }
             }
             Expr::Between {
                 expr, low, high, ..
             } => {
-                self.collect_column_refs(expr, refs);
-                self.collect_column_refs(low, refs);
-                self.collect_column_refs(high, refs);
+                Self::collect_column_refs(expr, refs);
+                Self::collect_column_refs(low, refs);
+                Self::collect_column_refs(high, refs);
             }
             Expr::IsNull(e) | Expr::IsNotNull(e) => {
-                self.collect_column_refs(e, refs);
+                Self::collect_column_refs(e, refs);
             }
             Expr::IsFalse(e) | Expr::IsNotFalse(e) | Expr::IsTrue(e) | Expr::IsNotTrue(e) => {
-                self.collect_column_refs(e, refs);
+                Self::collect_column_refs(e, refs);
             }
             Expr::Like { expr, pattern, .. } | Expr::ILike { expr, pattern, .. } => {
-                self.collect_column_refs(expr, refs);
-                self.collect_column_refs(pattern, refs);
+                Self::collect_column_refs(expr, refs);
+                Self::collect_column_refs(pattern, refs);
             }
             Expr::Tuple(exprs) => {
                 for e in exprs {
-                    self.collect_column_refs(e, refs);
+                    Self::collect_column_refs(e, refs);
                 }
             }
             Expr::Extract { expr, .. } => {
-                self.collect_column_refs(expr, refs);
+                Self::collect_column_refs(expr, refs);
             }
             _ => {
                 // Other expressions don't contain column references or are handled elsewhere
@@ -530,9 +593,9 @@ impl<'a> Analyzer<'a> {
             Expr::CompoundIdentifier(parts) => parts
                 .last()
                 .map(|i| i.value.clone())
-                .unwrap_or_else(|| format!("col_{}", index)),
+                .unwrap_or_else(|| format!("col_{index}")),
             Expr::Function(func) => func.name.to_string().to_lowercase(),
-            _ => format!("col_{}", index),
+            _ => format!("col_{index}"),
         }
     }
 
@@ -707,10 +770,7 @@ impl<'a> Analyzer<'a> {
                 self.issues.push(
                     Issue::info(
                         issue_codes::APPROXIMATE_LINEAGE,
-                        format!(
-                            "SELECT * from '{}' - column list unknown without schema metadata",
-                            table_canonical
-                        ),
+                        format!("SELECT * from '{table_canonical}' - column list unknown without schema metadata"),
                     )
                     .with_statement(ctx.statement_index),
                 );
@@ -852,6 +912,47 @@ impl<'a> Analyzer<'a> {
         }
     }
 
+    /// Pre-register aliases in a table factor without creating nodes.
+    fn register_aliases_in_table_factor(
+        &self,
+        ctx: &mut StatementContext,
+        table_factor: &TableFactor,
+    ) {
+        match table_factor {
+            TableFactor::Table {
+                name,
+                alias: Some(a),
+                ..
+            } => {
+                let canonical = self
+                    .canonicalize_table_reference(&name.to_string())
+                    .canonical;
+                ctx.table_aliases.insert(a.name.to_string(), canonical);
+            }
+            TableFactor::Derived { alias: Some(a), .. } => {
+                ctx.subquery_aliases.insert(a.name.to_string());
+            }
+            TableFactor::NestedJoin {
+                table_with_joins, ..
+            } => {
+                self.register_aliases_in_table_with_joins(ctx, table_with_joins);
+            }
+            _ => {}
+        }
+    }
+
+    /// Pre-register aliases in a joined table tree.
+    fn register_aliases_in_table_with_joins(
+        &self,
+        ctx: &mut StatementContext,
+        table_with_joins: &TableWithJoins,
+    ) {
+        self.register_aliases_in_table_factor(ctx, &table_with_joins.relation);
+        for join in &table_with_joins.joins {
+            self.register_aliases_in_table_factor(ctx, &join.relation);
+        }
+    }
+
     fn analyze_table_factor(
         &mut self,
         ctx: &mut StatementContext,
@@ -952,10 +1053,7 @@ impl<'a> Analyzer<'a> {
                     self.issues.push(
                         Issue::warning(
                             issue_codes::UNRESOLVED_REFERENCE,
-                            format!(
-                                "Table '{}' could not be resolved using provided schema metadata or search path",
-                                canonical
-                            ),
+                            format!("Table '{canonical}' could not be resolved using provided schema metadata or search path"),
                         )
                         .with_statement(ctx.statement_index),
                     );
@@ -986,6 +1084,9 @@ impl<'a> Analyzer<'a> {
 
         // Create edge to target if specified
         if let (Some(target), Some(source_id)) = (target_node, node_id.clone()) {
+            // Avoid self-loops (source == target) unless explicitly desired?
+            // Usually in UPDATE t SET ... FROM t, we don't want a loop unless needed.
+            // But for lineage, showing the table depends on itself is accurate for UPDATE/MERGE.
             let edge_id = generate_edge_id(&source_id, target);
             if !ctx.edge_ids.contains(&edge_id) {
                 ctx.add_edge(Edge {
@@ -1088,27 +1189,94 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    fn analyze_create_table(&mut self, ctx: &mut StatementContext, name: &ObjectName) {
+    fn analyze_create_table(
+        &mut self,
+
+        ctx: &mut StatementContext,
+
+        name: &ObjectName,
+
+        columns: &[ColumnDef],
+    ) {
         let target_name = name.to_string();
-        let canonical = self.normalize_table_name(&target_name);
+
+        let resolution = self.canonicalize_table_reference(&target_name);
+        let canonical = resolution.canonical.clone();
+
+        // Store schema info for subsequent statements, but only if no imported schema exists.
+        // If an implied schema already exists, replace it (to handle CREATE OR REPLACE TABLE).
+
+        let column_schemas: Vec<ColumnSchema> = columns
+            .iter()
+            .map(|c| ColumnSchema {
+                name: c.name.value.clone(),
+
+                data_type: Some(c.data_type.to_string()),
+            })
+            .collect();
+
+        if !column_schemas.is_empty() && !self.imported_tables.contains(&canonical) {
+            let parts = split_qualified_identifiers(&canonical);
+            let (catalog, schema, table_name) = match parts.as_slice() {
+                [catalog, schema, table] => {
+                    (Some(catalog.clone()), Some(schema.clone()), table.clone())
+                }
+                [schema, table] => (None, Some(schema.clone()), table.clone()),
+                [table] => (None, None, table.clone()),
+                _ => (None, None, extract_simple_name(&canonical)),
+            };
+
+            self.schema_tables.insert(
+                canonical.clone(),
+                SchemaTable {
+                    catalog,
+                    schema,
+                    name: table_name,
+                    columns: column_schemas.clone(),
+                },
+            );
+
+            // Treat the created table as known so subsequent references resolve without warnings
+            self.known_tables.insert(canonical.clone());
+        }
 
         // Create target table node
+
+        let node_id = generate_node_id("table", &canonical);
+
         ctx.add_node(Node {
-            id: generate_node_id("table", &canonical),
+            id: node_id.clone(),
+
             node_type: NodeType::Table,
+
             label: extract_simple_name(&target_name),
+
             qualified_name: Some(canonical.clone()),
+
             expression: None,
+
             span: None,
+
             metadata: None,
         });
 
+        // Create column nodes immediately from schema (either imported or from CREATE TABLE)
+
+        if self.schema_tables.contains_key(&canonical) {
+            self.add_table_columns_from_schema(ctx, &canonical, &node_id);
+        }
+
         self.all_tables.insert(canonical.clone());
-        self.produced_tables
-            .insert(canonical, ctx.statement_index);
+
+        self.produced_tables.insert(canonical, ctx.statement_index);
     }
 
-    fn analyze_create_view(&mut self, ctx: &mut StatementContext, name: &ObjectName, query: &Query) {
+    fn analyze_create_view(
+        &mut self,
+        ctx: &mut StatementContext,
+        name: &ObjectName,
+        query: &Query,
+    ) {
         let target_name = name.to_string();
         let canonical = self.normalize_table_name(&target_name);
 
@@ -1124,8 +1292,7 @@ impl<'a> Analyzer<'a> {
         });
 
         self.all_tables.insert(canonical.clone());
-        self.produced_tables
-            .insert(canonical, ctx.statement_index);
+        self.produced_tables.insert(canonical, ctx.statement_index);
 
         // Analyze source query
         self.analyze_query(ctx, query, Some(&target_id));
@@ -1218,17 +1385,40 @@ impl<'a> Analyzer<'a> {
         selection: &Option<Expr>,
     ) {
         // 1. Analyze the target table
-        self.analyze_table_with_joins(ctx, table, None);
+        let mut target_node_id = None;
 
-        // Register this table as being "produced" (modified)
-        if let TableFactor::Table { name, .. } = &table.relation {
-            let canonical = self.normalize_table_name(&name.to_string());
-            self.produced_tables.insert(canonical, ctx.statement_index);
+        if let TableFactor::Table { name, alias, .. } = &table.relation {
+            let table_name = name.to_string();
+            let canonical_res = self.add_source_table(ctx, &table_name, None);
+            let canonical = canonical_res
+                .clone()
+                .unwrap_or_else(|| self.normalize_table_name(&table_name));
+
+            // Register alias if present
+            if let (Some(a), Some(canonical_name)) = (alias, canonical_res) {
+                ctx.table_aliases.insert(a.name.to_string(), canonical_name);
+            }
+
+            // We need the Node ID
+            let node_id = generate_node_id("table", &canonical);
+
+            target_node_id = Some(node_id.clone());
+
+            #[cfg(feature = "tracing")]
+            info!(target: "analyzer", "UPDATE target identified: {} (ID: {})", canonical, node_id);
+
+            self.produced_tables
+                .insert(canonical.clone(), ctx.statement_index);
+
+            // Expand columns from schema if available
+            self.add_table_columns_from_schema(ctx, &canonical, &node_id);
+        } else {
+            self.analyze_table_with_joins(ctx, table, None);
         }
 
         // 2. Analyze FROM clause (Postgres style)
         if let Some(from_table) = from {
-            self.analyze_table_with_joins(ctx, from_table, None);
+            self.analyze_table_with_joins(ctx, from_table, target_node_id.as_deref());
         }
 
         // 3. Analyze assignments (SET clause)
@@ -1240,6 +1430,13 @@ impl<'a> Analyzer<'a> {
         if let Some(expr) = selection {
             self.analyze_expression(ctx, expr);
         }
+
+        // Also analyze the joins in the target table structure itself
+        for join in &table.joins {
+            let join_type = "JOIN";
+            ctx.last_operation = Some(join_type.to_string());
+            self.analyze_table_factor(ctx, &join.relation, target_node_id.as_deref());
+        }
     }
 
     fn analyze_delete(
@@ -1250,32 +1447,44 @@ impl<'a> Analyzer<'a> {
         using: &Option<Vec<TableWithJoins>>,
         selection: &Option<Expr>,
     ) {
-        // 1. Analyze sources (FROM + USING)
+        let mut target_ids = Vec::new();
+
+        // Pre-register aliases from sources so multi-table deletes can resolve targets.
         match from {
             FromTable::WithFromKeyword(ts) | FromTable::WithoutKeyword(ts) => {
                 for t in ts {
-                    self.analyze_table_with_joins(ctx, t, None);
+                    self.register_aliases_in_table_with_joins(ctx, t);
                 }
             }
         }
         if let Some(us) = using {
             for t in us {
-                self.analyze_table_with_joins(ctx, t, None);
+                self.register_aliases_in_table_with_joins(ctx, t);
             }
         }
 
-        // 2. Identify and register targets
+        // 1. Identify targets
         if !tables.is_empty() {
-            // MySQL multi-table delete syntax
+            // Multi-table delete
             for obj in tables {
                 let name = obj.to_string();
-                // Try to resolve against aliases found in FROM
-                let canonical = if let Some(c) = ctx.table_aliases.get(&name) {
-                    c.clone()
-                } else {
-                    self.canonicalize_table_reference(&name).canonical
-                };
-                self.produced_tables.insert(canonical, ctx.statement_index);
+                let target_canonical = self
+                    .resolve_table_alias(ctx, Some(&name))
+                    .unwrap_or_else(|| self.canonicalize_table_reference(&name).canonical);
+                // We add them as nodes (they are being affected)
+                self.add_source_table(ctx, &target_canonical, None);
+
+                let node_id = generate_node_id("table", &target_canonical);
+                target_ids.push(node_id.clone());
+
+                #[cfg(feature = "tracing")]
+                info!(target: "analyzer", "DELETE target identified: {} (ID: {})", target_canonical, node_id);
+
+                self.produced_tables
+                    .insert(target_canonical.clone(), ctx.statement_index);
+
+                // Expand columns from schema if available
+                self.add_table_columns_from_schema(ctx, &target_canonical, &node_id);
             }
         } else {
             // Standard SQL: first table in FROM is target
@@ -1284,20 +1493,55 @@ impl<'a> Analyzer<'a> {
             };
             if let Some(first) = ts.first() {
                 if let TableFactor::Table { name, alias, .. } = &first.relation {
-                    let table_name = name.to_string();
-                    let lookup = alias
-                        .as_ref()
-                        .map(|a| a.name.to_string())
-                        .unwrap_or(table_name.clone());
+                    let name_str = name.to_string();
+                    let canonical_res = self.add_source_table(ctx, &name_str, None);
 
-                    let canonical = if let Some(c) = ctx.table_aliases.get(&lookup) {
-                        c.clone()
-                    } else {
-                        self.canonicalize_table_reference(&table_name).canonical
-                    };
-                    self.produced_tables.insert(canonical, ctx.statement_index);
+                    // Use the canonical name returned by add_source_table
+                    let canonical = canonical_res
+                        .clone()
+                        .unwrap_or_else(|| self.normalize_table_name(&name_str));
+
+                    // Register alias if present
+                    if let (Some(a), Some(canonical_name)) = (alias, canonical_res) {
+                        ctx.table_aliases.insert(a.name.to_string(), canonical_name);
+                    }
+
+                    let node_id = generate_node_id("table", &canonical);
+                    target_ids.push(node_id.clone());
+
+                    #[cfg(feature = "tracing")]
+                    info!(target: "analyzer", "DELETE target identified: {} (ID: {})", canonical, node_id);
+
+                    self.produced_tables
+                        .insert(canonical.clone(), ctx.statement_index);
+
+                    // Expand columns from schema if available
+                    self.add_table_columns_from_schema(ctx, &canonical, &node_id);
                 }
             }
+        }
+
+        // 2. Analyze sources (FROM + USING)
+
+        let mut analyze_sources = |ctx: &mut StatementContext, source_tables: &[TableWithJoins]| {
+            for t in source_tables {
+                if target_ids.is_empty() {
+                    self.analyze_table_with_joins(ctx, t, None);
+                } else {
+                    for target_id in &target_ids {
+                        self.analyze_table_with_joins(ctx, t, Some(target_id));
+                    }
+                }
+            }
+        };
+
+        match from {
+            FromTable::WithFromKeyword(ts) | FromTable::WithoutKeyword(ts) => {
+                analyze_sources(ctx, ts);
+            }
+        }
+        if let Some(us) = using {
+            analyze_sources(ctx, us);
         }
 
         // 3. Analyze selection
@@ -1312,21 +1556,84 @@ impl<'a> Analyzer<'a> {
         _into: bool,
         table: &TableFactor,
         source: &TableFactor,
+        on: &Expr,
+        clauses: &[MergeClause],
     ) {
         // 1. Analyze Target Table
-        self.analyze_table_factor(ctx, table, None);
+        let mut target_id = None;
+        if let TableFactor::Table { name, alias, .. } = table {
+            let table_name = name.to_string();
+            let canonical_res = self.add_source_table(ctx, &table_name, None);
 
-        if let TableFactor::Table { name, .. } = table {
-            let canonical = self.normalize_table_name(&name.to_string());
-            self.produced_tables.insert(canonical, ctx.statement_index);
+            // Use the canonical name returned by add_source_table
+            let canonical = canonical_res
+                .clone()
+                .unwrap_or_else(|| self.normalize_table_name(&table_name));
+
+            // Register alias if present
+            if let (Some(a), Some(canonical_name)) = (alias, canonical_res) {
+                ctx.table_aliases.insert(a.name.to_string(), canonical_name);
+            }
+
+            let node_id = generate_node_id("table", &canonical);
+            target_id = Some(node_id.clone());
+
+            #[cfg(feature = "tracing")]
+            info!(target: "analyzer", "MERGE target identified: {} (ID: {})", canonical, node_id);
+
+            self.produced_tables
+                .insert(canonical.clone(), ctx.statement_index);
+
+            // Expand columns from schema if available
+            self.add_table_columns_from_schema(ctx, &canonical, &node_id);
+        } else {
+            self.analyze_table_factor(ctx, table, None);
         }
 
-        // 2. Analyze Source Table
-        self.analyze_table_factor(ctx, source, None);
+        // 2. Analyze Source Table (USING clause)
+        self.analyze_table_factor(ctx, source, target_id.as_deref());
+
+        // 3. Analyze ON predicate
+        self.analyze_expression(ctx, on);
+
+        // 4. Analyze MERGE clauses
+        for clause in clauses {
+            match &clause.action {
+                MergeAction::Update { assignments } => {
+                    // Analyze assignments in UPDATE clause
+                    for assignment in assignments {
+                        self.analyze_expression(ctx, &assignment.value);
+                    }
+                }
+                MergeAction::Insert(insert_expr) => {
+                    // Analyze INSERT clause
+                    // MergeInsertExpr contains columns and kind fields
+                    match &insert_expr.kind {
+                        MergeInsertKind::Values(values) => {
+                            // VALUES clause with rows
+                            for row in &values.rows {
+                                for value in row {
+                                    self.analyze_expression(ctx, value);
+                                }
+                            }
+                        }
+                        MergeInsertKind::Row => {
+                            // ROW keyword - no explicit values to analyze here
+                        }
+                    }
+                }
+                MergeAction::Delete => {
+                    // DELETE has no additional expressions
+                }
+            }
+
+            // Analyze the predicate for this clause (WHEN MATCHED ... AND <predicate>)
+            if let Some(ref predicate) = clause.predicate {
+                self.analyze_expression(ctx, predicate);
+            }
+        }
     }
-
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -1483,6 +1790,51 @@ mod tests {
             .filter(|e| e.edge_type == EdgeType::CrossStatement)
             .collect();
         assert!(!cross_edges.is_empty());
+    }
+
+    #[test]
+    fn test_multi_table_delete_resolves_alias_targets() {
+        use sqlparser::dialect::MySqlDialect;
+        use sqlparser::parser::Parser;
+
+        let sql = r#"
+            DELETE t
+            FROM orders AS t
+            INNER JOIN order_items AS oi ON oi.order_id = t.id
+            WHERE oi.cancelled = true;
+        "#;
+
+        let stmt = Parser::parse_sql(&MySqlDialect {}, sql)
+            .expect("parse should succeed")
+            .into_iter()
+            .next()
+            .expect("one statement parsed");
+
+        let request = make_request(sql);
+        let mut analyzer = Analyzer::new(&request);
+        let lineage = analyzer
+            .analyze_statement(0, &stmt, None)
+            .expect("analysis should succeed");
+
+        let tables: HashSet<_> = lineage
+            .nodes
+            .iter()
+            .filter(|n| n.node_type == NodeType::Table)
+            .map(|n| n.qualified_name.clone().unwrap_or_else(|| n.label.clone()))
+            .collect();
+
+        assert!(
+            tables.contains("orders"),
+            "DELETE target alias should resolve to base table"
+        );
+        assert!(
+            tables.contains("order_items"),
+            "DELETE join source should be tracked"
+        );
+        assert!(
+            !tables.contains("t"),
+            "DELETE should not produce table nodes for bare aliases"
+        );
     }
 
     #[test]
@@ -2263,5 +2615,109 @@ mod tests {
         if let Some(col) = is_active_col {
             assert!(col.expression.is_some());
         }
+    }
+
+    #[test]
+    fn test_create_or_replace_table_updates_implied_schema() {
+        // Test that CREATE OR REPLACE TABLE updates the implied schema for subsequent statements
+        let request = make_request(
+            r#"
+            CREATE TABLE t (id INT);
+            CREATE OR REPLACE TABLE t (id INT, name VARCHAR);
+            SELECT * FROM t;
+        "#,
+        );
+        let result = analyze(&request);
+
+        assert_eq!(result.statements.len(), 3);
+
+        // The SELECT * should expand to both id and name columns (from second CREATE)
+        let select_stmt = &result.statements[2];
+        let column_nodes: Vec<_> = select_stmt
+            .nodes
+            .iter()
+            .filter(|n| n.node_type == NodeType::Column)
+            .collect();
+
+        // Should have both columns from the second CREATE TABLE
+        let column_labels: Vec<_> = column_nodes.iter().map(|n| n.label.as_str()).collect();
+        assert!(
+            column_labels.contains(&"id"),
+            "Expected 'id' column, found: {:?}",
+            column_labels
+        );
+        assert!(
+            column_labels.contains(&"name"),
+            "Expected 'name' column, found: {:?}",
+            column_labels
+        );
+    }
+
+    #[test]
+    fn test_imported_schema_not_overwritten_by_create_table() {
+        // Test that imported (user-provided) schemas take precedence and are not overwritten
+        use crate::types::{ColumnSchema, SchemaMetadata, SchemaTable};
+
+        let schema = SchemaMetadata {
+            default_catalog: None,
+            default_schema: None,
+            search_path: None,
+            case_sensitivity: None,
+            tables: vec![SchemaTable {
+                catalog: None,
+                schema: None,
+                name: "t".to_string(),
+                columns: vec![
+                    ColumnSchema {
+                        name: "id".to_string(),
+                        data_type: Some("INT".to_string()),
+                    },
+                    ColumnSchema {
+                        name: "imported_col".to_string(),
+                        data_type: Some("VARCHAR".to_string()),
+                    },
+                ],
+            }],
+        };
+
+        let request = AnalyzeRequest {
+            sql: r#"
+                CREATE TABLE t (id INT, different_col VARCHAR);
+                SELECT * FROM t;
+            "#
+            .to_string(),
+            files: None,
+            dialect: Dialect::Generic,
+            source_name: None,
+            schema: Some(schema),
+            options: None,
+        };
+
+        let result = analyze(&request);
+
+        // The SELECT * should expand to imported schema columns, not the CREATE TABLE columns
+        let select_stmt = &result.statements[1];
+        let column_nodes: Vec<_> = select_stmt
+            .nodes
+            .iter()
+            .filter(|n| n.node_type == NodeType::Column)
+            .collect();
+
+        let column_labels: Vec<_> = column_nodes.iter().map(|n| n.label.as_str()).collect();
+        assert!(
+            column_labels.contains(&"id"),
+            "Expected 'id' column from imported schema, found: {:?}",
+            column_labels
+        );
+        assert!(
+            column_labels.contains(&"imported_col"),
+            "Expected 'imported_col' from imported schema, found: {:?}",
+            column_labels
+        );
+        assert!(
+            !column_labels.contains(&"different_col"),
+            "Should not have 'different_col' from CREATE TABLE (imported schema takes precedence), found: {:?}",
+            column_labels
+        );
     }
 }

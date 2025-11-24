@@ -4,7 +4,12 @@ use crate::types::{issue_codes, Issue};
 use sqlparser::ast::Expr;
 
 impl<'a> Analyzer<'a> {
-    pub(super) fn validate_column(&mut self, ctx: &StatementContext, table_canonical: &str, column: &str) {
+    pub(super) fn validate_column(
+        &mut self,
+        ctx: &StatementContext,
+        table_canonical: &str,
+        column: &str,
+    ) {
         if let Some(schema_table) = self.schema_tables.get(table_canonical) {
             let normalized_col = self.normalize_identifier(column);
             let column_exists = schema_table
@@ -16,10 +21,7 @@ impl<'a> Analyzer<'a> {
                 self.issues.push(
                     Issue::warning(
                         issue_codes::UNKNOWN_COLUMN,
-                        format!(
-                            "Column '{}' not found in table '{}'",
-                            column, table_canonical
-                        ),
+                        format!("Column '{column}' not found in table '{table_canonical}'"),
                     )
                     .with_statement(ctx.statement_index),
                 );
@@ -27,7 +29,11 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    pub(super) fn extract_column_refs_for_validation(&mut self, ctx: &StatementContext, expr: &Expr) {
+    pub(super) fn extract_column_refs_for_validation(
+        &mut self,
+        ctx: &StatementContext,
+        expr: &Expr,
+    ) {
         let refs = self.extract_column_refs(expr);
         for col_ref in refs {
             if let Some(table) = col_ref.table.as_deref() {
