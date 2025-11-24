@@ -36,10 +36,12 @@ export function AnimatedEdge({
   const sourceColumn = data?.sourceColumn as string | undefined;
   const targetColumn = data?.targetColumn as string | undefined;
   const isHighlighted = data?.isHighlighted as boolean | undefined;
+  const isRecursive = data?.isRecursive as boolean | undefined;
+  const customTooltip = data?.tooltip as string | undefined;
 
-  let tooltipContent = '';
+  let tooltipContent = customTooltip || '';
   if (sourceColumn && targetColumn) {
-    tooltipContent += `${sourceColumn} → ${targetColumn}`;
+    tooltipContent += tooltipContent ? `\n${sourceColumn} → ${targetColumn}` : `${sourceColumn} → ${targetColumn}`;
   }
   if (expression) {
     tooltipContent += tooltipContent ? '\n\n' : '';
@@ -53,9 +55,10 @@ export function AnimatedEdge({
         path={edgePath}
         markerEnd={markerEnd}
         style={{
-          stroke: isHighlighted ? colors.accent : (style?.stroke || '#b1b1b7'),
+          stroke: isHighlighted ? colors.accent : style?.stroke || '#b1b1b7',
           strokeWidth: isHighlighted ? 3 : 2,
           opacity: isHighlighted ? 1 : 0.5,
+          strokeDasharray: style?.strokeDasharray,
           ...style,
         }}
       />
@@ -72,33 +75,28 @@ export function AnimatedEdge({
             <GraphTooltipProvider>
               <GraphTooltip delayDuration={GRAPH_CONFIG.TOOLTIP_DELAY}>
                 <GraphTooltipTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label="View expression details"
+                  <div
                     style={{
                       cursor: 'help',
                       backgroundColor: 'white',
                       border: `2px solid ${colors.accent}`,
-                      borderRadius: '50%',
-                      width: 20,
+                      color: colors.accent,
+                      borderRadius: 12,
+                      minWidth: 20,
                       height: 20,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      padding: 0,
+                      padding: '0 8px',
+                      fontSize: 10,
+                      fontWeight: 700,
+                      textTransform: 'none',
+                      letterSpacing: 0.3,
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
                     }}
                   >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="none">
-                      <path
-                        d="M13 2L3 14H12L11 22L21 10H12L13 2Z"
-                        fill={colors.accent}
-                        stroke={colors.accent}
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </button>
+                    ƒ
+                  </div>
                 </GraphTooltipTrigger>
                 <GraphTooltipContent side="top">
                   {tooltipContent}

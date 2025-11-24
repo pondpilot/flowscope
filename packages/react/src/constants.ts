@@ -66,5 +66,6 @@ export const COLORS = {
     text: '#047857',
     textSecondary: '#065F46',
   },
+  recursive: '#F59E0B',
   accent: '#4C61FF',
 } as const;

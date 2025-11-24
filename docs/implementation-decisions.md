@@ -282,10 +282,8 @@ interface AnalyzeRequest {
 - **Minimal Options**: Only essential flags, no premature configurability
 
 ### CTE Handling
-- **Phase 1**: Non-recursive CTEs only
-- **Recursive CTEs**: Emit warning issue with code `UNSUPPORTED_RECURSIVE_CTE`
+- **Recursive CTEs**: Supported; self-references and mutual references are analyzed without warnings
 - **Scoping**: CTEs scoped to their statement, no cross-statement references
-- **Future**: Full recursive CTE support in post-MVP enhancement
 
 ### Dialect-Specific Feature Support
 - **Strategy**: Work with what `sqlparser-rs` offers out of the box

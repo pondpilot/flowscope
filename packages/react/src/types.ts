@@ -185,6 +185,8 @@ export interface TableNodeData extends Record<string, unknown> {
   label: string;
   /** Type of node: regular table, CTE, or virtual output */
   nodeType: 'table' | 'cte' | 'virtualOutput';
+  /** Whether this CTE is recursive (self-referential) */
+  isRecursive?: boolean;
   /** List of columns belonging to this table */
   columns: ColumnNodeInfo[];
   /** Whether this node is currently selected */

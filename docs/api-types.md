@@ -224,7 +224,7 @@ interface Issue {
    * Machine-readable issue code, examples:
    * - PARSE_ERROR
    * - UNSUPPORTED_SYNTAX
-   * - UNSUPPORTED_RECURSIVE_CTE
+   * - UNSUPPORTED_RECURSIVE_CTE (deprecated; no longer emitted)
    * - APPROXIMATE_LINEAGE
    * - UNKNOWN_COLUMN
    * - UNKNOWN_TABLE

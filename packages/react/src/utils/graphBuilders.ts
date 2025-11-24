@@ -61,6 +61,11 @@ export function buildFlowNodes(
   const lowerCaseSearchTerm = searchTerm.toLowerCase();
   const tableNodes = statement.nodes.filter((n) => n.type === 'table' || n.type === 'cte');
   const columnNodes = statement.nodes.filter((n) => n.type === 'column');
+  const recursiveNodeIds = new Set(
+    statement.edges
+      .filter((e) => e.type === 'data_flow' && e.from === e.to)
+      .map((e) => e.from)
+  );
 
   const tableColumnMap = new Map<string, ColumnNodeInfo[]>();
 
@@ -108,6 +113,7 @@ export function buildFlowNodes(
       data: {
         label: node.label,
         nodeType: node.type === 'cte' ? 'cte' : 'table',
+        isRecursive: recursiveNodeIds.has(node.id),
         columns: columns,
         isSelected: node.id === selectedNodeId,
         isHighlighted: isHighlighted,
@@ -125,14 +131,27 @@ export function buildFlowNodes(
 export function buildFlowEdges(statement: StatementLineage): FlowEdge[] {
   return statement.edges
     .filter((e) => e.type === 'data_flow' || e.type === 'derivation')
-    .map((edge) => ({
-      id: edge.id,
-      source: edge.from,
-      target: edge.to,
-      type: 'animated',
-      data: { type: edge.type },
-      label: edge.operation || undefined,
-    }));
+    .map((edge) => {
+      const isRecursive = edge.type === 'data_flow' && edge.from === edge.to;
+      const tooltip = isRecursive ? 'Recursive member' : undefined;
+      const label = isRecursive ? undefined : edge.operation || undefined;
+
+      return {
+        id: edge.id,
+        source: edge.from,
+        target: edge.to,
+        type: 'animated',
+        sourceHandle: isRecursive ? 'rec-top' : undefined,
+        targetHandle: isRecursive ? 'rec-top' : undefined,
+        data: { type: edge.type, isRecursive, tooltip },
+        style: isRecursive
+          ? {
+              strokeDasharray: '6 4',
+            }
+          : undefined,
+        label,
+      };
+    });
 }
 
 /**

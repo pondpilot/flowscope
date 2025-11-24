@@ -42,7 +42,6 @@ interface Issue {
 |------|-------------|
 | `UNKNOWN_TABLE` | Table referenced in SQL not found in schema |
 | `UNSUPPORTED_SYNTAX` | SQL construct recognized but not fully supported |
-| `UNSUPPORTED_RECURSIVE_CTE` | Recursive CTEs detected (lineage may be incomplete) |
 | `APPROXIMATE_LINEAGE` | Lineage is approximate due to `SELECT *` without schema |
 
 ### Info

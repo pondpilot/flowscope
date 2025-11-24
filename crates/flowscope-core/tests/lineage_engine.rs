@@ -1,6 +1,6 @@
 use flowscope_core::{
     analyze, issue_codes, AnalyzeRequest, AnalyzeResult, ColumnSchema, Dialect, Edge, EdgeType,
-    Node, NodeType, SchemaMetadata, SchemaNamespaceHint, SchemaTable, StatementLineage,
+    Node, NodeType, SchemaMetadata, SchemaNamespaceHint, SchemaTable, Severity, StatementLineage,
 };
 use rstest::rstest;
 use std::collections::HashSet;
@@ -275,7 +275,7 @@ fn multi_stage_pipeline_emits_cross_statement_edges() {
 }
 
 #[test]
-fn recursive_ctes_emit_warning_but_keep_lineage() {
+fn recursive_ctes_produce_lineage_without_warnings() {
     let sql = r#"
         WITH RECURSIVE org_hierarchy AS (
             SELECT e.employee_id, e.manager_id, 0 AS depth
@@ -298,16 +298,46 @@ fn recursive_ctes_emit_warning_but_keep_lineage() {
         tables.contains("employees"),
         "recursive CTE should still record base table lineage"
     );
+
+    // No warnings are expected for supported recursive CTEs.
     assert!(
         result
             .issues
             .iter()
-            .any(|issue| issue.code == issue_codes::UNSUPPORTED_RECURSIVE_CTE),
-        "recursive CTE should emit UNSUPPORTED_RECURSIVE_CTE warning"
+            .all(|issue| issue.severity != Severity::Warning),
+        "recursive CTEs should not emit warnings when supported"
     );
+
+    // Verify the CTE node is present and self-references are tracked.
+    let stmt = first_statement(&result);
+    let cte_node = stmt
+        .nodes
+        .iter()
+        .find(|n| n.node_type == NodeType::Cte && n.label == "org_hierarchy")
+        .expect("cte node should be present");
+
+    let employees_node = stmt
+        .nodes
+        .iter()
+        .find(|n| n.node_type == NodeType::Table && n.label == "employees")
+        .expect("base table should be present");
+
+    let has_self_edge = stmt
+        .edges
+        .iter()
+        .any(|e| e.from == cte_node.id && e.to == cte_node.id);
     assert!(
-        result.summary.issue_count.warnings >= 1,
-        "summary should reflect recursive warning"
+        has_self_edge,
+        "recursive CTE should have a self-referential edge to represent recursion"
+    );
+
+    let has_base_edge = stmt
+        .edges
+        .iter()
+        .any(|e| e.from == employees_node.id && e.to == cte_node.id);
+    assert!(
+        has_base_edge,
+        "recursive CTE anchor should link base table to the CTE node"
     );
 }
 

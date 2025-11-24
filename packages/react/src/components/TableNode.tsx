@@ -29,6 +29,7 @@ export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
   const nodeData = data;
   const isCte = nodeData.nodeType === 'cte';
   const isVirtualOutput = nodeData.nodeType === 'virtualOutput';
+  const isRecursive = !!nodeData.isRecursive;
   const isSelected = selected || nodeData.isSelected;
   const isHighlighted = nodeData.isHighlighted;
   const isCollapsed = nodeData.isCollapsed;
@@ -48,7 +49,9 @@ export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
         border: `1px solid ${isSelected ? colors.accent : palette.border}`,
         boxShadow: isSelected
           ? `0 0 0 2px ${colors.accent}40`
-          : '0 1px 3px rgba(0,0,0,0.1)',
+          : isRecursive
+            ? `0 0 0 2px ${colors.recursive}20`
+            : '0 1px 3px rgba(0,0,0,0.1)',
         overflow: 'hidden',
         backgroundColor: isHighlighted ? 'hsl(var(--highlight))' : palette.bg,
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
@@ -82,6 +85,22 @@ export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
             zIndex: 10 
           }}
         />
+        {isRecursive && (
+          <Handle
+            type="target"
+            position={Position.Top}
+            id="rec-top"
+            style={{
+              opacity: 0,
+              border: 'none',
+              background: 'transparent',
+              top: -4,
+              left: '20%',
+              transform: 'translate(-50%, -50%)',
+              zIndex: 12,
+            }}
+          />
+        )}
         <Handle
           type="source"
           position={Position.Right}
@@ -148,6 +167,41 @@ export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
             {sanitizeIdentifier(nodeData.label)}
           </div>
         </div>
+
+        {isRecursive && (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              backgroundColor: `${colors.recursive}15`,
+              color: colors.recursive,
+              borderRadius: 999,
+              padding: '4px 8px',
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: 0.25,
+            }}
+            title="Recursive CTE"
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M3 12a6 6 0 0 1 9-5l2 1" />
+              <path d="M21 12a6 6 0 0 1-9 5l-2-1" />
+              <path d="M7 10h4v4" />
+              <path d="M17 14h-4v-4" />
+            </svg>
+            Recursive
+          </span>
+        )}
       </div>
 
       {!isCollapsed && nodeData.columns.length > 0 && (

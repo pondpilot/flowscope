@@ -55,9 +55,9 @@ This document shows SQL feature support across different dialects in FlowScope.
 | Basic CTE | ✅ | ✅ | ✅ | ✅ |
 | Multiple CTEs | ✅ | ✅ | ✅ | ✅ |
 | CTE referencing CTE | ✅ | ✅ | ✅ | ✅ |
-| Recursive CTE | ⚠️ | ⚠️ | ⚠️ | ⚠️ |
+| Recursive CTE | ✅ | ✅ | ✅ | ✅ |
 
-**Note:** Recursive CTEs are parsed and emit a warning (`UNSUPPORTED_RECURSIVE_CTE`); lineage is incomplete.
+**Note:** Recursive CTEs are fully analyzed for table and column lineage, including self-referential edges; no warnings are emitted.
 
 ## Dialect-Specific Syntax
 

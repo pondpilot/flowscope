@@ -41,20 +41,11 @@ This document provides a comprehensive reference of all error and warning codes 
 - **Engine Behavior**: Provides partial lineage where possible; marks affected areas as approximate
 
 #### `UNSUPPORTED_RECURSIVE_CTE`
-- **Severity**: Warning
-- **Description**: Recursive CTEs are not supported in Phase 1
-- **When Emitted**: When a CTE references itself
-- **Example SQL**:
-  ```sql
-  WITH RECURSIVE cte AS (
-    SELECT 1 AS n
-    UNION ALL
-    SELECT n + 1 FROM cte WHERE n < 10
-  )
-  SELECT * FROM cte;
-  ```
-- **User Action**: Consider refactoring to non-recursive form or wait for Phase 2+ support
-- **Engine Behavior**: Treats CTE as opaque; provides table-level lineage only
+- **Severity**: Warning (deprecated)
+- **Description**: Previously emitted for recursive CTEs. Recursive CTE lineage is now supported, so this code is retained for backward compatibility but is no longer emitted by the analyzer.
+- **When Emitted**: Not emitted in current versions
+- **User Action**: None
+- **Engine Behavior**: N/A
 
 #### `APPROXIMATE_LINEAGE`
 - **Severity**: Info

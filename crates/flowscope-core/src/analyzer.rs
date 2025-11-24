@@ -283,19 +283,8 @@ impl<'a> Analyzer<'a> {
             .map(|w| &w.cte_tables)
             .unwrap_or(&empty_vec);
 
-        // Check if this is a recursive CTE
-        if let Some(ref with) = query.with {
-            if with.recursive {
-                self.issues.push(
-                    Issue::warning(
-                        issue_codes::UNSUPPORTED_RECURSIVE_CTE,
-                        "Recursive CTE detected - lineage may be incomplete".to_string(),
-                    )
-                    .with_statement(ctx.statement_index),
-                );
-            }
-        }
-
+        // Pass 1: register all CTE names/nodes up front to allow forward and mutual references.
+        let mut cte_ids: Vec<(String, String)> = Vec::new();
         for cte in ctes {
             let cte_name = cte.alias.name.to_string();
 
@@ -313,13 +302,16 @@ impl<'a> Analyzer<'a> {
             // Register CTE for resolution
             ctx.cte_definitions.insert(cte_name.clone(), cte_id.clone());
             self.all_ctes.insert(cte_name.clone());
+            cte_ids.push((cte_name, cte_id));
+        }
 
-            // Analyze CTE body
-            self.analyze_query_body(ctx, &cte.query.body, Some(&cte_id));
+        // Pass 2: analyze each CTE body now that all aliases are in scope.
+        for (cte, (_, cte_id)) in ctes.iter().zip(cte_ids.iter()) {
+            self.analyze_query_body(ctx, &cte.query.body, Some(cte_id));
 
             // Capture CTE columns for lineage linking
             let columns = std::mem::take(&mut ctx.output_columns);
-            ctx.cte_columns.insert(cte_name, columns);
+            ctx.cte_columns.insert(cte.alias.name.to_string(), columns);
         }
 
         // Analyze main query body
@@ -653,10 +645,18 @@ impl<'a> Analyzer<'a> {
                     }
                 }
 
-                // Fallback to generating a new ID (standard table column)
+                // Determine the node ID for the owning table/CTE
+                let table_node_id = ctx
+                    .table_node_ids
+                    .get(table_canonical)
+                    .cloned()
+                    .or_else(|| ctx.cte_definitions.get(table_canonical).cloned())
+                    .unwrap_or_else(|| generate_node_id("table", table_canonical));
+
+                // Fallback to generating a new ID (standard table/CTE column)
                 let source_col_id = source_col_id.unwrap_or_else(|| {
                     generate_column_node_id(
-                        Some(&generate_node_id("table", table_canonical)),
+                        Some(&table_node_id),
                         &self.normalize_identifier(&source.column),
                     )
                 });
@@ -677,7 +677,6 @@ impl<'a> Analyzer<'a> {
                 ctx.add_node(source_col_node);
 
                 // Create ownership edge from table to source column
-                let table_node_id = generate_node_id("table", table_canonical);
                 let ownership_edge_id = generate_edge_id(&table_node_id, &source_col_id);
                 if !ctx.edge_ids.contains(&ownership_edge_id) {
                     ctx.add_edge(Edge {
@@ -1638,6 +1637,7 @@ impl<'a> Analyzer<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Severity;
 
     fn make_request(sql: &str) -> AnalyzeRequest {
         AnalyzeRequest {
@@ -2247,7 +2247,7 @@ mod tests {
     }
 
     #[test]
-    fn test_recursive_cte_warning() {
+    fn test_recursive_cte_supported_without_warning() {
         let request = make_request(
             r#"
             WITH RECURSIVE cte AS (
@@ -2260,11 +2260,11 @@ mod tests {
         );
         let result = analyze(&request);
 
-        // Should emit recursive CTE warning
+        // Should be supported without warnings
         assert!(result
             .issues
             .iter()
-            .any(|i| i.code == issue_codes::UNSUPPORTED_RECURSIVE_CTE));
+            .all(|i| i.severity != Severity::Warning));
     }
 
     #[test]
