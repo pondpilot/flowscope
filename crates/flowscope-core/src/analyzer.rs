@@ -13,6 +13,7 @@ use tracing::{info, info_span};
 
 mod context;
 mod diagnostics;
+mod functions;
 mod global;
 pub mod helpers;
 mod input;
@@ -425,7 +426,10 @@ impl<'a> Analyzer<'a> {
         select: &ast::Select,
         target_node: Option<&str>,
     ) {
-        // Analyze FROM clause first to register tables and aliases
+        // Push a new scope for this SELECT - isolates table resolution
+        ctx.push_scope();
+
+        // Analyze FROM clause first to register tables and aliases in the current scope
         for table_with_joins in &select.from {
             self.analyze_table_with_joins(ctx, table_with_joins, target_node);
         }
@@ -434,6 +438,9 @@ impl<'a> Analyzer<'a> {
         if self.column_lineage_enabled {
             self.analyze_select_columns(ctx, select, target_node);
         }
+
+        // Pop the scope when done with this SELECT
+        ctx.pop_scope();
     }
 
     fn analyze_select_columns(
@@ -533,26 +540,33 @@ impl<'a> Analyzer<'a> {
             Expr::UnaryOp { expr, .. } => {
                 Self::collect_column_refs(expr, refs);
             }
-            Expr::Function(func) => match &func.args {
-                ast::FunctionArguments::List(arg_list) => {
-                    for arg in &arg_list.args {
-                        match arg {
-                            FunctionArg::Unnamed(FunctionArgExpr::Expr(e)) => {
-                                Self::collect_column_refs(e, refs);
+            Expr::Function(func) => {
+                let func_name = func.name.to_string();
+                match &func.args {
+                    ast::FunctionArguments::List(arg_list) => {
+                        for (idx, arg) in arg_list.args.iter().enumerate() {
+                            // Check if this argument should be skipped (e.g., date unit keywords)
+                            if functions::should_skip_function_arg(&func_name, idx) {
+                                continue;
                             }
-                            FunctionArg::Named {
-                                arg: FunctionArgExpr::Expr(e),
-                                ..
-                            } => {
-                                Self::collect_column_refs(e, refs);
+                            match arg {
+                                FunctionArg::Unnamed(FunctionArgExpr::Expr(e)) => {
+                                    Self::collect_column_refs(e, refs);
+                                }
+                                FunctionArg::Named {
+                                    arg: FunctionArgExpr::Expr(e),
+                                    ..
+                                } => {
+                                    Self::collect_column_refs(e, refs);
+                                }
+                                _ => {}
                             }
-                            _ => {}
                         }
                     }
+                    ast::FunctionArguments::Subquery(_) => {}
+                    ast::FunctionArguments::None => {}
                 }
-                ast::FunctionArguments::Subquery(_) => {}
-                ast::FunctionArguments::None => {}
-            },
+            }
             Expr::Case {
                 operand,
                 conditions,
@@ -870,6 +884,7 @@ impl<'a> Analyzer<'a> {
 
     /// Resolve which table a column belongs to.
     /// If qualifier is provided, resolve via alias. Otherwise, try to infer from tables in scope.
+    /// Uses stack-based scoping to only consider tables in the current SELECT's FROM clause.
     fn resolve_column_table(
         &mut self,
         ctx: &StatementContext,
@@ -882,7 +897,15 @@ impl<'a> Analyzer<'a> {
         }
 
         // No qualifier - try to find which table owns this column
-        let tables_in_scope: Vec<_> = ctx.table_node_ids.keys().cloned().collect();
+        // Use scope-based resolution: only consider tables in the current scope
+        let tables_in_scope = ctx.tables_in_current_scope();
+
+        // If no tables in current scope, fall back to global (shouldn't happen normally)
+        let tables_in_scope = if tables_in_scope.is_empty() {
+            ctx.table_node_ids.keys().cloned().collect::<Vec<_>>()
+        } else {
+            tables_in_scope
+        };
 
         // If only one table in scope, assume column belongs to it
         if tables_in_scope.len() == 1 {
@@ -892,8 +915,10 @@ impl<'a> Analyzer<'a> {
         let normalized_col = self.normalize_identifier(column);
 
         // Collect candidates using CTE output columns and schema metadata
+        // Only consider tables that are actually in the current scope
         let mut candidate_tables: Vec<String> = Vec::new();
         for table_canonical in &tables_in_scope {
+            // Check CTE columns
             if let Some(cte_cols) = ctx.cte_columns.get(table_canonical) {
                 if cte_cols.iter().any(|c| c.name == normalized_col) {
                     candidate_tables.push(table_canonical.clone());
@@ -901,6 +926,7 @@ impl<'a> Analyzer<'a> {
                 }
             }
 
+            // Check schema metadata
             if let Some(schema_entry) = self.schema_tables.get(table_canonical) {
                 if schema_entry
                     .table
@@ -916,7 +942,12 @@ impl<'a> Analyzer<'a> {
         match candidate_tables.len() {
             1 => candidate_tables.first().cloned(),
             0 => {
-                // Ambiguous because we have multiple tables in scope but no way to disambiguate.
+                // No candidates found - if there's only one table in scope, use it
+                // (the column might exist but not be in our schema)
+                if tables_in_scope.len() == 1 {
+                    return Some(tables_in_scope[0].clone());
+                }
+                // Multiple tables but column not found in any - ambiguous
                 self.issues.push(
                     Issue::warning(
                         issue_codes::UNRESOLVED_REFERENCE,
@@ -931,7 +962,7 @@ impl<'a> Analyzer<'a> {
                 None
             }
             _ => {
-                // Column exists in multiple tables — require explicit qualifier.
+                // Column exists in multiple tables in scope — require explicit qualifier.
                 self.issues.push(
                     Issue::warning(
                         issue_codes::UNRESOLVED_REFERENCE,
@@ -1031,9 +1062,9 @@ impl<'a> Analyzer<'a> {
 
                 let canonical = self.add_source_table(ctx, &table_name, target_node);
 
-                // Register alias if present
+                // Register alias if present (in current scope)
                 if let (Some(a), Some(canonical_name)) = (alias, canonical) {
-                    ctx.table_aliases.insert(a.name.to_string(), canonical_name);
+                    ctx.register_alias_in_scope(a.name.to_string(), canonical_name);
                 }
             }
             TableFactor::Derived {
@@ -1043,8 +1074,8 @@ impl<'a> Analyzer<'a> {
                 self.analyze_query(ctx, subquery, target_node);
 
                 if let Some(a) = alias {
-                    // Register subquery alias
-                    ctx.subquery_aliases.insert(a.name.to_string());
+                    // Register subquery alias (in current scope)
+                    ctx.register_subquery_alias_in_scope(a.name.to_string());
                 }
             }
             TableFactor::NestedJoin {
@@ -1094,8 +1125,8 @@ impl<'a> Analyzer<'a> {
             canonical_for_alias = Some(table_name.to_string());
             let cte_id = ctx.cte_definitions.get(table_name).cloned();
             if let Some(ref id) = cte_id {
-                ctx.table_node_ids
-                    .insert(table_name.to_string(), id.clone());
+                // Register CTE in current scope for resolution
+                ctx.register_table_in_scope(table_name.to_string(), id.clone());
             }
             cte_id
         } else {
@@ -1155,8 +1186,8 @@ impl<'a> Analyzer<'a> {
                 .or_default()
                 .push(ctx.statement_index);
 
-            // Track table node ID for column ownership
-            ctx.table_node_ids.insert(canonical, id.clone());
+            // Track table node ID for column ownership and register in current scope
+            ctx.register_table_in_scope(canonical, id.clone());
 
             Some(id)
         };
@@ -3336,6 +3367,238 @@ mod tests {
             conflict_warnings.len(),
             0,
             "Should not emit conflict warnings when allow_implied=false"
+        );
+    }
+
+    // =====================================================
+    // Scope-based Resolution Tests
+    // =====================================================
+
+    #[test]
+    fn test_multi_cte_scope_isolation() {
+        // Test that columns are resolved within their immediate CTE scope,
+        // not leaking across CTE boundaries
+        let request = make_request(
+            r#"
+            WITH user_metrics AS (
+                SELECT
+                    u.user_id,
+                    COUNT(DISTINCT o.order_id) as total_orders,
+                    SUM(o.total_amount) as lifetime_value
+                FROM users u
+                LEFT JOIN orders o ON u.user_id = o.user_id
+                GROUP BY u.user_id
+            ),
+            user_segments AS (
+                SELECT
+                    user_id,
+                    total_orders,
+                    lifetime_value,
+                    CASE
+                        WHEN lifetime_value > 1000 THEN 'VIP'
+                        ELSE 'Regular'
+                    END as customer_segment
+                FROM user_metrics
+            ),
+            segment_summary AS (
+                SELECT
+                    customer_segment,
+                    COUNT(DISTINCT user_id) as user_count,
+                    SUM(lifetime_value) as total_revenue
+                FROM user_segments
+                GROUP BY customer_segment
+            )
+            SELECT
+                customer_segment,
+                user_count,
+                total_revenue
+            FROM segment_summary
+            "#,
+        );
+        let result = analyze(&request);
+
+        // Should not have ambiguous column warnings because each CTE scope
+        // is isolated - columns should resolve to the single table in scope
+        let ambiguous_warnings: Vec<_> = result
+            .issues
+            .iter()
+            .filter(|i| {
+                i.code == issue_codes::UNRESOLVED_REFERENCE
+                    && i.message.contains("exists in multiple tables")
+            })
+            .collect();
+
+        assert!(
+            ambiguous_warnings.is_empty(),
+            "Should not have ambiguous column warnings in properly scoped CTEs. Found: {:?}",
+            ambiguous_warnings
+        );
+    }
+
+    #[test]
+    fn test_datediff_day_not_treated_as_column() {
+        // Test that 'day' in DATEDIFF(day, ...) is not treated as a column reference
+        let request = make_request(
+            r#"
+            SELECT
+                user_id,
+                DATEDIFF(day, created_at, CURRENT_DATE) as days_since_creation
+            FROM users
+            "#,
+        );
+        let result = analyze(&request);
+
+        // Should NOT have a warning about 'day' being ambiguous or unresolved
+        let day_warnings: Vec<_> = result
+            .issues
+            .iter()
+            .filter(|i| i.message.contains("'day'"))
+            .collect();
+
+        assert!(
+            day_warnings.is_empty(),
+            "Should not treat 'day' unit keyword as a column reference. Found warnings: {:?}",
+            day_warnings
+        );
+
+        // Should have column lineage for the actual columns
+        let column_nodes: Vec<_> = result.statements[0]
+            .nodes
+            .iter()
+            .filter(|n| n.node_type == NodeType::Column)
+            .collect();
+
+        let column_labels: Vec<_> = column_nodes.iter().map(|n| n.label.as_str()).collect();
+        assert!(
+            column_labels.contains(&"user_id") || column_labels.contains(&"days_since_creation")
+        );
+    }
+
+    #[test]
+    fn test_dateadd_unit_not_treated_as_column() {
+        // Test various date functions with unit keywords
+        let request = make_request(
+            r#"
+            SELECT
+                DATEADD(month, 1, created_at) as next_month,
+                DATEPART(year, created_at) as year_value,
+                TIMESTAMPDIFF(hour, start_time, end_time) as hours_diff
+            FROM events
+            "#,
+        );
+        let result = analyze(&request);
+
+        // Should NOT have warnings about 'month', 'year', or 'hour' being ambiguous
+        let unit_warnings: Vec<_> = result
+            .issues
+            .iter()
+            .filter(|i| {
+                i.message.contains("'month'")
+                    || i.message.contains("'year'")
+                    || i.message.contains("'hour'")
+            })
+            .collect();
+
+        assert!(
+            unit_warnings.is_empty(),
+            "Should not treat date/time unit keywords as column references. Found warnings: {:?}",
+            unit_warnings
+        );
+    }
+
+    #[test]
+    fn test_cte_with_join_scope_isolation() {
+        // Test that when a CTE joins multiple tables, subsequent CTEs that reference
+        // only the CTE don't see the internal tables
+        let request = make_request(
+            r#"
+            WITH enriched_orders AS (
+                SELECT
+                    o.order_id,
+                    o.user_id,
+                    o.total_amount,
+                    u.email,
+                    p.category
+                FROM orders o
+                JOIN users u ON o.user_id = u.user_id
+                JOIN products p ON o.product_id = p.product_id
+            ),
+            order_summary AS (
+                SELECT
+                    user_id,
+                    email,
+                    SUM(total_amount) as total_spent,
+                    COUNT(DISTINCT category) as categories_purchased
+                FROM enriched_orders
+                GROUP BY user_id, email
+            )
+            SELECT * FROM order_summary
+            "#,
+        );
+        let result = analyze(&request);
+
+        // The order_summary CTE references enriched_orders, not the underlying
+        // orders/users/products tables. Columns like user_id, email should resolve
+        // to enriched_orders, not be ambiguous across multiple tables.
+        let ambiguous_warnings: Vec<_> = result
+            .issues
+            .iter()
+            .filter(|i| {
+                i.code == issue_codes::UNRESOLVED_REFERENCE
+                    && i.message.contains("exists in multiple tables")
+            })
+            .collect();
+
+        assert!(
+            ambiguous_warnings.is_empty(),
+            "Columns in CTE referencing another CTE should resolve to that CTE, \
+            not see internal tables. Found: {:?}",
+            ambiguous_warnings
+        );
+    }
+
+    #[test]
+    fn test_column_named_day_tracked_in_aggregate() {
+        // Regression test: columns named like date units (day, month, year, etc.)
+        // should still be tracked when used in non-date functions like MAX, SUM, etc.
+        let request = make_request(
+            r#"
+            SELECT MAX(day) as max_day, SUM(hours) as total_hours
+            FROM metrics
+            "#,
+        );
+        let result = analyze(&request);
+
+        // Should NOT have any warnings - these are legitimate columns
+        let column_warnings: Vec<_> = result
+            .issues
+            .iter()
+            .filter(|i| i.message.contains("'day'") || i.message.contains("'hours'"))
+            .collect();
+
+        assert!(
+            column_warnings.is_empty(),
+            "Columns named 'day' or 'hours' should be tracked in aggregate functions. Found warnings: {:?}",
+            column_warnings
+        );
+
+        // Should have column lineage for both 'day' and 'hours'
+        let column_labels: Vec<_> = result.statements[0]
+            .nodes
+            .iter()
+            .filter(|n| n.node_type == NodeType::Column)
+            .map(|n| n.label.as_str())
+            .collect();
+
+        assert!(
+            column_labels.contains(&"day"),
+            "Should track 'day' column in MAX(day). Found columns: {:?}",
+            column_labels
+        );
+        assert!(
+            column_labels.contains(&"hours"),
+            "Should track 'hours' column in SUM(hours). Found columns: {:?}",
+            column_labels
         );
     }
 }

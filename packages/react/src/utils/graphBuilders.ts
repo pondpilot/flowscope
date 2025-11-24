@@ -212,25 +212,15 @@ export function buildFlowNodes(
 export function buildFlowEdges(statement: StatementLineage): FlowEdge[] {
   return statement.edges
     .filter((e) => e.type === 'data_flow' || e.type === 'derivation')
+    .filter((e) => e.from !== e.to) // Skip self-referencing edges (e.g., recursive CTEs)
     .map((edge) => {
-      const isRecursive = edge.type === 'data_flow' && edge.from === edge.to;
-      const tooltip = isRecursive ? 'Recursive member' : undefined;
-      const label = isRecursive ? undefined : edge.operation || undefined;
-
       return {
         id: edge.id,
         source: edge.from,
         target: edge.to,
         type: 'animated',
-        sourceHandle: isRecursive ? 'rec-top' : undefined,
-        targetHandle: isRecursive ? 'rec-top' : undefined,
-        data: { type: edge.type, isRecursive, tooltip },
-        style: isRecursive
-          ? {
-              strokeDasharray: '6 4',
-            }
-          : undefined,
-        label,
+        data: { type: edge.type },
+        label: edge.operation || undefined,
       };
     });
 }

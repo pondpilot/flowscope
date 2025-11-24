@@ -1,6 +1,25 @@
 use crate::types::{Edge, Node};
 use std::collections::{HashMap, HashSet};
 
+/// Represents a single scope level for column resolution.
+/// Each SELECT/subquery/CTE body gets its own scope.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct Scope {
+    /// Tables directly referenced in this scope's FROM/JOIN clauses
+    /// Maps canonical table name -> node ID
+    pub(crate) tables: HashMap<String, String>,
+    /// Aliases defined in this scope (alias -> canonical name)
+    pub(crate) aliases: HashMap<String, String>,
+    /// Subquery aliases in this scope
+    pub(crate) subquery_aliases: HashSet<String>,
+}
+
+impl Scope {
+    pub(crate) fn new() -> Self {
+        Self::default()
+    }
+}
+
 /// Context for analyzing a single statement
 pub(crate) struct StatementContext {
     pub(crate) statement_index: usize,
@@ -10,18 +29,21 @@ pub(crate) struct StatementContext {
     pub(crate) edge_ids: HashSet<String>,
     /// CTE name -> node ID
     pub(crate) cte_definitions: HashMap<String, String>,
-    /// Alias -> canonical table name
+    /// Alias -> canonical table name (global, for backwards compatibility)
     pub(crate) table_aliases: HashMap<String, String>,
     /// Subquery aliases (for reference tracking)
     pub(crate) subquery_aliases: HashSet<String>,
     /// Last join/operation type for edge labeling
     pub(crate) last_operation: Option<String>,
-    /// Table canonical name -> node ID (for column ownership)
+    /// Table canonical name -> node ID (for column ownership) - global registry
     pub(crate) table_node_ids: HashMap<String, String>,
     /// Output columns for this statement (for column lineage)
     pub(crate) output_columns: Vec<OutputColumn>,
     /// CTE columns: CTE name -> list of output columns
     pub(crate) cte_columns: HashMap<String, Vec<OutputColumn>>,
+    /// Stack of scopes for proper column resolution
+    /// The top of the stack (last element) is the current scope
+    pub(crate) scope_stack: Vec<Scope>,
 }
 
 /// Represents an output column in the SELECT list
@@ -66,6 +88,7 @@ impl StatementContext {
             table_node_ids: HashMap::new(),
             output_columns: Vec::new(),
             cte_columns: HashMap::new(),
+            scope_stack: Vec::new(),
         }
     }
 
@@ -81,6 +104,71 @@ impl StatementContext {
         let id = edge.id.clone();
         if self.edge_ids.insert(id) {
             self.edges.push(edge);
+        }
+    }
+
+    /// Push a new scope onto the stack (entering a SELECT/subquery)
+    pub(crate) fn push_scope(&mut self) {
+        self.scope_stack.push(Scope::new());
+    }
+
+    /// Pop the current scope (leaving a SELECT/subquery)
+    pub(crate) fn pop_scope(&mut self) {
+        self.scope_stack.pop();
+    }
+
+    /// Get the current (topmost) scope, if any
+    pub(crate) fn current_scope(&self) -> Option<&Scope> {
+        self.scope_stack.last()
+    }
+
+    /// Get the current (topmost) scope mutably, if any
+    pub(crate) fn current_scope_mut(&mut self) -> Option<&mut Scope> {
+        self.scope_stack.last_mut()
+    }
+
+    /// Register a table in the current scope
+    pub(crate) fn register_table_in_scope(&mut self, canonical: String, node_id: String) {
+        // Always register in global table_node_ids for node lookups
+        self.table_node_ids
+            .insert(canonical.clone(), node_id.clone());
+
+        // Also register in current scope for resolution
+        if let Some(scope) = self.current_scope_mut() {
+            scope.tables.insert(canonical, node_id);
+        }
+    }
+
+    /// Register an alias in the current scope
+    pub(crate) fn register_alias_in_scope(&mut self, alias: String, canonical: String) {
+        // Register in global aliases for backwards compatibility
+        self.table_aliases.insert(alias.clone(), canonical.clone());
+
+        // Also register in current scope
+        if let Some(scope) = self.current_scope_mut() {
+            scope.aliases.insert(alias, canonical);
+        }
+    }
+
+    /// Register a subquery alias in the current scope
+    pub(crate) fn register_subquery_alias_in_scope(&mut self, alias: String) {
+        // Register globally
+        self.subquery_aliases.insert(alias.clone());
+
+        // Also register in current scope
+        if let Some(scope) = self.current_scope_mut() {
+            scope.subquery_aliases.insert(alias);
+        }
+    }
+
+    /// Get tables that are in scope for column resolution.
+    /// Returns tables from the current scope only.
+    pub(crate) fn tables_in_current_scope(&self) -> Vec<String> {
+        if let Some(scope) = self.current_scope() {
+            scope.tables.keys().cloned().collect()
+        } else {
+            // Fallback to global table_node_ids if no scope (shouldn't happen normally)
+            self.table_node_ids.keys().cloned().collect()
         }
     }
 }
