@@ -17,6 +17,7 @@ const baseResult: AnalyzeResult = {
 const wasmModuleMock = vi.hoisted(() => ({
   default: vi.fn(async () => undefined),
   analyze_sql_json: vi.fn(() => JSON.stringify(baseResult)),
+  set_panic_hook: vi.fn(() => undefined),
 }));
 
 vi.mock('../wasm/flowscope_wasm', () => wasmModuleMock, { virtual: true });
@@ -31,6 +32,8 @@ describe('analyzer', () => {
     wasmModuleMock.default.mockImplementation(async () => undefined);
     wasmModuleMock.analyze_sql_json.mockClear();
     wasmModuleMock.analyze_sql_json.mockImplementation(() => JSON.stringify(baseResult));
+    wasmModuleMock.set_panic_hook.mockClear();
+    wasmModuleMock.set_panic_hook.mockImplementation(() => undefined);
   });
 
   afterEach(() => {

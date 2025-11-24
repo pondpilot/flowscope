@@ -7,6 +7,10 @@ export const FILE_LIMITS = {
   MAX_COUNT: 100,
 } as const;
 
+export const SCHEMA_LIMITS = {
+  MAX_SIZE: 1 * 1024 * 1024, // 1MB for schema DDL
+} as const;
+
 export const KEYBOARD_SHORTCUTS = {
   RUN_ANALYSIS: { key: 'Enter', modifiers: ['metaKey', 'ctrlKey'] },
   TOGGLE_SIDEBAR: { key: 'b', modifiers: ['metaKey', 'ctrlKey'] },

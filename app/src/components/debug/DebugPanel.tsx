@@ -3,7 +3,7 @@ import { X, Minimize2, Maximize2, Copy, Check } from 'lucide-react';
 import { useDebugData } from '../../hooks/useDebugData';
 import { JsonTreeView } from './JsonTreeView';
 
-type TabId = 'analysis' | 'uiState' | 'raw';
+type TabId = 'analysis' | 'schema' | 'uiState' | 'raw';
 
 interface Position {
   x: number;
@@ -89,6 +89,8 @@ export function DebugPanel() {
     switch (activeTab) {
       case 'analysis':
         return debugData.analysisResult;
+      case 'schema':
+        return debugData.schema;
       case 'uiState':
         return debugData.uiState;
       case 'raw':
@@ -163,6 +165,16 @@ export function DebugPanel() {
               }`}
             >
               Analysis Result
+            </button>
+            <button
+              onClick={() => setActiveTab('schema')}
+              className={`px-3 py-1 text-sm rounded ${
+                activeTab === 'schema'
+                  ? 'bg-white border border-gray-300 font-semibold'
+                  : 'text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              Schema
             </button>
             <button
               onClick={() => setActiveTab('uiState')}
@@ -255,6 +267,42 @@ export function DebugPanel() {
                   </div>
                 </div>
                 <JsonTreeView data={debugData.analysisResult} />
+              </div>
+            )}
+            {activeTab === 'schema' && (
+              <div>
+                <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded">
+                  <div className="text-xs font-sans text-gray-700 mb-2">
+                    <strong>Schema Status:</strong>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs font-sans">
+                    <div>
+                      <span className="text-gray-600">Has Schema SQL:</span>{' '}
+                      <span className="font-semibold">
+                        {debugData.schema.hasSchemaSQL ? '✓' : '✗'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Resolved Tables:</span>{' '}
+                      <span className="font-semibold">
+                        {debugData.schema.resolvedTableCount}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Imported:</span>{' '}
+                      <span className="font-semibold text-green-600">
+                        {debugData.schema.importedTableCount}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Implied:</span>{' '}
+                      <span className="font-semibold text-blue-600">
+                        {debugData.schema.impliedTableCount}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <JsonTreeView data={debugData.schema} />
               </div>
             )}
             {activeTab === 'uiState' && (

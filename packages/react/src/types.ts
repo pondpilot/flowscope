@@ -197,6 +197,8 @@ export interface TableNodeData extends Record<string, unknown> {
   isHighlighted: boolean;
   /** Optional source file name */
   sourceName?: string;
+  /** Number of columns hidden from resolvedSchema (0 if none) */
+  hiddenColumnCount?: number;
 }
 
 /**

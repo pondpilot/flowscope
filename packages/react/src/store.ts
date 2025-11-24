@@ -44,6 +44,7 @@ export interface LineageState {
   searchTerm: string;
   viewMode: LineageViewMode;
   collapsedNodeIds: Set<string>;
+  expandedTableIds: Set<string>; // Tables with all columns shown
   showScriptTables: boolean;
   navigationRequest: NavigationRequest | null;
 
@@ -52,6 +53,7 @@ export interface LineageState {
   setSql: (sql: string) => void;
   selectNode: (nodeId: string | null) => void;
   toggleNodeCollapse: (nodeId: string) => void;
+  toggleTableExpansion: (tableId: string) => void;
   selectStatement: (index: number) => void;
   highlightSpan: (span: Span | null) => void;
   setSearchTerm: (term: string) => void;
@@ -76,6 +78,7 @@ export function createLineageStore(initialState?: Partial<LineageState>): StoreA
     searchTerm: '',
     viewMode: initialViewMode,
     collapsedNodeIds: new Set(),
+    expandedTableIds: new Set(),
     showScriptTables: false,
     navigationRequest: null,
     ...initialState,
@@ -95,6 +98,7 @@ export function createLineageStore(initialState?: Partial<LineageState>): StoreA
           selectedNodeId: null,
           highlightedSpan: null,
           collapsedNodeIds: new Set(),
+          expandedTableIds: new Set(),
           selectedStatementIndex: statementCount === 0 ? 0 : newSelectedStatementIndex,
         };
       }),
@@ -116,6 +120,17 @@ export function createLineageStore(initialState?: Partial<LineageState>): StoreA
           newCollapsedNodeIds.add(nodeId);
         }
         return { collapsedNodeIds: newCollapsedNodeIds };
+      }),
+
+    toggleTableExpansion: (tableId) =>
+      set((state) => {
+        const newExpandedTableIds = new Set(state.expandedTableIds);
+        if (newExpandedTableIds.has(tableId)) {
+          newExpandedTableIds.delete(tableId);
+        } else {
+          newExpandedTableIds.add(tableId);
+        }
+        return { expandedTableIds: newExpandedTableIds };
       }),
 
     selectStatement: (index) =>
@@ -183,6 +198,7 @@ export function useLineage() {
       searchTerm: store.searchTerm,
       viewMode: store.viewMode,
       collapsedNodeIds: store.collapsedNodeIds,
+      expandedTableIds: store.expandedTableIds,
       showScriptTables: store.showScriptTables,
       navigationRequest: store.navigationRequest,
     },
@@ -191,6 +207,7 @@ export function useLineage() {
       setSql: store.setSql,
       selectNode: store.selectNode,
       toggleNodeCollapse: store.toggleNodeCollapse,
+      toggleTableExpansion: store.toggleTableExpansion,
       selectStatement: store.selectStatement,
       highlightSpan: store.highlightSpan,
       setSearchTerm: store.setSearchTerm,
@@ -215,6 +232,7 @@ export function useLineageState() {
   const searchTerm = useLineageStore((state) => state.searchTerm);
   const viewMode = useLineageStore((state) => state.viewMode);
   const collapsedNodeIds = useLineageStore((state) => state.collapsedNodeIds);
+  const expandedTableIds = useLineageStore((state) => state.expandedTableIds);
   const showScriptTables = useLineageStore((state) => state.showScriptTables);
   const navigationRequest = useLineageStore((state) => state.navigationRequest);
 
@@ -227,6 +245,7 @@ export function useLineageState() {
     searchTerm,
     viewMode,
     collapsedNodeIds,
+    expandedTableIds,
     showScriptTables,
     navigationRequest,
   };
@@ -240,6 +259,7 @@ export function useLineageActions() {
   const setSql = useLineageStore((state) => state.setSql);
   const selectNode = useLineageStore((state) => state.selectNode);
   const toggleNodeCollapse = useLineageStore((state) => state.toggleNodeCollapse);
+  const toggleTableExpansion = useLineageStore((state) => state.toggleTableExpansion);
   const selectStatement = useLineageStore((state) => state.selectStatement);
   const highlightSpan = useLineageStore((state) => state.highlightSpan);
   const setSearchTerm = useLineageStore((state) => state.setSearchTerm);
@@ -252,6 +272,7 @@ export function useLineageActions() {
     setSql,
     selectNode,
     toggleNodeCollapse,
+    toggleTableExpansion,
     selectStatement,
     highlightSpan,
     setSearchTerm,

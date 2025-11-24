@@ -36,7 +36,6 @@ export function AnimatedEdge({
   const sourceColumn = data?.sourceColumn as string | undefined;
   const targetColumn = data?.targetColumn as string | undefined;
   const isHighlighted = data?.isHighlighted as boolean | undefined;
-  const isRecursive = data?.isRecursive as boolean | undefined;
   const customTooltip = data?.tooltip as string | undefined;
 
   let tooltipContent = customTooltip || '';

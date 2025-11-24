@@ -1,8 +1,7 @@
-import { useRef, useMemo } from 'react';
+import { useRef, useMemo, useState, useCallback } from 'react';
 import { useLineage } from '@pondpilot/flowscope-react';
 import {
   GraphView,
-  IssuesPanel,
   SchemaView,
   GraphErrorBoundary,
 } from '@pondpilot/flowscope-react';
@@ -12,51 +11,27 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
+import { SchemaEditor } from './SchemaEditor';
+import { SchemaAwareIssuesPanel } from './SchemaAwareIssuesPanel';
+import { useProject } from '@/lib/project-store';
+import { Settings } from 'lucide-react';
 import type { SchemaTable, AnalyzeResult } from '@pondpilot/flowscope-core';
 
 /**
- * Extract schema tables from the analysis result by grouping columns by their parent tables.
+ * Extract schema tables from the analysis result using resolved schema metadata.
+ * When no schema is provided, returns empty array (Schema tab will show "No schema data").
  */
 function extractSchemaFromResult(result: AnalyzeResult): SchemaTable[] {
-  const tableMap = new Map<string, Set<string>>();
-
-  // Collect all tables and their columns from the lineage nodes
-  for (const statement of result.statements) {
-    for (const node of statement.nodes) {
-      if (node.type === 'table' || node.type === 'cte') {
-        const tableName = node.qualifiedName || node.label;
-        if (!tableMap.has(tableName)) {
-          tableMap.set(tableName, new Set());
-        }
-      } else if (node.type === 'column') {
-        // Try to determine which table this column belongs to
-        // This is a simplified approach - in a real scenario, you'd need more metadata
-        const columnName = node.label;
-
-        // Find edges that connect this column to a table
-        const parentEdge = statement.edges.find(
-          edge => edge.to === node.id && edge.type === 'ownership'
-        );
-
-        if (parentEdge) {
-          const parentNode = statement.nodes.find(n => n.id === parentEdge.from);
-          if (parentNode && (parentNode.type === 'table' || parentNode.type === 'cte')) {
-            const tableName = parentNode.qualifiedName || parentNode.label;
-            if (!tableMap.has(tableName)) {
-              tableMap.set(tableName, new Set());
-            }
-            tableMap.get(tableName)!.add(columnName);
-          }
-        }
-      }
-    }
+  // Only show schema when explicitly provided via resolvedSchema
+  // This has origin tracking and complete metadata from user-provided schema or DDL
+  if (result.resolvedSchema?.tables) {
+    return result.resolvedSchema.tables;
   }
 
-  // Convert map to SchemaTable array
-  return Array.from(tableMap.entries()).map(([name, columnsSet]) => ({
-    name,
-    columns: Array.from(columnsSet).map(columnName => ({ name: columnName })),
-  }));
+  // No schema available - return empty array
+  // Schema tab will display "No schema data to display"
+  return [];
 }
 
 /**
@@ -66,11 +41,20 @@ export function AnalysisView() {
   const { state } = useLineage();
   const { result } = state;
   const graphContainerRef = useRef<HTMLDivElement>(null);
+  const { currentProject, updateSchemaSQL, activeProjectId } = useProject();
+  const [schemaEditorOpen, setSchemaEditorOpen] = useState(false);
 
   const schema = useMemo(() => {
     if (!result) return [];
     return extractSchemaFromResult(result);
   }, [result]);
+
+  const handleSaveSchema = useCallback((schemaSQL: string) => {
+    if (activeProjectId) {
+      updateSchemaSQL(activeProjectId, schemaSQL);
+      // Analysis will be re-triggered automatically via useEffect in parent
+    }
+  }, [activeProjectId, updateSchemaSQL]);
 
   if (!result) {
     return (
@@ -99,9 +83,9 @@ export function AnalysisView() {
             >
               Lineage
             </TabsTrigger>
-            <TabsTrigger 
-              value="schema" 
-              className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4 h-full"
+            <TabsTrigger
+              value="schema"
+              className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4 h-full flex items-center gap-2"
             >
               Schema
             </TabsTrigger>
@@ -115,7 +99,7 @@ export function AnalysisView() {
             )}
           </TabsList>
 
-          {/* Summary Stats Right Aligned */}
+          {/* Summary Stats and Actions Right Aligned */}
           <div className="flex items-center gap-4 text-xs text-muted-foreground">
             <div className="flex items-center gap-1">
               <span className="font-semibold text-foreground">{summary.tableCount}</span>
@@ -125,6 +109,15 @@ export function AnalysisView() {
               <span className="font-semibold text-foreground">{summary.columnCount}</span>
               <span>columns</span>
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSchemaEditorOpen(true)}
+              className="h-7 text-xs"
+            >
+              <Settings className="h-3 w-3 mr-1" />
+              Edit Schema
+            </Button>
           </div>
         </div>
 
@@ -141,11 +134,22 @@ export function AnalysisView() {
 
           {hasIssues && (
             <TabsContent value="issues" className="h-full mt-0 overflow-auto p-0 absolute inset-0">
-              <IssuesPanel />
+              <SchemaAwareIssuesPanel onOpenSchemaEditor={() => setSchemaEditorOpen(true)} />
             </TabsContent>
           )}
         </div>
       </Tabs>
+
+      {/* Schema Editor Modal */}
+      {currentProject && (
+        <SchemaEditor
+          open={schemaEditorOpen}
+          onOpenChange={setSchemaEditorOpen}
+          schemaSQL={currentProject.schemaSQL}
+          dialect={currentProject.dialect}
+          onSave={handleSaveSchema}
+        />
+      )}
     </div>
   );
 }

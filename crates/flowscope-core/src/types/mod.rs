@@ -18,5 +18,6 @@ pub use request::{
 };
 pub use response::{
     AnalyzeResult, CanonicalName, Edge, EdgeType, GlobalEdge, GlobalLineage, GlobalNode, Node,
-    NodeType, StatementLineage, StatementRef,
+    NodeType, ResolutionSource, ResolvedColumnSchema, ResolvedSchemaMetadata, ResolvedSchemaTable,
+    SchemaOrigin, StatementLineage, StatementRef,
 };

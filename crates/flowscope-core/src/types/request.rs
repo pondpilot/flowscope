@@ -133,6 +133,19 @@ pub struct SchemaMetadata {
     /// Canonical table representations
     #[serde(default)]
     pub tables: Vec<SchemaTable>,
+
+    /// Global toggle for implied schema capture (default: true)
+    /// When false, only imported schema is used; workload DDL is ignored
+    #[serde(default = "default_allow_implied", skip_serializing_if = "is_true")]
+    pub allow_implied: bool,
+}
+
+fn default_allow_implied() -> bool {
+    true
+}
+
+fn is_true(v: &bool) -> bool {
+    *v
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

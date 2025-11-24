@@ -21,6 +21,7 @@ export interface Project {
   dialect: Dialect;
   runMode: RunMode;
   selectedFileIds: string[];
+  schemaSQL: string; // User-provided CREATE TABLE statements for schema augmentation
 }
 
 interface ProjectContextType {
@@ -33,14 +34,17 @@ interface ProjectContextType {
   setProjectDialect: (projectId: string, dialect: Dialect) => void;
   setRunMode: (projectId: string, mode: RunMode) => void;
   toggleFileSelection: (projectId: string, fileId: string) => void;
-  
+
   // File actions for active project
   createFile: (name: string, content?: string) => void;
   updateFile: (fileId: string, content: string) => void;
   deleteFile: (fileId: string) => void;
   renameFile: (fileId: string, newName: string) => void;
   selectFile: (fileId: string) => void;
-  
+
+  // Schema SQL management
+  updateSchemaSQL: (projectId: string, schemaSQL: string) => void;
+
   // Import/Export
   importFiles: (files: FileList) => Promise<void>;
 }
@@ -54,6 +58,7 @@ const DEFAULT_PROJECT: Project = {
   dialect: 'postgres',
   runMode: 'all',
   selectedFileIds: [],
+  schemaSQL: '', // Empty by default - user augments as needed
   files: [
     {
       id: 'file-1',
@@ -225,6 +230,7 @@ const loadProjectsFromStorage = (): Project[] => {
         dialect: p.dialect || 'generic',
         runMode: p.runMode || 'all',
         selectedFileIds: p.selectedFileIds || [],
+        schemaSQL: p.schemaSQL || '', // Default to empty string for older projects
       }));
     }
   } catch (error) {
@@ -259,7 +265,8 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       activeFileId: null,
       dialect: 'generic',
       runMode: 'all',
-      selectedFileIds: []
+      selectedFileIds: [],
+      schemaSQL: ''
     };
     setProjects(prev => [...prev, newProject]);
     setActiveProjectId(newProject.id);
@@ -383,6 +390,13 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     }));
   }, [activeProjectId]);
 
+  const updateSchemaSQL = useCallback((projectId: string, schemaSQL: string) => {
+    setProjects(prev => prev.map(p => {
+      if (p.id !== projectId) return p;
+      return { ...p, schemaSQL };
+    }));
+  }, []);
+
   const importFiles = useCallback(
     async (fileList: FileList) => {
       if (!activeProjectId) return;
@@ -429,6 +443,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     deleteFile,
     renameFile,
     selectFile,
+    updateSchemaSQL,
     importFiles
   };
 

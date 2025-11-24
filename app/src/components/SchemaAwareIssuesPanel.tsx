@@ -1,0 +1,148 @@
+import { useLineage } from '@pondpilot/flowscope-react';
+import { AlertCircle, Database } from 'lucide-react';
+import { Button } from './ui/button';
+import type { Issue } from '@pondpilot/flowscope-core';
+
+interface SchemaAwareIssuesPanelProps {
+  onOpenSchemaEditor: () => void;
+}
+
+const SCHEMA_ISSUE_CODES = ['UNKNOWN_COLUMN', 'UNKNOWN_TABLE', 'SCHEMA_CONFLICT'];
+
+const SEVERITY_ORDER = { error: 0, warning: 1, info: 2 };
+
+function isSchemaIssue(issue: Issue): boolean {
+  return SCHEMA_ISSUE_CODES.includes(issue.code);
+}
+
+export function SchemaAwareIssuesPanel({ onOpenSchemaEditor }: SchemaAwareIssuesPanelProps) {
+  const { state, actions } = useLineage();
+  const { result } = state;
+
+  const sortedIssues = result?.issues
+    .slice()
+    .sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]) || [];
+
+  const schemaIssueCount = sortedIssues.filter(isSchemaIssue).length;
+
+  const handleIssueClick = (issue: Issue) => {
+    if (issue.span) {
+      actions.highlightSpan(issue.span);
+    }
+    if (issue.statementIndex !== undefined) {
+      actions.selectStatement(issue.statementIndex);
+    }
+  };
+
+  if (!result) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-muted-foreground bg-muted/5">
+        <p>No data available</p>
+      </div>
+    );
+  }
+
+  const { errors, warnings, infos } = result.summary.issueCount;
+
+  return (
+    <div className="flex flex-col h-full bg-background">
+      <div className="px-4 py-3 border-b bg-muted/10">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-semibold text-sm">Issues</h3>
+          <div className="flex items-center gap-2 text-xs">
+            {errors > 0 && <span className="text-red-600 font-medium">{errors} errors</span>}
+            {warnings > 0 && <span className="text-yellow-600 font-medium">{warnings} warnings</span>}
+            {infos > 0 && <span className="text-blue-600 font-medium">{infos} info</span>}
+            {sortedIssues.length === 0 && (
+              <span className="text-green-600 font-medium">No issues</span>
+            )}
+          </div>
+        </div>
+
+        {schemaIssueCount > 0 && (
+          <div className="flex items-center gap-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs">
+            <Database className="h-4 w-4 text-blue-600 flex-shrink-0" />
+            <span className="text-blue-900 flex-1">
+              {schemaIssueCount} schema-related {schemaIssueCount === 1 ? 'issue' : 'issues'} detected
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onOpenSchemaEditor}
+              className="h-6 text-xs"
+            >
+              Edit Schema
+            </Button>
+          </div>
+        )}
+      </div>
+
+      <div className="flex-1 overflow-auto p-4">
+        {sortedIssues.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+            <p className="text-sm">Analysis completed without issues</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {sortedIssues.map((issue, idx) => {
+              const isSchema = isSchemaIssue(issue);
+              return (
+                <div
+                  key={`${issue.code}-${idx}`}
+                  onClick={() => handleIssueClick(issue)}
+                  className={`p-3 border rounded-md cursor-pointer transition-colors ${
+                    issue.severity === 'error'
+                      ? 'border-red-200 bg-red-50 hover:bg-red-100'
+                      : issue.severity === 'warning'
+                      ? 'border-yellow-200 bg-yellow-50 hover:bg-yellow-100'
+                      : 'border-blue-200 bg-blue-50 hover:bg-blue-100'
+                  } ${isSchema ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
+                >
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle
+                        className={`h-4 w-4 flex-shrink-0 ${
+                          issue.severity === 'error'
+                            ? 'text-red-600'
+                            : issue.severity === 'warning'
+                            ? 'text-yellow-600'
+                            : 'text-blue-600'
+                        }`}
+                      />
+                      <span
+                        className={`text-xs font-medium uppercase ${
+                          issue.severity === 'error'
+                            ? 'text-red-700'
+                            : issue.severity === 'warning'
+                            ? 'text-yellow-700'
+                            : 'text-blue-700'
+                        }`}
+                      >
+                        {issue.severity}
+                      </span>
+                      <code className="text-xs bg-black/5 px-1.5 py-0.5 rounded font-mono">
+                        {issue.code}
+                      </code>
+                    </div>
+                    {isSchema && (
+                      <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                        <Database className="h-3 w-3" />
+                        Schema
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-foreground mb-1">{issue.message}</p>
+                  {issue.statementIndex !== undefined && (
+                    <span className="text-xs text-muted-foreground">
+                      Statement {issue.statementIndex + 1}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

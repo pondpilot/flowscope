@@ -152,6 +152,7 @@ pub mod issue_codes {
     pub const CANCELLED: &str = "CANCELLED";
     pub const PAYLOAD_SIZE_WARNING: &str = "PAYLOAD_SIZE_WARNING";
     pub const MEMORY_LIMIT_EXCEEDED: &str = "MEMORY_LIMIT_EXCEEDED";
+    pub const SCHEMA_CONFLICT: &str = "SCHEMA_CONFLICT";
 }
 
 #[cfg(test)]

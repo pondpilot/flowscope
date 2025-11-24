@@ -65,6 +65,8 @@ export interface SchemaMetadata {
   caseSensitivity?: CaseSensitivity;
   /** Canonical table representations */
   tables?: SchemaTable[];
+  /** Global toggle for implied schema capture (default: true) */
+  allowImplied?: boolean;
 }
 
 export interface SchemaNamespaceHint {
@@ -101,6 +103,8 @@ export interface AnalyzeResult {
   issues: Issue[];
   /** Summary statistics */
   summary: Summary;
+  /** Effective schema used during analysis (imported + implied) */
+  resolvedSchema?: ResolvedSchemaMetadata;
 }
 
 /** Lineage information for a single SQL statement. */
@@ -135,6 +139,8 @@ export interface Node {
   span?: Span;
   /** Extensible metadata for future use */
   metadata?: Record<string, unknown>;
+  /** How this table was resolved (imported, implied, or unknown) */
+  resolutionSource?: ResolutionSource;
 }
 
 /** The type of a node in the lineage graph. */
@@ -156,6 +162,8 @@ export interface Edge {
   operation?: string;
   /** Extensible metadata for future use */
   metadata?: Record<string, unknown>;
+  /** True if this edge represents approximate/uncertain lineage */
+  approximate?: boolean;
 }
 
 /** The type of an edge in the lineage graph. */
@@ -186,6 +194,8 @@ export interface GlobalNode {
   statementRefs: StatementRef[];
   /** Extensible metadata */
   metadata?: Record<string, unknown>;
+  /** How this table was resolved (imported, implied, or unknown) */
+  resolutionSource?: ResolutionSource;
 }
 
 export interface CanonicalName {
@@ -275,3 +285,41 @@ export const IssueCodes = {
   PAYLOAD_SIZE_WARNING: 'PAYLOAD_SIZE_WARNING',
   MEMORY_LIMIT_EXCEEDED: 'MEMORY_LIMIT_EXCEEDED',
 } as const;
+
+// Resolved Schema Types
+
+/** Resolved schema metadata showing the effective schema used during analysis. */
+export interface ResolvedSchemaMetadata {
+  /** All tables used during analysis (imported + implied) */
+  tables: ResolvedSchemaTable[];
+}
+
+/** A table in the resolved schema with origin metadata. */
+export interface ResolvedSchemaTable {
+  catalog?: string;
+  schema?: string;
+  name: string;
+  columns: ResolvedColumnSchema[];
+  /** Origin of this table's schema information */
+  origin: SchemaOrigin;
+  /** For implied tables: which statement created it */
+  sourceStatementIndex?: number;
+  /** Timestamp when this entry was created/updated (ISO 8601) */
+  updatedAt: string;
+  /** True if this is a temporary table */
+  temporary?: boolean;
+}
+
+/** A column in the resolved schema with origin tracking. */
+export interface ResolvedColumnSchema {
+  name: string;
+  dataType?: string;
+  /** Column-level origin (can differ from table origin in future merging) */
+  origin?: SchemaOrigin;
+}
+
+/** The origin of schema information. */
+export type SchemaOrigin = 'imported' | 'implied';
+
+/** How a table reference was resolved during analysis. */
+export type ResolutionSource = 'imported' | 'implied' | 'unknown';

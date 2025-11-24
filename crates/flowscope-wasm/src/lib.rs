@@ -10,6 +10,12 @@ pub fn enable_tracing() {
     }
 }
 
+/// Install panic hook for better error messages in browser console
+#[wasm_bindgen]
+pub fn set_panic_hook() {
+    console_error_panic_hook::set_once();
+}
+
 /// Main analysis entry point - accepts JSON request, returns JSON result
 /// This function never throws - errors are returned in the result's issues array
 #[wasm_bindgen]

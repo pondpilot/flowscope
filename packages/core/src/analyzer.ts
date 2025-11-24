@@ -3,6 +3,7 @@ import type { AnalyzeRequest, AnalyzeResult, Dialect } from './types';
 
 // Import WASM functions (will be available after init)
 let analyzeSqlJson: ((request: string) => string) | null = null;
+let panicHookInstalled = false;
 
 async function ensureWasmReady(): Promise<void> {
   const wasmModule = await initWasm();
@@ -13,6 +14,12 @@ async function ensureWasmReady(): Promise<void> {
 
   if (!analyzeSqlJson) {
     analyzeSqlJson = wasmModule.analyze_sql_json;
+  }
+
+  // Install panic hook for better error messages
+  if (!panicHookInstalled && wasmModule.set_panic_hook) {
+    wasmModule.set_panic_hook();
+    panicHookInstalled = true;
   }
 }
 

@@ -31,6 +31,11 @@ export type {
   Span,
   Summary,
   IssueCount,
+  ResolvedSchemaMetadata,
+  ResolvedSchemaTable,
+  ResolvedColumnSchema,
+  SchemaOrigin,
+  ResolutionSource,
 } from './types';
 
 // Constants

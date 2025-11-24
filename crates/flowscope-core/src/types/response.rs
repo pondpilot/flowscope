@@ -25,6 +25,10 @@ pub struct AnalyzeResult {
 
     /// Summary statistics
     pub summary: Summary,
+
+    /// Effective schema used during analysis (imported + implied)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resolved_schema: Option<ResolvedSchemaMetadata>,
 }
 
 impl AnalyzeResult {
@@ -46,6 +50,7 @@ impl AnalyzeResult {
                 },
                 has_errors: true,
             },
+            resolved_schema: None,
         }
     }
 }
@@ -104,6 +109,10 @@ pub struct Node {
     /// Extensible metadata for future use
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, serde_json::Value>>,
+
+    /// How this table was resolved (imported, implied, or unknown)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resolution_source: Option<ResolutionSource>,
 }
 
 /// The type of a node in the lineage graph.
@@ -146,6 +155,10 @@ pub struct Edge {
     /// Extensible metadata for future use
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, serde_json::Value>>,
+
+    /// True if this edge represents approximate/uncertain lineage
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approximate: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -195,6 +208,10 @@ pub struct GlobalNode {
     /// Extensible metadata
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, serde_json::Value>>,
+
+    /// How this table was resolved (imported, implied, or unknown)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resolution_source: Option<ResolutionSource>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash)]
@@ -261,6 +278,77 @@ pub struct GlobalEdge {
     pub metadata: Option<HashMap<String, serde_json::Value>>,
 }
 
+/// Resolved schema metadata showing the effective schema used during analysis.
+///
+/// Combines imported (user-provided) and implied (inferred from DDL) schema.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolvedSchemaMetadata {
+    /// All tables used during analysis (imported + implied)
+    pub tables: Vec<ResolvedSchemaTable>,
+}
+
+/// A table in the resolved schema with origin metadata.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolvedSchemaTable {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub catalog: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schema: Option<String>,
+    pub name: String,
+    pub columns: Vec<ResolvedColumnSchema>,
+
+    /// Origin of this table's schema information
+    pub origin: SchemaOrigin,
+
+    /// For implied tables: which statement created it
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_statement_index: Option<usize>,
+
+    /// Timestamp when this entry was created/updated (ISO 8601)
+    pub updated_at: String,
+
+    /// True if this is a temporary table
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub temporary: Option<bool>,
+}
+
+/// A column in the resolved schema with origin tracking.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolvedColumnSchema {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub data_type: Option<String>,
+
+    /// Column-level origin (can differ from table origin in future merging)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<SchemaOrigin>,
+}
+
+/// The origin of schema information.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum SchemaOrigin {
+    /// User-provided schema
+    Imported,
+    /// Inferred from DDL in workload
+    Implied,
+}
+
+/// How a table reference was resolved during analysis.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum ResolutionSource {
+    /// Resolved from user-provided schema
+    Imported,
+    /// Resolved from inferred DDL schema
+    Implied,
+    /// Could not be resolved
+    Unknown,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -280,6 +368,7 @@ mod tests {
                     expression: None,
                     span: None,
                     metadata: None,
+                    resolution_source: None,
                 }],
                 edges: vec![],
                 span: None,
@@ -287,6 +376,7 @@ mod tests {
             global_lineage: GlobalLineage::default(),
             issues: vec![],
             summary: Summary::default(),
+            resolved_schema: None,
         };
 
         let json = serde_json::to_string_pretty(&result).unwrap();

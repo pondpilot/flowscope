@@ -1,5 +1,5 @@
 import type { Node as FlowNode, Edge as FlowEdge } from '@xyflow/react';
-import type { Node, Edge, StatementLineage } from '@pondpilot/flowscope-core';
+import type { Node, Edge, StatementLineage, ResolvedSchemaMetadata } from '@pondpilot/flowscope-core';
 import type {
   TableNodeData,
   ColumnNodeInfo,
@@ -50,13 +50,81 @@ export function mergeStatements(statements: StatementLineage[]): StatementLineag
 }
 
 /**
+ * Helper to find table in resolved schema by matching label/qualified name
+ */
+function findSchemaTable(
+  tableLabel: string,
+  qualifiedName: string | undefined,
+  resolvedSchema: ResolvedSchemaMetadata | null | undefined
+) {
+  if (!resolvedSchema?.tables) return null;
+
+  // Try exact match first (qualified name)
+  if (qualifiedName) {
+    const table = resolvedSchema.tables.find((t) => {
+      const schemaQualified = [t.catalog, t.schema, t.name].filter(Boolean).join('.');
+      return schemaQualified === qualifiedName;
+    });
+    if (table) return table;
+  }
+
+  // Try matching by table name only
+  const table = resolvedSchema.tables.find((t) => t.name === tableLabel);
+  return table || null;
+}
+
+/**
+ * Process table columns by injecting missing schema columns when expanded.
+ * Returns the final columns list and count of hidden columns.
+ */
+function processTableColumns(
+  tableLabel: string,
+  qualifiedName: string | undefined,
+  nodeId: string,
+  existingColumns: ColumnNodeInfo[],
+  isExpanded: boolean,
+  resolvedSchema: ResolvedSchemaMetadata | null | undefined
+): { columns: ColumnNodeInfo[]; hiddenColumnCount: number } {
+  const schemaTable = findSchemaTable(tableLabel, qualifiedName, resolvedSchema);
+
+  if (!schemaTable) {
+    return { columns: existingColumns, hiddenColumnCount: 0 };
+  }
+
+  const existingColumnNames = new Set(existingColumns.map((col) => col.name.toLowerCase()));
+  const schemaColumns = schemaTable.columns || [];
+  const missingColumns = schemaColumns.filter(
+    (col) => !existingColumnNames.has(col.name.toLowerCase())
+  );
+
+  const hiddenColumnCount = missingColumns.length;
+
+  // If expanded, add missing columns to the list
+  if (isExpanded && missingColumns.length > 0) {
+    const injectedColumns: ColumnNodeInfo[] = missingColumns.map((col) => ({
+      id: `${nodeId}__schema_${col.name}`,
+      name: col.name,
+      expression: col.dataType,
+    }));
+    return {
+      columns: [...existingColumns, ...injectedColumns],
+      hiddenColumnCount
+    };
+  }
+
+  return { columns: existingColumns, hiddenColumnCount };
+}
+
+/**
  * Build table-level flow nodes with columns
  */
 export function buildFlowNodes(
   statement: StatementLineage,
   selectedNodeId: string | null,
   searchTerm: string,
-  collapsedNodeIds: Set<string>
+  collapsedNodeIds: Set<string>,
+  expandedTableIds: Set<string> = new Set(),
+  resolvedSchema: ResolvedSchemaMetadata | null | undefined = null
 ): FlowNode[] {
   const lowerCaseSearchTerm = searchTerm.toLowerCase();
   const tableNodes = statement.nodes.filter((n) => n.type === 'table' || n.type === 'cte');
@@ -97,7 +165,19 @@ export function buildFlowNodes(
   const flowNodes: FlowNode[] = [];
 
   for (const node of [...nodesByType.table, ...nodesByType.cte]) {
-    const columns = tableColumnMap.get(node.id) || [];
+    const existingColumns = tableColumnMap.get(node.id) || [];
+    const isExpanded = expandedTableIds.has(node.id);
+
+    // Process columns with schema injection
+    const { columns, hiddenColumnCount } = processTableColumns(
+      node.label,
+      node.qualifiedName,
+      node.id,
+      existingColumns,
+      isExpanded,
+      resolvedSchema
+    );
+
     const isHighlighted = !!(
       lowerCaseSearchTerm &&
       (node.label.toLowerCase().includes(lowerCaseSearchTerm) ||
@@ -118,6 +198,7 @@ export function buildFlowNodes(
         isSelected: node.id === selectedNodeId,
         isHighlighted: isHighlighted,
         isCollapsed: isCollapsed,
+        hiddenColumnCount,
       } satisfies TableNodeData,
     });
   }
@@ -407,7 +488,9 @@ export function buildColumnLevelGraph(
   statement: StatementLineage,
   selectedNodeId: string | null,
   searchTerm: string,
-  collapsedNodeIds: Set<string>
+  collapsedNodeIds: Set<string>,
+  expandedTableIds: Set<string> = new Set(),
+  resolvedSchema: ResolvedSchemaMetadata | null | undefined = null
 ): { nodes: FlowNode[]; edges: FlowEdge[] } {
   const lowerCaseSearchTerm = searchTerm.toLowerCase();
   const tableNodes = statement.nodes.filter((n) => n.type === 'table' || n.type === 'cte');
@@ -449,7 +532,19 @@ export function buildColumnLevelGraph(
   }
 
   for (const node of tableNodes) {
-    const columns = tableColumnMap.get(node.id) || [];
+    const existingColumns = tableColumnMap.get(node.id) || [];
+    const isExpanded = expandedTableIds.has(node.id);
+
+    // Process columns with schema injection
+    const { columns, hiddenColumnCount } = processTableColumns(
+      node.label,
+      node.qualifiedName,
+      node.id,
+      existingColumns,
+      isExpanded,
+      resolvedSchema
+    );
+
     const isHighlighted = !!(
       lowerCaseSearchTerm &&
       (node.label.toLowerCase().includes(lowerCaseSearchTerm) ||
@@ -467,6 +562,7 @@ export function buildColumnLevelGraph(
         isSelected: node.id === selectedNodeId,
         isHighlighted: isHighlighted,
         isCollapsed: collapsedNodeIds.has(node.id),
+        hiddenColumnCount,
       } satisfies TableNodeData,
     });
   }

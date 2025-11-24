@@ -10,14 +10,15 @@ impl<'a> Analyzer<'a> {
         table_canonical: &str,
         column: &str,
     ) {
-        if let Some(schema_table) = self.schema_tables.get(table_canonical) {
+        if let Some(schema_entry) = self.schema_tables.get(table_canonical) {
             let normalized_col = self.normalize_identifier(column);
-            let column_exists = schema_table
+            let column_exists = schema_entry
+                .table
                 .columns
                 .iter()
                 .any(|c| self.normalize_identifier(&c.name) == normalized_col);
 
-            if !column_exists && !schema_table.columns.is_empty() {
+            if !column_exists && !schema_entry.table.columns.is_empty() {
                 self.issues.push(
                     Issue::warning(
                         issue_codes::UNKNOWN_COLUMN,

@@ -1,6 +1,7 @@
 use super::helpers::{is_quoted_identifier, split_qualified_identifiers, unquote_identifier};
-use super::{Analyzer, SearchPathEntry};
-use crate::types::{CaseSensitivity, SchemaTable};
+use super::{Analyzer, SchemaTableEntry, SearchPathEntry};
+use crate::types::{CaseSensitivity, SchemaOrigin, SchemaTable};
+use chrono::Utc;
 
 impl<'a> Analyzer<'a> {
     pub(super) fn initialize_schema_metadata(&mut self) {
@@ -32,7 +33,16 @@ impl<'a> Analyzer<'a> {
                 let canonical = self.schema_table_key(table);
                 self.known_tables.insert(canonical.clone());
                 self.imported_tables.insert(canonical.clone());
-                self.schema_tables.insert(canonical, table.clone());
+                self.schema_tables.insert(
+                    canonical,
+                    SchemaTableEntry {
+                        table: table.clone(),
+                        origin: SchemaOrigin::Imported,
+                        source_statement_idx: None,
+                        updated_at: Utc::now(),
+                        temporary: false,
+                    },
+                );
             }
         }
     }

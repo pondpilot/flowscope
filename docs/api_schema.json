@@ -131,6 +131,10 @@
       "SchemaMetadata": {
         "description": "Schema metadata for accurate column and table resolution.\n\nWhen provided, allows the analyzer to resolve ambiguous references and produce more accurate lineage information.",
         "properties": {
+          "allowImplied": {
+            "description": "Global toggle for implied schema capture (default: true) When false, only imported schema is used; workload DDL is ignored",
+            "type": "boolean"
+          },
           "caseSensitivity": {
             "anyOf": [
               {
@@ -321,6 +325,13 @@
       "Edge": {
         "description": "An edge connecting two nodes in the lineage graph.",
         "properties": {
+          "approximate": {
+            "description": "True if this edge represents approximate/uncertain lineage",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
           "expression": {
             "description": "Optional: SQL expression if this edge represents a transformation",
             "type": [
@@ -504,6 +515,17 @@
               "null"
             ]
           },
+          "resolutionSource": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/ResolutionSource"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How this table was resolved (imported, implied, or unknown)"
+          },
           "statementRefs": {
             "description": "References to statements that use this node",
             "items": {
@@ -638,6 +660,17 @@
               "null"
             ]
           },
+          "resolutionSource": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/ResolutionSource"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How this table was resolved (imported, implied, or unknown)"
+          },
           "span": {
             "anyOf": [
               {
@@ -686,6 +719,157 @@
             "description": "A column",
             "enum": [
               "column"
+            ],
+            "type": "string"
+          }
+        ]
+      },
+      "ResolutionSource": {
+        "description": "How a table reference was resolved during analysis.",
+        "oneOf": [
+          {
+            "description": "Resolved from user-provided schema",
+            "enum": [
+              "imported"
+            ],
+            "type": "string"
+          },
+          {
+            "description": "Resolved from inferred DDL schema",
+            "enum": [
+              "implied"
+            ],
+            "type": "string"
+          },
+          {
+            "description": "Could not be resolved",
+            "enum": [
+              "unknown"
+            ],
+            "type": "string"
+          }
+        ]
+      },
+      "ResolvedColumnSchema": {
+        "description": "A column in the resolved schema with origin tracking.",
+        "properties": {
+          "dataType": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/SchemaOrigin"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Column-level origin (can differ from table origin in future merging)"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "ResolvedSchemaMetadata": {
+        "description": "Resolved schema metadata showing the effective schema used during analysis.\n\nCombines imported (user-provided) and implied (inferred from DDL) schema.",
+        "properties": {
+          "tables": {
+            "description": "All tables used during analysis (imported + implied)",
+            "items": {
+              "$ref": "#/definitions/ResolvedSchemaTable"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "tables"
+        ],
+        "type": "object"
+      },
+      "ResolvedSchemaTable": {
+        "description": "A table in the resolved schema with origin metadata.",
+        "properties": {
+          "catalog": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "columns": {
+            "items": {
+              "$ref": "#/definitions/ResolvedColumnSchema"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "origin": {
+            "allOf": [
+              {
+                "$ref": "#/definitions/SchemaOrigin"
+              }
+            ],
+            "description": "Origin of this table's schema information"
+          },
+          "schema": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sourceStatementIndex": {
+            "description": "For implied tables: which statement created it",
+            "format": "uint",
+            "minimum": 0.0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "temporary": {
+            "description": "True if this is a temporary table",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "description": "Timestamp when this entry was created/updated (ISO 8601)",
+            "type": "string"
+          }
+        },
+        "required": [
+          "columns",
+          "name",
+          "origin",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "SchemaOrigin": {
+        "description": "The origin of schema information.",
+        "oneOf": [
+          {
+            "description": "User-provided schema",
+            "enum": [
+              "imported"
+            ],
+            "type": "string"
+          },
+          {
+            "description": "Inferred from DDL in workload",
+            "enum": [
+              "implied"
             ],
             "type": "string"
           }
@@ -856,6 +1040,17 @@
           "$ref": "#/definitions/Issue"
         },
         "type": "array"
+      },
+      "resolvedSchema": {
+        "anyOf": [
+          {
+            "$ref": "#/definitions/ResolvedSchemaMetadata"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "Effective schema used during analysis (imported + implied)"
       },
       "statements": {
         "description": "Per-statement lineage analysis results",

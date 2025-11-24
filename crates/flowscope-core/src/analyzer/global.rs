@@ -1,7 +1,8 @@
 use super::helpers::{generate_node_id, parse_canonical_name};
 use super::Analyzer;
 use crate::types::{
-    EdgeType, GlobalEdge, GlobalLineage, GlobalNode, IssueCount, NodeType, StatementRef, Summary,
+    EdgeType, GlobalEdge, GlobalLineage, GlobalNode, IssueCount, NodeType, ResolvedColumnSchema,
+    ResolvedSchemaMetadata, ResolvedSchemaTable, StatementRef, Summary,
 };
 use std::collections::HashMap;
 
@@ -9,13 +10,54 @@ impl<'a> Analyzer<'a> {
     pub(super) fn build_result(&self) -> crate::AnalyzeResult {
         let global_lineage = self.build_global_lineage();
         let summary = self.build_summary(&global_lineage);
+        let resolved_schema = self.build_resolved_schema();
 
         crate::AnalyzeResult {
             statements: self.statement_lineages.clone(),
             global_lineage,
             issues: self.issues.clone(),
             summary,
+            resolved_schema,
         }
+    }
+
+    fn build_resolved_schema(&self) -> Option<ResolvedSchemaMetadata> {
+        if self.schema_tables.is_empty() {
+            return None;
+        }
+
+        let mut tables: Vec<ResolvedSchemaTable> = self
+            .schema_tables
+            .values()
+            .map(|entry| {
+                let columns: Vec<ResolvedColumnSchema> = entry
+                    .table
+                    .columns
+                    .iter()
+                    .map(|col| ResolvedColumnSchema {
+                        name: col.name.clone(),
+                        data_type: col.data_type.clone(),
+                        origin: Some(entry.origin),
+                    })
+                    .collect();
+
+                ResolvedSchemaTable {
+                    catalog: entry.table.catalog.clone(),
+                    schema: entry.table.schema.clone(),
+                    name: entry.table.name.clone(),
+                    columns,
+                    origin: entry.origin,
+                    source_statement_index: entry.source_statement_idx,
+                    updated_at: entry.updated_at.to_rfc3339(),
+                    temporary: if entry.temporary { Some(true) } else { None },
+                }
+            })
+            .collect();
+
+        // Sort by name for consistent output
+        tables.sort_by(|a, b| a.name.cmp(&b.name));
+
+        Some(ResolvedSchemaMetadata { tables })
     }
 
     pub(super) fn build_global_lineage(&self) -> GlobalLineage {
@@ -46,6 +88,7 @@ impl<'a> Analyzer<'a> {
                             node_id: Some(node.id.clone()),
                         }],
                         metadata: None,
+                        resolution_source: node.resolution_source,
                     });
             }
 

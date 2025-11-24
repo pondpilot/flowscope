@@ -1,5 +1,6 @@
 use crate::error::ParseError;
 use crate::types::*;
+use chrono::{DateTime, Utc};
 use serde_json::json;
 use sqlparser::ast::{
     self, Assignment, ColumnDef, Expr, FromTable, FunctionArg, FunctionArgExpr, MergeAction,
@@ -51,8 +52,8 @@ pub(super) struct Analyzer<'a> {
     pub(super) known_tables: HashSet<String>,
     /// Tables from imported (user-provided) schema that should not be overwritten
     pub(super) imported_tables: HashSet<String>,
-    /// Schema lookup: table canonical name -> table schema info
-    pub(super) schema_tables: HashMap<String, SchemaTable>,
+    /// Schema lookup: table canonical name -> table schema entry with metadata
+    pub(super) schema_tables: HashMap<String, SchemaTableEntry>,
     /// Whether column lineage is enabled
     pub(super) column_lineage_enabled: bool,
     /// Default catalog for unqualified identifiers
@@ -73,6 +74,16 @@ pub(super) struct SearchPathEntry {
 struct TableResolution {
     canonical: String,
     matched_schema: bool,
+}
+
+/// Schema table entry with origin metadata for tracking imported vs implied schema
+#[derive(Debug, Clone)]
+pub(super) struct SchemaTableEntry {
+    pub(super) table: SchemaTable,
+    pub(super) origin: SchemaOrigin,
+    pub(super) source_statement_idx: Option<usize>,
+    pub(super) updated_at: DateTime<Utc>,
+    pub(super) temporary: bool,
 }
 
 impl<'a> Analyzer<'a> {
@@ -104,6 +115,15 @@ impl<'a> Analyzer<'a> {
         analyzer.initialize_schema_metadata();
 
         analyzer
+    }
+
+    /// Check if implied schema capture is allowed (default: true)
+    fn allow_implied(&self) -> bool {
+        self.request
+            .schema
+            .as_ref()
+            .map(|s| s.allow_implied)
+            .unwrap_or(true)
     }
 
     fn analyze(&mut self) -> AnalyzeResult {
@@ -165,15 +185,25 @@ impl<'a> Analyzer<'a> {
             }
             Statement::CreateTable(create) => {
                 if let Some(query) = &create.query {
-                    self.analyze_create_table_as(&mut ctx, &create.name, query);
+                    self.analyze_create_table_as(&mut ctx, &create.name, query, create.temporary);
                     "CREATE_TABLE_AS".to_string()
                 } else {
-                    self.analyze_create_table(&mut ctx, &create.name, &create.columns);
+                    self.analyze_create_table(
+                        &mut ctx,
+                        &create.name,
+                        &create.columns,
+                        create.temporary,
+                    );
                     "CREATE_TABLE".to_string()
                 }
             }
-            Statement::CreateView { name, query, .. } => {
-                self.analyze_create_view(&mut ctx, name, query);
+            Statement::CreateView {
+                name,
+                query,
+                temporary,
+                ..
+            } => {
+                self.analyze_create_view(&mut ctx, name, query, *temporary);
                 "CREATE_VIEW".to_string()
             }
             Statement::Update {
@@ -206,6 +236,12 @@ impl<'a> Analyzer<'a> {
                 self.analyze_merge(&mut ctx, *into, table, source, on, clauses);
                 "MERGE".to_string()
             }
+            Statement::Drop {
+                object_type, names, ..
+            } => {
+                self.analyze_drop(&mut ctx, object_type, names);
+                "DROP".to_string()
+            }
             _ => {
                 self.issues.push(
                     Issue::warning(
@@ -234,9 +270,9 @@ impl<'a> Analyzer<'a> {
         table_canonical: &str,
         table_node_id: &str,
     ) {
-        if let Some(schema_table) = self.schema_tables.get(table_canonical) {
+        if let Some(schema_entry) = self.schema_tables.get(table_canonical) {
             // We must clone columns to avoid borrowing self while iterating
-            let columns = schema_table.columns.clone();
+            let columns = schema_entry.table.columns.clone();
             for col in columns {
                 let col_node_id = generate_column_node_id(Some(table_node_id), &col.name);
 
@@ -249,6 +285,7 @@ impl<'a> Analyzer<'a> {
                     expression: None,
                     span: None,
                     metadata: None,
+                    resolution_source: None,
                 };
                 ctx.add_node(col_node);
 
@@ -263,6 +300,7 @@ impl<'a> Analyzer<'a> {
                         expression: None,
                         operation: None,
                         metadata: None,
+                        approximate: None,
                     });
                 }
             }
@@ -297,6 +335,7 @@ impl<'a> Analyzer<'a> {
                 expression: None,
                 span: None,
                 metadata: None,
+                resolution_source: None,
             });
 
             // Register CTE for resolution
@@ -413,7 +452,7 @@ impl<'a> Analyzer<'a> {
                     } else {
                         Some(expr.to_string())
                     };
-                    self.add_output_column(ctx, &name, sources, expr_text, target_node);
+                    self.add_output_column(ctx, &name, sources, expr_text, target_node, false);
                 }
                 SelectItem::ExprWithAlias { expr, alias } => {
                     let sources = self.extract_column_refs(expr);
@@ -423,7 +462,7 @@ impl<'a> Analyzer<'a> {
                     } else {
                         Some(expr.to_string())
                     };
-                    self.add_output_column(ctx, &name, sources, expr_text, target_node);
+                    self.add_output_column(ctx, &name, sources, expr_text, target_node, false);
                 }
                 SelectItem::QualifiedWildcard(name, _) => {
                     // table.*
@@ -598,6 +637,7 @@ impl<'a> Analyzer<'a> {
         sources: Vec<ColumnRef>,
         expression: Option<String>,
         target_node: Option<&str>,
+        approximate: bool,
     ) {
         let normalized_name = self.normalize_identifier(name);
         let node_id = generate_column_node_id(target_node, &normalized_name);
@@ -611,6 +651,7 @@ impl<'a> Analyzer<'a> {
             expression: expression.clone(),
             span: None,
             metadata: None,
+            resolution_source: None,
         };
         ctx.add_node(col_node);
 
@@ -626,6 +667,7 @@ impl<'a> Analyzer<'a> {
                     expression: None,
                     operation: None,
                     metadata: None,
+                    approximate: None,
                 });
             }
         }
@@ -673,6 +715,7 @@ impl<'a> Analyzer<'a> {
                     expression: None,
                     span: None,
                     metadata: None,
+                    resolution_source: None,
                 };
                 ctx.add_node(source_col_node);
 
@@ -687,6 +730,7 @@ impl<'a> Analyzer<'a> {
                         expression: None,
                         operation: None,
                         metadata: None,
+                        approximate: None,
                     });
                 }
 
@@ -706,6 +750,7 @@ impl<'a> Analyzer<'a> {
                         expression: expression.clone(),
                         operation: None,
                         metadata: None,
+                        approximate: if approximate { Some(true) } else { None },
                     });
                 }
             }
@@ -740,8 +785,9 @@ impl<'a> Analyzer<'a> {
             let columns_to_add: Option<Vec<(String, String, String)>> = self
                 .schema_tables
                 .get(&table_canonical)
-                .map(|schema_table| {
-                    schema_table
+                .map(|schema_entry| {
+                    schema_entry
+                        .table
                         .columns
                         .iter()
                         .map(|col| {
@@ -755,17 +801,18 @@ impl<'a> Analyzer<'a> {
                 });
 
             if let Some(columns) = columns_to_add {
-                // Expand from schema
+                // Expand from schema - NOT approximate
                 for (col_name, table, resolved_table) in columns {
                     let sources = vec![ColumnRef {
                         table: Some(table),
                         column: col_name.clone(),
                         resolved_table: Some(resolved_table),
                     }];
-                    self.add_output_column(ctx, &col_name, sources, None, target_node);
+                    self.add_output_column(ctx, &col_name, sources, None, target_node, false);
                 }
             } else {
                 // No schema available - emit approximate lineage warning
+                // Create a table-to-table edge marked as approximate
                 self.issues.push(
                     Issue::info(
                         issue_codes::APPROXIMATE_LINEAGE,
@@ -773,6 +820,25 @@ impl<'a> Analyzer<'a> {
                     )
                     .with_statement(ctx.statement_index),
                 );
+
+                // If there's a target node, create an approximate edge from source table to target
+                if let Some(target) = target_node {
+                    if let Some(source_node_id) = ctx.table_node_ids.get(&table_canonical) {
+                        let edge_id = generate_edge_id(source_node_id, target);
+                        if !ctx.edge_ids.contains(&edge_id) {
+                            ctx.add_edge(Edge {
+                                id: edge_id,
+                                from: source_node_id.clone(),
+                                to: target.to_string(),
+                                edge_type: EdgeType::DataFlow,
+                                expression: None,
+                                operation: None,
+                                metadata: None,
+                                approximate: Some(true),
+                            });
+                        }
+                    }
+                }
             }
         }
     }
@@ -835,8 +901,9 @@ impl<'a> Analyzer<'a> {
                 }
             }
 
-            if let Some(schema_table) = self.schema_tables.get(table_canonical) {
-                if schema_table
+            if let Some(schema_entry) = self.schema_tables.get(table_canonical) {
+                if schema_entry
+                    .table
                     .columns
                     .iter()
                     .any(|c| self.normalize_identifier(&c.name) == normalized_col)
@@ -1042,6 +1109,18 @@ impl<'a> Analyzer<'a> {
             let produced = self.produced_tables.contains_key(&canonical);
             let is_known = exists_in_schema || produced || self.known_tables.is_empty();
 
+            // Determine resolution source based on schema entry
+            let resolution_source = if let Some(entry) = self.schema_tables.get(&canonical) {
+                match entry.origin {
+                    crate::types::SchemaOrigin::Imported => Some(ResolutionSource::Imported),
+                    crate::types::SchemaOrigin::Implied => Some(ResolutionSource::Implied),
+                }
+            } else if !is_known {
+                Some(ResolutionSource::Unknown)
+            } else {
+                None
+            };
+
             // Check if already added
             if !ctx.node_ids.contains(&id) {
                 let mut metadata = None;
@@ -1066,6 +1145,7 @@ impl<'a> Analyzer<'a> {
                     expression: None,
                     span: None,
                     metadata,
+                    resolution_source,
                 });
             }
 
@@ -1096,6 +1176,7 @@ impl<'a> Analyzer<'a> {
                     expression: None,
                     operation: ctx.last_operation.clone(),
                     metadata: None,
+                    approximate: None,
                 });
             }
         }
@@ -1116,6 +1197,7 @@ impl<'a> Analyzer<'a> {
             expression: None,
             span: None,
             metadata: None,
+            resolution_source: None,
         });
 
         self.all_tables.insert(canonical.clone());
@@ -1138,11 +1220,93 @@ impl<'a> Analyzer<'a> {
         self.add_source_table(ctx, &target_name, _target_node);
     }
 
+    /// Helper to register implied schema from CREATE TABLE/VIEW/CTAS statements.
+    /// Handles conflict detection with imported schema and only registers if allow_implied is true.
+    fn register_implied_schema(
+        &mut self,
+        ctx: &StatementContext,
+        canonical: &str,
+        columns: Vec<ColumnSchema>,
+        is_temporary: bool,
+        statement_type: &str, // "TABLE", "VIEW", or "CREATE TABLE AS"
+    ) {
+        if !self.allow_implied() {
+            return;
+        }
+
+        // Check for conflict with imported schema
+        if self.imported_tables.contains(canonical) {
+            if let Some(imported_entry) = self.schema_tables.get(canonical) {
+                let imported_cols: std::collections::HashSet<_> = imported_entry
+                    .table
+                    .columns
+                    .iter()
+                    .map(|c| &c.name)
+                    .collect();
+                let ddl_cols: std::collections::HashSet<_> =
+                    columns.iter().map(|c| &c.name).collect();
+
+                if imported_cols != ddl_cols {
+                    self.issues.push(
+                        Issue::warning(
+                            issue_codes::SCHEMA_CONFLICT,
+                            format!(
+                                "{} for '{}' conflicts with imported schema. Using imported schema (imported has {} columns, {} has {} columns)",
+                                statement_type,
+                                canonical,
+                                imported_cols.len(),
+                                statement_type,
+                                ddl_cols.len()
+                            ),
+                        )
+                        .with_statement(ctx.statement_index),
+                    );
+                }
+            }
+            // Don't overwrite imported schema
+            return;
+        }
+
+        // Only store if we have columns
+        if columns.is_empty() {
+            return;
+        }
+
+        // Parse canonical name into parts
+        let parts = split_qualified_identifiers(canonical);
+        let (catalog, schema, table_name) = match parts.as_slice() {
+            [catalog, schema, table] => {
+                (Some(catalog.clone()), Some(schema.clone()), table.clone())
+            }
+            [schema, table] => (None, Some(schema.clone()), table.clone()),
+            [table] => (None, None, table.clone()),
+            _ => (None, None, extract_simple_name(canonical)),
+        };
+
+        self.schema_tables.insert(
+            canonical.to_string(),
+            SchemaTableEntry {
+                table: SchemaTable {
+                    catalog,
+                    schema,
+                    name: table_name,
+                    columns,
+                },
+                origin: SchemaOrigin::Implied,
+                source_statement_idx: Some(ctx.statement_index),
+                updated_at: Utc::now(),
+                temporary: is_temporary,
+            },
+        );
+        self.known_tables.insert(canonical.to_string());
+    }
+
     fn analyze_create_table_as(
         &mut self,
         ctx: &mut StatementContext,
         table_name: &ObjectName,
         query: &Query,
+        is_temporary: bool,
     ) {
         let target_name = table_name.to_string();
         let canonical = self.normalize_table_name(&target_name);
@@ -1156,13 +1320,34 @@ impl<'a> Analyzer<'a> {
             expression: None,
             span: None,
             metadata: None,
+            resolution_source: None,
         });
 
         self.all_tables.insert(canonical.clone());
-        self.produced_tables.insert(canonical, ctx.statement_index);
+        self.produced_tables
+            .insert(canonical.clone(), ctx.statement_index);
 
         // Analyze source query
         self.analyze_query(ctx, query, Some(&target_id));
+
+        // Capture output columns from the query to store as implied schema
+        let output_columns: Vec<ColumnSchema> = ctx
+            .output_columns
+            .iter()
+            .map(|col| ColumnSchema {
+                name: col.name.clone(),
+                data_type: None, // Type inference not implemented yet
+            })
+            .collect();
+
+        // Register implied schema using helper
+        self.register_implied_schema(
+            ctx,
+            &canonical,
+            output_columns,
+            is_temporary,
+            "CREATE TABLE AS",
+        );
 
         // Create edges from all source tables to target
         let source_nodes: Vec<_> = ctx
@@ -1183,6 +1368,7 @@ impl<'a> Analyzer<'a> {
                     expression: None,
                     operation: None,
                     metadata: None,
+                    approximate: None,
                 });
             }
         }
@@ -1190,12 +1376,10 @@ impl<'a> Analyzer<'a> {
 
     fn analyze_create_table(
         &mut self,
-
         ctx: &mut StatementContext,
-
         name: &ObjectName,
-
         columns: &[ColumnDef],
+        is_temporary: bool,
     ) {
         let target_name = name.to_string();
 
@@ -1214,30 +1398,8 @@ impl<'a> Analyzer<'a> {
             })
             .collect();
 
-        if !column_schemas.is_empty() && !self.imported_tables.contains(&canonical) {
-            let parts = split_qualified_identifiers(&canonical);
-            let (catalog, schema, table_name) = match parts.as_slice() {
-                [catalog, schema, table] => {
-                    (Some(catalog.clone()), Some(schema.clone()), table.clone())
-                }
-                [schema, table] => (None, Some(schema.clone()), table.clone()),
-                [table] => (None, None, table.clone()),
-                _ => (None, None, extract_simple_name(&canonical)),
-            };
-
-            self.schema_tables.insert(
-                canonical.clone(),
-                SchemaTable {
-                    catalog,
-                    schema,
-                    name: table_name,
-                    columns: column_schemas.clone(),
-                },
-            );
-
-            // Treat the created table as known so subsequent references resolve without warnings
-            self.known_tables.insert(canonical.clone());
-        }
+        // Register implied schema using helper
+        self.register_implied_schema(ctx, &canonical, column_schemas, is_temporary, "DDL");
 
         // Create target table node
 
@@ -1257,6 +1419,7 @@ impl<'a> Analyzer<'a> {
             span: None,
 
             metadata: None,
+            resolution_source: None,
         });
 
         // Create column nodes immediately from schema (either imported or from CREATE TABLE)
@@ -1275,6 +1438,7 @@ impl<'a> Analyzer<'a> {
         ctx: &mut StatementContext,
         name: &ObjectName,
         query: &Query,
+        is_temporary: bool,
     ) {
         let target_name = name.to_string();
         let canonical = self.normalize_table_name(&target_name);
@@ -1288,13 +1452,34 @@ impl<'a> Analyzer<'a> {
             expression: None,
             span: None,
             metadata: None,
+            resolution_source: None,
         });
 
         self.all_tables.insert(canonical.clone());
-        self.produced_tables.insert(canonical, ctx.statement_index);
+        self.produced_tables
+            .insert(canonical.clone(), ctx.statement_index);
 
         // Analyze source query
         self.analyze_query(ctx, query, Some(&target_id));
+
+        // Capture output columns from the query to store as implied schema
+        let output_columns: Vec<ColumnSchema> = ctx
+            .output_columns
+            .iter()
+            .map(|col| ColumnSchema {
+                name: col.name.clone(),
+                data_type: None, // Type inference not implemented yet
+            })
+            .collect();
+
+        // Register implied schema using helper
+        self.register_implied_schema(
+            ctx,
+            &canonical,
+            output_columns,
+            is_temporary,
+            "VIEW definition",
+        );
 
         // Create edges from all source tables to target
         let source_nodes: Vec<_> = ctx
@@ -1315,7 +1500,32 @@ impl<'a> Analyzer<'a> {
                     expression: None,
                     operation: None,
                     metadata: None,
+                    approximate: None,
                 });
+            }
+        }
+    }
+
+    fn analyze_drop(
+        &mut self,
+        _ctx: &mut StatementContext,
+        object_type: &ast::ObjectType,
+        names: &[ObjectName],
+    ) {
+        // Handle DROP TABLE/VIEW to remove implied schema entries (only if allow_implied is true)
+        if self.allow_implied()
+            && matches!(object_type, ast::ObjectType::Table | ast::ObjectType::View)
+        {
+            for name in names {
+                let table_name = name.to_string();
+                let canonical = self.normalize_table_name(&table_name);
+
+                // Only remove if it's an implied entry (not imported)
+                if !self.imported_tables.contains(&canonical) {
+                    self.schema_tables.remove(&canonical);
+                    self.known_tables.remove(&canonical);
+                    self.produced_tables.remove(&canonical);
+                }
             }
         }
     }
@@ -1946,6 +2156,7 @@ mod tests {
             source_name: None,
             options: None,
             schema: Some(crate::types::SchemaMetadata {
+                allow_implied: true,
                 default_catalog: None,
                 default_schema: None,
                 search_path: None,
@@ -1976,6 +2187,7 @@ mod tests {
             source_name: None,
             options: None,
             schema: Some(crate::types::SchemaMetadata {
+                allow_implied: true,
                 default_catalog: None,
                 default_schema: None,
                 search_path: None,
@@ -2058,6 +2270,7 @@ mod tests {
             source_name: None,
             options: None,
             schema: Some(crate::types::SchemaMetadata {
+                allow_implied: true,
                 default_catalog: None,
                 default_schema: Some("analytics".to_string()),
                 search_path: Some(vec![crate::types::SchemaNamespaceHint {
@@ -2100,6 +2313,7 @@ mod tests {
             source_name: None,
             options: None,
             schema: Some(crate::types::SchemaMetadata {
+                allow_implied: true,
                 default_catalog: None,
                 default_schema: Some("analytics".to_string()),
                 search_path: None,
@@ -2129,6 +2343,7 @@ mod tests {
             source_name: None,
             options: None,
             schema: Some(crate::types::SchemaMetadata {
+                allow_implied: true,
                 default_catalog: None,
                 default_schema: Some("analytics".to_string()),
                 search_path: None,
@@ -2441,6 +2656,7 @@ mod tests {
             source_name: None,
             options: None,
             schema: Some(crate::types::SchemaMetadata {
+                allow_implied: true,
                 default_catalog: None,
                 default_schema: None,
                 search_path: None,
@@ -2488,6 +2704,7 @@ mod tests {
             source_name: None,
             options: None,
             schema: Some(crate::types::SchemaMetadata {
+                allow_implied: true,
                 default_catalog: None,
                 default_schema: None,
                 search_path: None,
@@ -2521,6 +2738,7 @@ mod tests {
             source_name: None,
             options: None,
             schema: Some(crate::types::SchemaMetadata {
+                allow_implied: true,
                 default_catalog: None,
                 default_schema: None,
                 search_path: None,
@@ -2557,6 +2775,18 @@ mod tests {
 
         // Should have 3 columns from expansion (id, name, email) plus 3 source columns
         assert!(column_nodes.len() >= 3);
+
+        // All edges should NOT be marked as approximate (we have schema)
+        let approximate_edges: Vec<_> = result.statements[0]
+            .edges
+            .iter()
+            .filter(|e| e.approximate == Some(true))
+            .collect();
+        assert_eq!(
+            approximate_edges.len(),
+            0,
+            "Should not have approximate edges when schema is available"
+        );
     }
 
     #[test]
@@ -2663,6 +2893,7 @@ mod tests {
             default_schema: None,
             search_path: None,
             case_sensitivity: None,
+            allow_implied: true,
             tables: vec![SchemaTable {
                 catalog: None,
                 schema: None,
@@ -2718,6 +2949,393 @@ mod tests {
             !column_labels.contains(&"different_col"),
             "Should not have 'different_col' from CREATE TABLE (imported schema takes precedence), found: {:?}",
             column_labels
+        );
+    }
+
+    // =====================================================
+    // Schema Handling Tests (Phase 1-10)
+    // =====================================================
+
+    #[test]
+    fn test_create_view_captures_implied_schema() {
+        let request = make_request(
+            r#"
+            CREATE VIEW active_users AS 
+            SELECT id, name, email FROM users WHERE active = true;
+            
+            SELECT * FROM active_users;
+        "#,
+        );
+        let result = analyze(&request);
+
+        // Check that resolvedSchema contains the view
+        assert!(result.resolved_schema.is_some());
+        let schema = result.resolved_schema.unwrap();
+
+        let view = schema.tables.iter().find(|t| t.name == "active_users");
+        assert!(
+            view.is_some(),
+            "active_users view should be in resolved schema"
+        );
+
+        let view = view.unwrap();
+        assert_eq!(view.origin, crate::types::SchemaOrigin::Implied);
+        assert_eq!(view.source_statement_index, Some(0));
+        assert_eq!(view.columns.len(), 3);
+
+        let col_names: Vec<_> = view.columns.iter().map(|c| c.name.as_str()).collect();
+        assert!(col_names.contains(&"id"));
+        assert!(col_names.contains(&"name"));
+        assert!(col_names.contains(&"email"));
+    }
+
+    #[test]
+    fn test_create_table_explicit_columns_captured() {
+        let request = make_request(
+            r#"
+            CREATE TABLE products (
+                id INTEGER,
+                name VARCHAR(255),
+                price DECIMAL(10,2)
+            );
+        "#,
+        );
+        let result = analyze(&request);
+
+        assert!(result.resolved_schema.is_some());
+        let schema = result.resolved_schema.unwrap();
+
+        let table = schema.tables.iter().find(|t| t.name == "products");
+        assert!(table.is_some());
+
+        let table = table.unwrap();
+        assert_eq!(table.origin, crate::types::SchemaOrigin::Implied);
+        assert_eq!(table.columns.len(), 3);
+        assert!(table
+            .columns
+            .iter()
+            .any(|c| c.name == "id" && c.data_type.is_some()));
+    }
+
+    #[test]
+    fn test_temporary_table_flagged() {
+        let request = make_request(
+            r#"
+            CREATE TEMPORARY TABLE temp_data (
+                id INTEGER,
+                value TEXT
+            );
+        "#,
+        );
+        let result = analyze(&request);
+
+        assert!(result.resolved_schema.is_some());
+        let schema = result.resolved_schema.unwrap();
+
+        let table = schema.tables.iter().find(|t| t.name == "temp_data");
+        assert!(table.is_some());
+
+        let table = table.unwrap();
+        assert_eq!(table.temporary, Some(true));
+    }
+
+    #[test]
+    fn test_drop_table_removes_implied_schema() {
+        let request = make_request(
+            r#"
+            CREATE TABLE temp (id INTEGER);
+            DROP TABLE temp;
+        "#,
+        );
+        let result = analyze(&request);
+
+        if let Some(schema) = result.resolved_schema {
+            assert!(
+                !schema.tables.iter().any(|t| t.name == "temp"),
+                "Dropped table should not be in resolved schema"
+            );
+        }
+    }
+
+    #[test]
+    fn test_imported_schema_preserved_in_resolved() {
+        let request = AnalyzeRequest {
+            sql: "SELECT * FROM users".to_string(),
+            files: None,
+            dialect: Dialect::Generic,
+            source_name: None,
+            options: None,
+            schema: Some(crate::types::SchemaMetadata {
+                allow_implied: true,
+                default_catalog: None,
+                default_schema: None,
+                search_path: None,
+                case_sensitivity: None,
+                tables: vec![crate::types::SchemaTable {
+                    catalog: None,
+                    schema: None,
+                    name: "users".to_string(),
+                    columns: vec![
+                        crate::types::ColumnSchema {
+                            name: "id".to_string(),
+                            data_type: Some("INTEGER".to_string()),
+                        },
+                        crate::types::ColumnSchema {
+                            name: "name".to_string(),
+                            data_type: Some("VARCHAR".to_string()),
+                        },
+                    ],
+                }],
+            }),
+        };
+        let result = analyze(&request);
+
+        assert!(result.resolved_schema.is_some());
+        let schema = result.resolved_schema.unwrap();
+
+        let table = schema.tables.iter().find(|t| t.name == "users");
+        assert!(table.is_some());
+
+        let table = table.unwrap();
+        assert_eq!(table.origin, crate::types::SchemaOrigin::Imported);
+        assert_eq!(table.source_statement_index, None);
+        assert_eq!(table.columns.len(), 2);
+    }
+
+    #[test]
+    fn test_mixed_imported_and_implied_schema() {
+        let request = AnalyzeRequest {
+            sql: r#"
+                CREATE VIEW active_users AS 
+                SELECT id, name FROM users WHERE active = true;
+            "#
+            .to_string(),
+            files: None,
+            dialect: Dialect::Generic,
+            source_name: None,
+            options: None,
+            schema: Some(crate::types::SchemaMetadata {
+                allow_implied: true,
+                default_catalog: None,
+                default_schema: None,
+                search_path: None,
+                case_sensitivity: None,
+                tables: vec![crate::types::SchemaTable {
+                    catalog: None,
+                    schema: None,
+                    name: "users".to_string(),
+                    columns: vec![crate::types::ColumnSchema {
+                        name: "id".to_string(),
+                        data_type: Some("INTEGER".to_string()),
+                    }],
+                }],
+            }),
+        };
+        let result = analyze(&request);
+
+        assert!(result.resolved_schema.is_some());
+        let schema = result.resolved_schema.unwrap();
+
+        // Should have both imported (users) and implied (active_users)
+        assert!(schema
+            .tables
+            .iter()
+            .any(|t| t.name == "users" && t.origin == crate::types::SchemaOrigin::Imported));
+        assert!(schema
+            .tables
+            .iter()
+            .any(|t| t.name == "active_users" && t.origin == crate::types::SchemaOrigin::Implied));
+    }
+
+    #[test]
+    fn test_create_or_replace_updates_schema() {
+        let request = make_request(
+            r#"
+            CREATE TABLE data (old_col INTEGER);
+            CREATE TABLE data (new_col TEXT);
+        "#,
+        );
+        let result = analyze(&request);
+
+        assert!(result.resolved_schema.is_some());
+        let schema = result.resolved_schema.unwrap();
+
+        let table = schema.tables.iter().find(|t| t.name == "data");
+        assert!(table.is_some());
+
+        let table = table.unwrap();
+        // Should have the latest schema (new_col)
+        assert!(table.columns.iter().any(|c| c.name == "new_col"));
+    }
+
+    // Phase 8 - Test for table-level precedence and conflict detection
+    #[test]
+    fn test_imported_precedence_with_conflict_detection() {
+        let request = AnalyzeRequest {
+            sql: r#"
+                CREATE TABLE users (id INT, name VARCHAR, extra_col TEXT);
+                SELECT * FROM users;
+            "#
+            .to_string(),
+            files: None,
+            dialect: Dialect::Generic,
+            source_name: None,
+            options: None,
+            schema: Some(crate::types::SchemaMetadata {
+                allow_implied: true,
+                default_catalog: None,
+                default_schema: None,
+                search_path: None,
+                case_sensitivity: None,
+                tables: vec![crate::types::SchemaTable {
+                    catalog: None,
+                    schema: None,
+                    name: "users".to_string(),
+                    columns: vec![
+                        crate::types::ColumnSchema {
+                            name: "id".to_string(),
+                            data_type: Some("INTEGER".to_string()),
+                        },
+                        crate::types::ColumnSchema {
+                            name: "imported_col".to_string(),
+                            data_type: None,
+                        },
+                    ],
+                }],
+            }),
+        };
+        let result = analyze(&request);
+
+        // Imported schema should win - resolvedSchema should only show imported columns
+        let schema = result.resolved_schema.expect("Should have resolved schema");
+        let users_table = schema
+            .tables
+            .iter()
+            .find(|t| t.name == "users")
+            .expect("users table should exist");
+
+        assert_eq!(users_table.origin, crate::types::SchemaOrigin::Imported);
+        assert_eq!(users_table.columns.len(), 2); // Only imported columns
+        assert!(users_table.columns.iter().any(|c| c.name == "imported_col"));
+        assert!(!users_table.columns.iter().any(|c| c.name == "extra_col"));
+
+        // Should have a SCHEMA_CONFLICT warning
+        let conflict_warnings: Vec<_> = result
+            .issues
+            .iter()
+            .filter(|i| i.severity == Severity::Warning && i.code == issue_codes::SCHEMA_CONFLICT)
+            .collect();
+        assert_eq!(
+            conflict_warnings.len(),
+            1,
+            "Should have exactly one SCHEMA_CONFLICT warning"
+        );
+        assert!(conflict_warnings[0]
+            .message
+            .contains("conflicts with imported schema"));
+    }
+
+    // Test that allow_implied=false disables implied schema capture
+    #[test]
+    fn test_allow_implied_false_disables_schema_capture() {
+        let request = AnalyzeRequest {
+            sql: r#"
+                CREATE TABLE orders (order_id INT, amount DECIMAL);
+                CREATE VIEW high_orders AS SELECT order_id, amount FROM orders WHERE amount > 100;
+                DROP TABLE orders;
+            "#
+            .to_string(),
+            files: None,
+            dialect: Dialect::Generic,
+            source_name: None,
+            options: None,
+            schema: Some(crate::types::SchemaMetadata {
+                allow_implied: false, // Disable implied schema
+                default_catalog: None,
+                default_schema: None,
+                search_path: None,
+                case_sensitivity: None,
+                tables: vec![],
+            }),
+        };
+        let result = analyze(&request);
+
+        // Should NOT have any resolvedSchema entries (allow_implied=false)
+        assert!(
+            result.resolved_schema.is_none() || result.resolved_schema.unwrap().tables.is_empty(),
+            "Should not capture implied schema when allow_implied=false"
+        );
+
+        // Should NOT have any conflict warnings (implied schema not captured)
+        let conflict_warnings: Vec<_> = result
+            .issues
+            .iter()
+            .filter(|i| i.code == issue_codes::SCHEMA_CONFLICT)
+            .collect();
+        assert_eq!(
+            conflict_warnings.len(),
+            0,
+            "Should not emit conflict warnings when allow_implied=false"
+        );
+    }
+
+    // Test that allow_implied=false with imported schema still preserves imported
+    #[test]
+    fn test_allow_implied_false_preserves_imported_schema() {
+        let request = AnalyzeRequest {
+            sql: r#"
+                CREATE TABLE users (id INT, name TEXT, extra_col TEXT);
+                SELECT * FROM users;
+            "#
+            .to_string(),
+            files: None,
+            dialect: Dialect::Generic,
+            source_name: None,
+            options: None,
+            schema: Some(crate::types::SchemaMetadata {
+                allow_implied: false, // Disable implied schema
+                default_catalog: None,
+                default_schema: None,
+                search_path: None,
+                case_sensitivity: None,
+                tables: vec![crate::types::SchemaTable {
+                    catalog: None,
+                    schema: None,
+                    name: "users".to_string(),
+                    columns: vec![
+                        crate::types::ColumnSchema {
+                            name: "id".to_string(),
+                            data_type: Some("INTEGER".to_string()),
+                        },
+                        crate::types::ColumnSchema {
+                            name: "username".to_string(),
+                            data_type: Some("TEXT".to_string()),
+                        },
+                    ],
+                }],
+            }),
+        };
+        let result = analyze(&request);
+
+        // Should ONLY have imported schema (users), not implied schema
+        let resolved = result.resolved_schema.expect("Should have resolved schema");
+        assert_eq!(resolved.tables.len(), 1);
+
+        let users_table = &resolved.tables[0];
+        assert_eq!(users_table.name, "users");
+        assert_eq!(users_table.origin, crate::types::SchemaOrigin::Imported);
+        assert_eq!(users_table.columns.len(), 2);
+
+        // Should NOT have conflict warnings (allow_implied=false means no conflict check)
+        let conflict_warnings: Vec<_> = result
+            .issues
+            .iter()
+            .filter(|i| i.code == issue_codes::SCHEMA_CONFLICT)
+            .collect();
+        assert_eq!(
+            conflict_warnings.len(),
+            0,
+            "Should not emit conflict warnings when allow_implied=false"
         );
     }
 }

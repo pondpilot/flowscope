@@ -13,24 +13,31 @@ import type { Node as FlowNode, NodeProps } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
 import { getLayoutedElements } from '../utils/layout';
-import type { SchemaTable, ColumnSchema } from '@pondpilot/flowscope-core';
+import type { SchemaTable, ResolvedSchemaTable, ColumnSchema, SchemaOrigin } from '@pondpilot/flowscope-core';
 
 interface SchemaViewProps {
-  schema: SchemaTable[];
+  schema: (SchemaTable | ResolvedSchemaTable)[];
 }
 
 interface SchemaTableNodeData extends Record<string, unknown> {
   label: string;
   columns: ColumnSchema[];
+  origin?: SchemaOrigin;
 }
 
 function SchemaTableNode({ data }: NodeProps<FlowNode<SchemaTableNodeData>>): JSX.Element {
+  // Color coding based on origin: imported (green) vs implied (blue)
+  const isImported = data.origin === 'imported';
+  const borderColor = isImported ? '#10b981' : '#3b82f6'; // green-500 : blue-500
+  const headerBg = isImported ? '#d1fae5' : '#dbeafe'; // green-100 : blue-100
+  const headerColor = isImported ? '#047857' : '#1e40af'; // green-700 : blue-700
+
   return (
     <div
       style={{
         minWidth: 180,
         borderRadius: 8,
-        border: '1px solid #DBDDE1',
+        border: `2px solid ${borderColor}`,
         boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
         overflow: 'hidden',
         backgroundColor: '#FFFFFF',
@@ -43,9 +50,9 @@ function SchemaTableNode({ data }: NodeProps<FlowNode<SchemaTableNodeData>>): JS
           padding: '8px 12px',
           fontSize: 12,
           fontWeight: 500,
-          borderBottom: '1px solid #DBDDE1',
-          backgroundColor: '#F2F4F8',
-          color: '#212328',
+          borderBottom: `1px solid ${borderColor}`,
+          backgroundColor: headerBg,
+          color: headerColor,
         }}
       >
         <span style={{ fontWeight: 600 }}>{data.label}</span>
@@ -76,16 +83,24 @@ const nodeTypes = {
   schemaTableNode: SchemaTableNode,
 };
 
-function buildSchemaFlowNodes(schema: SchemaTable[]): FlowNode[] {
-  return schema.map((table) => ({
-    id: table.name,
-    type: 'schemaTableNode',
-    position: { x: 0, y: 0 },
-    data: {
-      label: table.name,
-      columns: table.columns || [],
-    } satisfies SchemaTableNodeData,
-  }));
+function buildSchemaFlowNodes(schema: (SchemaTable | ResolvedSchemaTable)[]): FlowNode[] {
+  return schema.map((table) => {
+    // Type guard to check if table is ResolvedSchemaTable
+    const isResolvedTable = (t: SchemaTable | ResolvedSchemaTable): t is ResolvedSchemaTable => {
+      return 'origin' in t;
+    };
+
+    return {
+      id: table.name,
+      type: 'schemaTableNode',
+      position: { x: 0, y: 0 },
+      data: {
+        label: table.name,
+        columns: table.columns || [],
+        origin: isResolvedTable(table) ? table.origin : undefined,
+      } satisfies SchemaTableNodeData,
+    };
+  });
 }
 
 export function SchemaView({ schema }: SchemaViewProps): JSX.Element {
@@ -135,7 +150,10 @@ export function SchemaView({ schema }: SchemaViewProps): JSX.Element {
         <Background />
         <Controls />
         <MiniMap
-          nodeColor={() => '#3b82f6'}
+          nodeColor={(node) => {
+            const origin = (node.data as SchemaTableNodeData)?.origin;
+            return origin === 'imported' ? '#10b981' : '#3b82f6'; // green : blue
+          }}
         />
       </ReactFlow>
     </div>

@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useLineage } from '@pondpilot/flowscope-react';
 import { useProject } from '../lib/project-store';
+import { getLastParseResult } from '../lib/schema-parser';
 
 export interface DebugData {
   analysisResult: {
@@ -11,6 +12,20 @@ export interface DebugData {
       statementCount: number;
       issueCount: number;
       hasErrors: boolean;
+    };
+  };
+  schema: {
+    schemaSQL: string;
+    hasSchemaSQL: boolean;
+    resolvedSchema: unknown;
+    resolvedTableCount: number;
+    importedTableCount: number;
+    impliedTableCount: number;
+    rawResult: unknown;
+    parseDebug: {
+      parsedTableCount: number;
+      parseErrors: string[];
+      parseResult: unknown;
     };
   };
   uiState: {
@@ -47,6 +62,10 @@ export function useDebugData(): DebugData {
       (f) => f.id === currentProject.activeFileId
     );
 
+    const resolvedSchema = (lineageState.result as any)?.resolvedSchema;
+    const importedCount = resolvedSchema?.tables?.filter((t: any) => t.origin === 'imported').length ?? 0;
+    const impliedCount = resolvedSchema?.tables?.filter((t: any) => t.origin === 'implied').length ?? 0;
+
     return {
       analysisResult: {
         result: lineageState.result,
@@ -56,6 +75,20 @@ export function useDebugData(): DebugData {
           statementCount: lineageState.result?.statements.length ?? 0,
           issueCount: lineageState.result?.issues.length ?? 0,
           hasErrors: lineageState.result?.summary.hasErrors ?? false,
+        },
+      },
+      schema: {
+        schemaSQL: currentProject?.schemaSQL ?? '',
+        hasSchemaSQL: Boolean(currentProject?.schemaSQL?.trim()),
+        resolvedSchema: resolvedSchema,
+        resolvedTableCount: resolvedSchema?.tables?.length ?? 0,
+        importedTableCount: importedCount,
+        impliedTableCount: impliedCount,
+        rawResult: lineageState.result, // Full result to inspect all fields
+        parseDebug: {
+          parsedTableCount: getLastParseResult()?.resolvedSchema?.tables?.length ?? 0,
+          parseErrors: getLastParseResult()?.issues?.filter((i: any) => i.severity === 'error').map((i: any) => i.message) ?? [],
+          parseResult: getLastParseResult(),
         },
       },
       uiState: {

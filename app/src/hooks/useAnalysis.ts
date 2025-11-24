@@ -3,6 +3,7 @@ import { analyzeSql } from '@pondpilot/flowscope-core';
 import { useLineage } from '@pondpilot/flowscope-react';
 import { useProject } from '@/lib/project-store';
 import { FILE_LIMITS } from '@/lib/constants';
+import { parseSchemaSQL } from '@/lib/schema-parser';
 import type { AnalysisState, AnalysisContext, FileValidationResult } from '@/types';
 
 export function useAnalysis(wasmReady: boolean) {
@@ -123,14 +124,50 @@ export function useAnalysis(wasmReady: boolean) {
 
         actions.setSql(representativeSql);
 
+        // Parse schema SQL to extract imported schema tables
+        let importedSchema = undefined;
+        const schemaParsingErrors: string[] = [];
+        if (currentProject.schemaSQL && currentProject.schemaSQL.trim()) {
+          const { tables, errors } = await parseSchemaSQL(
+            currentProject.schemaSQL,
+            currentProject.dialect,
+            analyzeSql
+          );
+
+          if (errors.length > 0) {
+            console.warn('Schema SQL parsing errors:', errors);
+            schemaParsingErrors.push(...errors);
+          }
+
+          if (tables.length > 0) {
+            importedSchema = {
+              allowImplied: true, // Still capture implied schema from DDL in queries
+              tables,
+            };
+          }
+        }
+
         const result = await analyzeSql({
           sql: '',
           files: context.files,
           dialect: currentProject.dialect,
+          schema: importedSchema,
           options: {
             enableColumnLineage: true,
           },
         });
+
+        // Inject schema parsing errors as issues in the result
+        if (schemaParsingErrors.length > 0) {
+          const schemaIssues = schemaParsingErrors.map((errorMsg) => ({
+            severity: 'warning' as const,
+            code: 'SCHEMA_PARSE_ERROR',
+            message: `Schema DDL: ${errorMsg}`,
+            locations: [],
+          }));
+
+          result.issues = [...(result.issues || []), ...schemaIssues];
+        }
 
         actions.setResult(result);
         setState(prev => ({ ...prev, lastAnalyzedAt: Date.now() }));

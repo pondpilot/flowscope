@@ -1,6 +1,6 @@
 import { Handle, Position } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
-import { useLineageActions } from '../store';
+import { useLineageActions, useLineageStore } from '../store';
 import type { TableNodeData, ColumnNodeInfo } from '../types';
 import { sanitizeIdentifier } from '../utils/sanitize';
 import { GRAPH_CONFIG, COLORS } from '../constants';
@@ -19,7 +19,8 @@ function isTableNodeData(data: unknown): data is TableNodeData {
 }
 
 export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
-  const { toggleNodeCollapse } = useLineageActions();
+  const { toggleNodeCollapse, toggleTableExpansion } = useLineageActions();
+  const expandedTableIds = useLineageStore((state) => state.expandedTableIds);
 
   if (!isTableNodeData(data)) {
     console.error('Invalid node data type for TableNode', data);
@@ -33,6 +34,8 @@ export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
   const isSelected = selected || nodeData.isSelected;
   const isHighlighted = nodeData.isHighlighted;
   const isCollapsed = nodeData.isCollapsed;
+  const isExpanded = expandedTableIds.has(id);
+  const hiddenColumnCount = nodeData.hiddenColumnCount || 0;
 
   let palette: typeof colors.table | typeof colors.cte | typeof colors.virtualOutput = colors.table;
   if (isCte) {
@@ -167,6 +170,43 @@ export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
             {sanitizeIdentifier(nodeData.label)}
           </div>
         </div>
+
+        {hiddenColumnCount > 0 && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleTableExpansion(id);
+            }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              backgroundColor: isExpanded ? `${colors.accent}20` : `${colors.accent}15`,
+              color: colors.accent,
+              borderRadius: 999,
+              padding: '4px 8px',
+              fontSize: 10,
+              fontWeight: 600,
+              border: 'none',
+              cursor: 'pointer',
+              transition: 'background-color 0.15s',
+            }}
+            title={
+              isExpanded
+                ? `Hide ${hiddenColumnCount} column${hiddenColumnCount !== 1 ? 's' : ''}`
+                : `Show ${hiddenColumnCount} more column${hiddenColumnCount !== 1 ? 's' : ''}`
+            }
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = `${colors.accent}30`;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = isExpanded
+                ? `${colors.accent}20`
+                : `${colors.accent}15`;
+            }}
+          >
+            {isExpanded ? `−${hiddenColumnCount}` : `+${hiddenColumnCount}`}
+          </button>
+        )}
 
         {isRecursive && (
           <span

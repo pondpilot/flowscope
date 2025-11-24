@@ -1,9 +1,9 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { SqlView } from '@pondpilot/flowscope-react';
 import { cn } from '@/lib/utils';
 import { useProject } from '@/lib/project-store';
-import { useAnalysis, useFileNavigation, useKeyboardShortcuts } from '@/hooks';
+import { useAnalysis, useDebounce, useFileNavigation, useKeyboardShortcuts } from '@/hooks';
 import { EditorToolbar } from './EditorToolbar';
 import { Toast } from './ui/toast';
 import { DEFAULT_FILE_NAMES, KEYBOARD_SHORTCUTS } from '@/lib/constants';
@@ -28,8 +28,12 @@ export function EditorArea({ wasmReady, className }: EditorAreaProps) {
 
   const [isRenaming, setIsRenaming] = useState(false);
   const [fileName, setFileName] = useState('');
+  const previousSchema = useRef<string | null>(null);
 
   const { isAnalyzing, error, runAnalysis, setError } = useAnalysis(wasmReady);
+
+  // Debounce schema SQL to prevent rapid re-analysis during editing
+  const debouncedSchemaSQL = useDebounce(currentProject?.schemaSQL ?? '', 300);
 
   useFileNavigation();
 
@@ -44,6 +48,28 @@ export function EditorArea({ wasmReady, className }: EditorAreaProps) {
       setFileName(activeFile.name);
     }
   }, [activeFile?.id, activeFile?.name]);
+
+  // Auto-trigger re-analysis when debounced schema changes.
+  // We use debouncing to prevent race conditions and excessive re-analysis during schema editing.
+  // We intentionally omit other dependencies like `activeFile.content` from the dependency array
+  // to ensure this effect is exclusively triggered by schema modifications, not by other UI
+  // interactions like typing in the main editor. The guards inside the effect prevent it from
+  // running when the application is not in a ready state.
+  useEffect(() => {
+    if (!wasmReady || !currentProject || !activeFile) {
+      return;
+    }
+    const hasChanged = previousSchema.current !== null && previousSchema.current !== debouncedSchemaSQL;
+    previousSchema.current = debouncedSchemaSQL;
+
+    // Re-run analysis whenever schema text changes (including being cleared after previously set)
+    if (hasChanged) {
+      runAnalysis(activeFile.content, activeFile.name).catch((error) => {
+        console.error('Auto-analysis after schema change failed:', error);
+        setError(error instanceof Error ? error.message : 'Failed to re-run analysis after schema change');
+      });
+    }
+  }, [wasmReady, debouncedSchemaSQL, activeFile?.id, activeFile?.name, runAnalysis, setError]);
 
   const handleRename = useCallback(() => {
     if (fileName.trim() && fileName !== activeFile?.name && activeFile) {

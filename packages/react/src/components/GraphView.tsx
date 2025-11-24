@@ -124,7 +124,7 @@ function enhanceGraphWithHighlights(
 
 export function GraphView({ className, onNodeClick, graphContainerRef }: GraphViewProps): JSX.Element {
   const { state, actions } = useLineage();
-  const { result, selectedNodeId, searchTerm, viewMode, collapsedNodeIds, showScriptTables } = state;
+  const { result, selectedNodeId, searchTerm, viewMode, collapsedNodeIds, showScriptTables, expandedTableIds } = state;
 
   // Local search state with debouncing
   const [localSearchTerm, setLocalSearchTerm] = useState(searchTerm);
@@ -176,7 +176,14 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
       } else if (viewMode === 'column') {
         if (!statement) return { layoutedNodes: [], layoutedEdges: [] };
 
-        const tempGraph = buildColumnLevelGraph(statement, selectedNodeId, searchTerm, new Set());
+        const tempGraph = buildColumnLevelGraph(
+          statement,
+          selectedNodeId,
+          searchTerm,
+          new Set(),
+          expandedTableIds,
+          result.resolvedSchema
+        );
 
         let highlightIds = new Set<string>();
         if (selectedNodeId) {
@@ -187,16 +194,49 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
           statement,
           selectedNodeId,
           searchTerm,
-          collapsedNodeIds
+          collapsedNodeIds,
+          expandedTableIds,
+          result.resolvedSchema
         );
         const enhancedGraph = enhanceGraphWithHighlights(graph, highlightIds);
         rawNodes = enhancedGraph.nodes;
         rawEdges = enhancedGraph.edges;
         direction = 'LR';
       } else {
+        // Table view
         if (!statement) return { layoutedNodes: [], layoutedEdges: [] };
-        rawNodes = buildFlowNodes(statement, selectedNodeId, searchTerm, collapsedNodeIds);
-        rawEdges = buildFlowEdges(statement);
+
+        const tempGraph = {
+          nodes: buildFlowNodes(
+            statement,
+            selectedNodeId,
+            searchTerm,
+            new Set(),
+            expandedTableIds,
+            result.resolvedSchema
+          ),
+          edges: buildFlowEdges(statement),
+        };
+
+        let highlightIds = new Set<string>();
+        if (selectedNodeId) {
+          highlightIds = findConnectedElements(selectedNodeId, tempGraph.edges);
+        }
+
+        const graph = {
+          nodes: buildFlowNodes(
+            statement,
+            selectedNodeId,
+            searchTerm,
+            collapsedNodeIds,
+            expandedTableIds,
+            result.resolvedSchema
+          ),
+          edges: buildFlowEdges(statement),
+        };
+        const enhancedGraph = enhanceGraphWithHighlights(graph, highlightIds);
+        rawNodes = enhancedGraph.nodes;
+        rawEdges = enhancedGraph.edges;
         direction = 'LR';
       }
 
@@ -206,7 +246,7 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
       console.error('Graph building failed:', error);
       return { layoutedNodes: [], layoutedEdges: [] };
     }
-  }, [result, statement, selectedNodeId, searchTerm, viewMode, collapsedNodeIds, showScriptTables]);
+  }, [result, statement, selectedNodeId, searchTerm, viewMode, collapsedNodeIds, showScriptTables, expandedTableIds]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<FlowEdge>([]);

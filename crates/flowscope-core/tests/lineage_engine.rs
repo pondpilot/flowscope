@@ -415,6 +415,7 @@ fn schema_metadata_and_search_path_resolve_identifiers() {
     "#;
 
     let schema = SchemaMetadata {
+        allow_implied: true,
         default_catalog: Some("analytics".into()),
         default_schema: Some("marts".into()),
         search_path: Some(vec![
@@ -676,6 +677,7 @@ fn ansi_insert_select_with_schema_flags_unknown_column() {
     "#;
 
     let schema = SchemaMetadata {
+        allow_implied: true,
         default_catalog: None,
         default_schema: None,
         search_path: None,
@@ -741,6 +743,7 @@ fn ansi_star_with_schema_expands_columns() {
     "#;
 
     let schema = SchemaMetadata {
+        allow_implied: true,
         default_catalog: None,
         default_schema: None,
         search_path: None,
@@ -898,6 +901,7 @@ fn ansi_cte_shadowing_existing_table_prefers_cte() {
     "#;
 
     let schema = SchemaMetadata {
+        allow_implied: true,
         default_catalog: None,
         default_schema: None,
         search_path: None,
@@ -1881,6 +1885,7 @@ fn error_unknown_table_without_schema() {
     "#;
 
     let schema = SchemaMetadata {
+        allow_implied: true,
         default_catalog: None,
         default_schema: None,
         search_path: None,
@@ -2537,6 +2542,7 @@ fn column_wildcard_expansion_with_schema() {
     "#;
 
     let schema = SchemaMetadata {
+        allow_implied: true,
         default_catalog: None,
         default_schema: None,
         search_path: None,
