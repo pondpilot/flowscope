@@ -22,6 +22,7 @@ export const STORAGE_KEYS = {
   PROJECTS: 'flowscope-projects',
   ACTIVE_PROJECT_ID: 'flowscope-active-project-id',
   VIEW_MODE: 'flowscope-view-mode',
+  WELCOME_SHOWN: 'flowscope-welcome-shown',
 } as const;
 
 export const UI_CONFIG = {

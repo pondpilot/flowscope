@@ -5,6 +5,7 @@ import '@pondpilot/flowscope-react/styles.css';
 import { ProjectProvider } from './lib/project-store';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Workspace } from './components/Workspace';
+import { WelcomeModal } from './components/WelcomeModal';
 import { Toaster } from './components/ui/sonner';
 import { useWasmInit } from './hooks';
 import { DebugPanel } from './components/debug/DebugPanel';
@@ -24,6 +25,7 @@ function App() {
             <Workspace wasmReady={wasmReady} error={error} onRetry={retry} isRetrying={isRetrying} />
           </div>
           <Toaster position="bottom-right" />
+          <WelcomeModal />
           {import.meta.env.DEV && <DebugPanel />}
         </LineageProvider>
       </ProjectProvider>
