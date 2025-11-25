@@ -1,36 +1,50 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useCallback, useRef, useMemo } from 'react';
 import { Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { SqlView } from '@pondpilot/flowscope-react';
 import { cn } from '@/lib/utils';
 import { useProject } from '@/lib/project-store';
-import { useAnalysis, useDebounce, useFileNavigation, useKeyboardShortcuts } from '@/hooks';
+import { useAnalysis, useDebounce, useFileNavigation, useGlobalShortcuts } from '@/hooks';
+import type { GlobalShortcut } from '@/hooks';
 import { EditorToolbar } from './EditorToolbar';
-import { Toast } from './ui/toast';
-import { DEFAULT_FILE_NAMES, KEYBOARD_SHORTCUTS } from '@/lib/constants';
+import { DEFAULT_FILE_NAMES } from '@/lib/constants';
 import type { Dialect, RunMode } from '@/lib/project-store';
 
 interface EditorAreaProps {
   wasmReady: boolean;
   className?: string;
+  fileSelectorOpen: boolean;
+  onFileSelectorOpenChange: (open: boolean) => void;
+  dialectSelectorOpen: boolean;
+  onDialectSelectorOpenChange: (open: boolean) => void;
 }
 
-export function EditorArea({ wasmReady, className }: EditorAreaProps) {
+export function EditorArea({ wasmReady, className, fileSelectorOpen, onFileSelectorOpenChange, dialectSelectorOpen, onDialectSelectorOpenChange }: EditorAreaProps) {
   const {
     currentProject,
     updateFile,
-    renameFile,
     createFile,
     setProjectDialect,
     setRunMode,
   } = useProject();
 
   const activeFile = currentProject?.files.find(f => f.id === currentProject.activeFileId);
+  const editorContainerRef = useRef<HTMLDivElement>(null);
 
-  const [isRenaming, setIsRenaming] = useState(false);
-  const [fileName, setFileName] = useState('');
   const previousSchema = useRef<string | null>(null);
 
   const { isAnalyzing, error, runAnalysis, setError } = useAnalysis(wasmReady);
+
+  // Show error toast when error occurs
+  useEffect(() => {
+    if (error) {
+      toast.error('Analysis Error', {
+        description: error,
+        duration: 5000,
+      });
+      setError(null);
+    }
+  }, [error, setError]);
 
   // Debounce schema SQL to prevent rapid re-analysis during editing
   const debouncedSchemaSQL = useDebounce(currentProject?.schemaSQL ?? '', 300);
@@ -43,18 +57,20 @@ export function EditorArea({ wasmReady, className }: EditorAreaProps) {
     }
   }, [currentProject, createFile]);
 
+  // Focus the editor when active file changes (e.g., new file created)
   useEffect(() => {
-    if (activeFile) {
-      setFileName(activeFile.name);
+    if (activeFile && editorContainerRef.current) {
+      requestAnimationFrame(() => {
+        const cmContent = editorContainerRef.current?.querySelector('.cm-content') as HTMLElement;
+        cmContent?.focus();
+      });
     }
-  }, [activeFile?.id, activeFile?.name]);
+  }, [activeFile?.id]);
 
   // Auto-trigger re-analysis when debounced schema changes.
-  // We use debouncing to prevent race conditions and excessive re-analysis during schema editing.
-  // We intentionally omit other dependencies like `activeFile.content` from the dependency array
-  // to ensure this effect is exclusively triggered by schema modifications, not by other UI
-  // interactions like typing in the main editor. The guards inside the effect prevent it from
-  // running when the application is not in a ready state.
+  // activeFile.content is intentionally omitted from the dependency array to prevent
+  // re-analysis on every keystroke in the editor. We only want to re-analyze when
+  // the schema SQL changes, not when the active file content changes.
   useEffect(() => {
     if (!wasmReady || !currentProject || !activeFile) {
       return;
@@ -62,21 +78,13 @@ export function EditorArea({ wasmReady, className }: EditorAreaProps) {
     const hasChanged = previousSchema.current !== null && previousSchema.current !== debouncedSchemaSQL;
     previousSchema.current = debouncedSchemaSQL;
 
-    // Re-run analysis whenever schema text changes (including being cleared after previously set)
     if (hasChanged) {
-      runAnalysis(activeFile.content, activeFile.name).catch((error) => {
-        console.error('Auto-analysis after schema change failed:', error);
-        setError(error instanceof Error ? error.message : 'Failed to re-run analysis after schema change');
+      runAnalysis(activeFile.content, activeFile.name).catch((err) => {
+        console.error('Auto-analysis after schema change failed:', err);
+        setError(err instanceof Error ? err.message : 'Failed to re-run analysis after schema change');
       });
     }
   }, [wasmReady, debouncedSchemaSQL, activeFile?.id, activeFile?.name, runAnalysis, setError]);
-
-  const handleRename = useCallback(() => {
-    if (fileName.trim() && fileName !== activeFile?.name && activeFile) {
-      renameFile(activeFile.id, fileName);
-    }
-    setIsRenaming(false);
-  }, [fileName, activeFile, renameFile]);
 
   const handleAnalyze = useCallback(() => {
     if (activeFile) {
@@ -84,13 +92,34 @@ export function EditorArea({ wasmReady, className }: EditorAreaProps) {
     }
   }, [activeFile, runAnalysis]);
 
-  useKeyboardShortcuts([
+  const handleAnalyzeActiveOnly = useCallback(() => {
+    if (activeFile && currentProject) {
+      // Temporarily switch to 'current' mode for this run
+      const originalMode = currentProject.runMode;
+      setRunMode(currentProject.id, 'current');
+      runAnalysis(activeFile.content, activeFile.name).finally(() => {
+        // Restore original mode after analysis
+        setRunMode(currentProject.id, originalMode);
+      });
+    }
+  }, [activeFile, currentProject, runAnalysis, setRunMode]);
+
+  // Keyboard shortcuts for running analysis
+  const analysisShortcuts = useMemo<GlobalShortcut[]>(() => [
     {
-      ...KEYBOARD_SHORTCUTS.RUN_ANALYSIS,
+      key: 'Enter',
+      cmdOrCtrl: true,
       handler: handleAnalyze,
-      description: 'Run SQL analysis',
     },
-  ]);
+    {
+      key: 'Enter',
+      cmdOrCtrl: true,
+      shift: true,
+      handler: handleAnalyzeActiveOnly,
+    },
+  ], [handleAnalyze, handleAnalyzeActiveOnly]);
+
+  useGlobalShortcuts(analysisShortcuts);
 
   if (!currentProject || !activeFile) {
     return (
@@ -106,11 +135,6 @@ export function EditorArea({ wasmReady, className }: EditorAreaProps) {
   return (
     <div className={cn('flex flex-col h-full bg-background', className)}>
       <EditorToolbar
-        fileName={fileName}
-        isRenaming={isRenaming}
-        onFileNameChange={setFileName}
-        onRenameStart={() => setIsRenaming(true)}
-        onRenameEnd={handleRename}
         dialect={currentProject.dialect}
         onDialectChange={(dialect: Dialect) => setProjectDialect(currentProject.id, dialect)}
         runMode={currentProject.runMode}
@@ -120,9 +144,13 @@ export function EditorArea({ wasmReady, className }: EditorAreaProps) {
         onAnalyze={handleAnalyze}
         allFileCount={allFileCount}
         selectedCount={selectedCount}
+        fileSelectorOpen={fileSelectorOpen}
+        onFileSelectorOpenChange={onFileSelectorOpenChange}
+        dialectSelectorOpen={dialectSelectorOpen}
+        onDialectSelectorOpenChange={onDialectSelectorOpenChange}
       />
 
-      <div className="flex-1 overflow-hidden relative">
+      <div ref={editorContainerRef} className="flex-1 overflow-hidden relative" data-testid="sql-editor">
         <SqlView
           value={activeFile.content}
           onChange={val => updateFile(activeFile.id, val)}
@@ -130,12 +158,6 @@ export function EditorArea({ wasmReady, className }: EditorAreaProps) {
           editable={true}
         />
       </div>
-
-      {error && (
-        <div className="absolute bottom-4 left-4 right-4 mx-auto max-w-md z-50">
-          <Toast type="error" title="Analysis Error" message={error} onClose={() => setError(null)} />
-        </div>
-      )}
     </div>
   );
 }

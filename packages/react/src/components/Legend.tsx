@@ -11,7 +11,7 @@ interface LegendProps {
  * Collapsible panel that shows in the bottom-left corner of the graph.
  */
 export function Legend({ viewMode = 'table' }: LegendProps): JSX.Element {
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   return (
     <div

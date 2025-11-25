@@ -304,12 +304,14 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       const newSelected = currentSelected.includes(fileId)
         ? currentSelected.filter(id => id !== fileId)
         : [...currentSelected, fileId];
-      
-      return { 
-        ...p, 
+
+      // Automatically switch runMode based on selection:
+      // - Selecting files implies the user wants 'custom' mode
+      // - Deselecting all files reverts to 'all' mode as a sensible default
+      return {
+        ...p,
         selectedFileIds: newSelected,
-        // If user interacts with selection, potentially switch mode to custom
-        // But let's leave that explicit for the user or UI to handle
+        runMode: newSelected.length > 0 ? 'custom' : 'all',
       };
     }));
   }, []);

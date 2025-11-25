@@ -1,6 +1,5 @@
-import { FileText, Play, Loader2, ChevronDown } from 'lucide-react';
+import { Play, Loader2, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,14 +16,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { FileSelector } from './FileSelector';
 import type { Dialect, RunMode } from '@/lib/project-store';
 
 interface EditorToolbarProps {
-  fileName: string;
-  isRenaming: boolean;
-  onFileNameChange: (name: string) => void;
-  onRenameStart: () => void;
-  onRenameEnd: () => void;
   dialect: Dialect;
   onDialectChange: (dialect: Dialect) => void;
   runMode: RunMode;
@@ -34,14 +29,13 @@ interface EditorToolbarProps {
   onAnalyze: () => void;
   allFileCount: number;
   selectedCount: number;
+  fileSelectorOpen: boolean;
+  onFileSelectorOpenChange: (open: boolean) => void;
+  dialectSelectorOpen: boolean;
+  onDialectSelectorOpenChange: (open: boolean) => void;
 }
 
 export function EditorToolbar({
-  fileName,
-  isRenaming,
-  onFileNameChange,
-  onRenameStart,
-  onRenameEnd,
   dialect,
   onDialectChange,
   runMode,
@@ -51,33 +45,25 @@ export function EditorToolbar({
   onAnalyze,
   allFileCount,
   selectedCount,
+  fileSelectorOpen,
+  onFileSelectorOpenChange,
+  dialectSelectorOpen,
+  onDialectSelectorOpenChange,
 }: EditorToolbarProps) {
   return (
-    <div className="flex items-center justify-between px-4 py-2 border-b h-[50px] shrink-0 bg-background">
-      <div className="flex items-center gap-2 overflow-hidden">
-        <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-        {isRenaming ? (
-          <Input
-            value={fileName}
-            onChange={e => onFileNameChange(e.target.value)}
-            onBlur={onRenameEnd}
-            onKeyDown={e => e.key === 'Enter' && onRenameEnd()}
-            className="h-7 w-48 text-sm"
-            autoFocus
-          />
-        ) : (
-          <span
-            className="text-sm font-medium cursor-pointer hover:text-foreground text-muted-foreground truncate max-w-[200px]"
-            onDoubleClick={onRenameStart}
-            title="Double click to rename"
-          >
-            {fileName}
-          </span>
-        )}
-      </div>
-
+    <div className="flex items-center justify-between px-3 py-2 border-b h-[44px] shrink-0 bg-muted/30">
       <div className="flex items-center gap-2">
-        <Select value={dialect} onValueChange={v => onDialectChange(v as Dialect)}>
+        <FileSelector
+          open={fileSelectorOpen}
+          onOpenChange={onFileSelectorOpenChange}
+        />
+
+        <Select
+          value={dialect}
+          onValueChange={v => onDialectChange(v as Dialect)}
+          open={dialectSelectorOpen}
+          onOpenChange={onDialectSelectorOpenChange}
+        >
           <SelectTrigger className="h-8 w-[130px] text-xs">
             <SelectValue placeholder="Dialect" />
           </SelectTrigger>
@@ -88,7 +74,9 @@ export function EditorToolbar({
             <SelectItem value="bigquery">BigQuery</SelectItem>
           </SelectContent>
         </Select>
+      </div>
 
+      <div className="flex items-center gap-2">
         <div className="flex items-center rounded-md border shadow-sm">
           <Button
             onClick={onAnalyze}
@@ -128,16 +116,26 @@ export function EditorToolbar({
               <DropdownMenuLabel>Run Configuration</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuRadioGroup value={runMode} onValueChange={v => onRunModeChange(v as RunMode)}>
+                <DropdownMenuRadioItem value="current" className="text-xs justify-between">
+                  <span>Run Active File Only</span>
+                  <kbd className="ml-4 inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+                    <span className="text-xs">⌘</span>⇧↵
+                  </kbd>
+                </DropdownMenuRadioItem>
                 <DropdownMenuRadioItem value="all" className="text-xs">
-                  Run Project ({allFileCount} files)
+                  Run All Files ({allFileCount})
                 </DropdownMenuRadioItem>
                 <DropdownMenuRadioItem value="custom" className="text-xs">
-                  Run Selected ({selectedCount} files)
-                </DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="current" className="text-xs">
-                  Run Active File Only
+                  Run Selected ({selectedCount})
                 </DropdownMenuRadioItem>
               </DropdownMenuRadioGroup>
+              <DropdownMenuSeparator />
+              <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                <kbd className="inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium">
+                  <span className="text-xs">⌘</span>↵
+                </kbd>
+                <span className="ml-2">Run in current mode</span>
+              </div>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

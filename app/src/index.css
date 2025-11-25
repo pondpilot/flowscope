@@ -116,3 +116,14 @@
 .react-flow__background {
   @apply !bg-background-primary-light dark:!bg-background-primary-dark;
 }
+
+
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
