@@ -54,7 +54,7 @@ export const COLORS = {
       border: '#DBDDE1',
       text: '#212328',
       textSecondary: '#6F7785',
-      accent: '#3B82F6', // Blue - for minimap and icons
+      accent: '#4957C1', // PondPilot brand blue - for minimap and icons
     },
     cte: {
       bg: '#F5F3FF',
@@ -91,16 +91,16 @@ export const COLORS = {
     muted: '#CBD5E1', // Light gray - dimmed edges
   },
 
-  // Semantic status colors
+  // Semantic status colors (aligned with PondPilot)
   status: {
-    error: '#EF4444',
-    errorBg: '#FEE2E2',
-    warning: '#F59E0B',
-    warningBg: '#FEF3C7',
-    info: '#3B82F6',
-    infoBg: '#DBEAFE',
-    success: '#22C55E',
-    successBg: '#DCFCE7',
+    error: '#EF486F', // PondPilot magenta
+    errorBg: '#FDE5EB',
+    warning: '#F4A462', // PondPilot orange
+    warningBg: '#FDF2E9',
+    info: '#4957C1', // PondPilot brand blue
+    infoBg: '#E5E7F6',
+    success: '#4CAE4F', // PondPilot green
+    successBg: '#E6F4E6',
   },
 
   // Interactive state colors
@@ -141,17 +141,17 @@ export const COLORS = {
 } as const;
 
 /**
- * Dark mode color overrides
+ * Dark mode color overrides (aligned with PondPilot blue-grey palette)
  */
 export const COLORS_DARK = {
   nodes: {
     table: {
-      bg: '#1E293B',
-      headerBg: '#334155',
-      border: '#475569',
-      text: '#F1F5F9',
-      textSecondary: '#94A3B8',
-      accent: '#60A5FA',
+      bg: '#242B35', // PondPilot background.primary.dark
+      headerBg: '#384252', // PondPilot blue-grey-700
+      border: '#5B6B86', // PondPilot border.dark
+      text: '#FDFDFD', // PondPilot text.primary.dark
+      textSecondary: '#A8B3C4', // PondPilot text.secondary.dark
+      accent: '#4C61FF', // PondPilot accent.dark
     },
     cte: {
       bg: '#2E1065',
@@ -167,7 +167,7 @@ export const COLORS_DARK = {
       border: '#16A34A',
       text: '#DCFCE7',
       textSecondary: '#BBF7D0',
-      accent: '#34D399',
+      accent: '#75C277', // PondPilot success.dark
     },
     script: {
       bg: '#431407',
@@ -175,35 +175,35 @@ export const COLORS_DARK = {
       border: '#EA580C',
       text: '#FFEDD5',
       textSecondary: '#FED7AA',
-      accent: '#FB923C',
+      accent: '#F7B987', // PondPilot warning.dark
     },
   },
   edges: {
-    dataFlow: '#64748B',
+    dataFlow: '#8292AA', // PondPilot blue-grey-500
     derivation: '#A78BFA',
-    aggregation: '#FBBF24',
-    highlighted: '#818CF8',
-    muted: '#475569',
+    aggregation: '#F7B987', // PondPilot warning.dark
+    highlighted: '#4C61FF', // PondPilot accent.dark
+    muted: '#5B6B86', // PondPilot blue-grey-600
   },
   status: {
-    error: '#F87171',
-    errorBg: '#450A0A',
-    warning: '#FBBF24',
-    warningBg: '#451A03',
-    info: '#60A5FA',
-    infoBg: '#172554',
-    success: '#4ADE80',
-    successBg: '#052E16',
+    error: '#F37391', // PondPilot error.dark
+    errorBg: '#990D2E',
+    warning: '#F7B987', // PondPilot warning.dark
+    warningBg: '#A8520C',
+    info: '#4C61FF', // PondPilot accent.dark
+    infoBg: '#1B255A',
+    success: '#75C277', // PondPilot success.dark
+    successBg: '#2B612C',
   },
   interactive: {
-    selection: '#818CF8',
-    selectionRing: '#818CF840',
-    hover: '#818CF815',
-    related: '#818CF825',
-    focus: '#818CF8',
+    selection: '#4C61FF', // PondPilot accent.dark
+    selectionRing: '#4C61FF40',
+    hover: '#4C61FF15',
+    related: '#4C61FF25',
+    focus: '#4C61FF',
   },
-  recursive: '#FBBF24',
-  accent: '#818CF8',
+  recursive: '#F7B987', // PondPilot warning.dark
+  accent: '#4C61FF', // PondPilot accent.dark
 } as const;
 
 /**

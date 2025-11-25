@@ -75,25 +75,16 @@ export function AnalysisView() {
   return (
     <div className="flex flex-col h-full bg-background">
       <Tabs defaultValue="lineage" className="flex-1 flex flex-col min-h-0">
-        <div className="px-4 border-b flex items-center justify-between bg-muted/10">
-          <TabsList className="h-10 w-auto justify-start bg-transparent p-0">
-            <TabsTrigger 
-              value="lineage" 
-              className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4 h-full"
-            >
+        <div className="px-4 py-2 border-b flex items-center justify-between bg-muted/10">
+          <TabsList>
+            <TabsTrigger value="lineage">
               Lineage
             </TabsTrigger>
-            <TabsTrigger
-              value="schema"
-              className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4 h-full flex items-center gap-2"
-            >
+            <TabsTrigger value="schema">
               Schema
             </TabsTrigger>
             {hasIssues && (
-              <TabsTrigger 
-                value="issues" 
-                className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4 h-full text-yellow-600 data-[state=active]:text-yellow-700"
-              >
+              <TabsTrigger value="issues" className="text-warning-light dark:text-warning-dark">
                 Issues ({summary.issueCount.errors + summary.issueCount.warnings})
               </TabsTrigger>
             )}
