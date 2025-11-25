@@ -171,10 +171,10 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
       <DropdownMenu open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger asChild>
           <button
-            className="flex h-8 items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-xs ring-offset-background placeholder:text-muted-foreground focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1 hover:bg-accent hover:text-accent-foreground"
+            className="flex h-8 items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-xs ring-offset-background placeholder:text-muted-foreground focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1 hover:bg-accent hover:text-accent-foreground min-w-0 shrink"
             data-testid="file-selector-trigger"
           >
-            <span className="max-w-[150px] truncate">
+            <span className="truncate">
               {activeFile?.name || 'No file selected'}
             </span>
             <kbd className="hidden sm:inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">

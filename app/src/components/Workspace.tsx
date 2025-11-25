@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useCallback } from 'react';
 import { Share2 } from 'lucide-react';
 import { Button } from './ui/button';
 import {
@@ -6,6 +6,7 @@ import {
   ResizablePanel,
   ResizableHandle,
 } from './ui/resizable';
+import type { ImperativePanelHandle } from 'react-resizable-panels';
 
 import { EditorArea } from './EditorArea';
 import { AnalysisView } from './AnalysisView';
@@ -27,12 +28,27 @@ interface WorkspaceProps {
  * - Left: SQL editor with file selector
  * - Right: Lineage visualization
  */
+const EDITOR_PANEL_DEFAULT_SIZE = 33;
+
 export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspaceProps) {
   const { currentProject } = useProject();
   const [fileSelectorOpen, setFileSelectorOpen] = useState(false);
   const [projectSelectorOpen, setProjectSelectorOpen] = useState(false);
   const [dialectSelectorOpen, setDialectSelectorOpen] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
+
+  const editorPanelRef = useRef<ImperativePanelHandle>(null);
+
+  const toggleEditorPanel = useCallback(() => {
+    const panel = editorPanelRef.current;
+    if (!panel) return;
+
+    if (panel.isCollapsed()) {
+      panel.expand();
+    } else {
+      panel.collapse();
+    }
+  }, []);
 
   // Global keyboard shortcuts
   const shortcuts = useMemo<GlobalShortcut[]>(() => [
@@ -51,7 +67,12 @@ export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspacePr
       cmdOrCtrl: true,
       handler: () => setDialectSelectorOpen(prev => !prev),
     },
-  ], []);
+    {
+      key: 'b',
+      cmdOrCtrl: true,
+      handler: toggleEditorPanel,
+    },
+  ], [toggleEditorPanel]);
 
   useGlobalShortcuts(shortcuts);
 
@@ -129,7 +150,14 @@ export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspacePr
       <div className="flex-1 overflow-hidden">
         <ResizablePanelGroup direction="horizontal">
           {/* Left: Editor */}
-          <ResizablePanel defaultSize={33} minSize={20} data-testid="editor-panel">
+          <ResizablePanel
+            ref={editorPanelRef}
+            defaultSize={EDITOR_PANEL_DEFAULT_SIZE}
+            minSize={25}
+            collapsible
+            collapsedSize={0}
+            data-testid="editor-panel"
+          >
             <EditorArea
               wasmReady={wasmReady}
               fileSelectorOpen={fileSelectorOpen}
@@ -142,7 +170,13 @@ export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspacePr
           <ResizableHandle withHandle />
 
           {/* Right: Visualization */}
-          <ResizablePanel defaultSize={67} minSize={30} data-testid="analysis-panel">
+          <ResizablePanel
+            defaultSize={67}
+            minSize={30}
+            collapsible
+            collapsedSize={0}
+            data-testid="analysis-panel"
+          >
             <AnalysisView />
           </ResizablePanel>
         </ResizablePanelGroup>

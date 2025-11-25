@@ -51,8 +51,8 @@ export function EditorToolbar({
   onDialectSelectorOpenChange,
 }: EditorToolbarProps) {
   return (
-    <div className="flex items-center justify-between px-3 py-2 border-b h-[44px] shrink-0 bg-muted/30">
-      <div className="flex items-center gap-2">
+    <div className="flex items-center justify-between px-3 py-2 border-b h-[44px] shrink-0 bg-muted/30 overflow-hidden gap-2">
+      <div className="flex items-center gap-2 min-w-0 flex-1">
         <FileSelector
           open={fileSelectorOpen}
           onOpenChange={onFileSelectorOpenChange}
@@ -64,7 +64,7 @@ export function EditorToolbar({
           open={dialectSelectorOpen}
           onOpenChange={onDialectSelectorOpenChange}
         >
-          <SelectTrigger className="h-8 w-[130px] text-xs">
+          <SelectTrigger className="h-8 w-[130px] min-w-0 text-xs">
             <SelectValue placeholder="Dialect" />
           </SelectTrigger>
           <SelectContent>
@@ -84,7 +84,7 @@ export function EditorToolbar({
         </Select>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 shrink-0">
         <div className="flex items-center rounded-md border shadow-sm">
           <Button
             onClick={onAnalyze}

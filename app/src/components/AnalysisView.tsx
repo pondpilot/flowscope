@@ -75,7 +75,7 @@ export function AnalysisView() {
   return (
     <div className="flex flex-col h-full bg-background">
       <Tabs defaultValue="lineage" className="flex-1 flex flex-col min-h-0">
-        <div className="px-4 py-2 border-b flex items-center justify-between bg-muted/10">
+        <div className="px-4 py-2 border-b flex items-center justify-between bg-muted/10 h-[44px] shrink-0">
           <TabsList>
             <TabsTrigger value="lineage">
               Lineage
