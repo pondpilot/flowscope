@@ -26,7 +26,7 @@ function App() {
     <ErrorBoundary>
       <ProjectProvider>
         <ShareImportHandler />
-        <LineageProvider>
+        <LineageProvider defaultLayoutAlgorithm="dagre">
           <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
             <Workspace wasmReady={wasmReady} error={error} onRetry={retry} isRetrying={isRetrying} />
           </div>

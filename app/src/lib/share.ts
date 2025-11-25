@@ -149,7 +149,10 @@ export function encodeProject(project: Project, options: EncodeOptions = {}): En
       compressedSize,
       status: 'success',
     };
-  } catch (err) {
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.warn('Failed to compress project data:', error);
+    }
     return {
       encoded: '',
       originalSize,
@@ -236,7 +239,10 @@ export function decodeProject(encoded: string): SharePayload | null {
     const payload = JSON.parse(json);
 
     return validatePayload(payload);
-  } catch {
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.warn('Failed to decode project data:', error);
+    }
     return null;
   }
 }

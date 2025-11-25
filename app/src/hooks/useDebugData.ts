@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useLineage } from '@pondpilot/flowscope-react';
 import { useProject } from '../lib/project-store';
 import { getLastParseResult } from '../lib/schema-parser';
+import type { Issue, ResolvedSchemaTable } from '@pondpilot/flowscope-core';
 
 export interface DebugData {
   analysisResult: {
@@ -62,9 +63,9 @@ export function useDebugData(): DebugData {
       (f) => f.id === currentProject.activeFileId
     );
 
-    const resolvedSchema = (lineageState.result as any)?.resolvedSchema;
-    const importedCount = resolvedSchema?.tables?.filter((t: any) => t.origin === 'imported').length ?? 0;
-    const impliedCount = resolvedSchema?.tables?.filter((t: any) => t.origin === 'implied').length ?? 0;
+    const resolvedSchema = lineageState.result?.resolvedSchema;
+    const importedCount = resolvedSchema?.tables?.filter((t: ResolvedSchemaTable) => t.origin === 'imported').length ?? 0;
+    const impliedCount = resolvedSchema?.tables?.filter((t: ResolvedSchemaTable) => t.origin === 'implied').length ?? 0;
 
     return {
       analysisResult: {
@@ -87,7 +88,7 @@ export function useDebugData(): DebugData {
         rawResult: lineageState.result, // Full result to inspect all fields
         parseDebug: {
           parsedTableCount: getLastParseResult()?.resolvedSchema?.tables?.length ?? 0,
-          parseErrors: getLastParseResult()?.issues?.filter((i: any) => i.severity === 'error').map((i: any) => i.message) ?? [],
+          parseErrors: getLastParseResult()?.issues?.filter((i: Issue) => i.severity === 'error').map((i: Issue) => i.message) ?? [],
           parseResult: getLastParseResult(),
         },
       },

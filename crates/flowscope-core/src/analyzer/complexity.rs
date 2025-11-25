@@ -62,15 +62,12 @@ pub fn calculate_complexity(nodes: &[Node]) -> u8 {
         + filter_count * FILTER_WEIGHT;
 
     // Normalize to 1-100 range
-    std::cmp::min(100, std::cmp::max(1, raw_score)) as u8
+    raw_score.clamp(1, 100) as u8
 }
 
 /// Count the number of JOIN operations in nodes.
 pub fn count_joins(nodes: &[Node]) -> usize {
-    nodes
-        .iter()
-        .filter(|n| n.join_type.is_some())
-        .count()
+    nodes.iter().filter(|n| n.join_type.is_some()).count()
 }
 
 /// Check if a join type is considered "complex" (higher weight).

@@ -1,6 +1,7 @@
 {
   "name": "flowscope-monorepo",
   "private": true,
+  "type": "module",
   "packageManager": "yarn@1.22.19",
   "workspaces": [
     "packages/*",
@@ -14,5 +15,11 @@
     "check:schema": "cargo test -p flowscope-core --test schema_guard --locked && yarn workspace @pondpilot/flowscope-core test schema-compat.test.ts --silent",
     "check:ts": "yarn workspace @pondpilot/flowscope-core test --silent",
     "check:rust": "cargo test --workspace --locked"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "eslint": "^9.39.1",
+    "globals": "^16.5.0",
+    "typescript-eslint": "^8.48.0"
   }
 }

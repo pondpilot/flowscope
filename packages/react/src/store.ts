@@ -6,6 +6,7 @@ import type { LineageViewMode, LayoutAlgorithm, NavigationRequest } from './type
 
 const VIEW_MODE_STORAGE_KEY = 'flowscope-view-mode';
 const LAYOUT_ALGORITHM_STORAGE_KEY = 'flowscope-layout-algorithm';
+const DEFAULT_LAYOUT_ALGORITHM: LayoutAlgorithm = 'dagre';
 
 /**
  * Load the view mode from localStorage, defaulting to 'table' if not found or invalid.
@@ -34,9 +35,12 @@ function saveViewMode(mode: LineageViewMode): void {
 }
 
 /**
- * Load the layout algorithm from localStorage, defaulting to 'dagre' if not found or invalid.
+ * Load the layout algorithm from localStorage, defaulting to the provided value
+ * (or dagre) if not found or invalid.
  */
-function loadLayoutAlgorithm(): LayoutAlgorithm {
+function loadLayoutAlgorithm(
+  defaultAlgorithm: LayoutAlgorithm = DEFAULT_LAYOUT_ALGORITHM
+): LayoutAlgorithm {
   try {
     const stored = localStorage.getItem(LAYOUT_ALGORITHM_STORAGE_KEY);
     if (stored === 'dagre' || stored === 'elk') {
@@ -45,7 +49,7 @@ function loadLayoutAlgorithm(): LayoutAlgorithm {
   } catch {
     // localStorage might not be available (SSR, etc.)
   }
-  return 'dagre';
+  return defaultAlgorithm;
 }
 
 /**
@@ -94,9 +98,14 @@ export interface LineageState {
 /**
  * Build a new, isolated Zustand store instance.
  */
-export function createLineageStore(initialState?: Partial<LineageState>): StoreApi<LineageState> {
+export function createLineageStore(
+  initialState?: Partial<LineageState>,
+  options?: { defaultLayoutAlgorithm?: LayoutAlgorithm }
+): StoreApi<LineageState> {
   const initialViewMode = initialState?.viewMode ?? loadViewMode();
-  const initialLayoutAlgorithm = initialState?.layoutAlgorithm ?? loadLayoutAlgorithm();
+  const fallbackAlgorithm = options?.defaultLayoutAlgorithm ?? DEFAULT_LAYOUT_ALGORITHM;
+  const initialLayoutAlgorithm =
+    initialState?.layoutAlgorithm ?? loadLayoutAlgorithm(fallbackAlgorithm);
 
   return createStore<LineageState>((set) => ({
     // Initial state

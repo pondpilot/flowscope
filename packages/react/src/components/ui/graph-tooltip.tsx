@@ -9,7 +9,7 @@ export const GraphTooltipPortal = TooltipPrimitive.Portal;
 export const GraphTooltipContent = React.forwardRef<
   React.ElementRef<typeof TooltipPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Content>
->(({ className, sideOffset = 5, style, ...props }, ref) => (
+>(({ className: _className, sideOffset = 5, style, ...props }, ref) => (
   <TooltipPrimitive.Content
     ref={ref}
     sideOffset={sideOffset}

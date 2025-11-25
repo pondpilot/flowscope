@@ -265,7 +265,7 @@ const loadProjectsFromStorage = (): Project[] => {
     const saved = localStorage.getItem(STORAGE_KEYS.PROJECTS);
     if (saved) {
       const parsed = JSON.parse(saved);
-      return parsed.map((p: any) => ({
+      return parsed.map((p: Partial<Project>) => ({
         ...p,
         dialect: p.dialect || 'generic',
         runMode: p.runMode || 'all',

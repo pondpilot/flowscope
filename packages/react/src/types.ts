@@ -162,6 +162,8 @@ export interface LineageExplorerProps {
   onSqlChange?: (sql: string) => void;
   /** Visual theme (default: 'light') */
   theme?: 'light' | 'dark';
+  /** Preferred default layout algorithm when the explorer first renders */
+  defaultLayoutAlgorithm?: LayoutAlgorithm;
 }
 
 /**

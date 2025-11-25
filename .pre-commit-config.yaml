@@ -1,0 +1,19 @@
+# Pre-commit configuration for FlowScope
+# See https://github.com/j178/prek for documentation
+
+repos:
+  - repo: local
+    hooks:
+      - id: check-schema-sync
+        name: Check schema synchronization
+        entry: ./scripts/check_schema_sync.sh
+        language: system
+        pass_filenames: false
+        files: ^(crates/flowscope-core/src/|docs/api_schema\.json)
+
+      - id: just-check
+        name: Run just check
+        entry: just check
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]

@@ -354,7 +354,7 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
       actions.selectNode(node.id);
 
       let sourceName: string | undefined;
-      let span: any | undefined;
+      let span: { start: number; end: number } | undefined;
 
       // 1. Try to get source/span from node data (Script View / Hybrid View)
       if (node.data && typeof node.data === 'object') {

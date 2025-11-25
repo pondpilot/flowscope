@@ -52,11 +52,16 @@ export function LineageExplorer({
   className,
   onSqlChange,
   theme = 'light',
+  defaultLayoutAlgorithm,
 }: LineageExplorerProps): JSX.Element {
   const themeClass = theme === 'dark' ? 'dark' : '';
 
   return (
-    <LineageProvider initialResult={result} initialSql={sql}>
+    <LineageProvider
+      initialResult={result}
+      initialSql={sql}
+      defaultLayoutAlgorithm={defaultLayoutAlgorithm}
+    >
       <div className={`flowscope-explorer ${themeClass} ${className || ''}`.trim()}>
         <LineageExplorerInner result={result} sql={sql} onSqlChange={onSqlChange} />
       </div>

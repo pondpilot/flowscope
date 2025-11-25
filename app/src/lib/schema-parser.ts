@@ -4,7 +4,7 @@
  */
 
 import type { Dialect } from './project-store';
-import type { SchemaTable } from '@pondpilot/flowscope-core';
+import type { SchemaTable, AnalyzeRequest, AnalyzeResult, ColumnSchema, StatementLineage, Issue, StatementRef } from '@pondpilot/flowscope-core';
 import { SCHEMA_LIMITS } from './constants';
 
 export interface ParsedSchema {
@@ -13,13 +13,13 @@ export interface ParsedSchema {
 }
 
 // Keep the last parse result for debugging
-let lastParseResult: any = null;
+let lastParseResult: AnalyzeResult | null = null;
 
 /**
  * Get the last parse result for debugging purposes.
  * Returns null if the result has been garbage collected.
  */
-export function getLastParseResult(): any | null {
+export function getLastParseResult(): AnalyzeResult | null {
   return lastParseResult;
 }
 
@@ -30,7 +30,7 @@ export function getLastParseResult(): any | null {
 export async function parseSchemaSQL(
   schemaSQL: string,
   dialect: Dialect,
-  analyzeFunction: (params: any) => Promise<any>
+  analyzeFunction: (params: AnalyzeRequest) => Promise<AnalyzeResult>
 ): Promise<ParsedSchema> {
   if (!schemaSQL.trim()) {
     return { tables: [], errors: [] };
@@ -68,7 +68,7 @@ export async function parseSchemaSQL(
           catalog: table.catalog,
           schema: table.schema,
           name: table.name,
-          columns: table.columns.map((col: any) => ({
+          columns: table.columns.map((col: ColumnSchema) => ({
             name: col.name,
             dataType: col.dataType,
           })),
@@ -78,15 +78,15 @@ export async function parseSchemaSQL(
       // Fallback: Extract from global lineage nodes (includes canonical names) when resolvedSchema is absent
       const createStatementIndexes = new Set(
         (result.statements || [])
-          .filter((stmt: any) => stmt.statementType === 'CREATE_TABLE')
-          .map((stmt: any) => stmt.statementIndex)
+          .filter((stmt: StatementLineage) => stmt.statementType === 'CREATE_TABLE')
+          .map((stmt: StatementLineage) => stmt.statementIndex)
       );
 
       const tableMap = new Map<string, SchemaTable>();
 
       for (const node of result.globalLineage?.nodes || []) {
         // Only consider nodes that belong to CREATE TABLE statements from the schema SQL
-        const isFromSchemaDDL = node.statementRefs?.some((ref: any) =>
+        const isFromSchemaDDL = node.statementRefs?.some((ref: StatementRef) =>
           createStatementIndexes.has(ref.statementIndex)
         );
         if (!isFromSchemaDDL) continue;
@@ -139,8 +139,8 @@ export async function parseSchemaSQL(
 
     // Collect parsing errors
     if (result.issues?.length > 0) {
-      const errorIssues = result.issues.filter((i: any) => i.severity === 'error');
-      errors.push(...errorIssues.map((i: any) => i.message));
+      const errorIssues = result.issues.filter((i: Issue) => i.severity === 'error');
+      errors.push(...errorIssues.map((i: Issue) => i.message));
     }
 
     if (tables.length === 0 && errors.length === 0) {

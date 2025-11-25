@@ -11,6 +11,10 @@ function loadSchemas() {
   const ajv = new Ajv({ allErrors: true, strict: false, validateFormats: true });
   // schemars emits "uint" format for unsigned integers; teach Ajv how to handle it
   ajv.addFormat('uint', { type: 'number', validate: (n: number) => Number.isInteger(n) && n >= 0 });
+  ajv.addFormat('uint8', {
+    type: 'number',
+    validate: (n: number) => Number.isInteger(n) && n >= 0 && n <= 255,
+  });
   ajv.addSchema(parsed.AnalyzeRequest, 'AnalyzeRequest');
   ajv.addSchema(parsed.AnalyzeResult, 'AnalyzeResult');
   return ajv;
@@ -53,6 +57,8 @@ describe('API schema compatibility', () => {
           sourceName: 'inline.sql',
           nodes: [],
           edges: [],
+          joinCount: 0,
+          complexityScore: 0,
         },
       ],
       globalLineage: { nodes: [], edges: [] },
@@ -61,6 +67,8 @@ describe('API schema compatibility', () => {
         statementCount: 1,
         tableCount: 0,
         columnCount: 0,
+        joinCount: 0,
+        complexityScore: 0,
         issueCount: { errors: 0, warnings: 0, infos: 0 },
         hasErrors: false,
       },

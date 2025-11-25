@@ -76,6 +76,8 @@ pub(crate) struct OutputColumn {
     /// Expression text for computed columns
     #[allow(dead_code)]
     pub(crate) expression: Option<String>,
+    /// Inferred data type of the column
+    pub(crate) data_type: Option<String>,
     /// Node ID for this column
     pub(crate) node_id: String,
 }

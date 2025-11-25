@@ -86,13 +86,17 @@ check-schema:
     cargo test -p flowscope-core --test schema_guard --locked
     cd packages/core && yarn test schema-compat.test.ts --silent
 
+# Regenerate the API schema snapshot from Rust definitions
+update-schema:
+    node ./scripts/update_api_schema.cjs
+
 # Run Rust clippy
 lint-rust:
     cargo clippy --workspace -- -D warnings
 
 # Run TypeScript linters
 lint-ts:
-    yarn lint
+    yarn workspaces run lint
 
 # Fix TypeScript lint issues
 lint-fix:
@@ -100,7 +104,7 @@ lint-fix:
 
 # Run TypeScript type checking
 typecheck:
-    yarn typecheck
+    yarn workspaces run typecheck
 
 # Format code
 fmt: fmt-rust fmt-ts
@@ -129,11 +133,15 @@ clean:
 install:
     yarn install
 
+# Install pre-commit hooks (requires prek: https://github.com/j178/prek)
+install-hooks:
+    prek install
+
 # Full CI workflow - lint, typecheck, test
 ci: lint typecheck test
 
-# Full development setup - install deps and build
-setup: install build
+# Full development setup - install deps, hooks, and build
+setup: install install-hooks build
 
 # Watch and rebuild on changes (Rust)
 watch:

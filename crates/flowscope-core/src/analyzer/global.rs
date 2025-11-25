@@ -189,12 +189,8 @@ impl<'a> Analyzer<'a> {
             .map(|n| n.filters.len())
             .sum();
 
-        let complexity_score = calculate_global_complexity(
-            table_count,
-            cte_count,
-            join_count,
-            filter_count,
-        );
+        let complexity_score =
+            calculate_global_complexity(table_count, cte_count, join_count, filter_count);
 
         Summary {
             statement_count: self.statement_lineages.len(),
@@ -238,5 +234,5 @@ fn calculate_global_complexity(
         + join_count * JOIN_WEIGHT
         + filter_count * FILTER_WEIGHT;
 
-    std::cmp::min(100, std::cmp::max(1, raw_score)) as u8
+    raw_score.clamp(1, 100) as u8
 }
