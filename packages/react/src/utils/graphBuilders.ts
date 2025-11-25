@@ -6,7 +6,16 @@ import type {
   ScriptNodeData,
   StatementLineageWithSource,
 } from '../types';
-import { GRAPH_CONFIG, UI_CONSTANTS } from '../constants';
+import { GRAPH_CONFIG, UI_CONSTANTS, JOIN_TYPE_LABELS } from '../constants';
+
+const SELECT_STATEMENT_TYPES = new Set([
+  'SELECT',
+  'WITH',
+  'UNION',
+  'INTERSECT',
+  'EXCEPT',
+  'VALUES',
+]);
 
 /**
  * Merge multiple statements into a single statement for visualization
@@ -129,6 +138,7 @@ export function buildFlowNodes(
   const lowerCaseSearchTerm = searchTerm.toLowerCase();
   const tableNodes = statement.nodes.filter((n) => n.type === 'table' || n.type === 'cte');
   const columnNodes = statement.nodes.filter((n) => n.type === 'column');
+  const isSelect = isSelectStatement(statement);
   const recursiveNodeIds = new Set(
     statement.edges
       .filter((e) => e.type === 'data_flow' && e.from === e.to)
@@ -199,6 +209,39 @@ export function buildFlowNodes(
         isHighlighted: isHighlighted,
         isCollapsed: isCollapsed,
         hiddenColumnCount,
+        filters: node.filters,
+      } satisfies TableNodeData,
+    });
+  }
+
+  // Find output columns (columns without qualifiedName are output columns)
+  const outputColumns: ColumnNodeInfo[] = columnNodes
+    .filter((col) => !col.qualifiedName)
+    .map((col) => ({
+      id: col.id,
+      name: col.label,
+      expression: col.expression,
+    }));
+
+  // Add virtual "Output" node only for SELECT-like statements
+  if (isSelect && outputColumns.length > 0) {
+    const outputNodeId = GRAPH_CONFIG.VIRTUAL_OUTPUT_NODE_ID;
+    const isHighlighted = !!(
+      lowerCaseSearchTerm &&
+      outputColumns.some((col) => col.name.toLowerCase().includes(lowerCaseSearchTerm))
+    );
+
+    flowNodes.push({
+      id: outputNodeId,
+      type: 'tableNode',
+      position: { x: 0, y: 0 },
+      data: {
+        label: 'Output',
+        nodeType: 'virtualOutput',
+        columns: outputColumns,
+        isSelected: outputNodeId === selectedNodeId,
+        isHighlighted,
+        isCollapsed: collapsedNodeIds.has(outputNodeId),
       } satisfies TableNodeData,
     });
   }
@@ -207,22 +250,127 @@ export function buildFlowNodes(
 }
 
 /**
- * Build flow edges from statement edges
+ * Check if a statement is a SELECT-like read query based on analyzer metadata.
+ */
+function isSelectStatement(statement: StatementLineage): boolean {
+  const normalizedType = (statement.statementType || '').toUpperCase();
+  return SELECT_STATEMENT_TYPES.has(normalizedType);
+}
+
+/**
+ * Format join type for display as edge label.
+ * Uses the JOIN_TYPE_LABELS mapping for readable labels.
+ */
+function formatJoinType(joinType: string | undefined | null): string | undefined {
+  if (!joinType) return undefined;
+  return JOIN_TYPE_LABELS[joinType] || joinType.replace(/_/g, ' ');
+}
+
+/**
+ * Build flow edges from statement edges.
+ * For SELECT statements: creates edges from source tables to virtual output.
+ * For DML/DDL statements (INSERT, UPDATE, CREATE TABLE AS, etc.): renders
+ * the backend's data_flow/derivation edges directly between tables.
  */
 export function buildFlowEdges(statement: StatementLineage): FlowEdge[] {
-  return statement.edges
-    .filter((e) => e.type === 'data_flow' || e.type === 'derivation')
-    .filter((e) => e.from !== e.to) // Skip self-referencing edges (e.g., recursive CTEs)
-    .map((edge) => {
-      return {
-        id: edge.id,
-        source: edge.from,
-        target: edge.to,
+  const tableNodes = statement.nodes.filter((n) => n.type === 'table' || n.type === 'cte');
+  const columnNodes = statement.nodes.filter((n) => n.type === 'column');
+  const outputNodeId = GRAPH_CONFIG.VIRTUAL_OUTPUT_NODE_ID;
+
+  // Build table ID -> Node map for join type lookup
+  const tableNodeMap = new Map<string, Node>();
+  for (const node of tableNodes) {
+    tableNodeMap.set(node.id, node);
+  }
+
+  // Build ownership map: column ID -> table ID
+  const columnToTableMap = new Map<string, string>();
+  for (const edge of statement.edges) {
+    if (edge.type === 'ownership') {
+      const parentNode = tableNodes.find((n) => n.id === edge.from);
+      if (parentNode) {
+        columnToTableMap.set(edge.to, parentNode.id);
+      }
+    }
+  }
+
+  // Find output columns (columns without qualifiedName indicate SELECT statements)
+  const outputColumnIds = new Set(
+    columnNodes.filter((col) => !col.qualifiedName).map((col) => col.id)
+  );
+
+  if (isSelectStatement(statement)) {
+    // SELECT statement: create edges from source tables to virtual output
+    const sourceTableIds = new Set<string>();
+    for (const edge of statement.edges) {
+      if (edge.type === 'data_flow' || edge.type === 'derivation') {
+        if (outputColumnIds.has(edge.to)) {
+          const sourceTableId = columnToTableMap.get(edge.from);
+          if (sourceTableId) {
+            sourceTableIds.add(sourceTableId);
+          }
+        }
+      }
+    }
+
+    const flowEdges: FlowEdge[] = [];
+    sourceTableIds.forEach((tableId) => {
+      const tableNode = tableNodeMap.get(tableId);
+      const joinType = formatJoinType(tableNode?.joinType);
+
+      flowEdges.push({
+        id: `edge_${tableId}_to_output`,
+        source: tableId,
+        target: outputNodeId,
         type: 'animated',
-        data: { type: edge.type },
-        label: edge.operation || undefined,
-      };
+        label: joinType,
+        data: {
+          type: 'data_flow',
+          joinType: tableNode?.joinType,
+          joinCondition: tableNode?.joinCondition,
+        },
+      });
     });
+    return flowEdges;
+  }
+
+  // DML/DDL statement (INSERT, UPDATE, CREATE TABLE AS, MERGE, etc.)
+  // Render backend edges directly between tables
+  const flowEdges: FlowEdge[] = [];
+  const seenEdges = new Set<string>();
+
+  for (const edge of statement.edges) {
+    if (edge.type === 'data_flow' || edge.type === 'derivation') {
+      // Find source and target tables via column ownership
+      const sourceTableId = columnToTableMap.get(edge.from);
+      const targetTableId = columnToTableMap.get(edge.to);
+
+      if (sourceTableId && targetTableId && sourceTableId !== targetTableId) {
+        const edgeKey = `${sourceTableId}_to_${targetTableId}`;
+        if (!seenEdges.has(edgeKey)) {
+          seenEdges.add(edgeKey);
+
+          const sourceNode = tableNodeMap.get(sourceTableId);
+          const joinType = formatJoinType(sourceNode?.joinType);
+
+          flowEdges.push({
+            id: `edge_${edgeKey}`,
+            source: sourceTableId,
+            target: targetTableId,
+            type: 'animated',
+            label: joinType,
+            data: {
+              type: edge.type,
+              joinType: sourceNode?.joinType,
+              joinCondition: sourceNode?.joinCondition,
+            },
+          });
+        }
+      }
+    }
+  }
+
+  return flowEdges;
 }
 
 /**
@@ -485,6 +633,7 @@ export function buildColumnLevelGraph(
   const lowerCaseSearchTerm = searchTerm.toLowerCase();
   const tableNodes = statement.nodes.filter((n) => n.type === 'table' || n.type === 'cte');
   const columnNodes = statement.nodes.filter((n) => n.type === 'column');
+  const isSelect = isSelectStatement(statement);
 
   // Build table-to-columns map
   const tableColumnMap = new Map<string, ColumnNodeInfo[]>();
@@ -557,8 +706,8 @@ export function buildColumnLevelGraph(
     });
   }
 
-  // Add virtual "Output" table node if there are output columns
-  if (outputColumns.length > 0) {
+  // Add virtual "Output" table node for SELECT-like statements only
+  if (isSelect && outputColumns.length > 0) {
     const outputNodeId = GRAPH_CONFIG.VIRTUAL_OUTPUT_NODE_ID;
     const isHighlighted = !!(
       lowerCaseSearchTerm &&

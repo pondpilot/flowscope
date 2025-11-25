@@ -8,7 +8,7 @@ import {
   GraphTooltipTrigger,
   GraphTooltipArrow,
 } from './ui/graph-tooltip';
-import { GRAPH_CONFIG, COLORS, EDGE_STYLES } from '../constants';
+import { GRAPH_CONFIG, COLORS, EDGE_STYLES, JOIN_TYPE_LABELS } from '../constants';
 
 export type EdgeType = 'dataFlow' | 'derivation' | 'aggregation';
 
@@ -97,18 +97,28 @@ export function AnimatedEdge({
   const isHighlighted = data?.isHighlighted as boolean | undefined;
   const customTooltip = data?.tooltip as string | undefined;
   const edgeType = data?.type as EdgeType | string | undefined;
+  const joinType = data?.joinType as string | undefined;
+  const joinCondition = data?.joinCondition as string | undefined;
 
   const tooltipContent = useMemo(() => {
     let content = customTooltip || '';
     if (sourceColumn && targetColumn) {
       content += content ? `\n${sourceColumn} → ${targetColumn}` : `${sourceColumn} → ${targetColumn}`;
     }
+    if (joinType) {
+      content += content ? '\n\n' : '';
+      content += `Join: ${JOIN_TYPE_LABELS[joinType] || joinType.replace(/_/g, ' ')}`;
+    }
+    if (joinCondition) {
+      content += content ? '\n' : '';
+      content += `ON ${joinCondition}`;
+    }
     if (expression) {
       content += content ? '\n\n' : '';
       content += `Expression:\n${expression}`;
     }
     return content;
-  }, [customTooltip, sourceColumn, targetColumn, expression]);
+  }, [customTooltip, sourceColumn, targetColumn, expression, joinType, joinCondition]);
 
   const edgeStyle = useMemo(
     () => getEdgeStyle(edgeType, isHighlighted, style),
@@ -168,7 +178,49 @@ export function AnimatedEdge({
           </div>
         </EdgeLabelRenderer>
       )}
-      {!expression && tooltipContent && (
+      {!expression && joinType && (
+        <EdgeLabelRenderer>
+          <div
+            style={{
+              position: 'absolute',
+              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+              pointerEvents: 'all',
+              zIndex: 1000,
+            }}
+          >
+            <GraphTooltipProvider>
+              <GraphTooltip delayDuration={GRAPH_CONFIG.TOOLTIP_DELAY}>
+                <GraphTooltipTrigger asChild>
+                  <div
+                    style={{
+                      cursor: joinCondition ? 'help' : 'default',
+                      backgroundColor: 'white',
+                      border: `1px solid ${COLORS.edges.dataFlow}`,
+                      color: COLORS.edges.dataFlow,
+                      borderRadius: 4,
+                      padding: '2px 6px',
+                      fontSize: 9,
+                      fontWeight: 600,
+                      textTransform: 'uppercase',
+                      letterSpacing: 0.5,
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                    }}
+                  >
+                    {JOIN_TYPE_LABELS[joinType] || joinType.replace(/_/g, ' ')}
+                  </div>
+                </GraphTooltipTrigger>
+                {joinCondition && (
+                  <GraphTooltipContent side="top">
+                    <span style={{ fontWeight: 600 }}>ON</span> {joinCondition}
+                    <GraphTooltipArrow />
+                  </GraphTooltipContent>
+                )}
+              </GraphTooltip>
+            </GraphTooltipProvider>
+          </div>
+        </EdgeLabelRenderer>
+      )}
+      {!expression && !joinType && tooltipContent && (
         <g transform={`translate(${labelX}, ${labelY})`}>
           <title>{tooltipContent}</title>
         </g>

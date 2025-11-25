@@ -3,7 +3,7 @@ import type { NodeProps } from '@xyflow/react';
 import { useLineageActions, useLineageStore } from '../store';
 import type { TableNodeData, ColumnNodeInfo } from '../types';
 import { sanitizeIdentifier } from '../utils/sanitize';
-import { GRAPH_CONFIG, COLORS } from '../constants';
+import { GRAPH_CONFIG, COLORS, MAX_FILTER_DISPLAY_LENGTH } from '../constants';
 
 const colors = COLORS;
 
@@ -299,6 +299,65 @@ export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
               </div>
             );
           })}
+        </div>
+      )}
+      {!isCollapsed && nodeData.filters && nodeData.filters.length > 0 && (
+        <div
+          style={{
+            padding: '6px 12px',
+            borderTop: `1px solid ${palette.border}`,
+            backgroundColor: `${colors.filter}08`,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              marginBottom: 4,
+            }}
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={colors.filter}
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+            </svg>
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 600,
+                color: colors.filter,
+                textTransform: 'uppercase',
+                letterSpacing: 0.5,
+              }}
+            >
+              Filters
+            </span>
+          </div>
+          {nodeData.filters.map((filter, index) => (
+            <div
+              key={index}
+              style={{
+                fontSize: 11,
+                color: palette.textSecondary,
+                padding: '2px 0',
+                fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace',
+                wordBreak: 'break-word',
+              }}
+              title={filter.expression}
+            >
+              {filter.expression.length > MAX_FILTER_DISPLAY_LENGTH
+                ? `${filter.expression.substring(0, MAX_FILTER_DISPLAY_LENGTH)}...`
+                : filter.expression}
+            </div>
+          ))}
         </div>
       )}
     </div>

@@ -2,6 +2,31 @@
  * UI Constants for Flowscope React Components
  */
 
+/**
+ * Maximum character length for filter expression display before truncation
+ */
+export const MAX_FILTER_DISPLAY_LENGTH = 40;
+
+/**
+ * Human-readable labels for SQL JOIN types.
+ * Keys match the API format (e.g., LEFT_SEMI), values are display labels.
+ */
+export const JOIN_TYPE_LABELS: Record<string, string> = {
+  INNER: 'Inner Join',
+  LEFT: 'Left Join',
+  RIGHT: 'Right Join',
+  FULL: 'Full Join',
+  CROSS: 'Cross Join',
+  LEFT_SEMI: 'Left Semi',
+  RIGHT_SEMI: 'Right Semi',
+  LEFT_ANTI: 'Left Anti',
+  RIGHT_ANTI: 'Right Anti',
+  LEFT_MARK: 'Left Mark',
+  CROSS_APPLY: 'Cross Apply',
+  OUTER_APPLY: 'Outer Apply',
+  AS_OF: 'As Of',
+};
+
 export const UI_CONSTANTS = {
   /** Delay in milliseconds before showing tooltips */
   TOOLTIP_DELAY: 300,
@@ -115,6 +140,7 @@ export const COLORS = {
   // Special indicators
   recursive: '#F59E0B',
   accent: '#4C61FF',
+  filter: '#059669', // Emerald - filter predicates
 
   // Legacy aliases for backwards compatibility
   table: {

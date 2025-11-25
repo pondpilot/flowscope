@@ -1,6 +1,7 @@
 use flowscope_core::{
     analyze, issue_codes, AnalyzeRequest, AnalyzeResult, ColumnSchema, Dialect, Edge, EdgeType,
-    Node, NodeType, SchemaMetadata, SchemaNamespaceHint, SchemaTable, Severity, StatementLineage,
+    FilterClauseType, Node, NodeType, SchemaMetadata, SchemaNamespaceHint, SchemaTable, Severity,
+    StatementLineage,
 };
 use rstest::rstest;
 use std::collections::HashSet;
@@ -3062,4 +3063,289 @@ fn column_lineage_cte_transformation_chain_with_reuse() {
         eprintln!("\nActual users owns: {:?}", users_col_names);
         eprintln!("Actual transformed owns: {:?}", transformed_col_names);
     }
+}
+
+#[test]
+fn joined_tables_all_present_without_join_edges() {
+    // Joins should not create table-to-table edges in the lineage graph.
+    // The column-level data_flow edges already show where data comes from.
+    // Join edges would misrepresent data flow (joins merge tables, not chain them).
+    let sql = r#"
+        SELECT
+            o.order_id,
+            c.customer_name,
+            oi.quantity,
+            p.product_name
+        FROM orders o
+        INNER JOIN customers c ON o.customer_id = c.id
+        LEFT JOIN order_items oi ON o.order_id = oi.order_id
+        LEFT JOIN products p ON oi.product_id = p.id
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let stmt = first_statement(&result);
+
+    // Verify we have all 4 tables
+    let table_names: Vec<String> = stmt
+        .nodes
+        .iter()
+        .filter(|n| n.node_type == NodeType::Table)
+        .map(|n| n.label.clone())
+        .collect();
+    eprintln!("Tables found: {:?}", table_names);
+    assert!(table_names.contains(&"orders".to_string()));
+    assert!(table_names.contains(&"customers".to_string()));
+    assert!(table_names.contains(&"order_items".to_string()));
+    assert!(table_names.contains(&"products".to_string()));
+
+    // Verify there are NO table-to-table join edges
+    let table_ids: std::collections::HashSet<_> = stmt
+        .nodes
+        .iter()
+        .filter(|n| n.node_type == NodeType::Table)
+        .map(|n| &n.id)
+        .collect();
+
+    let table_to_table_edges: Vec<&Edge> = stmt
+        .edges
+        .iter()
+        .filter(|e| table_ids.contains(&e.from) && table_ids.contains(&e.to))
+        .collect();
+
+    assert!(
+        table_to_table_edges.is_empty(),
+        "Should not have table-to-table edges for joins; found {:?}",
+        table_to_table_edges
+    );
+
+    // Verify we still have column-level data_flow edges
+    let data_flow_edges = edges_by_type(stmt, EdgeType::DataFlow);
+    assert!(
+        !data_flow_edges.is_empty(),
+        "Should have column-level data_flow edges"
+    );
+}
+
+#[test]
+fn where_filters_attached_to_correct_tables() {
+    let sql = r#"
+        SELECT o.order_id, c.customer_name
+        FROM orders o
+        INNER JOIN customers c ON o.customer_id = c.id
+        WHERE o.order_date >= '2024-01-01'
+            AND c.status = 'active'
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let stmt = first_statement(&result);
+
+    // Find orders and customers table nodes
+    let orders_node = find_table_node(stmt, "orders").expect("orders table not found");
+    let customers_node = find_table_node(stmt, "customers").expect("customers table not found");
+
+    eprintln!("orders filters: {:?}", orders_node.filters);
+    eprintln!("customers filters: {:?}", customers_node.filters);
+
+    // Orders should have exactly ONE filter about order_date (localized)
+    assert_eq!(
+        orders_node.filters.len(),
+        1,
+        "orders should have exactly one filter"
+    );
+    assert!(
+        orders_node.filters[0].expression.contains("order_date"),
+        "orders filter should mention order_date"
+    );
+    assert!(
+        !orders_node.filters[0].expression.contains("status"),
+        "orders filter should NOT mention status (that belongs to customers)"
+    );
+
+    // Customers should have exactly ONE filter about status (localized)
+    assert_eq!(
+        customers_node.filters.len(),
+        1,
+        "customers should have exactly one filter"
+    );
+    assert!(
+        customers_node.filters[0].expression.contains("status"),
+        "customers filter should mention status"
+    );
+    assert!(
+        !customers_node.filters[0].expression.contains("order_date"),
+        "customers filter should NOT mention order_date (that belongs to orders)"
+    );
+
+    // All filters should be WHERE type
+    for filter in &orders_node.filters {
+        assert_eq!(filter.clause_type, FilterClauseType::Where);
+    }
+    for filter in &customers_node.filters {
+        assert_eq!(filter.clause_type, FilterClauseType::Where);
+    }
+}
+
+#[test]
+fn having_filters_attached_correctly() {
+    let sql = r#"
+        SELECT
+            c.category,
+            SUM(p.price) as total_price,
+            COUNT(*) as product_count
+        FROM products p
+        JOIN categories c ON p.category_id = c.id
+        WHERE p.active = true
+        GROUP BY c.category
+        HAVING SUM(p.price) > 1000 AND COUNT(*) > 5
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let stmt = first_statement(&result);
+
+    let products_node = find_table_node(stmt, "products").expect("products table not found");
+    let categories_node = find_table_node(stmt, "categories").expect("categories table not found");
+
+    eprintln!("products filters: {:?}", products_node.filters);
+    eprintln!("categories filters: {:?}", categories_node.filters);
+
+    // Products should have the WHERE clause filter
+    let products_where_filters: Vec<_> = products_node
+        .filters
+        .iter()
+        .filter(|f| f.clause_type == FilterClauseType::Where)
+        .collect();
+    assert_eq!(
+        products_where_filters.len(),
+        1,
+        "products should have one WHERE filter"
+    );
+    assert!(
+        products_where_filters[0].expression.contains("active"),
+        "products WHERE filter should mention 'active'"
+    );
+
+    // HAVING filters are harder to localize to specific tables since they often
+    // reference aggregate functions. The important thing is they get captured.
+    let all_having_filters: Vec<_> = stmt
+        .nodes
+        .iter()
+        .flat_map(|n| &n.filters)
+        .filter(|f| f.clause_type == FilterClauseType::Having)
+        .collect();
+
+    // We should have captured HAVING filters (may be split by AND)
+    assert!(
+        !all_having_filters.is_empty() || products_node.filters.len() > 1,
+        "HAVING filters should be captured"
+    );
+}
+
+#[test]
+fn nested_or_predicates_not_split() {
+    // OR predicates at the top level should NOT be split by AND
+    // This test ensures we only split by AND at the top level
+    let sql = r#"
+        SELECT * FROM users
+        WHERE (status = 'active' OR status = 'pending') AND age > 18
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let stmt = first_statement(&result);
+
+    let users_node = find_table_node(stmt, "users").expect("users table not found");
+
+    eprintln!("users filters: {:?}", users_node.filters);
+
+    // Should have 2 filters: the OR group and the AND condition
+    assert_eq!(
+        users_node.filters.len(),
+        2,
+        "Should split by top-level AND only, keeping OR grouped"
+    );
+
+    // One filter should contain OR
+    let has_or_filter = users_node
+        .filters
+        .iter()
+        .any(|f| f.expression.contains("OR") || f.expression.contains("pending"));
+    assert!(has_or_filter, "One filter should contain the OR expression");
+}
+
+#[test]
+fn multiple_join_types_captured() {
+    let sql = r#"
+        SELECT *
+        FROM orders o
+        LEFT JOIN customers c ON o.customer_id = c.id
+        INNER JOIN products p ON o.product_id = p.id
+        FULL OUTER JOIN inventory i ON p.id = i.product_id
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let stmt = first_statement(&result);
+
+    // Main table (orders) should have no join_type
+    let orders_node = find_table_node(stmt, "orders").expect("orders table not found");
+    assert!(
+        orders_node.join_type.is_none(),
+        "Main FROM table should have no join_type"
+    );
+
+    // Joined tables should have correct join types
+    let customers_node = find_table_node(stmt, "customers").expect("customers table not found");
+    let products_node = find_table_node(stmt, "products").expect("products table not found");
+    let inventory_node = find_table_node(stmt, "inventory").expect("inventory table not found");
+
+    use flowscope_core::JoinType;
+    assert_eq!(
+        customers_node.join_type,
+        Some(JoinType::Left),
+        "customers should be LEFT joined"
+    );
+    assert_eq!(
+        products_node.join_type,
+        Some(JoinType::Inner),
+        "products should be INNER joined"
+    );
+    assert_eq!(
+        inventory_node.join_type,
+        Some(JoinType::Full),
+        "inventory should be FULL joined"
+    );
+
+    // Join conditions should be captured
+    assert!(
+        customers_node.join_condition.is_some(),
+        "customers should have join condition"
+    );
+    assert!(
+        products_node.join_condition.is_some(),
+        "products should have join condition"
+    );
+    assert!(
+        inventory_node.join_condition.is_some(),
+        "inventory should have join condition"
+    );
+}
+
+#[test]
+fn deeply_nested_and_predicates_split_correctly() {
+    let sql = r#"
+        SELECT * FROM users
+        WHERE a = 1 AND b = 2 AND c = 3 AND d = 4
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let stmt = first_statement(&result);
+
+    let users_node = find_table_node(stmt, "users").expect("users table not found");
+
+    eprintln!("users filters: {:?}", users_node.filters);
+
+    // All 4 predicates should be split into separate filters
+    assert_eq!(
+        users_node.filters.len(),
+        4,
+        "Should split into 4 separate predicates"
+    );
 }

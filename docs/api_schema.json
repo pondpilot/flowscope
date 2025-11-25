@@ -356,6 +356,24 @@
             "description": "Stable content-based hash ID",
             "type": "string"
           },
+          "joinCondition": {
+            "description": "Optional: join condition expression (ON clause) See join_type comment for usage notes.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "joinType": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/JoinType"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional: specific join type for JOIN edges (INNER, LEFT, RIGHT, FULL, CROSS, etc.) Note: For table-level visualization, the frontend typically reads join info from the target Node's join_type/join_condition fields. These Edge fields are preserved for column-level lineage edges and future use cases where edge-level join context is needed."
+          },
           "metadata": {
             "additionalProperties": true,
             "description": "Extensible metadata for future use",
@@ -423,6 +441,54 @@
             "type": "string"
           }
         ]
+      },
+      "FilterClauseType": {
+        "description": "The type of SQL clause where a filter predicate appears.",
+        "oneOf": [
+          {
+            "description": "FROM ... WHERE clause",
+            "enum": [
+              "WHERE"
+            ],
+            "type": "string"
+          },
+          {
+            "description": "HAVING clause (after GROUP BY)",
+            "enum": [
+              "HAVING"
+            ],
+            "type": "string"
+          },
+          {
+            "description": "JOIN ... ON clause",
+            "enum": [
+              "JOIN_ON"
+            ],
+            "type": "string"
+          }
+        ]
+      },
+      "FilterPredicate": {
+        "description": "A filter predicate from a WHERE, HAVING, or JOIN ON clause.",
+        "properties": {
+          "clauseType": {
+            "allOf": [
+              {
+                "$ref": "#/definitions/FilterClauseType"
+              }
+            ],
+            "description": "Where this filter appears in the query"
+          },
+          "expression": {
+            "description": "The SQL expression text of the predicate",
+            "type": "string"
+          }
+        },
+        "required": [
+          "clauseType",
+          "expression"
+        ],
+        "type": "object"
       },
       "GlobalEdge": {
         "properties": {
@@ -636,6 +702,95 @@
         ],
         "type": "object"
       },
+      "JoinType": {
+        "description": "The type of SQL JOIN operation.",
+        "oneOf": [
+          {
+            "description": "INNER JOIN - only matching rows from both tables",
+            "enum": [
+              "INNER"
+            ],
+            "type": "string"
+          },
+          {
+            "description": "LEFT OUTER JOIN - all rows from left table, matching from right",
+            "enum": [
+              "LEFT"
+            ],
+            "type": "string"
+          },
+          {
+            "description": "RIGHT OUTER JOIN - all rows from right table, matching from left",
+            "enum": [
+              "RIGHT"
+            ],
+            "type": "string"
+          },
+          {
+            "description": "FULL OUTER JOIN - all rows from both tables",
+            "enum": [
+              "FULL"
+            ],
+            "type": "string"
+          },
+          {
+            "description": "CROSS JOIN - cartesian product",
+            "enum": [
+              "CROSS"
+            ],
+            "type": "string"
+          },
+          {
+            "description": "LEFT SEMI JOIN - rows from left that have match in right",
+            "enum": [
+              "LEFT_SEMI"
+            ],
+            "type": "string"
+          },
+          {
+            "description": "RIGHT SEMI JOIN - rows from right that have match in left",
+            "enum": [
+              "RIGHT_SEMI"
+            ],
+            "type": "string"
+          },
+          {
+            "description": "LEFT ANTI JOIN - rows from left that have no match in right",
+            "enum": [
+              "LEFT_ANTI"
+            ],
+            "type": "string"
+          },
+          {
+            "description": "RIGHT ANTI JOIN - rows from right that have no match in left",
+            "enum": [
+              "RIGHT_ANTI"
+            ],
+            "type": "string"
+          },
+          {
+            "description": "CROSS APPLY (SQL Server)",
+            "enum": [
+              "CROSS_APPLY"
+            ],
+            "type": "string"
+          },
+          {
+            "description": "OUTER APPLY (SQL Server)",
+            "enum": [
+              "OUTER_APPLY"
+            ],
+            "type": "string"
+          },
+          {
+            "description": "AS OF JOIN (time-series)",
+            "enum": [
+              "AS_OF"
+            ],
+            "type": "string"
+          }
+        ]
+      },
       "Node": {
         "description": "A node in the lineage graph (table, CTE, or column).",
         "properties": {
@@ -646,9 +801,34 @@
               "null"
             ]
           },
+          "filters": {
+            "description": "Filter predicates (WHERE clause conditions) that affect this table's rows",
+            "items": {
+              "$ref": "#/definitions/FilterPredicate"
+            },
+            "type": "array"
+          },
           "id": {
             "description": "Stable content-based hash ID",
             "type": "string"
+          },
+          "joinCondition": {
+            "description": "For table nodes that are JOINed: the join condition (ON clause).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "joinType": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/JoinType"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For table nodes that are JOINed: the type of join used to include this table. None for the main FROM table, Some(JoinType) for joined tables."
           },
           "label": {
             "description": "Human-readable label (short name)",

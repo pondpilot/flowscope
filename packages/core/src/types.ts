@@ -154,10 +154,27 @@ export interface Node {
   metadata?: Record<string, unknown>;
   /** How this table was resolved (imported, implied, or unknown) */
   resolutionSource?: ResolutionSource;
+  /** Filter predicates (WHERE clause conditions) that affect this table's rows */
+  filters?: FilterPredicate[];
+  /** For table nodes that are JOINed: the type of join used to include this table */
+  joinType?: JoinType;
+  /** For table nodes that are JOINed: the join condition (ON clause) */
+  joinCondition?: string;
 }
 
 /** The type of a node in the lineage graph. */
 export type NodeType = 'table' | 'cte' | 'column';
+
+/** A filter predicate from a WHERE, HAVING, or JOIN ON clause. */
+export interface FilterPredicate {
+  /** The SQL expression text of the predicate */
+  expression: string;
+  /** Where this filter appears in the query */
+  clauseType: FilterClauseType;
+}
+
+/** The type of SQL clause where a filter predicate appears. */
+export type FilterClauseType = 'WHERE' | 'HAVING' | 'JOIN_ON';
 
 /** An edge connecting two nodes in the lineage graph. */
 export interface Edge {
@@ -173,6 +190,10 @@ export interface Edge {
   expression?: string;
   /** Optional: operation label ('JOIN', 'UNION', 'AGGREGATE', etc.) */
   operation?: string;
+  /** Optional: specific join type for JOIN edges */
+  joinType?: JoinType;
+  /** Optional: join condition expression (ON clause) */
+  joinCondition?: string;
   /** Extensible metadata for future use */
   metadata?: Record<string, unknown>;
   /** True if this edge represents approximate/uncertain lineage */
@@ -181,6 +202,21 @@ export interface Edge {
 
 /** The type of an edge in the lineage graph. */
 export type EdgeType = 'ownership' | 'data_flow' | 'derivation' | 'cross_statement';
+
+/** The type of SQL JOIN operation. */
+export type JoinType =
+  | 'INNER'
+  | 'LEFT'
+  | 'RIGHT'
+  | 'FULL'
+  | 'CROSS'
+  | 'LEFT_SEMI'
+  | 'RIGHT_SEMI'
+  | 'LEFT_ANTI'
+  | 'RIGHT_ANTI'
+  | 'CROSS_APPLY'
+  | 'OUTER_APPLY'
+  | 'AS_OF';
 
 /**
  * Global lineage graph spanning all statements in the analyzed SQL.

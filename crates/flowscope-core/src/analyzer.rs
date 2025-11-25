@@ -127,6 +127,72 @@ impl<'a> Analyzer<'a> {
             .unwrap_or(true)
     }
 
+    /// Convert an AST JoinOperator to JoinType enum, also extracting the join condition.
+    fn convert_join_operator(op: &ast::JoinOperator) -> (Option<JoinType>, Option<String>) {
+        match op {
+            ast::JoinOperator::Inner(constraint) => (
+                Some(JoinType::Inner),
+                Self::extract_join_condition(constraint),
+            ),
+            ast::JoinOperator::LeftOuter(constraint) => (
+                Some(JoinType::Left),
+                Self::extract_join_condition(constraint),
+            ),
+            ast::JoinOperator::RightOuter(constraint) => (
+                Some(JoinType::Right),
+                Self::extract_join_condition(constraint),
+            ),
+            ast::JoinOperator::FullOuter(constraint) => (
+                Some(JoinType::Full),
+                Self::extract_join_condition(constraint),
+            ),
+            ast::JoinOperator::CrossJoin => (Some(JoinType::Cross), None),
+            ast::JoinOperator::LeftSemi(constraint) => (
+                Some(JoinType::LeftSemi),
+                Self::extract_join_condition(constraint),
+            ),
+            ast::JoinOperator::RightSemi(constraint) => (
+                Some(JoinType::RightSemi),
+                Self::extract_join_condition(constraint),
+            ),
+            ast::JoinOperator::LeftAnti(constraint) => (
+                Some(JoinType::LeftAnti),
+                Self::extract_join_condition(constraint),
+            ),
+            ast::JoinOperator::RightAnti(constraint) => (
+                Some(JoinType::RightAnti),
+                Self::extract_join_condition(constraint),
+            ),
+            ast::JoinOperator::CrossApply => (Some(JoinType::CrossApply), None),
+            ast::JoinOperator::OuterApply => (Some(JoinType::OuterApply), None),
+            ast::JoinOperator::AsOf { constraint, .. } => (
+                Some(JoinType::AsOf),
+                Self::extract_join_condition(constraint),
+            ),
+        }
+    }
+
+    /// Convert JoinType enum to operation string for edge labels.
+    fn join_type_to_operation(join_type: Option<JoinType>) -> Option<String> {
+        join_type.map(|jt| {
+            match jt {
+                JoinType::Inner => "INNER_JOIN",
+                JoinType::Left => "LEFT_JOIN",
+                JoinType::Right => "RIGHT_JOIN",
+                JoinType::Full => "FULL_JOIN",
+                JoinType::Cross => "CROSS_JOIN",
+                JoinType::LeftSemi => "LEFT_SEMI_JOIN",
+                JoinType::RightSemi => "RIGHT_SEMI_JOIN",
+                JoinType::LeftAnti => "LEFT_ANTI_JOIN",
+                JoinType::RightAnti => "RIGHT_ANTI_JOIN",
+                JoinType::CrossApply => "CROSS_APPLY",
+                JoinType::OuterApply => "OUTER_APPLY",
+                JoinType::AsOf => "AS_OF_JOIN",
+            }
+            .to_string()
+        })
+    }
+
     fn analyze(&mut self) -> AnalyzeResult {
         let (all_statements, mut preflight_issues) = collect_statements(self.request);
         self.issues.append(&mut preflight_issues);
@@ -255,6 +321,9 @@ impl<'a> Analyzer<'a> {
             }
         };
 
+        // Apply pending filter predicates to table nodes before finalizing
+        self.apply_pending_filters(&mut ctx);
+
         Ok(StatementLineage {
             statement_index: index,
             statement_type,
@@ -287,6 +356,9 @@ impl<'a> Analyzer<'a> {
                     span: None,
                     metadata: None,
                     resolution_source: None,
+                    filters: Vec::new(),
+                    join_type: None,
+                    join_condition: None,
                 };
                 ctx.add_node(col_node);
 
@@ -300,6 +372,8 @@ impl<'a> Analyzer<'a> {
                         edge_type: EdgeType::Ownership,
                         expression: None,
                         operation: None,
+                        join_type: None,
+                        join_condition: None,
                         metadata: None,
                         approximate: None,
                     });
@@ -337,6 +411,9 @@ impl<'a> Analyzer<'a> {
                 span: None,
                 metadata: None,
                 resolution_source: None,
+                filters: Vec::new(),
+                join_type: None,
+                join_condition: None,
             });
 
             // Register CTE for resolution
@@ -486,6 +563,8 @@ impl<'a> Analyzer<'a> {
         // Also extract column refs from WHERE, GROUP BY, HAVING for completeness
         if let Some(ref where_clause) = select.selection {
             self.analyze_expression(ctx, where_clause);
+            // Capture WHERE predicates for table nodes
+            self.capture_filter_predicates(ctx, where_clause, FilterClauseType::Where);
         }
 
         // Handle GROUP BY
@@ -500,6 +579,8 @@ impl<'a> Analyzer<'a> {
 
         if let Some(ref having) = select.having {
             self.analyze_expression(ctx, having);
+            // Capture HAVING predicates for table nodes
+            self.capture_filter_predicates(ctx, having, FilterClauseType::Having);
         }
     }
 
@@ -666,6 +747,9 @@ impl<'a> Analyzer<'a> {
             span: None,
             metadata: None,
             resolution_source: None,
+            filters: Vec::new(),
+            join_type: None,
+            join_condition: None,
         };
         ctx.add_node(col_node);
 
@@ -680,6 +764,8 @@ impl<'a> Analyzer<'a> {
                     edge_type: EdgeType::Ownership,
                     expression: None,
                     operation: None,
+                    join_type: None,
+                    join_condition: None,
                     metadata: None,
                     approximate: None,
                 });
@@ -730,6 +816,9 @@ impl<'a> Analyzer<'a> {
                     span: None,
                     metadata: None,
                     resolution_source: None,
+                    filters: Vec::new(),
+                    join_type: None,
+                    join_condition: None,
                 };
                 ctx.add_node(source_col_node);
 
@@ -743,6 +832,8 @@ impl<'a> Analyzer<'a> {
                         edge_type: EdgeType::Ownership,
                         expression: None,
                         operation: None,
+                        join_type: None,
+                        join_condition: None,
                         metadata: None,
                         approximate: None,
                     });
@@ -763,6 +854,8 @@ impl<'a> Analyzer<'a> {
                         edge_type,
                         expression: expression.clone(),
                         operation: None,
+                        join_type: None,
+                        join_condition: None,
                         metadata: None,
                         approximate: if approximate { Some(true) } else { None },
                     });
@@ -847,6 +940,8 @@ impl<'a> Analyzer<'a> {
                                 edge_type: EdgeType::DataFlow,
                                 expression: None,
                                 operation: None,
+                                join_type: None,
+                                join_condition: None,
                                 metadata: None,
                                 approximate: Some(true),
                             });
@@ -988,24 +1083,123 @@ impl<'a> Analyzer<'a> {
         // Analyze main relation
         self.analyze_table_factor(ctx, &table_with_joins.relation, target_node);
 
-        // Analyze joins
+        // Analyze joins - process each joined table but don't create table-to-table edges
+        // Join edges don't represent data flow; the column-level edges already show lineage
         for join in &table_with_joins.joins {
-            let join_type = match &join.join_operator {
-                ast::JoinOperator::Inner(_) => "INNER_JOIN",
-                ast::JoinOperator::LeftOuter(_) => "LEFT_JOIN",
-                ast::JoinOperator::RightOuter(_) => "RIGHT_JOIN",
-                ast::JoinOperator::FullOuter(_) => "FULL_JOIN",
-                ast::JoinOperator::CrossJoin => "CROSS_JOIN",
-                ast::JoinOperator::LeftSemi(_) => "LEFT_SEMI_JOIN",
-                ast::JoinOperator::RightSemi(_) => "RIGHT_SEMI_JOIN",
-                ast::JoinOperator::LeftAnti(_) => "LEFT_ANTI_JOIN",
-                ast::JoinOperator::RightAnti(_) => "RIGHT_ANTI_JOIN",
-                ast::JoinOperator::CrossApply => "CROSS_APPLY",
-                ast::JoinOperator::OuterApply => "OUTER_APPLY",
-                ast::JoinOperator::AsOf { .. } => "AS_OF_JOIN",
-            };
-            ctx.last_operation = Some(join_type.to_string());
+            // Convert join operator directly to JoinType enum and extract condition
+            let (join_type, join_condition) = Self::convert_join_operator(&join.join_operator);
+
+            ctx.current_join_info.join_type = join_type;
+            ctx.current_join_info.join_condition = join_condition;
+            // Keep last_operation for backward compatibility with edge labels
+            ctx.last_operation = Self::join_type_to_operation(join_type);
+
+            // Analyze the joined table
             self.analyze_table_factor(ctx, &join.relation, target_node);
+
+            // Clear join info after processing
+            ctx.current_join_info.join_type = None;
+            ctx.current_join_info.join_condition = None;
+        }
+    }
+
+    /// Extract the join condition expression from a JoinConstraint
+    fn extract_join_condition(constraint: &ast::JoinConstraint) -> Option<String> {
+        match constraint {
+            ast::JoinConstraint::On(expr) => Some(expr.to_string()),
+            ast::JoinConstraint::Using(columns) => {
+                let col_names: Vec<String> = columns.iter().map(|c| c.to_string()).collect();
+                Some(format!("USING ({})", col_names.join(", ")))
+            }
+            ast::JoinConstraint::Natural => Some("NATURAL".to_string()),
+            ast::JoinConstraint::None => None,
+        }
+    }
+
+    /// Capture filter predicates from a WHERE/HAVING expression and attach to table nodes.
+    /// This splits the expression by AND to localize predicates to specific tables,
+    /// so each table only shows the filters that directly reference it.
+    fn capture_filter_predicates(
+        &mut self,
+        ctx: &mut StatementContext,
+        expr: &Expr,
+        clause_type: FilterClauseType,
+    ) {
+        // Split by AND and process each predicate separately
+        let predicates = Self::split_by_and(expr);
+
+        for predicate in predicates {
+            // Extract column references from this specific predicate
+            let column_refs = self.extract_column_refs(predicate);
+
+            // Find unique tables referenced in this predicate
+            let mut affected_tables: HashSet<String> = HashSet::new();
+            for col_ref in &column_refs {
+                if let Some(table_canonical) =
+                    self.resolve_column_table(ctx, col_ref.table.as_deref(), &col_ref.column)
+                {
+                    affected_tables.insert(table_canonical);
+                }
+            }
+
+            // If we couldn't resolve columns to specific tables (e.g., columns from
+            // functions without clear table references, or ambiguous column names),
+            // apply the filter to all tables in the current scope as a conservative
+            // fallback. This may be imprecise for complex multi-table expressions,
+            // but ensures the filter is captured rather than lost.
+            if affected_tables.is_empty() && !column_refs.is_empty() {
+                for table in ctx.tables_in_current_scope() {
+                    affected_tables.insert(table);
+                }
+            }
+
+            // Add this specific predicate to affected table nodes
+            let filter_text = predicate.to_string();
+            for table_canonical in &affected_tables {
+                ctx.add_filter_for_table(table_canonical, filter_text.clone(), clause_type);
+            }
+        }
+    }
+
+    /// Split an expression by top-level AND operator into individual predicates.
+    /// For example: `a = 1 AND b = 2 AND c = 3` becomes [`a = 1`, `b = 2`, `c = 3`]
+    fn split_by_and(expr: &Expr) -> Vec<&Expr> {
+        let mut predicates = Vec::new();
+        Self::collect_and_predicates(expr, &mut predicates);
+        predicates
+    }
+
+    fn collect_and_predicates<'b>(expr: &'b Expr, predicates: &mut Vec<&'b Expr>) {
+        match expr {
+            Expr::BinaryOp {
+                left,
+                op: ast::BinaryOperator::And,
+                right,
+            } => {
+                Self::collect_and_predicates(left, predicates);
+                Self::collect_and_predicates(right, predicates);
+            }
+            _ => {
+                predicates.push(expr);
+            }
+        }
+    }
+
+    /// Apply pending filters to table nodes before finalizing the statement.
+    /// This should be called after all analysis is complete for a statement.
+    fn apply_pending_filters(&self, ctx: &mut StatementContext) {
+        // Collect pending filters to avoid borrow issues
+        let pending: Vec<(String, Vec<FilterPredicate>)> = ctx.pending_filters.drain().collect();
+
+        for (table_canonical, filters) in pending {
+            // Find the node for this table
+            if let Some(node) = ctx
+                .nodes
+                .iter_mut()
+                .find(|n| n.qualified_name.as_deref() == Some(&table_canonical))
+            {
+                node.filters.extend(filters);
+            }
         }
     }
 
@@ -1168,6 +1362,10 @@ impl<'a> Analyzer<'a> {
                     );
                 }
 
+                // Get join type directly from context (already converted from AST)
+                let join_type = ctx.current_join_info.join_type;
+                let join_condition = ctx.current_join_info.join_condition.clone();
+
                 ctx.add_node(Node {
                     id: id.clone(),
                     node_type: NodeType::Table,
@@ -1177,6 +1375,9 @@ impl<'a> Analyzer<'a> {
                     span: None,
                     metadata,
                     resolution_source,
+                    filters: Vec::new(),
+                    join_type,
+                    join_condition,
                 });
             }
 
@@ -1206,6 +1407,8 @@ impl<'a> Analyzer<'a> {
                     edge_type: EdgeType::DataFlow,
                     expression: None,
                     operation: ctx.last_operation.clone(),
+                    join_type: ctx.current_join_info.join_type,
+                    join_condition: ctx.current_join_info.join_condition.clone(),
                     metadata: None,
                     approximate: None,
                 });
@@ -1229,6 +1432,9 @@ impl<'a> Analyzer<'a> {
             span: None,
             metadata: None,
             resolution_source: None,
+            filters: Vec::new(),
+            join_type: None,
+            join_condition: None,
         });
 
         self.all_tables.insert(canonical.clone());
@@ -1352,6 +1558,9 @@ impl<'a> Analyzer<'a> {
             span: None,
             metadata: None,
             resolution_source: None,
+            filters: Vec::new(),
+            join_type: None,
+            join_condition: None,
         });
 
         self.all_tables.insert(canonical.clone());
@@ -1398,6 +1607,8 @@ impl<'a> Analyzer<'a> {
                     edge_type: EdgeType::DataFlow,
                     expression: None,
                     operation: None,
+                    join_type: None,
+                    join_condition: None,
                     metadata: None,
                     approximate: None,
                 });
@@ -1438,19 +1649,16 @@ impl<'a> Analyzer<'a> {
 
         ctx.add_node(Node {
             id: node_id.clone(),
-
             node_type: NodeType::Table,
-
             label: extract_simple_name(&target_name),
-
             qualified_name: Some(canonical.clone()),
-
             expression: None,
-
             span: None,
-
             metadata: None,
             resolution_source: None,
+            filters: Vec::new(),
+            join_type: None,
+            join_condition: None,
         });
 
         // Create column nodes immediately from schema (either imported or from CREATE TABLE)
@@ -1484,6 +1692,9 @@ impl<'a> Analyzer<'a> {
             span: None,
             metadata: None,
             resolution_source: None,
+            filters: Vec::new(),
+            join_type: None,
+            join_condition: None,
         });
 
         self.all_tables.insert(canonical.clone());
@@ -1530,6 +1741,8 @@ impl<'a> Analyzer<'a> {
                     edge_type: EdgeType::DataFlow,
                     expression: None,
                     operation: None,
+                    join_type: None,
+                    join_condition: None,
                     metadata: None,
                     approximate: None,
                 });

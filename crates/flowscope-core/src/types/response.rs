@@ -113,6 +113,194 @@ pub struct Node {
     /// How this table was resolved (imported, implied, or unknown)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub resolution_source: Option<ResolutionSource>,
+
+    /// Filter predicates (WHERE clause conditions) that affect this table's rows
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub filters: Vec<FilterPredicate>,
+
+    /// For table nodes that are JOINed: the type of join used to include this table.
+    /// None for the main FROM table, Some(JoinType) for joined tables.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub join_type: Option<JoinType>,
+
+    /// For table nodes that are JOINed: the join condition (ON clause).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub join_condition: Option<String>,
+}
+
+impl Node {
+    /// Create a new table node with required fields.
+    pub fn table(id: String, label: String) -> Self {
+        Self {
+            id,
+            node_type: NodeType::Table,
+            label,
+            qualified_name: None,
+            expression: None,
+            span: None,
+            metadata: None,
+            resolution_source: None,
+            filters: Vec::new(),
+            join_type: None,
+            join_condition: None,
+        }
+    }
+
+    /// Create a new CTE node with required fields.
+    pub fn cte(id: String, label: String) -> Self {
+        Self {
+            id,
+            node_type: NodeType::Cte,
+            label,
+            qualified_name: None,
+            expression: None,
+            span: None,
+            metadata: None,
+            resolution_source: None,
+            filters: Vec::new(),
+            join_type: None,
+            join_condition: None,
+        }
+    }
+
+    /// Create a new column node with required fields.
+    pub fn column(id: String, label: String) -> Self {
+        Self {
+            id,
+            node_type: NodeType::Column,
+            label,
+            qualified_name: None,
+            expression: None,
+            span: None,
+            metadata: None,
+            resolution_source: None,
+            filters: Vec::new(),
+            join_type: None,
+            join_condition: None,
+        }
+    }
+
+    /// Set the qualified name.
+    pub fn with_qualified_name(mut self, name: impl Into<String>) -> Self {
+        self.qualified_name = Some(name.into());
+        self
+    }
+
+    /// Set the expression.
+    pub fn with_expression(mut self, expr: impl Into<String>) -> Self {
+        self.expression = Some(expr.into());
+        self
+    }
+
+    /// Set the metadata.
+    pub fn with_metadata(mut self, metadata: HashMap<String, serde_json::Value>) -> Self {
+        self.metadata = Some(metadata);
+        self
+    }
+
+    /// Set the resolution source.
+    pub fn with_resolution_source(mut self, source: ResolutionSource) -> Self {
+        self.resolution_source = Some(source);
+        self
+    }
+
+    /// Set the join type.
+    pub fn with_join_type(mut self, join_type: JoinType) -> Self {
+        self.join_type = Some(join_type);
+        self
+    }
+
+    /// Set the join condition.
+    pub fn with_join_condition(mut self, condition: impl Into<String>) -> Self {
+        self.join_condition = Some(condition.into());
+        self
+    }
+}
+
+impl Edge {
+    /// Create a new edge with required fields.
+    pub fn new(id: String, from: String, to: String, edge_type: EdgeType) -> Self {
+        Self {
+            id,
+            from,
+            to,
+            edge_type,
+            expression: None,
+            operation: None,
+            join_type: None,
+            join_condition: None,
+            metadata: None,
+            approximate: None,
+        }
+    }
+
+    /// Create a data flow edge.
+    pub fn data_flow(id: String, from: String, to: String) -> Self {
+        Self::new(id, from, to, EdgeType::DataFlow)
+    }
+
+    /// Create a derivation edge.
+    pub fn derivation(id: String, from: String, to: String) -> Self {
+        Self::new(id, from, to, EdgeType::Derivation)
+    }
+
+    /// Create an ownership edge.
+    pub fn ownership(id: String, from: String, to: String) -> Self {
+        Self::new(id, from, to, EdgeType::Ownership)
+    }
+
+    /// Set the expression.
+    pub fn with_expression(mut self, expr: impl Into<String>) -> Self {
+        self.expression = Some(expr.into());
+        self
+    }
+
+    /// Set the operation.
+    pub fn with_operation(mut self, op: impl Into<String>) -> Self {
+        self.operation = Some(op.into());
+        self
+    }
+
+    /// Set the join type.
+    pub fn with_join_type(mut self, join_type: JoinType) -> Self {
+        self.join_type = Some(join_type);
+        self
+    }
+
+    /// Set the join condition.
+    pub fn with_join_condition(mut self, condition: impl Into<String>) -> Self {
+        self.join_condition = Some(condition.into());
+        self
+    }
+
+    /// Mark as approximate lineage.
+    pub fn approximate(mut self) -> Self {
+        self.approximate = Some(true);
+        self
+    }
+}
+
+/// A filter predicate from a WHERE, HAVING, or JOIN ON clause.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct FilterPredicate {
+    /// The SQL expression text of the predicate
+    pub expression: String,
+
+    /// Where this filter appears in the query
+    pub clause_type: FilterClauseType,
+}
+
+/// The type of SQL clause where a filter predicate appears.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum FilterClauseType {
+    /// FROM ... WHERE clause
+    Where,
+    /// HAVING clause (after GROUP BY)
+    Having,
+    /// JOIN ... ON clause
+    JoinOn,
 }
 
 /// The type of a node in the lineage graph.
@@ -152,6 +340,18 @@ pub struct Edge {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub operation: Option<String>,
 
+    /// Optional: specific join type for JOIN edges (INNER, LEFT, RIGHT, FULL, CROSS, etc.)
+    /// Note: For table-level visualization, the frontend typically reads join info from the
+    /// target Node's join_type/join_condition fields. These Edge fields are preserved for
+    /// column-level lineage edges and future use cases where edge-level join context is needed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub join_type: Option<JoinType>,
+
+    /// Optional: join condition expression (ON clause)
+    /// See join_type comment for usage notes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub join_condition: Option<String>,
+
     /// Extensible metadata for future use
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, serde_json::Value>>,
@@ -159,6 +359,36 @@ pub struct Edge {
     /// True if this edge represents approximate/uncertain lineage
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub approximate: Option<bool>,
+}
+
+/// The type of SQL JOIN operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum JoinType {
+    /// INNER JOIN - only matching rows from both tables
+    Inner,
+    /// LEFT OUTER JOIN - all rows from left table, matching from right
+    Left,
+    /// RIGHT OUTER JOIN - all rows from right table, matching from left
+    Right,
+    /// FULL OUTER JOIN - all rows from both tables
+    Full,
+    /// CROSS JOIN - cartesian product
+    Cross,
+    /// LEFT SEMI JOIN - rows from left that have match in right
+    LeftSemi,
+    /// RIGHT SEMI JOIN - rows from right that have match in left
+    RightSemi,
+    /// LEFT ANTI JOIN - rows from left that have no match in right
+    LeftAnti,
+    /// RIGHT ANTI JOIN - rows from right that have no match in left
+    RightAnti,
+    /// CROSS APPLY (SQL Server)
+    CrossApply,
+    /// OUTER APPLY (SQL Server)
+    OuterApply,
+    /// AS OF JOIN (time-series)
+    AsOf,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -369,6 +599,9 @@ mod tests {
                     span: None,
                     metadata: None,
                     resolution_source: None,
+                    filters: Vec::new(),
+                    join_type: None,
+                    join_condition: None,
                 }],
                 edges: vec![],
                 span: None,

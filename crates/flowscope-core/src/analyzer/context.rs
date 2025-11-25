@@ -1,4 +1,4 @@
-use crate::types::{Edge, Node};
+use crate::types::{Edge, FilterClauseType, FilterPredicate, JoinType, Node};
 use std::collections::{HashMap, HashSet};
 
 /// Represents a single scope level for column resolution.
@@ -20,6 +20,15 @@ impl Scope {
     }
 }
 
+/// Information about the current JOIN being processed.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct JoinInfo {
+    /// The type of join (INNER, LEFT, etc.)
+    pub(crate) join_type: Option<JoinType>,
+    /// The join condition expression (ON clause text)
+    pub(crate) join_condition: Option<String>,
+}
+
 /// Context for analyzing a single statement
 pub(crate) struct StatementContext {
     pub(crate) statement_index: usize,
@@ -35,6 +44,8 @@ pub(crate) struct StatementContext {
     pub(crate) subquery_aliases: HashSet<String>,
     /// Last join/operation type for edge labeling
     pub(crate) last_operation: Option<String>,
+    /// Current join information (type + condition) for edge labeling
+    pub(crate) current_join_info: JoinInfo,
     /// Table canonical name -> node ID (for column ownership) - global registry
     pub(crate) table_node_ids: HashMap<String, String>,
     /// Output columns for this statement (for column lineage)
@@ -44,6 +55,9 @@ pub(crate) struct StatementContext {
     /// Stack of scopes for proper column resolution
     /// The top of the stack (last element) is the current scope
     pub(crate) scope_stack: Vec<Scope>,
+    /// Pending filter predicates to attach to table nodes
+    /// Maps table canonical name -> list of filter predicates
+    pub(crate) pending_filters: HashMap<String, Vec<FilterPredicate>>,
 }
 
 /// Represents an output column in the SELECT list
@@ -85,11 +99,29 @@ impl StatementContext {
             table_aliases: HashMap::new(),
             subquery_aliases: HashSet::new(),
             last_operation: None,
+            current_join_info: JoinInfo::default(),
             table_node_ids: HashMap::new(),
             output_columns: Vec::new(),
             cte_columns: HashMap::new(),
             scope_stack: Vec::new(),
+            pending_filters: HashMap::new(),
         }
+    }
+
+    /// Add a filter predicate for a specific table
+    pub(crate) fn add_filter_for_table(
+        &mut self,
+        table_canonical: &str,
+        expression: String,
+        clause_type: FilterClauseType,
+    ) {
+        self.pending_filters
+            .entry(table_canonical.to_string())
+            .or_default()
+            .push(FilterPredicate {
+                expression,
+                clause_type,
+            });
     }
 
     pub(crate) fn add_node(&mut self, node: Node) -> String {

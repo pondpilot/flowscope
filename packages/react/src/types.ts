@@ -7,6 +7,7 @@ import type {
   Span,
   StatementLineage,
   SchemaTable,
+  FilterPredicate,
 } from '@pondpilot/flowscope-core';
 
 /**
@@ -199,6 +200,8 @@ export interface TableNodeData extends Record<string, unknown> {
   sourceName?: string;
   /** Number of columns hidden from resolvedSchema (0 if none) */
   hiddenColumnCount?: number;
+  /** Filter predicates (WHERE/HAVING clauses) affecting this table */
+  filters?: FilterPredicate[];
 }
 
 /**
