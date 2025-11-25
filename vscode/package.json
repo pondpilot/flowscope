@@ -1,0 +1,90 @@
+{
+  "name": "flowscope-vscode",
+  "displayName": "FlowScope SQL Lineage",
+  "description": "SQL lineage analysis and visualization for VS Code",
+  "version": "0.1.0",
+  "publisher": "pondpilot",
+  "license": "Apache-2.0",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Visualization",
+    "Other"
+  ],
+  "activationEvents": [
+    "onLanguage:sql"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "flowscope.showLineage",
+        "title": "FlowScope: Show Lineage Graph"
+      },
+      {
+        "command": "flowscope.analyzeFile",
+        "title": "FlowScope: Analyze Current File"
+      }
+    ],
+    "configuration": {
+      "title": "FlowScope",
+      "properties": {
+        "flowscope.dialect": {
+          "type": "string",
+          "default": "generic",
+          "enum": [
+            "generic",
+            "ansi",
+            "bigquery",
+            "clickhouse",
+            "databricks",
+            "duckdb",
+            "hive",
+            "mssql",
+            "mysql",
+            "postgres",
+            "redshift",
+            "snowflake",
+            "sqlite"
+          ],
+          "description": "Default SQL dialect for analysis"
+        },
+        "flowscope.enableCodeLens": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show complexity annotations above SQL statements"
+        },
+        "flowscope.enableHover": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show lineage info on hover"
+        }
+      }
+    },
+    "languages": [
+      {
+        "id": "sql",
+        "extensions": [
+          ".sql"
+        ]
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "npm run build:webview && node esbuild.js",
+    "build:extension": "node esbuild.js",
+    "build:webview": "cd webview-ui && npm run build",
+    "watch": "node esbuild.js --watch",
+    "typecheck": "tsc --noEmit",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.20.0",
+    "typescript": "^5.0.0"
+  }
+}

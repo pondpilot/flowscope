@@ -1,0 +1,67 @@
+/* Import flowscope-react styles - must be first */
+@import '@pondpilot/flowscope-react/styles.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell,
+    'Open Sans', 'Helvetica Neue', sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* VSCode theme integration */
+body {
+  background-color: var(--vscode-editor-background, #1e1e1e);
+  color: var(--vscode-foreground, #cccccc);
+}
+
+/* Override some flowscope styles for VSCode dark theme */
+.react-flow {
+  background-color: var(--vscode-editor-background, #1e1e1e) !important;
+}
+
+.react-flow__background {
+  background-color: var(--vscode-editor-background, #1e1e1e) !important;
+}
+
+/* Fix panel backgrounds for dark theme */
+.react-flow__panel {
+  background-color: transparent !important;
+}
+
+.react-flow__panel > div {
+  background-color: var(--vscode-editorWidget-background, #252526) !important;
+  border-color: var(--vscode-editorWidget-border, #454545) !important;
+}
+
+/* Controls styling */
+.react-flow__controls {
+  background-color: var(--vscode-editorWidget-background, #252526) !important;
+  border-color: var(--vscode-editorWidget-border, #454545) !important;
+}
+
+.react-flow__controls-button {
+  background-color: var(--vscode-button-background, #0e639c) !important;
+  border-color: var(--vscode-editorWidget-border, #454545) !important;
+  color: var(--vscode-button-foreground, #ffffff) !important;
+}
+
+.react-flow__controls-button:hover {
+  background-color: var(--vscode-button-hoverBackground, #1177bb) !important;
+}
+
+/* MiniMap styling */
+.react-flow__minimap {
+  background-color: var(--vscode-editorWidget-background, #252526) !important;
+  border-color: var(--vscode-editorWidget-border, #454545) !important;
+}
