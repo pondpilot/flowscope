@@ -22,3 +22,4 @@ tracing = { version = "0.1", optional = true }
 [dev-dependencies]
 rstest = "0.22"
 proptest = "1.4"
+insta = { version = "1.44.1", features = ["json"] }

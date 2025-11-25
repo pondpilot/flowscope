@@ -1,0 +1,223 @@
+---
+source: crates/flowscope-core/tests/golden.rs
+expression: cleaned
+---
+{
+  "statements": [
+    {
+      "statementIndex": 0,
+      "statementType": "SELECT",
+      "nodes": [
+        {
+          "id": "column_07f2c53c2049650d",
+          "type": "column",
+          "label": "id"
+        },
+        {
+          "id": "column_146291330e487758",
+          "type": "column",
+          "label": "id",
+          "qualifiedName": "public.users.id"
+        },
+        {
+          "id": "column_6ed10d3dcc0acc1a",
+          "type": "column",
+          "label": "email"
+        },
+        {
+          "id": "column_e40458cf3907cc5e",
+          "type": "column",
+          "label": "email",
+          "qualifiedName": "public.users.email"
+        },
+        {
+          "id": "table_61860e36618f6e44",
+          "type": "table",
+          "label": "users",
+          "qualifiedName": "public.users",
+          "resolutionSource": "imported"
+        }
+      ],
+      "edges": [
+        {
+          "id": "edge_0fd7c9d999a9289c",
+          "from": "table_61860e36618f6e44",
+          "to": "column_e40458cf3907cc5e",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_686fd17f81858f87",
+          "from": "table_61860e36618f6e44",
+          "to": "column_146291330e487758",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_7c0d8ffb8cb41f39",
+          "from": "column_146291330e487758",
+          "to": "column_07f2c53c2049650d",
+          "type": "data_flow"
+        },
+        {
+          "id": "edge_c26c45539fda0e71",
+          "from": "column_e40458cf3907cc5e",
+          "to": "column_6ed10d3dcc0acc1a",
+          "type": "data_flow"
+        }
+      ],
+      "joinCount": 0,
+      "complexityScore": 5
+    }
+  ],
+  "globalLineage": {
+    "nodes": [
+      {
+        "id": "column_07f2c53c2049650d",
+        "type": "column",
+        "label": "id",
+        "canonicalName": {
+          "name": "id"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_07f2c53c2049650d"
+          }
+        ]
+      },
+      {
+        "id": "column_146291330e487758",
+        "type": "column",
+        "label": "id",
+        "canonicalName": {
+          "catalog": "public",
+          "schema": "users",
+          "name": "id"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_146291330e487758"
+          }
+        ]
+      },
+      {
+        "id": "column_6ed10d3dcc0acc1a",
+        "type": "column",
+        "label": "email",
+        "canonicalName": {
+          "name": "email"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_6ed10d3dcc0acc1a"
+          }
+        ]
+      },
+      {
+        "id": "column_e40458cf3907cc5e",
+        "type": "column",
+        "label": "email",
+        "canonicalName": {
+          "catalog": "public",
+          "schema": "users",
+          "name": "email"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_e40458cf3907cc5e"
+          }
+        ]
+      },
+      {
+        "id": "table_61860e36618f6e44",
+        "type": "table",
+        "label": "users",
+        "canonicalName": {
+          "schema": "public",
+          "name": "users"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "table_61860e36618f6e44"
+          }
+        ],
+        "resolutionSource": "imported"
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge_0fd7c9d999a9289c",
+        "from": "table_61860e36618f6e44",
+        "to": "column_e40458cf3907cc5e",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_686fd17f81858f87",
+        "from": "table_61860e36618f6e44",
+        "to": "column_146291330e487758",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_7c0d8ffb8cb41f39",
+        "from": "column_146291330e487758",
+        "to": "column_07f2c53c2049650d",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_c26c45539fda0e71",
+        "from": "column_e40458cf3907cc5e",
+        "to": "column_6ed10d3dcc0acc1a",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      }
+    ]
+  },
+  "issues": [],
+  "summary": {
+    "statementCount": 1,
+    "tableCount": 1,
+    "columnCount": 4,
+    "joinCount": 0,
+    "complexityScore": 5,
+    "issueCount": {
+      "errors": 0,
+      "warnings": 0,
+      "infos": 0
+    },
+    "hasErrors": false
+  },
+  "resolvedSchema": {
+    "tables": [
+      {
+        "schema": "public",
+        "name": "users",
+        "columns": [
+          {
+            "name": "id",
+            "origin": "imported"
+          },
+          {
+            "name": "email",
+            "origin": "imported"
+          }
+        ],
+        "origin": "imported",
+        "updatedAt": "2024-01-01T00:00:00Z"
+      }
+    ]
+  }
+}

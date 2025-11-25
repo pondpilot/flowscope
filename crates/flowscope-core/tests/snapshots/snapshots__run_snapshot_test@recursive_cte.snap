@@ -1,0 +1,385 @@
+---
+source: crates/flowscope-core/tests/snapshots.rs
+expression: clean_result
+---
+{
+  "statements": [
+    {
+      "statementIndex": 0,
+      "statementType": "WITH",
+      "nodes": [
+        {
+          "id": "column_0f95136bd6024017",
+          "type": "column",
+          "label": "employee_id",
+          "qualifiedName": "employees.employee_id"
+        },
+        {
+          "id": "column_3bb15f110141f382",
+          "type": "column",
+          "label": "employee_id"
+        },
+        {
+          "id": "column_d4e47a99ac16a7c1",
+          "type": "column",
+          "label": "manager_id"
+        },
+        {
+          "id": "column_e651a7d1449a8c25",
+          "type": "column",
+          "label": "name",
+          "qualifiedName": "employees.name"
+        },
+        {
+          "id": "column_e980fdc92e16dc69",
+          "type": "column",
+          "label": "manager_id",
+          "qualifiedName": "employees.manager_id"
+        },
+        {
+          "id": "column_fb3b69287fcc45b6",
+          "type": "column",
+          "label": "name"
+        },
+        {
+          "id": "cte_55404a7d16da64f6",
+          "type": "cte",
+          "label": "subordinates",
+          "qualifiedName": "subordinates"
+        },
+        {
+          "id": "table_1d63721b3610a67f",
+          "type": "table",
+          "label": "employees",
+          "qualifiedName": "employees",
+          "filters": [
+            {
+              "expression": "manager_id IS NULL",
+              "clauseType": "WHERE"
+            }
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "id": "edge_09c32dc2c5e228ef",
+          "from": "column_0f95136bd6024017",
+          "to": "column_3bb15f110141f382",
+          "type": "data_flow"
+        },
+        {
+          "id": "edge_14893331427855ac",
+          "from": "column_e980fdc92e16dc69",
+          "to": "column_d4e47a99ac16a7c1",
+          "type": "data_flow"
+        },
+        {
+          "id": "edge_2a6393f52a5d54b3",
+          "from": "table_1d63721b3610a67f",
+          "to": "cte_55404a7d16da64f6",
+          "type": "data_flow"
+        },
+        {
+          "id": "edge_34bfcab9f7ae187f",
+          "from": "cte_55404a7d16da64f6",
+          "to": "column_3bb15f110141f382",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_3d7f94e1cb11e28c",
+          "from": "table_1d63721b3610a67f",
+          "to": "column_e651a7d1449a8c25",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_633c40956539c664",
+          "from": "cte_55404a7d16da64f6",
+          "to": "column_d4e47a99ac16a7c1",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_8aedc318ed9a4cc8",
+          "from": "column_e651a7d1449a8c25",
+          "to": "column_fb3b69287fcc45b6",
+          "type": "data_flow"
+        },
+        {
+          "id": "edge_94929fb16a6077f8",
+          "from": "cte_55404a7d16da64f6",
+          "to": "column_fb3b69287fcc45b6",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_a4a02611c7eb6903",
+          "from": "table_1d63721b3610a67f",
+          "to": "column_e980fdc92e16dc69",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_f3e714066f98df3b",
+          "from": "table_1d63721b3610a67f",
+          "to": "column_0f95136bd6024017",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_fe9d742304dac298",
+          "from": "cte_55404a7d16da64f6",
+          "to": "cte_55404a7d16da64f6",
+          "type": "data_flow",
+          "operation": "INNER_JOIN",
+          "joinType": "INNER",
+          "joinCondition": "s.employee_id = e.manager_id"
+        }
+      ],
+      "joinCount": 0,
+      "complexityScore": 15
+    }
+  ],
+  "globalLineage": {
+    "nodes": [
+      {
+        "id": "column_0f95136bd6024017",
+        "type": "column",
+        "label": "employee_id",
+        "canonicalName": {
+          "schema": "employees",
+          "name": "employee_id"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_0f95136bd6024017"
+          }
+        ]
+      },
+      {
+        "id": "column_3bb15f110141f382",
+        "type": "column",
+        "label": "employee_id",
+        "canonicalName": {
+          "name": "employee_id"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_3bb15f110141f382"
+          }
+        ]
+      },
+      {
+        "id": "column_d4e47a99ac16a7c1",
+        "type": "column",
+        "label": "manager_id",
+        "canonicalName": {
+          "name": "manager_id"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_d4e47a99ac16a7c1"
+          }
+        ]
+      },
+      {
+        "id": "column_e651a7d1449a8c25",
+        "type": "column",
+        "label": "name",
+        "canonicalName": {
+          "schema": "employees",
+          "name": "name"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_e651a7d1449a8c25"
+          }
+        ]
+      },
+      {
+        "id": "column_e980fdc92e16dc69",
+        "type": "column",
+        "label": "manager_id",
+        "canonicalName": {
+          "schema": "employees",
+          "name": "manager_id"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_e980fdc92e16dc69"
+          }
+        ]
+      },
+      {
+        "id": "column_fb3b69287fcc45b6",
+        "type": "column",
+        "label": "name",
+        "canonicalName": {
+          "name": "name"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_fb3b69287fcc45b6"
+          }
+        ]
+      },
+      {
+        "id": "cte_55404a7d16da64f6",
+        "type": "cte",
+        "label": "subordinates",
+        "canonicalName": {
+          "name": "subordinates"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "cte_55404a7d16da64f6"
+          }
+        ]
+      },
+      {
+        "id": "table_1d63721b3610a67f",
+        "type": "table",
+        "label": "employees",
+        "canonicalName": {
+          "name": "employees"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "table_1d63721b3610a67f"
+          }
+        ]
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge_09c32dc2c5e228ef",
+        "from": "column_0f95136bd6024017",
+        "to": "column_3bb15f110141f382",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_14893331427855ac",
+        "from": "column_e980fdc92e16dc69",
+        "to": "column_d4e47a99ac16a7c1",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_2a6393f52a5d54b3",
+        "from": "table_1d63721b3610a67f",
+        "to": "cte_55404a7d16da64f6",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_34bfcab9f7ae187f",
+        "from": "cte_55404a7d16da64f6",
+        "to": "column_3bb15f110141f382",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_3d7f94e1cb11e28c",
+        "from": "table_1d63721b3610a67f",
+        "to": "column_e651a7d1449a8c25",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_633c40956539c664",
+        "from": "cte_55404a7d16da64f6",
+        "to": "column_d4e47a99ac16a7c1",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_8aedc318ed9a4cc8",
+        "from": "column_e651a7d1449a8c25",
+        "to": "column_fb3b69287fcc45b6",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_94929fb16a6077f8",
+        "from": "cte_55404a7d16da64f6",
+        "to": "column_fb3b69287fcc45b6",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_a4a02611c7eb6903",
+        "from": "table_1d63721b3610a67f",
+        "to": "column_e980fdc92e16dc69",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_f3e714066f98df3b",
+        "from": "table_1d63721b3610a67f",
+        "to": "column_0f95136bd6024017",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_fe9d742304dac298",
+        "from": "cte_55404a7d16da64f6",
+        "to": "cte_55404a7d16da64f6",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      }
+    ]
+  },
+  "issues": [
+    {
+      "severity": "info",
+      "code": "APPROXIMATE_LINEAGE",
+      "message": "SELECT * from 'employees' - column list unknown without schema metadata",
+      "statementIndex": 0
+    },
+    {
+      "severity": "info",
+      "code": "APPROXIMATE_LINEAGE",
+      "message": "SELECT * from 'subordinates' - column list unknown without schema metadata",
+      "statementIndex": 0
+    }
+  ],
+  "summary": {
+    "statementCount": 1,
+    "tableCount": 2,
+    "columnCount": 6,
+    "joinCount": 0,
+    "complexityScore": 15,
+    "issueCount": {
+      "errors": 0,
+      "warnings": 0,
+      "infos": 2
+    },
+    "hasErrors": false
+  }
+}

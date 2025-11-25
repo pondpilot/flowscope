@@ -1,0 +1,151 @@
+---
+source: crates/flowscope-core/tests/golden.rs
+expression: cleaned
+---
+{
+  "statements": [
+    {
+      "statementIndex": 0,
+      "statementType": "SELECT",
+      "nodes": [
+        {
+          "id": "column_07f2c53c2049650d",
+          "type": "column",
+          "label": "id"
+        },
+        {
+          "id": "column_208687717881053c",
+          "type": "column",
+          "label": "id",
+          "qualifiedName": "employees.id"
+        },
+        {
+          "id": "column_ca661975347e1ac3",
+          "type": "column",
+          "label": "rn",
+          "expression": "ROW_NUMBER() OVER (PARTITION BY dept)",
+          "metadata": {
+            "data_type": "INTEGER"
+          }
+        },
+        {
+          "id": "table_1d63721b3610a67f",
+          "type": "table",
+          "label": "employees",
+          "qualifiedName": "employees"
+        }
+      ],
+      "edges": [
+        {
+          "id": "edge_67cf78c40623a924",
+          "from": "column_208687717881053c",
+          "to": "column_07f2c53c2049650d",
+          "type": "data_flow"
+        },
+        {
+          "id": "edge_d0d8e0de8ab72937",
+          "from": "table_1d63721b3610a67f",
+          "to": "column_208687717881053c",
+          "type": "ownership"
+        }
+      ],
+      "joinCount": 0,
+      "complexityScore": 5
+    }
+  ],
+  "globalLineage": {
+    "nodes": [
+      {
+        "id": "column_07f2c53c2049650d",
+        "type": "column",
+        "label": "id",
+        "canonicalName": {
+          "name": "id"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_07f2c53c2049650d"
+          }
+        ]
+      },
+      {
+        "id": "column_208687717881053c",
+        "type": "column",
+        "label": "id",
+        "canonicalName": {
+          "schema": "employees",
+          "name": "id"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_208687717881053c"
+          }
+        ]
+      },
+      {
+        "id": "column_ca661975347e1ac3",
+        "type": "column",
+        "label": "rn",
+        "canonicalName": {
+          "name": "rn"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_ca661975347e1ac3"
+          }
+        ]
+      },
+      {
+        "id": "table_1d63721b3610a67f",
+        "type": "table",
+        "label": "employees",
+        "canonicalName": {
+          "name": "employees"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "table_1d63721b3610a67f"
+          }
+        ]
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge_67cf78c40623a924",
+        "from": "column_208687717881053c",
+        "to": "column_07f2c53c2049650d",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_d0d8e0de8ab72937",
+        "from": "table_1d63721b3610a67f",
+        "to": "column_208687717881053c",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      }
+    ]
+  },
+  "issues": [],
+  "summary": {
+    "statementCount": 1,
+    "tableCount": 1,
+    "columnCount": 3,
+    "joinCount": 0,
+    "complexityScore": 5,
+    "issueCount": {
+      "errors": 0,
+      "warnings": 0,
+      "infos": 0
+    },
+    "hasErrors": false
+  }
+}

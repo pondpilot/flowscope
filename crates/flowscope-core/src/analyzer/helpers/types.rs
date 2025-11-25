@@ -7,7 +7,7 @@ use sqlparser::ast::{self as ast, Expr, FunctionArg, FunctionArgExpr};
 use std::fmt;
 
 /// Inferred SQL data type
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SqlType {
     Number,
     Integer,
@@ -15,6 +15,7 @@ pub enum SqlType {
     Boolean,
     Date,
     Timestamp,
+    Custom(String),
 }
 
 impl fmt::Display for SqlType {
@@ -26,6 +27,7 @@ impl fmt::Display for SqlType {
             SqlType::Boolean => write!(f, "BOOLEAN"),
             SqlType::Date => write!(f, "DATE"),
             SqlType::Timestamp => write!(f, "TIMESTAMP"),
+            SqlType::Custom(name) => write!(f, "{name}"),
         }
     }
 }
@@ -62,7 +64,7 @@ pub fn infer_expr_type(expr: &Expr) -> Option<SqlType> {
             ast::BinaryOperator::Plus => {
                 let l_type = infer_expr_type(left);
                 let r_type = infer_expr_type(right);
-                if is_numeric_type(l_type) || is_numeric_type(r_type) {
+                if is_numeric_type(&l_type) || is_numeric_type(&r_type) {
                     Some(SqlType::Number)
                 } else if l_type == Some(SqlType::Text) || r_type == Some(SqlType::Text) {
                     Some(SqlType::Text)
@@ -76,7 +78,7 @@ pub fn infer_expr_type(expr: &Expr) -> Option<SqlType> {
             | ast::BinaryOperator::Modulo => {
                 let l_type = infer_expr_type(left);
                 let r_type = infer_expr_type(right);
-                if is_numeric_type(l_type) || is_numeric_type(r_type) {
+                if is_numeric_type(&l_type) || is_numeric_type(&r_type) {
                     Some(SqlType::Number)
                 } else {
                     l_type.or(r_type)
@@ -146,11 +148,12 @@ fn sql_type_from_data_type(data_type: &ast::DataType) -> Option<SqlType> {
         ast::DataType::Boolean => Some(SqlType::Boolean),
         ast::DataType::Date => Some(SqlType::Date),
         ast::DataType::Timestamp(_, _) | ast::DataType::Datetime(_) => Some(SqlType::Timestamp),
-        _ => None,
+        ast::DataType::Custom(obj_name, _) => Some(SqlType::Custom(obj_name.to_string())),
+        _ => Some(SqlType::Custom(data_type.to_string())),
     }
 }
 
-fn is_numeric_type(t: Option<SqlType>) -> bool {
+fn is_numeric_type(t: &Option<SqlType>) -> bool {
     matches!(t, Some(SqlType::Number) | Some(SqlType::Integer))
 }
 
@@ -285,6 +288,10 @@ mod tests {
             infer_expr_type(&parse_expr("CAST(x AS VARCHAR(100))")),
             Some(SqlType::Text)
         );
+        assert_eq!(
+            infer_expr_type(&parse_expr("CAST(x AS VARIANT)")),
+            Some(SqlType::Custom("VARIANT".to_string()))
+        );
     }
 
     #[test]
@@ -300,5 +307,6 @@ mod tests {
         assert_eq!(SqlType::Boolean.to_string(), "BOOLEAN");
         assert_eq!(SqlType::Date.to_string(), "DATE");
         assert_eq!(SqlType::Timestamp.to_string(), "TIMESTAMP");
+        assert_eq!(SqlType::Custom("VARIANT".into()).to_string(), "VARIANT");
     }
 }

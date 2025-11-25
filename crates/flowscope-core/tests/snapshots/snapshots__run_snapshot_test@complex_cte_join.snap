@@ -1,0 +1,700 @@
+---
+source: crates/flowscope-core/tests/snapshots.rs
+expression: clean_result
+---
+{
+  "statements": [
+    {
+      "statementIndex": 0,
+      "statementType": "WITH",
+      "nodes": [
+        {
+          "id": "column_0dd3279d9b05299d",
+          "type": "column",
+          "label": "email"
+        },
+        {
+          "id": "column_17365cc1224ceac1",
+          "type": "column",
+          "label": "name",
+          "qualifiedName": "users.name"
+        },
+        {
+          "id": "column_3f39e80c6a14bd6c",
+          "type": "column",
+          "label": "order_count",
+          "expression": "COUNT(o.id)",
+          "metadata": {
+            "data_type": "INTEGER"
+          },
+          "aggregation": {
+            "isGroupingKey": false,
+            "function": "COUNT"
+          }
+        },
+        {
+          "id": "column_754b72f44edb529b",
+          "type": "column",
+          "label": "name"
+        },
+        {
+          "id": "column_91ec561dfe172758",
+          "type": "column",
+          "label": "total_spend",
+          "expression": "SUM(o.total)",
+          "metadata": {
+            "data_type": "NUMBER"
+          },
+          "aggregation": {
+            "isGroupingKey": false,
+            "function": "SUM"
+          }
+        },
+        {
+          "id": "column_a364e172f29a758b",
+          "type": "column",
+          "label": "id"
+        },
+        {
+          "id": "column_c9a06119b0a87873",
+          "type": "column",
+          "label": "email",
+          "qualifiedName": "users.email"
+        },
+        {
+          "id": "column_ce9b99d49d1c412c",
+          "type": "column",
+          "label": "id",
+          "qualifiedName": "orders.id"
+        },
+        {
+          "id": "column_d780b69ea9480267",
+          "type": "column",
+          "label": "total",
+          "qualifiedName": "orders.total"
+        },
+        {
+          "id": "column_f6b363282306de23",
+          "type": "column",
+          "label": "id",
+          "qualifiedName": "users.id"
+        },
+        {
+          "id": "column_f9835ae7e58312a3",
+          "type": "column",
+          "label": "user_id",
+          "aggregation": {
+            "isGroupingKey": true
+          }
+        },
+        {
+          "id": "cte_4cdce43201cd680f",
+          "type": "cte",
+          "label": "active_users",
+          "qualifiedName": "active_users"
+        },
+        {
+          "id": "cte_96884c4a7cec8bbc",
+          "type": "cte",
+          "label": "user_orders",
+          "qualifiedName": "user_orders",
+          "filters": [
+            {
+              "expression": "total_spend > 1000",
+              "clauseType": "WHERE"
+            }
+          ]
+        },
+        {
+          "id": "table_10a0682dff76cdbc",
+          "type": "table",
+          "label": "users",
+          "qualifiedName": "users",
+          "filters": [
+            {
+              "expression": "active = true",
+              "clauseType": "WHERE"
+            }
+          ]
+        },
+        {
+          "id": "table_eaa6ebb8f158751f",
+          "type": "table",
+          "label": "orders",
+          "qualifiedName": "orders",
+          "joinType": "LEFT",
+          "joinCondition": "u.id = o.user_id"
+        }
+      ],
+      "edges": [
+        {
+          "id": "edge_0700f3ed60434045",
+          "from": "cte_4cdce43201cd680f",
+          "to": "column_0dd3279d9b05299d",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_163cd5c8bf2b325d",
+          "from": "table_10a0682dff76cdbc",
+          "to": "column_c9a06119b0a87873",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_18ff0fc3949528ed",
+          "from": "column_d780b69ea9480267",
+          "to": "column_91ec561dfe172758",
+          "type": "derivation",
+          "expression": "SUM(o.total)"
+        },
+        {
+          "id": "edge_322548822d4b9438",
+          "from": "column_c9a06119b0a87873",
+          "to": "column_0dd3279d9b05299d",
+          "type": "data_flow"
+        },
+        {
+          "id": "edge_45237cceaa15c447",
+          "from": "table_eaa6ebb8f158751f",
+          "to": "column_d780b69ea9480267",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_5247487575dfc1b5",
+          "from": "column_a364e172f29a758b",
+          "to": "column_f9835ae7e58312a3",
+          "type": "data_flow"
+        },
+        {
+          "id": "edge_77a8147e13e06124",
+          "from": "table_eaa6ebb8f158751f",
+          "to": "cte_96884c4a7cec8bbc",
+          "type": "data_flow",
+          "operation": "LEFT_JOIN",
+          "joinType": "LEFT",
+          "joinCondition": "u.id = o.user_id"
+        },
+        {
+          "id": "edge_7df9c3295059ea65",
+          "from": "column_17365cc1224ceac1",
+          "to": "column_754b72f44edb529b",
+          "type": "data_flow"
+        },
+        {
+          "id": "edge_8e423f2170586fc2",
+          "from": "column_ce9b99d49d1c412c",
+          "to": "column_3f39e80c6a14bd6c",
+          "type": "derivation",
+          "expression": "COUNT(o.id)"
+        },
+        {
+          "id": "edge_8f3abcaefa3ed79f",
+          "from": "table_10a0682dff76cdbc",
+          "to": "cte_4cdce43201cd680f",
+          "type": "data_flow"
+        },
+        {
+          "id": "edge_8fa553198fb9176f",
+          "from": "cte_4cdce43201cd680f",
+          "to": "column_754b72f44edb529b",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_9e3f639e6cd7a540",
+          "from": "table_eaa6ebb8f158751f",
+          "to": "column_ce9b99d49d1c412c",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_a18ce6cc0cd5cdb6",
+          "from": "cte_96884c4a7cec8bbc",
+          "to": "column_f9835ae7e58312a3",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_a92e0d09881d5676",
+          "from": "table_10a0682dff76cdbc",
+          "to": "column_f6b363282306de23",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_bc85044d80d56009",
+          "from": "cte_96884c4a7cec8bbc",
+          "to": "column_3f39e80c6a14bd6c",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_c9ff3fb142c5814b",
+          "from": "column_f6b363282306de23",
+          "to": "column_a364e172f29a758b",
+          "type": "data_flow"
+        },
+        {
+          "id": "edge_ca4078f641aa8fdc",
+          "from": "table_10a0682dff76cdbc",
+          "to": "column_17365cc1224ceac1",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_dd517e925875f866",
+          "from": "cte_96884c4a7cec8bbc",
+          "to": "column_91ec561dfe172758",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_e6a9923eac83c21c",
+          "from": "cte_4cdce43201cd680f",
+          "to": "cte_96884c4a7cec8bbc",
+          "type": "data_flow"
+        },
+        {
+          "id": "edge_fda77fffc4908fe5",
+          "from": "cte_4cdce43201cd680f",
+          "to": "column_a364e172f29a758b",
+          "type": "ownership"
+        }
+      ],
+      "joinCount": 1,
+      "complexityScore": 40
+    }
+  ],
+  "globalLineage": {
+    "nodes": [
+      {
+        "id": "column_0dd3279d9b05299d",
+        "type": "column",
+        "label": "email",
+        "canonicalName": {
+          "name": "email"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_0dd3279d9b05299d"
+          }
+        ]
+      },
+      {
+        "id": "column_17365cc1224ceac1",
+        "type": "column",
+        "label": "name",
+        "canonicalName": {
+          "schema": "users",
+          "name": "name"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_17365cc1224ceac1"
+          }
+        ]
+      },
+      {
+        "id": "column_3f39e80c6a14bd6c",
+        "type": "column",
+        "label": "order_count",
+        "canonicalName": {
+          "name": "order_count"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_3f39e80c6a14bd6c"
+          }
+        ]
+      },
+      {
+        "id": "column_754b72f44edb529b",
+        "type": "column",
+        "label": "name",
+        "canonicalName": {
+          "name": "name"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_754b72f44edb529b"
+          }
+        ]
+      },
+      {
+        "id": "column_91ec561dfe172758",
+        "type": "column",
+        "label": "total_spend",
+        "canonicalName": {
+          "name": "total_spend"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_91ec561dfe172758"
+          }
+        ]
+      },
+      {
+        "id": "column_a364e172f29a758b",
+        "type": "column",
+        "label": "id",
+        "canonicalName": {
+          "name": "id"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_a364e172f29a758b"
+          }
+        ]
+      },
+      {
+        "id": "column_c9a06119b0a87873",
+        "type": "column",
+        "label": "email",
+        "canonicalName": {
+          "schema": "users",
+          "name": "email"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_c9a06119b0a87873"
+          }
+        ]
+      },
+      {
+        "id": "column_ce9b99d49d1c412c",
+        "type": "column",
+        "label": "id",
+        "canonicalName": {
+          "schema": "orders",
+          "name": "id"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_ce9b99d49d1c412c"
+          }
+        ]
+      },
+      {
+        "id": "column_d780b69ea9480267",
+        "type": "column",
+        "label": "total",
+        "canonicalName": {
+          "schema": "orders",
+          "name": "total"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_d780b69ea9480267"
+          }
+        ]
+      },
+      {
+        "id": "column_f6b363282306de23",
+        "type": "column",
+        "label": "id",
+        "canonicalName": {
+          "schema": "users",
+          "name": "id"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_f6b363282306de23"
+          }
+        ]
+      },
+      {
+        "id": "column_f9835ae7e58312a3",
+        "type": "column",
+        "label": "user_id",
+        "canonicalName": {
+          "name": "user_id"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_f9835ae7e58312a3"
+          }
+        ]
+      },
+      {
+        "id": "cte_4cdce43201cd680f",
+        "type": "cte",
+        "label": "active_users",
+        "canonicalName": {
+          "name": "active_users"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "cte_4cdce43201cd680f"
+          }
+        ]
+      },
+      {
+        "id": "cte_96884c4a7cec8bbc",
+        "type": "cte",
+        "label": "user_orders",
+        "canonicalName": {
+          "name": "user_orders"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "cte_96884c4a7cec8bbc"
+          }
+        ]
+      },
+      {
+        "id": "table_10a0682dff76cdbc",
+        "type": "table",
+        "label": "users",
+        "canonicalName": {
+          "name": "users"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "table_10a0682dff76cdbc"
+          }
+        ]
+      },
+      {
+        "id": "table_eaa6ebb8f158751f",
+        "type": "table",
+        "label": "orders",
+        "canonicalName": {
+          "name": "orders"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "table_eaa6ebb8f158751f"
+          }
+        ]
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge_0700f3ed60434045",
+        "from": "cte_4cdce43201cd680f",
+        "to": "column_0dd3279d9b05299d",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_163cd5c8bf2b325d",
+        "from": "table_10a0682dff76cdbc",
+        "to": "column_c9a06119b0a87873",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_18ff0fc3949528ed",
+        "from": "column_d780b69ea9480267",
+        "to": "column_91ec561dfe172758",
+        "type": "derivation",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_322548822d4b9438",
+        "from": "column_c9a06119b0a87873",
+        "to": "column_0dd3279d9b05299d",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_45237cceaa15c447",
+        "from": "table_eaa6ebb8f158751f",
+        "to": "column_d780b69ea9480267",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_5247487575dfc1b5",
+        "from": "column_a364e172f29a758b",
+        "to": "column_f9835ae7e58312a3",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_77a8147e13e06124",
+        "from": "table_eaa6ebb8f158751f",
+        "to": "cte_96884c4a7cec8bbc",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_7df9c3295059ea65",
+        "from": "column_17365cc1224ceac1",
+        "to": "column_754b72f44edb529b",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_8e423f2170586fc2",
+        "from": "column_ce9b99d49d1c412c",
+        "to": "column_3f39e80c6a14bd6c",
+        "type": "derivation",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_8f3abcaefa3ed79f",
+        "from": "table_10a0682dff76cdbc",
+        "to": "cte_4cdce43201cd680f",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_8fa553198fb9176f",
+        "from": "cte_4cdce43201cd680f",
+        "to": "column_754b72f44edb529b",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_9e3f639e6cd7a540",
+        "from": "table_eaa6ebb8f158751f",
+        "to": "column_ce9b99d49d1c412c",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_a18ce6cc0cd5cdb6",
+        "from": "cte_96884c4a7cec8bbc",
+        "to": "column_f9835ae7e58312a3",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_a92e0d09881d5676",
+        "from": "table_10a0682dff76cdbc",
+        "to": "column_f6b363282306de23",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_bc85044d80d56009",
+        "from": "cte_96884c4a7cec8bbc",
+        "to": "column_3f39e80c6a14bd6c",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_c9ff3fb142c5814b",
+        "from": "column_f6b363282306de23",
+        "to": "column_a364e172f29a758b",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_ca4078f641aa8fdc",
+        "from": "table_10a0682dff76cdbc",
+        "to": "column_17365cc1224ceac1",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_dd517e925875f866",
+        "from": "cte_96884c4a7cec8bbc",
+        "to": "column_91ec561dfe172758",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_e6a9923eac83c21c",
+        "from": "cte_4cdce43201cd680f",
+        "to": "cte_96884c4a7cec8bbc",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_fda77fffc4908fe5",
+        "from": "cte_4cdce43201cd680f",
+        "to": "column_a364e172f29a758b",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      }
+    ]
+  },
+  "issues": [
+    {
+      "severity": "info",
+      "code": "APPROXIMATE_LINEAGE",
+      "message": "SELECT * from 'active_users' - column list unknown without schema metadata",
+      "statementIndex": 0
+    },
+    {
+      "severity": "info",
+      "code": "APPROXIMATE_LINEAGE",
+      "message": "SELECT * from 'orders' - column list unknown without schema metadata",
+      "statementIndex": 0
+    },
+    {
+      "severity": "info",
+      "code": "APPROXIMATE_LINEAGE",
+      "message": "SELECT * from 'user_orders' - column list unknown without schema metadata",
+      "statementIndex": 0
+    },
+    {
+      "severity": "info",
+      "code": "APPROXIMATE_LINEAGE",
+      "message": "SELECT * from 'users' - column list unknown without schema metadata",
+      "statementIndex": 0
+    }
+  ],
+  "summary": {
+    "statementCount": 1,
+    "tableCount": 4,
+    "columnCount": 11,
+    "joinCount": 1,
+    "complexityScore": 40,
+    "issueCount": {
+      "errors": 0,
+      "warnings": 0,
+      "infos": 4
+    },
+    "hasErrors": false
+  }
+}

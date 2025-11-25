@@ -1,0 +1,148 @@
+---
+source: crates/flowscope-core/tests/golden.rs
+expression: cleaned
+---
+{
+  "statements": [
+    {
+      "statementIndex": 0,
+      "statementType": "SELECT",
+      "nodes": [
+        {
+          "id": "column_17e884ba8fe7efc8",
+          "type": "column",
+          "label": "amount"
+        },
+        {
+          "id": "column_6bd816528de45ddd",
+          "type": "column",
+          "label": "amount",
+          "qualifiedName": "sales.analytics.reports.amount"
+        },
+        {
+          "id": "table_b6822030e61daaf4",
+          "type": "table",
+          "label": "reports",
+          "qualifiedName": "sales.analytics.reports",
+          "resolutionSource": "imported"
+        }
+      ],
+      "edges": [
+        {
+          "id": "edge_4c761a567cce583f",
+          "from": "column_6bd816528de45ddd",
+          "to": "column_17e884ba8fe7efc8",
+          "type": "data_flow"
+        },
+        {
+          "id": "edge_53109492fbd471a4",
+          "from": "table_b6822030e61daaf4",
+          "to": "column_6bd816528de45ddd",
+          "type": "ownership"
+        }
+      ],
+      "joinCount": 0,
+      "complexityScore": 5
+    }
+  ],
+  "globalLineage": {
+    "nodes": [
+      {
+        "id": "column_17e884ba8fe7efc8",
+        "type": "column",
+        "label": "amount",
+        "canonicalName": {
+          "name": "amount"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_17e884ba8fe7efc8"
+          }
+        ]
+      },
+      {
+        "id": "column_6bd816528de45ddd",
+        "type": "column",
+        "label": "amount",
+        "canonicalName": {
+          "name": "sales.analytics.reports.amount"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_6bd816528de45ddd"
+          }
+        ]
+      },
+      {
+        "id": "table_b6822030e61daaf4",
+        "type": "table",
+        "label": "reports",
+        "canonicalName": {
+          "catalog": "sales",
+          "schema": "analytics",
+          "name": "reports"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "table_b6822030e61daaf4"
+          }
+        ],
+        "resolutionSource": "imported"
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge_4c761a567cce583f",
+        "from": "column_6bd816528de45ddd",
+        "to": "column_17e884ba8fe7efc8",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_53109492fbd471a4",
+        "from": "table_b6822030e61daaf4",
+        "to": "column_6bd816528de45ddd",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      }
+    ]
+  },
+  "issues": [],
+  "summary": {
+    "statementCount": 1,
+    "tableCount": 1,
+    "columnCount": 2,
+    "joinCount": 0,
+    "complexityScore": 5,
+    "issueCount": {
+      "errors": 0,
+      "warnings": 0,
+      "infos": 0
+    },
+    "hasErrors": false
+  },
+  "resolvedSchema": {
+    "tables": [
+      {
+        "catalog": "sales",
+        "schema": "analytics",
+        "name": "reports",
+        "columns": [
+          {
+            "name": "amount",
+            "origin": "imported"
+          }
+        ],
+        "origin": "imported",
+        "updatedAt": "2024-01-01T00:00:00Z"
+      }
+    ]
+  }
+}

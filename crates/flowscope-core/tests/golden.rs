@@ -1,58 +1,8 @@
 use flowscope_core::{analyze, AnalyzeRequest, Dialect, FileSource};
-use serde_json::json;
+use insta::assert_json_snapshot;
 
-fn summarize_tables(result: &flowscope_core::AnalyzeResult) -> serde_json::Value {
-    let statements = result
-        .statements
-        .iter()
-        .map(|stmt| {
-            let mut tables: Vec<_> = stmt
-                .nodes
-                .iter()
-                .filter(|n| n.node_type == flowscope_core::NodeType::Table)
-                .map(|n| n.label.clone())
-                .collect();
-            tables.sort();
-            tables.dedup();
-
-            json!({
-                "statementType": stmt.statement_type,
-                "source": stmt.source_name,
-                "tables": tables,
-            })
-        })
-        .collect::<Vec<_>>();
-
-    json!({
-        "statements": statements,
-        "issues": result.issues.iter().map(|i| json!({
-            "code": i.code,
-            "severity": format!("{:?}", i.severity),
-        })).collect::<Vec<_>>(),
-        "summary": {
-            "statementCount": result.summary.statement_count,
-            "tableCount": result.summary.table_count,
-            "columnCount": result.summary.column_count,
-            "hasErrors": result.summary.has_errors,
-        }
-    })
-}
-
-fn collect_columns(result: &flowscope_core::AnalyzeResult) -> Vec<String> {
-    let mut cols: Vec<_> = result
-        .statements
-        .iter()
-        .flat_map(|stmt| {
-            stmt.nodes
-                .iter()
-                .filter(|n| n.node_type == flowscope_core::NodeType::Column)
-                .map(|n| n.label.clone())
-        })
-        .collect();
-    cols.sort();
-    cols.dedup();
-    cols
-}
+mod common;
+use common::prepare_for_snapshot;
 
 #[test]
 fn golden_inline_select_tables_only() {
@@ -67,26 +17,8 @@ fn golden_inline_select_tables_only() {
     };
 
     let result = analyze(&request);
-    let summary = summarize_tables(&result);
-
-    let expected = json!({
-        "statements": [
-            {
-                "statementType": "SELECT",
-                "source": null,
-                "tables": ["orders", "users"],
-            }
-        ],
-        "issues": [],
-        "summary": {
-            "statementCount": 1,
-            "tableCount": 2,
-            "columnCount": result.summary.column_count,
-            "hasErrors": false,
-        }
-    });
-
-    assert_eq!(summary, expected);
+    let cleaned = prepare_for_snapshot(result);
+    assert_json_snapshot!(cleaned);
 }
 
 #[test]
@@ -110,34 +42,8 @@ fn golden_multi_file_keeps_sources() {
     };
 
     let result = analyze(&request);
-    let summary = summarize_tables(&result);
-
-    let mut statements = summary["statements"]
-        .as_array()
-        .cloned()
-        .expect("statements array");
-    statements.sort_by(|a, b| {
-        a["source"]
-            .as_str()
-            .unwrap_or_default()
-            .cmp(b["source"].as_str().unwrap_or_default())
-    });
-
-    let expected = vec![
-        json!({
-            "statementType": "SELECT",
-            "source": "alpha.sql",
-            "tables": ["alpha_table"],
-        }),
-        json!({
-            "statementType": "SELECT",
-            "source": "beta.sql",
-            "tables": ["beta_table"],
-        }),
-    ];
-
-    assert_eq!(statements, expected);
-    assert!(!summary["summary"]["hasErrors"].as_bool().unwrap());
+    let cleaned = prepare_for_snapshot(result);
+    assert_json_snapshot!(cleaned);
 }
 
 #[test]
@@ -152,15 +58,8 @@ fn golden_column_lineage_union_captures_outputs() {
     };
 
     let result = analyze(&request);
-    let columns = collect_columns(&result);
-    let tables = summarize_tables(&result);
-
-    assert_eq!(columns, vec!["id", "name"]);
-    assert_eq!(
-        tables["statements"][0]["tables"],
-        json!(["admins", "users"])
-    );
-    assert!(!result.summary.has_errors);
+    let cleaned = prepare_for_snapshot(result);
+    assert_json_snapshot!(cleaned);
 }
 
 #[test]
@@ -175,10 +74,8 @@ fn golden_window_functions_emit_columns() {
     };
 
     let result = analyze(&request);
-    let columns = collect_columns(&result);
-
-    assert_eq!(columns, vec!["id", "rn"]);
-    assert!(!result.summary.has_errors);
+    let cleaned = prepare_for_snapshot(result);
+    assert_json_snapshot!(cleaned);
 }
 
 #[test]
@@ -193,18 +90,13 @@ fn golden_ctas_captures_target_columns() {
     };
 
     let result = analyze(&request);
-    let columns = collect_columns(&result);
-    let tables = summarize_tables(&result);
-
-    assert!(columns.contains(&"id".to_string()));
-    assert!(columns.contains(&"upper_name".to_string()));
-    assert_eq!(tables["statements"][0]["tables"], json!(["tgt", "users"]));
-    assert!(!result.summary.has_errors);
+    let cleaned = prepare_for_snapshot(result);
+    assert_json_snapshot!(cleaned);
 }
 
 #[test]
 fn golden_resolved_schema_with_imported_and_implied() {
-    use flowscope_core::{ColumnSchema, SchemaMetadata, SchemaOrigin, SchemaTable};
+    use flowscope_core::{ColumnSchema, SchemaMetadata, SchemaTable};
 
     let request = AnalyzeRequest {
         sql: r#"
@@ -242,48 +134,13 @@ fn golden_resolved_schema_with_imported_and_implied() {
     };
 
     let result = analyze(&request);
-
-    // Should have resolvedSchema with 3 tables
-    let resolved = result.resolved_schema.expect("Should have resolved schema");
-    assert_eq!(resolved.tables.len(), 3);
-
-    // Find each table and verify origin
-    let users_table = resolved
-        .tables
-        .iter()
-        .find(|t| t.name == "users")
-        .expect("Should have users table");
-    assert_eq!(users_table.origin, SchemaOrigin::Imported);
-    assert_eq!(users_table.columns.len(), 2);
-    assert!(users_table.columns.iter().any(|c| c.name == "id"));
-    assert!(users_table.columns.iter().any(|c| c.name == "username"));
-
-    let orders_table = resolved
-        .tables
-        .iter()
-        .find(|t| t.name == "orders")
-        .expect("Should have orders table");
-    assert_eq!(orders_table.origin, SchemaOrigin::Implied);
-    assert_eq!(orders_table.columns.len(), 2);
-    assert!(orders_table.columns.iter().any(|c| c.name == "order_id"));
-    assert!(orders_table.columns.iter().any(|c| c.name == "amount"));
-    assert_eq!(orders_table.source_statement_index, Some(0));
-
-    let high_orders_view = resolved
-        .tables
-        .iter()
-        .find(|t| t.name == "high_orders")
-        .expect("Should have high_orders view");
-    assert_eq!(high_orders_view.origin, SchemaOrigin::Implied);
-    assert_eq!(high_orders_view.columns.len(), 2);
-    assert_eq!(high_orders_view.source_statement_index, Some(1));
-
-    assert!(!result.summary.has_errors);
+    let cleaned = prepare_for_snapshot(result);
+    assert_json_snapshot!(cleaned);
 }
 
 #[test]
 fn golden_imported_precedence_over_create_table() {
-    use flowscope_core::{ColumnSchema, SchemaMetadata, SchemaOrigin, SchemaTable};
+    use flowscope_core::{ColumnSchema, SchemaMetadata, SchemaTable};
 
     let request = AnalyzeRequest {
         sql: "CREATE TABLE products (product_id INT, name TEXT, extra_col TEXT);".to_string(),
@@ -316,40 +173,14 @@ fn golden_imported_precedence_over_create_table() {
     };
 
     let result = analyze(&request);
-
-    // Should have resolvedSchema with products from imported schema
-    let resolved = result.resolved_schema.expect("Should have resolved schema");
-    assert_eq!(resolved.tables.len(), 1);
-
-    let products_table = &resolved.tables[0];
-    assert_eq!(products_table.name, "products");
-    assert_eq!(products_table.origin, SchemaOrigin::Imported);
-    assert_eq!(products_table.columns.len(), 2); // Only imported columns
-
-    // Should NOT have extra_col from DDL
-    assert!(!products_table.columns.iter().any(|c| c.name == "extra_col"));
-    assert!(products_table
-        .columns
-        .iter()
-        .any(|c| c.name == "imported_col"));
-
-    // Should have a SCHEMA_CONFLICT warning
-    let conflict_warnings: Vec<_> = result
-        .issues
-        .iter()
-        .filter(|i| {
-            i.severity == flowscope_core::Severity::Warning
-                && i.code == flowscope_core::issue_codes::SCHEMA_CONFLICT
-        })
-        .collect();
-    assert_eq!(conflict_warnings.len(), 1);
+    let cleaned = prepare_for_snapshot(result);
+    assert_json_snapshot!(cleaned);
 }
 
 #[test]
 fn imported_schema_preserves_qualified_names() {
     use flowscope_core::{
-        analyze, issue_codes, AnalyzeRequest, CaseSensitivity, ColumnSchema, Dialect,
-        SchemaMetadata, SchemaOrigin, SchemaTable,
+        AnalyzeRequest, CaseSensitivity, ColumnSchema, Dialect, SchemaMetadata, SchemaTable,
     };
 
     let request = AnalyzeRequest {
@@ -383,40 +214,13 @@ fn imported_schema_preserves_qualified_names() {
     };
 
     let result = analyze(&request);
-
-    // Ensure imported schema keys match fully qualified references (no UNKNOWN_* issues).
-    assert!(
-        result.issues.iter().all(|i| {
-            i.code != issue_codes::UNKNOWN_TABLE && i.code != issue_codes::UNKNOWN_COLUMN
-        }),
-        "Unexpected schema issues: {:?}",
-        result
-            .issues
-            .iter()
-            .map(|i| (&i.code, &i.message))
-            .collect::<Vec<_>>()
-    );
-
-    let resolved = result
-        .resolved_schema
-        .expect("Should produce resolved schema");
-    let users = resolved
-        .tables
-        .iter()
-        .find(|t| t.schema.as_deref() == Some("public") && t.name == "users")
-        .expect("Should keep public.users qualified");
-
-    assert_eq!(users.origin, SchemaOrigin::Imported);
-    assert!(users.columns.iter().any(|c| c.name == "id"));
-    assert!(users.columns.iter().any(|c| c.name == "email"));
+    let cleaned = prepare_for_snapshot(result);
+    assert_json_snapshot!(cleaned);
 }
 
 #[test]
 fn imported_schema_resolves_via_default_schema() {
-    use flowscope_core::{
-        analyze, issue_codes, AnalyzeRequest, ColumnSchema, Dialect, SchemaMetadata, SchemaOrigin,
-        SchemaTable,
-    };
+    use flowscope_core::{AnalyzeRequest, ColumnSchema, Dialect, SchemaMetadata, SchemaTable};
 
     let request = AnalyzeRequest {
         sql: "SELECT id, email FROM users".to_string(),
@@ -449,39 +253,14 @@ fn imported_schema_resolves_via_default_schema() {
     };
 
     let result = analyze(&request);
-
-    // With default_schema provided, unqualified references should match imported schema.
-    assert!(
-        result.issues.iter().all(|i| {
-            i.code != issue_codes::UNKNOWN_TABLE && i.code != issue_codes::UNKNOWN_COLUMN
-        }),
-        "Unexpected schema issues: {:?}",
-        result
-            .issues
-            .iter()
-            .map(|i| (&i.code, &i.message))
-            .collect::<Vec<_>>()
-    );
-
-    let resolved = result
-        .resolved_schema
-        .expect("Should produce resolved schema");
-    let users = resolved
-        .tables
-        .iter()
-        .find(|t| t.schema.as_deref() == Some("public") && t.name == "users")
-        .expect("Should resolve users via default schema");
-
-    assert_eq!(users.origin, SchemaOrigin::Imported);
-    assert!(users.columns.iter().any(|c| c.name == "id"));
-    assert!(users.columns.iter().any(|c| c.name == "email"));
+    let cleaned = prepare_for_snapshot(result);
+    assert_json_snapshot!(cleaned);
 }
 
 #[test]
 fn imported_schema_resolves_via_search_path_with_catalog() {
     use flowscope_core::{
-        analyze, issue_codes, AnalyzeRequest, ColumnSchema, Dialect, SchemaMetadata,
-        SchemaNamespaceHint, SchemaOrigin, SchemaTable,
+        AnalyzeRequest, ColumnSchema, Dialect, SchemaMetadata, SchemaNamespaceHint, SchemaTable,
     };
 
     let request = AnalyzeRequest {
@@ -512,33 +291,6 @@ fn imported_schema_resolves_via_search_path_with_catalog() {
     };
 
     let result = analyze(&request);
-
-    // Unqualified reference should be resolved via search_path (catalog + schema).
-    assert!(
-        result.issues.iter().all(|i| {
-            i.code != issue_codes::UNKNOWN_TABLE && i.code != issue_codes::UNKNOWN_COLUMN
-        }),
-        "Unexpected schema issues: {:?}",
-        result
-            .issues
-            .iter()
-            .map(|i| (&i.code, &i.message))
-            .collect::<Vec<_>>()
-    );
-
-    let resolved = result
-        .resolved_schema
-        .expect("Should produce resolved schema");
-    let reports = resolved
-        .tables
-        .iter()
-        .find(|t| {
-            t.catalog.as_deref() == Some("sales")
-                && t.schema.as_deref() == Some("analytics")
-                && t.name == "reports"
-        })
-        .expect("Should resolve reports via search_path");
-
-    assert_eq!(reports.origin, SchemaOrigin::Imported);
-    assert!(reports.columns.iter().any(|c| c.name == "amount"));
+    let cleaned = prepare_for_snapshot(result);
+    assert_json_snapshot!(cleaned);
 }
