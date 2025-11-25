@@ -19,6 +19,7 @@ use super::Analyzer;
 use crate::types::{issue_codes, FilterClauseType, Issue};
 use sqlparser::ast::{self, SelectItem, TableFactor, TableWithJoins};
 use std::collections::HashSet;
+use std::sync::Arc;
 
 /// Analyzes SELECT statements to build column-level lineage graphs.
 ///
@@ -107,7 +108,7 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
         &mut self,
         table_name: &str,
         alias: Option<&ast::TableAlias>,
-    ) -> Option<(String, String)> {
+    ) -> Option<(String, Arc<str>)> {
         let canonical_res = self.add_source_table(table_name, None);
         let canonical = canonical_res
             .clone()
@@ -132,7 +133,7 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
     ///
     /// If the factor is a simple table reference, processes it as a DML target.
     /// Otherwise, falls back to standard table factor analysis.
-    pub(crate) fn analyze_dml_target_factor(&mut self, table: &TableFactor) -> Option<String> {
+    pub(crate) fn analyze_dml_target_factor(&mut self, table: &TableFactor) -> Option<Arc<str>> {
         if let TableFactor::Table { name, alias, .. } = table {
             let table_name = name.to_string();
             self.analyze_dml_target(&table_name, alias.as_ref())
@@ -153,7 +154,7 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
     pub(crate) fn analyze_dml_target_from_table_with_joins(
         &mut self,
         table: &TableWithJoins,
-    ) -> Option<String> {
+    ) -> Option<Arc<str>> {
         if let TableFactor::Table { name, alias, .. } = &table.relation {
             let table_name = name.to_string();
             self.analyze_dml_target(&table_name, alias.as_ref())

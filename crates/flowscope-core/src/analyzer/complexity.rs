@@ -81,7 +81,7 @@ mod tests {
 
     #[test]
     fn test_single_table() {
-        let nodes = vec![Node::table("t1".into(), "users".into())];
+        let nodes = vec![Node::table("t1", "users")];
         assert_eq!(calculate_complexity(&nodes), 5);
         assert_eq!(count_joins(&nodes), 0);
     }
@@ -89,8 +89,8 @@ mod tests {
     #[test]
     fn test_table_with_join() {
         let nodes = vec![
-            Node::table("t1".into(), "users".into()),
-            Node::table("t2".into(), "orders".into()).with_join_type(JoinType::Inner),
+            Node::table("t1", "users"),
+            Node::table("t2", "orders").with_join_type(JoinType::Inner),
         ];
         assert_eq!(count_joins(&nodes), 1);
         // 2 tables (10) + 1 join (10) = 20
@@ -100,10 +100,10 @@ mod tests {
     #[test]
     fn test_complex_query() {
         let nodes = vec![
-            Node::table("t1".into(), "users".into()),
-            Node::table("t2".into(), "orders".into()).with_join_type(JoinType::Left),
-            Node::table("t3".into(), "products".into()).with_join_type(JoinType::Left),
-            Node::cte("c1".into(), "active_users".into()),
+            Node::table("t1", "users"),
+            Node::table("t2", "orders").with_join_type(JoinType::Left),
+            Node::table("t3", "products").with_join_type(JoinType::Left),
+            Node::cte("c1", "active_users"),
         ];
         // 3 tables (15) + 1 CTE (8) + 2 joins (20) = 43
         assert_eq!(calculate_complexity(&nodes), 43);
@@ -113,8 +113,8 @@ mod tests {
     #[test]
     fn test_cross_join_higher_weight() {
         let nodes = vec![
-            Node::table("t1".into(), "users".into()),
-            Node::table("t2".into(), "dates".into()).with_join_type(JoinType::Cross),
+            Node::table("t1", "users"),
+            Node::table("t2", "dates").with_join_type(JoinType::Cross),
         ];
         // 2 tables (10) + 1 cross join (15) = 25
         assert_eq!(calculate_complexity(&nodes), 25);

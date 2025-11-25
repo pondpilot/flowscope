@@ -19,7 +19,7 @@ fn test_simple_select() {
     assert_eq!(result.statements.len(), 1);
     assert_eq!(result.statements[0].statement_type, "SELECT");
     assert_eq!(result.statements[0].nodes.len(), 1);
-    assert_eq!(result.statements[0].nodes[0].label, "users");
+    assert_eq!(&*result.statements[0].nodes[0].label, "users");
     assert_eq!(result.statements[0].nodes[0].node_type, NodeType::Table);
     assert!(!result.summary.has_errors);
 }

@@ -8,6 +8,7 @@ mod common;
 mod legacy;
 mod request;
 mod response;
+pub mod serde_utils;
 
 // Re-export all public types
 pub use common::{issue_codes, CaseSensitivity, Issue, IssueCount, Severity, Span, Summary};

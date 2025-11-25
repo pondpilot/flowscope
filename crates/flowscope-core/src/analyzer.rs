@@ -17,6 +17,7 @@ mod query;
 mod resolution;
 mod select;
 mod statements;
+pub mod visitor;
 
 use input::{collect_statements, StatementInput};
 

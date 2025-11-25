@@ -110,8 +110,8 @@ impl<'a> Analyzer<'a> {
         let target_id = ctx.add_node(Node {
             id: generate_node_id("table", &canonical),
             node_type: NodeType::Table,
-            label: extract_simple_name(&target_name),
-            qualified_name: Some(canonical.clone()),
+            label: extract_simple_name(&target_name).into(),
+            qualified_name: Some(canonical.clone().into()),
             expression: None,
             span: None,
             metadata: None,
@@ -209,8 +209,8 @@ impl<'a> Analyzer<'a> {
         ctx.add_node(Node {
             id: node_id.clone(),
             node_type: NodeType::Table,
-            label: extract_simple_name(&target_name),
-            qualified_name: Some(canonical.clone()),
+            label: extract_simple_name(&target_name).into(),
+            qualified_name: Some(canonical.clone().into()),
             expression: None,
             span: None,
             metadata: None,
@@ -246,8 +246,8 @@ impl<'a> Analyzer<'a> {
         let target_id = ctx.add_node(Node {
             id: generate_node_id("table", &canonical),
             node_type: NodeType::Table, // Represent views as tables for now
-            label: extract_simple_name(&target_name),
-            qualified_name: Some(canonical.clone()),
+            label: extract_simple_name(&target_name).into(),
+            qualified_name: Some(canonical.clone().into()),
             expression: None,
             span: None,
             metadata: None,

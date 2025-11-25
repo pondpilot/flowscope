@@ -32,12 +32,12 @@ fn test_alias_shadowing_in_subquery() {
     let t1_nodes: Vec<_> = result.statements[0]
         .nodes
         .iter()
-        .filter(|n| n.label == "t1")
+        .filter(|n| &*n.label == "t1")
         .collect();
     let t2_nodes: Vec<_> = result.statements[0]
         .nodes
         .iter()
-        .filter(|n| n.label == "t2")
+        .filter(|n| &*n.label == "t2")
         .collect();
 
     assert!(!t1_nodes.is_empty(), "t1 should be present");
@@ -139,7 +139,7 @@ fn new_tables_are_known_when_implied_schema_disabled() {
         .collect();
 
     assert_eq!(select_tables.len(), 1, "SELECT should reference foo once");
-    assert_eq!(select_tables[0].label, "foo");
+    assert_eq!(&*select_tables[0].label, "foo");
     assert!(
         select_tables[0]
             .metadata

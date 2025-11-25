@@ -15,6 +15,7 @@ use crate::types::{
 use serde_json::json;
 use sqlparser::ast::{self, Query, SetExpr, Statement};
 use std::collections::HashMap;
+use std::sync::Arc;
 
 /// Represents the information needed to add an expanded column during wildcard expansion.
 struct ExpandedColumnInfo {
@@ -47,7 +48,7 @@ impl<'a, 'b> CteAnalyzer<'a, 'b> {
 
     fn analyze(&mut self, ctes: &[ast::Cte]) {
         // Pass 1: register all CTE names/nodes up front to allow forward and mutual references.
-        let mut cte_ids: Vec<(String, String)> = Vec::new();
+        let mut cte_ids: Vec<(String, Arc<str>)> = Vec::new();
         for cte in ctes {
             let cte_name = cte.alias.name.to_string();
 
@@ -55,8 +56,8 @@ impl<'a, 'b> CteAnalyzer<'a, 'b> {
             let cte_id = self.ctx.add_node(Node {
                 id: generate_node_id("cte", &cte_name),
                 node_type: NodeType::Cte,
-                label: cte_name.clone(),
-                qualified_name: Some(cte_name.clone()),
+                label: cte_name.clone().into(),
+                qualified_name: Some(cte_name.clone().into()),
                 expression: None,
                 span: None,
                 metadata: None,
@@ -231,13 +232,17 @@ impl<'a> Analyzer<'a> {
 
                 // Get join type directly from context (already converted from AST)
                 let join_type = ctx.current_join_info.join_type;
-                let join_condition = ctx.current_join_info.join_condition.clone();
+                let join_condition = ctx
+                    .current_join_info
+                    .join_condition
+                    .as_deref()
+                    .map(Into::into);
 
                 ctx.add_node(Node {
                     id: id.clone(),
                     node_type: NodeType::Table,
-                    label: crate::analyzer::helpers::extract_simple_name(&canonical),
-                    qualified_name: Some(canonical.clone()),
+                    label: crate::analyzer::helpers::extract_simple_name(&canonical).into(),
+                    qualified_name: Some(canonical.clone().into()),
                     expression: None,
                     span: None,
                     metadata,
@@ -268,12 +273,16 @@ impl<'a> Analyzer<'a> {
                 ctx.add_edge(Edge {
                     id: edge_id,
                     from: source_id,
-                    to: target.to_string(),
+                    to: target.to_string().into(),
                     edge_type: EdgeType::DataFlow,
                     expression: None,
-                    operation: ctx.last_operation.clone(),
+                    operation: ctx.last_operation.as_deref().map(Into::into),
                     join_type: ctx.current_join_info.join_type,
-                    join_condition: ctx.current_join_info.join_condition.clone(),
+                    join_condition: ctx
+                        .current_join_info
+                        .join_condition
+                        .as_deref()
+                        .map(Into::into),
                     metadata: None,
                     approximate: None,
                 });
@@ -299,8 +308,8 @@ impl<'a> Analyzer<'a> {
                 let col_node = Node {
                     id: col_node_id.clone(),
                     node_type: NodeType::Column,
-                    label: col.name.clone(),
-                    qualified_name: Some(format!("{}.{}", table_canonical, col.name)),
+                    label: col.name.clone().into(),
+                    qualified_name: Some(format!("{}.{}", table_canonical, col.name).into()),
                     expression: None,
                     span: None,
                     metadata: None,
@@ -317,7 +326,7 @@ impl<'a> Analyzer<'a> {
                 if !ctx.edge_ids.contains(&edge_id) {
                     ctx.add_edge(Edge {
                         id: edge_id,
-                        from: table_node_id.to_string(),
+                        from: table_node_id.to_string().into(),
                         to: col_node_id,
                         edge_type: EdgeType::Ownership,
                         expression: None,
@@ -403,7 +412,7 @@ impl<'a> Analyzer<'a> {
                             ctx.add_edge(Edge {
                                 id: edge_id,
                                 from: source_node_id.clone(),
-                                to: target.to_string(),
+                                to: target.to_string().into(),
                                 edge_type: EdgeType::DataFlow,
                                 expression: None,
                                 operation: None,
@@ -583,9 +592,9 @@ impl<'a> Analyzer<'a> {
         let col_node = Node {
             id: node_id.clone(),
             node_type: NodeType::Column,
-            label: normalized_name.clone(),
+            label: normalized_name.clone().into(),
             qualified_name: None, // Will be set if we have target table
-            expression: params.expression.clone(),
+            expression: params.expression.as_deref().map(Into::into),
             span: None,
             metadata: params.data_type.as_ref().map(|dt| {
                 let mut m = HashMap::new();
@@ -606,7 +615,7 @@ impl<'a> Analyzer<'a> {
             if !ctx.edge_ids.contains(&edge_id) {
                 ctx.add_edge(Edge {
                     id: edge_id,
-                    from: target.to_string(),
+                    from: target.to_string().into(),
                     to: node_id.clone(),
                     edge_type: EdgeType::Ownership,
                     expression: None,
@@ -657,8 +666,8 @@ impl<'a> Analyzer<'a> {
                 let source_col_node = Node {
                     id: source_col_id.clone(),
                     node_type: NodeType::Column,
-                    label: source.column.clone(),
-                    qualified_name: Some(format!("{}.{}", table_canonical, source.column)),
+                    label: source.column.clone().into(),
+                    qualified_name: Some(format!("{}.{}", table_canonical, source.column).into()),
                     expression: None,
                     span: None,
                     metadata: None,
@@ -700,7 +709,7 @@ impl<'a> Analyzer<'a> {
                         from: source_col_id,
                         to: node_id.clone(),
                         edge_type,
-                        expression: params.expression.clone(),
+                        expression: params.expression.as_deref().map(Into::into),
                         operation: None,
                         join_type: None,
                         join_condition: None,

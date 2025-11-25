@@ -16,6 +16,7 @@ use sqlparser::ast::{
     self, Assignment, Expr, FromTable, MergeAction, MergeClause, MergeInsertKind, ObjectName,
     Statement, TableFactor, TableWithJoins,
 };
+use std::sync::Arc;
 #[cfg(feature = "tracing")]
 use tracing::{info, info_span};
 
@@ -135,8 +136,8 @@ impl<'a> Analyzer<'a> {
         let target_id = ctx.add_node(Node {
             id: generate_node_id("table", &canonical),
             node_type: NodeType::Table,
-            label: extract_simple_name(&target_name),
-            qualified_name: Some(canonical.clone()),
+            label: extract_simple_name(&target_name).into(),
+            qualified_name: Some(canonical.clone().into()),
             expression: None,
             span: None,
             metadata: None,
@@ -201,7 +202,7 @@ impl<'a> Analyzer<'a> {
         using: &Option<Vec<TableWithJoins>>,
         selection: &Option<Expr>,
     ) {
-        let mut target_ids = Vec::new();
+        let mut target_ids: Vec<Arc<str>> = Vec::new();
 
         // Scope for SelectAnalyzer usage
         {

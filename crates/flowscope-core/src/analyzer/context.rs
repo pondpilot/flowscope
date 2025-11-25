@@ -1,5 +1,6 @@
 use crate::types::{Edge, FilterClauseType, FilterPredicate, JoinType, Node};
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 /// Represents a single scope level for column resolution.
 /// Each SELECT/subquery/CTE body gets its own scope.
@@ -7,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 pub(crate) struct Scope {
     /// Tables directly referenced in this scope's FROM/JOIN clauses
     /// Maps canonical table name -> node ID
-    pub(crate) tables: HashMap<String, String>,
+    pub(crate) tables: HashMap<String, Arc<str>>,
     /// Aliases defined in this scope (alias -> canonical name)
     pub(crate) aliases: HashMap<String, String>,
     /// Subquery aliases in this scope
@@ -34,10 +35,10 @@ pub(crate) struct StatementContext {
     pub(crate) statement_index: usize,
     pub(crate) nodes: Vec<Node>,
     pub(crate) edges: Vec<Edge>,
-    pub(crate) node_ids: HashSet<String>,
-    pub(crate) edge_ids: HashSet<String>,
+    pub(crate) node_ids: HashSet<Arc<str>>,
+    pub(crate) edge_ids: HashSet<Arc<str>>,
     /// CTE name -> node ID
-    pub(crate) cte_definitions: HashMap<String, String>,
+    pub(crate) cte_definitions: HashMap<String, Arc<str>>,
     /// Alias -> canonical table name (global, for backwards compatibility)
     pub(crate) table_aliases: HashMap<String, String>,
     /// Subquery aliases (for reference tracking)
@@ -47,7 +48,7 @@ pub(crate) struct StatementContext {
     /// Current join information (type + condition) for edge labeling
     pub(crate) current_join_info: JoinInfo,
     /// Table canonical name -> node ID (for column ownership) - global registry
-    pub(crate) table_node_ids: HashMap<String, String>,
+    pub(crate) table_node_ids: HashMap<String, Arc<str>>,
     /// Output columns for this statement (for column lineage)
     pub(crate) output_columns: Vec<OutputColumn>,
     /// CTE columns: CTE name -> list of output columns
@@ -79,7 +80,7 @@ pub(crate) struct OutputColumn {
     /// Inferred data type of the column
     pub(crate) data_type: Option<String>,
     /// Node ID for this column
-    pub(crate) node_id: String,
+    pub(crate) node_id: Arc<str>,
 }
 
 /// A reference to a source column
@@ -150,7 +151,7 @@ impl StatementContext {
             });
     }
 
-    pub(crate) fn add_node(&mut self, node: Node) -> String {
+    pub(crate) fn add_node(&mut self, node: Node) -> Arc<str> {
         let id = node.id.clone();
         if self.node_ids.insert(id.clone()) {
             self.nodes.push(node);
@@ -186,7 +187,7 @@ impl StatementContext {
     }
 
     /// Register a table in the current scope
-    pub(crate) fn register_table_in_scope(&mut self, canonical: String, node_id: String) {
+    pub(crate) fn register_table_in_scope(&mut self, canonical: String, node_id: Arc<str>) {
         // Always register in global table_node_ids for node lookups
         self.table_node_ids
             .insert(canonical.clone(), node_id.clone());

@@ -4,6 +4,7 @@
 
 use flowscope_core::{AnalyzeResult, EdgeType, NodeType};
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 /// View mode for Mermaid diagrams
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,8 +47,8 @@ fn escape_label(label: &str) -> String {
 #[derive(Debug)]
 struct ScriptInfo {
     source_name: String,
-    tables_read: HashSet<String>,
-    tables_written: HashSet<String>,
+    tables_read: HashSet<Arc<str>>,
+    tables_written: HashSet<Arc<str>>,
 }
 
 /// Extract script information from statements
@@ -147,19 +148,16 @@ fn extract_column_mappings(result: &AnalyzeResult) -> Vec<ColumnMapping> {
 
                 if let (Some(source), Some(target)) = (source_col, target_col) {
                     let source_table = column_to_table
-                        .get(edge.from.as_str())
+                        .get(&*edge.from)
                         .copied()
                         .unwrap_or("Output");
-                    let target_table = column_to_table
-                        .get(edge.to.as_str())
-                        .copied()
-                        .unwrap_or("Output");
+                    let target_table = column_to_table.get(&*edge.to).copied().unwrap_or("Output");
 
                     mappings.push(ColumnMapping {
                         source_table: source_table.to_string(),
-                        source_column: source.label.clone(),
+                        source_column: source.label.to_string(),
                         target_table: target_table.to_string(),
-                        target_column: target.label.clone(),
+                        target_column: target.label.to_string(),
                         edge_type: edge.edge_type,
                     });
                 }
@@ -199,19 +197,21 @@ fn generate_script_view(result: &AnalyzeResult) -> String {
                 let producer_id = sanitize_id(&producer.source_name);
                 let consumer_id = sanitize_id(&consumer.source_name);
                 let label: String = if shared_tables.len() > 3 {
-                    let first_three: Vec<_> =
-                        shared_tables.iter().take(3).map(|s| s.as_str()).collect();
+                    let first_three: Vec<&str> =
+                        shared_tables.iter().take(3).map(|s| s.as_ref()).collect();
                     format!("{}...", first_three.join(", "))
                 } else {
                     shared_tables
                         .iter()
-                        .map(|s| s.as_str())
-                        .collect::<Vec<_>>()
+                        .map(|s| s.as_ref())
+                        .collect::<Vec<&str>>()
                         .join(", ")
                 };
                 lines.push(format!(
-                    "    {producer_id} -->|\"{}\"| {consumer_id}",
-                    escape_label(&label)
+                    "    {} -->|\"{}\"| {}",
+                    producer_id,
+                    escape_label(&label),
+                    consumer_id
                 ));
             }
         }
@@ -223,7 +223,7 @@ fn generate_script_view(result: &AnalyzeResult) -> String {
 /// Generate Mermaid diagram for table-level view
 fn generate_table_view(result: &AnalyzeResult) -> String {
     let mut lines = vec!["flowchart LR".to_string()];
-    let mut table_ids: HashMap<String, String> = HashMap::new();
+    let mut table_ids: HashMap<Arc<str>, String> = HashMap::new();
     let mut edges: HashSet<String> = HashSet::new();
 
     for stmt in &result.statements {
@@ -239,9 +239,9 @@ fn generate_table_view(result: &AnalyzeResult) -> String {
                 .qualified_name
                 .clone()
                 .unwrap_or_else(|| node.label.clone());
-            if !table_ids.contains_key(&key) {
+            if let std::collections::hash_map::Entry::Vacant(e) = table_ids.entry(key.clone()) {
                 let id = sanitize_id(&key);
-                table_ids.insert(key.clone(), id.clone());
+                e.insert(id.clone());
                 let shape = if node.node_type == NodeType::Cte {
                     format!("([\"{}\"])", escape_label(&node.label))
                 } else {
@@ -306,7 +306,8 @@ fn generate_column_view(result: &AnalyzeResult) -> String {
         if !nodes.contains(&source_id) {
             nodes.insert(source_id.clone());
             lines.push(format!(
-                "    {source_id}[\"{}\"]",
+                "    {}[\"{}\"]",
+                source_id,
                 escape_label(&source_label)
             ));
         }
@@ -314,7 +315,8 @@ fn generate_column_view(result: &AnalyzeResult) -> String {
         if !nodes.contains(&target_id) {
             nodes.insert(target_id.clone());
             lines.push(format!(
-                "    {target_id}[\"{}\"]",
+                "    {}[\"{}\"]",
+                target_id,
                 escape_label(&target_label)
             ));
         }
@@ -338,23 +340,20 @@ fn generate_column_view(result: &AnalyzeResult) -> String {
 fn generate_hybrid_view(result: &AnalyzeResult) -> String {
     let mut lines = vec!["flowchart LR".to_string()];
     let scripts = extract_script_info(result);
-    let mut all_tables: HashSet<String> = HashSet::new();
+    let mut all_tables: HashSet<Arc<str>> = HashSet::new();
 
     // Collect all tables
     for script in &scripts {
-        for t in &script.tables_read {
-            all_tables.insert(t.clone());
-        }
-        for t in &script.tables_written {
-            all_tables.insert(t.clone());
-        }
+        all_tables.extend(script.tables_read.iter().cloned());
+        all_tables.extend(script.tables_written.iter().cloned());
     }
 
     // Add script nodes
     for script in &scripts {
         let id = sanitize_id(&format!("script_{}", script.source_name));
         lines.push(format!(
-            "    {id}{{{{\"{}\"}}}}",
+            "    {}{{{{\"{}\"}}}}",
+            id,
             escape_label(&script.source_name)
         ));
     }

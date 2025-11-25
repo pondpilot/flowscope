@@ -5,6 +5,7 @@ use crate::types::{
     ResolvedSchemaMetadata, ResolvedSchemaTable, StatementRef, Summary,
 };
 use std::collections::HashMap;
+use std::sync::Arc;
 
 impl<'a> Analyzer<'a> {
     pub(super) fn build_result(&self) -> crate::AnalyzeResult {
@@ -61,7 +62,7 @@ impl<'a> Analyzer<'a> {
     }
 
     pub(super) fn build_global_lineage(&self) -> GlobalLineage {
-        let mut global_nodes: HashMap<String, GlobalNode> = HashMap::new();
+        let mut global_nodes: HashMap<Arc<str>, GlobalNode> = HashMap::new();
         let mut global_edges: Vec<GlobalEdge> = Vec::new();
 
         // Collect all nodes from all statements
@@ -117,7 +118,7 @@ impl<'a> Analyzer<'a> {
                         // This is a cross-statement dependency
                         let edge_id = format!("cross_{producer_idx}_{consumer_idx}");
                         global_edges.push(GlobalEdge {
-                            id: edge_id,
+                            id: edge_id.into(),
                             from: generate_node_id("table", table_name),
                             to: generate_node_id("table", table_name),
                             edge_type: EdgeType::CrossStatement,

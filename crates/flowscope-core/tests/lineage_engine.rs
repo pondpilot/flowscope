@@ -56,11 +56,8 @@ fn collect_table_names(result: &AnalyzeResult) -> HashSet<String> {
     for statement in &result.statements {
         for node in &statement.nodes {
             if node.node_type == NodeType::Table {
-                let name = node
-                    .qualified_name
-                    .clone()
-                    .unwrap_or_else(|| node.label.clone());
-                tables.insert(name);
+                let name = node.qualified_name.as_ref().unwrap_or(&node.label);
+                tables.insert(name.to_string());
             }
         }
     }
@@ -99,7 +96,7 @@ fn column_labels(lineage: &StatementLineage) -> Vec<String> {
         .nodes
         .iter()
         .filter(|node| node.node_type == NodeType::Column)
-        .map(|node| node.label.clone())
+        .map(|node| node.label.to_string())
         .collect()
 }
 
@@ -108,7 +105,7 @@ fn collect_cte_names(result: &AnalyzeResult) -> HashSet<String> {
     for stmt in &result.statements {
         for node in &stmt.nodes {
             if node.node_type == NodeType::Cte {
-                ctes.insert(node.label.clone());
+                ctes.insert(node.label.to_string());
             }
         }
     }
@@ -133,20 +130,20 @@ fn edges_by_type<'a>(lineage: &'a StatementLineage, edge_type: EdgeType) -> Vec<
 
 #[allow(dead_code)]
 fn find_node_by_label<'a>(lineage: &'a StatementLineage, label: &str) -> Option<&'a Node> {
-    lineage.nodes.iter().find(|node| node.label == label)
+    lineage.nodes.iter().find(|node| &*node.label == label)
 }
 
 fn find_column_node<'a>(lineage: &'a StatementLineage, label: &str) -> Option<&'a Node> {
     lineage
         .nodes
         .iter()
-        .find(|node| node.node_type == NodeType::Column && node.label == label)
+        .find(|node| node.node_type == NodeType::Column && &*node.label == label)
 }
 
 fn find_table_node<'a>(lineage: &'a StatementLineage, name: &str) -> Option<&'a Node> {
     lineage.nodes.iter().find(|node| {
         node.node_type == NodeType::Table
-            && (node.label == name || node.qualified_name.as_deref() == Some(name))
+            && (&*node.label == name || node.qualified_name.as_deref() == Some(name))
     })
 }
 
@@ -314,13 +311,13 @@ fn recursive_ctes_produce_lineage_without_warnings() {
     let cte_node = stmt
         .nodes
         .iter()
-        .find(|n| n.node_type == NodeType::Cte && n.label == "org_hierarchy")
+        .find(|n| n.node_type == NodeType::Cte && &*n.label == "org_hierarchy")
         .expect("cte node should be present");
 
     let employees_node = stmt
         .nodes
         .iter()
-        .find(|n| n.node_type == NodeType::Table && n.label == "employees")
+        .find(|n| n.node_type == NodeType::Table && &*n.label == "employees")
         .expect("base table should be present");
 
     let has_self_edge = stmt
@@ -2828,7 +2825,7 @@ fn column_lineage_cte_transformation_chain_with_reuse() {
     let transformed_cte = stmt
         .nodes
         .iter()
-        .find(|n| n.node_type == NodeType::Cte && n.label == "transformed");
+        .find(|n| n.node_type == NodeType::Cte && &*n.label == "transformed");
 
     assert!(users_table.is_some(), "users table node should exist");
     assert!(
@@ -3001,7 +2998,7 @@ fn column_lineage_cte_transformation_chain_with_reuse() {
                     .collect();
 
                 columns_by_name
-                    .entry(node.label.clone())
+                    .entry(node.label.to_string())
                     .or_insert_with(Vec::new)
                     .push((node, owners));
             }
@@ -3031,13 +3028,13 @@ fn column_lineage_cte_transformation_chain_with_reuse() {
             .filter_map(|e| stmt.nodes.iter().find(|n| n.id == e.to))
             .collect();
 
-        let users_col_names: Vec<_> = users_owned_cols.iter().map(|n| n.label.as_str()).collect();
+        let users_col_names: Vec<_> = users_owned_cols.iter().map(|n| &*n.label).collect();
         eprintln!("\nusers owns: {:?}", users_col_names);
 
         // BUG: users should NOT own name_upper or email_lower (these are derived in CTE)
         for col in &users_owned_cols {
             assert!(
-                col.label != "name_upper" && col.label != "email_lower",
+                &*col.label != "name_upper" && &*col.label != "email_lower",
                 "🐛 BUG DETECTED: users table incorrectly owns derived column '{}' (should only be in transformed CTE)",
                 col.label
             );
@@ -3047,7 +3044,7 @@ fn column_lineage_cte_transformation_chain_with_reuse() {
         let transformed_col_names: Vec<_> = transformed_owns_cols
             .iter()
             .filter_map(|e| stmt.nodes.iter().find(|n| n.id == e.to))
-            .map(|n| n.label.as_str())
+            .map(|n| &*n.label)
             .collect();
         eprintln!("transformed owns: {:?}", transformed_col_names);
 
@@ -3090,7 +3087,7 @@ fn joined_tables_all_present_without_join_edges() {
         .nodes
         .iter()
         .filter(|n| n.node_type == NodeType::Table)
-        .map(|n| n.label.clone())
+        .map(|n| n.label.to_string())
         .collect();
     eprintln!("Tables found: {:?}", table_names);
     assert!(table_names.contains(&"orders".to_string()));

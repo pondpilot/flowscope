@@ -3,6 +3,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use super::common::{Issue, IssueCount, Span, Summary};
 
@@ -93,22 +94,32 @@ pub struct StatementLineage {
 #[serde(rename_all = "camelCase")]
 pub struct Node {
     /// Stable content-based hash ID
-    pub id: String,
+    #[serde(deserialize_with = "super::serde_utils::deserialize_arc_str")]
+    pub id: Arc<str>,
 
     /// Node type
     #[serde(rename = "type")]
     pub node_type: NodeType,
 
     /// Human-readable label (short name)
-    pub label: String,
+    #[serde(deserialize_with = "super::serde_utils::deserialize_arc_str")]
+    pub label: Arc<str>,
 
     /// Fully qualified name when available
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub qualified_name: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "super::serde_utils::deserialize_option_arc_str"
+    )]
+    pub qualified_name: Option<Arc<str>>,
 
     /// SQL expression text for computed columns
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub expression: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "super::serde_utils::deserialize_option_arc_str"
+    )]
+    pub expression: Option<Arc<str>>,
 
     /// Source location in original SQL
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -132,8 +143,12 @@ pub struct Node {
     pub join_type: Option<JoinType>,
 
     /// For table nodes that are JOINed: the join condition (ON clause).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub join_condition: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "super::serde_utils::deserialize_option_arc_str"
+    )]
+    pub join_condition: Option<Arc<str>>,
 
     /// For column nodes: aggregation information if this column is aggregated or a grouping key.
     /// Presence indicates the query uses GROUP BY; the fields indicate the column's role.
@@ -143,11 +158,11 @@ pub struct Node {
 
 impl Node {
     /// Create a new table node with required fields.
-    pub fn table(id: String, label: String) -> Self {
+    pub fn table(id: impl Into<Arc<str>>, label: impl Into<Arc<str>>) -> Self {
         Self {
-            id,
+            id: id.into(),
             node_type: NodeType::Table,
-            label,
+            label: label.into(),
             qualified_name: None,
             expression: None,
             span: None,
@@ -161,11 +176,11 @@ impl Node {
     }
 
     /// Create a new CTE node with required fields.
-    pub fn cte(id: String, label: String) -> Self {
+    pub fn cte(id: impl Into<Arc<str>>, label: impl Into<Arc<str>>) -> Self {
         Self {
-            id,
+            id: id.into(),
             node_type: NodeType::Cte,
-            label,
+            label: label.into(),
             qualified_name: None,
             expression: None,
             span: None,
@@ -179,11 +194,11 @@ impl Node {
     }
 
     /// Create a new column node with required fields.
-    pub fn column(id: String, label: String) -> Self {
+    pub fn column(id: impl Into<Arc<str>>, label: impl Into<Arc<str>>) -> Self {
         Self {
-            id,
+            id: id.into(),
             node_type: NodeType::Column,
-            label,
+            label: label.into(),
             qualified_name: None,
             expression: None,
             span: None,
@@ -203,13 +218,13 @@ impl Node {
     }
 
     /// Set the qualified name.
-    pub fn with_qualified_name(mut self, name: impl Into<String>) -> Self {
+    pub fn with_qualified_name(mut self, name: impl Into<Arc<str>>) -> Self {
         self.qualified_name = Some(name.into());
         self
     }
 
     /// Set the expression.
-    pub fn with_expression(mut self, expr: impl Into<String>) -> Self {
+    pub fn with_expression(mut self, expr: impl Into<Arc<str>>) -> Self {
         self.expression = Some(expr.into());
         self
     }
@@ -233,19 +248,85 @@ impl Node {
     }
 
     /// Set the join condition.
-    pub fn with_join_condition(mut self, condition: impl Into<String>) -> Self {
+    pub fn with_join_condition(mut self, condition: impl Into<Arc<str>>) -> Self {
         self.join_condition = Some(condition.into());
         self
     }
 }
 
+/// An edge connecting two nodes in the lineage graph.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct Edge {
+    /// Stable content-based hash ID
+    #[serde(deserialize_with = "super::serde_utils::deserialize_arc_str")]
+    pub id: Arc<str>,
+
+    /// Source node ID
+    #[serde(deserialize_with = "super::serde_utils::deserialize_arc_str")]
+    pub from: Arc<str>,
+
+    /// Target node ID
+    #[serde(deserialize_with = "super::serde_utils::deserialize_arc_str")]
+    pub to: Arc<str>,
+
+    /// Edge type
+    #[serde(rename = "type")]
+    pub edge_type: EdgeType,
+
+    /// Optional: SQL expression if this edge represents a transformation
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "super::serde_utils::deserialize_option_arc_str"
+    )]
+    pub expression: Option<Arc<str>>,
+
+    /// Optional: operation label ('JOIN', 'UNION', 'AGGREGATE', etc.)
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "super::serde_utils::deserialize_option_arc_str"
+    )]
+    pub operation: Option<Arc<str>>,
+
+    /// Optional: specific join type for JOIN edges (INNER, LEFT, RIGHT, FULL, CROSS, etc.)
+    /// Note: For table-level visualization, the frontend typically reads join info from the
+    /// target Node's join_type/join_condition fields. These Edge fields are preserved for
+    /// column-level lineage edges and future use cases where edge-level join context is needed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub join_type: Option<JoinType>,
+
+    /// Optional: join condition expression (ON clause)
+    /// See join_type comment for usage notes.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "super::serde_utils::deserialize_option_arc_str"
+    )]
+    pub join_condition: Option<Arc<str>>,
+
+    /// Extensible metadata for future use
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<HashMap<String, serde_json::Value>>,
+
+    /// True if this edge represents approximate/uncertain lineage
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approximate: Option<bool>,
+}
+
 impl Edge {
     /// Create a new edge with required fields.
-    pub fn new(id: String, from: String, to: String, edge_type: EdgeType) -> Self {
+    pub fn new(
+        id: impl Into<Arc<str>>,
+        from: impl Into<Arc<str>>,
+        to: impl Into<Arc<str>>,
+        edge_type: EdgeType,
+    ) -> Self {
         Self {
-            id,
-            from,
-            to,
+            id: id.into(),
+            from: from.into(),
+            to: to.into(),
             edge_type,
             expression: None,
             operation: None,
@@ -257,28 +338,40 @@ impl Edge {
     }
 
     /// Create a data flow edge.
-    pub fn data_flow(id: String, from: String, to: String) -> Self {
+    pub fn data_flow(
+        id: impl Into<Arc<str>>,
+        from: impl Into<Arc<str>>,
+        to: impl Into<Arc<str>>,
+    ) -> Self {
         Self::new(id, from, to, EdgeType::DataFlow)
     }
 
     /// Create a derivation edge.
-    pub fn derivation(id: String, from: String, to: String) -> Self {
+    pub fn derivation(
+        id: impl Into<Arc<str>>,
+        from: impl Into<Arc<str>>,
+        to: impl Into<Arc<str>>,
+    ) -> Self {
         Self::new(id, from, to, EdgeType::Derivation)
     }
 
     /// Create an ownership edge.
-    pub fn ownership(id: String, from: String, to: String) -> Self {
+    pub fn ownership(
+        id: impl Into<Arc<str>>,
+        from: impl Into<Arc<str>>,
+        to: impl Into<Arc<str>>,
+    ) -> Self {
         Self::new(id, from, to, EdgeType::Ownership)
     }
 
     /// Set the expression.
-    pub fn with_expression(mut self, expr: impl Into<String>) -> Self {
+    pub fn with_expression(mut self, expr: impl Into<Arc<str>>) -> Self {
         self.expression = Some(expr.into());
         self
     }
 
     /// Set the operation.
-    pub fn with_operation(mut self, op: impl Into<String>) -> Self {
+    pub fn with_operation(mut self, op: impl Into<Arc<str>>) -> Self {
         self.operation = Some(op.into());
         self
     }
@@ -290,7 +383,7 @@ impl Edge {
     }
 
     /// Set the join condition.
-    pub fn with_join_condition(mut self, condition: impl Into<String>) -> Self {
+    pub fn with_join_condition(mut self, condition: impl Into<Arc<str>>) -> Self {
         self.join_condition = Some(condition.into());
         self
     }
@@ -357,52 +450,6 @@ pub enum NodeType {
     Column,
 }
 
-/// An edge connecting two nodes in the lineage graph.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct Edge {
-    /// Stable content-based hash ID
-    pub id: String,
-
-    /// Source node ID
-    pub from: String,
-
-    /// Target node ID
-    pub to: String,
-
-    /// Edge type
-    #[serde(rename = "type")]
-    pub edge_type: EdgeType,
-
-    /// Optional: SQL expression if this edge represents a transformation
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub expression: Option<String>,
-
-    /// Optional: operation label ('JOIN', 'UNION', 'AGGREGATE', etc.)
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub operation: Option<String>,
-
-    /// Optional: specific join type for JOIN edges (INNER, LEFT, RIGHT, FULL, CROSS, etc.)
-    /// Note: For table-level visualization, the frontend typically reads join info from the
-    /// target Node's join_type/join_condition fields. These Edge fields are preserved for
-    /// column-level lineage edges and future use cases where edge-level join context is needed.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub join_type: Option<JoinType>,
-
-    /// Optional: join condition expression (ON clause)
-    /// See join_type comment for usage notes.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub join_condition: Option<String>,
-
-    /// Extensible metadata for future use
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<HashMap<String, serde_json::Value>>,
-
-    /// True if this edge represents approximate/uncertain lineage
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub approximate: Option<bool>,
-}
-
 /// The type of SQL JOIN operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -462,14 +509,16 @@ pub struct GlobalLineage {
 #[serde(rename_all = "camelCase")]
 pub struct GlobalNode {
     /// Stable ID derived from canonical identifier
-    pub id: String,
+    #[serde(deserialize_with = "super::serde_utils::deserialize_arc_str")]
+    pub id: Arc<str>,
 
     /// Node type
     #[serde(rename = "type")]
     pub node_type: NodeType,
 
     /// Human-readable label
-    pub label: String,
+    #[serde(deserialize_with = "super::serde_utils::deserialize_arc_str")]
+    pub label: Arc<str>,
 
     /// Canonical name for cross-statement matching
     pub canonical_name: CanonicalName,
@@ -530,16 +579,23 @@ pub struct StatementRef {
     /// Statement index in the original request
     pub statement_index: usize,
     /// ID of the local node inside that statement graph (if available)
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub node_id: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "super::serde_utils::deserialize_option_arc_str"
+    )]
+    pub node_id: Option<Arc<str>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GlobalEdge {
-    pub id: String,
-    pub from: String,
-    pub to: String,
+    #[serde(deserialize_with = "super::serde_utils::deserialize_arc_str")]
+    pub id: Arc<str>,
+    #[serde(deserialize_with = "super::serde_utils::deserialize_arc_str")]
+    pub from: Arc<str>,
+    #[serde(deserialize_with = "super::serde_utils::deserialize_arc_str")]
+    pub to: Arc<str>,
     #[serde(rename = "type")]
     pub edge_type: EdgeType,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -633,10 +689,10 @@ mod tests {
                 statement_type: "SELECT".to_string(),
                 source_name: None,
                 nodes: vec![Node {
-                    id: "tbl_123".to_string(),
+                    id: "tbl_123".to_string().into(),
                     node_type: NodeType::Table,
-                    label: "users".to_string(),
-                    qualified_name: Some("public.users".to_string()),
+                    label: "users".to_string().into(),
+                    qualified_name: Some("public.users".to_string().into()),
                     expression: None,
                     span: None,
                     metadata: None,

@@ -81,9 +81,9 @@ fn write_lineage(out: &mut String, result: &AnalyzeResult, colored: bool) {
         if let (Some(from), Some(to)) = (from_node, to_node) {
             if from.node_type == NodeType::Table && to.node_type == NodeType::Table {
                 source_tables
-                    .entry(to.label.clone())
+                    .entry(to.label.to_string())
                     .or_default()
-                    .insert(from.label.clone());
+                    .insert(from.label.to_string());
             }
         }
     }
@@ -95,7 +95,7 @@ fn write_lineage(out: &mut String, result: &AnalyzeResult, colored: bool) {
             .nodes
             .iter()
             .filter(|n| n.node_type == NodeType::Table)
-            .map(|n| n.label.as_str())
+            .map(|n| n.label.to_string())
             .collect();
 
         if !tables.is_empty() {
