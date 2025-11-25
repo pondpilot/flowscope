@@ -13,6 +13,7 @@ import type { Node as FlowNode, NodeProps } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
 import { getLayoutedElements } from '../utils/layout';
+import { COLORS, GRAPH_CONFIG } from '../constants';
 import type { SchemaTable, ResolvedSchemaTable, ColumnSchema, SchemaOrigin } from '@pondpilot/flowscope-core';
 
 interface SchemaViewProps {
@@ -26,21 +27,18 @@ interface SchemaTableNodeData extends Record<string, unknown> {
 }
 
 function SchemaTableNode({ data }: NodeProps<FlowNode<SchemaTableNodeData>>): JSX.Element {
-  // Color coding based on origin: imported (green) vs implied (blue)
-  const isImported = data.origin === 'imported';
-  const borderColor = isImported ? '#10b981' : '#3b82f6'; // green-500 : blue-500
-  const headerBg = isImported ? '#d1fae5' : '#dbeafe'; // green-100 : blue-100
-  const headerColor = isImported ? '#047857' : '#1e40af'; // green-700 : blue-700
+  // Color coding based on origin: imported (table palette) vs implied (cte palette)
+  const palette = data.origin === 'imported' ? COLORS.nodes.table : COLORS.nodes.cte;
 
   return (
     <div
       style={{
         minWidth: 180,
         borderRadius: 8,
-        border: `2px solid ${borderColor}`,
+        border: `1px solid ${palette.border}`,
         boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
         overflow: 'hidden',
-        backgroundColor: '#FFFFFF',
+        backgroundColor: palette.bg,
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       }}
     >
@@ -50,21 +48,21 @@ function SchemaTableNode({ data }: NodeProps<FlowNode<SchemaTableNodeData>>): JS
           padding: '8px 12px',
           fontSize: 12,
           fontWeight: 500,
-          borderBottom: `1px solid ${borderColor}`,
-          backgroundColor: headerBg,
-          color: headerColor,
+          borderBottom: `1px solid ${palette.border}`,
+          backgroundColor: palette.headerBg,
+          color: palette.text,
         }}
       >
         <span style={{ fontWeight: 600 }}>{data.label}</span>
       </div>
       {(data.columns || []).length > 0 && (
-        <div style={{ padding: '6px 12px', maxHeight: 150, overflowY: 'auto' }}>
+        <div style={{ padding: '6px 12px', maxHeight: GRAPH_CONFIG.MAX_COLUMN_HEIGHT, overflowY: 'auto' }}>
           {(data.columns || []).map((col: ColumnSchema) => (
             <div
               key={col.name}
               style={{
                 fontSize: 12,
-                color: '#6F7785',
+                color: palette.textSecondary,
                 padding: '3px 4px',
                 borderRadius: 4,
               }}
@@ -152,7 +150,7 @@ export function SchemaView({ schema }: SchemaViewProps): JSX.Element {
         <MiniMap
           nodeColor={(node) => {
             const origin = (node.data as SchemaTableNodeData)?.origin;
-            return origin === 'imported' ? '#10b981' : '#3b82f6'; // green : blue
+            return origin === 'imported' ? COLORS.nodes.table.accent : COLORS.nodes.cte.accent;
           }}
         />
       </ReactFlow>
