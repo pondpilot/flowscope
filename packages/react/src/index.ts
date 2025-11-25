@@ -58,3 +58,27 @@ export {
   sanitizeErrorMessage,
   sanitizeIdentifier,
 } from './utils/sanitize';
+
+// Export utilities
+export {
+  downloadXlsx,
+  downloadJson,
+  downloadMermaid,
+  downloadHtml,
+  generateXlsxWorkbook,
+  generateStructuredJson,
+  generateMermaid,
+  generateAllMermaidDiagrams,
+  generateHtmlExport,
+  extractScriptInfo,
+  extractTableInfo,
+  extractColumnMappings,
+} from './utils/exportUtils';
+
+export type {
+  ScriptInfo,
+  TableInfo,
+  ColumnMapping,
+  MermaidGraphType,
+  StructuredLineageJson,
+} from './utils/exportUtils';

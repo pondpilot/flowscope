@@ -53,6 +53,7 @@
     "html-to-image": "^1.11.13",
     "lucide-react": "^0.554.0",
     "tailwind-merge": "^3.4.0",
+    "xlsx": "^0.18.5",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
