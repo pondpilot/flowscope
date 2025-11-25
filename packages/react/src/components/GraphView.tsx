@@ -345,10 +345,6 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
     showScriptTables,
   ]);
 
-  const handleRearrange = useCallback(() => {
-    setNodes(layoutedNodes);
-    setEdges(layoutedEdges);
-  }, [layoutedNodes, layoutedEdges, setNodes, setEdges]);
 
   const internalGraphRef = useRef<HTMLDivElement>(null);
   const finalRef = graphContainerRef || internalGraphRef;
