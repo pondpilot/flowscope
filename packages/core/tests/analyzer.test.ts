@@ -20,7 +20,7 @@ const wasmModuleMock = vi.hoisted(() => ({
   set_panic_hook: vi.fn(() => undefined),
 }));
 
-vi.mock('../wasm/flowscope_wasm', () => wasmModuleMock, { virtual: true });
+vi.mock('../src/wasm/flowscope_wasm', () => wasmModuleMock);
 
 async function loadAnalyzer() {
   return import('../src/analyzer');

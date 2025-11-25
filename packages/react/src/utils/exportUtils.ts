@@ -8,7 +8,6 @@ import type {
   AnalyzeResult,
   StatementLineage,
   Node,
-  Edge,
 } from '@pondpilot/flowscope-core';
 
 // ============================================================================

@@ -6,7 +6,7 @@ const wasmModuleMock = vi.hoisted(() => ({
   __wbindgen_free: vi.fn(),
 }));
 
-vi.mock('../wasm/flowscope_wasm', () => wasmModuleMock, { virtual: true });
+vi.mock('../src/wasm/flowscope_wasm', () => wasmModuleMock);
 
 async function loadLoader() {
   return import('../src/wasm-loader');

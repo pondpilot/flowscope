@@ -1,0 +1,26 @@
+[package]
+name = "flowscope-cli"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Command-line interface for FlowScope SQL lineage analyzer"
+
+[[bin]]
+name = "flowscope"
+path = "src/main.rs"
+
+[dependencies]
+flowscope-core = { path = "../flowscope-core" }
+clap = { version = "4", features = ["derive"] }
+serde.workspace = true
+serde_json.workspace = true
+anyhow = "1.0"
+thiserror = "1.0"
+tabled = "0.17"
+owo-colors = "4"
+is-terminal = "0.4"
+
+[dev-dependencies]
+tempfile = "3"

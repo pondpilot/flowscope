@@ -16,6 +16,26 @@ build-rust:
 build-rust-release:
     cargo build --release --workspace
 
+# Build CLI binary
+build-cli:
+    cargo build -p flowscope-cli --release
+
+# Install CLI locally
+install-cli:
+    cargo install --path crates/flowscope-cli --force
+
+# Run CLI with arguments
+cli *ARGS:
+    cargo run -p flowscope-cli -- {{ARGS}}
+
+# Run CLI with arguments in release mode
+cli-release *ARGS:
+    cargo run -p flowscope-cli --release -- {{ARGS}}
+
+# Run CLI tests
+test-cli:
+    cargo test -p flowscope-cli
+
 # Build WASM module and TypeScript packages
 build-wasm:
     ./scripts/build-rust.sh
