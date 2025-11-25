@@ -160,6 +160,8 @@ export interface Node {
   joinType?: JoinType;
   /** For table nodes that are JOINed: the join condition (ON clause) */
   joinCondition?: string;
+  /** For column nodes: aggregation information if this column is aggregated or a grouping key */
+  aggregation?: AggregationInfo;
 }
 
 /** The type of a node in the lineage graph. */
@@ -175,6 +177,21 @@ export interface FilterPredicate {
 
 /** The type of SQL clause where a filter predicate appears. */
 export type FilterClauseType = 'WHERE' | 'HAVING' | 'JOIN_ON';
+
+/**
+ * Information about aggregation applied to a column.
+ *
+ * This tracks when a column is the result of an aggregation operation (like SUM, COUNT, AVG),
+ * which indicates a cardinality reduction (1:many collapse) in the data flow.
+ */
+export interface AggregationInfo {
+  /** True if this column is a GROUP BY key (preserves row identity within groups) */
+  isGroupingKey: boolean;
+  /** The aggregation function used (e.g., "SUM", "COUNT", "AVG"). Undefined if this is a grouping key. */
+  function?: string;
+  /** True if this aggregation uses DISTINCT (e.g., COUNT(DISTINCT col)) */
+  distinct?: boolean;
+}
 
 /** An edge connecting two nodes in the lineage graph. */
 export interface Edge {

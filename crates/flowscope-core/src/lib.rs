@@ -23,6 +23,7 @@ pub use types::{
     // Issue codes
     issue_codes,
     // Request types
+    AggregationInfo,
     AnalysisOptions,
     AnalyzeRequest,
     // Response types

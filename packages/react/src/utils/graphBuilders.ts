@@ -231,6 +231,7 @@ export function buildFlowNodes(
           id: childNode.id,
           name: childNode.label,
           expression: childNode.expression,
+          aggregation: childNode.aggregation,
         });
         tableColumnMap.set(parentNode.id, cols);
       }
@@ -283,6 +284,7 @@ export function buildFlowNodes(
       id: col.id,
       name: col.label,
       expression: col.expression,
+      aggregation: col.aggregation,
     }));
 
   // Add virtual "Output" node only for SELECT-like statements
@@ -702,6 +704,7 @@ export function buildColumnLevelGraph(
           id: childNode.id,
           name: childNode.label,
           expression: childNode.expression,
+          aggregation: childNode.aggregation,
         });
         tableColumnMap.set(parentNode.id, cols);
         columnToTableMap.set(childNode.id, parentNode.id);
@@ -719,6 +722,7 @@ export function buildColumnLevelGraph(
         id: node.id,
         name: node.label,
         expression: node.expression,
+        aggregation: node.aggregation,
       });
     }
   }

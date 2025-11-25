@@ -24,6 +24,7 @@ export type {
   JoinType,
   FilterPredicate,
   FilterClauseType,
+  AggregationInfo,
   GlobalLineage,
   GlobalNode,
   GlobalEdge,

@@ -17,7 +17,8 @@ pub use request::{
     SchemaNamespaceHint, SchemaTable,
 };
 pub use response::{
-    AnalyzeResult, CanonicalName, Edge, EdgeType, FilterClauseType, FilterPredicate, GlobalEdge,
-    GlobalLineage, GlobalNode, JoinType, Node, NodeType, ResolutionSource, ResolvedColumnSchema,
-    ResolvedSchemaMetadata, ResolvedSchemaTable, SchemaOrigin, StatementLineage, StatementRef,
+    AggregationInfo, AnalyzeResult, CanonicalName, Edge, EdgeType, FilterClauseType,
+    FilterPredicate, GlobalEdge, GlobalLineage, GlobalNode, JoinType, Node, NodeType,
+    ResolutionSource, ResolvedColumnSchema, ResolvedSchemaMetadata, ResolvedSchemaTable,
+    SchemaOrigin, StatementLineage, StatementRef,
 };

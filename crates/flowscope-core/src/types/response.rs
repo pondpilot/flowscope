@@ -126,6 +126,11 @@ pub struct Node {
     /// For table nodes that are JOINed: the join condition (ON clause).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub join_condition: Option<String>,
+
+    /// For column nodes: aggregation information if this column is aggregated or a grouping key.
+    /// Presence indicates the query uses GROUP BY; the fields indicate the column's role.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub aggregation: Option<AggregationInfo>,
 }
 
 impl Node {
@@ -143,6 +148,7 @@ impl Node {
             filters: Vec::new(),
             join_type: None,
             join_condition: None,
+            aggregation: None,
         }
     }
 
@@ -160,6 +166,7 @@ impl Node {
             filters: Vec::new(),
             join_type: None,
             join_condition: None,
+            aggregation: None,
         }
     }
 
@@ -177,7 +184,14 @@ impl Node {
             filters: Vec::new(),
             join_type: None,
             join_condition: None,
+            aggregation: None,
         }
+    }
+
+    /// Set the aggregation info.
+    pub fn with_aggregation(mut self, aggregation: AggregationInfo) -> Self {
+        self.aggregation = Some(aggregation);
+        self
     }
 
     /// Set the qualified name.
@@ -301,6 +315,26 @@ pub enum FilterClauseType {
     Having,
     /// JOIN ... ON clause
     JoinOn,
+}
+
+/// Information about aggregation applied to a column.
+///
+/// This tracks when a column is the result of an aggregation operation (like SUM, COUNT, AVG),
+/// which indicates a cardinality reduction (1:many collapse) in the data flow.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AggregationInfo {
+    /// True if this column is a GROUP BY key (preserves row identity within groups)
+    pub is_grouping_key: bool,
+
+    /// The aggregation function used (e.g., "SUM", "COUNT", "AVG")
+    /// None if this is a grouping key or non-aggregated column
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub function: Option<String>,
+
+    /// True if this aggregation uses DISTINCT (e.g., COUNT(DISTINCT col))
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub distinct: Option<bool>,
 }
 
 /// The type of a node in the lineage graph.
@@ -602,6 +636,7 @@ mod tests {
                     filters: Vec::new(),
                     join_type: None,
                     join_condition: None,
+                    aggregation: None,
                 }],
                 edges: vec![],
                 span: None,

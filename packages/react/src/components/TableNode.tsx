@@ -4,8 +4,61 @@ import { useLineageActions, useLineageStore } from '../store';
 import type { TableNodeData, ColumnNodeInfo } from '../types';
 import { sanitizeIdentifier } from '../utils/sanitize';
 import { GRAPH_CONFIG, COLORS, MAX_FILTER_DISPLAY_LENGTH } from '../constants';
+import type { AggregationInfo } from '@pondpilot/flowscope-core';
 
 const colors = COLORS;
+
+/**
+ * Render aggregation indicator for a column.
+ * Shows a badge for GROUP BY keys or aggregate functions.
+ */
+function AggregationIndicator({ aggregation }: { aggregation?: AggregationInfo }): JSX.Element | null {
+  if (!aggregation) return null;
+
+  if (aggregation.isGroupingKey) {
+    return (
+      <span
+        role="img"
+        aria-label="GROUP BY key column"
+        style={{
+          backgroundColor: `${colors.groupingKey}15`,
+          color: colors.groupingKey,
+          borderRadius: 4,
+          padding: '1px 4px',
+          fontSize: 9,
+          fontWeight: 600,
+          marginLeft: 4,
+        }}
+        title="GROUP BY key"
+      >
+        KEY
+      </span>
+    );
+  }
+
+  // Aggregated column
+  const funcName = aggregation.function || 'AGG';
+  const tooltipText = aggregation.distinct ? `${funcName} DISTINCT` : funcName;
+
+  return (
+    <span
+      role="img"
+      aria-label={`Aggregated with ${tooltipText}`}
+      style={{
+        backgroundColor: `${colors.aggregation}15`,
+        color: colors.aggregation,
+        borderRadius: 4,
+        padding: '1px 4px',
+        fontSize: 9,
+        fontWeight: 600,
+        marginLeft: 4,
+      }}
+      title={tooltipText}
+    >
+      {aggregation.distinct ? `${funcName}(D)` : funcName}
+    </span>
+  );
+}
 
 // Type guard for safer type checking
 function isTableNodeData(data: unknown): data is TableNodeData {
@@ -280,7 +333,12 @@ export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
                     background: 'transparent',
                   }}
                 />
-                {sanitizeIdentifier(col.name)}
+                <span style={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {sanitizeIdentifier(col.name)}
+                  </span>
+                  <AggregationIndicator aggregation={col.aggregation} />
+                </span>
                 <Handle
                   type="source"
                   position={Position.Right}

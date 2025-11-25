@@ -8,6 +8,7 @@ import type {
   StatementLineage,
   SchemaTable,
   FilterPredicate,
+  AggregationInfo,
 } from '@pondpilot/flowscope-core';
 
 /**
@@ -218,6 +219,8 @@ export interface ColumnNodeInfo {
   isHighlighted?: boolean;
   /** Optional source file name */
   sourceName?: string;
+  /** Aggregation information if this column is aggregated or a grouping key */
+  aggregation?: AggregationInfo;
 }
 
 /**

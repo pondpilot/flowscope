@@ -302,6 +302,33 @@
   "AnalyzeResult": {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "definitions": {
+      "AggregationInfo": {
+        "description": "Information about aggregation applied to a column.\n\nThis tracks when a column is the result of an aggregation operation (like SUM, COUNT, AVG), which indicates a cardinality reduction (1:many collapse) in the data flow.",
+        "properties": {
+          "distinct": {
+            "description": "True if this aggregation uses DISTINCT (e.g., COUNT(DISTINCT col))",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "function": {
+            "description": "The aggregation function used (e.g., \"SUM\", \"COUNT\", \"AVG\") None if this is a grouping key or non-aggregated column",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "isGroupingKey": {
+            "description": "True if this column is a GROUP BY key (preserves row identity within groups)",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "isGroupingKey"
+        ],
+        "type": "object"
+      },
       "CanonicalName": {
         "properties": {
           "catalog": {
@@ -794,6 +821,17 @@
       "Node": {
         "description": "A node in the lineage graph (table, CTE, or column).",
         "properties": {
+          "aggregation": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/AggregationInfo"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For column nodes: aggregation information if this column is aggregated or a grouping key. Presence indicates the query uses GROUP BY; the fields indicate the column's role."
+          },
           "expression": {
             "description": "SQL expression text for computed columns",
             "type": [

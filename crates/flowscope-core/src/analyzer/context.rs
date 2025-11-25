@@ -58,6 +58,11 @@ pub(crate) struct StatementContext {
     /// Pending filter predicates to attach to table nodes
     /// Maps table canonical name -> list of filter predicates
     pub(crate) pending_filters: HashMap<String, Vec<FilterPredicate>>,
+    /// Grouping columns for the current SELECT (normalized expression strings)
+    /// Used to detect aggregation vs grouping key columns
+    pub(crate) grouping_columns: HashSet<String>,
+    /// True if the current SELECT has a GROUP BY clause
+    pub(crate) has_group_by: bool,
 }
 
 /// Represents an output column in the SELECT list
@@ -105,7 +110,26 @@ impl StatementContext {
             cte_columns: HashMap::new(),
             scope_stack: Vec::new(),
             pending_filters: HashMap::new(),
+            grouping_columns: HashSet::new(),
+            has_group_by: false,
         }
+    }
+
+    /// Clear grouping context for a new SELECT
+    pub(crate) fn clear_grouping(&mut self) {
+        self.grouping_columns.clear();
+        self.has_group_by = false;
+    }
+
+    /// Add a grouping column expression
+    pub(crate) fn add_grouping_column(&mut self, expr: String) {
+        self.grouping_columns.insert(expr);
+        self.has_group_by = true;
+    }
+
+    /// Check if an expression matches a grouping column
+    pub(crate) fn is_grouping_column(&self, expr: &str) -> bool {
+        self.grouping_columns.contains(expr)
     }
 
     /// Add a filter predicate for a specific table

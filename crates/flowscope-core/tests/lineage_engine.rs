@@ -3349,3 +3349,234 @@ fn deeply_nested_and_predicates_split_correctly() {
         "Should split into 4 separate predicates"
     );
 }
+
+// ============================================================================
+// AGGREGATION DETECTION TESTS
+// ============================================================================
+
+#[test]
+fn aggregation_detects_grouping_key() {
+    let sql = r#"
+        SELECT region, SUM(amount) AS total
+        FROM orders
+        GROUP BY region;
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let stmt = first_statement(&result);
+
+    // Find the region column (grouping key)
+    let region_col = find_column_node(stmt, "region").expect("region column not found");
+
+    assert!(
+        region_col.aggregation.is_some(),
+        "region column should have aggregation info"
+    );
+    let agg = region_col.aggregation.as_ref().unwrap();
+    assert!(
+        agg.is_grouping_key,
+        "region should be marked as grouping key"
+    );
+    assert!(
+        agg.function.is_none(),
+        "grouping key should not have function"
+    );
+}
+
+#[test]
+fn aggregation_detects_aggregate_function() {
+    let sql = r#"
+        SELECT region, SUM(amount) AS total
+        FROM orders
+        GROUP BY region;
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let stmt = first_statement(&result);
+
+    // Find the total column (aggregate)
+    let total_col = find_column_node(stmt, "total").expect("total column not found");
+
+    assert!(
+        total_col.aggregation.is_some(),
+        "total column should have aggregation info"
+    );
+    let agg = total_col.aggregation.as_ref().unwrap();
+    assert!(
+        !agg.is_grouping_key,
+        "total should not be marked as grouping key"
+    );
+    assert_eq!(
+        agg.function.as_deref(),
+        Some("SUM"),
+        "should detect SUM function"
+    );
+}
+
+#[test]
+fn aggregation_detects_distinct() {
+    let sql = r#"
+        SELECT region, COUNT(DISTINCT user_id) AS unique_users
+        FROM orders
+        GROUP BY region;
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let stmt = first_statement(&result);
+
+    let unique_users_col =
+        find_column_node(stmt, "unique_users").expect("unique_users column not found");
+
+    assert!(
+        unique_users_col.aggregation.is_some(),
+        "unique_users column should have aggregation info"
+    );
+    let agg = unique_users_col.aggregation.as_ref().unwrap();
+    assert_eq!(
+        agg.function.as_deref(),
+        Some("COUNT"),
+        "should detect COUNT function"
+    );
+    assert_eq!(agg.distinct, Some(true), "should detect DISTINCT modifier");
+}
+
+#[test]
+fn aggregation_no_info_without_group_by() {
+    let sql = r#"
+        SELECT region, amount
+        FROM orders;
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let stmt = first_statement(&result);
+
+    let region_col = find_column_node(stmt, "region").expect("region column not found");
+    let amount_col = find_column_node(stmt, "amount").expect("amount column not found");
+
+    assert!(
+        region_col.aggregation.is_none(),
+        "region should not have aggregation info without GROUP BY"
+    );
+    assert!(
+        amount_col.aggregation.is_none(),
+        "amount should not have aggregation info without GROUP BY"
+    );
+}
+
+#[test]
+fn aggregation_multiple_grouping_keys() {
+    let sql = r#"
+        SELECT region, product_type, AVG(price) AS avg_price
+        FROM products
+        GROUP BY region, product_type;
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let stmt = first_statement(&result);
+
+    let region_col = find_column_node(stmt, "region").expect("region column not found");
+    let product_type_col =
+        find_column_node(stmt, "product_type").expect("product_type column not found");
+    let avg_price_col = find_column_node(stmt, "avg_price").expect("avg_price column not found");
+
+    assert!(
+        region_col
+            .aggregation
+            .as_ref()
+            .map(|a| a.is_grouping_key)
+            .unwrap_or(false),
+        "region should be grouping key"
+    );
+    assert!(
+        product_type_col
+            .aggregation
+            .as_ref()
+            .map(|a| a.is_grouping_key)
+            .unwrap_or(false),
+        "product_type should be grouping key"
+    );
+    assert_eq!(
+        avg_price_col
+            .aggregation
+            .as_ref()
+            .and_then(|a| a.function.as_deref()),
+        Some("AVG"),
+        "avg_price should have AVG function"
+    );
+}
+
+#[test]
+fn aggregation_nested_in_expression() {
+    let sql = r#"
+        SELECT region, SUM(amount) * 1.1 AS total_with_tax
+        FROM orders
+        GROUP BY region;
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let stmt = first_statement(&result);
+
+    let total_col =
+        find_column_node(stmt, "total_with_tax").expect("total_with_tax column not found");
+
+    assert!(
+        total_col.aggregation.is_some(),
+        "total_with_tax should have aggregation info"
+    );
+    let agg = total_col.aggregation.as_ref().unwrap();
+    assert_eq!(
+        agg.function.as_deref(),
+        Some("SUM"),
+        "should detect SUM in expression"
+    );
+}
+
+#[test]
+fn aggregation_in_case_expression() {
+    let sql = r#"
+        SELECT
+            region,
+            CASE WHEN SUM(amount) > 1000 THEN 'high' ELSE 'low' END AS volume
+        FROM orders
+        GROUP BY region;
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let stmt = first_statement(&result);
+
+    let volume_col = find_column_node(stmt, "volume").expect("volume column not found");
+
+    assert!(
+        volume_col.aggregation.is_some(),
+        "volume should have aggregation info from CASE"
+    );
+    let agg = volume_col.aggregation.as_ref().unwrap();
+    assert_eq!(
+        agg.function.as_deref(),
+        Some("SUM"),
+        "should detect SUM in CASE expression"
+    );
+}
+
+#[test]
+fn aggregation_qualified_column_as_grouping_key() {
+    let sql = r#"
+        SELECT o.region, SUM(o.amount) AS total
+        FROM orders o
+        GROUP BY o.region;
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let stmt = first_statement(&result);
+
+    let region_col = find_column_node(stmt, "region").expect("region column not found");
+
+    assert!(
+        region_col
+            .aggregation
+            .as_ref()
+            .map(|a| a.is_grouping_key)
+            .unwrap_or(false),
+        "qualified column should match grouping key"
+    );
+}

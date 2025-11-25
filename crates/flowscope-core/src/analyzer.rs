@@ -359,6 +359,7 @@ impl<'a> Analyzer<'a> {
                     filters: Vec::new(),
                     join_type: None,
                     join_condition: None,
+                    aggregation: None,
                 };
                 ctx.add_node(col_node);
 
@@ -414,6 +415,7 @@ impl<'a> Analyzer<'a> {
                 filters: Vec::new(),
                 join_type: None,
                 join_condition: None,
+                aggregation: None,
             });
 
             // Register CTE for resolution
@@ -526,6 +528,27 @@ impl<'a> Analyzer<'a> {
         select: &ast::Select,
         target_node: Option<&str>,
     ) {
+        // Clear any previous grouping context
+        ctx.clear_grouping();
+
+        // First, capture GROUP BY columns so we can identify grouping keys vs aggregates
+        match &select.group_by {
+            ast::GroupByExpr::Expressions(exprs, _) => {
+                for group_by in exprs {
+                    // Normalize the expression string for comparison
+                    let expr_str = self.normalize_group_by_expr(group_by);
+                    ctx.add_grouping_column(expr_str);
+                    self.analyze_expression(ctx, group_by);
+                }
+            }
+            ast::GroupByExpr::All(_) => {
+                // GROUP BY ALL - all non-aggregate columns are grouping keys
+                // We can't determine this statically, so we mark has_group_by
+                ctx.has_group_by = true;
+            }
+        }
+
+        // Process SELECT projection with aggregation detection
         for (idx, item) in select.projection.iter().enumerate() {
             match item {
                 SelectItem::UnnamedExpr(expr) => {
@@ -536,7 +559,16 @@ impl<'a> Analyzer<'a> {
                     } else {
                         Some(expr.to_string())
                     };
-                    self.add_output_column(ctx, &name, sources, expr_text, target_node, false);
+                    let aggregation = self.detect_aggregation(ctx, expr);
+                    self.add_output_column_with_aggregation(
+                        ctx,
+                        &name,
+                        sources,
+                        expr_text,
+                        target_node,
+                        false,
+                        aggregation,
+                    );
                 }
                 SelectItem::ExprWithAlias { expr, alias } => {
                     let sources = self.extract_column_refs(expr);
@@ -546,7 +578,16 @@ impl<'a> Analyzer<'a> {
                     } else {
                         Some(expr.to_string())
                     };
-                    self.add_output_column(ctx, &name, sources, expr_text, target_node, false);
+                    let aggregation = self.detect_aggregation(ctx, expr);
+                    self.add_output_column_with_aggregation(
+                        ctx,
+                        &name,
+                        sources,
+                        expr_text,
+                        target_node,
+                        false,
+                        aggregation,
+                    );
                 }
                 SelectItem::QualifiedWildcard(name, _) => {
                     // table.*
@@ -560,21 +601,11 @@ impl<'a> Analyzer<'a> {
             }
         }
 
-        // Also extract column refs from WHERE, GROUP BY, HAVING for completeness
+        // Also extract column refs from WHERE for completeness
         if let Some(ref where_clause) = select.selection {
             self.analyze_expression(ctx, where_clause);
             // Capture WHERE predicates for table nodes
             self.capture_filter_predicates(ctx, where_clause, FilterClauseType::Where);
-        }
-
-        // Handle GROUP BY
-        match &select.group_by {
-            ast::GroupByExpr::Expressions(exprs, _) => {
-                for group_by in exprs {
-                    self.analyze_expression(ctx, group_by);
-                }
-            }
-            ast::GroupByExpr::All(_) => {}
         }
 
         if let Some(ref having) = select.having {
@@ -582,6 +613,184 @@ impl<'a> Analyzer<'a> {
             // Capture HAVING predicates for table nodes
             self.capture_filter_predicates(ctx, having, FilterClauseType::Having);
         }
+    }
+
+    /// Normalize a GROUP BY expression for comparison with SELECT expressions.
+    ///
+    /// # Limitations
+    ///
+    /// This uses string-based normalization which has inherent limitations:
+    /// - Semantically equivalent expressions with different syntax may not match
+    ///   (e.g., `a + b` vs `b + a` for commutative operations)
+    /// - Complex expressions fall back to `expr.to_string().to_lowercase()` which
+    ///   may have formatting differences between the GROUP BY and SELECT clauses
+    ///
+    /// For most real-world queries with simple column references, this works correctly.
+    fn normalize_group_by_expr(&self, expr: &Expr) -> String {
+        match expr {
+            Expr::Identifier(ident) => self.normalize_identifier(&ident.value),
+            Expr::CompoundIdentifier(parts) => {
+                // Use the full qualified name
+                parts
+                    .iter()
+                    .map(|p| self.normalize_identifier(&p.value))
+                    .collect::<Vec<_>>()
+                    .join(".")
+            }
+            Expr::Nested(inner) => {
+                // Unwrap parentheses for matching: GROUP BY (col) should match SELECT col
+                self.normalize_group_by_expr(inner)
+            }
+            _ => {
+                // For complex expressions, use the string representation
+                expr.to_string().to_lowercase()
+            }
+        }
+    }
+
+    /// Detect aggregation in an expression and return AggregationInfo if applicable
+    fn detect_aggregation(&self, ctx: &StatementContext, expr: &Expr) -> Option<AggregationInfo> {
+        if ctx.has_group_by {
+            // Check if this expression is a grouping key
+            let expr_normalized = self.normalize_group_by_expr(expr);
+            if ctx.is_grouping_column(&expr_normalized) {
+                return Some(AggregationInfo {
+                    is_grouping_key: true,
+                    function: None,
+                    distinct: None,
+                });
+            }
+        }
+
+        // Check if the expression contains an aggregate function
+        if let Some(agg_call) = self.find_aggregate_function(expr) {
+            return Some(AggregationInfo {
+                is_grouping_key: false,
+                function: Some(agg_call.function),
+                distinct: if agg_call.distinct { Some(true) } else { None },
+            });
+        }
+
+        // Expression in a GROUP BY query but neither grouping key nor aggregate
+        // This could be a constant or an error in the query - we don't flag it
+        None
+    }
+
+    /// Find the first aggregate function in an expression.
+    ///
+    /// Recursively traverses the expression tree looking for aggregate function calls
+    /// (SUM, COUNT, AVG, etc.). Returns the first aggregate found.
+    ///
+    /// # Note on Window Functions
+    ///
+    /// This method does not distinguish between aggregate functions used in a
+    /// GROUP BY context vs. window function context (e.g., `SUM(x) OVER (...)`).
+    /// Window functions are parsed as `Expr::Function` with an `over` clause,
+    /// but this detection treats them the same as regular aggregates.
+    /// For lineage purposes, both represent a many-to-one data transformation.
+    fn find_aggregate_function(&self, expr: &Expr) -> Option<functions::AggregateCall> {
+        match expr {
+            Expr::Function(func) => self.check_function_for_aggregate(func),
+            Expr::BinaryOp { left, right, .. } => self
+                .find_aggregate_function(left)
+                .or_else(|| self.find_aggregate_function(right)),
+            Expr::UnaryOp { expr, .. } | Expr::Nested(expr) | Expr::Cast { expr, .. } => {
+                self.find_aggregate_function(expr)
+            }
+            Expr::Case {
+                operand,
+                conditions,
+                results,
+                else_result,
+            } => self.find_aggregate_in_case(operand, conditions, results, else_result),
+            _ => None,
+        }
+    }
+
+    /// Check if a function is an aggregate and return its info, or search its arguments.
+    fn check_function_for_aggregate(
+        &self,
+        func: &ast::Function,
+    ) -> Option<functions::AggregateCall> {
+        let func_name = func.name.to_string();
+
+        if functions::is_aggregate_function(&func_name) {
+            let distinct = matches!(
+                &func.args,
+                ast::FunctionArguments::List(args) if args.duplicate_treatment == Some(ast::DuplicateTreatment::Distinct)
+            );
+            return Some(functions::AggregateCall {
+                function: func_name.to_uppercase(),
+                distinct,
+            });
+        }
+
+        // Not an aggregate itself, check arguments for nested aggregates
+        self.find_aggregate_in_function_args(&func.args)
+    }
+
+    /// Search function arguments for nested aggregate functions.
+    fn find_aggregate_in_function_args(
+        &self,
+        args: &ast::FunctionArguments,
+    ) -> Option<functions::AggregateCall> {
+        if let ast::FunctionArguments::List(arg_list) = args {
+            for arg in &arg_list.args {
+                let expr = match arg {
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(e)) => Some(e),
+                    FunctionArg::Named {
+                        arg: FunctionArgExpr::Expr(e),
+                        ..
+                    } => Some(e),
+                    _ => None,
+                };
+                if let Some(e) = expr {
+                    if let Some(agg) = self.find_aggregate_function(e) {
+                        return Some(agg);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Search CASE expression components for aggregate functions.
+    fn find_aggregate_in_case(
+        &self,
+        operand: &Option<Box<Expr>>,
+        conditions: &[Expr],
+        results: &[Expr],
+        else_result: &Option<Box<Expr>>,
+    ) -> Option<functions::AggregateCall> {
+        // Check operand (for CASE expr WHEN ...)
+        if let Some(op) = operand {
+            if let Some(agg) = self.find_aggregate_function(op) {
+                return Some(agg);
+            }
+        }
+
+        // Check WHEN conditions
+        for cond in conditions {
+            if let Some(agg) = self.find_aggregate_function(cond) {
+                return Some(agg);
+            }
+        }
+
+        // Check THEN results
+        for result in results {
+            if let Some(agg) = self.find_aggregate_function(result) {
+                return Some(agg);
+            }
+        }
+
+        // Check ELSE result
+        if let Some(else_r) = else_result {
+            if let Some(agg) = self.find_aggregate_function(else_r) {
+                return Some(agg);
+            }
+        }
+
+        None
     }
 
     fn extract_column_refs(&self, expr: &Expr) -> Vec<ColumnRef> {
@@ -734,6 +943,28 @@ impl<'a> Analyzer<'a> {
         target_node: Option<&str>,
         approximate: bool,
     ) {
+        self.add_output_column_with_aggregation(
+            ctx,
+            name,
+            sources,
+            expression,
+            target_node,
+            approximate,
+            None,
+        );
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn add_output_column_with_aggregation(
+        &mut self,
+        ctx: &mut StatementContext,
+        name: &str,
+        sources: Vec<ColumnRef>,
+        expression: Option<String>,
+        target_node: Option<&str>,
+        approximate: bool,
+        aggregation: Option<AggregationInfo>,
+    ) {
         let normalized_name = self.normalize_identifier(name);
         let node_id = generate_column_node_id(target_node, &normalized_name);
 
@@ -750,6 +981,7 @@ impl<'a> Analyzer<'a> {
             filters: Vec::new(),
             join_type: None,
             join_condition: None,
+            aggregation,
         };
         ctx.add_node(col_node);
 
@@ -819,6 +1051,7 @@ impl<'a> Analyzer<'a> {
                     filters: Vec::new(),
                     join_type: None,
                     join_condition: None,
+                    aggregation: None,
                 };
                 ctx.add_node(source_col_node);
 
@@ -1378,6 +1611,7 @@ impl<'a> Analyzer<'a> {
                     filters: Vec::new(),
                     join_type,
                     join_condition,
+                    aggregation: None,
                 });
             }
 
@@ -1435,6 +1669,7 @@ impl<'a> Analyzer<'a> {
             filters: Vec::new(),
             join_type: None,
             join_condition: None,
+            aggregation: None,
         });
 
         self.all_tables.insert(canonical.clone());
@@ -1561,6 +1796,7 @@ impl<'a> Analyzer<'a> {
             filters: Vec::new(),
             join_type: None,
             join_condition: None,
+            aggregation: None,
         });
 
         self.all_tables.insert(canonical.clone());
@@ -1659,6 +1895,7 @@ impl<'a> Analyzer<'a> {
             filters: Vec::new(),
             join_type: None,
             join_condition: None,
+            aggregation: None,
         });
 
         // Create column nodes immediately from schema (either imported or from CREATE TABLE)
@@ -1695,6 +1932,7 @@ impl<'a> Analyzer<'a> {
             filters: Vec::new(),
             join_type: None,
             join_condition: None,
+            aggregation: None,
         });
 
         self.all_tables.insert(canonical.clone());

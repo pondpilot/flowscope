@@ -71,3 +71,103 @@ pub(crate) fn should_skip_function_arg(func_name: &str, arg_index: usize) -> boo
     }
     false
 }
+
+/// Set of known SQL aggregate functions.
+/// These functions collapse multiple rows into a single result (1:many → 1).
+pub(crate) static AGGREGATE_FUNCTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    let mut funcs = HashSet::new();
+
+    // Standard SQL aggregate functions
+    funcs.insert("count");
+    funcs.insert("sum");
+    funcs.insert("avg");
+    funcs.insert("min");
+    funcs.insert("max");
+
+    // Statistical aggregates
+    funcs.insert("stddev");
+    funcs.insert("stddev_pop");
+    funcs.insert("stddev_samp");
+    funcs.insert("variance");
+    funcs.insert("var_pop");
+    funcs.insert("var_samp");
+    funcs.insert("covar_pop");
+    funcs.insert("covar_samp");
+    funcs.insert("corr");
+    funcs.insert("regr_slope");
+    funcs.insert("regr_intercept");
+    funcs.insert("regr_count");
+    funcs.insert("regr_r2");
+    funcs.insert("regr_avgx");
+    funcs.insert("regr_avgy");
+    funcs.insert("regr_sxx");
+    funcs.insert("regr_syy");
+    funcs.insert("regr_sxy");
+
+    // Array/List aggregates
+    funcs.insert("array_agg");
+    funcs.insert("list_agg");
+    funcs.insert("listagg");
+    funcs.insert("string_agg");
+    funcs.insert("group_concat");
+
+    // JSON aggregates
+    funcs.insert("json_agg");
+    funcs.insert("jsonb_agg");
+    funcs.insert("json_object_agg");
+    funcs.insert("jsonb_object_agg");
+
+    // Boolean aggregates
+    funcs.insert("bool_and");
+    funcs.insert("bool_or");
+    funcs.insert("every");
+
+    // Bit aggregates
+    funcs.insert("bit_and");
+    funcs.insert("bit_or");
+    funcs.insert("bit_xor");
+
+    // Other common aggregates
+    funcs.insert("any_value");
+    funcs.insert("first");
+    funcs.insert("last");
+    funcs.insert("first_value");
+    funcs.insert("last_value");
+    funcs.insert("median");
+    funcs.insert("mode");
+    funcs.insert("percentile_cont");
+    funcs.insert("percentile_disc");
+    funcs.insert("approx_count_distinct");
+    funcs.insert("approx_percentile");
+    funcs.insert("hll_count");
+    funcs.insert("hyperloglog");
+
+    // BigQuery specific
+    funcs.insert("countif");
+    funcs.insert("logical_and");
+    funcs.insert("logical_or");
+
+    // Snowflake specific
+    funcs.insert("bitand_agg");
+    funcs.insert("bitor_agg");
+    funcs.insert("bitxor_agg");
+    funcs.insert("booland_agg");
+    funcs.insert("boolor_agg");
+
+    funcs
+});
+
+/// Check if a function name is a known aggregate function.
+pub(crate) fn is_aggregate_function(func_name: &str) -> bool {
+    let func_lower = func_name.to_lowercase();
+    AGGREGATE_FUNCTIONS.contains(func_lower.as_str())
+}
+
+/// Information about an aggregate function call found in an expression.
+#[derive(Debug, Clone)]
+pub(crate) struct AggregateCall {
+    /// The aggregate function name (uppercase, e.g., "SUM", "COUNT")
+    pub(crate) function: String,
+    /// Whether DISTINCT was specified
+    pub(crate) distinct: bool,
+}

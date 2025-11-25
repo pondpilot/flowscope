@@ -141,6 +141,9 @@ export const COLORS = {
   recursive: '#F59E0B',
   accent: '#4C61FF',
   filter: '#059669', // Emerald - filter predicates
+  // WCAG AA compliant colors for badges (minimum 4.5:1 contrast ratio on light backgrounds)
+  aggregation: '#B45309', // Amber-700 - aggregation/GROUP BY (5.0:1 contrast)
+  groupingKey: '#1D4ED8', // Blue-700 - GROUP BY key columns (7.2:1 contrast)
 
   // Legacy aliases for backwards compatibility
   table: {
