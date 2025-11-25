@@ -69,9 +69,17 @@ export function EditorToolbar({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="generic">Generic SQL</SelectItem>
-            <SelectItem value="postgres">PostgreSQL</SelectItem>
-            <SelectItem value="snowflake">Snowflake</SelectItem>
             <SelectItem value="bigquery">BigQuery</SelectItem>
+            <SelectItem value="clickhouse">ClickHouse</SelectItem>
+            <SelectItem value="databricks">Databricks</SelectItem>
+            <SelectItem value="duckdb">DuckDB</SelectItem>
+            <SelectItem value="hive">Hive</SelectItem>
+            <SelectItem value="mssql">MS SQL Server</SelectItem>
+            <SelectItem value="mysql">MySQL</SelectItem>
+            <SelectItem value="postgres">PostgreSQL</SelectItem>
+            <SelectItem value="redshift">Redshift</SelectItem>
+            <SelectItem value="snowflake">Snowflake</SelectItem>
+            <SelectItem value="sqlite">SQLite</SelectItem>
           </SelectContent>
         </Select>
       </div>

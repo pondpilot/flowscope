@@ -20,6 +20,7 @@ export const KEYBOARD_SHORTCUTS = {
 
 export const STORAGE_KEYS = {
   PROJECTS: 'flowscope-projects',
+  ACTIVE_PROJECT_ID: 'flowscope-active-project-id',
   VIEW_MODE: 'flowscope-view-mode',
 } as const;
 

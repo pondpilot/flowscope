@@ -4,12 +4,21 @@ This document shows SQL feature support across different dialects in FlowScope.
 
 ## Supported Dialects
 
-| Dialect | Parser | Status |
-|---------|--------|--------|
-| `generic` | sqlparser-rs Generic | ✅ Stable |
-| `postgres` | sqlparser-rs PostgreSQL | ✅ Stable |
-| `snowflake` | sqlparser-rs Snowflake | ✅ Stable |
-| `bigquery` | sqlparser-rs BigQuery | ✅ Stable |
+| Dialect | Parser | Case Sensitivity | Status |
+|---------|--------|------------------|--------|
+| `generic` | sqlparser-rs Generic | Lower | ✅ Stable |
+| `ansi` | sqlparser-rs ANSI | Upper | ✅ Stable |
+| `bigquery` | sqlparser-rs BigQuery | Exact | ✅ Stable |
+| `clickhouse` | sqlparser-rs ClickHouse | Exact | ✅ Stable |
+| `databricks` | sqlparser-rs Databricks | Lower | ✅ Stable |
+| `duckdb` | sqlparser-rs DuckDB | Lower | ✅ Stable |
+| `hive` | sqlparser-rs Hive | Lower | ✅ Stable |
+| `mssql` | sqlparser-rs MS SQL Server | Exact | ✅ Stable |
+| `mysql` | sqlparser-rs MySQL | Exact | ✅ Stable |
+| `postgres` | sqlparser-rs PostgreSQL | Lower | ✅ Stable |
+| `redshift` | sqlparser-rs Redshift | Lower | ✅ Stable |
+| `snowflake` | sqlparser-rs Snowflake | Upper | ✅ Stable |
+| `sqlite` | sqlparser-rs SQLite | Exact | ✅ Stable |
 
 ## Statement Support
 

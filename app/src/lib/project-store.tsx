@@ -3,7 +3,42 @@ import { STORAGE_KEYS, FILE_EXTENSIONS } from './constants';
 
 const uuidv4 = () => crypto.randomUUID();
 
-export type Dialect = 'generic' | 'postgres' | 'snowflake' | 'bigquery';
+const MAX_PROJECT_NAME_LENGTH = 50;
+
+/**
+ * Validates and sanitizes a project name.
+ * Returns the sanitized name or null if invalid.
+ */
+function validateProjectName(name: string, existingNames: string[]): string | null {
+  const trimmed = name.trim().slice(0, MAX_PROJECT_NAME_LENGTH);
+
+  if (!trimmed) {
+    return null;
+  }
+
+  // Check for duplicate names (case-insensitive)
+  const lowerName = trimmed.toLowerCase();
+  if (existingNames.some(existing => existing.toLowerCase() === lowerName)) {
+    return null;
+  }
+
+  return trimmed;
+}
+
+export type Dialect =
+  | 'generic'
+  | 'ansi'
+  | 'bigquery'
+  | 'clickhouse'
+  | 'databricks'
+  | 'duckdb'
+  | 'hive'
+  | 'mssql'
+  | 'mysql'
+  | 'postgres'
+  | 'redshift'
+  | 'snowflake'
+  | 'sqlite';
 export type RunMode = 'current' | 'all' | 'custom';
 
 export interface ProjectFile {
@@ -30,6 +65,7 @@ interface ProjectContextType {
   currentProject: Project | null;
   createProject: (name: string) => void;
   deleteProject: (id: string) => void;
+  renameProject: (id: string, newName: string) => void;
   selectProject: (id: string) => void;
   setProjectDialect: (projectId: string, dialect: Dialect) => void;
   setRunMode: (projectId: string, mode: RunMode) => void;
@@ -247,20 +283,57 @@ const saveProjectsToStorage = (projects: Project[]) => {
   }
 };
 
+const loadActiveProjectIdFromStorage = (projects: Project[]): string | null => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEYS.ACTIVE_PROJECT_ID);
+    if (saved && projects.some(p => p.id === saved)) {
+      return saved;
+    }
+  } catch (error) {
+    console.error('Failed to load active project id from storage:', error);
+  }
+  return projects[0]?.id || null;
+};
+
+const saveActiveProjectIdToStorage = (projectId: string | null) => {
+  try {
+    if (projectId) {
+      localStorage.setItem(STORAGE_KEYS.ACTIVE_PROJECT_ID, projectId);
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.ACTIVE_PROJECT_ID);
+    }
+  } catch (error) {
+    console.error('Failed to save active project id to storage:', error);
+  }
+};
+
 export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const [projects, setProjects] = useState<Project[]>(loadProjectsFromStorage);
-  const [activeProjectId, setActiveProjectId] = useState<string | null>(projects[0]?.id || null);
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(() =>
+    loadActiveProjectIdFromStorage(projects)
+  );
 
   useEffect(() => {
     saveProjectsToStorage(projects);
   }, [projects]);
 
+  useEffect(() => {
+    saveActiveProjectIdToStorage(activeProjectId);
+  }, [activeProjectId]);
+
   const currentProject = projects.find(p => p.id === activeProjectId) || null;
 
   const createProject = useCallback((name: string) => {
+    const existingNames = projects.map(p => p.name);
+    const validatedName = validateProjectName(name, existingNames);
+
+    if (!validatedName) {
+      return;
+    }
+
     const newProject: Project = {
       id: uuidv4(),
-      name,
+      name: validatedName,
       files: [],
       activeFileId: null,
       dialect: 'generic',
@@ -270,7 +343,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     };
     setProjects(prev => [...prev, newProject]);
     setActiveProjectId(newProject.id);
-  }, []);
+  }, [projects]);
 
   const deleteProject = useCallback((id: string) => {
     setProjects(prev => prev.filter(p => p.id !== id));
@@ -278,6 +351,21 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       setActiveProjectId(null);
     }
   }, [activeProjectId]);
+
+  const renameProject = useCallback((id: string, newName: string) => {
+    // Exclude the project being renamed from the duplicate check
+    const existingNames = projects.filter(p => p.id !== id).map(p => p.name);
+    const validatedName = validateProjectName(newName, existingNames);
+
+    if (!validatedName) {
+      return;
+    }
+
+    setProjects(prev => prev.map(p => {
+      if (p.id !== id) return p;
+      return { ...p, name: validatedName };
+    }));
+  }, [projects]);
 
   const selectProject = useCallback((id: string) => {
     setActiveProjectId(id);
@@ -436,6 +524,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     currentProject,
     createProject,
     deleteProject,
+    renameProject,
     selectProject,
     setProjectDialect,
     setRunMode,

@@ -50,31 +50,63 @@ pub struct FileSource {
 pub enum Dialect {
     #[default]
     Generic,
-    Postgres,
-    Snowflake,
+    Ansi,
     Bigquery,
+    Clickhouse,
+    Databricks,
+    Duckdb,
+    Hive,
+    Mssql,
+    Mysql,
+    Postgres,
+    Redshift,
+    Snowflake,
+    Sqlite,
 }
 
 impl Dialect {
     pub fn to_sqlparser_dialect(&self) -> Box<dyn sqlparser::dialect::Dialect> {
         use sqlparser::dialect::{
-            BigQueryDialect, GenericDialect, PostgreSqlDialect, SnowflakeDialect,
+            AnsiDialect, BigQueryDialect, ClickHouseDialect, DatabricksDialect, DuckDbDialect,
+            GenericDialect, HiveDialect, MsSqlDialect, MySqlDialect, PostgreSqlDialect,
+            RedshiftSqlDialect, SQLiteDialect, SnowflakeDialect,
         };
         match self {
             Self::Generic => Box::new(GenericDialect {}),
-            Self::Postgres => Box::new(PostgreSqlDialect {}),
-            Self::Snowflake => Box::new(SnowflakeDialect {}),
+            Self::Ansi => Box::new(AnsiDialect {}),
             Self::Bigquery => Box::new(BigQueryDialect {}),
+            Self::Clickhouse => Box::new(ClickHouseDialect {}),
+            Self::Databricks => Box::new(DatabricksDialect {}),
+            Self::Duckdb => Box::new(DuckDbDialect {}),
+            Self::Hive => Box::new(HiveDialect {}),
+            Self::Mssql => Box::new(MsSqlDialect {}),
+            Self::Mysql => Box::new(MySqlDialect {}),
+            Self::Postgres => Box::new(PostgreSqlDialect {}),
+            Self::Redshift => Box::new(RedshiftSqlDialect {}),
+            Self::Snowflake => Box::new(SnowflakeDialect {}),
+            Self::Sqlite => Box::new(SQLiteDialect {}),
         }
     }
 
     /// Get the case sensitivity behavior for this dialect
     pub fn default_case_sensitivity(&self) -> CaseSensitivity {
         match self {
+            // Databases that fold unquoted identifiers to lowercase
             Dialect::Postgres => CaseSensitivity::Lower,
-            Dialect::Snowflake => CaseSensitivity::Upper,
-            Dialect::Bigquery => CaseSensitivity::Exact,
+            Dialect::Redshift => CaseSensitivity::Lower,
+            Dialect::Duckdb => CaseSensitivity::Lower,
+            Dialect::Databricks => CaseSensitivity::Lower,
+            Dialect::Hive => CaseSensitivity::Lower,
             Dialect::Generic => CaseSensitivity::Lower,
+            // Databases that fold unquoted identifiers to uppercase
+            Dialect::Snowflake => CaseSensitivity::Upper,
+            Dialect::Ansi => CaseSensitivity::Upper,
+            // Databases that preserve case (case-sensitive)
+            Dialect::Bigquery => CaseSensitivity::Exact,
+            Dialect::Clickhouse => CaseSensitivity::Exact,
+            Dialect::Mssql => CaseSensitivity::Exact,
+            Dialect::Mysql => CaseSensitivity::Exact,
+            Dialect::Sqlite => CaseSensitivity::Exact,
         }
     }
 }

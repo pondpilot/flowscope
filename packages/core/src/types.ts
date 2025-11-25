@@ -6,7 +6,20 @@
 // Request Types
 
 /** SQL dialect for parsing and analysis. */
-export type Dialect = 'generic' | 'postgres' | 'snowflake' | 'bigquery';
+export type Dialect =
+  | 'generic'
+  | 'ansi'
+  | 'bigquery'
+  | 'clickhouse'
+  | 'databricks'
+  | 'duckdb'
+  | 'hive'
+  | 'mssql'
+  | 'mysql'
+  | 'postgres'
+  | 'redshift'
+  | 'snowflake'
+  | 'sqlite';
 
 /** Case sensitivity mode for identifier normalization. */
 export type CaseSensitivity = 'dialect' | 'lower' | 'upper' | 'exact';

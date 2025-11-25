@@ -64,7 +64,21 @@ export async function analyzeSql(request: AnalyzeRequest): Promise<AnalyzeResult
     throw new Error('Invalid request: dialect is required');
   }
 
-  const validDialects: Dialect[] = ['generic', 'postgres', 'snowflake', 'bigquery'];
+  const validDialects: Dialect[] = [
+    'generic',
+    'ansi',
+    'bigquery',
+    'clickhouse',
+    'databricks',
+    'duckdb',
+    'hive',
+    'mssql',
+    'mysql',
+    'postgres',
+    'redshift',
+    'snowflake',
+    'sqlite',
+  ];
   if (!validDialects.includes(request.dialect)) {
     throw new Error(
       `Invalid dialect: ${request.dialect}. Must be one of: ${validDialects.join(', ')}`
