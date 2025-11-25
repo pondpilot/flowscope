@@ -2,9 +2,10 @@ import { createContext, createElement, useContext, type ReactNode } from 'react'
 import { useStore } from 'zustand';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { AnalyzeResult, Span } from '@pondpilot/flowscope-core';
-import type { LineageViewMode, NavigationRequest } from './types';
+import type { LineageViewMode, LayoutAlgorithm, NavigationRequest } from './types';
 
 const VIEW_MODE_STORAGE_KEY = 'flowscope-view-mode';
+const LAYOUT_ALGORITHM_STORAGE_KEY = 'flowscope-layout-algorithm';
 
 /**
  * Load the view mode from localStorage, defaulting to 'table' if not found or invalid.
@@ -32,6 +33,32 @@ function saveViewMode(mode: LineageViewMode): void {
   }
 }
 
+/**
+ * Load the layout algorithm from localStorage, defaulting to 'dagre' if not found or invalid.
+ */
+function loadLayoutAlgorithm(): LayoutAlgorithm {
+  try {
+    const stored = localStorage.getItem(LAYOUT_ALGORITHM_STORAGE_KEY);
+    if (stored === 'dagre' || stored === 'elk') {
+      return stored;
+    }
+  } catch {
+    // localStorage might not be available (SSR, etc.)
+  }
+  return 'dagre';
+}
+
+/**
+ * Save the layout algorithm to localStorage.
+ */
+function saveLayoutAlgorithm(algorithm: LayoutAlgorithm): void {
+  try {
+    localStorage.setItem(LAYOUT_ALGORITHM_STORAGE_KEY, algorithm);
+  } catch {
+    // localStorage might not be available
+  }
+}
+
 export interface LineageState {
   // Data
   result: AnalyzeResult | null;
@@ -43,6 +70,7 @@ export interface LineageState {
   highlightedSpan: Span | null;
   searchTerm: string;
   viewMode: LineageViewMode;
+  layoutAlgorithm: LayoutAlgorithm;
   collapsedNodeIds: Set<string>;
   expandedTableIds: Set<string>; // Tables with all columns shown
   showScriptTables: boolean;
@@ -58,6 +86,7 @@ export interface LineageState {
   highlightSpan: (span: Span | null) => void;
   setSearchTerm: (term: string) => void;
   setViewMode: (mode: LineageViewMode) => void;
+  setLayoutAlgorithm: (algorithm: LayoutAlgorithm) => void;
   toggleShowScriptTables: () => void;
   requestNavigation: (request: NavigationRequest | null) => void;
 }
@@ -67,6 +96,7 @@ export interface LineageState {
  */
 export function createLineageStore(initialState?: Partial<LineageState>): StoreApi<LineageState> {
   const initialViewMode = initialState?.viewMode ?? loadViewMode();
+  const initialLayoutAlgorithm = initialState?.layoutAlgorithm ?? loadLayoutAlgorithm();
 
   return createStore<LineageState>((set) => ({
     // Initial state
@@ -77,6 +107,7 @@ export function createLineageStore(initialState?: Partial<LineageState>): StoreA
     highlightedSpan: null,
     searchTerm: '',
     viewMode: initialViewMode,
+    layoutAlgorithm: initialLayoutAlgorithm,
     collapsedNodeIds: new Set(),
     expandedTableIds: new Set(),
     showScriptTables: false,
@@ -150,6 +181,11 @@ export function createLineageStore(initialState?: Partial<LineageState>): StoreA
       set({ viewMode: mode });
     },
 
+    setLayoutAlgorithm: (algorithm) => {
+      saveLayoutAlgorithm(algorithm);
+      set({ layoutAlgorithm: algorithm });
+    },
+
     toggleShowScriptTables: () => set((state) => ({ showScriptTables: !state.showScriptTables })),
 
     requestNavigation: (request) => set({ navigationRequest: request }),
@@ -197,6 +233,7 @@ export function useLineage() {
       highlightedSpan: store.highlightedSpan,
       searchTerm: store.searchTerm,
       viewMode: store.viewMode,
+      layoutAlgorithm: store.layoutAlgorithm,
       collapsedNodeIds: store.collapsedNodeIds,
       expandedTableIds: store.expandedTableIds,
       showScriptTables: store.showScriptTables,
@@ -212,6 +249,7 @@ export function useLineage() {
       highlightSpan: store.highlightSpan,
       setSearchTerm: store.setSearchTerm,
       setViewMode: store.setViewMode,
+      setLayoutAlgorithm: store.setLayoutAlgorithm,
       toggleShowScriptTables: store.toggleShowScriptTables,
       requestNavigation: store.requestNavigation,
     },
@@ -231,6 +269,7 @@ export function useLineageState() {
   const highlightedSpan = useLineageStore((state) => state.highlightedSpan);
   const searchTerm = useLineageStore((state) => state.searchTerm);
   const viewMode = useLineageStore((state) => state.viewMode);
+  const layoutAlgorithm = useLineageStore((state) => state.layoutAlgorithm);
   const collapsedNodeIds = useLineageStore((state) => state.collapsedNodeIds);
   const expandedTableIds = useLineageStore((state) => state.expandedTableIds);
   const showScriptTables = useLineageStore((state) => state.showScriptTables);
@@ -244,6 +283,7 @@ export function useLineageState() {
     highlightedSpan,
     searchTerm,
     viewMode,
+    layoutAlgorithm,
     collapsedNodeIds,
     expandedTableIds,
     showScriptTables,
@@ -264,6 +304,7 @@ export function useLineageActions() {
   const highlightSpan = useLineageStore((state) => state.highlightSpan);
   const setSearchTerm = useLineageStore((state) => state.setSearchTerm);
   const setViewMode = useLineageStore((state) => state.setViewMode);
+  const setLayoutAlgorithm = useLineageStore((state) => state.setLayoutAlgorithm);
   const toggleShowScriptTables = useLineageStore((state) => state.toggleShowScriptTables);
   const requestNavigation = useLineageStore((state) => state.requestNavigation);
 
@@ -277,6 +318,7 @@ export function useLineageActions() {
     highlightSpan,
     setSearchTerm,
     setViewMode,
+    setLayoutAlgorithm,
     toggleShowScriptTables,
     requestNavigation,
   };

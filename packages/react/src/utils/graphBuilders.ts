@@ -50,11 +50,19 @@ export function mergeStatements(statements: StatementLineage[]): StatementLineag
     });
   });
 
+  // Aggregate stats from all statements
+  const totalJoinCount = statements.reduce((sum, stmt) => sum + stmt.joinCount, 0);
+  const maxComplexity = statements.length > 0
+    ? Math.max(...statements.map((stmt) => stmt.complexityScore))
+    : 1;
+
   return {
     statementIndex: 0,
     statementType: 'SELECT',
     nodes: Array.from(mergedNodes.values()),
     edges: Array.from(mergedEdges.values()),
+    joinCount: totalJoinCount,
+    complexityScore: maxComplexity,
   };
 }
 

@@ -162,7 +162,13 @@ impl<'a> Analyzer<'a> {
         let table_count = global_lineage
             .nodes
             .iter()
-            .filter(|n| n.node_type == NodeType::Table || n.node_type == NodeType::Cte)
+            .filter(|n| n.node_type == NodeType::Table)
+            .count();
+
+        let cte_count = global_lineage
+            .nodes
+            .iter()
+            .filter(|n| n.node_type == NodeType::Cte)
             .count();
 
         let column_count = global_lineage
@@ -171,10 +177,31 @@ impl<'a> Analyzer<'a> {
             .filter(|n| n.node_type == NodeType::Column)
             .count();
 
+        // Aggregate join count from all statements
+        let join_count: usize = self.statement_lineages.iter().map(|s| s.join_count).sum();
+
+        // Calculate project-level complexity from global lineage
+        // Uses table/CTE counts since GlobalNode doesn't track per-node join info
+        let filter_count: usize = self
+            .statement_lineages
+            .iter()
+            .flat_map(|s| s.nodes.iter())
+            .map(|n| n.filters.len())
+            .sum();
+
+        let complexity_score = calculate_global_complexity(
+            table_count,
+            cte_count,
+            join_count,
+            filter_count,
+        );
+
         Summary {
             statement_count: self.statement_lineages.len(),
-            table_count,
+            table_count: table_count + cte_count, // Keep combined for backwards compat
             column_count,
+            join_count,
+            complexity_score,
             issue_count: IssueCount {
                 errors: error_count,
                 warnings: warning_count,
@@ -183,4 +210,33 @@ impl<'a> Analyzer<'a> {
             has_errors: error_count > 0,
         }
     }
+}
+
+/// Calculate complexity score for project-level summary.
+///
+/// Returns a score from 1-100 based on structural complexity indicators.
+/// The weights reflect typical query maintenance and comprehension burden:
+/// - Tables (5): Base data sources add moderate complexity
+/// - CTEs (8): Higher than tables since they introduce intermediate logic
+/// - Joins (10): Highest weight as joins significantly increase query complexity
+///   and are common sources of performance issues and logical errors
+/// - Filters (2): Low weight since WHERE clauses are straightforward but add
+///   some cognitive load when numerous
+fn calculate_global_complexity(
+    table_count: usize,
+    cte_count: usize,
+    join_count: usize,
+    filter_count: usize,
+) -> u8 {
+    const TABLE_WEIGHT: usize = 5;
+    const CTE_WEIGHT: usize = 8;
+    const JOIN_WEIGHT: usize = 10;
+    const FILTER_WEIGHT: usize = 2;
+
+    let raw_score = table_count * TABLE_WEIGHT
+        + cte_count * CTE_WEIGHT
+        + join_count * JOIN_WEIGHT
+        + filter_count * FILTER_WEIGHT;
+
+    std::cmp::min(100, std::cmp::max(1, raw_score)) as u8
 }

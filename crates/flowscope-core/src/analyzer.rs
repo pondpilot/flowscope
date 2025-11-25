@@ -11,6 +11,7 @@ use std::collections::{HashMap, HashSet};
 #[cfg(feature = "tracing")]
 use tracing::{info, info_span};
 
+mod complexity;
 mod context;
 mod diagnostics;
 mod functions;
@@ -324,6 +325,10 @@ impl<'a> Analyzer<'a> {
         // Apply pending filter predicates to table nodes before finalizing
         self.apply_pending_filters(&mut ctx);
 
+        // Calculate statement-level stats
+        let join_count = complexity::count_joins(&ctx.nodes);
+        let complexity_score = complexity::calculate_complexity(&ctx.nodes);
+
         Ok(StatementLineage {
             statement_index: index,
             statement_type,
@@ -331,6 +336,8 @@ impl<'a> Analyzer<'a> {
             nodes: ctx.nodes,
             edges: ctx.edges,
             span: None,
+            join_count,
+            complexity_score,
         })
     }
 

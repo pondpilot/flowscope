@@ -18,6 +18,11 @@ import type {
 export type LineageViewMode = 'script' | 'table' | 'column';
 
 /**
+ * Layout algorithm for the graph visualization.
+ */
+export type LayoutAlgorithm = 'dagre' | 'elk';
+
+/**
  * Props for the SchemaView component.
  */
 export interface SchemaViewProps {

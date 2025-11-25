@@ -561,6 +561,7 @@
     html-to-image "^1.11.13"
     lucide-react "^0.554.0"
     tailwind-merge "^3.4.0"
+    xlsx "^0.18.5"
     zustand "^5.0.8"
 
 "@radix-ui/number@1.1.1":
@@ -2023,6 +2024,11 @@ electron-to-chromium@^1.5.249:
   version "1.5.259"
   resolved "https://registry.npmjs.org/electron-to-chromium/-/electron-to-chromium-1.5.259.tgz"
   integrity sha512-I+oLXgpEJzD6Cwuwt1gYjxsDmu/S/Kd41mmLA3O+/uH2pFRO/DvOjUyGozL8j3KeLV6WyZ7ssPwELMsXCcsJAQ==
+
+elkjs@^0.11.0:
+  version "0.11.0"
+  resolved "https://registry.yarnpkg.com/elkjs/-/elkjs-0.11.0.tgz#ca57b209ff66531c0f77ff32b9667aaeaad45d1b"
+  integrity sha512-u4J8h9mwEDaYMqo0RYJpqNMFDoMK7f+pu4GjcV+N8jIC7TRdORgzkfSjTJemhqONFfH6fBI3wpysgWbhgVWIXw==
 
 entities@^6.0.0:
   version "6.0.1"

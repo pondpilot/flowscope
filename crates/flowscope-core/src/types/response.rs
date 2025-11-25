@@ -43,6 +43,8 @@ impl AnalyzeResult {
                 statement_count: 0,
                 table_count: 0,
                 column_count: 0,
+                join_count: 0,
+                complexity_score: 1,
                 issue_count: IssueCount {
                     errors: 1,
                     warnings: 0,
@@ -78,6 +80,12 @@ pub struct StatementLineage {
     /// Optional span of the entire statement in source SQL
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub span: Option<Span>,
+
+    /// Number of JOIN operations in this statement
+    pub join_count: usize,
+
+    /// Complexity score (1-100) based on query structure
+    pub complexity_score: u8,
 }
 
 /// A node in the lineage graph (table, CTE, or column).
@@ -640,6 +648,8 @@ mod tests {
                 }],
                 edges: vec![],
                 span: None,
+                join_count: 0,
+                complexity_score: 5,
             }],
             global_lineage: GlobalLineage::default(),
             issues: vec![],

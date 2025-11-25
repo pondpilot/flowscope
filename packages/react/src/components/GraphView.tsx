@@ -10,11 +10,12 @@ import {
 } from '@xyflow/react';
 import type { Node as FlowNode, Edge as FlowEdge } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Network, LayoutList } from 'lucide-react';
+import { LayoutList } from 'lucide-react';
 
 import { useLineage } from '../store';
-import type { GraphViewProps, TableNodeData } from '../types';
-import { getLayoutedElements } from '../utils/layout';
+import type { GraphViewProps, TableNodeData, LayoutAlgorithm } from '../types';
+import { getLayoutedElements, getLayoutedElementsAsync } from '../utils/layout';
+import { LayoutSelector } from './LayoutSelector';
 import { findConnectedElements } from '../utils/graphTraversal';
 import {
   mergeStatements,
@@ -125,7 +126,7 @@ function enhanceGraphWithHighlights(
 
 export function GraphView({ className, onNodeClick, graphContainerRef }: GraphViewProps): JSX.Element {
   const { state, actions } = useLineage();
-  const { result, selectedNodeId, searchTerm, viewMode, collapsedNodeIds, showScriptTables, expandedTableIds } = state;
+  const { result, selectedNodeId, searchTerm, viewMode, layoutAlgorithm, collapsedNodeIds, showScriptTables, expandedTableIds } = state;
 
   // Local search state with debouncing
   const [localSearchTerm, setLocalSearchTerm] = useState(searchTerm);
@@ -149,13 +150,14 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
     return mergeStatements(result.statements);
   }, [result]);
 
-  const { layoutedNodes, layoutedEdges } = useMemo(() => {
-    if (!result || !result.statements) return { layoutedNodes: [], layoutedEdges: [] };
+  // Build raw nodes and edges (without layout)
+  const { rawNodes, rawEdges, direction } = useMemo(() => {
+    if (!result || !result.statements) return { rawNodes: [], rawEdges: [], direction: 'LR' as const };
 
     try {
-      let rawNodes: FlowNode[];
-      let rawEdges: FlowEdge[];
-      let direction: 'LR' | 'TB' = 'LR';
+      let nodes: FlowNode[];
+      let edges: FlowEdge[];
+      let dir: 'LR' | 'TB' = 'LR';
 
       if (viewMode === 'script') {
         const tempGraph = buildScriptLevelGraph(
@@ -171,11 +173,11 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
         }
 
         const enhancedGraph = enhanceGraphWithHighlights(tempGraph, highlightIds);
-        rawNodes = enhancedGraph.nodes;
-        rawEdges = enhancedGraph.edges;
-        direction = 'LR';
+        nodes = enhancedGraph.nodes;
+        edges = enhancedGraph.edges;
+        dir = 'LR';
       } else if (viewMode === 'column') {
-        if (!statement) return { layoutedNodes: [], layoutedEdges: [] };
+        if (!statement) return { rawNodes: [], rawEdges: [], direction: 'LR' as const };
 
         const tempGraph = buildColumnLevelGraph(
           statement,
@@ -200,12 +202,12 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
           result.resolvedSchema
         );
         const enhancedGraph = enhanceGraphWithHighlights(graph, highlightIds);
-        rawNodes = enhancedGraph.nodes;
-        rawEdges = enhancedGraph.edges;
-        direction = 'LR';
+        nodes = enhancedGraph.nodes;
+        edges = enhancedGraph.edges;
+        dir = 'LR';
       } else {
         // Table view
-        if (!statement) return { layoutedNodes: [], layoutedEdges: [] };
+        if (!statement) return { rawNodes: [], rawEdges: [], direction: 'LR' as const };
 
         const tempGraph = {
           nodes: buildFlowNodes(
@@ -236,18 +238,58 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
           edges: buildFlowEdges(statement),
         };
         const enhancedGraph = enhanceGraphWithHighlights(graph, highlightIds);
-        rawNodes = enhancedGraph.nodes;
-        rawEdges = enhancedGraph.edges;
-        direction = 'LR';
+        nodes = enhancedGraph.nodes;
+        edges = enhancedGraph.edges;
+        dir = 'LR';
       }
 
-      const { nodes: ln, edges: le } = getLayoutedElements(rawNodes, rawEdges, direction);
-      return { layoutedNodes: ln, layoutedEdges: le };
+      return { rawNodes: nodes, rawEdges: edges, direction: dir };
     } catch (error) {
       console.error('Graph building failed:', error);
-      return { layoutedNodes: [], layoutedEdges: [] };
+      return { rawNodes: [], rawEdges: [], direction: 'LR' as const };
     }
   }, [result, statement, selectedNodeId, searchTerm, viewMode, collapsedNodeIds, showScriptTables, expandedTableIds]);
+
+  // State for async layout results
+  const [layoutedNodes, setLayoutedNodes] = useState<FlowNode[]>([]);
+  const [layoutedEdges, setLayoutedEdges] = useState<FlowEdge[]>([]);
+
+  // Apply layout (sync for dagre, async for elk)
+  useEffect(() => {
+    if (rawNodes.length === 0) {
+      setLayoutedNodes([]);
+      setLayoutedEdges([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    if (layoutAlgorithm === 'elk') {
+      getLayoutedElementsAsync(rawNodes, rawEdges, direction, 'elk')
+        .then(({ nodes, edges }) => {
+          if (!cancelled) {
+            setLayoutedNodes(nodes);
+            setLayoutedEdges(edges);
+          }
+        })
+        .catch((error) => {
+          console.error('ELK layout failed, falling back to dagre:', error);
+          if (!cancelled) {
+            const { nodes, edges } = getLayoutedElements(rawNodes, rawEdges, direction, 'dagre');
+            setLayoutedNodes(nodes);
+            setLayoutedEdges(edges);
+          }
+        });
+    } else {
+      const { nodes, edges } = getLayoutedElements(rawNodes, rawEdges, direction, 'dagre');
+      setLayoutedNodes(nodes);
+      setLayoutedEdges(edges);
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [rawNodes, rawEdges, direction, layoutAlgorithm]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<FlowEdge>([]);
@@ -256,6 +298,7 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
   const lastResultId = useRef<string | null>(null);
   const lastViewMode = useRef<string | null>(null);
   const lastShowTables = useRef<boolean | null>(null);
+  const lastLayoutAlgorithm = useRef<LayoutAlgorithm | null>(null);
 
   useEffect(() => {
     const currentResultId = result ? JSON.stringify(result.summary) : null;
@@ -264,7 +307,8 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
       !isInitialized.current ||
       currentResultId !== lastResultId.current ||
       viewMode !== lastViewMode.current ||
-      showScriptTables !== lastShowTables.current;
+      showScriptTables !== lastShowTables.current ||
+      layoutAlgorithm !== lastLayoutAlgorithm.current;
 
     if (needsUpdate && layoutedNodes.length > 0) {
       setNodes(layoutedNodes);
@@ -273,6 +317,7 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
       lastResultId.current = currentResultId;
       lastViewMode.current = viewMode;
       lastShowTables.current = showScriptTables;
+      lastLayoutAlgorithm.current = layoutAlgorithm;
     } else if (layoutedNodes.length > 0) {
       setNodes((currentNodes) => {
         return layoutedNodes.map((layoutNode) => {
@@ -295,6 +340,7 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
     setEdges,
     result,
     viewMode,
+    layoutAlgorithm,
     collapsedNodeIds,
     showScriptTables,
   ]);
@@ -457,25 +503,7 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
         </Panel>
         <Panel position="top-right" className="flex gap-3">
           <div className="flex items-center rounded-lg border border-slate-200/60 bg-white px-1 py-1 shadow-sm backdrop-blur-sm">
-            <GraphTooltipProvider>
-              <GraphTooltip delayDuration={300}>
-                <GraphTooltipTrigger asChild>
-                  <button
-                    onClick={handleRearrange}
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                    aria-label="Rearrange graph layout"
-                  >
-                    <Network className="h-4 w-4" strokeWidth={1.5} />
-                  </button>
-                </GraphTooltipTrigger>
-                <GraphTooltipPortal>
-                  <GraphTooltipContent side="bottom">
-                    <p>Rearrange layout</p>
-                    <GraphTooltipArrow />
-                  </GraphTooltipContent>
-                </GraphTooltipPortal>
-              </GraphTooltip>
-            </GraphTooltipProvider>
+            <LayoutSelector />
           </div>
           <div className="flex items-center rounded-lg border border-slate-200/60 bg-white px-1 py-1 shadow-sm backdrop-blur-sm">
             <ExportMenu graphRef={finalRef} />

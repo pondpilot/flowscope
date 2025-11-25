@@ -119,6 +119,12 @@ pub struct Summary {
     /// Total columns in output (Phase 2+)
     pub column_count: usize,
 
+    /// Total number of JOIN operations
+    pub join_count: usize,
+
+    /// Complexity score (1-100) based on query structure
+    pub complexity_score: u8,
+
     /// Issue counts by severity
     pub issue_count: IssueCount,
 

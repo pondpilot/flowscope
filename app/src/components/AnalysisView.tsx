@@ -14,6 +14,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { SchemaEditor } from './SchemaEditor';
 import { SchemaAwareIssuesPanel } from './SchemaAwareIssuesPanel';
+import { ComplexityDots } from './ComplexityDots';
 import { useProject } from '@/lib/project-store';
 import { Settings } from 'lucide-react';
 import type { SchemaTable, AnalyzeResult } from '@pondpilot/flowscope-core';
@@ -100,6 +101,11 @@ export function AnalysisView() {
               <span className="font-semibold text-foreground">{summary.columnCount}</span>
               <span>columns</span>
             </div>
+            <div className="flex items-center gap-1">
+              <span className="font-semibold text-foreground">{summary.joinCount}</span>
+              <span>joins</span>
+            </div>
+            <ComplexityDots score={summary.complexityScore} />
             <Button
               variant="outline"
               size="sm"

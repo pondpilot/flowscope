@@ -6,6 +6,7 @@ export { IssuesPanel } from './components/IssuesPanel';
 export { LineageExplorer } from './components/LineageExplorer';
 export { SchemaView } from './components/SchemaView';
 export { ViewModeSelector } from './components/ViewModeSelector';
+export { LayoutSelector } from './components/LayoutSelector';
 export { Legend } from './components/Legend';
 export { type EdgeType } from './components/AnimatedEdge';
 export { ErrorBoundary, GraphErrorBoundary } from './components/ErrorBoundary';
@@ -30,6 +31,7 @@ export type {
   LineageActions,
   LineageContextValue,
   LineageViewMode,
+  LayoutAlgorithm,
   GraphViewProps,
   SqlViewProps,
   ColumnPanelProps,

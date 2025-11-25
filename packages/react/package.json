@@ -50,6 +50,7 @@
     "clsx": "^2.1.1",
     "codemirror": "^6.0.0",
     "dagre": "^0.8.5",
+    "elkjs": "^0.11.0",
     "html-to-image": "^1.11.13",
     "lucide-react": "^0.554.0",
     "tailwind-merge": "^3.4.0",

@@ -134,6 +134,10 @@ export interface StatementLineage {
   edges: Edge[];
   /** Optional span of the entire statement in source SQL */
   span?: Span;
+  /** Number of JOIN operations in this statement */
+  joinCount: number;
+  /** Complexity score (1-100) based on query structure */
+  complexityScore: number;
 }
 
 /** A node in the lineage graph (table, CTE, or column). */
@@ -320,6 +324,10 @@ export interface Summary {
   tableCount: number;
   /** Total unique columns discovered across all statements */
   columnCount: number;
+  /** Total number of JOIN operations */
+  joinCount: number;
+  /** Complexity score (1-100) based on query structure */
+  complexityScore: number;
   /** Issue counts by severity */
   issueCount: IssueCount;
   /** Quick check: true if any errors were encountered */

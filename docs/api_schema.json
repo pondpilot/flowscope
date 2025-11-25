@@ -1135,12 +1135,24 @@
       "StatementLineage": {
         "description": "Lineage information for a single SQL statement.",
         "properties": {
+          "complexityScore": {
+            "description": "Complexity score (1-100) based on query structure",
+            "format": "uint8",
+            "minimum": 0.0,
+            "type": "integer"
+          },
           "edges": {
             "description": "All edges connecting nodes in the lineage graph",
             "items": {
               "$ref": "#/definitions/Edge"
             },
             "type": "array"
+          },
+          "joinCount": {
+            "description": "Number of JOIN operations in this statement",
+            "format": "uint",
+            "minimum": 0.0,
+            "type": "integer"
           },
           "nodes": {
             "description": "All nodes in the lineage graph for this statement",
@@ -1179,7 +1191,9 @@
           }
         },
         "required": [
+          "complexityScore",
           "edges",
+          "joinCount",
           "nodes",
           "statementIndex",
           "statementType"
@@ -1216,6 +1230,12 @@
             "minimum": 0.0,
             "type": "integer"
           },
+          "complexityScore": {
+            "description": "Complexity score (1-100) based on query structure",
+            "format": "uint8",
+            "minimum": 0.0,
+            "type": "integer"
+          },
           "hasErrors": {
             "description": "Quick check: true if any errors were encountered",
             "type": "boolean"
@@ -1227,6 +1247,12 @@
               }
             ],
             "description": "Issue counts by severity"
+          },
+          "joinCount": {
+            "description": "Total number of JOIN operations",
+            "format": "uint",
+            "minimum": 0.0,
+            "type": "integer"
           },
           "statementCount": {
             "description": "Total number of statements analyzed",
@@ -1243,8 +1269,10 @@
         },
         "required": [
           "columnCount",
+          "complexityScore",
           "hasErrors",
           "issueCount",
+          "joinCount",
           "statementCount",
           "tableCount"
         ],
