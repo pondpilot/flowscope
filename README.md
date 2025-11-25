@@ -16,6 +16,7 @@ This is a monorepo containing the complete FlowScope stack:
 **Core Engine** (`crates/`)
 - `flowscope-core` — Rust-based SQL parser and lineage analyzer built on sqlparser-rs
 - `flowscope-wasm` — WebAssembly bindings exposing the core engine to JavaScript
+- `flowscope-cli` — Command-line interface for analyzing SQL files and generating diagrams
 
 **NPM Packages** (`packages/`)
 - `@pondpilot/flowscope-core` — TypeScript API with WASM loader and type-safe interfaces
@@ -247,7 +248,8 @@ flowscope/
 │   │   │   ├── parser/              # SQL dialect handling
 │   │   │   └── types/               # Request/response types
 │   │   └── tests/                   # Comprehensive test suite
-│   └── flowscope-wasm/      # WebAssembly bindings
+│   ├── flowscope-wasm/      # WebAssembly bindings
+│   └── flowscope-cli/       # Command-line interface
 │
 ├── packages/
 │   ├── core/                # @pondpilot/flowscope-core
