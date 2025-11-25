@@ -142,3 +142,8 @@ check-all:
     cargo test --workspace --locked
     yarn workspace @pondpilot/flowscope-core test --silent
     just check-schema
+
+# Deploy app to Cloudflare Pages
+deploy: build-wasm build-ts
+    cd app && yarn build
+    wrangler pages deploy app/dist --project-name flowscope-app

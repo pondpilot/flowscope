@@ -33,7 +33,7 @@ interface FileSource {
 }
 
 interface AnalysisOptions {
-  /** Enable column-level lineage (Phase 2+, default true when implemented) */
+  /** Enable column-level lineage (default true) */
   enableColumnLineage?: boolean;
 }
 
@@ -309,7 +309,7 @@ interface Summary {
   /** Total unique tables/CTEs discovered across all statements */
   tableCount: number;
 
-  /** Total columns in output (Phase 2+) */
+  /** Total columns in output */
   columnCount: number;
 
   /** Issue counts by severity */

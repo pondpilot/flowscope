@@ -62,7 +62,7 @@ For unsupported syntax in a given dialect:
 Schema metadata gives the engine knowledge of:
 
 - Which columns exist on which tables.
-- Potentially (later) data types or other attributes (not required for MVP).
+- Potentially (later) data types or other attributes (not required for current version).
 
 ### 3.2 Canonical Structure
 
@@ -107,7 +107,7 @@ Column names inherit the same normalization rules. When conflicts remain ambiguo
 
 ## 4. Lineage Computation
 
-### 4.1 Scope of Statements (MVP)
+### 4.1 Scope of Statements
 
 The engine must handle at least:
 
@@ -132,7 +132,7 @@ The engine must handle at least:
 - `UNION / UNION ALL` and basic set operations:
   - Map columns from both branches into the resulting output.
 
-Explicit exclusions in MVP:
+Explicit exclusions:
 
 - `UPDATE`, `DELETE`, `MERGE`.
 - DDL beyond `CREATE TABLE ... AS SELECT`.
@@ -296,7 +296,7 @@ The assembly pass must run in linear time relative to total nodes/edges to keep 
 
 ## 7. Performance & Limits
 
-### 7.1 Target Scale for MVP
+### 7.1 Target Scale
 
 - Single statement size: a few thousand lines.
 - Multi-statement input: up to a few dozen "normal-sized" statements (not enforced strictly at engine level; host apps can impose limits).

@@ -4,30 +4,39 @@ Core SQL lineage analysis engine for FlowScope.
 
 ## Overview
 
-`flowscope-core` is a Rust library that parses SQL queries and extracts table-level lineage information. It uses `sqlparser-rs` for SQL parsing and provides a clean API for lineage analysis.
+`flowscope-core` is a Rust library that performs static analysis on SQL queries to extract table and column-level lineage information. It serves as the foundation for the FlowScope ecosystem, powering the WebAssembly bindings and JavaScript packages.
 
 ## Features
 
-- SQL parsing using sqlparser-rs
-- Table-level lineage extraction
-- Support for multiple SQL dialects
-- JSON serialization of results
+- **Multi-Dialect Parsing:** Built on `sqlparser-rs`, supporting PostgreSQL, Snowflake, BigQuery, and Generic ANSI SQL.
+- **Deep Lineage Extraction:**
+  - Table-level dependencies (SELECT, INSERT, UPDATE, MERGE, etc.)
+  - Column-level data flow (including transformations)
+- **Complex SQL Support:** Handles CTEs (Common Table Expressions), Subqueries, Joins, Unions, and Window Functions.
+- **Schema Awareness:** Can utilize provided schema metadata to validate column references and resolve wildcards (`SELECT *`).
+- **Diagnostics:** Returns structured issues (errors, warnings) with source spans for precise highlighting.
 
 ## Usage
 
 ```rust
-use flowscope_core::{parse_sql, extract_tables, LineageResult};
+use flowscope_core::{analyze, AnalyzeRequest, Dialect};
 
-// Parse SQL
-let sql = "SELECT * FROM users JOIN orders ON users.id = orders.user_id";
-let statements = parse_sql(sql)?;
+fn main() {
+    let request = AnalyzeRequest {
+        sql: "SELECT u.name, o.id FROM users u JOIN orders o ON u.id = o.user_id".to_string(),
+        dialect: Dialect::Postgres,
+        schema: None, // Optional schema metadata
+        file_path: None,
+    };
 
-// Extract tables
-let tables = extract_tables(&statements);
+    let result = analyze(&request);
 
-// Create result
-let result = LineageResult::new(tables);
-println!("{:?}", result); // LineageResult { tables: ["users", "orders"] }
+    // Access table lineage
+    for statement in result.statements {
+        println!("Tables: {:?}", statement.nodes);
+        println!("Edges: {:?}", statement.edges);
+    }
+}
 ```
 
 ## Testing
@@ -35,12 +44,6 @@ println!("{:?}", result); // LineageResult { tables: ["users", "orders"] }
 ```bash
 cargo test
 ```
-
-## Current Limitations (Phase 0)
-
-- Only table-level lineage (column-level coming in Phase 2)
-- Basic SELECT support (CTEs, subqueries coming in Phase 1)
-- No schema awareness yet (coming in Phase 1)
 
 ## License
 

@@ -103,9 +103,9 @@ This document shows SQL feature support across different dialects in FlowScope.
 | Feature | Status |
 |---------|--------|
 | Table-level lineage | ✅ Stable |
-| Column-level lineage | ⏳ Phase 2 |
-| `SELECT *` expansion | ⏳ Phase 2 |
-| Expression tracking | ⏳ Phase 2 |
+| Column-level lineage | ✅ Stable |
+| `SELECT *` expansion | ✅ Stable |
+| Expression tracking | ✅ Stable |
 | Cross-statement lineage | ✅ Stable |
 
 ## Test Coverage

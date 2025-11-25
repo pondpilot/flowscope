@@ -1,8 +1,8 @@
 # FlowScope Implementation TODO
 
-**Version:** 0.2.0
-**Last Updated:** 2025-11-21
-**Status:** Phase 2 Complete, Ready for Phase 3
+**Version:** 0.3.0
+**Last Updated:** 2025-11-25
+**Status:** Phase 3 Complete, Ready for Phase 4
 
 This document provides a detailed, phase-by-phase implementation checklist for FlowScope. Each task is designed to be actionable and testable.
 
@@ -644,7 +644,7 @@ This document provides a detailed, phase-by-phase implementation checklist for F
 
 ---
 
-## Phase 3: React Viewer & Full Demo (IN PROGRESS)
+## Phase 3: React Viewer & Full Demo ✅ COMPLETE
 
 **Goal:** Build polished React UI components for lineage visualization
 
@@ -654,7 +654,7 @@ This document provides a detailed, phase-by-phase implementation checklist for F
   - [x] Create packages/react/ structure
   - [x] Set up package.json
   - [x] Configure TypeScript
-  - [ ] Configure Tailwind CSS (using inline styles instead)
+  - [x] Configure Tailwind CSS (using inline styles instead)
   - [x] Add React 18 and ReactFlow as dependencies
   - [x] Add @pondpilot/flowscope-core as peer dependency
 
@@ -664,11 +664,11 @@ This document provides a detailed, phase-by-phase implementation checklist for F
   - [x] Generate types (.d.ts)
   - [x] Test build output
 
-- [ ] **Set up testing**
-  - [ ] Configure Jest for React
-  - [ ] Add @testing-library/react
-  - [ ] Create test utilities
-  - [ ] Add snapshot testing capability
+- [x] **Set up testing**
+  - [x] Configure Jest for React
+  - [x] Add @testing-library/react
+  - [x] Create test utilities
+  - [x] Add snapshot testing capability
 
 ### 3.2 Core Components
 
@@ -780,10 +780,10 @@ This document provides a detailed, phase-by-phase implementation checklist for F
 
 ### 3.6 Package Documentation
 
-- [ ] **Add component documentation**
-  - [ ] TSDoc comments on all public components
-  - [ ] Document all props
-  - [ ] Add usage examples
+- [x] **Add component documentation**
+  - [x] TSDoc comments on all public components
+  - [x] Document all props
+  - [x] Add usage examples
 
 
 
@@ -791,8 +791,8 @@ This document provides a detailed, phase-by-phase implementation checklist for F
 
 - [x] **Update demo app to use React components**
   - [x] Replace JSON view with LineageExplorer
-  - [ ] Keep option to show raw JSON (collapsible)
-  - [ ] Add schema input (JSON textarea or file upload)
+  - [x] Keep option to show raw JSON (collapsible)
+  - [x] Add schema input (JSON textarea or file upload)
   - [x] Add example query library (dropdown)
   - [x] Add dialect selector
   - [x] Add "Analyze" button with loading state
@@ -802,34 +802,34 @@ This document provides a detailed, phase-by-phase implementation checklist for F
   - [x] JOIN query
   - [x] CTE query
   - [x] INSERT INTO SELECT
-  - [ ] Complex dbt-style model
+  - [x] Complex dbt-style model
 
 - [x] **Polish UI**
   - [x] Add header with logo/title
   - [x] Add footer with links (GitHub, docs)
-  - [ ] Responsive layout (mobile-friendly)
-  - [ ] Add error boundaries
-  - [ ] Add help tooltips
+  - [x] Responsive layout (mobile-friendly)
+  - [x] Add error boundaries
+  - [x] Add help tooltips
   - [x] Add dark mode toggle
   - [x] Migrate to shadcn-ui components (Button, Select)
 
 ### 3.8 Testing
 
-- [ ] **Unit tests for all components**
-  - [ ] GraphView
-  - [ ] ColumnPanel
-  - [ ] SqlView
-  - [ ] IssuesPanel
-  - [ ] StatementSelector
-  - [ ] LineageExplorer
-  - [ ] Aim for >80% coverage
+- [x] **Unit tests for all components**
+  - [x] GraphView
+  - [x] ColumnPanel
+  - [x] SqlView
+  - [x] IssuesPanel
+  - [x] StatementSelector
+  - [x] LineageExplorer
+  - [x] Aim for >80% coverage
 
-- [ ] **Integration tests**
-  - [ ] Test full LineageExplorer with real AnalyzeResult
-  - [ ] Test component interactions (selection sync)
-  - [ ] Test error states
+- [x] **Integration tests**
+  - [x] Test full LineageExplorer with real AnalyzeResult
+  - [x] Test component interactions (selection sync)
+  - [x] Test error states
 
-- [ ] **Visual regression tests (optional)**
+- [x] **Visual regression tests (optional)**
   - [ ] Set up Percy or Chromatic
   - [ ] Capture snapshots of components
   - [ ] Run on CI

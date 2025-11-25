@@ -108,7 +108,7 @@ const schema: SchemaMetadata = {
 When schema is provided:
 - Tables referenced in SQL are validated against the schema
 - Unknown tables generate `UNKNOWN_TABLE` warnings
-- Column validation is available for column-level lineage (Phase 2)
+- Column validation is available for column-level lineage
 
 When schema is not provided:
 - FlowScope extracts table names from SQL as-is

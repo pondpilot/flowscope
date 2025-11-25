@@ -26,12 +26,12 @@ yarn install
 
 3. Build the project:
 ```bash
-yarn build
+just build
 ```
 
 4. Run tests:
 ```bash
-yarn test
+just test
 ```
 
 ## Project Structure
@@ -60,25 +60,23 @@ git checkout -b feature/your-feature-name
 2. Make your changes
 3. Run tests:
 ```bash
-yarn test
+just test
 ```
 
 4. Run linters:
 ```bash
-yarn lint
+just check
 ```
 
 5. Format code:
 ```bash
-yarn prettier:write
-cargo fmt
+just fmt
 ```
 
 ### Running the Demo
 
 ```bash
-cd app
-yarn dev
+just dev
 ```
 
 ## Code Style
