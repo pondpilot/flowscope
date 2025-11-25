@@ -219,7 +219,7 @@ impl<'a> Analyzer<'a> {
                         Some(expr.to_string())
                     };
                     let aggregation = self.detect_aggregation(ctx, expr);
-                    let data_type = infer_expr_type(expr);
+                    let data_type = infer_expr_type(expr).map(|t| t.to_string());
                     self.add_output_column_with_aggregation(
                         ctx,
                         OutputColumnParams {
@@ -242,7 +242,7 @@ impl<'a> Analyzer<'a> {
                         Some(expr.to_string())
                     };
                     let aggregation = self.detect_aggregation(ctx, expr);
-                    let data_type = infer_expr_type(expr);
+                    let data_type = infer_expr_type(expr).map(|t| t.to_string());
                     self.add_output_column_with_aggregation(
                         ctx,
                         OutputColumnParams {

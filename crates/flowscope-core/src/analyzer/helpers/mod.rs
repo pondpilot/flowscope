@@ -9,4 +9,4 @@ pub use naming::{
     unquote_identifier,
 };
 pub use query::{classify_query_type, is_simple_column_ref};
-pub use types::infer_expr_type;
+pub use types::{infer_expr_type, SqlType};
