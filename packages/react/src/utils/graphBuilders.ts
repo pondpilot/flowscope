@@ -125,6 +125,81 @@ function processTableColumns(
 }
 
 /**
+ * Base options shared by all node data builder functions.
+ */
+interface NodeBuilderOptions {
+  selectedNodeId: string | null;
+  searchTerm: string;
+  isCollapsed: boolean;
+}
+
+/**
+ * Options for building table/CTE node data.
+ */
+interface TableNodeBuilderOptions extends NodeBuilderOptions {
+  hiddenColumnCount?: number;
+  isRecursive?: boolean;
+}
+
+/**
+ * Determine if a node should be highlighted based on search term.
+ * Checks both node label and column names for matches.
+ */
+function isNodeHighlighted(
+  searchTerm: string,
+  columns: ColumnNodeInfo[],
+  nodeLabel?: string
+): boolean {
+  if (!searchTerm) {
+    return false;
+  }
+  const lowerSearch = searchTerm.toLowerCase();
+  const labelMatch = !!nodeLabel && nodeLabel.toLowerCase().includes(lowerSearch);
+  const columnMatch = columns.some((col) => col.name.toLowerCase().includes(lowerSearch));
+  return labelMatch || columnMatch;
+}
+
+/**
+ * Build TableNodeData for a table/CTE node.
+ * Shared between table-level and column-level graph builders to ensure feature parity.
+ */
+function buildTableNodeData(
+  node: Node,
+  columns: ColumnNodeInfo[],
+  options: TableNodeBuilderOptions
+): TableNodeData {
+  return {
+    label: node.label,
+    nodeType: node.type === 'cte' ? 'cte' : 'table',
+    columns,
+    isSelected: node.id === options.selectedNodeId,
+    isHighlighted: isNodeHighlighted(options.searchTerm, columns, node.label),
+    isCollapsed: options.isCollapsed,
+    hiddenColumnCount: options.hiddenColumnCount,
+    isRecursive: options.isRecursive,
+    filters: node.filters,
+  };
+}
+
+/**
+ * Build TableNodeData for the virtual Output node.
+ * Shared between table-level and column-level graph builders.
+ */
+function buildOutputNodeData(
+  outputColumns: ColumnNodeInfo[],
+  options: NodeBuilderOptions
+): TableNodeData {
+  return {
+    label: 'Output',
+    nodeType: 'virtualOutput',
+    columns: outputColumns,
+    isSelected: GRAPH_CONFIG.VIRTUAL_OUTPUT_NODE_ID === options.selectedNodeId,
+    isHighlighted: isNodeHighlighted(options.searchTerm, outputColumns),
+    isCollapsed: options.isCollapsed,
+  };
+}
+
+/**
  * Build table-level flow nodes with columns
  */
 export function buildFlowNodes(
@@ -135,7 +210,6 @@ export function buildFlowNodes(
   expandedTableIds: Set<string> = new Set(),
   resolvedSchema: ResolvedSchemaMetadata | null | undefined = null
 ): FlowNode[] {
-  const lowerCaseSearchTerm = searchTerm.toLowerCase();
   const tableNodes = statement.nodes.filter((n) => n.type === 'table' || n.type === 'cte');
   const columnNodes = statement.nodes.filter((n) => n.type === 'column');
   const isSelect = isSelectStatement(statement);
@@ -188,29 +262,17 @@ export function buildFlowNodes(
       resolvedSchema
     );
 
-    const isHighlighted = !!(
-      lowerCaseSearchTerm &&
-      (node.label.toLowerCase().includes(lowerCaseSearchTerm) ||
-        columns.some((col) => col.name.toLowerCase().includes(lowerCaseSearchTerm)))
-    );
-
-    const isCollapsed = collapsedNodeIds.has(node.id);
-
     flowNodes.push({
       id: node.id,
       type: 'tableNode',
       position: { x: 0, y: 0 },
-      data: {
-        label: node.label,
-        nodeType: node.type === 'cte' ? 'cte' : 'table',
-        isRecursive: recursiveNodeIds.has(node.id),
-        columns: columns,
-        isSelected: node.id === selectedNodeId,
-        isHighlighted: isHighlighted,
-        isCollapsed: isCollapsed,
+      data: buildTableNodeData(node, columns, {
+        selectedNodeId,
+        searchTerm,
+        isCollapsed: collapsedNodeIds.has(node.id),
         hiddenColumnCount,
-        filters: node.filters,
-      } satisfies TableNodeData,
+        isRecursive: recursiveNodeIds.has(node.id),
+      }),
     });
   }
 
@@ -226,23 +288,15 @@ export function buildFlowNodes(
   // Add virtual "Output" node only for SELECT-like statements
   if (isSelect && outputColumns.length > 0) {
     const outputNodeId = GRAPH_CONFIG.VIRTUAL_OUTPUT_NODE_ID;
-    const isHighlighted = !!(
-      lowerCaseSearchTerm &&
-      outputColumns.some((col) => col.name.toLowerCase().includes(lowerCaseSearchTerm))
-    );
-
     flowNodes.push({
       id: outputNodeId,
       type: 'tableNode',
       position: { x: 0, y: 0 },
-      data: {
-        label: 'Output',
-        nodeType: 'virtualOutput',
-        columns: outputColumns,
-        isSelected: outputNodeId === selectedNodeId,
-        isHighlighted,
+      data: buildOutputNodeData(outputColumns, {
+        selectedNodeId,
+        searchTerm,
         isCollapsed: collapsedNodeIds.has(outputNodeId),
-      } satisfies TableNodeData,
+      }),
     });
   }
 
@@ -630,7 +684,6 @@ export function buildColumnLevelGraph(
   expandedTableIds: Set<string> = new Set(),
   resolvedSchema: ResolvedSchemaMetadata | null | undefined = null
 ): { nodes: FlowNode[]; edges: FlowEdge[] } {
-  const lowerCaseSearchTerm = searchTerm.toLowerCase();
   const tableNodes = statement.nodes.filter((n) => n.type === 'table' || n.type === 'cte');
   const columnNodes = statement.nodes.filter((n) => n.type === 'column');
   const isSelect = isSelectStatement(statement);
@@ -684,48 +737,31 @@ export function buildColumnLevelGraph(
       resolvedSchema
     );
 
-    const isHighlighted = !!(
-      lowerCaseSearchTerm &&
-      (node.label.toLowerCase().includes(lowerCaseSearchTerm) ||
-        columns.some((col) => col.name.toLowerCase().includes(lowerCaseSearchTerm)))
-    );
-
     flowNodes.push({
       id: node.id,
       type: 'tableNode',
       position: { x: 0, y: 0 },
-      data: {
-        label: node.label,
-        nodeType: node.type === 'cte' ? 'cte' : 'table',
-        columns: columns,
-        isSelected: node.id === selectedNodeId,
-        isHighlighted: isHighlighted,
+      data: buildTableNodeData(node, columns, {
+        selectedNodeId,
+        searchTerm,
         isCollapsed: collapsedNodeIds.has(node.id),
         hiddenColumnCount,
-      } satisfies TableNodeData,
+      }),
     });
   }
 
   // Add virtual "Output" table node for SELECT-like statements only
   if (isSelect && outputColumns.length > 0) {
     const outputNodeId = GRAPH_CONFIG.VIRTUAL_OUTPUT_NODE_ID;
-    const isHighlighted = !!(
-      lowerCaseSearchTerm &&
-      outputColumns.some((col) => col.name.toLowerCase().includes(lowerCaseSearchTerm))
-    );
-
     flowNodes.push({
       id: outputNodeId,
       type: 'tableNode',
       position: { x: 0, y: 0 },
-      data: {
-        label: 'Output',
-        nodeType: 'virtualOutput',
-        columns: outputColumns,
-        isSelected: outputNodeId === selectedNodeId,
-        isHighlighted,
+      data: buildOutputNodeData(outputColumns, {
+        selectedNodeId,
+        searchTerm,
         isCollapsed: collapsedNodeIds.has(outputNodeId),
-      } satisfies TableNodeData,
+      }),
     });
 
     // Update columnToTableMap for output columns
