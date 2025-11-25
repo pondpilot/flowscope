@@ -7,8 +7,13 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { Workspace } from './components/Workspace';
 import { WelcomeModal } from './components/WelcomeModal';
 import { Toaster } from './components/ui/sonner';
-import { useWasmInit } from './hooks';
+import { useWasmInit, useShareImport } from './hooks';
 import { DebugPanel } from './components/debug/DebugPanel';
+
+function ShareImportHandler() {
+  useShareImport();
+  return null;
+}
 
 function App() {
   const { ready: wasmReady, error, isRetrying, retry } = useWasmInit();
@@ -20,6 +25,7 @@ function App() {
   return (
     <ErrorBoundary>
       <ProjectProvider>
+        <ShareImportHandler />
         <LineageProvider>
           <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
             <Workspace wasmReady={wasmReady} error={error} onRetry={retry} isRetrying={isRetrying} />

@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { Share2 } from 'lucide-react';
 import { Button } from './ui/button';
 import {
   ResizablePanelGroup,
@@ -9,6 +10,8 @@ import {
 import { EditorArea } from './EditorArea';
 import { AnalysisView } from './AnalysisView';
 import { ProjectSelector } from './ProjectSelector';
+import { ShareDialog } from './ShareDialog';
+import { useProject } from '@/lib/project-store';
 import { useGlobalShortcuts } from '@/hooks';
 import type { GlobalShortcut } from '@/hooks';
 
@@ -25,9 +28,11 @@ interface WorkspaceProps {
  * - Right: Lineage visualization
  */
 export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspaceProps) {
+  const { currentProject } = useProject();
   const [fileSelectorOpen, setFileSelectorOpen] = useState(false);
   const [projectSelectorOpen, setProjectSelectorOpen] = useState(false);
   const [dialectSelectorOpen, setDialectSelectorOpen] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
 
   // Global keyboard shortcuts
   const shortcuts = useMemo<GlobalShortcut[]>(() => [
@@ -74,7 +79,29 @@ export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspacePr
             onOpenChange={setProjectSelectorOpen}
           />
         </div>
+
+        {/* Share Button */}
+        {currentProject && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 gap-1.5"
+            onClick={() => setShareDialogOpen(true)}
+          >
+            <Share2 className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Share</span>
+          </Button>
+        )}
       </header>
+
+      {/* Share Dialog */}
+      {currentProject && (
+        <ShareDialog
+          open={shareDialogOpen}
+          onOpenChange={setShareDialogOpen}
+          project={currentProject}
+        />
+      )}
 
       {/* Global Error Banner */}
       {error && (

@@ -4,3 +4,4 @@ export { useFileNavigation } from './useFileNavigation';
 export { useKeyboardShortcuts, useGlobalShortcuts } from './useKeyboardShortcuts';
 export type { GlobalShortcut } from './useKeyboardShortcuts';
 export { useWasmInit } from './useWasmInit';
+export { useShareImport } from './useShareImport';

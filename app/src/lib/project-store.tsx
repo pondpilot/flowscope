@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { STORAGE_KEYS, FILE_EXTENSIONS } from './constants';
+import { STORAGE_KEYS, FILE_EXTENSIONS, SHARE_LIMITS, DEFAULT_FILE_LANGUAGE } from './constants';
+import type { SharePayload } from './share';
 
 const uuidv4 = () => crypto.randomUUID();
 
@@ -83,6 +84,9 @@ interface ProjectContextType {
 
   // Import/Export
   importFiles: (files: FileList) => Promise<void>;
+
+  // Import from shared URL
+  importProject: (payload: SharePayload) => string;
 }
 
 const ProjectContext = createContext<ProjectContextType | null>(null);
@@ -518,6 +522,52 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     [activeProjectId]
   );
 
+  const importProject = useCallback((payload: SharePayload): string => {
+    // Generate unique name if collision (with safety limit)
+    const existingNames = projects.map(p => p.name.toLowerCase());
+    let name = payload.n;
+    let counter = 1;
+    while (
+      existingNames.includes(name.toLowerCase()) &&
+      counter <= SHARE_LIMITS.MAX_NAME_COLLISION_ATTEMPTS
+    ) {
+      name = `${payload.n} (${counter++})`;
+    }
+    // Fallback if we hit the limit
+    if (existingNames.includes(name.toLowerCase())) {
+      name = `${payload.n} (${Date.now()})`;
+    }
+
+    // Create files with new IDs
+    const newFiles: ProjectFile[] = payload.f.map(f => ({
+      id: uuidv4(),
+      name: f.n,
+      content: f.c,
+      language: f.l || DEFAULT_FILE_LANGUAGE,
+    }));
+
+    // Map selected file indices to new IDs
+    const selectedFileIds = (payload.sel || [])
+      .filter(i => i >= 0 && i < newFiles.length)
+      .map(i => newFiles[i].id);
+
+    const newProject: Project = {
+      id: uuidv4(),
+      name,
+      files: newFiles,
+      activeFileId: newFiles[0]?.id || null,
+      dialect: payload.d,
+      runMode: payload.r,
+      selectedFileIds,
+      schemaSQL: payload.s,
+    };
+
+    setProjects(prev => [...prev, newProject]);
+    setActiveProjectId(newProject.id);
+
+    return name;
+  }, [projects]);
+
   const value = {
     projects,
     activeProjectId,
@@ -535,7 +585,8 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     renameFile,
     selectFile,
     updateSchemaSQL,
-    importFiles
+    importFiles,
+    importProject,
   };
 
   return (

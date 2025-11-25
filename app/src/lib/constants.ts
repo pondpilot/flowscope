@@ -56,3 +56,15 @@ export const DEFAULT_FILE_NAMES = {
   NEW_QUERY: 'new_query.sql',
   SCRATCHPAD: 'scratchpad.sql',
 } as const;
+
+export const SHARE_LIMITS = {
+  URL_SOFT_LIMIT: 6000, // Warning threshold
+  URL_HARD_LIMIT: 32000, // Error threshold
+  MAX_FILES: 100,
+  MAX_FILE_NAME_LENGTH: 255,
+  MAX_FILE_CONTENT_SIZE: 1 * 1024 * 1024, // 1MB per file
+  MAX_PROJECT_NAME_LENGTH: 100,
+  MAX_NAME_COLLISION_ATTEMPTS: 100,
+} as const;
+
+export const DEFAULT_FILE_LANGUAGE = 'sql' as const;
