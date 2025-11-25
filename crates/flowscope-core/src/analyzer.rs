@@ -8,12 +8,14 @@ mod complexity;
 mod context;
 mod ddl;
 mod diagnostics;
+mod expression;
 mod functions;
 mod global;
 pub mod helpers;
 mod input;
 mod query;
 mod resolution;
+mod select;
 mod statements;
 
 use input::{collect_statements, StatementInput};

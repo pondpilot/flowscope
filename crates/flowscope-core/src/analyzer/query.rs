@@ -5,22 +5,16 @@
 //! column-level lineage graph by tracking data flow from source columns to output columns.
 
 use super::context::{ColumnRef, OutputColumn, StatementContext};
-use super::functions;
-use super::helpers::{
-    generate_column_node_id, generate_edge_id, generate_node_id, infer_expr_type,
-    is_simple_column_ref,
-};
+use super::expression::ExpressionAnalyzer;
+use super::helpers::{generate_column_node_id, generate_edge_id, generate_node_id};
+use super::select::SelectAnalyzer;
 use super::Analyzer;
 use crate::types::{
-    issue_codes, AggregationInfo, Edge, EdgeType, FilterClauseType, Issue, JoinType, Node,
-    NodeType, ResolutionSource,
+    issue_codes, AggregationInfo, Edge, EdgeType, Issue, JoinType, Node, NodeType, ResolutionSource,
 };
 use serde_json::json;
-use sqlparser::ast::{
-    self, Expr, FunctionArg, FunctionArgExpr, Query, SelectItem, SetExpr, Statement, TableFactor,
-    TableWithJoins,
-};
-use std::collections::{HashMap, HashSet};
+use sqlparser::ast::{self, Query, SetExpr, Statement};
+use std::collections::HashMap;
 
 /// Represents the information needed to add an expanded column during wildcard expansion.
 struct ExpandedColumnInfo {
@@ -41,28 +35,24 @@ pub(super) struct OutputColumnParams {
     pub aggregation: Option<AggregationInfo>,
 }
 
-impl<'a> Analyzer<'a> {
-    pub(super) fn analyze_query(
-        &mut self,
-        ctx: &mut StatementContext,
-        query: &Query,
-        target_node: Option<&str>,
-    ) {
-        // First analyze CTEs
-        let empty_vec = vec![];
-        let ctes = query
-            .with
-            .as_ref()
-            .map(|w| &w.cte_tables)
-            .unwrap_or(&empty_vec);
+struct CteAnalyzer<'a, 'b> {
+    analyzer: &'a mut Analyzer<'b>,
+    ctx: &'a mut StatementContext,
+}
 
+impl<'a, 'b> CteAnalyzer<'a, 'b> {
+    fn new(analyzer: &'a mut Analyzer<'b>, ctx: &'a mut StatementContext) -> Self {
+        Self { analyzer, ctx }
+    }
+
+    fn analyze(&mut self, ctes: &[ast::Cte]) {
         // Pass 1: register all CTE names/nodes up front to allow forward and mutual references.
         let mut cte_ids: Vec<(String, String)> = Vec::new();
         for cte in ctes {
             let cte_name = cte.alias.name.to_string();
 
             // Create CTE node
-            let cte_id = ctx.add_node(Node {
+            let cte_id = self.ctx.add_node(Node {
                 id: generate_node_id("cte", &cte_name),
                 node_type: NodeType::Cte,
                 label: cte_name.clone(),
@@ -78,18 +68,38 @@ impl<'a> Analyzer<'a> {
             });
 
             // Register CTE for resolution
-            ctx.cte_definitions.insert(cte_name.clone(), cte_id.clone());
-            self.all_ctes.insert(cte_name.clone());
+            self.ctx
+                .cte_definitions
+                .insert(cte_name.clone(), cte_id.clone());
+            self.analyzer.all_ctes.insert(cte_name.clone());
             cte_ids.push((cte_name, cte_id));
         }
 
         // Pass 2: analyze each CTE body now that all aliases are in scope.
         for (cte, (_, cte_id)) in ctes.iter().zip(cte_ids.iter()) {
-            self.analyze_query_body(ctx, &cte.query.body, Some(cte_id));
+            self.analyzer
+                .analyze_query_body(self.ctx, &cte.query.body, Some(cte_id));
 
             // Capture CTE columns for lineage linking
-            let columns = std::mem::take(&mut ctx.output_columns);
-            ctx.cte_columns.insert(cte.alias.name.to_string(), columns);
+            let columns = std::mem::take(&mut self.ctx.output_columns);
+            self.ctx
+                .cte_columns
+                .insert(cte.alias.name.to_string(), columns);
+        }
+    }
+}
+
+impl<'a> Analyzer<'a> {
+    pub(super) fn analyze_query(
+        &mut self,
+        ctx: &mut StatementContext,
+        query: &Query,
+        target_node: Option<&str>,
+    ) {
+        // Use CteAnalyzer for WITH clause
+        if let Some(with) = &query.with {
+            let mut cte_analyzer = CteAnalyzer::new(self, ctx);
+            cte_analyzer.analyze(&with.cte_tables);
         }
 
         // Analyze main query body
@@ -104,7 +114,8 @@ impl<'a> Analyzer<'a> {
     ) {
         match body {
             SetExpr::Select(select) => {
-                self.analyze_select(ctx, select, target_node);
+                let mut select_analyzer = SelectAnalyzer::new(self, ctx);
+                select_analyzer.analyze(select, target_node);
             }
             SetExpr::Query(query) => {
                 self.analyze_query(ctx, query, target_node);
@@ -128,17 +139,19 @@ impl<'a> Analyzer<'a> {
                 }
             }
             SetExpr::Values(values) => {
+                let mut expr_analyzer = ExpressionAnalyzer::new(self, ctx);
                 // Analyze expressions in VALUES clause
                 for row in &values.rows {
                     for expr in row {
-                        self.analyze_expression(ctx, expr);
+                        expr_analyzer.analyze(expr);
                     }
                 }
             }
             SetExpr::Insert(insert_stmt) => {
                 // Nested INSERT statement - analyze it
                 if let Statement::Insert(ref insert) = *insert_stmt {
-                    self.analyze_insert_stmt(ctx, insert, target_node);
+                    let target_name = insert.table_name.to_string();
+                    self.add_source_table(ctx, &target_name, target_node);
                 }
             }
             SetExpr::Update(_) => {
@@ -158,325 +171,7 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    fn analyze_select(
-        &mut self,
-        ctx: &mut StatementContext,
-        select: &ast::Select,
-        target_node: Option<&str>,
-    ) {
-        // Push a new scope for this SELECT - isolates table resolution
-        ctx.push_scope();
-
-        // Analyze FROM clause first to register tables and aliases in the current scope
-        for table_with_joins in &select.from {
-            self.analyze_table_with_joins(ctx, table_with_joins, target_node);
-        }
-
-        // Analyze columns if column lineage is enabled
-        if self.column_lineage_enabled {
-            self.analyze_select_columns(ctx, select, target_node);
-        }
-
-        // Pop the scope when done with this SELECT
-        ctx.pop_scope();
-    }
-
-    fn analyze_select_columns(
-        &mut self,
-        ctx: &mut StatementContext,
-        select: &ast::Select,
-        target_node: Option<&str>,
-    ) {
-        // Clear any previous grouping context
-        ctx.clear_grouping();
-
-        // First, capture GROUP BY columns so we can identify grouping keys vs aggregates
-        match &select.group_by {
-            ast::GroupByExpr::Expressions(exprs, _) => {
-                for group_by in exprs {
-                    // Normalize the expression string for comparison
-                    let expr_str = self.normalize_group_by_expr(group_by);
-                    ctx.add_grouping_column(expr_str);
-                    self.analyze_expression(ctx, group_by);
-                }
-            }
-            ast::GroupByExpr::All(_) => {
-                // GROUP BY ALL - all non-aggregate columns are grouping keys
-                // We can't determine this statically, so we mark has_group_by
-                ctx.has_group_by = true;
-            }
-        }
-
-        // Process SELECT projection with aggregation detection
-        for (idx, item) in select.projection.iter().enumerate() {
-            match item {
-                SelectItem::UnnamedExpr(expr) => {
-                    let sources = self.extract_column_refs(expr);
-                    let name = self.derive_column_name(expr, idx);
-                    let expr_text = if is_simple_column_ref(expr) {
-                        None
-                    } else {
-                        Some(expr.to_string())
-                    };
-                    let aggregation = self.detect_aggregation(ctx, expr);
-                    let data_type = infer_expr_type(expr).map(|t| t.to_string());
-                    self.add_output_column_with_aggregation(
-                        ctx,
-                        OutputColumnParams {
-                            name: name.clone(),
-                            sources,
-                            expression: expr_text,
-                            data_type,
-                            target_node: target_node.map(|s| s.to_string()),
-                            approximate: false,
-                            aggregation,
-                        },
-                    );
-                }
-                SelectItem::ExprWithAlias { expr, alias } => {
-                    let sources = self.extract_column_refs(expr);
-                    let name = alias.value.clone();
-                    let expr_text = if is_simple_column_ref(expr) {
-                        None
-                    } else {
-                        Some(expr.to_string())
-                    };
-                    let aggregation = self.detect_aggregation(ctx, expr);
-                    let data_type = infer_expr_type(expr).map(|t| t.to_string());
-                    self.add_output_column_with_aggregation(
-                        ctx,
-                        OutputColumnParams {
-                            name: name.clone(),
-                            sources,
-                            expression: expr_text,
-                            data_type,
-                            target_node: target_node.map(|s| s.to_string()),
-                            approximate: false,
-                            aggregation,
-                        },
-                    );
-                }
-                SelectItem::QualifiedWildcard(name, _) => {
-                    // table.*
-                    let table_name = name.to_string();
-                    self.expand_wildcard(ctx, Some(&table_name), target_node);
-                }
-                SelectItem::Wildcard(_) => {
-                    // SELECT *
-                    self.expand_wildcard(ctx, None, target_node);
-                }
-            }
-        }
-
-        // Also extract column refs from WHERE for completeness
-        if let Some(ref where_clause) = select.selection {
-            self.analyze_expression(ctx, where_clause);
-            // Capture WHERE predicates for table nodes
-            self.capture_filter_predicates(ctx, where_clause, FilterClauseType::Where);
-        }
-
-        if let Some(ref having) = select.having {
-            self.analyze_expression(ctx, having);
-            // Capture HAVING predicates for table nodes
-            self.capture_filter_predicates(ctx, having, FilterClauseType::Having);
-        }
-    }
-
-    pub(super) fn analyze_expression(&mut self, ctx: &mut StatementContext, expr: &Expr) {
-        // 1. Traverse for subqueries
-        self.visit_expression_for_subqueries(ctx, expr);
-        // 2. Validate columns
-        self.extract_column_refs_for_validation(ctx, expr);
-    }
-
-    fn visit_expression_for_subqueries(&mut self, ctx: &mut StatementContext, expr: &Expr) {
-        match expr {
-            Expr::Subquery(query) => self.analyze_query(ctx, query, None),
-            Expr::InSubquery { subquery, .. } => self.analyze_query(ctx, subquery, None),
-            Expr::Exists { subquery, .. } => self.analyze_query(ctx, subquery, None),
-            Expr::BinaryOp { left, right, .. } => {
-                self.visit_expression_for_subqueries(ctx, left);
-                self.visit_expression_for_subqueries(ctx, right);
-            }
-            Expr::UnaryOp { expr, .. } => self.visit_expression_for_subqueries(ctx, expr),
-            Expr::Nested(expr) => self.visit_expression_for_subqueries(ctx, expr),
-            Expr::Case {
-                operand,
-                conditions,
-                results,
-                else_result,
-            } => {
-                if let Some(op) = operand {
-                    self.visit_expression_for_subqueries(ctx, op);
-                }
-                for cond in conditions {
-                    self.visit_expression_for_subqueries(ctx, cond);
-                }
-                for res in results {
-                    self.visit_expression_for_subqueries(ctx, res);
-                }
-                if let Some(el) = else_result {
-                    self.visit_expression_for_subqueries(ctx, el);
-                }
-            }
-            Expr::Function(func) => {
-                if let ast::FunctionArguments::List(args) = &func.args {
-                    for arg in &args.args {
-                        match arg {
-                            FunctionArg::Unnamed(FunctionArgExpr::Expr(e))
-                            | FunctionArg::Named {
-                                arg: FunctionArgExpr::Expr(e),
-                                ..
-                            } => self.visit_expression_for_subqueries(ctx, e),
-                            _ => {}
-                        }
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-
-    fn analyze_insert_stmt(
-        &mut self,
-        ctx: &mut StatementContext,
-        insert: &ast::Insert,
-        _target_node: Option<&str>,
-    ) {
-        // For nested INSERT in SetExpr, analyze similarly
-        let target_name = insert.table_name.to_string();
-        self.add_source_table(ctx, &target_name, _target_node);
-    }
-
-    pub(super) fn analyze_table_with_joins(
-        &mut self,
-        ctx: &mut StatementContext,
-        table_with_joins: &TableWithJoins,
-        target_node: Option<&str>,
-    ) {
-        // Analyze main relation
-        self.analyze_table_factor(ctx, &table_with_joins.relation, target_node);
-
-        // Analyze joins - process each joined table but don't create table-to-table edges
-        // Join edges don't represent data flow; the column-level edges already show lineage
-        for join in &table_with_joins.joins {
-            // Convert join operator directly to JoinType enum and extract condition
-            let (join_type, join_condition) = Self::convert_join_operator(&join.join_operator);
-
-            ctx.current_join_info.join_type = join_type;
-            ctx.current_join_info.join_condition = join_condition;
-            // Keep last_operation for backward compatibility with edge labels
-            ctx.last_operation = Self::join_type_to_operation(join_type);
-
-            // Analyze the joined table
-            self.analyze_table_factor(ctx, &join.relation, target_node);
-
-            // Clear join info after processing
-            ctx.current_join_info.join_type = None;
-            ctx.current_join_info.join_condition = None;
-        }
-    }
-
-    pub(super) fn analyze_table_factor(
-        &mut self,
-        ctx: &mut StatementContext,
-        table_factor: &TableFactor,
-        target_node: Option<&str>,
-    ) {
-        match table_factor {
-            TableFactor::Table { name, alias, .. } => {
-                let table_name = name.to_string();
-
-                let canonical = self.add_source_table(ctx, &table_name, target_node);
-
-                // Register alias if present (in current scope)
-                if let (Some(a), Some(canonical_name)) = (alias, canonical) {
-                    ctx.register_alias_in_scope(a.name.to_string(), canonical_name);
-                }
-            }
-            TableFactor::Derived {
-                subquery, alias, ..
-            } => {
-                // Subquery - analyze recursively
-                self.analyze_query(ctx, subquery, target_node);
-
-                if let Some(a) = alias {
-                    // Register subquery alias (in current scope)
-                    ctx.register_subquery_alias_in_scope(a.name.to_string());
-                }
-            }
-            TableFactor::NestedJoin {
-                table_with_joins, ..
-            } => {
-                self.analyze_table_with_joins(ctx, table_with_joins, target_node);
-            }
-            TableFactor::TableFunction { .. } => {
-                self.issues.push(
-                    Issue::info(
-                        issue_codes::UNSUPPORTED_SYNTAX,
-                        "Table function lineage not fully tracked",
-                    )
-                    .with_statement(ctx.statement_index),
-                );
-            }
-            TableFactor::Function { .. } => {
-                // Table-valued function
-            }
-            TableFactor::UNNEST { .. } => {
-                // UNNEST clause
-            }
-            TableFactor::Pivot { .. } | TableFactor::Unpivot { .. } => {
-                self.issues.push(
-                    Issue::warning(
-                        issue_codes::UNSUPPORTED_SYNTAX,
-                        "PIVOT/UNPIVOT lineage not fully supported",
-                    )
-                    .with_statement(ctx.statement_index),
-                );
-            }
-            TableFactor::MatchRecognize { .. } => {}
-            TableFactor::JsonTable { .. } => {}
-        }
-    }
-
-    pub(super) fn register_aliases_in_table_with_joins(
-        &self,
-        ctx: &mut StatementContext,
-        table_with_joins: &TableWithJoins,
-    ) {
-        self.register_aliases_in_table_factor(ctx, &table_with_joins.relation);
-        for join in &table_with_joins.joins {
-            self.register_aliases_in_table_factor(ctx, &join.relation);
-        }
-    }
-
-    pub(super) fn register_aliases_in_table_factor(
-        &self,
-        ctx: &mut StatementContext,
-        table_factor: &TableFactor,
-    ) {
-        match table_factor {
-            TableFactor::Table {
-                name,
-                alias: Some(a),
-                ..
-            } => {
-                let canonical = self
-                    .canonicalize_table_reference(&name.to_string())
-                    .canonical;
-                ctx.table_aliases.insert(a.name.to_string(), canonical);
-            }
-            TableFactor::Derived { alias: Some(a), .. } => {
-                ctx.subquery_aliases.insert(a.name.to_string());
-            }
-            TableFactor::NestedJoin {
-                table_with_joins, ..
-            } => {
-                self.register_aliases_in_table_with_joins(ctx, table_with_joins);
-            }
-            _ => {}
-        }
-    }
+    // --- Shared Methods used by SelectAnalyzer, ExpressionAnalyzer, and Statements ---
 
     pub(super) fn add_source_table(
         &mut self,
@@ -568,9 +263,6 @@ impl<'a> Analyzer<'a> {
 
         // Create edge to target if specified
         if let (Some(target), Some(source_id)) = (target_node, node_id.clone()) {
-            // Avoid self-loops (source == target) unless explicitly desired?
-            // Usually in UPDATE t SET ... FROM t, we don't want a loop unless needed.
-            // But for lineage, showing the table depends on itself is accurate for UPDATE/MERGE.
             let edge_id = generate_edge_id(&source_id, target);
             if !ctx.edge_ids.contains(&edge_id) {
                 ctx.add_edge(Edge {
@@ -640,7 +332,7 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    fn expand_wildcard(
+    pub(crate) fn expand_wildcard(
         &mut self,
         ctx: &mut StatementContext,
         table_qualifier: Option<&str>,
@@ -759,7 +451,7 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    fn resolve_column_table(
+    pub(crate) fn resolve_column_table(
         &mut self,
         ctx: &StatementContext,
         qualifier: Option<&str>,
@@ -853,298 +545,6 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    fn normalize_group_by_expr(&self, expr: &Expr) -> String {
-        match expr {
-            Expr::Identifier(ident) => self.normalize_identifier(&ident.value),
-            Expr::CompoundIdentifier(parts) => {
-                // Use the full qualified name
-                parts
-                    .iter()
-                    .map(|p| self.normalize_identifier(&p.value))
-                    .collect::<Vec<_>>()
-                    .join(".")
-            }
-            Expr::Nested(inner) => {
-                // Unwrap parentheses for matching: GROUP BY (col) should match SELECT col
-                self.normalize_group_by_expr(inner)
-            }
-            _ => {
-                // For complex expressions, use the string representation
-                expr.to_string().to_lowercase()
-            }
-        }
-    }
-
-    fn detect_aggregation(&self, ctx: &StatementContext, expr: &Expr) -> Option<AggregationInfo> {
-        if ctx.has_group_by {
-            // Check if this expression is a grouping key
-            let expr_normalized = self.normalize_group_by_expr(expr);
-            if ctx.is_grouping_column(&expr_normalized) {
-                return Some(AggregationInfo {
-                    is_grouping_key: true,
-                    function: None,
-                    distinct: None,
-                });
-            }
-        }
-
-        // Check if the expression contains an aggregate function
-        if let Some(agg_call) = self.find_aggregate_function(expr) {
-            return Some(AggregationInfo {
-                is_grouping_key: false,
-                function: Some(agg_call.function),
-                distinct: if agg_call.distinct { Some(true) } else { None },
-            });
-        }
-
-        // Expression in a GROUP BY query but neither grouping key nor aggregate
-        // This could be a constant or an error in the query - we don't flag it
-        None
-    }
-
-    fn find_aggregate_function(&self, expr: &Expr) -> Option<functions::AggregateCall> {
-        match expr {
-            Expr::Function(func) => self.check_function_for_aggregate(func),
-            Expr::BinaryOp { left, right, .. } => self
-                .find_aggregate_function(left)
-                .or_else(|| self.find_aggregate_function(right)),
-            Expr::UnaryOp { expr, .. } | Expr::Nested(expr) | Expr::Cast { expr, .. } => {
-                self.find_aggregate_function(expr)
-            }
-            Expr::Case {
-                operand,
-                conditions,
-                results,
-                else_result,
-            } => self.find_aggregate_in_case(operand, conditions, results, else_result),
-            _ => None,
-        }
-    }
-
-    fn check_function_for_aggregate(
-        &self,
-        func: &ast::Function,
-    ) -> Option<functions::AggregateCall> {
-        let func_name = func.name.to_string();
-
-        if functions::is_aggregate_function(&func_name) {
-            let distinct = matches!(
-                &func.args,
-                ast::FunctionArguments::List(args) if args.duplicate_treatment == Some(ast::DuplicateTreatment::Distinct)
-            );
-            return Some(functions::AggregateCall {
-                function: func_name.to_uppercase(),
-                distinct,
-            });
-        }
-
-        // Not an aggregate itself, check arguments for nested aggregates
-        self.find_aggregate_in_function_args(&func.args)
-    }
-
-    fn find_aggregate_in_function_args(
-        &self,
-        args: &ast::FunctionArguments,
-    ) -> Option<functions::AggregateCall> {
-        if let ast::FunctionArguments::List(arg_list) = args {
-            for arg in &arg_list.args {
-                let expr = match arg {
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(e)) => Some(e),
-                    FunctionArg::Named {
-                        arg: FunctionArgExpr::Expr(e),
-                        ..
-                    } => Some(e),
-                    _ => None,
-                };
-                if let Some(e) = expr {
-                    if let Some(agg) = self.find_aggregate_function(e) {
-                        return Some(agg);
-                    }
-                }
-            }
-        }
-        None
-    }
-
-    fn find_aggregate_in_case(
-        &self,
-        operand: &Option<Box<Expr>>,
-        conditions: &[Expr],
-        results: &[Expr],
-        else_result: &Option<Box<Expr>>,
-    ) -> Option<functions::AggregateCall> {
-        // Check operand (for CASE expr WHEN ...)
-        if let Some(op) = operand {
-            if let Some(agg) = self.find_aggregate_function(op) {
-                return Some(agg);
-            }
-        }
-
-        // Check WHEN conditions
-        for cond in conditions {
-            if let Some(agg) = self.find_aggregate_function(cond) {
-                return Some(agg);
-            }
-        }
-
-        // Check THEN results
-        for result in results {
-            if let Some(agg) = self.find_aggregate_function(result) {
-                return Some(agg);
-            }
-        }
-
-        // Check ELSE result
-        if let Some(else_r) = else_result {
-            if let Some(agg) = self.find_aggregate_function(else_r) {
-                return Some(agg);
-            }
-        }
-
-        None
-    }
-
-    pub(super) fn extract_column_refs(&self, expr: &Expr) -> Vec<ColumnRef> {
-        let mut refs = Vec::new();
-        Self::collect_column_refs(expr, &mut refs);
-        refs
-    }
-
-    fn collect_column_refs(expr: &Expr, refs: &mut Vec<ColumnRef>) {
-        match expr {
-            Expr::Identifier(ident) => {
-                refs.push(ColumnRef {
-                    table: None,
-                    column: ident.value.clone(),
-                    resolved_table: None,
-                });
-            }
-            Expr::CompoundIdentifier(parts) => {
-                if parts.len() >= 2 {
-                    let table = parts[..parts.len() - 1]
-                        .iter()
-                        .map(|i| i.value.as_str())
-                        .collect::<Vec<_>>()
-                        .join(".");
-                    let column = parts.last().unwrap().value.clone();
-                    refs.push(ColumnRef {
-                        table: Some(table),
-                        column,
-                        resolved_table: None,
-                    });
-                }
-            }
-            Expr::BinaryOp { left, right, .. } => {
-                Self::collect_column_refs(left, refs);
-                Self::collect_column_refs(right, refs);
-            }
-            Expr::UnaryOp { expr, .. } => {
-                Self::collect_column_refs(expr, refs);
-            }
-            Expr::Function(func) => {
-                let func_name = func.name.to_string();
-                match &func.args {
-                    ast::FunctionArguments::List(arg_list) => {
-                        for (idx, arg) in arg_list.args.iter().enumerate() {
-                            // Check if this argument should be skipped (e.g., date unit keywords)
-                            if functions::should_skip_function_arg(&func_name, idx) {
-                                continue;
-                            }
-                            match arg {
-                                FunctionArg::Unnamed(FunctionArgExpr::Expr(e)) => {
-                                    Self::collect_column_refs(e, refs);
-                                }
-                                FunctionArg::Named {
-                                    arg: FunctionArgExpr::Expr(e),
-                                    ..
-                                } => {
-                                    Self::collect_column_refs(e, refs);
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
-                    ast::FunctionArguments::Subquery(_) => {}
-                    ast::FunctionArguments::None => {}
-                }
-            }
-            Expr::Case {
-                operand,
-                conditions,
-                results,
-                else_result,
-            } => {
-                if let Some(op) = operand {
-                    Self::collect_column_refs(op, refs);
-                }
-                for cond in conditions {
-                    Self::collect_column_refs(cond, refs);
-                }
-                for res in results {
-                    Self::collect_column_refs(res, refs);
-                }
-                if let Some(el) = else_result {
-                    Self::collect_column_refs(el, refs);
-                }
-            }
-            Expr::Cast { expr, .. } => {
-                Self::collect_column_refs(expr, refs);
-            }
-            Expr::Nested(inner) => {
-                Self::collect_column_refs(inner, refs);
-            }
-            Expr::Subquery(_) => {
-                // Subquery columns are handled separately
-            }
-            Expr::InList { expr, list, .. } => {
-                Self::collect_column_refs(expr, refs);
-                for item in list {
-                    Self::collect_column_refs(item, refs);
-                }
-            }
-            Expr::Between {
-                expr, low, high, ..
-            } => {
-                Self::collect_column_refs(expr, refs);
-                Self::collect_column_refs(low, refs);
-                Self::collect_column_refs(high, refs);
-            }
-            Expr::IsNull(e) | Expr::IsNotNull(e) => {
-                Self::collect_column_refs(e, refs);
-            }
-            Expr::IsFalse(e) | Expr::IsNotFalse(e) | Expr::IsTrue(e) | Expr::IsNotTrue(e) => {
-                Self::collect_column_refs(e, refs);
-            }
-            Expr::Like { expr, pattern, .. } | Expr::ILike { expr, pattern, .. } => {
-                Self::collect_column_refs(expr, refs);
-                Self::collect_column_refs(pattern, refs);
-            }
-            Expr::Tuple(exprs) => {
-                for e in exprs {
-                    Self::collect_column_refs(e, refs);
-                }
-            }
-            Expr::Extract { expr, .. } => {
-                Self::collect_column_refs(expr, refs);
-            }
-            _ => {
-                // Other expressions don't contain column references or are handled elsewhere
-            }
-        }
-    }
-
-    fn derive_column_name(&self, expr: &Expr, index: usize) -> String {
-        match expr {
-            Expr::Identifier(ident) => ident.value.clone(),
-            Expr::CompoundIdentifier(parts) => parts
-                .last()
-                .map(|i| i.value.clone())
-                .unwrap_or_else(|| format!("col_{index}")),
-            Expr::Function(func) => func.name.to_string().to_lowercase(),
-            _ => format!("col_{index}"),
-        }
-    }
-
     #[allow(clippy::too_many_arguments)]
     fn add_output_column(
         &mut self,
@@ -1171,8 +571,6 @@ impl<'a> Analyzer<'a> {
     }
 
     /// Adds an output column and its associated nodes and edges to the statement context.
-    ///
-    /// This function is central to building the column-level lineage graph.
     pub(super) fn add_output_column_with_aggregation(
         &mut self,
         ctx: &mut StatementContext,
@@ -1202,7 +600,7 @@ impl<'a> Analyzer<'a> {
         };
         ctx.add_node(col_node);
 
-        // Create ownership edge if we have a target (table/CTE being written to)
+        // Create ownership edge if we have a target
         if let Some(target) = params.target_node {
             let edge_id = generate_edge_id(&target, &node_id);
             if !ctx.edge_ids.contains(&edge_id) {
@@ -1244,7 +642,7 @@ impl<'a> Analyzer<'a> {
                     .or_else(|| ctx.cte_definitions.get(table_canonical).cloned())
                     .unwrap_or_else(|| generate_node_id("table", table_canonical));
 
-                // Fallback to generating a new ID (standard table/CTE column)
+                // Fallback to generating a new ID
                 let source_col_id = source_col_id.unwrap_or_else(|| {
                     generate_column_node_id(
                         Some(&table_node_id),
@@ -1404,77 +802,7 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    /// Capture filter predicates from a WHERE/HAVING expression and attach to table nodes.
-    /// This splits the expression by AND to localize predicates to specific tables,
-    /// so each table only shows the filters that directly reference it.
-    pub(super) fn capture_filter_predicates(
-        &mut self,
-        ctx: &mut StatementContext,
-        expr: &Expr,
-        clause_type: FilterClauseType,
-    ) {
-        // Split by AND and process each predicate separately
-        let predicates = Self::split_by_and(expr);
-
-        for predicate in predicates {
-            // Extract column references from this specific predicate
-            let column_refs = self.extract_column_refs(predicate);
-
-            // Find unique tables referenced in this predicate
-            let mut affected_tables: HashSet<String> = HashSet::new();
-            for col_ref in &column_refs {
-                if let Some(table_canonical) =
-                    self.resolve_column_table(ctx, col_ref.table.as_deref(), &col_ref.column)
-                {
-                    affected_tables.insert(table_canonical);
-                }
-            }
-
-            // If we couldn't resolve columns to specific tables (e.g., columns from
-            // functions without clear table references, or ambiguous column names),
-            // apply the filter to all tables in the current scope as a conservative
-            // fallback. This may be imprecise for complex multi-table expressions,
-            // but ensures the filter is captured rather than lost.
-            if affected_tables.is_empty() && !column_refs.is_empty() {
-                for table in ctx.tables_in_current_scope() {
-                    affected_tables.insert(table);
-                }
-            }
-
-            // Add this specific predicate to affected table nodes
-            let filter_text = predicate.to_string();
-            for table_canonical in &affected_tables {
-                ctx.add_filter_for_table(table_canonical, filter_text.clone(), clause_type);
-            }
-        }
-    }
-
-    /// Split an expression by top-level AND operator into individual predicates.
-    /// For example: `a = 1 AND b = 2 AND c = 3` becomes [`a = 1`, `b = 2`, `c = 3`]
-    fn split_by_and(expr: &Expr) -> Vec<&Expr> {
-        let mut predicates = Vec::new();
-        Self::collect_and_predicates(expr, &mut predicates);
-        predicates
-    }
-
-    fn collect_and_predicates<'b>(expr: &'b Expr, predicates: &mut Vec<&'b Expr>) {
-        match expr {
-            Expr::BinaryOp {
-                left,
-                op: ast::BinaryOperator::And,
-                right,
-            } => {
-                Self::collect_and_predicates(left, predicates);
-                Self::collect_and_predicates(right, predicates);
-            }
-            _ => {
-                predicates.push(expr);
-            }
-        }
-    }
-
     /// Apply pending filters to table nodes before finalizing the statement.
-    /// This should be called after all analysis is complete for a statement.
     pub(super) fn apply_pending_filters(&self, ctx: &mut StatementContext) {
         // Collect pending filters to avoid borrow issues
         let pending: Vec<(String, Vec<crate::types::FilterPredicate>)> =

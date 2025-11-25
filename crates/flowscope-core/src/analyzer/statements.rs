@@ -6,7 +6,9 @@
 
 use super::complexity;
 use super::context::StatementContext;
+use super::expression::ExpressionAnalyzer;
 use super::helpers::{classify_query_type, extract_simple_name, generate_node_id};
+use super::select::SelectAnalyzer;
 use super::Analyzer;
 use crate::error::ParseError;
 use crate::types::{issue_codes, Issue, Node, NodeType, StatementLineage};
@@ -162,58 +164,32 @@ impl<'a> Analyzer<'a> {
         from: &Option<TableWithJoins>,
         selection: &Option<Expr>,
     ) {
+        let mut select_analyzer = SelectAnalyzer::new(self, ctx);
+
         // 1. Analyze the target table
-        let mut target_node_id = None;
-
-        if let TableFactor::Table { name, alias, .. } = &table.relation {
-            let table_name = name.to_string();
-            let canonical_res = self.add_source_table(ctx, &table_name, None);
-            let canonical = canonical_res
-                .clone()
-                .unwrap_or_else(|| self.normalize_table_name(&table_name));
-
-            // Register alias if present
-            if let (Some(a), Some(canonical_name)) = (alias, canonical_res) {
-                ctx.table_aliases.insert(a.name.to_string(), canonical_name);
-            }
-
-            // We need the Node ID
-            let node_id = generate_node_id("table", &canonical);
-
-            target_node_id = Some(node_id.clone());
-
-            #[cfg(feature = "tracing")]
-            info!(target: "analyzer", "UPDATE target identified: {} (ID: {})", canonical, node_id);
-
-            self.produced_tables
-                .insert(canonical.clone(), ctx.statement_index);
-
-            // Expand columns from schema if available
-            self.add_table_columns_from_schema(ctx, &canonical, &node_id);
-        } else {
-            self.analyze_table_with_joins(ctx, table, None);
-        }
+        let target_node_id = select_analyzer.analyze_dml_target_from_table_with_joins(table);
 
         // 2. Analyze FROM clause (Postgres style)
         if let Some(from_table) = from {
-            self.analyze_table_with_joins(ctx, from_table, target_node_id.as_deref());
-        }
-
-        // 3. Analyze assignments (SET clause)
-        for assignment in assignments {
-            self.analyze_expression(ctx, &assignment.value);
-        }
-
-        // 4. Analyze selection (WHERE clause)
-        if let Some(expr) = selection {
-            self.analyze_expression(ctx, expr);
+            select_analyzer.analyze_table_with_joins(from_table, target_node_id.as_deref());
         }
 
         // Also analyze the joins in the target table structure itself
         for join in &table.joins {
             let join_type = "JOIN";
-            ctx.last_operation = Some(join_type.to_string());
-            self.analyze_table_factor(ctx, &join.relation, target_node_id.as_deref());
+            select_analyzer.ctx.last_operation = Some(join_type.to_string());
+            select_analyzer.analyze_table_factor(&join.relation, target_node_id.as_deref());
+        }
+
+        // 3. Analyze assignments (SET clause)
+        let mut expr_analyzer = ExpressionAnalyzer::new(self, ctx);
+        for assignment in assignments {
+            expr_analyzer.analyze(&assignment.value);
+        }
+
+        // 4. Analyze selection (WHERE clause)
+        if let Some(expr) = selection {
+            expr_analyzer.analyze(expr);
         }
     }
 
@@ -227,104 +203,92 @@ impl<'a> Analyzer<'a> {
     ) {
         let mut target_ids = Vec::new();
 
-        // Pre-register aliases from sources so multi-table deletes can resolve targets.
-        match from {
-            FromTable::WithFromKeyword(ts) | FromTable::WithoutKeyword(ts) => {
+        // Scope for SelectAnalyzer usage
+        {
+            let mut select_analyzer = SelectAnalyzer::new(self, ctx);
+
+            // Pre-register aliases from sources so multi-table deletes can resolve targets.
+            match from {
+                FromTable::WithFromKeyword(ts) | FromTable::WithoutKeyword(ts) => {
+                    for t in ts {
+                        select_analyzer.register_aliases_in_table_with_joins(t);
+                    }
+                }
+            }
+            if let Some(us) = using {
+                for t in us {
+                    select_analyzer.register_aliases_in_table_with_joins(t);
+                }
+            }
+
+            // 1. Identify targets
+            if !tables.is_empty() {
+                // Multi-table delete - targets may reference aliases
+                for obj in tables {
+                    let name = obj.to_string();
+                    let target_canonical = select_analyzer
+                        .resolve_table_alias(Some(&name))
+                        .unwrap_or_else(|| {
+                            select_analyzer
+                                .canonicalize_table_reference(&name)
+                                .canonical
+                        });
+
+                    if let Some((_canonical, node_id)) =
+                        select_analyzer.analyze_dml_target(&target_canonical, None)
+                    {
+                        #[cfg(feature = "tracing")]
+                        info!(target: "analyzer", "DELETE target identified: {} (ID: {})", _canonical, node_id);
+                        target_ids.push(node_id);
+                    }
+                }
+            } else {
+                // Standard SQL: first table in FROM is target
+                let ts = match from {
+                    FromTable::WithFromKeyword(ts) | FromTable::WithoutKeyword(ts) => ts,
+                };
+                if let Some(first) = ts.first() {
+                    if let TableFactor::Table { name, alias, .. } = &first.relation {
+                        let name_str = name.to_string();
+                        if let Some((_canonical, node_id)) =
+                            select_analyzer.analyze_dml_target(&name_str, alias.as_ref())
+                        {
+                            #[cfg(feature = "tracing")]
+                            info!(target: "analyzer", "DELETE target identified: {} (ID: {})", _canonical, node_id);
+                            target_ids.push(node_id);
+                        }
+                    }
+                }
+            }
+
+            // 2. Analyze sources (FROM + USING)
+            // Helper to avoid borrow checker issues by re-using select_analyzer
+            let mut analyze_sources = |ts: &[TableWithJoins]| {
                 for t in ts {
-                    self.register_aliases_in_table_with_joins(ctx, t);
+                    if target_ids.is_empty() {
+                        select_analyzer.analyze_table_with_joins(t, None);
+                    } else {
+                        for target_id in &target_ids {
+                            select_analyzer.analyze_table_with_joins(t, Some(target_id));
+                        }
+                    }
                 }
-            }
-        }
-        if let Some(us) = using {
-            for t in us {
-                self.register_aliases_in_table_with_joins(ctx, t);
-            }
-        }
-
-        // 1. Identify targets
-        if !tables.is_empty() {
-            // Multi-table delete
-            for obj in tables {
-                let name = obj.to_string();
-                let target_canonical = self
-                    .resolve_table_alias(ctx, Some(&name))
-                    .unwrap_or_else(|| self.canonicalize_table_reference(&name).canonical);
-                // We add them as nodes (they are being affected)
-                self.add_source_table(ctx, &target_canonical, None);
-
-                let node_id = generate_node_id("table", &target_canonical);
-                target_ids.push(node_id.clone());
-
-                #[cfg(feature = "tracing")]
-                info!(target: "analyzer", "DELETE target identified: {} (ID: {})", target_canonical, node_id);
-
-                self.produced_tables
-                    .insert(target_canonical.clone(), ctx.statement_index);
-
-                // Expand columns from schema if available
-                self.add_table_columns_from_schema(ctx, &target_canonical, &node_id);
-            }
-        } else {
-            // Standard SQL: first table in FROM is target
-            let ts = match from {
-                FromTable::WithFromKeyword(ts) | FromTable::WithoutKeyword(ts) => ts,
             };
-            if let Some(first) = ts.first() {
-                if let TableFactor::Table { name, alias, .. } = &first.relation {
-                    let name_str = name.to_string();
-                    let canonical_res = self.add_source_table(ctx, &name_str, None);
 
-                    // Use the canonical name returned by add_source_table
-                    let canonical = canonical_res
-                        .clone()
-                        .unwrap_or_else(|| self.normalize_table_name(&name_str));
-
-                    // Register alias if present
-                    if let (Some(a), Some(canonical_name)) = (alias, canonical_res) {
-                        ctx.table_aliases.insert(a.name.to_string(), canonical_name);
-                    }
-
-                    let node_id = generate_node_id("table", &canonical);
-                    target_ids.push(node_id.clone());
-
-                    #[cfg(feature = "tracing")]
-                    info!(target: "analyzer", "DELETE target identified: {} (ID: {})", canonical, node_id);
-
-                    self.produced_tables
-                        .insert(canonical.clone(), ctx.statement_index);
-
-                    // Expand columns from schema if available
-                    self.add_table_columns_from_schema(ctx, &canonical, &node_id);
+            match from {
+                FromTable::WithFromKeyword(ts) | FromTable::WithoutKeyword(ts) => {
+                    analyze_sources(ts);
                 }
             }
-        }
-
-        // 2. Analyze sources (FROM + USING)
-
-        let mut analyze_sources = |ctx: &mut StatementContext, source_tables: &[TableWithJoins]| {
-            for t in source_tables {
-                if target_ids.is_empty() {
-                    self.analyze_table_with_joins(ctx, t, None);
-                } else {
-                    for target_id in &target_ids {
-                        self.analyze_table_with_joins(ctx, t, Some(target_id));
-                    }
-                }
+            if let Some(us) = using {
+                analyze_sources(us);
             }
-        };
-
-        match from {
-            FromTable::WithFromKeyword(ts) | FromTable::WithoutKeyword(ts) => {
-                analyze_sources(ctx, ts);
-            }
-        }
-        if let Some(us) = using {
-            analyze_sources(ctx, us);
         }
 
         // 3. Analyze selection
         if let Some(expr) = selection {
-            self.analyze_expression(ctx, expr);
+            let mut expr_analyzer = ExpressionAnalyzer::new(self, ctx);
+            expr_analyzer.analyze(expr);
         }
     }
 
@@ -337,42 +301,17 @@ impl<'a> Analyzer<'a> {
         on: &Expr,
         clauses: &[MergeClause],
     ) {
+        let mut select_analyzer = SelectAnalyzer::new(self, ctx);
+
         // 1. Analyze Target Table
-        let mut target_id = None;
-        if let TableFactor::Table { name, alias, .. } = table {
-            let table_name = name.to_string();
-            let canonical_res = self.add_source_table(ctx, &table_name, None);
-
-            // Use the canonical name returned by add_source_table
-            let canonical = canonical_res
-                .clone()
-                .unwrap_or_else(|| self.normalize_table_name(&table_name));
-
-            // Register alias if present
-            if let (Some(a), Some(canonical_name)) = (alias, canonical_res) {
-                ctx.table_aliases.insert(a.name.to_string(), canonical_name);
-            }
-
-            let node_id = generate_node_id("table", &canonical);
-            target_id = Some(node_id.clone());
-
-            #[cfg(feature = "tracing")]
-            info!(target: "analyzer", "MERGE target identified: {} (ID: {})", canonical, node_id);
-
-            self.produced_tables
-                .insert(canonical.clone(), ctx.statement_index);
-
-            // Expand columns from schema if available
-            self.add_table_columns_from_schema(ctx, &canonical, &node_id);
-        } else {
-            self.analyze_table_factor(ctx, table, None);
-        }
+        let target_id = select_analyzer.analyze_dml_target_factor(table);
 
         // 2. Analyze Source Table (USING clause)
-        self.analyze_table_factor(ctx, source, target_id.as_deref());
+        select_analyzer.analyze_table_factor(source, target_id.as_deref());
 
         // 3. Analyze ON predicate
-        self.analyze_expression(ctx, on);
+        let mut expr_analyzer = ExpressionAnalyzer::new(self, ctx);
+        expr_analyzer.analyze(on);
 
         // 4. Analyze MERGE clauses
         for clause in clauses {
@@ -380,18 +319,17 @@ impl<'a> Analyzer<'a> {
                 MergeAction::Update { assignments } => {
                     // Analyze assignments in UPDATE clause
                     for assignment in assignments {
-                        self.analyze_expression(ctx, &assignment.value);
+                        expr_analyzer.analyze(&assignment.value);
                     }
                 }
                 MergeAction::Insert(insert_expr) => {
                     // Analyze INSERT clause
-                    // MergeInsertExpr contains columns and kind fields
                     match &insert_expr.kind {
                         MergeInsertKind::Values(values) => {
                             // VALUES clause with rows
                             for row in &values.rows {
                                 for value in row {
-                                    self.analyze_expression(ctx, value);
+                                    expr_analyzer.analyze(value);
                                 }
                             }
                         }
@@ -407,7 +345,7 @@ impl<'a> Analyzer<'a> {
 
             // Analyze the predicate for this clause (WHEN MATCHED ... AND <predicate>)
             if let Some(ref predicate) = clause.predicate {
-                self.analyze_expression(ctx, predicate);
+                expr_analyzer.analyze(predicate);
             }
         }
     }

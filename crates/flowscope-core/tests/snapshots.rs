@@ -1,4 +1,4 @@
-use flowscope_core::{analyze, AnalyzeRequest, AnalyzeResult, Dialect};
+use flowscope_core::{analyze, AnalyzeRequest, Dialect};
 use insta::{assert_json_snapshot, Settings};
 
 mod common;
@@ -65,4 +65,33 @@ fn test_recursive_cte() {
     "#;
 
     run_snapshot_test("recursive_cte", sql);
+}
+
+#[test]
+fn test_dml_update_with_from() {
+    let sql = r#"
+        UPDATE orders AS o
+        SET status = 'shipped', updated_at = NOW()
+        FROM customers c
+        WHERE o.customer_id = c.id
+          AND c.region = 'US';
+    "#;
+
+    run_snapshot_test("dml_update_with_from", sql);
+}
+
+#[test]
+fn test_dml_merge_statement() {
+    let sql = r#"
+        MERGE INTO inventory t
+        USING daily_shipments s
+        ON t.product_id = s.product_id
+        WHEN MATCHED THEN
+            UPDATE SET t.quantity = t.quantity + s.quantity
+        WHEN NOT MATCHED THEN
+            INSERT (product_id, quantity)
+            VALUES (s.product_id, s.quantity);
+    "#;
+
+    run_snapshot_test("dml_merge_statement", sql);
 }

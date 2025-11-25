@@ -1,0 +1,94 @@
+---
+source: crates/flowscope-core/tests/snapshots.rs
+assertion_line: 25
+expression: clean_result
+---
+{
+  "statements": [
+    {
+      "statementIndex": 0,
+      "statementType": "UPDATE",
+      "nodes": [
+        {
+          "id": "table_e500054d128e991c",
+          "type": "table",
+          "label": "customers",
+          "qualifiedName": "customers"
+        },
+        {
+          "id": "table_eaa6ebb8f158751f",
+          "type": "table",
+          "label": "orders",
+          "qualifiedName": "orders"
+        }
+      ],
+      "edges": [
+        {
+          "id": "edge_7f782d3c9f01e6e0",
+          "from": "table_e500054d128e991c",
+          "to": "table_eaa6ebb8f158751f",
+          "type": "data_flow"
+        }
+      ],
+      "joinCount": 0,
+      "complexityScore": 10
+    }
+  ],
+  "globalLineage": {
+    "nodes": [
+      {
+        "id": "table_e500054d128e991c",
+        "type": "table",
+        "label": "customers",
+        "canonicalName": {
+          "name": "customers"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "table_e500054d128e991c"
+          }
+        ]
+      },
+      {
+        "id": "table_eaa6ebb8f158751f",
+        "type": "table",
+        "label": "orders",
+        "canonicalName": {
+          "name": "orders"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "table_eaa6ebb8f158751f"
+          }
+        ]
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge_7f782d3c9f01e6e0",
+        "from": "table_e500054d128e991c",
+        "to": "table_eaa6ebb8f158751f",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      }
+    ]
+  },
+  "issues": [],
+  "summary": {
+    "statementCount": 1,
+    "tableCount": 2,
+    "columnCount": 0,
+    "joinCount": 0,
+    "complexityScore": 10,
+    "issueCount": {
+      "errors": 0,
+      "warnings": 0,
+      "infos": 0
+    },
+    "hasErrors": false
+  }
+}

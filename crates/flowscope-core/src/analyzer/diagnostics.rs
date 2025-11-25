@@ -1,4 +1,5 @@
 use super::context::StatementContext;
+use super::expression::ExpressionAnalyzer;
 use super::Analyzer;
 use crate::types::{issue_codes, Issue};
 use sqlparser::ast::Expr;
@@ -35,7 +36,7 @@ impl<'a> Analyzer<'a> {
         ctx: &StatementContext,
         expr: &Expr,
     ) {
-        let refs = self.extract_column_refs(expr);
+        let refs = ExpressionAnalyzer::extract_column_refs(expr);
         for col_ref in refs {
             if let Some(table) = col_ref.table.as_deref() {
                 let resolved = self.resolve_table_alias(ctx, Some(table));
