@@ -13,7 +13,7 @@ proptest! {
         prop_assume!(table_a != table_b);
 
         let sql = format!(
-            "SELECT {ta}.{ca}, {tb}.{cb} FROM {ta} JOIN {tb} ON {ta}.{ca} = {tb}.{cb}",
+            "SELECT \"{ta}\".\"{ca}\", \"{tb}\".\"{cb}\" FROM \"{ta}\" JOIN \"{tb}\" ON \"{ta}\".\"{ca}\" = \"{tb}\".\"{cb}\"",
             ta = table_a,
             tb = table_b,
             ca = col_a,

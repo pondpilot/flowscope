@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { X, Minimize2, Maximize2, Copy, Check } from 'lucide-react';
 import { useDebugData } from '../../hooks/useDebugData';
 import { JsonTreeView } from './JsonTreeView';
+import { getEngineVersion, isWasmInitialized } from '@pondpilot/flowscope-core';
 
 type TabId = 'analysis' | 'schema' | 'uiState' | 'raw';
 
@@ -18,9 +19,20 @@ export function DebugPanel() {
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState<Position>({ x: 0, y: 0 });
   const [copied, setCopied] = useState(false);
+  const [engineVersion, setEngineVersion] = useState<string>('unknown');
 
   const panelRef = useRef<HTMLDivElement>(null);
   const debugData = useDebugData();
+
+  useEffect(() => {
+    if (isVisible && isWasmInitialized()) {
+      try {
+        setEngineVersion(getEngineVersion());
+      } catch (e) {
+        console.warn('Could not fetch engine version', e);
+      }
+    }
+  }, [isVisible]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -234,6 +246,10 @@ export function DebugPanel() {
                     <strong>Summary:</strong>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-xs font-sans">
+                    <div>
+                      <span className="text-gray-600">Engine Version:</span>{' '}
+                      <span className="font-mono text-gray-800">{engineVersion}</span>
+                    </div>
                     <div>
                       <span className="text-gray-600">Has Result:</span>{' '}
                       <span className="font-semibold">

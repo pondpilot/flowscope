@@ -81,9 +81,18 @@
         "description": "SQL dialect for parsing and analysis.\n\nDifferent dialects have different syntax rules and identifier normalization behavior.",
         "enum": [
           "generic",
+          "ansi",
+          "bigquery",
+          "clickhouse",
+          "databricks",
+          "duckdb",
+          "hive",
+          "mssql",
+          "mysql",
           "postgres",
+          "redshift",
           "snowflake",
-          "bigquery"
+          "sqlite"
         ],
         "type": "string"
       },

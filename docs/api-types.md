@@ -15,7 +15,7 @@ interface AnalyzeRequest {
   files?: FileSource[];
 
   /** SQL dialect - required field with default 'generic' at TS wrapper level */
-  dialect: 'generic' | 'postgres' | 'snowflake' | 'bigquery';
+  dialect: 'generic' | 'postgres' | 'snowflake' | 'bigquery' | 'ansi' | 'clickhouse' | 'databricks' | 'duckdb' | 'hive' | 'mssql' | 'mysql' | 'redshift' | 'sqlite';
 
   /** Optional source name (file path or script identifier) for grouping */
   sourceName?: string;
@@ -348,6 +348,8 @@ pub enum Dialect {
     Postgres,
     Snowflake,
     Bigquery,
+    Duckdb,
+    // ... others
 }
 
 // ... similar for other types
