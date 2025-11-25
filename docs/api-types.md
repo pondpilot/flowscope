@@ -11,14 +11,25 @@ interface AnalyzeRequest {
   /** The SQL code to analyze (UTF-8 string, multi-statement supported) */
   sql: string;
 
+  /** Optional list of source files to analyze (alternative to single `sql` field) */
+  files?: FileSource[];
+
   /** SQL dialect - required field with default 'generic' at TS wrapper level */
   dialect: 'generic' | 'postgres' | 'snowflake' | 'bigquery';
+
+  /** Optional source name (file path or script identifier) for grouping */
+  sourceName?: string;
 
   /** Optional analysis options */
   options?: AnalysisOptions;
 
   /** Optional schema metadata for accurate column resolution */
   schema?: SchemaMetadata;
+}
+
+interface FileSource {
+  name: string;
+  content: string;
 }
 
 interface AnalysisOptions {
@@ -41,6 +52,9 @@ interface SchemaMetadata {
 
   /** Canonical table representations */
   tables: SchemaTable[];
+
+  /** Global toggle for implied schema capture (default: true) */
+  allowImplied?: boolean;
 }
 
 interface SchemaNamespaceHint {
@@ -85,6 +99,36 @@ interface AnalyzeResult {
 
   /** Summary statistics */
   summary: Summary;
+
+  /** Effective schema used during analysis (imported + implied) */
+  resolvedSchema?: ResolvedSchemaMetadata;
+}
+
+interface ResolvedSchemaMetadata {
+  /** All tables used during analysis (imported + implied) */
+  tables: ResolvedSchemaTable[];
+}
+
+interface ResolvedSchemaTable {
+  catalog?: string;
+  schema?: string;
+  name: string;
+  columns: ResolvedColumnSchema[];
+  /** Origin of this table's schema information */
+  origin: 'imported' | 'implied';
+  /** For implied tables: which statement created it */
+  sourceStatementIndex?: number;
+  /** Timestamp when this entry was created/updated (ISO 8601) */
+  updatedAt: string;
+  /** True if this is a temporary table */
+  temporary?: boolean;
+}
+
+interface ResolvedColumnSchema {
+  name: string;
+  dataType?: string;
+  /** Column-level origin (can differ from table origin in future merging) */
+  origin?: 'imported' | 'implied';
 }
 
 interface GlobalLineage {

@@ -103,6 +103,13 @@ This document provides a comprehensive reference of all error and warning codes 
 
 ### System Issues
 
+#### `INVALID_REQUEST`
+- **Severity**: Error
+- **Description**: The analysis request was malformed or missing required fields
+- **When Emitted**: When the JSON payload cannot be parsed or validated against the schema
+- **User Action**: Check the request format matches `AnalyzeRequest` interface
+- **Engine Behavior**: Analysis is rejected immediately
+
 #### `CANCELLED`
 - **Severity**: Info
 - **Description**: Analysis was cancelled before completion (via AbortSignal)

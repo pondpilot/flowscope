@@ -12,39 +12,21 @@ The core idea:
 
 ### Core Specifications
 
-- [`product-scope.md`](./product-scope.md)
-  What we're building, who it's for, and what it's explicitly *not*.
-
-- [`architecture-overview.md`](./architecture-overview.md)
-  High-level system design, components, data flows, and packaging.
-
 - [`core-engine-spec.md`](./core-engine-spec.md)
   Rust lineage engine: parsing, dialects, lineage computation, internal models.
-
-- [`wasm-and-js-layer.md`](./wasm-and-js-layer.md)
-  WASM export, JS/TS wrapper, worker model, public APIs for consumers.
 
 - [`api-types.md`](./api-types.md)
   Exact TypeScript/Rust type definitions for the WASM boundary.
 
-- [`ui-and-integrations.md`](./ui-and-integrations.md)
-  React viewer package, example app, and integration surfaces (browser, IDE, external tools).
-
 ### Quality & Planning
 
-- [`testing-and-quality.md`](./testing-and-quality.md)
-  Testing strategy, sample datasets, regression harness, performance & correctness checks.
-
-- [`roadmap-and-phasing.md`](./roadmap-and-phasing.md)
-  Implementation phases and priorities (MVP → v1.0 → later).
+- [`dialect-coverage.md`](./dialect-coverage.md)
+  SQL feature support matrix across supported dialects.
 
 ### Implementation Guide
 
-- [`implementation-decisions.md`](./implementation-decisions.md)
-  All technical decisions made during design: build tools, libraries, strategies, and constraints.
-
-- [`design-gaps-and-questions.md`](./design-gaps-and-questions.md)
-  Open questions, resolved gaps, and future design considerations.
+- [`schema-handling-design.md`](./schema-handling-design.md)
+  Advanced schema inference logic and precedence rules.
 
 ## High-Level Summary
 
