@@ -75,6 +75,94 @@ High-level data flow:
   * SQL with highlights.
 * Stay strictly presentation-oriented; no lineage logic here.
 
+### 2.5 Internal Architecture (Core Engine)
+
+The core engine utilizes a standard compiler frontend architecture specialized for lineage graph construction:
+
+* **Parser**: Uses `sqlparser-rs` to generate an Abstract Syntax Tree (AST) from raw SQL.
+* **Two-Phase Visitor Pattern**: Analysis is split into two phases:
+  1. **Table Discovery**: Traverses FROM clauses to find all tables, register aliases, and build the table-level graph.
+  2. **Column Lineage**: Analyzes SELECT projections to track column-level data flow (via `SelectAnalyzer`).
+* **Best-Effort Parsing**: For unsupported constructs (PIVOT, UNPIVOT, table functions), the analyzer extracts identifiers that match known tables, providing "fuzzy" lineage rather than no lineage.
+
+#### Scope Management State Diagram
+
+The analyzer maintains a **Stack of Scopes** (`StatementContext::scope_stack`) to handle nested queries correctly:
+
+```text
+┌─────────────────────────────────────────────────────────────────────┐
+│                        SCOPE LIFECYCLE                               │
+└─────────────────────────────────────────────────────────────────────┘
+
+                    ┌──────────────────┐
+                    │  Statement Start │
+                    │  (empty stack)   │
+                    └────────┬─────────┘
+                             │
+                             ▼
+    ┌────────────────────────────────────────────────────────────────┐
+    │  Enter SELECT/Subquery/CTE body                                │
+    │  ──────────────────────────────────────────────────────────────│
+    │  Action: push_scope()                                          │
+    │  Creates new Scope with:                                       │
+    │    • table_aliases: HashMap<alias, canonical>                  │
+    │    • subquery_aliases: HashSet<alias>                          │
+    └────────────────────────────────────────────────────────────────┘
+                             │
+                             ▼
+    ┌────────────────────────────────────────────────────────────────┐
+    │  Visit FROM clause (Table Discovery Phase)                     │
+    │  ──────────────────────────────────────────────────────────────│
+    │  For each table/subquery:                                      │
+    │    • register_alias_in_scope(alias, canonical)                 │
+    │    • register_subquery_alias_in_scope(alias)                   │
+    │                                                                │
+    │  Aliases registered here are visible to:                       │
+    │    • Current scope                                             │
+    │    • Child scopes (nested subqueries)                          │
+    └────────────────────────────────────────────────────────────────┘
+                             │
+                             ▼
+    ┌────────────────────────────────────────────────────────────────┐
+    │  Analyze SELECT/WHERE/HAVING (Column Lineage Phase)            │
+    │  ──────────────────────────────────────────────────────────────│
+    │  Column references resolved by searching scope stack:          │
+    │    1. Current scope first                                      │
+    │    2. Then parent scopes (for correlated subqueries)           │
+    │    3. Fall back to CTE definitions                             │
+    └────────────────────────────────────────────────────────────────┘
+                             │
+                             ▼
+    ┌────────────────────────────────────────────────────────────────┐
+    │  Exit SELECT/Subquery/CTE body                                 │
+    │  ──────────────────────────────────────────────────────────────│
+    │  Action: pop_scope()                                           │
+    │  Discards current scope; parent scope becomes active           │
+    └────────────────────────────────────────────────────────────────┘
+
+RESOLUTION EXAMPLE:
+
+  SELECT t1.col1, sub.col2
+  FROM table1 t1
+  JOIN (
+    SELECT t2.col2          ◄── Scope 1 (inner)
+    FROM table2 t2              • t2 → table2
+    WHERE t2.id = t1.id     ◄── Correlated reference to parent scope
+  ) sub ON ...              ◄── Scope 0 (outer)
+                                • t1 → table1
+                                • sub → (subquery alias)
+
+  When resolving "t1.id" inside the subquery:
+    1. Search Scope 1: not found
+    2. Search Scope 0: found t1 → table1 ✓
+```
+
+This design ensures:
+* **Shadowing**: A subquery alias `x` hiding an outer table named `x`
+* **Correlation**: Subqueries accessing columns from parent scopes
+* **Lateral Joins**: Accessing tables defined earlier in the same FROM clause
+* **Isolation**: Sibling subqueries cannot see each other's aliases
+
 ## 3. Deployment & Packaging Model
 
 ### 3.1 Repository Layout (Suggested)

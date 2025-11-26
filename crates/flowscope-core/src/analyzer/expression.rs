@@ -141,7 +141,6 @@ impl<'a, 'b> ExpressionAnalyzer<'a, 'b> {
                 refs.push(ColumnRef {
                     table: None,
                     column: ident.value.clone(),
-                    resolved_table: None,
                 });
             }
             Expr::CompoundIdentifier(parts) => {
@@ -155,7 +154,6 @@ impl<'a, 'b> ExpressionAnalyzer<'a, 'b> {
                     refs.push(ColumnRef {
                         table: Some(table),
                         column,
-                        resolved_table: None,
                     });
                 }
             }

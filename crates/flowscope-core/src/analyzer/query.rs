@@ -20,7 +20,6 @@ use std::collections::HashMap;
 struct ExpandedColumnInfo {
     name: String,
     table_canonical: String,
-    resolved_table_canonical: String,
     data_type: Option<String>,
 }
 
@@ -36,6 +35,7 @@ pub(super) struct OutputColumnParams {
 }
 
 impl<'a> Analyzer<'a> {
+    #[cfg_attr(feature = "tracing", tracing::instrument(skip_all, fields(has_target = target_node.is_some())))]
     pub(super) fn analyze_query(
         &mut self,
         ctx: &mut StatementContext,
@@ -173,15 +173,18 @@ impl<'a> Analyzer<'a> {
         let metadata = if is_known {
             None
         } else {
-            self.issues.push(
-                Issue::warning(
-                    issue_codes::UNRESOLVED_REFERENCE,
-                    format!(
-                        "Table '{canonical}' could not be resolved using provided schema metadata or search path"
-                    ),
-                )
-                .with_statement(ctx.statement_index),
-            );
+            let mut issue = Issue::warning(
+                issue_codes::UNRESOLVED_REFERENCE,
+                format!(
+                    "Table '{canonical}' could not be resolved using provided schema metadata or search path"
+                ),
+            )
+            .with_statement(ctx.statement_index);
+            // Attach span if we can find the table name in the SQL
+            if let Some(span) = self.find_span(canonical) {
+                issue = issue.with_span(span);
+            }
+            self.issues.push(issue);
             let mut meta = HashMap::new();
             meta.insert("placeholder".to_string(), json!(true));
             Some(meta)
@@ -314,7 +317,6 @@ impl<'a> Analyzer<'a> {
                         .map(|col| ExpandedColumnInfo {
                             name: col.name.clone(),
                             table_canonical: table_canonical.clone(),
-                            resolved_table_canonical: table_canonical.clone(),
                             data_type: col.data_type.clone(),
                         })
                         .collect()
@@ -326,7 +328,6 @@ impl<'a> Analyzer<'a> {
                     let sources = vec![ColumnRef {
                         table: Some(col_info.table_canonical),
                         column: col_info.name.clone(),
-                        resolved_table: Some(col_info.resolved_table_canonical),
                     }];
                     self.add_output_column(
                         ctx,
@@ -341,13 +342,15 @@ impl<'a> Analyzer<'a> {
             } else {
                 // No schema available - emit approximate lineage warning
                 // Create a table-to-table edge marked as approximate
-                self.issues.push(
-                    Issue::info(
-                        issue_codes::APPROXIMATE_LINEAGE,
-                        format!("SELECT * from '{table_canonical}' - column list unknown without schema metadata"),
-                    )
-                    .with_statement(ctx.statement_index),
-                );
+                let mut issue = Issue::info(
+                    issue_codes::APPROXIMATE_LINEAGE,
+                    format!("SELECT * from '{table_canonical}' - column list unknown without schema metadata"),
+                )
+                .with_statement(ctx.statement_index);
+                if let Some(span) = self.find_span(&table_canonical) {
+                    issue = issue.with_span(span);
+                }
+                self.issues.push(issue);
 
                 // If there's a target node, create an approximate edge from source table to target
                 if let Some(target) = target_node {
@@ -468,32 +471,36 @@ impl<'a> Analyzer<'a> {
                     return Some(tables_in_scope[0].clone());
                 }
                 // Multiple tables but column not found in any - ambiguous
-                self.issues.push(
-                    Issue::warning(
-                        issue_codes::UNRESOLVED_REFERENCE,
-                        format!(
-                            "Column '{}' is ambiguous across tables in scope: {}",
-                            column,
-                            tables_in_scope.join(", ")
-                        ),
-                    )
-                    .with_statement(ctx.statement_index),
-                );
+                let mut issue = Issue::warning(
+                    issue_codes::UNRESOLVED_REFERENCE,
+                    format!(
+                        "Column '{}' is ambiguous across tables in scope: {}",
+                        column,
+                        tables_in_scope.join(", ")
+                    ),
+                )
+                .with_statement(ctx.statement_index);
+                if let Some(span) = self.find_span(column) {
+                    issue = issue.with_span(span);
+                }
+                self.issues.push(issue);
                 None
             }
             _ => {
                 // Column exists in multiple tables in scope — require explicit qualifier.
-                self.issues.push(
-                    Issue::warning(
-                        issue_codes::UNRESOLVED_REFERENCE,
-                        format!(
-                            "Column '{}' exists in multiple tables in scope: {}. Qualify the column to disambiguate.",
-                            column,
-                            candidate_tables.join(", ")
-                        ),
-                    )
-                    .with_statement(ctx.statement_index),
-                );
+                let mut issue = Issue::warning(
+                    issue_codes::UNRESOLVED_REFERENCE,
+                    format!(
+                        "Column '{}' exists in multiple tables in scope: {}. Qualify the column to disambiguate.",
+                        column,
+                        candidate_tables.join(", ")
+                    ),
+                )
+                .with_statement(ctx.statement_index);
+                if let Some(span) = self.find_span(column) {
+                    issue = issue.with_span(span);
+                }
+                self.issues.push(issue);
                 None
             }
         }
@@ -668,8 +675,6 @@ impl<'a> Analyzer<'a> {
         // Record output column
         ctx.output_columns.push(OutputColumn {
             name: normalized_name,
-            sources: params.sources,
-            expression: params.expression,
             data_type: params.data_type,
             node_id,
         });

@@ -54,8 +54,6 @@ temp/
 
 # Fuzzing and property test artifacts
 crates/flowscope-core/tests/property.proptest-regressions
-fuzz/target/
-fuzz/corpus/*/crash-*
-fuzz/corpus/*/leak-*
-fuzz/corpus/*/timeout-*
-fuzz/corpus/*/oom-*
+crates/flowscope-core/fuzz/target/
+crates/flowscope-core/fuzz/corpus/
+crates/flowscope-core/fuzz/artifacts/

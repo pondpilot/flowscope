@@ -91,7 +91,7 @@ pub enum Severity {
 }
 
 /// A byte range in the source SQL string.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Span {
     /// Byte offset from start of SQL string (inclusive)

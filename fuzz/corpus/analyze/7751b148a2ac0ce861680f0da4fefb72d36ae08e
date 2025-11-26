@@ -1,1 +1,0 @@
-SELECT i id, d, name FROM use,INTCABORSE

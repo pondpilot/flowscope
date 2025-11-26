@@ -71,12 +71,6 @@ pub(crate) struct StatementContext {
 pub(crate) struct OutputColumn {
     /// Alias or derived name for the column
     pub(crate) name: String,
-    /// Source columns that contribute to this output
-    #[allow(dead_code)]
-    pub(crate) sources: Vec<ColumnRef>,
-    /// Expression text for computed columns
-    #[allow(dead_code)]
-    pub(crate) expression: Option<String>,
     /// Inferred data type of the column
     pub(crate) data_type: Option<String>,
     /// Node ID for this column
@@ -90,9 +84,6 @@ pub(crate) struct ColumnRef {
     pub(crate) table: Option<String>,
     /// Column name
     pub(crate) column: String,
-    /// Resolved table canonical name (if known)
-    #[allow(dead_code)]
-    pub(crate) resolved_table: Option<String>,
 }
 
 impl StatementContext {

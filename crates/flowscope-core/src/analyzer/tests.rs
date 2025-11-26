@@ -11,6 +11,22 @@ fn make_request(sql: &str) -> AnalyzeRequest {
     }
 }
 
+fn schema_with_known_table() -> SchemaMetadata {
+    SchemaMetadata {
+        default_catalog: None,
+        default_schema: None,
+        search_path: None,
+        case_sensitivity: None,
+        tables: vec![SchemaTable {
+            catalog: None,
+            schema: None,
+            name: "existing".to_string(),
+            columns: Vec::new(),
+        }],
+        allow_implied: true,
+    }
+}
+
 #[test]
 fn test_simple_select() {
     let request = make_request("SELECT * FROM users");
@@ -78,4 +94,54 @@ fn ctas_edges_only_from_relations() {
             );
         }
     }
+}
+
+#[test]
+fn spans_anchor_to_current_statement() {
+    let sql = "SELECT 1 FROM missing;\nSELECT 1 FROM missing;";
+    let mut request = make_request(sql);
+    request.schema = Some(schema_with_known_table());
+    let result = analyze(&request);
+
+    let spans: Vec<Span> = result
+        .issues
+        .iter()
+        .filter(|issue| issue.code == issue_codes::UNRESOLVED_REFERENCE)
+        .filter_map(|issue| issue.span)
+        .collect();
+
+    assert_eq!(spans.len(), 2, "expected two unresolved reference spans");
+
+    let first_pos = sql.find("missing").expect("first identifier");
+    let second_pos = sql[first_pos + "missing".len()..]
+        .find("missing")
+        .map(|offset| first_pos + "missing".len() + offset)
+        .expect("second identifier");
+
+    assert_eq!(spans[0].start, first_pos);
+    assert_eq!(spans[1].start, second_pos);
+    assert!(spans[0].start < spans[1].start);
+}
+
+#[test]
+fn file_statements_produce_spans() {
+    let mut request = make_request("");
+    let file_sql = "SELECT * FROM missing_table";
+    request.schema = Some(schema_with_known_table());
+    request.files = Some(vec![FileSource {
+        name: "file.sql".to_string(),
+        content: file_sql.to_string(),
+    }]);
+
+    let result = analyze(&request);
+    let issue = result
+        .issues
+        .iter()
+        .find(|issue| issue.code == issue_codes::UNRESOLVED_REFERENCE)
+        .expect("missing table issue");
+
+    let span = issue
+        .span
+        .expect("span should be present for file statement");
+    assert_eq!(&file_sql[span.start..span.end], "missing_table");
 }

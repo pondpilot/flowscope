@@ -22,13 +22,17 @@ impl<'a> Analyzer<'a> {
         is_temporary: bool,
         statement_type: &str,
     ) {
-        if let Some(issue) = self.schema.register_implied(
+        if let Some(mut issue) = self.schema.register_implied(
             canonical,
             columns,
             is_temporary,
             statement_type,
             ctx.statement_index,
         ) {
+            // Attach span if we can find the table name in the SQL
+            if let Some(span) = self.find_span(canonical) {
+                issue = issue.with_span(span);
+            }
             self.issues.push(issue);
         }
     }

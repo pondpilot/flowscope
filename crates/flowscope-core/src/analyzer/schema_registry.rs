@@ -35,7 +35,8 @@ use crate::types::{
     SchemaTable,
 };
 use chrono::{DateTime, Utc};
-use std::collections::HashSet;
+use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
 
 use super::helpers::{
     extract_simple_name, is_quoted_identifier, split_qualified_identifiers, unquote_identifier,
@@ -127,7 +128,7 @@ pub(crate) struct SchemaRegistry {
     /// Schema lookup: table canonical name -> table schema entry with metadata.
     ///
     /// Contains full schema information including column definitions.
-    pub(crate) schema_tables: std::collections::HashMap<String, SchemaTableEntry>,
+    pub(crate) schema_tables: HashMap<String, SchemaTableEntry>,
     /// Default catalog for unqualified identifiers (e.g., database name).
     pub(crate) default_catalog: Option<String>,
     /// Default schema for unqualified identifiers (e.g., "public" in PostgreSQL).
@@ -142,6 +143,8 @@ pub(crate) struct SchemaRegistry {
     dialect: Dialect,
     /// Whether to capture schema from DDL statements.
     allow_implied: bool,
+    /// Cache for identifier normalization to avoid repeated string operations.
+    identifier_cache: RefCell<HashMap<String, String>>,
 }
 
 impl SchemaRegistry {
@@ -150,13 +153,14 @@ impl SchemaRegistry {
         let mut registry = Self {
             known_tables: HashSet::new(),
             imported_tables: HashSet::new(),
-            schema_tables: std::collections::HashMap::new(),
+            schema_tables: HashMap::new(),
             default_catalog: None,
             default_schema: None,
             search_path: Vec::new(),
             case_sensitivity: CaseSensitivity::Dialect,
             dialect,
             allow_implied: true,
+            identifier_cache: RefCell::new(HashMap::new()),
         };
 
         let issues = registry.initialize_from_metadata(schema);
@@ -339,6 +343,7 @@ impl SchemaRegistry {
     }
 
     /// Canonicalizes a table reference using search path and defaults.
+    #[cfg_attr(feature = "tracing", tracing::instrument(skip(self), fields(input = name)))]
     pub(crate) fn canonicalize_table_reference(&self, name: &str) -> TableResolution {
         let parts = split_qualified_identifiers(name);
         if parts.is_empty() {
@@ -438,13 +443,24 @@ impl SchemaRegistry {
     }
 
     /// Normalizes an identifier according to dialect case sensitivity rules.
+    ///
+    /// Results are cached to avoid repeated string operations for the same identifiers.
     pub(crate) fn normalize_identifier(&self, name: &str) -> String {
+        // Check cache first
+        {
+            let cache = self.identifier_cache.borrow();
+            if let Some(cached) = cache.get(name) {
+                return cached.clone();
+            }
+        }
+
+        // Compute normalization
         let effective_case = match self.case_sensitivity {
             CaseSensitivity::Dialect => self.dialect.default_case_sensitivity(),
             other => other,
         };
 
-        if is_quoted_identifier(name) {
+        let normalized = if is_quoted_identifier(name) {
             unquote_identifier(name)
         } else {
             match effective_case {
@@ -452,7 +468,14 @@ impl SchemaRegistry {
                 CaseSensitivity::Upper => name.to_uppercase(),
                 CaseSensitivity::Exact => name.to_string(),
             }
-        }
+        };
+
+        // Store in cache
+        self.identifier_cache
+            .borrow_mut()
+            .insert(name.to_string(), normalized.clone());
+
+        normalized
     }
 
     /// Normalizes a qualified table name according to dialect case sensitivity rules.

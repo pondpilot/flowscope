@@ -21,6 +21,7 @@ use std::sync::Arc;
 use tracing::{info, info_span};
 
 impl<'a> Analyzer<'a> {
+    #[cfg_attr(feature = "tracing", tracing::instrument(skip(self, statement), fields(index, source = source_name.as_deref())))]
     pub(super) fn analyze_statement(
         &mut self,
         index: usize,
@@ -101,7 +102,7 @@ impl<'a> Analyzer<'a> {
                 self.issues.push(
                     Issue::warning(
                         issue_codes::UNSUPPORTED_SYNTAX,
-                        "Statement type not fully supported for lineage analysis".to_string(),
+                        "Statement type not fully supported for lineage analysis",
                     )
                     .with_statement(index),
                 );

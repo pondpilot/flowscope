@@ -16,6 +16,29 @@ Core SQL lineage analysis engine for FlowScope.
 - **Schema Awareness:** Can utilize provided schema metadata to validate column references and resolve wildcards (`SELECT *`).
 - **Diagnostics:** Returns structured issues (errors, warnings) with source spans for precise highlighting.
 
+## Structure
+
+```
+src/
+├── analyzer.rs              # Main analysis orchestration
+├── analyzer/
+│   ├── context.rs           # Per-statement state and scope management
+│   ├── schema_registry.rs   # Schema metadata and name resolution
+│   ├── visitor.rs           # AST visitor for lineage extraction
+│   ├── query.rs             # Query analysis (SELECT, subqueries)
+│   ├── expression.rs        # Expression and column lineage
+│   ├── select_analyzer.rs   # SELECT clause analysis
+│   ├── statements.rs        # Statement-level analysis
+│   ├── ddl.rs               # DDL statement handling (CREATE, ALTER)
+│   ├── cross_statement.rs   # Cross-statement lineage tracking
+│   ├── diagnostics.rs       # Issue reporting
+│   ├── input.rs             # Input merging and deduplication
+│   └── helpers/             # Utility functions
+├── parser/                  # SQL dialect handling
+├── types/                   # Request/response types
+└── lineage/                 # Lineage graph construction
+```
+
 ## Usage
 
 ```rust

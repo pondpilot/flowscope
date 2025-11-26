@@ -1,4 +1,5 @@
 use crate::types::*;
+use std::ops::Range;
 use std::sync::Arc;
 #[cfg(feature = "tracing")]
 use tracing::info_span;
@@ -15,10 +16,12 @@ pub mod helpers;
 mod input;
 mod query;
 pub(crate) mod schema_registry;
+mod select_analyzer;
 mod statements;
 pub mod visitor;
 
 use cross_statement::CrossStatementTracker;
+use helpers::find_identifier_span;
 use input::{collect_statements, StatementInput};
 use schema_registry::SchemaRegistry;
 
@@ -52,6 +55,8 @@ pub(crate) struct Analyzer<'a> {
     pub(crate) tracker: CrossStatementTracker,
     /// Whether column lineage is enabled.
     pub(crate) column_lineage_enabled: bool,
+    /// Source slice for the currently analyzed statement (for span lookups).
+    current_statement_source: Option<StatementSourceSlice<'a>>,
 }
 
 impl<'a> Analyzer<'a> {
@@ -72,7 +77,25 @@ impl<'a> Analyzer<'a> {
             schema,
             tracker: CrossStatementTracker::new(),
             column_lineage_enabled,
+            current_statement_source: None,
         }
+    }
+
+    /// Finds the span of an identifier in the SQL text.
+    ///
+    /// This is used to attach source locations to issues for better error reporting.
+    pub(crate) fn find_span(&self, identifier: &str) -> Option<Span> {
+        if let Some(source) = &self.current_statement_source {
+            let statement_sql = &source.sql[source.range.clone()];
+            return find_identifier_span(statement_sql, identifier, 0).map(|span| {
+                Span::new(
+                    source.range.start + span.start,
+                    source.range.start + span.end,
+                )
+            });
+        }
+
+        find_identifier_span(&self.request.sql, identifier, 0)
     }
 
     /// Returns the correct node ID and type for a relation (view vs table).
@@ -105,9 +128,13 @@ impl<'a> Analyzer<'a> {
         self.schema.normalize_table_name(name)
     }
 
+    #[cfg_attr(feature = "tracing", tracing::instrument(skip(self), fields(dialect = ?self.request.dialect, stmt_count)))]
     fn analyze(&mut self) -> AnalyzeResult {
         let (all_statements, mut preflight_issues) = collect_statements(self.request);
         self.issues.append(&mut preflight_issues);
+
+        #[cfg(feature = "tracing")]
+        tracing::Span::current().record("stmt_count", all_statements.len());
 
         if all_statements.is_empty() {
             return self.build_result();
@@ -119,6 +146,8 @@ impl<'a> Analyzer<'a> {
             StatementInput {
                 statement,
                 source_name,
+                source_sql,
+                source_range,
             },
         ) in all_statements.into_iter().enumerate()
         {
@@ -130,7 +159,15 @@ impl<'a> Analyzer<'a> {
                 stmt_type = ?statement
             )
             .entered();
-            match self.analyze_statement(index, &statement, source_name) {
+            self.current_statement_source = Some(StatementSourceSlice {
+                sql: source_sql,
+                range: source_range,
+            });
+
+            let result = self.analyze_statement(index, &statement, source_name);
+            self.current_statement_source = None;
+
+            match result {
                 Ok(lineage) => {
                     self.statement_lineages.push(lineage);
                 }
@@ -144,6 +181,11 @@ impl<'a> Analyzer<'a> {
 
         self.build_result()
     }
+}
+
+struct StatementSourceSlice<'a> {
+    sql: &'a str,
+    range: Range<usize>,
 }
 
 #[cfg(test)]

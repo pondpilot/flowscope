@@ -241,8 +241,13 @@ flowscope/
 │   │   ├── src/
 │   │   │   ├── analyzer.rs          # Main analysis orchestration
 │   │   │   ├── analyzer/            # Modular analysis components
-│   │   │   │   ├── context.rs       # Per-statement state
-│   │   │   │   ├── resolution.rs    # Name resolution
+│   │   │   │   ├── context.rs       # Per-statement state and scope management
+│   │   │   │   ├── schema_registry.rs # Schema metadata and name resolution
+│   │   │   │   ├── visitor.rs       # AST visitor for lineage extraction
+│   │   │   │   ├── query.rs         # Query analysis (SELECT, subqueries)
+│   │   │   │   ├── expression.rs    # Expression and column lineage
+│   │   │   │   ├── statements.rs    # Statement-level analysis
+│   │   │   │   ├── ddl.rs           # DDL statement handling
 │   │   │   │   ├── diagnostics.rs   # Issue reporting
 │   │   │   │   └── helpers/         # Utility functions
 │   │   │   ├── parser/              # SQL dialect handling
