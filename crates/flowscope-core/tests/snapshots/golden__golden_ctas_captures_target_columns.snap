@@ -1,5 +1,6 @@
 ---
 source: crates/flowscope-core/tests/golden.rs
+assertion_line: 94
 expression: cleaned
 ---
 {
@@ -84,30 +85,6 @@ expression: cleaned
           "from": "table_10a0682dff76cdbc",
           "to": "column_17365cc1224ceac1",
           "type": "ownership"
-        },
-        {
-          "id": "edge_d2e68706ce91a9fa",
-          "from": "column_073ed625e10d73f3",
-          "to": "table_623e5f3551061424",
-          "type": "data_flow"
-        },
-        {
-          "id": "edge_d83c85f4d317a4a6",
-          "from": "column_17365cc1224ceac1",
-          "to": "table_623e5f3551061424",
-          "type": "data_flow"
-        },
-        {
-          "id": "edge_ddd741acbc5d6a94",
-          "from": "column_f6b363282306de23",
-          "to": "table_623e5f3551061424",
-          "type": "data_flow"
-        },
-        {
-          "id": "edge_e6adc5329230a39c",
-          "from": "column_8ebd316ab60e6446",
-          "to": "table_623e5f3551061424",
-          "type": "data_flow"
         },
         {
           "id": "edge_f6501889408ccbfc",
@@ -260,42 +237,6 @@ expression: cleaned
         "from": "table_10a0682dff76cdbc",
         "to": "column_17365cc1224ceac1",
         "type": "ownership",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      },
-      {
-        "id": "edge_d2e68706ce91a9fa",
-        "from": "column_073ed625e10d73f3",
-        "to": "table_623e5f3551061424",
-        "type": "data_flow",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      },
-      {
-        "id": "edge_d83c85f4d317a4a6",
-        "from": "column_17365cc1224ceac1",
-        "to": "table_623e5f3551061424",
-        "type": "data_flow",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      },
-      {
-        "id": "edge_ddd741acbc5d6a94",
-        "from": "column_f6b363282306de23",
-        "to": "table_623e5f3551061424",
-        "type": "data_flow",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      },
-      {
-        "id": "edge_e6adc5329230a39c",
-        "from": "column_8ebd316ab60e6446",
-        "to": "table_623e5f3551061424",
-        "type": "data_flow",
         "producerStatement": {
           "statementIndex": 0
         }

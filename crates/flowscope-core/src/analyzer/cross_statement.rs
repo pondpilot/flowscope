@@ -30,7 +30,9 @@
 //! Each analysis pass should create a fresh tracker instance.
 
 use crate::types::{EdgeType, GlobalEdge, NodeType, StatementRef};
+use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 use super::helpers::generate_node_id;
@@ -200,6 +202,17 @@ impl CrossStatementTracker {
     ///
     /// Cross-statement edges are self-referential on the table node (from/to are the same),
     /// with `producer_statement` and `consumer_statement` metadata indicating the flow direction.
+    ///
+    /// # Edge ID Generation
+    ///
+    /// Edge IDs are generated using a hash of `(table_name, producer_index, consumer_index)`.
+    /// This ensures uniqueness even when the same pair of statements have multiple data flows
+    /// through different tables. For example, if statement 0 produces both `table_a` and
+    /// `table_b`, and statement 1 consumes both, each flow gets a distinct edge ID.
+    ///
+    /// The hash uses `DefaultHasher` which is fast but not guaranteed to be stable across
+    /// Rust versions. This is acceptable because edge IDs are ephemeral within a single
+    /// analysis run and are not persisted or compared across runs.
     pub(crate) fn build_cross_statement_edges(&self) -> Vec<GlobalEdge> {
         let mut edges = Vec::new();
 
@@ -207,7 +220,14 @@ impl CrossStatementTracker {
             if let Some(&producer_idx) = self.produced_tables.get(table_name) {
                 for &consumer_idx in consumers {
                     if consumer_idx > producer_idx {
-                        let edge_id = format!("cross_{producer_idx}_{consumer_idx}");
+                        // Hash table name + indices to generate unique edge IDs.
+                        // This prevents collisions when multiple tables flow between
+                        // the same pair of statements.
+                        let mut hasher = DefaultHasher::new();
+                        table_name.hash(&mut hasher);
+                        producer_idx.hash(&mut hasher);
+                        consumer_idx.hash(&mut hasher);
+                        let edge_id = format!("cross_{:016x}", hasher.finish());
                         let node_id = self.relation_node_id(table_name);
 
                         edges.push(GlobalEdge {
@@ -605,5 +625,21 @@ mod tests {
         let ids: Vec<_> = edges.iter().map(|e| &e.id).collect();
         let unique_ids: std::collections::HashSet<_> = ids.iter().collect();
         assert_eq!(ids.len(), unique_ids.len());
+    }
+
+    #[test]
+    fn edge_ids_differ_for_same_statement_pairs() {
+        let mut tracker = CrossStatementTracker::new();
+
+        tracker.record_produced("table_a", 0);
+        tracker.record_consumed("table_a", 1);
+        tracker.record_produced("table_b", 0);
+        tracker.record_consumed("table_b", 1);
+
+        let edges = tracker.build_cross_statement_edges();
+        assert_eq!(edges.len(), 2);
+
+        let ids: std::collections::HashSet<_> = edges.iter().map(|edge| edge.id.clone()).collect();
+        assert_eq!(ids.len(), 2, "expected unique edge IDs for each table");
     }
 }

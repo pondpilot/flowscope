@@ -88,7 +88,7 @@ impl<'a> Analyzer<'a> {
         let source_nodes: Vec<_> = ctx
             .nodes
             .iter()
-            .filter(|n| n.id != target_id)
+            .filter(|n| n.id != target_id && n.node_type.is_table_like())
             .map(|n| n.id.clone())
             .collect();
 
@@ -221,7 +221,7 @@ impl<'a> Analyzer<'a> {
         let source_nodes: Vec<_> = ctx
             .nodes
             .iter()
-            .filter(|n| n.id != target_id)
+            .filter(|n| n.id != target_id && n.node_type.is_table_like())
             .map(|n| n.id.clone())
             .collect();
 

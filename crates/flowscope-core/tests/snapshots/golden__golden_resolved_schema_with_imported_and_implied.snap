@@ -93,24 +93,6 @@ expression: cleaned
       ],
       "edges": [
         {
-          "id": "edge_01dfd8b5090cd303",
-          "from": "column_294e2368a65dc2b2",
-          "to": "view_6dd7a41668993f4d",
-          "type": "data_flow"
-        },
-        {
-          "id": "edge_0b24e739a36bac97",
-          "from": "column_267df5d7036d3aed",
-          "to": "view_6dd7a41668993f4d",
-          "type": "data_flow"
-        },
-        {
-          "id": "edge_3643af2e3a92a9c7",
-          "from": "column_d30fde42f0c2b80a",
-          "to": "view_6dd7a41668993f4d",
-          "type": "data_flow"
-        },
-        {
           "id": "edge_4086db7f23928c0e",
           "from": "column_294e2368a65dc2b2",
           "to": "column_267df5d7036d3aed",
@@ -139,12 +121,6 @@ expression: cleaned
           "from": "table_eaa6ebb8f158751f",
           "to": "column_3ab7e0c4b2ad65a8",
           "type": "ownership"
-        },
-        {
-          "id": "edge_9d8345782c560179",
-          "from": "column_3ab7e0c4b2ad65a8",
-          "to": "view_6dd7a41668993f4d",
-          "type": "data_flow"
         },
         {
           "id": "edge_e85f63e7928fc4d8",
@@ -408,7 +384,7 @@ expression: cleaned
     ],
     "edges": [
       {
-        "id": "cross_0_1",
+        "id": "cross_a7e9c15d268bb5d5",
         "from": "table_eaa6ebb8f158751f",
         "to": "table_eaa6ebb8f158751f",
         "type": "cross_statement",
@@ -420,39 +396,12 @@ expression: cleaned
         }
       },
       {
-        "id": "edge_01dfd8b5090cd303",
-        "from": "column_294e2368a65dc2b2",
-        "to": "view_6dd7a41668993f4d",
-        "type": "data_flow",
-        "producerStatement": {
-          "statementIndex": 1
-        }
-      },
-      {
-        "id": "edge_0b24e739a36bac97",
-        "from": "column_267df5d7036d3aed",
-        "to": "view_6dd7a41668993f4d",
-        "type": "data_flow",
-        "producerStatement": {
-          "statementIndex": 1
-        }
-      },
-      {
         "id": "edge_33c6f0ab41e886d5",
         "from": "table_10a0682dff76cdbc",
         "to": "column_220c5a80272857a9",
         "type": "ownership",
         "producerStatement": {
           "statementIndex": 2
-        }
-      },
-      {
-        "id": "edge_3643af2e3a92a9c7",
-        "from": "column_d30fde42f0c2b80a",
-        "to": "view_6dd7a41668993f4d",
-        "type": "data_flow",
-        "producerStatement": {
-          "statementIndex": 1
         }
       },
       {
@@ -514,15 +463,6 @@ expression: cleaned
         "from": "table_eaa6ebb8f158751f",
         "to": "column_3ab7e0c4b2ad65a8",
         "type": "ownership",
-        "producerStatement": {
-          "statementIndex": 1
-        }
-      },
-      {
-        "id": "edge_9d8345782c560179",
-        "from": "column_3ab7e0c4b2ad65a8",
-        "to": "view_6dd7a41668993f4d",
-        "type": "data_flow",
         "producerStatement": {
           "statementIndex": 1
         }
