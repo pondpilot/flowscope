@@ -14,7 +14,7 @@ use crate::error::ParseError;
 use crate::types::{issue_codes, Issue, Node, NodeType, StatementLineage};
 use sqlparser::ast::{
     self, Assignment, Expr, FromTable, MergeAction, MergeClause, MergeInsertKind, ObjectName,
-    Statement, TableFactor, TableWithJoins,
+    Statement, TableFactor, TableWithJoins, UpdateTableFromKind,
 };
 use std::sync::Arc;
 #[cfg(feature = "tracing")]
@@ -67,7 +67,7 @@ impl<'a> Analyzer<'a> {
                 assignments,
                 from,
                 selection,
-                returning: _,
+                ..
             } => {
                 self.analyze_update(&mut ctx, table, assignments, from, selection);
                 "UPDATE".to_string()
@@ -88,6 +88,7 @@ impl<'a> Analyzer<'a> {
                 source,
                 on,
                 clauses,
+                ..
             } => {
                 self.analyze_merge(&mut ctx, *into, table, source, on, clauses);
                 "MERGE".to_string()
@@ -130,7 +131,7 @@ impl<'a> Analyzer<'a> {
     }
 
     pub(super) fn analyze_insert(&mut self, ctx: &mut StatementContext, insert: &ast::Insert) {
-        let target_name = insert.table_name.to_string();
+        let target_name = insert.table.to_string();
         let canonical = self.normalize_table_name(&target_name);
 
         // Create target table node
@@ -163,7 +164,7 @@ impl<'a> Analyzer<'a> {
         ctx: &mut StatementContext,
         table: &TableWithJoins,
         assignments: &[Assignment],
-        from: &Option<TableWithJoins>,
+        from: &Option<UpdateTableFromKind>,
         selection: &Option<Expr>,
     ) {
         let target_node_id = {
@@ -178,8 +179,19 @@ impl<'a> Analyzer<'a> {
             let target = LineageVisitor::target_from_arc(target_node_id.as_ref());
             let mut visitor = LineageVisitor::new(self, ctx, target);
 
-            if let Some(from_table) = from {
-                visitor.visit_table_with_joins(from_table);
+            if let Some(from_kind) = from {
+                match from_kind {
+                    UpdateTableFromKind::BeforeSet(tables) => {
+                        for t in tables {
+                            visitor.visit_table_with_joins(t);
+                        }
+                    }
+                    UpdateTableFromKind::AfterSet(tables) => {
+                        for t in tables {
+                            visitor.visit_table_with_joins(t);
+                        }
+                    }
+                }
             }
 
             for join in &table.joins {

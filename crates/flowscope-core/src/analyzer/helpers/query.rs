@@ -11,6 +11,7 @@ pub fn classify_query_type(query: &Query) -> String {
                 ast::SetOperator::Union => "UNION".to_string(),
                 ast::SetOperator::Intersect => "INTERSECT".to_string(),
                 ast::SetOperator::Except => "EXCEPT".to_string(),
+                ast::SetOperator::Minus => "MINUS".to_string(),
             },
             SetExpr::Values(_) => "VALUES".to_string(),
             _ => "SELECT".to_string(),

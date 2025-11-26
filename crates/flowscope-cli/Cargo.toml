@@ -17,8 +17,8 @@ clap = { version = "4", features = ["derive"] }
 serde.workspace = true
 serde_json.workspace = true
 anyhow = "1.0"
-thiserror = "1.0"
-tabled = "0.17"
+thiserror = "2.0"
+tabled = "0.20"
 owo-colors = "4"
 is-terminal = "0.4"
 

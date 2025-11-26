@@ -22,11 +22,11 @@ regex = "1"
 tracing = { version = "0.1", optional = true }
 
 [build-dependencies]
-toml = "0.8.19"
+toml = "0.9"
 serde = { version = "1.0.215", features = ["derive"] }
 serde_json = "1.0.133"
 
 [dev-dependencies]
-rstest = "0.22"
-proptest = "1.4"
+rstest = "0.26"
+proptest = "1.9"
 insta = { version = "1.44.1", features = ["json"] }

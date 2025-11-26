@@ -280,17 +280,15 @@ impl<'a, 'b> LineageVisitor<'a, 'b> {
             Expr::Case {
                 operand,
                 conditions,
-                results,
                 else_result,
+                ..
             } => {
                 if let Some(op) = operand {
                     self.extract_identifiers_from_expr(op);
                 }
-                for cond in conditions {
-                    self.extract_identifiers_from_expr(cond);
-                }
-                for result in results {
-                    self.extract_identifiers_from_expr(result);
+                for case_when in conditions {
+                    self.extract_identifiers_from_expr(&case_when.condition);
+                    self.extract_identifiers_from_expr(&case_when.result);
                 }
                 if let Some(else_r) = else_result {
                     self.extract_identifiers_from_expr(else_r);
@@ -336,9 +334,14 @@ impl<'a, 'b> LineageVisitor<'a, 'b> {
     fn analyze_order_by(&mut self, order_by: &ast::OrderBy) {
         let dialect = self.analyzer.request.dialect;
 
+        let order_exprs = match &order_by.kind {
+            ast::OrderByKind::Expressions(exprs) => exprs,
+            ast::OrderByKind::All(_) => return,
+        };
+
         // Check for alias usage in ORDER BY clause
         if !dialect.alias_in_order_by() {
-            for order_expr in &order_by.exprs {
+            for order_expr in order_exprs {
                 let identifiers = ExpressionAnalyzer::extract_simple_identifiers(&order_expr.expr);
                 for ident in &identifiers {
                     let normalized_ident = self.analyzer.normalize_identifier(ident);
@@ -356,7 +359,7 @@ impl<'a, 'b> LineageVisitor<'a, 'b> {
         }
 
         // Also analyze any subqueries in ORDER BY expressions
-        for order_expr in &order_by.exprs {
+        for order_expr in order_exprs {
             let mut ea = ExpressionAnalyzer::new(self.analyzer, self.ctx);
             ea.analyze(&order_expr.expr);
         }
@@ -421,6 +424,7 @@ impl<'a, 'b> Visitor for LineageVisitor<'a, 'b> {
                     SetOperator::Union => "UNION",
                     SetOperator::Intersect => "INTERSECT",
                     SetOperator::Except => "EXCEPT",
+                    SetOperator::Minus => "MINUS",
                 };
                 self.visit_set_expr(left);
                 self.visit_set_expr(right);
@@ -433,7 +437,7 @@ impl<'a, 'b> Visitor for LineageVisitor<'a, 'b> {
                 let Statement::Insert(insert) = insert_stmt else {
                     return;
                 };
-                let target_name = insert.table_name.to_string();
+                let target_name = insert.table.to_string();
                 self.add_source_table(&target_name);
             }
             SetExpr::Table(tbl) => {
@@ -562,8 +566,8 @@ impl<'a, 'b> Visitor for LineageVisitor<'a, 'b> {
                 for func in aggregate_functions {
                     self.extract_identifiers_from_expr(&func.expr);
                 }
-                for ident in value_column {
-                    self.try_add_identifier_as_table(&[ident.clone()]);
+                for expr in value_column {
+                    self.extract_identifiers_from_expr(expr);
                 }
                 match value_source {
                     ast::PivotValueSource::List(values) => {
@@ -596,7 +600,7 @@ impl<'a, 'b> Visitor for LineageVisitor<'a, 'b> {
             } => {
                 self.visit_table_factor(table);
                 for col in columns {
-                    self.try_add_identifier_as_table(&[col.clone()]);
+                    self.extract_identifiers_from_expr(&col.expr);
                 }
                 if let Some(a) = alias {
                     self.ctx

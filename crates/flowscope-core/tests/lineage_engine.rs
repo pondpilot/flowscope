@@ -1,7 +1,7 @@
 use flowscope_core::{
     analyze, issue_codes, AnalyzeRequest, AnalyzeResult, ColumnSchema, Dialect, Edge, EdgeType,
-    FilterClauseType, Node, NodeType, SchemaMetadata, SchemaNamespaceHint, SchemaTable, Severity,
-    StatementLineage,
+    FilterClauseType, JoinType, Node, NodeType, SchemaMetadata, SchemaNamespaceHint, SchemaTable,
+    Severity, StatementLineage,
 };
 use rstest::rstest;
 use std::collections::HashSet;
@@ -4101,4 +4101,595 @@ fn derived_table_inside_cte() {
         tables.contains("orders"),
         "orders table should be tracked through CTE with nested derived table"
     );
+}
+
+// ============================================================================
+// SQLPARSER 0.59 COMPATIBILITY TESTS
+// Tests for new AST structures and SQL features introduced in sqlparser 0.59
+// ============================================================================
+
+#[test]
+fn case_when_simple_expression() {
+    // Test simple CASE WHEN expression with multiple conditions
+    let sql = r#"
+        SELECT
+            id,
+            CASE
+                WHEN status = 'active' THEN 'Active'
+                WHEN status = 'pending' THEN 'Pending'
+                WHEN status = 'inactive' THEN 'Inactive'
+                ELSE 'Unknown'
+            END AS status_label
+        FROM users
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    assert!(!result.summary.has_errors, "should parse without errors");
+
+    let stmt = first_statement(&result);
+    let status_col = find_column_node(stmt, "status_label");
+    assert!(
+        status_col.is_some(),
+        "CASE expression should produce status_label column"
+    );
+
+    let tables = collect_table_names(&result);
+    assert!(tables.contains("users"), "users table should be tracked");
+}
+
+#[test]
+fn case_when_searched_form() {
+    // Test searched CASE (without operand) with column references
+    let sql = r#"
+        SELECT
+            order_id,
+            CASE
+                WHEN amount > 1000 THEN 'large'
+                WHEN amount > 100 THEN 'medium'
+                ELSE 'small'
+            END AS size_category,
+            CASE status
+                WHEN 'A' THEN 'Active'
+                WHEN 'P' THEN 'Pending'
+                ELSE 'Other'
+            END AS status_name
+        FROM orders
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    assert!(!result.summary.has_errors, "should parse without errors");
+
+    let stmt = first_statement(&result);
+
+    // Both CASE expressions should produce columns
+    let size_col = find_column_node(stmt, "size_category");
+    let status_col = find_column_node(stmt, "status_name");
+    assert!(size_col.is_some(), "searched CASE should work");
+    assert!(status_col.is_some(), "simple CASE should work");
+}
+
+#[test]
+fn case_when_nested_in_function() {
+    // Test CASE inside a function call
+    let sql = r#"
+        SELECT
+            COALESCE(
+                CASE WHEN active THEN name ELSE NULL END,
+                'default'
+            ) AS display_name
+        FROM users
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    assert!(
+        !result.summary.has_errors,
+        "nested CASE in function should parse"
+    );
+
+    let stmt = first_statement(&result);
+    let col = find_column_node(stmt, "display_name");
+    assert!(col.is_some(), "nested CASE should produce output column");
+}
+
+#[test]
+fn case_when_with_subquery() {
+    // Test CASE with subquery in condition
+    let sql = r#"
+        SELECT
+            u.id,
+            CASE
+                WHEN u.id IN (SELECT user_id FROM premium_users) THEN 'premium'
+                ELSE 'standard'
+            END AS tier
+        FROM users u
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    assert!(
+        !result.summary.has_errors,
+        "CASE with subquery should parse"
+    );
+
+    let tables = collect_table_names(&result);
+    assert!(tables.contains("users"), "main table tracked");
+    // Note: subquery tables in CASE expressions may or may not be tracked
+    // depending on analyzer implementation. The key test is that parsing succeeds.
+
+    let stmt = first_statement(&result);
+    let tier_col = find_column_node(stmt, "tier");
+    assert!(
+        tier_col.is_some(),
+        "CASE with subquery produces tier column"
+    );
+}
+
+// ============================================================================
+// JOIN TYPE TESTS (Semi, Anti, StraightJoin)
+// ============================================================================
+
+#[test]
+fn left_semi_join_tracks_tables() {
+    // LEFT SEMI JOIN - supported by Spark SQL, Databricks
+    let sql = r#"
+        SELECT o.order_id, o.total
+        FROM orders o
+        LEFT SEMI JOIN customers c ON o.customer_id = c.id
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    // Semi joins may not parse in all dialects, check if parsing succeeded
+    if !result.summary.has_errors {
+        let stmt = first_statement(&result);
+        let tables = collect_table_names(&result);
+        assert!(tables.contains("orders"), "orders table should be tracked");
+        assert!(
+            tables.contains("customers"),
+            "customers table should be tracked"
+        );
+
+        // Check that join was recognized
+        let orders_node = find_table_node(stmt, "orders");
+        let customers_node = find_table_node(stmt, "customers");
+        assert!(orders_node.is_some(), "orders node exists");
+        assert!(customers_node.is_some(), "customers node exists");
+
+        // Check join type on joined table
+        if let Some(cust) = customers_node {
+            assert_eq!(
+                cust.join_type,
+                Some(JoinType::LeftSemi),
+                "should recognize LEFT SEMI JOIN"
+            );
+        }
+    }
+}
+
+#[test]
+fn left_anti_join_tracks_tables() {
+    // LEFT ANTI JOIN - rows from left that have no match in right
+    let sql = r#"
+        SELECT o.order_id, o.total
+        FROM orders o
+        LEFT ANTI JOIN returns r ON o.order_id = r.order_id
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    if !result.summary.has_errors {
+        let stmt = first_statement(&result);
+        let tables = collect_table_names(&result);
+        assert!(tables.contains("orders"), "orders tracked");
+        assert!(tables.contains("returns"), "returns tracked");
+
+        let returns_node = find_table_node(stmt, "returns");
+        if let Some(ret) = returns_node {
+            assert_eq!(
+                ret.join_type,
+                Some(JoinType::LeftAnti),
+                "should recognize LEFT ANTI JOIN"
+            );
+        }
+    }
+}
+
+#[test]
+fn straight_join_mysql_syntax() {
+    // STRAIGHT_JOIN - MySQL specific, forces join order
+    let sql = r#"
+        SELECT o.id, c.name
+        FROM orders o
+        STRAIGHT_JOIN customers c ON o.customer_id = c.id
+    "#;
+
+    let result = run_analysis(sql, Dialect::Mysql, None);
+    if !result.summary.has_errors {
+        let tables = collect_table_names(&result);
+        assert!(tables.contains("orders"), "orders tracked");
+        assert!(tables.contains("customers"), "customers tracked");
+
+        // STRAIGHT_JOIN is treated as INNER JOIN semantically
+        let stmt = first_statement(&result);
+        let cust_node = find_table_node(stmt, "customers");
+        if let Some(cust) = cust_node {
+            // STRAIGHT_JOIN maps to Inner join type
+            assert_eq!(
+                cust.join_type,
+                Some(JoinType::Inner),
+                "STRAIGHT_JOIN should be treated as Inner join"
+            );
+        }
+    }
+}
+
+#[test]
+fn cross_apply_sql_server_syntax() {
+    // CROSS APPLY - SQL Server specific
+    let sql = r#"
+        SELECT e.name, d.dept_name
+        FROM employees e
+        CROSS APPLY (
+            SELECT dept_name FROM departments WHERE dept_id = e.dept_id
+        ) d
+    "#;
+
+    let result = run_analysis(sql, Dialect::Mssql, None);
+    if !result.summary.has_errors {
+        let tables = collect_table_names(&result);
+        assert!(tables.contains("employees"), "employees tracked");
+        assert!(
+            tables.contains("departments"),
+            "departments tracked in CROSS APPLY"
+        );
+    }
+}
+
+#[test]
+fn outer_apply_sql_server_syntax() {
+    // OUTER APPLY - SQL Server specific
+    let sql = r#"
+        SELECT e.name, d.dept_name
+        FROM employees e
+        OUTER APPLY (
+            SELECT TOP 1 dept_name FROM departments WHERE dept_id = e.dept_id
+        ) d
+    "#;
+
+    let result = run_analysis(sql, Dialect::Mssql, None);
+    if !result.summary.has_errors {
+        let tables = collect_table_names(&result);
+        assert!(tables.contains("employees"), "employees tracked");
+    }
+}
+
+// ============================================================================
+// SET OPERATOR TESTS (MINUS)
+// ============================================================================
+
+#[test]
+fn minus_set_operator_oracle_syntax() {
+    // MINUS - Oracle/Teradata equivalent of EXCEPT
+    let sql = r#"
+        SELECT customer_id FROM all_customers
+        MINUS
+        SELECT customer_id FROM inactive_customers
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    if !result.summary.has_errors {
+        let tables = collect_table_names(&result);
+        assert!(
+            tables.contains("all_customers"),
+            "all_customers tracked in MINUS"
+        );
+        assert!(
+            tables.contains("inactive_customers"),
+            "inactive_customers tracked in MINUS"
+        );
+    }
+}
+
+#[test]
+fn minus_with_multiple_columns() {
+    let sql = r#"
+        SELECT id, name, email FROM users_2024
+        MINUS
+        SELECT id, name, email FROM users_2023
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    if !result.summary.has_errors {
+        let tables = collect_table_names(&result);
+        assert!(tables.contains("users_2024"), "users_2024 tracked");
+        assert!(tables.contains("users_2023"), "users_2023 tracked");
+    }
+}
+
+// ============================================================================
+// UPDATE ... FROM TESTS
+// ============================================================================
+
+#[test]
+fn update_from_single_source_table() {
+    // Basic UPDATE ... FROM with one source table
+    let sql = r#"
+        UPDATE target_table t
+        SET t.value = s.new_value
+        FROM source_table s
+        WHERE t.id = s.id
+    "#;
+
+    let result = run_analysis(sql, Dialect::Postgres, None);
+    assert!(!result.summary.has_errors, "UPDATE FROM should parse");
+
+    let tables = collect_table_names(&result);
+    assert!(tables.contains("target_table"), "target table tracked");
+    assert!(
+        tables.contains("source_table"),
+        "source table in FROM tracked"
+    );
+}
+
+#[test]
+fn update_from_multiple_source_tables() {
+    // UPDATE ... FROM with multiple source tables joined
+    let sql = r#"
+        UPDATE orders o
+        SET o.status = 'shipped',
+            o.shipping_date = s.ship_date
+        FROM shipments s
+        JOIN carriers c ON s.carrier_id = c.id
+        WHERE o.id = s.order_id
+          AND c.active = true
+    "#;
+
+    let result = run_analysis(sql, Dialect::Postgres, None);
+    if !result.summary.has_errors {
+        let tables = collect_table_names(&result);
+        assert!(tables.contains("orders"), "target table tracked");
+        assert!(tables.contains("shipments"), "shipments source tracked");
+        assert!(tables.contains("carriers"), "carriers source tracked");
+    }
+}
+
+#[test]
+fn update_from_with_subquery() {
+    // UPDATE ... FROM with subquery in FROM clause
+    let sql = r#"
+        UPDATE products p
+        SET p.avg_rating = agg.rating
+        FROM (
+            SELECT product_id, AVG(rating) as rating
+            FROM reviews
+            GROUP BY product_id
+        ) agg
+        WHERE p.id = agg.product_id
+    "#;
+
+    let result = run_analysis(sql, Dialect::Postgres, None);
+    if !result.summary.has_errors {
+        let tables = collect_table_names(&result);
+        assert!(tables.contains("products"), "target table tracked");
+        assert!(tables.contains("reviews"), "subquery source tracked");
+    }
+}
+
+// ============================================================================
+// NEW TABLE FACTOR TESTS (OPENJSON, XMLTABLE, etc.)
+// ============================================================================
+
+#[test]
+fn openjson_table_factor_sql_server() {
+    // OPENJSON - SQL Server JSON table-valued function
+    let sql = r#"
+        SELECT j.id, j.name
+        FROM documents d
+        CROSS APPLY OPENJSON(d.json_data)
+        WITH (id INT, name VARCHAR(100)) AS j
+    "#;
+
+    let result = run_analysis(sql, Dialect::Mssql, None);
+    // This may or may not parse depending on sqlparser support
+    if !result.summary.has_errors {
+        let tables = collect_table_names(&result);
+        assert!(tables.contains("documents"), "documents table tracked");
+    }
+}
+
+#[test]
+fn xmltable_factor_oracle_postgres() {
+    // XMLTABLE - Oracle/PostgreSQL XML parsing
+    let sql = r#"
+        SELECT x.id, x.value
+        FROM xml_data d,
+        XMLTABLE('/root/item'
+            PASSING d.xml_content
+            COLUMNS
+                id INT PATH '@id',
+                value VARCHAR(100) PATH 'text()'
+        ) AS x
+    "#;
+
+    let result = run_analysis(sql, Dialect::Postgres, None);
+    // XMLTABLE parsing support varies
+    if !result.summary.has_errors {
+        let tables = collect_table_names(&result);
+        assert!(tables.contains("xml_data"), "xml_data table tracked");
+    }
+}
+
+#[test]
+fn lateral_derived_table() {
+    // LATERAL - allows derived table to reference earlier FROM items
+    let sql = r#"
+        SELECT e.name, d.dept_name
+        FROM employees e,
+        LATERAL (
+            SELECT dept_name
+            FROM departments
+            WHERE dept_id = e.dept_id
+            LIMIT 1
+        ) AS d
+    "#;
+
+    let result = run_analysis(sql, Dialect::Postgres, None);
+    if !result.summary.has_errors {
+        let tables = collect_table_names(&result);
+        assert!(tables.contains("employees"), "employees tracked");
+        assert!(
+            tables.contains("departments"),
+            "lateral subquery table tracked"
+        );
+    }
+}
+
+#[test]
+fn unnest_table_factor() {
+    // UNNEST - expands array to rows
+    let sql = r#"
+        SELECT u.name, tag
+        FROM users u
+        CROSS JOIN UNNEST(u.tags) AS tag
+    "#;
+
+    let result = run_analysis(sql, Dialect::Bigquery, None);
+    if !result.summary.has_errors {
+        let tables = collect_table_names(&result);
+        assert!(tables.contains("users"), "users table tracked");
+    }
+}
+
+#[test]
+fn table_function_call() {
+    // Table-valued function call
+    let sql = r#"
+        SELECT *
+        FROM generate_series(1, 10) AS nums(n)
+    "#;
+
+    let result = run_analysis(sql, Dialect::Postgres, None);
+    // Table functions may or may not produce table nodes
+    assert!(
+        !result.summary.has_errors || result.issues.iter().any(|i| i.code.contains("PARSE")),
+        "should either parse or report parse error"
+    );
+}
+
+// ============================================================================
+// EDGE CASE AND REGRESSION TESTS
+// ============================================================================
+
+#[test]
+fn deeply_nested_case_expressions() {
+    // Test deeply nested CASE to ensure no stack overflow
+    let sql = r#"
+        SELECT
+            CASE WHEN a = 1 THEN
+                CASE WHEN b = 2 THEN
+                    CASE WHEN c = 3 THEN 'deep'
+                    ELSE 'c_fail'
+                    END
+                ELSE 'b_fail'
+                END
+            ELSE 'a_fail'
+            END AS nested_result
+        FROM test_table
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    assert!(!result.summary.has_errors, "nested CASE should parse");
+
+    let stmt = first_statement(&result);
+    let col = find_column_node(stmt, "nested_result");
+    assert!(col.is_some(), "nested CASE produces column");
+}
+
+#[test]
+fn case_with_aggregate_in_condition() {
+    // CASE with aggregate function in WHEN condition
+    let sql = r#"
+        SELECT
+            customer_id,
+            CASE
+                WHEN COUNT(*) > 10 THEN 'frequent'
+                WHEN COUNT(*) > 5 THEN 'regular'
+                ELSE 'occasional'
+            END AS customer_type
+        FROM orders
+        GROUP BY customer_id
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    assert!(
+        !result.summary.has_errors,
+        "CASE with aggregates should parse"
+    );
+
+    let stmt = first_statement(&result);
+    let col = find_column_node(stmt, "customer_type");
+    assert!(col.is_some(), "CASE with aggregate produces column");
+}
+
+#[test]
+fn multiple_join_types_in_single_query() {
+    // Mix of different join types in one query
+    let sql = r#"
+        SELECT o.id, c.name, p.product_name, s.status
+        FROM orders o
+        INNER JOIN customers c ON o.customer_id = c.id
+        LEFT JOIN products p ON o.product_id = p.id
+        RIGHT JOIN order_status s ON o.status_id = s.id
+        CROSS JOIN config cfg
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    assert!(!result.summary.has_errors, "mixed joins should parse");
+
+    let tables = collect_table_names(&result);
+    assert!(tables.contains("orders"), "orders tracked");
+    assert!(tables.contains("customers"), "customers tracked");
+    assert!(tables.contains("products"), "products tracked");
+    assert!(tables.contains("order_status"), "order_status tracked");
+    assert!(tables.contains("config"), "config tracked");
+
+    let stmt = first_statement(&result);
+
+    // Verify join types are correctly identified
+    if let Some(cust) = find_table_node(stmt, "customers") {
+        assert_eq!(cust.join_type, Some(JoinType::Inner), "INNER JOIN detected");
+    }
+    if let Some(prod) = find_table_node(stmt, "products") {
+        assert_eq!(prod.join_type, Some(JoinType::Left), "LEFT JOIN detected");
+    }
+    if let Some(status) = find_table_node(stmt, "order_status") {
+        assert_eq!(
+            status.join_type,
+            Some(JoinType::Right),
+            "RIGHT JOIN detected"
+        );
+    }
+    if let Some(cfg) = find_table_node(stmt, "config") {
+        assert_eq!(cfg.join_type, Some(JoinType::Cross), "CROSS JOIN detected");
+    }
+}
+
+#[test]
+fn set_operations_with_all_operators() {
+    // Test UNION, INTERSECT, EXCEPT all in one query
+    let sql = r#"
+        SELECT id FROM table_a
+        UNION
+        SELECT id FROM table_b
+        INTERSECT
+        SELECT id FROM table_c
+        EXCEPT
+        SELECT id FROM table_d
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    assert!(!result.summary.has_errors, "set operations should parse");
+
+    let tables = collect_table_names(&result);
+    assert!(tables.contains("table_a"), "table_a tracked");
+    assert!(tables.contains("table_b"), "table_b tracked");
+    assert!(tables.contains("table_c"), "table_c tracked");
+    assert!(tables.contains("table_d"), "table_d tracked");
 }

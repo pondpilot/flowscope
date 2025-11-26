@@ -1,15 +1,21 @@
 use flowscope_core::{AnalyzeRequest, AnalyzeResult};
-use schemars::schema_for;
+use schemars::generate::SchemaSettings;
 use serde_json::json;
 
 const SNAPSHOT: &str = include_str!("../../../docs/api_schema.json");
 
+fn generate_schema() -> serde_json::Value {
+    let settings = SchemaSettings::draft07();
+    let generator = settings.into_generator();
+    json!({
+        "AnalyzeRequest": generator.clone().into_root_schema_for::<AnalyzeRequest>(),
+        "AnalyzeResult": generator.into_root_schema_for::<AnalyzeResult>(),
+    })
+}
+
 #[test]
 fn api_schema_snapshot_matches() {
-    let generated = json!({
-        "AnalyzeRequest": schema_for!(AnalyzeRequest),
-        "AnalyzeResult": schema_for!(AnalyzeResult),
-    });
+    let generated = generate_schema();
 
     let expected: serde_json::Value =
         serde_json::from_str(SNAPSHOT).expect("invalid bundled API schema snapshot");
@@ -23,10 +29,7 @@ fn api_schema_snapshot_matches() {
 #[test]
 #[ignore]
 fn regenerate_api_schema_snapshot() {
-    let generated = json!({
-        "AnalyzeRequest": schema_for!(AnalyzeRequest),
-        "AnalyzeResult": schema_for!(AnalyzeResult),
-    });
+    let generated = generate_schema();
 
     println!(
         "{}",

@@ -35,7 +35,7 @@ impl fmt::Display for SqlType {
 /// Basic type inference for expressions
 pub fn infer_expr_type(expr: &Expr) -> Option<SqlType> {
     match expr {
-        Expr::Value(val) => match val {
+        Expr::Value(val) => match &val.value {
             ast::Value::Number(_, _) => Some(SqlType::Number),
             ast::Value::SingleQuotedString(_) | ast::Value::DollarQuotedString(_) => {
                 Some(SqlType::Text)
@@ -45,7 +45,7 @@ pub fn infer_expr_type(expr: &Expr) -> Option<SqlType> {
             _ => None,
         },
         Expr::Cast { data_type, .. } => sql_type_from_data_type(data_type),
-        Expr::TypedString { data_type, .. } => sql_type_from_data_type(data_type),
+        Expr::TypedString(typed_string) => sql_type_from_data_type(&typed_string.data_type),
         Expr::Nested(inner) => infer_expr_type(inner),
         Expr::UnaryOp { op, expr } => match op {
             ast::UnaryOperator::Not => Some(SqlType::Boolean),
@@ -136,7 +136,7 @@ fn sql_type_from_data_type(data_type: &ast::DataType) -> Option<SqlType> {
         | ast::DataType::SmallInt(_)
         | ast::DataType::TinyInt(_) => Some(SqlType::Integer),
         ast::DataType::Float(_)
-        | ast::DataType::Double
+        | ast::DataType::Double(_)
         | ast::DataType::DoublePrecision
         | ast::DataType::Real
         | ast::DataType::Decimal(_)

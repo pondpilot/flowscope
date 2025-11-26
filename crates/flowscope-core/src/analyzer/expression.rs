@@ -92,17 +92,15 @@ impl<'a, 'b> ExpressionAnalyzer<'a, 'b> {
             Expr::Case {
                 operand,
                 conditions,
-                results,
                 else_result,
+                ..
             } => {
                 if let Some(op) = operand {
                     self.visit_expression_for_subqueries(op, next_depth);
                 }
-                for cond in conditions {
-                    self.visit_expression_for_subqueries(cond, next_depth);
-                }
-                for res in results {
-                    self.visit_expression_for_subqueries(res, next_depth);
+                for case_when in conditions {
+                    self.visit_expression_for_subqueries(&case_when.condition, next_depth);
+                    self.visit_expression_for_subqueries(&case_when.result, next_depth);
                 }
                 if let Some(el) = else_result {
                     self.visit_expression_for_subqueries(el, next_depth);
@@ -212,17 +210,15 @@ impl<'a, 'b> ExpressionAnalyzer<'a, 'b> {
             Expr::Case {
                 operand,
                 conditions,
-                results,
                 else_result,
+                ..
             } => {
                 if let Some(op) = operand {
                     Self::collect_column_refs(op, refs, dialect, next_depth);
                 }
-                for cond in conditions {
-                    Self::collect_column_refs(cond, refs, dialect, next_depth);
-                }
-                for res in results {
-                    Self::collect_column_refs(res, refs, dialect, next_depth);
+                for case_when in conditions {
+                    Self::collect_column_refs(&case_when.condition, refs, dialect, next_depth);
+                    Self::collect_column_refs(&case_when.result, refs, dialect, next_depth);
                 }
                 if let Some(el) = else_result {
                     Self::collect_column_refs(el, refs, dialect, next_depth);
@@ -373,9 +369,9 @@ impl<'a, 'b> ExpressionAnalyzer<'a, 'b> {
             Expr::Case {
                 operand,
                 conditions,
-                results,
                 else_result,
-            } => self.find_aggregate_in_case(operand, conditions, results, else_result, next_depth),
+                ..
+            } => self.find_aggregate_in_case(operand, conditions, else_result, next_depth),
             _ => None,
         }
     }
@@ -430,8 +426,7 @@ impl<'a, 'b> ExpressionAnalyzer<'a, 'b> {
     fn find_aggregate_in_case(
         &self,
         operand: &Option<Box<Expr>>,
-        conditions: &[Expr],
-        results: &[Expr],
+        conditions: &[ast::CaseWhen],
         else_result: &Option<Box<Expr>>,
         depth: usize,
     ) -> Option<functions::AggregateCall> {
@@ -442,16 +437,12 @@ impl<'a, 'b> ExpressionAnalyzer<'a, 'b> {
             }
         }
 
-        // Check WHEN conditions
-        for cond in conditions {
-            if let Some(agg) = self.find_aggregate_function(cond, depth) {
+        // Check WHEN conditions and THEN results
+        for case_when in conditions {
+            if let Some(agg) = self.find_aggregate_function(&case_when.condition, depth) {
                 return Some(agg);
             }
-        }
-
-        // Check THEN results
-        for result in results {
-            if let Some(agg) = self.find_aggregate_function(result, depth) {
+            if let Some(agg) = self.find_aggregate_function(&case_when.result, depth) {
                 return Some(agg);
             }
         }
@@ -595,8 +586,7 @@ impl<'a, 'b> ExpressionAnalyzer<'a, 'b> {
             | Expr::IsNotTrue(e)
             | Expr::IsUnknown(e)
             | Expr::IsNotUnknown(e)
-            | Expr::JsonAccess { value: e, .. }
-            | Expr::CompositeAccess { expr: e, .. } => {
+            | Expr::JsonAccess { value: e, .. } => {
                 Self::collect_simple_identifiers(e, identifiers, next_depth);
             }
 
@@ -682,17 +672,15 @@ impl<'a, 'b> ExpressionAnalyzer<'a, 'b> {
             Expr::Case {
                 operand,
                 conditions,
-                results,
                 else_result,
+                ..
             } => {
                 if let Some(op) = operand {
                     Self::collect_simple_identifiers(op, identifiers, next_depth);
                 }
-                for cond in conditions {
-                    Self::collect_simple_identifiers(cond, identifiers, next_depth);
-                }
-                for res in results {
-                    Self::collect_simple_identifiers(res, identifiers, next_depth);
+                for case_when in conditions {
+                    Self::collect_simple_identifiers(&case_when.condition, identifiers, next_depth);
+                    Self::collect_simple_identifiers(&case_when.result, identifiers, next_depth);
                 }
                 if let Some(el) = else_result {
                     Self::collect_simple_identifiers(el, identifiers, next_depth);

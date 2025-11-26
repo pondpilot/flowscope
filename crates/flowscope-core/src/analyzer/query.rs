@@ -722,15 +722,15 @@ impl<'a> Analyzer<'a> {
         op: &ast::JoinOperator,
     ) -> (Option<JoinType>, Option<String>) {
         match op {
-            ast::JoinOperator::Inner(constraint) => (
+            ast::JoinOperator::Join(constraint) | ast::JoinOperator::Inner(constraint) => (
                 Some(JoinType::Inner),
                 Self::extract_join_condition(constraint),
             ),
-            ast::JoinOperator::LeftOuter(constraint) => (
+            ast::JoinOperator::Left(constraint) | ast::JoinOperator::LeftOuter(constraint) => (
                 Some(JoinType::Left),
                 Self::extract_join_condition(constraint),
             ),
-            ast::JoinOperator::RightOuter(constraint) => (
+            ast::JoinOperator::Right(constraint) | ast::JoinOperator::RightOuter(constraint) => (
                 Some(JoinType::Right),
                 Self::extract_join_condition(constraint),
             ),
@@ -738,8 +738,8 @@ impl<'a> Analyzer<'a> {
                 Some(JoinType::Full),
                 Self::extract_join_condition(constraint),
             ),
-            ast::JoinOperator::CrossJoin => (Some(JoinType::Cross), None),
-            ast::JoinOperator::LeftSemi(constraint) => (
+            ast::JoinOperator::CrossJoin(_) => (Some(JoinType::Cross), None),
+            ast::JoinOperator::Semi(constraint) | ast::JoinOperator::LeftSemi(constraint) => (
                 Some(JoinType::LeftSemi),
                 Self::extract_join_condition(constraint),
             ),
@@ -747,7 +747,7 @@ impl<'a> Analyzer<'a> {
                 Some(JoinType::RightSemi),
                 Self::extract_join_condition(constraint),
             ),
-            ast::JoinOperator::LeftAnti(constraint) => (
+            ast::JoinOperator::Anti(constraint) | ast::JoinOperator::LeftAnti(constraint) => (
                 Some(JoinType::LeftAnti),
                 Self::extract_join_condition(constraint),
             ),
@@ -759,6 +759,10 @@ impl<'a> Analyzer<'a> {
             ast::JoinOperator::OuterApply => (Some(JoinType::OuterApply), None),
             ast::JoinOperator::AsOf { constraint, .. } => (
                 Some(JoinType::AsOf),
+                Self::extract_join_condition(constraint),
+            ),
+            ast::JoinOperator::StraightJoin(constraint) => (
+                Some(JoinType::Inner),
                 Self::extract_join_condition(constraint),
             ),
         }

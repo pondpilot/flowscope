@@ -36,6 +36,10 @@ fn extract_tables_from_query_body(body: &sqlparser::ast::SetExpr, tables: &mut V
         SetExpr::Insert(_) => {}
         SetExpr::Update(_) => {}
         SetExpr::Table(_) => {}
+        // TODO: Implement table extraction for DELETE subqueries
+        SetExpr::Delete(_) => {}
+        // TODO: Implement table extraction for MERGE statements
+        SetExpr::Merge(_) => {}
     }
 }
 
@@ -62,6 +66,12 @@ fn extract_tables_from_table_factor(table_factor: &TableFactor, tables: &mut Vec
         TableFactor::Unpivot { .. } => {}
         TableFactor::MatchRecognize { .. } => {}
         TableFactor::JsonTable { .. } => {}
+        // TODO: Implement table extraction for OPENJSON (SQL Server)
+        TableFactor::OpenJsonTable { .. } => {}
+        // TODO: Implement table extraction for XMLTABLE
+        TableFactor::XmlTable { .. } => {}
+        // TODO: Implement table extraction for semantic views
+        TableFactor::SemanticView { .. } => {}
     }
 }
 

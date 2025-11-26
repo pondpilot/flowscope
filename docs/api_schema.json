@@ -1,84 +1,85 @@
 {
   "AnalyzeRequest": {
     "$schema": "http://json-schema.org/draft-07/schema#",
-    "definitions": {
-      "AnalysisOptions": {
-        "description": "Options controlling the analysis behavior.",
-        "properties": {
-          "enableColumnLineage": {
-            "default": null,
-            "description": "Enable column-level lineage (Phase 2+, default true when implemented)",
-            "type": [
-              "boolean",
-              "null"
-            ]
-          },
-          "graphDetailLevel": {
-            "anyOf": [
-              {
-                "$ref": "#/definitions/GraphDetailLevel"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Preferred graph detail level for visualization (does not affect analysis)"
-          }
-        },
-        "type": "object"
+    "title": "AnalyzeRequest",
+    "description": "A request to analyze SQL for data lineage.\n\nThis is the main entry point for the analysis API. It accepts SQL code along with\noptional dialect and schema information to produce accurate lineage graphs.",
+    "type": "object",
+    "properties": {
+      "sql": {
+        "description": "The SQL code to analyze (UTF-8 string, multi-statement supported)",
+        "type": "string"
       },
-      "CaseSensitivity": {
-        "description": "Case sensitivity for identifier normalization.",
-        "oneOf": [
+      "files": {
+        "description": "Optional list of source files to analyze (alternative to single `sql` field)",
+        "type": [
+          "array",
+          "null"
+        ],
+        "items": {
+          "$ref": "#/definitions/FileSource"
+        }
+      },
+      "dialect": {
+        "description": "SQL dialect",
+        "allOf": [
           {
-            "description": "Use dialect default",
-            "enum": [
-              "dialect"
-            ],
-            "type": "string"
-          },
-          {
-            "description": "Lowercase normalization (Postgres)",
-            "enum": [
-              "lower"
-            ],
-            "type": "string"
-          },
-          {
-            "description": "Uppercase normalization (Snowflake)",
-            "enum": [
-              "upper"
-            ],
-            "type": "string"
-          },
-          {
-            "description": "Case-sensitive as-is (BigQuery)",
-            "enum": [
-              "exact"
-            ],
-            "type": "string"
+            "$ref": "#/definitions/Dialect"
           }
         ]
       },
-      "ColumnSchema": {
-        "properties": {
-          "dataType": {
-            "type": [
-              "string",
-              "null"
-            ]
+      "sourceName": {
+        "description": "Optional source name (file path or script identifier) for grouping",
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "options": {
+        "description": "Optional analysis options",
+        "anyOf": [
+          {
+            "$ref": "#/definitions/AnalysisOptions"
           },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "schema": {
+        "description": "Optional schema metadata for accurate column resolution",
+        "anyOf": [
+          {
+            "$ref": "#/definitions/SchemaMetadata"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "sql",
+      "dialect"
+    ],
+    "definitions": {
+      "FileSource": {
+        "type": "object",
+        "properties": {
           "name": {
+            "type": "string"
+          },
+          "content": {
             "type": "string"
           }
         },
         "required": [
-          "name"
-        ],
-        "type": "object"
+          "name",
+          "content"
+        ]
       },
       "Dialect": {
         "description": "SQL dialect for parsing and analysis.\n\nDifferent dialects have different syntax rules and identifier normalization behavior.",
+        "type": "string",
         "enum": [
           "generic",
           "ansi",
@@ -93,68 +94,57 @@
           "redshift",
           "snowflake",
           "sqlite"
-        ],
-        "type": "string"
+        ]
       },
-      "FileSource": {
+      "AnalysisOptions": {
+        "description": "Options controlling the analysis behavior.",
+        "type": "object",
         "properties": {
-          "content": {
-            "type": "string"
+          "enableColumnLineage": {
+            "description": "Enable column-level lineage (Phase 2+, default true when implemented)",
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "default": null
           },
-          "name": {
-            "type": "string"
+          "graphDetailLevel": {
+            "description": "Preferred graph detail level for visualization (does not affect analysis)",
+            "anyOf": [
+              {
+                "$ref": "#/definitions/GraphDetailLevel"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
-        },
-        "required": [
-          "content",
-          "name"
-        ],
-        "type": "object"
+        }
       },
       "GraphDetailLevel": {
         "description": "Graph detail level for visualization.\n\nControls the granularity of the lineage graph returned by the analyzer.",
         "oneOf": [
           {
             "description": "Script/file level: show relationships between scripts through shared tables",
-            "enum": [
-              "script"
-            ],
-            "type": "string"
+            "type": "string",
+            "const": "script"
           },
           {
             "description": "Table level: show tables and their relationships (default)",
-            "enum": [
-              "table"
-            ],
-            "type": "string"
+            "type": "string",
+            "const": "table"
           },
           {
             "description": "Column level: show individual columns as separate graph nodes",
-            "enum": [
-              "column"
-            ],
-            "type": "string"
+            "type": "string",
+            "const": "column"
           }
         ]
       },
       "SchemaMetadata": {
-        "description": "Schema metadata for accurate column and table resolution.\n\nWhen provided, allows the analyzer to resolve ambiguous references and produce more accurate lineage information.",
+        "description": "Schema metadata for accurate column and table resolution.\n\nWhen provided, allows the analyzer to resolve ambiguous references and\nproduce more accurate lineage information.",
+        "type": "object",
         "properties": {
-          "allowImplied": {
-            "description": "Global toggle for implied schema capture (default: true) When false, only imported schema is used; workload DDL is ignored",
-            "type": "boolean"
-          },
-          "caseSensitivity": {
-            "anyOf": [
-              {
-                "$ref": "#/definitions/CaseSensitivity"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Override for identifier normalization (default 'dialect')"
-          },
           "defaultCatalog": {
             "description": "Default catalog applied to unqualified identifiers",
             "type": [
@@ -171,26 +161,41 @@
           },
           "searchPath": {
             "description": "Ordered list mirroring database search_path behavior",
-            "items": {
-              "$ref": "#/definitions/SchemaNamespaceHint"
-            },
             "type": [
               "array",
               "null"
+            ],
+            "items": {
+              "$ref": "#/definitions/SchemaNamespaceHint"
+            }
+          },
+          "caseSensitivity": {
+            "description": "Override for identifier normalization (default 'dialect')",
+            "anyOf": [
+              {
+                "$ref": "#/definitions/CaseSensitivity"
+              },
+              {
+                "type": "null"
+              }
             ]
           },
           "tables": {
-            "default": [],
             "description": "Canonical table representations",
+            "type": "array",
             "items": {
               "$ref": "#/definitions/SchemaTable"
             },
-            "type": "array"
+            "default": []
+          },
+          "allowImplied": {
+            "description": "Global toggle for implied schema capture (default: true)\nWhen false, only imported schema is used; workload DDL is ignored",
+            "type": "boolean"
           }
-        },
-        "type": "object"
+        }
       },
       "SchemaNamespaceHint": {
+        "type": "object",
         "properties": {
           "catalog": {
             "type": [
@@ -204,10 +209,35 @@
         },
         "required": [
           "schema"
-        ],
-        "type": "object"
+        ]
+      },
+      "CaseSensitivity": {
+        "description": "Case sensitivity for identifier normalization.",
+        "oneOf": [
+          {
+            "description": "Use dialect default",
+            "type": "string",
+            "const": "dialect"
+          },
+          {
+            "description": "Lowercase normalization (Postgres)",
+            "type": "string",
+            "const": "lower"
+          },
+          {
+            "description": "Uppercase normalization (Snowflake)",
+            "type": "string",
+            "const": "upper"
+          },
+          {
+            "description": "Case-sensitive as-is (BigQuery)",
+            "type": "string",
+            "const": "exact"
+          }
+        ]
       },
       "SchemaTable": {
+        "type": "object",
         "properties": {
           "catalog": {
             "type": [
@@ -215,17 +245,34 @@
               "null"
             ]
           },
+          "schema": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
           "columns": {
-            "default": [],
+            "type": "array",
             "items": {
               "$ref": "#/definitions/ColumnSchema"
             },
-            "type": "array"
-          },
+            "default": []
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "ColumnSchema": {
+        "type": "object",
+        "properties": {
           "name": {
             "type": "string"
           },
-          "schema": {
+          "dataType": {
             "type": [
               "string",
               "null"
@@ -234,163 +281,207 @@
         },
         "required": [
           "name"
-        ],
-        "type": "object"
-      }
-    },
-    "description": "A request to analyze SQL for data lineage.\n\nThis is the main entry point for the analysis API. It accepts SQL code along with optional dialect and schema information to produce accurate lineage graphs.",
-    "properties": {
-      "dialect": {
-        "allOf": [
-          {
-            "$ref": "#/definitions/Dialect"
-          }
-        ],
-        "description": "SQL dialect"
-      },
-      "files": {
-        "description": "Optional list of source files to analyze (alternative to single `sql` field)",
-        "items": {
-          "$ref": "#/definitions/FileSource"
-        },
-        "type": [
-          "array",
-          "null"
         ]
-      },
-      "options": {
-        "anyOf": [
-          {
-            "$ref": "#/definitions/AnalysisOptions"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "description": "Optional analysis options"
-      },
-      "schema": {
-        "anyOf": [
-          {
-            "$ref": "#/definitions/SchemaMetadata"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "description": "Optional schema metadata for accurate column resolution"
-      },
-      "sourceName": {
-        "description": "Optional source name (file path or script identifier) for grouping",
-        "type": [
-          "string",
-          "null"
-        ]
-      },
-      "sql": {
-        "description": "The SQL code to analyze (UTF-8 string, multi-statement supported)",
-        "type": "string"
       }
-    },
-    "required": [
-      "dialect",
-      "sql"
-    ],
-    "title": "AnalyzeRequest",
-    "type": "object"
+    }
   },
   "AnalyzeResult": {
     "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AnalyzeResult",
+    "description": "The result of analyzing SQL for data lineage.\n\nContains per-statement lineage graphs, a global lineage graph spanning all statements,\nany issues encountered during analysis, and summary statistics.",
+    "type": "object",
+    "properties": {
+      "statements": {
+        "description": "Per-statement lineage analysis results",
+        "type": "array",
+        "items": {
+          "$ref": "#/definitions/StatementLineage"
+        }
+      },
+      "globalLineage": {
+        "description": "Global lineage graph spanning all statements",
+        "allOf": [
+          {
+            "$ref": "#/definitions/GlobalLineage"
+          }
+        ]
+      },
+      "issues": {
+        "description": "All issues encountered during analysis",
+        "type": "array",
+        "items": {
+          "$ref": "#/definitions/Issue"
+        }
+      },
+      "summary": {
+        "description": "Summary statistics",
+        "allOf": [
+          {
+            "$ref": "#/definitions/Summary"
+          }
+        ]
+      },
+      "resolvedSchema": {
+        "description": "Effective schema used during analysis (imported + implied)",
+        "anyOf": [
+          {
+            "$ref": "#/definitions/ResolvedSchemaMetadata"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "statements",
+      "globalLineage",
+      "issues",
+      "summary"
+    ],
     "definitions": {
-      "AggregationInfo": {
-        "description": "Information about aggregation applied to a column.\n\nThis tracks when a column is the result of an aggregation operation (like SUM, COUNT, AVG), which indicates a cardinality reduction (1:many collapse) in the data flow.",
+      "StatementLineage": {
+        "description": "Lineage information for a single SQL statement.",
+        "type": "object",
         "properties": {
-          "distinct": {
-            "description": "True if this aggregation uses DISTINCT (e.g., COUNT(DISTINCT col))",
-            "type": [
-              "boolean",
-              "null"
-            ]
+          "statementIndex": {
+            "description": "Zero-based index of the statement in the input SQL",
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
           },
-          "function": {
-            "description": "The aggregation function used (e.g., \"SUM\", \"COUNT\", \"AVG\") None if this is a grouping key or non-aggregated column",
+          "statementType": {
+            "description": "Type of SQL statement",
+            "type": "string"
+          },
+          "sourceName": {
+            "description": "Optional source name (file path or script identifier) for grouping",
             "type": [
               "string",
               "null"
             ]
           },
-          "isGroupingKey": {
-            "description": "True if this column is a GROUP BY key (preserves row identity within groups)",
-            "type": "boolean"
+          "nodes": {
+            "description": "All nodes in the lineage graph for this statement",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/Node"
+            }
+          },
+          "edges": {
+            "description": "All edges connecting nodes in the lineage graph",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/Edge"
+            }
+          },
+          "span": {
+            "description": "Optional span of the entire statement in source SQL",
+            "anyOf": [
+              {
+                "$ref": "#/definitions/Span"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "joinCount": {
+            "description": "Number of JOIN operations in this statement",
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          },
+          "complexityScore": {
+            "description": "Complexity score (1-100) based on query structure",
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0,
+            "maximum": 255
           }
         },
         "required": [
-          "isGroupingKey"
-        ],
-        "type": "object"
+          "statementIndex",
+          "statementType",
+          "nodes",
+          "edges",
+          "joinCount",
+          "complexityScore"
+        ]
       },
-      "CanonicalName": {
+      "Node": {
+        "description": "A node in the lineage graph (table, CTE, or column).",
+        "type": "object",
         "properties": {
-          "catalog": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "column": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "name": {
-            "type": "string"
-          },
-          "schema": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "name"
-        ],
-        "type": "object"
-      },
-      "Edge": {
-        "description": "An edge connecting two nodes in the lineage graph.",
-        "properties": {
-          "approximate": {
-            "description": "True if this edge represents approximate/uncertain lineage",
-            "type": [
-              "boolean",
-              "null"
-            ]
-          },
-          "expression": {
-            "description": "Optional: SQL expression if this edge represents a transformation",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "from": {
-            "description": "Source node ID",
-            "type": "string"
-          },
           "id": {
             "description": "Stable content-based hash ID",
             "type": "string"
           },
-          "joinCondition": {
-            "description": "Optional: join condition expression (ON clause) See join_type comment for usage notes.",
+          "type": {
+            "description": "Node type",
+            "allOf": [
+              {
+                "$ref": "#/definitions/NodeType"
+              }
+            ]
+          },
+          "label": {
+            "description": "Human-readable label (short name)",
+            "type": "string"
+          },
+          "qualifiedName": {
+            "description": "Fully qualified name when available",
             "type": [
               "string",
               "null"
             ]
           },
+          "expression": {
+            "description": "SQL expression text for computed columns",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "span": {
+            "description": "Source location in original SQL",
+            "anyOf": [
+              {
+                "$ref": "#/definitions/Span"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "metadata": {
+            "description": "Extensible metadata for future use",
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          },
+          "resolutionSource": {
+            "description": "How this table was resolved (imported, implied, or unknown)",
+            "anyOf": [
+              {
+                "$ref": "#/definitions/ResolutionSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "filters": {
+            "description": "Filter predicates (WHERE clause conditions) that affect this table's rows",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/FilterPredicate"
+            }
+          },
           "joinType": {
+            "description": "For table nodes that are JOINed: the type of join used to include this table.\nNone for the main FROM table, Some(JoinType) for joined tables.",
             "anyOf": [
               {
                 "$ref": "#/definitions/JoinType"
@@ -398,14 +489,262 @@
               {
                 "type": "null"
               }
-            ],
-            "description": "Optional: specific join type for JOIN edges (INNER, LEFT, RIGHT, FULL, CROSS, etc.) Note: For table-level visualization, the frontend typically reads join info from the target Node's join_type/join_condition fields. These Edge fields are preserved for column-level lineage edges and future use cases where edge-level join context is needed."
+            ]
           },
-          "metadata": {
-            "additionalProperties": true,
-            "description": "Extensible metadata for future use",
+          "joinCondition": {
+            "description": "For table nodes that are JOINed: the join condition (ON clause).",
             "type": [
-              "object",
+              "string",
+              "null"
+            ]
+          },
+          "aggregation": {
+            "description": "For column nodes: aggregation information if this column is aggregated or a grouping key.\nPresence indicates the query uses GROUP BY; the fields indicate the column's role.",
+            "anyOf": [
+              {
+                "$ref": "#/definitions/AggregationInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "label"
+        ]
+      },
+      "NodeType": {
+        "description": "The type of a node in the lineage graph.",
+        "oneOf": [
+          {
+            "description": "A database table",
+            "type": "string",
+            "const": "table"
+          },
+          {
+            "description": "A database view (CREATE VIEW)",
+            "type": "string",
+            "const": "view"
+          },
+          {
+            "description": "A Common Table Expression (WITH clause)",
+            "type": "string",
+            "const": "cte"
+          },
+          {
+            "description": "A column",
+            "type": "string",
+            "const": "column"
+          }
+        ]
+      },
+      "Span": {
+        "description": "A byte range in the source SQL string.",
+        "type": "object",
+        "properties": {
+          "start": {
+            "description": "Byte offset from start of SQL string (inclusive)",
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          },
+          "end": {
+            "description": "Byte offset from start of SQL string (exclusive)",
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ]
+      },
+      "ResolutionSource": {
+        "description": "How a table reference was resolved during analysis.",
+        "oneOf": [
+          {
+            "description": "Resolved from user-provided schema",
+            "type": "string",
+            "const": "imported"
+          },
+          {
+            "description": "Resolved from inferred DDL schema",
+            "type": "string",
+            "const": "implied"
+          },
+          {
+            "description": "Could not be resolved",
+            "type": "string",
+            "const": "unknown"
+          }
+        ]
+      },
+      "FilterPredicate": {
+        "description": "A filter predicate from a WHERE, HAVING, or JOIN ON clause.",
+        "type": "object",
+        "properties": {
+          "expression": {
+            "description": "The SQL expression text of the predicate",
+            "type": "string"
+          },
+          "clauseType": {
+            "description": "Where this filter appears in the query",
+            "allOf": [
+              {
+                "$ref": "#/definitions/FilterClauseType"
+              }
+            ]
+          }
+        },
+        "required": [
+          "expression",
+          "clauseType"
+        ]
+      },
+      "FilterClauseType": {
+        "description": "The type of SQL clause where a filter predicate appears.",
+        "oneOf": [
+          {
+            "description": "FROM ... WHERE clause",
+            "type": "string",
+            "const": "WHERE"
+          },
+          {
+            "description": "HAVING clause (after GROUP BY)",
+            "type": "string",
+            "const": "HAVING"
+          },
+          {
+            "description": "JOIN ... ON clause",
+            "type": "string",
+            "const": "JOIN_ON"
+          }
+        ]
+      },
+      "JoinType": {
+        "description": "The type of SQL JOIN operation.",
+        "oneOf": [
+          {
+            "description": "INNER JOIN - only matching rows from both tables",
+            "type": "string",
+            "const": "INNER"
+          },
+          {
+            "description": "LEFT OUTER JOIN - all rows from left table, matching from right",
+            "type": "string",
+            "const": "LEFT"
+          },
+          {
+            "description": "RIGHT OUTER JOIN - all rows from right table, matching from left",
+            "type": "string",
+            "const": "RIGHT"
+          },
+          {
+            "description": "FULL OUTER JOIN - all rows from both tables",
+            "type": "string",
+            "const": "FULL"
+          },
+          {
+            "description": "CROSS JOIN - cartesian product",
+            "type": "string",
+            "const": "CROSS"
+          },
+          {
+            "description": "LEFT SEMI JOIN - rows from left that have match in right",
+            "type": "string",
+            "const": "LEFT_SEMI"
+          },
+          {
+            "description": "RIGHT SEMI JOIN - rows from right that have match in left",
+            "type": "string",
+            "const": "RIGHT_SEMI"
+          },
+          {
+            "description": "LEFT ANTI JOIN - rows from left that have no match in right",
+            "type": "string",
+            "const": "LEFT_ANTI"
+          },
+          {
+            "description": "RIGHT ANTI JOIN - rows from right that have no match in left",
+            "type": "string",
+            "const": "RIGHT_ANTI"
+          },
+          {
+            "description": "CROSS APPLY (SQL Server)",
+            "type": "string",
+            "const": "CROSS_APPLY"
+          },
+          {
+            "description": "OUTER APPLY (SQL Server)",
+            "type": "string",
+            "const": "OUTER_APPLY"
+          },
+          {
+            "description": "AS OF JOIN (time-series)",
+            "type": "string",
+            "const": "AS_OF"
+          }
+        ]
+      },
+      "AggregationInfo": {
+        "description": "Information about aggregation applied to a column.\n\nThis tracks when a column is the result of an aggregation operation (like SUM, COUNT, AVG),\nwhich indicates a cardinality reduction (1:many collapse) in the data flow.",
+        "type": "object",
+        "properties": {
+          "isGroupingKey": {
+            "description": "True if this column is a GROUP BY key (preserves row identity within groups)",
+            "type": "boolean"
+          },
+          "function": {
+            "description": "The aggregation function used (e.g., \"SUM\", \"COUNT\", \"AVG\")\nNone if this is a grouping key or non-aggregated column",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "distinct": {
+            "description": "True if this aggregation uses DISTINCT (e.g., COUNT(DISTINCT col))",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "isGroupingKey"
+        ]
+      },
+      "Edge": {
+        "description": "An edge connecting two nodes in the lineage graph.",
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "Stable content-based hash ID",
+            "type": "string"
+          },
+          "from": {
+            "description": "Source node ID",
+            "type": "string"
+          },
+          "to": {
+            "description": "Target node ID",
+            "type": "string"
+          },
+          "type": {
+            "description": "Edge type",
+            "allOf": [
+              {
+                "$ref": "#/definitions/EdgeType"
+              }
+            ]
+          },
+          "expression": {
+            "description": "Optional: SQL expression if this edge represents a transformation",
+            "type": [
+              "string",
               "null"
             ]
           },
@@ -416,131 +755,221 @@
               "null"
             ]
           },
-          "to": {
-            "description": "Target node ID",
-            "type": "string"
-          },
-          "type": {
-            "allOf": [
-              {
-                "$ref": "#/definitions/EdgeType"
-              }
-            ],
-            "description": "Edge type"
-          }
-        },
-        "required": [
-          "from",
-          "id",
-          "to",
-          "type"
-        ],
-        "type": "object"
-      },
-      "EdgeType": {
-        "oneOf": [
-          {
-            "description": "Table/CTE owns columns",
-            "enum": [
-              "ownership"
-            ],
-            "type": "string"
-          },
-          {
-            "description": "Data flows from one column to another",
-            "enum": [
-              "data_flow"
-            ],
-            "type": "string"
-          },
-          {
-            "description": "Output derived from inputs (with transformation)",
-            "enum": [
-              "derivation"
-            ],
-            "type": "string"
-          },
-          {
-            "description": "Cross-statement dependency",
-            "enum": [
-              "cross_statement"
-            ],
-            "type": "string"
-          }
-        ]
-      },
-      "FilterClauseType": {
-        "description": "The type of SQL clause where a filter predicate appears.",
-        "oneOf": [
-          {
-            "description": "FROM ... WHERE clause",
-            "enum": [
-              "WHERE"
-            ],
-            "type": "string"
-          },
-          {
-            "description": "HAVING clause (after GROUP BY)",
-            "enum": [
-              "HAVING"
-            ],
-            "type": "string"
-          },
-          {
-            "description": "JOIN ... ON clause",
-            "enum": [
-              "JOIN_ON"
-            ],
-            "type": "string"
-          }
-        ]
-      },
-      "FilterPredicate": {
-        "description": "A filter predicate from a WHERE, HAVING, or JOIN ON clause.",
-        "properties": {
-          "clauseType": {
-            "allOf": [
-              {
-                "$ref": "#/definitions/FilterClauseType"
-              }
-            ],
-            "description": "Where this filter appears in the query"
-          },
-          "expression": {
-            "description": "The SQL expression text of the predicate",
-            "type": "string"
-          }
-        },
-        "required": [
-          "clauseType",
-          "expression"
-        ],
-        "type": "object"
-      },
-      "GlobalEdge": {
-        "properties": {
-          "consumerStatement": {
+          "joinType": {
+            "description": "Optional: specific join type for JOIN edges (INNER, LEFT, RIGHT, FULL, CROSS, etc.)\nNote: For table-level visualization, the frontend typically reads join info from the\ntarget Node's join_type/join_condition fields. These Edge fields are preserved for\ncolumn-level lineage edges and future use cases where edge-level join context is needed.",
             "anyOf": [
               {
-                "$ref": "#/definitions/StatementRef"
+                "$ref": "#/definitions/JoinType"
               },
               {
                 "type": "null"
               }
             ]
           },
-          "from": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
+          "joinCondition": {
+            "description": "Optional: join condition expression (ON clause)\nSee join_type comment for usage notes.",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "metadata": {
-            "additionalProperties": true,
+            "description": "Extensible metadata for future use",
             "type": [
               "object",
               "null"
+            ],
+            "additionalProperties": true
+          },
+          "approximate": {
+            "description": "True if this edge represents approximate/uncertain lineage",
+            "type": [
+              "boolean",
+              "null"
             ]
+          }
+        },
+        "required": [
+          "id",
+          "from",
+          "to",
+          "type"
+        ]
+      },
+      "EdgeType": {
+        "oneOf": [
+          {
+            "description": "Table/CTE owns columns",
+            "type": "string",
+            "const": "ownership"
+          },
+          {
+            "description": "Data flows from one column to another",
+            "type": "string",
+            "const": "data_flow"
+          },
+          {
+            "description": "Output derived from inputs (with transformation)",
+            "type": "string",
+            "const": "derivation"
+          },
+          {
+            "description": "Cross-statement dependency",
+            "type": "string",
+            "const": "cross_statement"
+          }
+        ]
+      },
+      "GlobalLineage": {
+        "description": "Global lineage graph spanning all statements in the analyzed SQL.\n\nProvides a unified view of data flow across multiple statements.",
+        "type": "object",
+        "properties": {
+          "nodes": {
+            "description": "All unique nodes across all statements",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/GlobalNode"
+            }
+          },
+          "edges": {
+            "description": "All edges representing cross-statement data flow",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/GlobalEdge"
+            }
+          }
+        },
+        "required": [
+          "nodes",
+          "edges"
+        ]
+      },
+      "GlobalNode": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "Stable ID derived from canonical identifier",
+            "type": "string"
+          },
+          "type": {
+            "description": "Node type",
+            "allOf": [
+              {
+                "$ref": "#/definitions/NodeType"
+              }
+            ]
+          },
+          "label": {
+            "description": "Human-readable label",
+            "type": "string"
+          },
+          "canonicalName": {
+            "description": "Canonical name for cross-statement matching",
+            "allOf": [
+              {
+                "$ref": "#/definitions/CanonicalName"
+              }
+            ]
+          },
+          "statementRefs": {
+            "description": "References to statements that use this node",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/StatementRef"
+            }
+          },
+          "metadata": {
+            "description": "Extensible metadata",
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          },
+          "resolutionSource": {
+            "description": "How this table was resolved (imported, implied, or unknown)",
+            "anyOf": [
+              {
+                "$ref": "#/definitions/ResolutionSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "label",
+          "canonicalName",
+          "statementRefs"
+        ]
+      },
+      "CanonicalName": {
+        "type": "object",
+        "properties": {
+          "catalog": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "schema": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "column": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "StatementRef": {
+        "type": "object",
+        "properties": {
+          "statementIndex": {
+            "description": "Statement index in the original request",
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          },
+          "nodeId": {
+            "description": "ID of the local node inside that statement graph (if available)",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "statementIndex"
+        ]
+      },
+      "GlobalEdge": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/definitions/EdgeType"
           },
           "producerStatement": {
             "anyOf": [
@@ -552,110 +981,43 @@
               }
             ]
           },
-          "to": {
-            "type": "string"
-          },
-          "type": {
-            "$ref": "#/definitions/EdgeType"
-          }
-        },
-        "required": [
-          "from",
-          "id",
-          "to",
-          "type"
-        ],
-        "type": "object"
-      },
-      "GlobalLineage": {
-        "description": "Global lineage graph spanning all statements in the analyzed SQL.\n\nProvides a unified view of data flow across multiple statements.",
-        "properties": {
-          "edges": {
-            "description": "All edges representing cross-statement data flow",
-            "items": {
-              "$ref": "#/definitions/GlobalEdge"
-            },
-            "type": "array"
-          },
-          "nodes": {
-            "description": "All unique nodes across all statements",
-            "items": {
-              "$ref": "#/definitions/GlobalNode"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "edges",
-          "nodes"
-        ],
-        "type": "object"
-      },
-      "GlobalNode": {
-        "properties": {
-          "canonicalName": {
-            "allOf": [
-              {
-                "$ref": "#/definitions/CanonicalName"
-              }
-            ],
-            "description": "Canonical name for cross-statement matching"
-          },
-          "id": {
-            "description": "Stable ID derived from canonical identifier",
-            "type": "string"
-          },
-          "label": {
-            "description": "Human-readable label",
-            "type": "string"
-          },
-          "metadata": {
-            "additionalProperties": true,
-            "description": "Extensible metadata",
-            "type": [
-              "object",
-              "null"
-            ]
-          },
-          "resolutionSource": {
+          "consumerStatement": {
             "anyOf": [
               {
-                "$ref": "#/definitions/ResolutionSource"
+                "$ref": "#/definitions/StatementRef"
               },
               {
                 "type": "null"
               }
-            ],
-            "description": "How this table was resolved (imported, implied, or unknown)"
+            ]
           },
-          "statementRefs": {
-            "description": "References to statements that use this node",
-            "items": {
-              "$ref": "#/definitions/StatementRef"
-            },
-            "type": "array"
-          },
-          "type": {
-            "allOf": [
-              {
-                "$ref": "#/definitions/NodeType"
-              }
+          "metadata": {
+            "type": [
+              "object",
+              "null"
             ],
-            "description": "Node type"
+            "additionalProperties": true
           }
         },
         "required": [
-          "canonicalName",
           "id",
-          "label",
-          "statementRefs",
+          "from",
+          "to",
           "type"
-        ],
-        "type": "object"
+        ]
       },
       "Issue": {
         "description": "An issue encountered during SQL analysis (error, warning, or info).",
+        "type": "object",
         "properties": {
+          "severity": {
+            "description": "Severity level",
+            "allOf": [
+              {
+                "$ref": "#/definitions/Severity"
+              }
+            ]
+          },
           "code": {
             "description": "Machine-readable issue code",
             "type": "string"
@@ -664,15 +1026,8 @@
             "description": "Human-readable error message",
             "type": "string"
           },
-          "severity": {
-            "allOf": [
-              {
-                "$ref": "#/definitions/Severity"
-              }
-            ],
-            "description": "Severity level"
-          },
           "span": {
+            "description": "Optional: location in source SQL where issue occurred",
             "anyOf": [
               {
                 "$ref": "#/definitions/Span"
@@ -680,357 +1035,138 @@
               {
                 "type": "null"
               }
-            ],
-            "description": "Optional: location in source SQL where issue occurred"
+            ]
           },
           "statementIndex": {
             "description": "Optional: which statement index this issue relates to",
-            "format": "uint",
-            "minimum": 0.0,
             "type": [
               "integer",
               "null"
-            ]
+            ],
+            "format": "uint",
+            "minimum": 0
           }
         },
         "required": [
+          "severity",
           "code",
-          "message",
-          "severity"
-        ],
-        "type": "object"
+          "message"
+        ]
+      },
+      "Severity": {
+        "type": "string",
+        "enum": [
+          "error",
+          "warning",
+          "info"
+        ]
+      },
+      "Summary": {
+        "description": "Summary statistics for the analysis result.",
+        "type": "object",
+        "properties": {
+          "statementCount": {
+            "description": "Total number of statements analyzed",
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          },
+          "tableCount": {
+            "description": "Total unique tables/CTEs discovered across all statements",
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          },
+          "columnCount": {
+            "description": "Total columns in output (Phase 2+)",
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          },
+          "joinCount": {
+            "description": "Total number of JOIN operations",
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          },
+          "complexityScore": {
+            "description": "Complexity score (1-100) based on query structure",
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "issueCount": {
+            "description": "Issue counts by severity",
+            "allOf": [
+              {
+                "$ref": "#/definitions/IssueCount"
+              }
+            ]
+          },
+          "hasErrors": {
+            "description": "Quick check: true if any errors were encountered",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "statementCount",
+          "tableCount",
+          "columnCount",
+          "joinCount",
+          "complexityScore",
+          "issueCount",
+          "hasErrors"
+        ]
       },
       "IssueCount": {
         "description": "Counts of issues by severity level.",
+        "type": "object",
         "properties": {
           "errors": {
             "description": "Number of error-level issues",
+            "type": "integer",
             "format": "uint",
-            "minimum": 0.0,
-            "type": "integer"
-          },
-          "infos": {
-            "description": "Number of info-level issues",
-            "format": "uint",
-            "minimum": 0.0,
-            "type": "integer"
+            "minimum": 0
           },
           "warnings": {
             "description": "Number of warning-level issues",
+            "type": "integer",
             "format": "uint",
-            "minimum": 0.0,
-            "type": "integer"
+            "minimum": 0
+          },
+          "infos": {
+            "description": "Number of info-level issues",
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
           }
         },
         "required": [
           "errors",
-          "infos",
-          "warnings"
-        ],
-        "type": "object"
-      },
-      "JoinType": {
-        "description": "The type of SQL JOIN operation.",
-        "oneOf": [
-          {
-            "description": "INNER JOIN - only matching rows from both tables",
-            "enum": [
-              "INNER"
-            ],
-            "type": "string"
-          },
-          {
-            "description": "LEFT OUTER JOIN - all rows from left table, matching from right",
-            "enum": [
-              "LEFT"
-            ],
-            "type": "string"
-          },
-          {
-            "description": "RIGHT OUTER JOIN - all rows from right table, matching from left",
-            "enum": [
-              "RIGHT"
-            ],
-            "type": "string"
-          },
-          {
-            "description": "FULL OUTER JOIN - all rows from both tables",
-            "enum": [
-              "FULL"
-            ],
-            "type": "string"
-          },
-          {
-            "description": "CROSS JOIN - cartesian product",
-            "enum": [
-              "CROSS"
-            ],
-            "type": "string"
-          },
-          {
-            "description": "LEFT SEMI JOIN - rows from left that have match in right",
-            "enum": [
-              "LEFT_SEMI"
-            ],
-            "type": "string"
-          },
-          {
-            "description": "RIGHT SEMI JOIN - rows from right that have match in left",
-            "enum": [
-              "RIGHT_SEMI"
-            ],
-            "type": "string"
-          },
-          {
-            "description": "LEFT ANTI JOIN - rows from left that have no match in right",
-            "enum": [
-              "LEFT_ANTI"
-            ],
-            "type": "string"
-          },
-          {
-            "description": "RIGHT ANTI JOIN - rows from right that have no match in left",
-            "enum": [
-              "RIGHT_ANTI"
-            ],
-            "type": "string"
-          },
-          {
-            "description": "CROSS APPLY (SQL Server)",
-            "enum": [
-              "CROSS_APPLY"
-            ],
-            "type": "string"
-          },
-          {
-            "description": "OUTER APPLY (SQL Server)",
-            "enum": [
-              "OUTER_APPLY"
-            ],
-            "type": "string"
-          },
-          {
-            "description": "AS OF JOIN (time-series)",
-            "enum": [
-              "AS_OF"
-            ],
-            "type": "string"
-          }
+          "warnings",
+          "infos"
         ]
-      },
-      "Node": {
-        "description": "A node in the lineage graph (table, CTE, or column).",
-        "properties": {
-          "aggregation": {
-            "anyOf": [
-              {
-                "$ref": "#/definitions/AggregationInfo"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "For column nodes: aggregation information if this column is aggregated or a grouping key. Presence indicates the query uses GROUP BY; the fields indicate the column's role."
-          },
-          "expression": {
-            "description": "SQL expression text for computed columns",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "filters": {
-            "description": "Filter predicates (WHERE clause conditions) that affect this table's rows",
-            "items": {
-              "$ref": "#/definitions/FilterPredicate"
-            },
-            "type": "array"
-          },
-          "id": {
-            "description": "Stable content-based hash ID",
-            "type": "string"
-          },
-          "joinCondition": {
-            "description": "For table nodes that are JOINed: the join condition (ON clause).",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "joinType": {
-            "anyOf": [
-              {
-                "$ref": "#/definitions/JoinType"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "For table nodes that are JOINed: the type of join used to include this table. None for the main FROM table, Some(JoinType) for joined tables."
-          },
-          "label": {
-            "description": "Human-readable label (short name)",
-            "type": "string"
-          },
-          "metadata": {
-            "additionalProperties": true,
-            "description": "Extensible metadata for future use",
-            "type": [
-              "object",
-              "null"
-            ]
-          },
-          "qualifiedName": {
-            "description": "Fully qualified name when available",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "resolutionSource": {
-            "anyOf": [
-              {
-                "$ref": "#/definitions/ResolutionSource"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "How this table was resolved (imported, implied, or unknown)"
-          },
-          "span": {
-            "anyOf": [
-              {
-                "$ref": "#/definitions/Span"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Source location in original SQL"
-          },
-          "type": {
-            "allOf": [
-              {
-                "$ref": "#/definitions/NodeType"
-              }
-            ],
-            "description": "Node type"
-          }
-        },
-        "required": [
-          "id",
-          "label",
-          "type"
-        ],
-        "type": "object"
-      },
-      "NodeType": {
-        "description": "The type of a node in the lineage graph.",
-        "oneOf": [
-          {
-            "description": "A database table",
-            "enum": [
-              "table"
-            ],
-            "type": "string"
-          },
-          {
-            "description": "A database view (CREATE VIEW)",
-            "enum": [
-              "view"
-            ],
-            "type": "string"
-          },
-          {
-            "description": "A Common Table Expression (WITH clause)",
-            "enum": [
-              "cte"
-            ],
-            "type": "string"
-          },
-          {
-            "description": "A column",
-            "enum": [
-              "column"
-            ],
-            "type": "string"
-          }
-        ]
-      },
-      "ResolutionSource": {
-        "description": "How a table reference was resolved during analysis.",
-        "oneOf": [
-          {
-            "description": "Resolved from user-provided schema",
-            "enum": [
-              "imported"
-            ],
-            "type": "string"
-          },
-          {
-            "description": "Resolved from inferred DDL schema",
-            "enum": [
-              "implied"
-            ],
-            "type": "string"
-          },
-          {
-            "description": "Could not be resolved",
-            "enum": [
-              "unknown"
-            ],
-            "type": "string"
-          }
-        ]
-      },
-      "ResolvedColumnSchema": {
-        "description": "A column in the resolved schema with origin tracking.",
-        "properties": {
-          "dataType": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "name": {
-            "type": "string"
-          },
-          "origin": {
-            "anyOf": [
-              {
-                "$ref": "#/definitions/SchemaOrigin"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Column-level origin (can differ from table origin in future merging)"
-          }
-        },
-        "required": [
-          "name"
-        ],
-        "type": "object"
       },
       "ResolvedSchemaMetadata": {
         "description": "Resolved schema metadata showing the effective schema used during analysis.\n\nCombines imported (user-provided) and implied (inferred from DDL) schema.",
+        "type": "object",
         "properties": {
           "tables": {
             "description": "All tables used during analysis (imported + implied)",
+            "type": "array",
             "items": {
               "$ref": "#/definitions/ResolvedSchemaTable"
-            },
-            "type": "array"
+            }
           }
         },
         "required": [
           "tables"
-        ],
-        "type": "object"
+        ]
       },
       "ResolvedSchemaTable": {
         "description": "A table in the resolved schema with origin metadata.",
+        "type": "object",
         "properties": {
           "catalog": {
             "type": [
@@ -1038,37 +1174,41 @@
               "null"
             ]
           },
-          "columns": {
-            "items": {
-              "$ref": "#/definitions/ResolvedColumnSchema"
-            },
-            "type": "array"
-          },
-          "name": {
-            "type": "string"
-          },
-          "origin": {
-            "allOf": [
-              {
-                "$ref": "#/definitions/SchemaOrigin"
-              }
-            ],
-            "description": "Origin of this table's schema information"
-          },
           "schema": {
             "type": [
               "string",
               "null"
             ]
           },
+          "name": {
+            "type": "string"
+          },
+          "columns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/ResolvedColumnSchema"
+            }
+          },
+          "origin": {
+            "description": "Origin of this table's schema information",
+            "allOf": [
+              {
+                "$ref": "#/definitions/SchemaOrigin"
+              }
+            ]
+          },
           "sourceStatementIndex": {
             "description": "For implied tables: which statement created it",
-            "format": "uint",
-            "minimum": 0.0,
             "type": [
               "integer",
               "null"
-            ]
+            ],
+            "format": "uint",
+            "minimum": 0
+          },
+          "updatedAt": {
+            "description": "Timestamp when this entry was created/updated (ISO 8601)",
+            "type": "string"
           },
           "temporary": {
             "description": "True if this is a temporary table",
@@ -1076,267 +1216,59 @@
               "boolean",
               "null"
             ]
-          },
-          "updatedAt": {
-            "description": "Timestamp when this entry was created/updated (ISO 8601)",
-            "type": "string"
           }
         },
         "required": [
-          "columns",
           "name",
+          "columns",
           "origin",
           "updatedAt"
-        ],
-        "type": "object"
+        ]
+      },
+      "ResolvedColumnSchema": {
+        "description": "A column in the resolved schema with origin tracking.",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "dataType": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "origin": {
+            "description": "Column-level origin (can differ from table origin in future merging)",
+            "anyOf": [
+              {
+                "$ref": "#/definitions/SchemaOrigin"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "name"
+        ]
       },
       "SchemaOrigin": {
         "description": "The origin of schema information.",
         "oneOf": [
           {
             "description": "User-provided schema",
-            "enum": [
-              "imported"
-            ],
-            "type": "string"
+            "type": "string",
+            "const": "imported"
           },
           {
             "description": "Inferred from DDL in workload",
-            "enum": [
-              "implied"
-            ],
-            "type": "string"
+            "type": "string",
+            "const": "implied"
           }
         ]
-      },
-      "Severity": {
-        "enum": [
-          "error",
-          "warning",
-          "info"
-        ],
-        "type": "string"
-      },
-      "Span": {
-        "description": "A byte range in the source SQL string.",
-        "properties": {
-          "end": {
-            "description": "Byte offset from start of SQL string (exclusive)",
-            "format": "uint",
-            "minimum": 0.0,
-            "type": "integer"
-          },
-          "start": {
-            "description": "Byte offset from start of SQL string (inclusive)",
-            "format": "uint",
-            "minimum": 0.0,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "end",
-          "start"
-        ],
-        "type": "object"
-      },
-      "StatementLineage": {
-        "description": "Lineage information for a single SQL statement.",
-        "properties": {
-          "complexityScore": {
-            "description": "Complexity score (1-100) based on query structure",
-            "format": "uint8",
-            "minimum": 0.0,
-            "type": "integer"
-          },
-          "edges": {
-            "description": "All edges connecting nodes in the lineage graph",
-            "items": {
-              "$ref": "#/definitions/Edge"
-            },
-            "type": "array"
-          },
-          "joinCount": {
-            "description": "Number of JOIN operations in this statement",
-            "format": "uint",
-            "minimum": 0.0,
-            "type": "integer"
-          },
-          "nodes": {
-            "description": "All nodes in the lineage graph for this statement",
-            "items": {
-              "$ref": "#/definitions/Node"
-            },
-            "type": "array"
-          },
-          "sourceName": {
-            "description": "Optional source name (file path or script identifier) for grouping",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "span": {
-            "anyOf": [
-              {
-                "$ref": "#/definitions/Span"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Optional span of the entire statement in source SQL"
-          },
-          "statementIndex": {
-            "description": "Zero-based index of the statement in the input SQL",
-            "format": "uint",
-            "minimum": 0.0,
-            "type": "integer"
-          },
-          "statementType": {
-            "description": "Type of SQL statement",
-            "type": "string"
-          }
-        },
-        "required": [
-          "complexityScore",
-          "edges",
-          "joinCount",
-          "nodes",
-          "statementIndex",
-          "statementType"
-        ],
-        "type": "object"
-      },
-      "StatementRef": {
-        "properties": {
-          "nodeId": {
-            "description": "ID of the local node inside that statement graph (if available)",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "statementIndex": {
-            "description": "Statement index in the original request",
-            "format": "uint",
-            "minimum": 0.0,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "statementIndex"
-        ],
-        "type": "object"
-      },
-      "Summary": {
-        "description": "Summary statistics for the analysis result.",
-        "properties": {
-          "columnCount": {
-            "description": "Total columns in output (Phase 2+)",
-            "format": "uint",
-            "minimum": 0.0,
-            "type": "integer"
-          },
-          "complexityScore": {
-            "description": "Complexity score (1-100) based on query structure",
-            "format": "uint8",
-            "minimum": 0.0,
-            "type": "integer"
-          },
-          "hasErrors": {
-            "description": "Quick check: true if any errors were encountered",
-            "type": "boolean"
-          },
-          "issueCount": {
-            "allOf": [
-              {
-                "$ref": "#/definitions/IssueCount"
-              }
-            ],
-            "description": "Issue counts by severity"
-          },
-          "joinCount": {
-            "description": "Total number of JOIN operations",
-            "format": "uint",
-            "minimum": 0.0,
-            "type": "integer"
-          },
-          "statementCount": {
-            "description": "Total number of statements analyzed",
-            "format": "uint",
-            "minimum": 0.0,
-            "type": "integer"
-          },
-          "tableCount": {
-            "description": "Total unique tables/CTEs discovered across all statements",
-            "format": "uint",
-            "minimum": 0.0,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "columnCount",
-          "complexityScore",
-          "hasErrors",
-          "issueCount",
-          "joinCount",
-          "statementCount",
-          "tableCount"
-        ],
-        "type": "object"
       }
-    },
-    "description": "The result of analyzing SQL for data lineage.\n\nContains per-statement lineage graphs, a global lineage graph spanning all statements, any issues encountered during analysis, and summary statistics.",
-    "properties": {
-      "globalLineage": {
-        "allOf": [
-          {
-            "$ref": "#/definitions/GlobalLineage"
-          }
-        ],
-        "description": "Global lineage graph spanning all statements"
-      },
-      "issues": {
-        "description": "All issues encountered during analysis",
-        "items": {
-          "$ref": "#/definitions/Issue"
-        },
-        "type": "array"
-      },
-      "resolvedSchema": {
-        "anyOf": [
-          {
-            "$ref": "#/definitions/ResolvedSchemaMetadata"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "description": "Effective schema used during analysis (imported + implied)"
-      },
-      "statements": {
-        "description": "Per-statement lineage analysis results",
-        "items": {
-          "$ref": "#/definitions/StatementLineage"
-        },
-        "type": "array"
-      },
-      "summary": {
-        "allOf": [
-          {
-            "$ref": "#/definitions/Summary"
-          }
-        ],
-        "description": "Summary statistics"
-      }
-    },
-    "required": [
-      "globalLineage",
-      "issues",
-      "statements",
-      "summary"
-    ],
-    "title": "AnalyzeResult",
-    "type": "object"
+    }
   }
 }
