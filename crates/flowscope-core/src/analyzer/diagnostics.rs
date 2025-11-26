@@ -1,36 +1,33 @@
 use super::context::StatementContext;
 use super::expression::ExpressionAnalyzer;
 use super::Analyzer;
-use crate::types::{issue_codes, Issue};
 use sqlparser::ast::Expr;
 
 impl<'a> Analyzer<'a> {
+    /// Validates that a column exists in a table's schema.
+    ///
+    /// Adds a warning issue if the column is not found.
+    ///
+    /// # Parameters
+    ///
+    /// - `ctx`: The statement context
+    /// - `canonical`: The canonical table name
+    /// - `column`: The column name to validate
     pub(super) fn validate_column(
         &mut self,
         ctx: &StatementContext,
-        table_canonical: &str,
+        canonical: &str,
         column: &str,
     ) {
-        if let Some(schema_entry) = self.schema_tables.get(table_canonical) {
-            let normalized_col = self.normalize_identifier(column);
-            let column_exists = schema_entry
-                .table
-                .columns
-                .iter()
-                .any(|c| self.normalize_identifier(&c.name) == normalized_col);
-
-            if !column_exists && !schema_entry.table.columns.is_empty() {
-                self.issues.push(
-                    Issue::warning(
-                        issue_codes::UNKNOWN_COLUMN,
-                        format!("Column '{column}' not found in table '{table_canonical}'"),
-                    )
-                    .with_statement(ctx.statement_index),
-                );
-            }
+        if let Some(issue) = self
+            .schema
+            .validate_column(canonical, column, ctx.statement_index)
+        {
+            self.issues.push(issue);
         }
     }
 
+    /// Extracts column references from an expression and validates each one.
     pub(super) fn extract_column_refs_for_validation(
         &mut self,
         ctx: &StatementContext,
@@ -39,9 +36,8 @@ impl<'a> Analyzer<'a> {
         let refs = ExpressionAnalyzer::extract_column_refs(expr);
         for col_ref in refs {
             if let Some(table) = col_ref.table.as_deref() {
-                let resolved = self.resolve_table_alias(ctx, Some(table));
-                if let Some(table_canonical) = resolved {
-                    self.validate_column(ctx, &table_canonical, &col_ref.column);
+                if let Some(canonical) = self.resolve_table_alias(ctx, Some(table)) {
+                    self.validate_column(ctx, &canonical, &col_ref.column);
                 }
             }
         }

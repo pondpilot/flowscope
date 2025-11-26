@@ -148,8 +148,8 @@ impl<'a> Analyzer<'a> {
             aggregation: None,
         });
 
-        self.all_relations.insert(canonical.clone());
-        self.produced_tables.insert(canonical, ctx.statement_index);
+        self.tracker
+            .record_produced(&canonical, ctx.statement_index);
 
         // Analyze source - check the body of the insert
         if let Some(ref source_body) = insert.source {
@@ -372,12 +372,8 @@ impl<'a> Analyzer<'a> {
                 let canonical = self.normalize_table_name(&table_name);
 
                 // Only remove if it's an implied entry (not imported)
-                if !self.imported_tables.contains(&canonical) {
-                    self.schema_tables.remove(&canonical);
-                    self.known_tables.remove(&canonical);
-                    self.produced_tables.remove(&canonical);
-                    self.produced_views.remove(&canonical);
-                }
+                self.schema.remove_implied(&canonical);
+                self.tracker.remove(&canonical);
             }
         }
     }

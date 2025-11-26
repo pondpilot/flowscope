@@ -1,12 +1,11 @@
 use crate::types::*;
-use chrono::{DateTime, Utc};
-use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 #[cfg(feature = "tracing")]
-use tracing::{info, info_span};
+use tracing::info_span;
 
 mod complexity;
 mod context;
+pub(crate) mod cross_statement;
 mod ddl;
 mod diagnostics;
 mod expression;
@@ -15,11 +14,16 @@ mod global;
 pub mod helpers;
 mod input;
 mod query;
-mod resolution;
+pub(crate) mod schema_registry;
 mod statements;
 pub mod visitor;
 
+use cross_statement::CrossStatementTracker;
 use input::{collect_statements, StatementInput};
+use schema_registry::SchemaRegistry;
+
+// Re-export for use in other analyzer modules
+pub(crate) use schema_registry::TableResolution;
 
 /// Main entry point for SQL analysis
 pub fn analyze(request: &AnalyzeRequest) -> AnalyzeResult {
@@ -31,57 +35,23 @@ pub fn analyze(request: &AnalyzeRequest) -> AnalyzeResult {
     analyzer.analyze()
 }
 
-/// Internal analyzer state
-pub(super) struct Analyzer<'a> {
-    pub(super) request: &'a AnalyzeRequest,
-    pub(super) issues: Vec<Issue>,
-    pub(super) statement_lineages: Vec<StatementLineage>,
-    /// Track which tables are produced by which statement (for cross-statement linking)
-    pub(super) produced_tables: HashMap<String, usize>,
-    /// Track canonical names that were produced via CREATE VIEW
-    pub(super) produced_views: HashSet<String>,
-    /// Track which tables are consumed by which statements
-    pub(super) consumed_tables: HashMap<String, Vec<usize>>,
-    /// All discovered tables and views across statements (for global lineage)
-    pub(super) all_relations: HashSet<String>,
-    /// All discovered CTEs
-    pub(super) all_ctes: HashSet<String>,
-    /// Known tables from schema metadata (for validation)
-    pub(super) known_tables: HashSet<String>,
-    /// Tables from imported (user-provided) schema that should not be overwritten
-    pub(super) imported_tables: HashSet<String>,
-    /// Schema lookup: table canonical name -> table schema entry with metadata
-    pub(super) schema_tables: HashMap<String, SchemaTableEntry>,
-    /// Whether column lineage is enabled
-    pub(super) column_lineage_enabled: bool,
-    /// Default catalog for unqualified identifiers
-    pub(super) default_catalog: Option<String>,
-    /// Default schema for unqualified identifiers
-    pub(super) default_schema: Option<String>,
-    /// Ordered search path entries
-    pub(super) search_path: Vec<SearchPathEntry>,
-}
-
-#[derive(Debug, Clone)]
-pub(super) struct SearchPathEntry {
-    catalog: Option<String>,
-    schema: String,
-}
-
-#[derive(Debug, Clone)]
-struct TableResolution {
-    canonical: String,
-    matched_schema: bool,
-}
-
-/// Schema table entry with origin metadata for tracking imported vs implied schema
-#[derive(Debug, Clone)]
-pub(super) struct SchemaTableEntry {
-    pub(super) table: SchemaTable,
-    pub(super) origin: SchemaOrigin,
-    pub(super) source_statement_idx: Option<usize>,
-    pub(super) updated_at: DateTime<Utc>,
-    pub(super) temporary: bool,
+/// Internal analyzer state.
+///
+/// The analyzer is organized into focused components:
+/// - `schema`: Manages schema metadata, resolution, and normalization
+/// - `tracker`: Tracks cross-statement dependencies and lineage
+/// - `issues`: Collects warnings and errors during analysis
+/// - `statement_lineages`: Stores per-statement analysis results
+pub(crate) struct Analyzer<'a> {
+    pub(crate) request: &'a AnalyzeRequest,
+    pub(crate) issues: Vec<Issue>,
+    pub(crate) statement_lineages: Vec<StatementLineage>,
+    /// Schema registry for table/column resolution.
+    pub(crate) schema: SchemaRegistry,
+    /// Cross-statement dependency tracker.
+    pub(crate) tracker: CrossStatementTracker,
+    /// Whether column lineage is enabled.
+    pub(crate) column_lineage_enabled: bool,
 }
 
 impl<'a> Analyzer<'a> {
@@ -93,51 +63,46 @@ impl<'a> Analyzer<'a> {
             .and_then(|o| o.enable_column_lineage)
             .unwrap_or(true);
 
-        let mut analyzer = Self {
+        let (schema, init_issues) = SchemaRegistry::new(request.schema.as_ref(), request.dialect);
+
+        Self {
             request,
-            issues: Vec::new(),
+            issues: init_issues,
             statement_lineages: Vec::new(),
-            produced_tables: HashMap::new(),
-            produced_views: HashSet::new(),
-            consumed_tables: HashMap::new(),
-            all_relations: HashSet::new(),
-            all_ctes: HashSet::new(),
-            known_tables: HashSet::new(),
-            imported_tables: HashSet::new(),
-            schema_tables: HashMap::new(),
+            schema,
+            tracker: CrossStatementTracker::new(),
             column_lineage_enabled,
-            default_catalog: None,
-            default_schema: None,
-            search_path: Vec::new(),
-        };
-
-        analyzer.initialize_schema_metadata();
-
-        analyzer
-    }
-
-    fn relation_identity(&self, canonical: &str) -> (Arc<str>, NodeType) {
-        if self.produced_views.contains(canonical) {
-            (helpers::generate_node_id("view", canonical), NodeType::View)
-        } else {
-            (
-                helpers::generate_node_id("table", canonical),
-                NodeType::Table,
-            )
         }
     }
 
-    fn relation_node_id(&self, canonical: &str) -> Arc<str> {
-        self.relation_identity(canonical).0
+    /// Returns the correct node ID and type for a relation (view vs table).
+    pub(crate) fn relation_identity(&self, canonical: &str) -> (Arc<str>, NodeType) {
+        self.tracker.relation_identity(canonical)
     }
 
-    /// Check if implied schema capture is allowed (default: true)
-    fn allow_implied(&self) -> bool {
-        self.request
-            .schema
-            .as_ref()
-            .map(|s| s.allow_implied)
-            .unwrap_or(true)
+    /// Returns the node ID for a relation.
+    pub(crate) fn relation_node_id(&self, canonical: &str) -> Arc<str> {
+        self.tracker.relation_node_id(canonical)
+    }
+
+    /// Check if implied schema capture is allowed (default: true).
+    pub(crate) fn allow_implied(&self) -> bool {
+        self.schema.allow_implied()
+    }
+
+    /// Canonicalizes a table reference using schema resolution.
+    pub(crate) fn canonicalize_table_reference(&self, name: &str) -> TableResolution {
+        self.schema.canonicalize_table_reference(name)
+    }
+
+    /// Normalizes an identifier according to dialect case sensitivity.
+    pub(crate) fn normalize_identifier(&self, name: &str) -> String {
+        self.schema.normalize_identifier(name)
+    }
+
+    /// Normalizes a qualified table name.
+    pub(crate) fn normalize_table_name(&self, name: &str) -> String {
+        self.schema.normalize_table_name(name)
     }
 
     fn analyze(&mut self) -> AnalyzeResult {

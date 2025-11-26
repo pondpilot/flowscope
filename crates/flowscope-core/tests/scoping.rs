@@ -1,6 +1,6 @@
 use flowscope_core::analyze;
 use flowscope_core::types::{
-    issue_codes, AnalysisOptions, AnalyzeRequest, Dialect, SchemaMetadata,
+    issue_codes, AnalysisOptions, AnalyzeRequest, Dialect, SchemaMetadata, Severity,
 };
 
 #[test]
@@ -146,5 +146,58 @@ fn new_tables_are_known_when_implied_schema_disabled() {
             .as_ref()
             .map_or(true, |m| !m.contains_key("placeholder")),
         "Table node should not be marked as placeholder"
+    );
+}
+
+#[test]
+fn missing_table_warned_when_other_tables_known() {
+    // When we have some knowledge (from DDL), we should warn about unknown tables.
+    let sql = "
+        CREATE TABLE foo AS SELECT 1 as id;
+        SELECT * FROM missing_table;
+    ";
+
+    let request = AnalyzeRequest {
+        sql: sql.to_string(),
+        files: None,
+        dialect: Dialect::Postgres,
+        source_name: Some("test_missing_warned".to_string()),
+        options: Some(AnalysisOptions {
+            enable_column_lineage: Some(true),
+            ..Default::default()
+        }),
+        schema: Some(SchemaMetadata {
+            default_schema: Some("public".to_string()),
+            allow_implied: false,
+            ..Default::default()
+        }),
+    };
+
+    let result = analyze(&request);
+
+    assert_eq!(result.statements.len(), 2, "Expected CREATE + SELECT");
+
+    // Should have an UNRESOLVED_REFERENCE warning for missing_table
+    let unresolved_warnings: Vec<_> = result
+        .issues
+        .iter()
+        .filter(|issue| {
+            issue.code == issue_codes::UNRESOLVED_REFERENCE && issue.severity == Severity::Warning
+        })
+        .collect();
+
+    assert_eq!(
+        unresolved_warnings.len(),
+        1,
+        "Should have exactly one unresolved reference warning: {:?}",
+        result.issues
+    );
+    assert!(
+        unresolved_warnings[0].message.contains("missing_table")
+            || unresolved_warnings[0]
+                .message
+                .contains("public.missing_table"),
+        "Warning should mention missing_table: {:?}",
+        unresolved_warnings[0]
     );
 }

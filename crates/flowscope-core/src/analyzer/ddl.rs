@@ -5,95 +5,32 @@
 //! creating the appropriate nodes and edges in the lineage graph.
 
 use super::context::StatementContext;
-use super::helpers::{
-    extract_simple_name, generate_edge_id, generate_node_id, split_qualified_identifiers,
-};
-use super::{Analyzer, SchemaTableEntry};
-use crate::types::{
-    issue_codes, ColumnSchema, Edge, EdgeType, Issue, Node, NodeType, SchemaOrigin, SchemaTable,
-};
-use chrono::Utc;
+use super::helpers::{extract_simple_name, generate_edge_id, generate_node_id};
+use super::Analyzer;
+use crate::types::{ColumnSchema, Edge, EdgeType, Node, NodeType};
 use sqlparser::ast::{ColumnDef, ObjectName, Query};
 
 impl<'a> Analyzer<'a> {
     /// Helper to register implied schema from CREATE TABLE/VIEW/CTAS statements.
-    /// Handles conflict detection with imported schema and marks tables as known even when
-    /// implied schema capture is disabled.
+    ///
+    /// Delegates to the schema registry and collects any conflict warnings.
     pub(super) fn register_implied_schema(
         &mut self,
         ctx: &StatementContext,
         canonical: &str,
         columns: Vec<ColumnSchema>,
         is_temporary: bool,
-        statement_type: &str, // "TABLE", "VIEW", or "CREATE TABLE AS"
+        statement_type: &str,
     ) {
-        // Always treat a newly created object as known so subsequent statements can resolve it.
-        self.known_tables.insert(canonical.to_string());
-
-        // Check for conflict with imported schema
-        if self.imported_tables.contains(canonical) {
-            if let Some(imported_entry) = self.schema_tables.get(canonical) {
-                let imported_cols: std::collections::HashSet<_> = imported_entry
-                    .table
-                    .columns
-                    .iter()
-                    .map(|c| &c.name)
-                    .collect();
-                let ddl_cols: std::collections::HashSet<_> =
-                    columns.iter().map(|c| &c.name).collect();
-
-                if imported_cols != ddl_cols {
-                    self.issues.push(
-                        Issue::warning(
-                            issue_codes::SCHEMA_CONFLICT,
-                            format!(
-                                "{} for '{}' conflicts with imported schema. Using imported schema (imported has {} columns, {} has {} columns)",
-                                statement_type,
-                                canonical,
-                                imported_cols.len(),
-                                statement_type,
-                                ddl_cols.len()
-                            ),
-                        )
-                        .with_statement(ctx.statement_index),
-                    );
-                }
-            }
-            // Don't overwrite imported schema
-            return;
+        if let Some(issue) = self.schema.register_implied(
+            canonical,
+            columns,
+            is_temporary,
+            statement_type,
+            ctx.statement_index,
+        ) {
+            self.issues.push(issue);
         }
-
-        // If implied capture is disabled or there are no columns, avoid persisting schema.
-        if !self.allow_implied() || columns.is_empty() {
-            return;
-        }
-
-        // Parse canonical name into parts
-        let parts = split_qualified_identifiers(canonical);
-        let (catalog, schema, table_name) = match parts.as_slice() {
-            [catalog, schema, table] => {
-                (Some(catalog.clone()), Some(schema.clone()), table.clone())
-            }
-            [schema, table] => (None, Some(schema.clone()), table.clone()),
-            [table] => (None, None, table.clone()),
-            _ => (None, None, extract_simple_name(canonical)),
-        };
-
-        self.schema_tables.insert(
-            canonical.to_string(),
-            SchemaTableEntry {
-                table: SchemaTable {
-                    catalog,
-                    schema,
-                    name: table_name,
-                    columns,
-                },
-                origin: SchemaOrigin::Implied,
-                source_statement_idx: Some(ctx.statement_index),
-                updated_at: Utc::now(),
-                temporary: is_temporary,
-            },
-        );
     }
 
     pub(super) fn analyze_create_table_as(
@@ -122,9 +59,8 @@ impl<'a> Analyzer<'a> {
             aggregation: None,
         });
 
-        self.all_relations.insert(canonical.clone());
-        self.produced_tables
-            .insert(canonical.clone(), ctx.statement_index);
+        self.tracker
+            .record_produced(&canonical, ctx.statement_index);
 
         // Analyze source query
         self.analyze_query(ctx, query, Some(&target_id));
@@ -222,14 +158,12 @@ impl<'a> Analyzer<'a> {
         });
 
         // Create column nodes immediately from schema (either imported or from CREATE TABLE)
-
-        if self.schema_tables.contains_key(&canonical) {
+        if self.schema.is_known(&canonical) {
             self.add_table_columns_from_schema(ctx, &canonical, &node_id);
         }
 
-        self.all_relations.insert(canonical.clone());
-
-        self.produced_tables.insert(canonical, ctx.statement_index);
+        self.tracker
+            .record_produced(&canonical, ctx.statement_index);
     }
 
     pub(super) fn analyze_create_view(
@@ -258,10 +192,8 @@ impl<'a> Analyzer<'a> {
             aggregation: None,
         });
 
-        self.all_relations.insert(canonical.clone());
-        self.produced_views.insert(canonical.clone());
-        self.produced_tables
-            .insert(canonical.clone(), ctx.statement_index);
+        self.tracker
+            .record_view_produced(&canonical, ctx.statement_index);
 
         // Analyze source query
         self.analyze_query(ctx, query, Some(&target_id));

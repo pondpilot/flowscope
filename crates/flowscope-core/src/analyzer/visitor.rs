@@ -233,8 +233,8 @@ impl<'a, 'b> LineageVisitor<'a, 'b> {
             .unwrap_or_else(|| self.analyzer.relation_node_id(&canonical));
 
         self.analyzer
-            .produced_tables
-            .insert(canonical.clone(), self.ctx.statement_index);
+            .tracker
+            .record_produced(&canonical, self.ctx.statement_index);
         self.analyzer
             .add_table_columns_from_schema(self.ctx, &canonical, &node_id);
 
@@ -361,7 +361,7 @@ impl<'a, 'b> Visitor for LineageVisitor<'a, 'b> {
                 self.ctx
                     .cte_definitions
                     .insert(cte_name.clone(), cte_id.clone());
-                self.analyzer.all_ctes.insert(cte_name.clone());
+                self.analyzer.tracker.record_cte(&cte_name);
                 cte_ids.push((cte_name, cte_id));
             }
 

@@ -9,7 +9,8 @@ use super::helpers::{generate_column_node_id, generate_edge_id};
 use super::visitor::{LineageVisitor, Visitor};
 use super::Analyzer;
 use crate::types::{
-    issue_codes, AggregationInfo, Edge, EdgeType, Issue, JoinType, Node, NodeType, ResolutionSource,
+    issue_codes, AggregationInfo, Edge, EdgeType, Issue, JoinType, Node, NodeType,
+    ResolutionSource, SchemaOrigin,
 };
 use serde_json::json;
 use sqlparser::ast::{self, Query, SetExpr};
@@ -57,124 +58,185 @@ impl<'a> Analyzer<'a> {
 
     // --- Shared Methods used by SelectAnalyzer, ExpressionAnalyzer, and Statements ---
 
+    /// Adds a source table to the lineage graph.
+    ///
+    /// This is the main entry point for table resolution and node creation.
+    /// Returns the canonical table name for alias registration.
     pub(super) fn add_source_table(
         &mut self,
         ctx: &mut StatementContext,
         table_name: &str,
         target_node: Option<&str>,
     ) -> Option<String> {
-        let canonical_for_alias: Option<String>;
-
-        // Check if this is a CTE reference
-        let node_id = if ctx.cte_definitions.contains_key(table_name) {
-            canonical_for_alias = Some(table_name.to_string());
-            let cte_id = ctx.cte_definitions.get(table_name).cloned();
-            if let Some(ref id) = cte_id {
-                // Register CTE in current scope for resolution
-                ctx.register_table_in_scope(table_name.to_string(), id.clone());
-            }
-            cte_id
-        } else {
-            // Regular table or view
-            let resolution = self.canonicalize_table_reference(table_name);
-            let canonical = resolution.canonical.clone();
-            canonical_for_alias = Some(canonical.clone());
-
-            // Use relation_identity to get correct node ID and type (view vs table)
-            let (id, node_type) = self.relation_identity(&canonical);
-
-            let exists_in_schema = resolution.matched_schema;
-            let produced = self.produced_tables.contains_key(&canonical);
-            let is_known = exists_in_schema || produced || self.known_tables.is_empty();
-
-            // Determine resolution source based on schema entry
-            let resolution_source = if let Some(entry) = self.schema_tables.get(&canonical) {
-                match entry.origin {
-                    crate::types::SchemaOrigin::Imported => Some(ResolutionSource::Imported),
-                    crate::types::SchemaOrigin::Implied => Some(ResolutionSource::Implied),
-                }
-            } else if !is_known {
-                Some(ResolutionSource::Unknown)
-            } else {
-                None
-            };
-
-            // Check if already added
-            if !ctx.node_ids.contains(&id) {
-                let mut metadata = None;
-                if !is_known {
-                    let mut meta = HashMap::new();
-                    meta.insert("placeholder".to_string(), json!(true));
-                    metadata = Some(meta);
-                    self.issues.push(
-                        Issue::warning(
-                            issue_codes::UNRESOLVED_REFERENCE,
-                            format!("Table '{canonical}' could not be resolved using provided schema metadata or search path"),
-                        )
-                        .with_statement(ctx.statement_index),
-                    );
-                }
-
-                // Get join type directly from context (already converted from AST)
-                let join_type = ctx.current_join_info.join_type;
-                let join_condition = ctx
-                    .current_join_info
-                    .join_condition
-                    .as_deref()
-                    .map(Into::into);
-
-                ctx.add_node(Node {
-                    id: id.clone(),
-                    node_type,
-                    label: crate::analyzer::helpers::extract_simple_name(&canonical).into(),
-                    qualified_name: Some(canonical.clone().into()),
-                    expression: None,
-                    span: None,
-                    metadata,
-                    resolution_source,
-                    filters: Vec::new(),
-                    join_type,
-                    join_condition,
-                    aggregation: None,
-                });
-            }
-
-            self.all_relations.insert(canonical.clone());
-            self.consumed_tables
-                .entry(canonical.clone())
-                .or_default()
-                .push(ctx.statement_index);
-
-            // Track table node ID for column ownership and register in current scope
-            ctx.register_table_in_scope(canonical, id.clone());
-
-            Some(id)
-        };
+        // Resolve the table reference (CTE or regular table)
+        let (canonical, node_id) = self.resolve_table_reference(ctx, table_name)?;
 
         // Create edge to target if specified
-        if let (Some(target), Some(source_id)) = (target_node, node_id.clone()) {
-            let edge_id = generate_edge_id(&source_id, target);
-            if !ctx.edge_ids.contains(&edge_id) {
-                ctx.add_edge(Edge {
-                    id: edge_id,
-                    from: source_id,
-                    to: target.to_string().into(),
-                    edge_type: EdgeType::DataFlow,
-                    expression: None,
-                    operation: ctx.last_operation.as_deref().map(Into::into),
-                    join_type: ctx.current_join_info.join_type,
-                    join_condition: ctx
-                        .current_join_info
-                        .join_condition
-                        .as_deref()
-                        .map(Into::into),
-                    metadata: None,
-                    approximate: None,
-                });
-            }
+        self.create_source_edge(ctx, &node_id, target_node);
+
+        Some(canonical)
+    }
+
+    /// Resolves a table reference, handling CTEs and regular tables.
+    ///
+    /// Returns the canonical name and node ID for the resolved table.
+    fn resolve_table_reference(
+        &mut self,
+        ctx: &mut StatementContext,
+        table_name: &str,
+    ) -> Option<(String, std::sync::Arc<str>)> {
+        // Check if this is a CTE reference
+        if ctx.cte_definitions.contains_key(table_name) {
+            return self.resolve_cte_reference(ctx, table_name);
         }
 
-        canonical_for_alias
+        // Regular table or view
+        self.resolve_regular_table(ctx, table_name)
+    }
+
+    /// Resolves a CTE reference and registers it in scope.
+    fn resolve_cte_reference(
+        &mut self,
+        ctx: &mut StatementContext,
+        cte_name: &str,
+    ) -> Option<(String, std::sync::Arc<str>)> {
+        let cte_id = ctx.cte_definitions.get(cte_name)?.clone();
+        ctx.register_table_in_scope(cte_name.to_string(), cte_id.clone());
+        Some((cte_name.to_string(), cte_id))
+    }
+
+    /// Resolves a regular table or view reference.
+    fn resolve_regular_table(
+        &mut self,
+        ctx: &mut StatementContext,
+        table_name: &str,
+    ) -> Option<(String, std::sync::Arc<str>)> {
+        let resolution = self.canonicalize_table_reference(table_name);
+        let canonical = resolution.canonical.clone();
+
+        let (id, node_type) = self.relation_identity(&canonical);
+        let is_known = self.is_table_known(&canonical, resolution.matched_schema);
+        let resolution_source = self.determine_resolution_source(&canonical, is_known);
+
+        // Create node if not already present
+        if !ctx.node_ids.contains(&id) {
+            self.create_table_node(ctx, &canonical, &id, node_type, is_known, resolution_source);
+        }
+
+        self.tracker
+            .record_consumed(&canonical, ctx.statement_index);
+        ctx.register_table_in_scope(canonical.clone(), id.clone());
+
+        Some((canonical, id))
+    }
+
+    /// Determines if a table is considered "known" to avoid false unresolved warnings.
+    ///
+    /// A table is known if any of:
+    /// - `matched_schema`: Found in imported or implied schema
+    /// - `produced`: Created by an earlier statement in the workload (CREATE TABLE, etc.)
+    /// - No tables known at all: When we have zero knowledge, be permissive to avoid false warnings
+    fn is_table_known(&self, canonical: &str, matched_schema: bool) -> bool {
+        let produced = self.tracker.was_produced(canonical);
+        let no_tables_known = self.schema.has_no_known_tables();
+        matched_schema || produced || no_tables_known
+    }
+
+    /// Determines the resolution source for a table.
+    fn determine_resolution_source(
+        &self,
+        canonical: &str,
+        is_known: bool,
+    ) -> Option<ResolutionSource> {
+        if let Some(entry) = self.schema.get(canonical) {
+            match entry.origin {
+                SchemaOrigin::Imported => Some(ResolutionSource::Imported),
+                SchemaOrigin::Implied => Some(ResolutionSource::Implied),
+            }
+        } else if !is_known {
+            Some(ResolutionSource::Unknown)
+        } else {
+            None
+        }
+    }
+
+    /// Creates a table node and adds it to the context.
+    fn create_table_node(
+        &mut self,
+        ctx: &mut StatementContext,
+        canonical: &str,
+        id: &std::sync::Arc<str>,
+        node_type: NodeType,
+        is_known: bool,
+        resolution_source: Option<ResolutionSource>,
+    ) {
+        let metadata = if is_known {
+            None
+        } else {
+            self.issues.push(
+                Issue::warning(
+                    issue_codes::UNRESOLVED_REFERENCE,
+                    format!(
+                        "Table '{canonical}' could not be resolved using provided schema metadata or search path"
+                    ),
+                )
+                .with_statement(ctx.statement_index),
+            );
+            let mut meta = HashMap::new();
+            meta.insert("placeholder".to_string(), json!(true));
+            Some(meta)
+        };
+
+        ctx.add_node(Node {
+            id: id.clone(),
+            node_type,
+            label: crate::analyzer::helpers::extract_simple_name(canonical).into(),
+            qualified_name: Some(canonical.to_string().into()),
+            expression: None,
+            span: None,
+            metadata,
+            resolution_source,
+            filters: Vec::new(),
+            join_type: ctx.current_join_info.join_type,
+            join_condition: ctx
+                .current_join_info
+                .join_condition
+                .as_deref()
+                .map(Into::into),
+            aggregation: None,
+        });
+    }
+
+    /// Creates a data flow edge from source to target.
+    fn create_source_edge(
+        &mut self,
+        ctx: &mut StatementContext,
+        source_id: &std::sync::Arc<str>,
+        target_node: Option<&str>,
+    ) {
+        let Some(target) = target_node else { return };
+
+        let edge_id = generate_edge_id(source_id, target);
+        if ctx.edge_ids.contains(&edge_id) {
+            return;
+        }
+
+        ctx.add_edge(Edge {
+            id: edge_id,
+            from: source_id.clone(),
+            to: target.to_string().into(),
+            edge_type: EdgeType::DataFlow,
+            expression: None,
+            operation: ctx.last_operation.as_deref().map(Into::into),
+            join_type: ctx.current_join_info.join_type,
+            join_condition: ctx
+                .current_join_info
+                .join_condition
+                .as_deref()
+                .map(Into::into),
+            metadata: None,
+            approximate: None,
+        });
     }
 
     pub(super) fn add_table_columns_from_schema(
@@ -183,7 +245,7 @@ impl<'a> Analyzer<'a> {
         table_canonical: &str,
         table_node_id: &str,
     ) {
-        if let Some(schema_entry) = self.schema_tables.get(table_canonical) {
+        if let Some(schema_entry) = self.schema.get(table_canonical) {
             // We must clone columns to avoid borrowing self while iterating
             let columns = schema_entry.table.columns.clone();
             for col in columns {
@@ -243,10 +305,8 @@ impl<'a> Analyzer<'a> {
 
         for table_canonical in tables_to_expand {
             // First collect column info to avoid borrow conflict
-            let columns_to_add: Option<Vec<ExpandedColumnInfo>> = self
-                .schema_tables
-                .get(&table_canonical)
-                .map(|schema_entry| {
+            let columns_to_add: Option<Vec<ExpandedColumnInfo>> =
+                self.schema.get(&table_canonical).map(|schema_entry| {
                     schema_entry
                         .table
                         .columns
@@ -387,7 +447,7 @@ impl<'a> Analyzer<'a> {
             }
 
             // Check schema metadata
-            if let Some(schema_entry) = self.schema_tables.get(table_canonical) {
+            if let Some(schema_entry) = self.schema.get(table_canonical) {
                 if schema_entry
                     .table
                     .columns

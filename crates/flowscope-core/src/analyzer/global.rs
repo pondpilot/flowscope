@@ -1,7 +1,7 @@
 use super::helpers::parse_canonical_name;
 use super::Analyzer;
 use crate::types::{
-    EdgeType, GlobalEdge, GlobalLineage, GlobalNode, IssueCount, NodeType, ResolvedColumnSchema,
+    GlobalEdge, GlobalLineage, GlobalNode, IssueCount, NodeType, ResolvedColumnSchema,
     ResolvedSchemaMetadata, ResolvedSchemaTable, StatementRef, Summary,
 };
 use std::collections::HashMap;
@@ -23,13 +23,13 @@ impl<'a> Analyzer<'a> {
     }
 
     fn build_resolved_schema(&self) -> Option<ResolvedSchemaMetadata> {
-        if self.schema_tables.is_empty() {
+        if self.schema.is_empty() {
             return None;
         }
 
         let mut tables: Vec<ResolvedSchemaTable> = self
-            .schema_tables
-            .values()
+            .schema
+            .all_entries()
             .map(|entry| {
                 let columns: Vec<ResolvedColumnSchema> = entry
                     .table
@@ -110,32 +110,8 @@ impl<'a> Analyzer<'a> {
             }
         }
 
-        // Detect cross-statement edges
-        for (table_name, consumers) in &self.consumed_tables {
-            if let Some(&producer_idx) = self.produced_tables.get(table_name) {
-                for &consumer_idx in consumers {
-                    if consumer_idx > producer_idx {
-                        // This is a cross-statement dependency
-                        let edge_id = format!("cross_{producer_idx}_{consumer_idx}");
-                        global_edges.push(GlobalEdge {
-                            id: edge_id.into(),
-                            from: self.relation_node_id(table_name),
-                            to: self.relation_node_id(table_name),
-                            edge_type: EdgeType::CrossStatement,
-                            producer_statement: Some(StatementRef {
-                                statement_index: producer_idx,
-                                node_id: None,
-                            }),
-                            consumer_statement: Some(StatementRef {
-                                statement_index: consumer_idx,
-                                node_id: None,
-                            }),
-                            metadata: None,
-                        });
-                    }
-                }
-            }
-        }
+        // Detect cross-statement edges using the tracker
+        global_edges.extend(self.tracker.build_cross_statement_edges());
 
         GlobalLineage {
             nodes: global_nodes.into_values().collect(),

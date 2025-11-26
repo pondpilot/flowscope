@@ -135,15 +135,21 @@ impl StatementContext {
         self.grouping_columns.contains(expr)
     }
 
-    /// Add a filter predicate for a specific table
+    /// Add a filter predicate for a specific table.
+    ///
+    /// # Parameters
+    ///
+    /// - `canonical`: The canonical table name
+    /// - `expression`: The filter expression text
+    /// - `clause_type`: The type of SQL clause (WHERE, HAVING, etc.)
     pub(crate) fn add_filter_for_table(
         &mut self,
-        table_canonical: &str,
+        canonical: &str,
         expression: String,
         clause_type: FilterClauseType,
     ) {
         self.pending_filters
-            .entry(table_canonical.to_string())
+            .entry(canonical.to_string())
             .or_default()
             .push(FilterPredicate {
                 expression,
