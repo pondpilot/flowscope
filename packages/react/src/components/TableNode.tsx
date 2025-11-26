@@ -82,6 +82,7 @@ export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
 
   const nodeData = data;
   const isCte = nodeData.nodeType === 'cte';
+  const isView = nodeData.nodeType === 'view';
   const isVirtualOutput = nodeData.nodeType === 'virtualOutput';
   const isRecursive = !!nodeData.isRecursive;
   const isSelected = selected || nodeData.isSelected;
@@ -90,11 +91,21 @@ export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
   const isExpanded = expandedTableIds.has(id);
   const hiddenColumnCount = nodeData.hiddenColumnCount || 0;
 
-  let palette: typeof colors.table | typeof colors.cte | typeof colors.virtualOutput = colors.table;
+  type NodePalette = {
+    bg: string;
+    headerBg: string;
+    border: string;
+    text: string;
+    textSecondary: string;
+    accent: string;
+  };
+  let palette: NodePalette = colors.nodes.table;
   if (isCte) {
-    palette = colors.cte;
+    palette = colors.nodes.cte;
+  } else if (isView) {
+    palette = colors.nodes.view;
   } else if (isVirtualOutput) {
-    palette = colors.virtualOutput;
+    palette = colors.nodes.virtualOutput;
   }
 
   return (

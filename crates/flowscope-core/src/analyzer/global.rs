@@ -1,4 +1,4 @@
-use super::helpers::{generate_node_id, parse_canonical_name};
+use super::helpers::parse_canonical_name;
 use super::Analyzer;
 use crate::types::{
     EdgeType, GlobalEdge, GlobalLineage, GlobalNode, IssueCount, NodeType, ResolvedColumnSchema,
@@ -119,8 +119,8 @@ impl<'a> Analyzer<'a> {
                         let edge_id = format!("cross_{producer_idx}_{consumer_idx}");
                         global_edges.push(GlobalEdge {
                             id: edge_id.into(),
-                            from: generate_node_id("table", table_name),
-                            to: generate_node_id("table", table_name),
+                            from: self.relation_node_id(table_name),
+                            to: self.relation_node_id(table_name),
                             edge_type: EdgeType::CrossStatement,
                             producer_statement: Some(StatementRef {
                                 statement_index: producer_idx,
@@ -163,7 +163,7 @@ impl<'a> Analyzer<'a> {
         let table_count = global_lineage
             .nodes
             .iter()
-            .filter(|n| n.node_type == NodeType::Table)
+            .filter(|n| n.node_type.is_table_or_view())
             .count();
 
         let cte_count = global_lineage

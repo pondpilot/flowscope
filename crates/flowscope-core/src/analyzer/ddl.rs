@@ -122,7 +122,7 @@ impl<'a> Analyzer<'a> {
             aggregation: None,
         });
 
-        self.all_tables.insert(canonical.clone());
+        self.all_relations.insert(canonical.clone());
         self.produced_tables
             .insert(canonical.clone(), ctx.statement_index);
 
@@ -227,7 +227,7 @@ impl<'a> Analyzer<'a> {
             self.add_table_columns_from_schema(ctx, &canonical, &node_id);
         }
 
-        self.all_tables.insert(canonical.clone());
+        self.all_relations.insert(canonical.clone());
 
         self.produced_tables.insert(canonical, ctx.statement_index);
     }
@@ -242,10 +242,10 @@ impl<'a> Analyzer<'a> {
         let target_name = name.to_string();
         let canonical = self.normalize_table_name(&target_name);
 
-        // Create target view/table node
+        // Create target view node
         let target_id = ctx.add_node(Node {
-            id: generate_node_id("table", &canonical),
-            node_type: NodeType::Table, // Represent views as tables for now
+            id: generate_node_id("view", &canonical),
+            node_type: NodeType::View,
             label: extract_simple_name(&target_name).into(),
             qualified_name: Some(canonical.clone().into()),
             expression: None,
@@ -258,7 +258,8 @@ impl<'a> Analyzer<'a> {
             aggregation: None,
         });
 
-        self.all_tables.insert(canonical.clone());
+        self.all_relations.insert(canonical.clone());
+        self.produced_views.insert(canonical.clone());
         self.produced_tables
             .insert(canonical.clone(), ctx.statement_index);
 

@@ -60,7 +60,7 @@ export interface Node {
   aggregation?: AggregationInfo;
 }
 
-export type NodeType = 'table' | 'cte' | 'column';
+export type NodeType = 'table' | 'view' | 'cte' | 'column';
 
 export interface FilterPredicate {
   expression: string;

@@ -3,6 +3,7 @@ import { ArrowRight, Columns3 } from 'lucide-react';
 import { useLineage } from '../store';
 import type { ColumnPanelProps } from '../types';
 import type { Node, Edge } from '@pondpilot/flowscope-core';
+import { isTableLikeType } from '@pondpilot/flowscope-core';
 import { COLORS } from '../constants';
 
 interface ColumnInfo {
@@ -69,7 +70,7 @@ export function ColumnPanel({ className }: ColumnPanelProps): JSX.Element {
 
   const tableColumns = useMemo(() => {
     if (!statement || !selectedNode) return [];
-    if (selectedNode.type === 'table' || selectedNode.type === 'cte') {
+    if (isTableLikeType(selectedNode.type)) {
       return findTableColumns(statement.nodes, statement.edges, selectedNode.id);
     }
     return [];
@@ -118,7 +119,7 @@ export function ColumnPanel({ className }: ColumnPanelProps): JSX.Element {
     );
   }
 
-  if (selectedNode.type === 'table' || selectedNode.type === 'cte') {
+  if (isTableLikeType(selectedNode.type)) {
     return (
       <div className={`flowscope-column-panel ${className || ''}`}>
         <div className="flowscope-panel-header">

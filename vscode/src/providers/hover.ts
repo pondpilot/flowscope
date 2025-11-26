@@ -65,7 +65,7 @@ export class FlowScopeHoverProvider implements vscode.HoverProvider {
         continue;
       }
 
-      // Find matching table/CTE node
+      // Find matching table/view/CTE node
       const matchingNode = stmt.nodes.find((node) => {
         if (node.type === 'column') {
           return false;

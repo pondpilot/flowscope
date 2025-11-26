@@ -1974,11 +1974,21 @@ fn ddl_create_view_tracks_dependencies() {
 
     let result = run_analysis(sql, Dialect::Generic, None);
 
-    // CREATE VIEW support may be limited - this test documents current behavior
-    // TODO: Full CREATE VIEW lineage tracking
     assert!(
         result.summary.statement_count >= 1,
         "CREATE VIEW should parse"
+    );
+
+    // Verify the view node has the correct NodeType::View
+    let view_node = result.statements[0]
+        .nodes
+        .iter()
+        .find(|n| &*n.label == "active_user_orders");
+    assert!(view_node.is_some(), "Should find view node");
+    assert_eq!(
+        view_node.unwrap().node_type,
+        NodeType::View,
+        "CREATE VIEW should create a View node type, not Table"
     );
 }
 
@@ -2080,6 +2090,225 @@ fn ddl_multi_statement_temp_table_pipeline() {
     assert!(
         cross_edges.len() >= 3,
         "temp table pipeline should have cross-statement edges"
+    );
+}
+
+// ============================================================================
+// MIXED TABLE AND VIEW SCENARIOS
+// ============================================================================
+
+#[test]
+fn view_and_table_in_same_statement() {
+    let sql = r#"
+        CREATE VIEW active_users AS SELECT id, name FROM users WHERE active = true;
+        CREATE TABLE orders (order_id INT, user_id INT, amount DECIMAL);
+        SELECT v.name, o.amount
+        FROM active_users v
+        JOIN orders o ON v.id = o.user_id;
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+
+    assert_eq!(
+        result.summary.statement_count, 3,
+        "Should have 3 statements"
+    );
+
+    // Verify view has correct type
+    let view_node = result.statements[0]
+        .nodes
+        .iter()
+        .find(|n| &*n.label == "active_users");
+    assert!(view_node.is_some(), "Should find view node");
+    assert_eq!(
+        view_node.unwrap().node_type,
+        NodeType::View,
+        "active_users should be a View"
+    );
+
+    // Verify table has correct type
+    let table_node = result.statements[1]
+        .nodes
+        .iter()
+        .find(|n| &*n.label == "orders");
+    assert!(table_node.is_some(), "Should find orders table node");
+    assert_eq!(
+        table_node.unwrap().node_type,
+        NodeType::Table,
+        "orders should be a Table"
+    );
+}
+
+#[test]
+fn cross_statement_view_lineage() {
+    let sql = r#"
+        CREATE VIEW user_orders AS
+        SELECT u.id, u.name, o.order_id
+        FROM users u
+        JOIN orders o ON u.id = o.user_id;
+
+        SELECT name, COUNT(*) as order_count
+        FROM user_orders
+        GROUP BY name;
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+
+    assert_eq!(
+        result.summary.statement_count, 2,
+        "Should have 2 statements"
+    );
+
+    // Check that cross-statement edges exist
+    let cross_edges: Vec<_> = result
+        .global_lineage
+        .edges
+        .iter()
+        .filter(|edge| edge.edge_type == EdgeType::CrossStatement)
+        .collect();
+
+    assert!(
+        !cross_edges.is_empty(),
+        "Should have cross-statement edges linking view creation to its usage"
+    );
+
+    // Verify the view is correctly typed in global lineage
+    let global_view = result
+        .global_lineage
+        .nodes
+        .iter()
+        .find(|n| &*n.label == "user_orders");
+    assert!(global_view.is_some(), "Should find view in global lineage");
+    assert_eq!(
+        global_view.unwrap().node_type,
+        NodeType::View,
+        "View should retain View type in global lineage"
+    );
+}
+
+#[test]
+fn mixed_table_view_cte_in_pipeline() {
+    let sql = r#"
+        CREATE TABLE raw_events (event_id INT, user_id INT, event_type VARCHAR(50));
+
+        CREATE VIEW filtered_events AS
+        SELECT event_id, user_id, event_type
+        FROM raw_events
+        WHERE event_type IN ('click', 'purchase');
+
+        WITH event_counts AS (
+            SELECT user_id, COUNT(*) as cnt
+            FROM filtered_events
+            GROUP BY user_id
+        )
+        SELECT u.name, ec.cnt
+        FROM users u
+        JOIN event_counts ec ON u.id = ec.user_id;
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+
+    assert_eq!(
+        result.summary.statement_count, 3,
+        "Should have 3 statements"
+    );
+
+    // Collect all node types
+    let mut table_count = 0;
+    let mut view_count = 0;
+    let mut cte_count = 0;
+
+    for node in &result.global_lineage.nodes {
+        match node.node_type {
+            NodeType::Table => table_count += 1,
+            NodeType::View => view_count += 1,
+            NodeType::Cte => cte_count += 1,
+            NodeType::Column => {}
+        }
+    }
+
+    assert!(
+        table_count >= 2,
+        "Should have at least 2 tables (raw_events, users)"
+    );
+    assert!(
+        view_count >= 1,
+        "Should have at least 1 view (filtered_events)"
+    );
+    assert!(cte_count >= 1, "Should have at least 1 CTE (event_counts)");
+}
+
+#[test]
+fn node_type_helper_methods() {
+    // Test is_table_like() - should include Table, View, and Cte
+    assert!(
+        NodeType::Table.is_table_like(),
+        "Table should be table-like"
+    );
+    assert!(NodeType::View.is_table_like(), "View should be table-like");
+    assert!(NodeType::Cte.is_table_like(), "Cte should be table-like");
+    assert!(
+        !NodeType::Column.is_table_like(),
+        "Column should not be table-like"
+    );
+
+    // Test is_table_or_view() - should include Table and View but NOT Cte
+    assert!(
+        NodeType::Table.is_table_or_view(),
+        "Table should be table-or-view"
+    );
+    assert!(
+        NodeType::View.is_table_or_view(),
+        "View should be table-or-view"
+    );
+    assert!(
+        !NodeType::Cte.is_table_or_view(),
+        "Cte should NOT be table-or-view"
+    );
+    assert!(
+        !NodeType::Column.is_table_or_view(),
+        "Column should not be table-or-view"
+    );
+}
+
+#[test]
+fn view_referenced_multiple_times() {
+    let sql = r#"
+        CREATE VIEW product_summary AS
+        SELECT product_id, SUM(quantity) as total_qty
+        FROM order_items
+        GROUP BY product_id;
+
+        SELECT * FROM product_summary WHERE total_qty > 100;
+        SELECT * FROM product_summary WHERE total_qty < 10;
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+
+    assert_eq!(
+        result.summary.statement_count, 3,
+        "Should have 3 statements"
+    );
+
+    // The view should appear in global lineage only once
+    let view_nodes: Vec<_> = result
+        .global_lineage
+        .nodes
+        .iter()
+        .filter(|n| &*n.label == "product_summary")
+        .collect();
+
+    assert_eq!(
+        view_nodes.len(),
+        1,
+        "View should appear exactly once in global lineage"
+    );
+
+    // But it should have multiple statement refs
+    let view_node = view_nodes[0];
+    assert!(
+        view_node.statement_refs.len() >= 2,
+        "View should be referenced by multiple statements"
     );
 }
 

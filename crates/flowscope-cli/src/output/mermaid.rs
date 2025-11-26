@@ -70,13 +70,13 @@ fn extract_script_info(result: &AnalyzeResult) -> Vec<ScriptInfo> {
             });
 
         for node in &stmt.nodes {
-            if node.node_type == NodeType::Table {
-                // A table is written to if it has incoming data_flow edges
+            if matches!(node.node_type, NodeType::Table | NodeType::View) {
+                // A table/view is written to if it has incoming data_flow edges
                 let is_written = stmt
                     .edges
                     .iter()
                     .any(|e| e.to == node.id && e.edge_type == EdgeType::DataFlow);
-                // A table is read from if it has outgoing data_flow edges
+                // A table/view is read from if it has outgoing data_flow edges
                 let is_read = stmt
                     .edges
                     .iter()
@@ -118,7 +118,7 @@ fn extract_column_mappings(result: &AnalyzeResult) -> Vec<ColumnMapping> {
         let table_nodes: Vec<_> = stmt
             .nodes
             .iter()
-            .filter(|n| n.node_type == NodeType::Table || n.node_type == NodeType::Cte)
+            .filter(|n| n.node_type.is_table_like())
             .collect();
         let column_nodes: Vec<_> = stmt
             .nodes
@@ -230,7 +230,7 @@ fn generate_table_view(result: &AnalyzeResult) -> String {
         let table_nodes: Vec<_> = stmt
             .nodes
             .iter()
-            .filter(|n| n.node_type == NodeType::Table || n.node_type == NodeType::Cte)
+            .filter(|n| n.node_type.is_table_like())
             .collect();
 
         // Add table nodes
@@ -242,10 +242,10 @@ fn generate_table_view(result: &AnalyzeResult) -> String {
             if let std::collections::hash_map::Entry::Vacant(e) = table_ids.entry(key.clone()) {
                 let id = sanitize_id(&key);
                 e.insert(id.clone());
-                let shape = if node.node_type == NodeType::Cte {
-                    format!("([\"{}\"])", escape_label(&node.label))
-                } else {
-                    format!("[\"{}\"]", escape_label(&node.label))
+                let shape = match node.node_type {
+                    NodeType::Cte => format!("([\"{}\"])", escape_label(&node.label)),
+                    NodeType::View => format!("[/\"{}\"/]", escape_label(&node.label)),
+                    _ => format!("[\"{}\"]", escape_label(&node.label)),
                 };
                 lines.push(format!("    {id}{shape}"));
             }

@@ -196,7 +196,7 @@ impl<'a> Analyzer<'a> {
             let resolution = self.canonicalize_table_reference(table_name);
             let canonical = resolution.canonical.clone();
             canonical_for_alias = Some(canonical.clone());
-            let id = generate_node_id("table", &canonical);
+            let (id, node_type) = self.relation_identity(&canonical);
 
             let exists_in_schema = resolution.matched_schema;
             let produced = self.produced_tables.contains_key(&canonical);
@@ -240,7 +240,7 @@ impl<'a> Analyzer<'a> {
 
                 ctx.add_node(Node {
                     id: id.clone(),
-                    node_type: NodeType::Table,
+                    node_type,
                     label: crate::analyzer::helpers::extract_simple_name(&canonical).into(),
                     qualified_name: Some(canonical.clone().into()),
                     expression: None,
@@ -254,7 +254,7 @@ impl<'a> Analyzer<'a> {
                 });
             }
 
-            self.all_tables.insert(canonical.clone());
+            self.all_relations.insert(canonical.clone());
             self.consumed_tables
                 .entry(canonical.clone())
                 .or_default()
@@ -649,7 +649,7 @@ impl<'a> Analyzer<'a> {
                     .get(table_canonical)
                     .cloned()
                     .or_else(|| ctx.cte_definitions.get(table_canonical).cloned())
-                    .unwrap_or_else(|| generate_node_id("table", table_canonical));
+                    .unwrap_or_else(|| self.relation_node_id(table_canonical));
 
                 // Fallback to generating a new ID
                 let source_col_id = source_col_id.unwrap_or_else(|| {

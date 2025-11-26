@@ -79,7 +79,9 @@ fn write_lineage(out: &mut String, result: &AnalyzeResult, colored: bool) {
         let to_node = result.global_lineage.nodes.iter().find(|n| n.id == edge.to);
 
         if let (Some(from), Some(to)) = (from_node, to_node) {
-            if from.node_type == NodeType::Table && to.node_type == NodeType::Table {
+            if matches!(from.node_type, NodeType::Table | NodeType::View)
+                && matches!(to.node_type, NodeType::Table | NodeType::View)
+            {
                 source_tables
                     .entry(to.label.to_string())
                     .or_default()
@@ -89,12 +91,12 @@ fn write_lineage(out: &mut String, result: &AnalyzeResult, colored: bool) {
     }
 
     if source_tables.is_empty() {
-        // Just list tables if no relationships found
+        // Just list tables/views if no relationships found
         let tables: Vec<_> = result
             .global_lineage
             .nodes
             .iter()
-            .filter(|n| n.node_type == NodeType::Table)
+            .filter(|n| matches!(n.node_type, NodeType::Table | NodeType::View))
             .map(|n| n.label.to_string())
             .collect();
 

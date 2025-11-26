@@ -444,10 +444,26 @@ pub struct AggregationInfo {
 pub enum NodeType {
     /// A database table
     Table,
+    /// A database view (CREATE VIEW)
+    View,
     /// A Common Table Expression (WITH clause)
     Cte,
     /// A column
     Column,
+}
+
+impl NodeType {
+    /// Returns true if this is a table-like node (table, view, or CTE).
+    /// These nodes can contain columns and appear in FROM clauses.
+    pub fn is_table_like(self) -> bool {
+        matches!(self, NodeType::Table | NodeType::View | NodeType::Cte)
+    }
+
+    /// Returns true if this is a table or view (excludes CTEs).
+    /// Use this when you need to distinguish persistent relations from CTEs.
+    pub fn is_table_or_view(self) -> bool {
+        matches!(self, NodeType::Table | NodeType::View)
+    }
 }
 
 /// The type of SQL JOIN operation.

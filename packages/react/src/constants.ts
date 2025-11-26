@@ -105,6 +105,14 @@ export const COLORS = {
       textSecondary: '#C2410C',
       accent: '#F97316', // Orange
     },
+    view: {
+      bg: '#EFF6FF',
+      headerBg: '#DBEAFE',
+      border: '#93C5FD',
+      text: '#1E40AF',
+      textSecondary: '#3B82F6',
+      accent: '#3B82F6', // Blue
+    },
   },
 
   // Edge type colors
@@ -144,29 +152,6 @@ export const COLORS = {
   // WCAG AA compliant colors for badges (minimum 4.5:1 contrast ratio on light backgrounds)
   aggregation: '#B45309', // Amber-700 - aggregation/GROUP BY (5.0:1 contrast)
   groupingKey: '#1D4ED8', // Blue-700 - GROUP BY key columns (7.2:1 contrast)
-
-  // Legacy aliases for backwards compatibility
-  table: {
-    bg: '#FFFFFF',
-    headerBg: '#F2F4F8',
-    border: '#DBDDE1',
-    text: '#212328',
-    textSecondary: '#6F7785',
-  },
-  cte: {
-    bg: '#F5F3FF',
-    headerBg: '#EDE9FE',
-    border: '#C4B5FD',
-    text: '#5B21B6',
-    textSecondary: '#7C3AED',
-  },
-  virtualOutput: {
-    bg: '#F0FDF4',
-    headerBg: '#DCFCE7',
-    border: '#6EE7B7',
-    text: '#047857',
-    textSecondary: '#065F46',
-  },
 } as const;
 
 /**
@@ -205,6 +190,14 @@ export const COLORS_DARK = {
       text: '#FFEDD5',
       textSecondary: '#FED7AA',
       accent: '#F7B987', // PondPilot warning.dark
+    },
+    view: {
+      bg: '#172554', // Blue-950
+      headerBg: '#1E3A8A', // Blue-900
+      border: '#3B82F6', // Blue-500
+      text: '#DBEAFE', // Blue-100
+      textSecondary: '#93C5FD', // Blue-300
+      accent: '#60A5FA', // Blue-400
     },
   },
   edges: {
@@ -273,6 +266,8 @@ export function getMinimapNodeColor(nodeType: string): string {
     case 'virtualOutput':
     case 'output':
       return COLORS.nodes.virtualOutput.accent;
+    case 'view':
+      return COLORS.nodes.view.accent;
     case 'table':
     default:
       return COLORS.nodes.table.accent;

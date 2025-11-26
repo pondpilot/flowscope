@@ -19,6 +19,7 @@ export type {
   StatementLineage,
   Node,
   NodeType,
+  TableLikeNodeType,
   Edge,
   EdgeType,
   JoinType,
@@ -42,5 +43,5 @@ export type {
   ResolutionSource,
 } from './types';
 
-// Constants
-export { IssueCodes } from './types';
+// Constants and utilities
+export { IssueCodes, isTableLikeType } from './types';

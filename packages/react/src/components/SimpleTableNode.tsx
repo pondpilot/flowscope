@@ -16,11 +16,21 @@ function SimpleTableNodeComponent({ data, selected }: NodeProps): JSX.Element {
   const active = selected || isSelected;
   
   // Determine colors based on node type
-  let palette: typeof COLORS.table | typeof COLORS.cte | typeof COLORS.virtualOutput = COLORS.table;
+  type NodePalette = {
+    bg: string;
+    headerBg: string;
+    border: string;
+    text: string;
+    textSecondary: string;
+    accent: string;
+  };
+  let palette: NodePalette = COLORS.nodes.table;
   if (nodeType === 'cte') {
-    palette = COLORS.cte;
+    palette = COLORS.nodes.cte;
+  } else if (nodeType === 'view') {
+    palette = COLORS.nodes.view;
   } else if (nodeType === 'virtualOutput') {
-    palette = COLORS.virtualOutput;
+    palette = COLORS.nodes.virtualOutput;
   }
 
   return (

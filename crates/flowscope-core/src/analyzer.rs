@@ -1,6 +1,7 @@
 use crate::types::*;
 use chrono::{DateTime, Utc};
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 #[cfg(feature = "tracing")]
 use tracing::{info, info_span};
 
@@ -38,10 +39,12 @@ pub(super) struct Analyzer<'a> {
     pub(super) statement_lineages: Vec<StatementLineage>,
     /// Track which tables are produced by which statement (for cross-statement linking)
     pub(super) produced_tables: HashMap<String, usize>,
+    /// Track canonical names that were produced via CREATE VIEW
+    pub(super) produced_views: HashSet<String>,
     /// Track which tables are consumed by which statements
     pub(super) consumed_tables: HashMap<String, Vec<usize>>,
-    /// All discovered tables across statements (for global lineage)
-    pub(super) all_tables: HashSet<String>,
+    /// All discovered tables and views across statements (for global lineage)
+    pub(super) all_relations: HashSet<String>,
     /// All discovered CTEs
     pub(super) all_ctes: HashSet<String>,
     /// Known tables from schema metadata (for validation)
@@ -96,8 +99,9 @@ impl<'a> Analyzer<'a> {
             issues: Vec::new(),
             statement_lineages: Vec::new(),
             produced_tables: HashMap::new(),
+            produced_views: HashSet::new(),
             consumed_tables: HashMap::new(),
-            all_tables: HashSet::new(),
+            all_relations: HashSet::new(),
             all_ctes: HashSet::new(),
             known_tables: HashSet::new(),
             imported_tables: HashSet::new(),
@@ -111,6 +115,21 @@ impl<'a> Analyzer<'a> {
         analyzer.initialize_schema_metadata();
 
         analyzer
+    }
+
+    fn relation_identity(&self, canonical: &str) -> (Arc<str>, NodeType) {
+        if self.produced_views.contains(canonical) {
+            (helpers::generate_node_id("view", canonical), NodeType::View)
+        } else {
+            (
+                helpers::generate_node_id("table", canonical),
+                NodeType::Table,
+            )
+        }
+    }
+
+    fn relation_node_id(&self, canonical: &str) -> Arc<str> {
+        self.relation_identity(canonical).0
     }
 
     /// Check if implied schema capture is allowed (default: true)

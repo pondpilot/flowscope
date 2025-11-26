@@ -169,7 +169,15 @@ export interface Node {
 }
 
 /** The type of a node in the lineage graph. */
-export type NodeType = 'table' | 'cte' | 'column';
+export type NodeType = 'table' | 'view' | 'cte' | 'column';
+
+/** Table-like node types that can contain columns and appear in FROM clauses. */
+export type TableLikeNodeType = 'table' | 'view' | 'cte';
+
+/** Returns true if the node type is table-like (table, view, or CTE). */
+export function isTableLikeType(type: NodeType): type is TableLikeNodeType {
+  return type === 'table' || type === 'view' || type === 'cte';
+}
 
 /** A filter predicate from a WHERE, HAVING, or JOIN ON clause. */
 export interface FilterPredicate {

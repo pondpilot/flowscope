@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { isTableLikeType } from '@pondpilot/flowscope-core';
 import { useLineageStore } from '../store';
 
 export interface SearchResultItem {
@@ -53,7 +54,7 @@ export function useGraphSearch(searchTerm: string) {
           if (node.canonicalName.schema) parts.push(node.canonicalName.schema);
           if (node.canonicalName.name) parts.push(node.canonicalName.name);
           if (parts.length > 0) subtitle = `in ${parts.join('.')}`;
-        } else if (node.type === 'cte' || node.type === 'table') {
+        } else if (isTableLikeType(node.type)) {
           subtitle = node.type?.toUpperCase();
         }
 
@@ -114,8 +115,8 @@ export function useGraphSearch(searchTerm: string) {
         if (aTitle.startsWith(textTerm) && !bTitle.startsWith(textTerm)) return -1;
         if (bTitle.startsWith(textTerm) && !aTitle.startsWith(textTerm)) return 1;
 
-        // Prioritize Tables/Scripts over Columns
-        const score = (type: string) => (type === 'table' || type === 'cte' || type === 'script' ? 1 : 0);
+        // Prioritize Tables/Views/Scripts over Columns
+        const score = (type: string) => (type === 'table' || type === 'view' || type === 'cte' || type === 'script' ? 1 : 0);
         return score(b.type) - score(a.type);
       });
   }, [items, searchTerm]);

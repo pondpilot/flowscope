@@ -386,7 +386,7 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
 
       // 3. Dispatch navigation request if we have a source file
       if (sourceName) {
-        let targetType: 'table' | 'cte' | 'column' | 'script' | undefined;
+        let targetType: 'table' | 'view' | 'cte' | 'column' | 'script' | undefined;
         const flowNodeType = node.type;
 
         if (flowNodeType === 'scriptNode') {
@@ -396,6 +396,7 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
         } else if (flowNodeType === 'tableNode' || flowNodeType === 'simpleTableNode') {
           const data = node.data as TableNodeData;
           if (data.nodeType === 'cte') targetType = 'cte';
+          else if (data.nodeType === 'view') targetType = 'view';
           else targetType = 'table';
         }
 

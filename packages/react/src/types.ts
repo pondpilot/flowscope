@@ -37,7 +37,7 @@ export interface NavigationRequest {
   sourceName: string;
   span?: Span;
   targetName?: string;
-  targetType?: 'table' | 'cte' | 'column' | 'script';
+  targetType?: 'table' | 'view' | 'cte' | 'column' | 'script';
 }
 
 /**
@@ -187,13 +187,13 @@ export interface ScriptNodeData extends Record<string, unknown> {
 }
 
 /**
- * Data structure for table/CTE nodes in the graph visualization.
+ * Data structure for table/view/CTE nodes in the graph visualization.
  */
 export interface TableNodeData extends Record<string, unknown> {
-  /** Display name of the table or CTE */
+  /** Display name of the table, view, or CTE */
   label: string;
-  /** Type of node: regular table, CTE, or virtual output */
-  nodeType: 'table' | 'cte' | 'virtualOutput';
+  /** Type of node: regular table, view, CTE, or virtual output */
+  nodeType: 'table' | 'view' | 'cte' | 'virtualOutput';
   /** Whether this CTE is recursive (self-referential) */
   isRecursive?: boolean;
   /** List of columns belonging to this table */

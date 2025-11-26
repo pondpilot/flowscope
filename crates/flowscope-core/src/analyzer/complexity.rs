@@ -24,33 +24,23 @@ pub fn calculate_complexity(nodes: &[Node]) -> u8 {
     let mut filter_count = 0;
 
     for node in nodes {
-        match node.node_type {
-            NodeType::Table => {
-                table_count += 1;
-                filter_count += node.filters.len();
+        // Count tables/views and CTEs separately
+        if node.node_type.is_table_or_view() {
+            table_count += 1;
+        } else if node.node_type == NodeType::Cte {
+            cte_count += 1;
+        }
 
-                if let Some(join_type) = &node.join_type {
-                    if is_complex_join(join_type) {
-                        complex_join_count += 1;
-                    } else {
-                        join_count += 1;
-                    }
-                }
-            }
-            NodeType::Cte => {
-                cte_count += 1;
-                filter_count += node.filters.len();
+        // Filters and joins apply to all table-like nodes (tables, views, CTEs)
+        if node.node_type.is_table_like() {
+            filter_count += node.filters.len();
 
-                if let Some(join_type) = &node.join_type {
-                    if is_complex_join(join_type) {
-                        complex_join_count += 1;
-                    } else {
-                        join_count += 1;
-                    }
+            if let Some(join_type) = &node.join_type {
+                if is_complex_join(join_type) {
+                    complex_join_count += 1;
+                } else {
+                    join_count += 1;
                 }
-            }
-            NodeType::Column => {
-                // Columns don't directly contribute to complexity
             }
         }
     }

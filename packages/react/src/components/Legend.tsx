@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { ChevronDown, ChevronUp, Table2, Database, FileCode, Columns3 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Table2, Database, FileCode, Columns3, Eye } from 'lucide-react';
 import { COLORS, EDGE_STYLES } from '../constants';
 
 interface LegendProps {
@@ -52,6 +52,13 @@ export function Legend({ viewMode = 'table' }: LegendProps): JSX.Element {
                 label="Table"
                 color={COLORS.nodes.table.accent}
                 bgColor={COLORS.nodes.table.headerBg}
+              />
+              <LegendNodeItem
+                icon={<Eye className="h-3 w-3" />}
+                label="View"
+                sublabel="Defined query"
+                color={COLORS.nodes.view.accent}
+                bgColor={COLORS.nodes.view.headerBg}
               />
               <LegendNodeItem
                 icon={<Database className="h-3 w-3" />}

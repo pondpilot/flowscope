@@ -9,6 +9,7 @@ import type {
   StatementLineage,
   Node,
 } from '@pondpilot/flowscope-core';
+import { isTableLikeType } from '@pondpilot/flowscope-core';
 
 // ============================================================================
 // Types
@@ -24,7 +25,7 @@ export interface ScriptInfo {
 export interface TableInfo {
   name: string;
   qualifiedName: string;
-  type: 'table' | 'cte';
+  type: 'table' | 'view' | 'cte';
   columns: string[];
   sourceName?: string;
 }
@@ -58,10 +59,10 @@ export function extractScriptInfo(statements: StatementLineage[]): ScriptInfo[] 
     const tablesWritten = new Set<string>(existing?.tablesWritten || []);
 
     for (const node of stmt.nodes) {
-      if (node.type === 'table') {
-        // A table is written to if it has incoming data_flow edges (data flows INTO it)
+      if (node.type === 'table' || node.type === 'view') {
+        // A table/view is written to if it has incoming data_flow edges (data flows INTO it)
         const isWritten = stmt.edges.some((e) => e.to === node.id && e.type === 'data_flow');
-        // A table is read from if it has outgoing data_flow edges (data flows FROM it)
+        // A table/view is read from if it has outgoing data_flow edges (data flows FROM it)
         const isRead = stmt.edges.some((e) => e.from === node.id && e.type === 'data_flow');
 
         if (isWritten) {
@@ -91,14 +92,14 @@ export function extractTableInfo(statements: StatementLineage[]): TableInfo[] {
   const tableMap = new Map<string, TableInfo>();
 
   for (const stmt of statements) {
-    const tableNodes = stmt.nodes.filter((n) => n.type === 'table' || n.type === 'cte');
+    const tableNodes = stmt.nodes.filter((n) => isTableLikeType(n.type));
     const columnNodes = stmt.nodes.filter((n) => n.type === 'column');
 
     for (const tableNode of tableNodes) {
       const key = tableNode.qualifiedName || tableNode.label;
       const existing = tableMap.get(key);
 
-      // Find columns owned by this table
+      // Find columns owned by this table/view
       const ownedColumnIds = stmt.edges
         .filter((e) => e.type === 'ownership' && e.from === tableNode.id)
         .map((e) => e.to);
@@ -113,7 +114,7 @@ export function extractTableInfo(statements: StatementLineage[]): TableInfo[] {
       tableMap.set(key, {
         name: tableNode.label,
         qualifiedName: tableNode.qualifiedName || tableNode.label,
-        type: tableNode.type as 'table' | 'cte',
+        type: tableNode.type as 'table' | 'view' | 'cte',
         columns: Array.from(existingColumns),
         sourceName: stmt.sourceName,
       });
@@ -130,7 +131,7 @@ export function extractColumnMappings(statements: StatementLineage[]): ColumnMap
   const mappings: ColumnMapping[] = [];
 
   for (const stmt of statements) {
-    const tableNodes = stmt.nodes.filter((n) => n.type === 'table' || n.type === 'cte');
+    const tableNodes = stmt.nodes.filter((n) => isTableLikeType(n.type));
     const columnNodes = stmt.nodes.filter((n) => n.type === 'column');
 
     // Build column-to-table lookup
@@ -361,7 +362,7 @@ export function generateMermaidTableView(result: AnalyzeResult): string {
   const edges = new Set<string>();
 
   for (const stmt of result.statements) {
-    const tableNodes = stmt.nodes.filter((n) => n.type === 'table' || n.type === 'cte');
+    const tableNodes = stmt.nodes.filter((n) => isTableLikeType(n.type));
 
     // Add table nodes
     for (const node of tableNodes) {
@@ -369,7 +370,14 @@ export function generateMermaidTableView(result: AnalyzeResult): string {
       if (!tableIds.has(key)) {
         const id = sanitizeMermaidId(key);
         tableIds.set(key, id);
-        const shape = node.type === 'cte' ? `(["${escapeMermaidLabel(node.label)}"])` : `["${escapeMermaidLabel(node.label)}"]`;
+        let shape: string;
+        if (node.type === 'cte') {
+          shape = `(["${escapeMermaidLabel(node.label)}"])`;
+        } else if (node.type === 'view') {
+          shape = `[/"${escapeMermaidLabel(node.label)}"/]`;
+        } else {
+          shape = `["${escapeMermaidLabel(node.label)}"]`;
+        }
         lines.push(`    ${id}${shape}`);
       }
     }

@@ -936,6 +936,13 @@
             "type": "string"
           },
           {
+            "description": "A database view (CREATE VIEW)",
+            "enum": [
+              "view"
+            ],
+            "type": "string"
+          },
+          {
             "description": "A Common Table Expression (WITH clause)",
             "enum": [
               "cte"

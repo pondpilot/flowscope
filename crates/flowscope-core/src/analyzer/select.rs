@@ -119,7 +119,12 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
             self.register_table_alias(a.name.to_string(), canonical_name);
         }
 
-        let node_id = super::helpers::generate_node_id("table", &canonical);
+        let node_id = self
+            .ctx
+            .table_node_ids
+            .get(&canonical)
+            .cloned()
+            .unwrap_or_else(|| self.analyzer.relation_node_id(&canonical));
 
         self.mark_table_produced(canonical.clone());
         self.add_table_columns_from_schema(&canonical, &node_id);

@@ -148,7 +148,7 @@ impl<'a> Analyzer<'a> {
             aggregation: None,
         });
 
-        self.all_tables.insert(canonical.clone());
+        self.all_relations.insert(canonical.clone());
         self.produced_tables.insert(canonical, ctx.statement_index);
 
         // Analyze source - check the body of the insert
@@ -370,6 +370,7 @@ impl<'a> Analyzer<'a> {
                     self.schema_tables.remove(&canonical);
                     self.known_tables.remove(&canonical);
                     self.produced_tables.remove(&canonical);
+                    self.produced_views.remove(&canonical);
                 }
             }
         }
