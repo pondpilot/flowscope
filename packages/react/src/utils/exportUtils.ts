@@ -171,6 +171,108 @@ export function extractColumnMappings(statements: StatementLineage[]): ColumnMap
   return mappings;
 }
 
+/**
+ * Represents a dependency from one table to another
+ */
+export interface TableDependency {
+  sourceTable: string;
+  targetTable: string;
+}
+
+/**
+ * Extract table-to-table dependencies from statements.
+ * A dependency exists when data flows from one table to another.
+ */
+export function extractTableDependencies(statements: StatementLineage[]): TableDependency[] {
+  const dependencies: TableDependency[] = [];
+  const seen = new Set<string>();
+
+  for (const stmt of statements) {
+    const tableNodes = stmt.nodes.filter((n) => isTableLikeType(n.type));
+
+    // Find data_flow edges between tables
+    for (const edge of stmt.edges) {
+      if (edge.type === 'data_flow') {
+        const sourceNode = tableNodes.find((n) => n.id === edge.from);
+        const targetNode = tableNodes.find((n) => n.id === edge.to);
+
+        if (sourceNode && targetNode) {
+          const sourceKey = sourceNode.qualifiedName || sourceNode.label;
+          const targetKey = targetNode.qualifiedName || targetNode.label;
+          const depKey = `${sourceKey}->${targetKey}`;
+
+          if (!seen.has(depKey) && sourceKey !== targetKey) {
+            seen.add(depKey);
+            dependencies.push({
+              sourceTable: sourceKey,
+              targetTable: targetKey,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  return dependencies;
+}
+
+/**
+ * Generate a dependency matrix sheet for xlsx export.
+ * Creates a matrix where rows and columns are tables, and cells indicate dependencies.
+ * Uses letters: 'w' = row writes to column, 'r' = row reads from column
+ */
+export function generateDependencyMatrixSheet(
+  dependencies: TableDependency[]
+): XLSX.WorkSheet {
+  // Collect all unique tables
+  const allTables = new Set<string>();
+  for (const dep of dependencies) {
+    allTables.add(dep.sourceTable);
+    allTables.add(dep.targetTable);
+  }
+
+  const tableList = Array.from(allTables).sort();
+
+  // Build dependency lookup for quick access
+  const depSet = new Set(dependencies.map((d) => `${d.sourceTable}->${d.targetTable}`));
+
+  // Create matrix data
+  // First row is header: empty cell + all table names
+  const matrixData: (string | number)[][] = [];
+  const headerRow: string[] = ['', ...tableList.map((t) => sanitizeXlsxValue(t))];
+  matrixData.push(headerRow);
+
+  // Each subsequent row: table name in first column, then dependency indicators
+  // 'w' = row writes to column (data flows from row to column)
+  // 'r' = row reads from column (data flows from column to row)
+  for (const rowTable of tableList) {
+    const row: (string | number)[] = [sanitizeXlsxValue(rowTable)];
+    for (const colTable of tableList) {
+      if (rowTable === colTable) {
+        row.push('-');
+      } else if (depSet.has(`${rowTable}->${colTable}`)) {
+        row.push('w');
+      } else if (depSet.has(`${colTable}->${rowTable}`)) {
+        row.push('r');
+      } else {
+        row.push('');
+      }
+    }
+    matrixData.push(row);
+  }
+
+  // Add empty row before legend
+  matrixData.push([]);
+
+  // Add legend
+  matrixData.push(['Legend:']);
+  matrixData.push(['w', 'Row table writes to column table (data flows row → column)']);
+  matrixData.push(['r', 'Row table reads from column table (data flows column → row)']);
+  matrixData.push(['-', 'Self (same table)']);
+
+  return XLSX.utils.aoa_to_sheet(matrixData);
+}
+
 // ============================================================================
 // XLSX Export
 // ============================================================================
@@ -238,12 +340,19 @@ export function generateXlsxWorkbook(result: AnalyzeResult): XLSX.WorkBook {
     { Metric: 'Total Statements', Value: result.summary.statementCount },
     { Metric: 'Total Tables', Value: result.summary.tableCount },
     { Metric: 'Total Columns', Value: result.summary.columnCount },
+    { Metric: 'Total Joins', Value: result.summary.joinCount },
+    { Metric: 'Complexity Score', Value: result.summary.complexityScore },
     { Metric: 'Errors', Value: result.summary.issueCount.errors },
     { Metric: 'Warnings', Value: result.summary.issueCount.warnings },
     { Metric: 'Info', Value: result.summary.issueCount.infos },
   ];
   const summarySheet = XLSX.utils.json_to_sheet(summaryData);
   XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
+
+  // Dependency Matrix sheet
+  const dependencies = extractTableDependencies(result.statements);
+  const depMatrixSheet = generateDependencyMatrixSheet(dependencies);
+  XLSX.utils.book_append_sheet(workbook, depMatrixSheet, 'Dependency Matrix');
 
   return workbook;
 }

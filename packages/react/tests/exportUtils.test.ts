@@ -3,12 +3,14 @@ import {
   extractScriptInfo,
   extractTableInfo,
   extractColumnMappings,
+  extractTableDependencies,
   generateMermaidScriptView,
   generateMermaidTableView,
   generateMermaidColumnView,
   generateMermaidHybridView,
   generateStructuredJson,
   generateXlsxWorkbook,
+  generateDependencyMatrixSheet,
   sanitizeXlsxValue,
 } from '../src/utils/exportUtils';
 import type { AnalyzeResult, StatementLineage } from '@pondpilot/flowscope-core';
@@ -53,6 +55,8 @@ const createMockResult = (): AnalyzeResult => ({
     statementCount: 2,
     tableCount: 3,
     columnCount: 3,
+    joinCount: 1,
+    complexityScore: 25,
     issueCount: { errors: 0, warnings: 1, infos: 0 },
     hasErrors: false,
   },
@@ -226,18 +230,6 @@ describe('generateStructuredJson', () => {
   });
 });
 
-describe('generateXlsxWorkbook', () => {
-  it('generates workbook with all required sheets', () => {
-    const result = createMockResult();
-    const workbook = generateXlsxWorkbook(result);
-
-    expect(workbook.SheetNames).toContain('Scripts');
-    expect(workbook.SheetNames).toContain('Tables');
-    expect(workbook.SheetNames).toContain('Column Mappings');
-    expect(workbook.SheetNames).toContain('Summary');
-  });
-});
-
 describe('sanitizeXlsxValue', () => {
   it('returns normal strings unchanged', () => {
     expect(sanitizeXlsxValue('hello')).toBe('hello');
@@ -264,5 +256,135 @@ describe('sanitizeXlsxValue', () => {
 
   it('handles empty strings', () => {
     expect(sanitizeXlsxValue('')).toBe('');
+  });
+});
+
+describe('extractTableDependencies', () => {
+  it('extracts table-to-table dependencies from data_flow edges', () => {
+    const result = createMockResult();
+    const deps = extractTableDependencies(result.statements);
+
+    // From mock: table1 -> table2 (e4), table2_ref -> table3 (e6)
+    expect(deps).toHaveLength(2);
+
+    const dep1 = deps.find(d => d.sourceTable === 'public.users' && d.targetTable === 'public.orders');
+    expect(dep1).toBeDefined();
+
+    const dep2 = deps.find(d => d.sourceTable === 'public.orders' && d.targetTable === 'public.summary');
+    expect(dep2).toBeDefined();
+  });
+
+  it('handles empty statements', () => {
+    const deps = extractTableDependencies([]);
+    expect(deps).toHaveLength(0);
+  });
+
+  it('deduplicates identical dependencies', () => {
+    const statements: StatementLineage[] = [
+      {
+        statementIndex: 0,
+        statementType: 'SELECT',
+        nodes: [
+          { id: 't1', type: 'table', label: 'source', qualifiedName: 'db.source' },
+          { id: 't2', type: 'table', label: 'target', qualifiedName: 'db.target' },
+        ],
+        edges: [
+          { id: 'e1', from: 't1', to: 't2', type: 'data_flow' },
+          { id: 'e2', from: 't1', to: 't2', type: 'data_flow' },
+        ],
+      },
+    ];
+
+    const deps = extractTableDependencies(statements);
+    expect(deps).toHaveLength(1);
+  });
+});
+
+describe('generateDependencyMatrixSheet', () => {
+  it('generates a matrix sheet with tables as rows and columns', () => {
+    const deps = [
+      { sourceTable: 'A', targetTable: 'B' },
+      { sourceTable: 'B', targetTable: 'C' },
+    ];
+
+    const sheet = generateDependencyMatrixSheet(deps);
+
+    // Header row: ['', 'A', 'B', 'C']
+    expect(sheet['A1']).toEqual({ t: 's', v: '' });
+    expect(sheet['B1']).toEqual({ t: 's', v: 'A' });
+    expect(sheet['C1']).toEqual({ t: 's', v: 'B' });
+    expect(sheet['D1']).toEqual({ t: 's', v: 'C' });
+
+    // Row A: ['A', '-', 'w', '']
+    // A writes to B, no relation with C
+    expect(sheet['A2']).toEqual({ t: 's', v: 'A' });
+    expect(sheet['B2']).toEqual({ t: 's', v: '-' }); // self
+    expect(sheet['C2']).toEqual({ t: 's', v: 'w' }); // A writes to B
+    expect(sheet['D2']).toEqual({ t: 's', v: '' }); // no A -> C
+
+    // Row B: ['B', 'r', '-', 'w']
+    // B reads from A, B writes to C
+    expect(sheet['A3']).toEqual({ t: 's', v: 'B' });
+    expect(sheet['B3']).toEqual({ t: 's', v: 'r' }); // B reads from A
+    expect(sheet['C3']).toEqual({ t: 's', v: '-' }); // self
+    expect(sheet['D3']).toEqual({ t: 's', v: 'w' }); // B writes to C
+
+    // Row C: ['C', '', 'r', '-']
+    // C reads from B
+    expect(sheet['A4']).toEqual({ t: 's', v: 'C' });
+    expect(sheet['B4']).toEqual({ t: 's', v: '' }); // no relation
+    expect(sheet['C4']).toEqual({ t: 's', v: 'r' }); // C reads from B
+    expect(sheet['D4']).toEqual({ t: 's', v: '-' }); // self
+  });
+
+  it('handles empty dependencies', () => {
+    const sheet = generateDependencyMatrixSheet([]);
+
+    // Should have header + legend rows
+    expect(sheet['A1']).toEqual({ t: 's', v: '' }); // empty header corner
+    expect(sheet['A3']).toEqual({ t: 's', v: 'Legend:' }); // legend starts after empty row
+  });
+
+  it('includes legend at the bottom', () => {
+    const deps = [{ sourceTable: 'A', targetTable: 'B' }];
+    const sheet = generateDependencyMatrixSheet(deps);
+
+    // Legend should be after the matrix (2 tables = 3 rows: header + 2 data rows)
+    // Row 4 is empty, Row 5 is "Legend:"
+    expect(sheet['A5']).toEqual({ t: 's', v: 'Legend:' });
+    expect(sheet['A6']).toEqual({ t: 's', v: 'w' });
+    expect(sheet['A7']).toEqual({ t: 's', v: 'r' });
+    expect(sheet['A8']).toEqual({ t: 's', v: '-' });
+  });
+});
+
+describe('generateXlsxWorkbook', () => {
+  it('generates workbook with all required sheets', () => {
+    const result = createMockResult();
+    const workbook = generateXlsxWorkbook(result);
+
+    expect(workbook.SheetNames).toContain('Scripts');
+    expect(workbook.SheetNames).toContain('Tables');
+    expect(workbook.SheetNames).toContain('Column Mappings');
+    expect(workbook.SheetNames).toContain('Summary');
+    expect(workbook.SheetNames).toContain('Dependency Matrix');
+  });
+
+  it('includes joinCount and complexityScore in Summary sheet', () => {
+    const result = createMockResult();
+    const workbook = generateXlsxWorkbook(result);
+    const summarySheet = workbook.Sheets['Summary'];
+
+    // Check that joinCount and complexityScore are present
+    // The sheet format is: A=Metric, B=Value
+    const metrics: string[] = [];
+    let row = 2;
+    while (summarySheet[`A${row}`]) {
+      metrics.push(summarySheet[`A${row}`].v);
+      row++;
+    }
+
+    expect(metrics).toContain('Total Joins');
+    expect(metrics).toContain('Complexity Score');
   });
 });
