@@ -619,10 +619,9 @@ impl<'a, 'b> Visitor for LineageVisitor<'a, 'b> {
             } => {
                 // UNNEST expands array columns into rows. Extract column references
                 // from the array expressions and resolve them to their source tables.
-                let dialect = self.analyzer.request.dialect;
                 for expr in array_exprs {
-                    let column_refs =
-                        ExpressionAnalyzer::extract_column_refs_with_dialect(expr, dialect);
+                    let mut ea = ExpressionAnalyzer::new(self.analyzer, self.ctx);
+                    let column_refs = ea.extract_column_refs_with_warning(expr);
                     for col_ref in &column_refs {
                         // Resolve the column to its source table and add it as a data source
                         if let Some(table_canonical) = self.analyzer.resolve_column_table(

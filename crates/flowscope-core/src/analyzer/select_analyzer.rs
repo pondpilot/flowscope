@@ -101,8 +101,6 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
     }
 
     fn analyze_projection(&mut self, projection: &[SelectItem]) {
-        let dialect = self.analyzer.request.dialect;
-
         // Track aliases defined in this SELECT list for lateral column alias checking
         let mut defined_aliases: HashSet<String> = HashSet::new();
 
@@ -113,9 +111,10 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
                     self.check_lateral_column_alias(expr, &defined_aliases);
 
                     let (sources, name, aggregation) = {
-                        let ea = ExpressionAnalyzer::new(self.analyzer, self.ctx);
+                        let mut ea = ExpressionAnalyzer::new(self.analyzer, self.ctx);
+                        let column_refs = ea.extract_column_refs_with_warning(expr);
                         (
-                            ExpressionAnalyzer::extract_column_refs_with_dialect(expr, dialect),
+                            column_refs,
                             ea.derive_column_name(expr, idx),
                             ea.detect_aggregation(expr),
                         )
@@ -146,11 +145,9 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
                     self.check_lateral_column_alias(expr, &defined_aliases);
 
                     let (sources, aggregation) = {
-                        let ea = ExpressionAnalyzer::new(self.analyzer, self.ctx);
-                        (
-                            ExpressionAnalyzer::extract_column_refs_with_dialect(expr, dialect),
-                            ea.detect_aggregation(expr),
-                        )
+                        let mut ea = ExpressionAnalyzer::new(self.analyzer, self.ctx);
+                        let column_refs = ea.extract_column_refs_with_warning(expr);
+                        (column_refs, ea.detect_aggregation(expr))
                     };
 
                     let name = alias.value.clone();

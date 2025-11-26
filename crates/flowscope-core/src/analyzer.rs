@@ -1,4 +1,6 @@
 use crate::types::*;
+use sqlparser::ast::Statement;
+use std::collections::HashSet;
 use std::ops::Range;
 use std::sync::Arc;
 #[cfg(feature = "tracing")]
@@ -57,6 +59,8 @@ pub(crate) struct Analyzer<'a> {
     pub(crate) column_lineage_enabled: bool,
     /// Source slice for the currently analyzed statement (for span lookups).
     current_statement_source: Option<StatementSourceSlice<'a>>,
+    /// Statements that already emitted a recursion-depth warning.
+    depth_limit_statements: HashSet<usize>,
 }
 
 impl<'a> Analyzer<'a> {
@@ -78,6 +82,7 @@ impl<'a> Analyzer<'a> {
             tracker: CrossStatementTracker::new(),
             column_lineage_enabled,
             current_statement_source: None,
+            depth_limit_statements: HashSet::new(),
         }
     }
 
@@ -128,6 +133,22 @@ impl<'a> Analyzer<'a> {
         self.schema.normalize_table_name(name)
     }
 
+    /// Emits a warning when expression traversal exceeds the recursion guard.
+    pub(crate) fn emit_depth_limit_warning(&mut self, statement_index: usize) {
+        if self.depth_limit_statements.insert(statement_index) {
+            self.issues.push(
+                Issue::warning(
+                    issue_codes::APPROXIMATE_LINEAGE,
+                    format!(
+                        "Expression recursion depth exceeded (>{}). Lineage may be incomplete.",
+                        expression::MAX_RECURSION_DEPTH
+                    ),
+                )
+                .with_statement(statement_index),
+            );
+        }
+    }
+
     #[cfg_attr(feature = "tracing", tracing::instrument(skip(self), fields(dialect = ?self.request.dialect, stmt_count)))]
     fn analyze(&mut self) -> AnalyzeResult {
         let (all_statements, mut preflight_issues) = collect_statements(self.request);
@@ -135,6 +156,8 @@ impl<'a> Analyzer<'a> {
 
         #[cfg(feature = "tracing")]
         tracing::Span::current().record("stmt_count", all_statements.len());
+
+        self.precollect_ddl(&all_statements);
 
         if all_statements.is_empty() {
             return self.build_result();
@@ -186,6 +209,63 @@ impl<'a> Analyzer<'a> {
 struct StatementSourceSlice<'a> {
     sql: &'a str,
     range: Range<usize>,
+}
+
+impl<'a> Analyzer<'a> {
+    /// Pre-registers CREATE TABLE/VIEW targets so earlier statements can resolve them.
+    fn precollect_ddl(&mut self, statements: &[StatementInput]) {
+        for (index, stmt_input) in statements.iter().enumerate() {
+            match &stmt_input.statement {
+                Statement::CreateTable(create) => {
+                    self.precollect_create_table(create, index);
+                }
+                Statement::CreateView { name, .. } => {
+                    self.precollect_create_view(name);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Handles CREATE TABLE statements during DDL pre-collection.
+    fn precollect_create_table(
+        &mut self,
+        create: &sqlparser::ast::CreateTable,
+        statement_index: usize,
+    ) {
+        let canonical = self.normalize_table_name(&create.name.to_string());
+
+        if create.query.is_none() {
+            let column_schemas: Vec<ColumnSchema> = create
+                .columns
+                .iter()
+                .map(|c| ColumnSchema {
+                    name: c.name.value.clone(),
+                    data_type: Some(c.data_type.to_string()),
+                })
+                .collect();
+
+            self.schema.seed_implied_schema(
+                &canonical,
+                column_schemas,
+                create.temporary,
+                statement_index,
+            );
+        } else {
+            // This is a CTAS (CREATE TABLE ... AS SELECT ...).
+            // We mark the table as known to prevent UNRESOLVED_REFERENCE
+            // errors, but we don't have column schema yet.
+            // TODO: A more advanced implementation could perform a partial
+            // analysis of the query to infer the column schema here.
+            self.schema.mark_table_known(&canonical);
+        }
+    }
+
+    /// Handles CREATE VIEW statements during DDL pre-collection.
+    fn precollect_create_view(&mut self, name: &sqlparser::ast::ObjectName) {
+        let canonical = self.normalize_table_name(&name.to_string());
+        self.schema.mark_table_known(&canonical);
+    }
 }
 
 #[cfg(test)]

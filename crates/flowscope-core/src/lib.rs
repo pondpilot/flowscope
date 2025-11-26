@@ -1,7 +1,7 @@
 pub mod analyzer;
 pub mod error;
+pub mod extractors;
 pub mod generated;
-pub mod lineage;
 pub mod parser;
 #[cfg(test)]
 pub mod test_utils;
@@ -16,7 +16,7 @@ pub mod analyzer_helpers {
 // Re-export main types and functions
 pub use analyzer::analyze;
 pub use error::ParseError;
-pub use lineage::extract_tables;
+pub use extractors::extract_tables;
 pub use parser::{parse_sql, parse_sql_with_dialect};
 
 // Re-export types explicitly

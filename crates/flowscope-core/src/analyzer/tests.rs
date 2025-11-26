@@ -145,3 +145,15 @@ fn file_statements_produce_spans() {
         .expect("span should be present for file statement");
     assert_eq!(&file_sql[span.start..span.end], "missing_table");
 }
+
+#[test]
+fn depth_limit_warning_emitted_once_per_statement() {
+    let request = make_request("SELECT 1");
+    let mut analyzer = Analyzer::new(&request);
+
+    analyzer.emit_depth_limit_warning(0);
+    analyzer.emit_depth_limit_warning(0);
+
+    assert_eq!(analyzer.issues.len(), 1, "warning should be deduplicated");
+    assert_eq!(analyzer.issues[0].code, issue_codes::APPROXIMATE_LINEAGE);
+}

@@ -2046,6 +2046,39 @@ fn ddl_create_temp_table() {
 }
 
 #[test]
+fn forward_declared_tables_are_known_before_usage() {
+    let sql = r#"
+        CREATE VIEW future_view AS
+        SELECT id FROM future_table;
+
+        CREATE TABLE future_table (id INT, name TEXT);
+
+        SELECT * FROM future_view;
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let unresolved_count = result
+        .issues
+        .iter()
+        .filter(|issue| issue.code == issue_codes::UNRESOLVED_REFERENCE)
+        .count();
+    assert_eq!(
+        unresolved_count, 0,
+        "forward references should not emit UNRESOLVED_REFERENCE warnings"
+    );
+
+    let unknown_column_count = result
+        .issues
+        .iter()
+        .filter(|issue| issue.code == issue_codes::UNKNOWN_COLUMN)
+        .count();
+    assert_eq!(
+        unknown_column_count, 0,
+        "columns from forward-declared tables should be known"
+    );
+}
+
+#[test]
 fn ddl_multi_statement_temp_table_pipeline() {
     let sql = r#"
         CREATE TEMP TABLE bronze AS

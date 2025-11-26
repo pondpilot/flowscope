@@ -1,7 +1,5 @@
 use super::context::StatementContext;
-use super::expression::ExpressionAnalyzer;
 use super::Analyzer;
-use sqlparser::ast::Expr;
 
 impl<'a> Analyzer<'a> {
     /// Validates that a column exists in a table's schema.
@@ -24,23 +22,6 @@ impl<'a> Analyzer<'a> {
             .validate_column(canonical, column, ctx.statement_index)
         {
             self.issues.push(issue);
-        }
-    }
-
-    /// Extracts column references from an expression and validates each one.
-    pub(super) fn extract_column_refs_for_validation(
-        &mut self,
-        ctx: &StatementContext,
-        expr: &Expr,
-    ) {
-        let dialect = self.request.dialect;
-        let refs = ExpressionAnalyzer::extract_column_refs_with_dialect(expr, dialect);
-        for col_ref in refs {
-            if let Some(table) = col_ref.table.as_deref() {
-                if let Some(canonical) = self.resolve_table_alias(ctx, Some(table)) {
-                    self.validate_column(ctx, &canonical, &col_ref.column);
-                }
-            }
         }
     }
 }

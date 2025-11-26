@@ -119,11 +119,33 @@ pub(crate) struct TableResolution {
 pub(crate) struct SchemaRegistry {
     /// All known table canonical names (for quick existence checks).
     ///
-    /// This includes both imported and implied tables. Used for O(1) existence checks.
+    /// This is a superset containing all tables from any source:
+    /// - Tables from `imported_tables` (user-provided schema)
+    /// - Tables from `forward_declared_tables` (discovered during DDL pre-pass)
+    /// - Tables discovered during analysis (e.g., from DDL statements)
+    ///
+    /// Used for O(1) existence checks when resolving table references.
     pub(crate) known_tables: HashSet<String>,
+    /// Tables discovered during the DDL pre-collection pass (forward declarations).
+    ///
+    /// These are CREATE TABLE/VIEW targets found before the main analysis begins.
+    /// They allow earlier statements to reference tables defined later in the script.
+    ///
+    /// This set is used to distinguish between:
+    /// - Tables the user explicitly provided schema for (`imported_tables`)
+    /// - Tables only known because they appear in DDL within the script
+    ///
+    /// When all known tables are forward-declared (i.e., no imported schema),
+    /// we suppress `UNRESOLVED_REFERENCE` warnings for external tables since
+    /// the user hasn't provided authoritative schema metadata.
+    forward_declared_tables: HashSet<String>,
     /// Tables from imported (user-provided) schema that should not be overwritten.
     ///
     /// These represent authoritative schema from an external source (e.g., database catalog).
+    /// Tables in this set:
+    /// - Have priority over DDL-inferred schema (conflicts emit warnings)
+    /// - Cannot be removed by DROP statements
+    /// - Trigger `UNRESOLVED_REFERENCE` warnings when other tables are referenced
     pub(crate) imported_tables: HashSet<String>,
     /// Schema lookup: table canonical name -> table schema entry with metadata.
     ///
@@ -152,6 +174,7 @@ impl SchemaRegistry {
     pub(crate) fn new(schema: Option<&SchemaMetadata>, dialect: Dialect) -> (Self, Vec<Issue>) {
         let mut registry = Self {
             known_tables: HashSet::new(),
+            forward_declared_tables: HashSet::new(),
             imported_tables: HashSet::new(),
             schema_tables: HashMap::new(),
             default_catalog: None,
@@ -245,6 +268,7 @@ impl SchemaRegistry {
         if !self.imported_tables.contains(canonical) {
             self.schema_tables.remove(canonical);
             self.known_tables.remove(canonical);
+            self.forward_declared_tables.remove(canonical);
         }
     }
 
@@ -261,6 +285,7 @@ impl SchemaRegistry {
     ) -> Option<Issue> {
         // Always treat a newly created object as known.
         self.known_tables.insert(canonical.to_string());
+        self.forward_declared_tables.remove(canonical);
 
         // Check for conflict with imported schema.
         if self.imported_tables.contains(canonical) {
@@ -327,6 +352,64 @@ impl SchemaRegistry {
         );
 
         None
+    }
+
+    /// Marks a table as known without persisting schema information.
+    ///
+    /// Used during pre-analysis passes to avoid `UNRESOLVED_REFERENCE`
+    /// warnings for forward-declared tables/views.
+    pub(crate) fn mark_table_known(&mut self, canonical: &str) {
+        self.known_tables.insert(canonical.to_string());
+        self.forward_declared_tables.insert(canonical.to_string());
+    }
+
+    /// Seeds implied schema metadata without emitting conflict warnings.
+    ///
+    /// This is used for forward declarations so earlier statements can see
+    /// column layouts from later DDL statements.
+    pub(crate) fn seed_implied_schema(
+        &mut self,
+        canonical: &str,
+        columns: Vec<ColumnSchema>,
+        is_temporary: bool,
+        statement_index: usize,
+    ) {
+        self.known_tables.insert(canonical.to_string());
+        self.forward_declared_tables.insert(canonical.to_string());
+
+        if self.imported_tables.contains(canonical) {
+            return;
+        }
+
+        if !self.allow_implied || columns.is_empty() {
+            return;
+        }
+
+        let parts = split_qualified_identifiers(canonical);
+        let (catalog, schema, table_name) = match parts.as_slice() {
+            [catalog, schema, table] => {
+                (Some(catalog.clone()), Some(schema.clone()), table.clone())
+            }
+            [schema, table] => (None, Some(schema.clone()), table.clone()),
+            [table] => (None, None, table.clone()),
+            _ => (None, None, extract_simple_name(canonical)),
+        };
+
+        self.schema_tables.insert(
+            canonical.to_string(),
+            SchemaTableEntry {
+                table: SchemaTable {
+                    catalog,
+                    schema,
+                    name: table_name,
+                    columns,
+                },
+                origin: SchemaOrigin::Implied,
+                source_statement_idx: Some(statement_index),
+                updated_at: Utc::now(),
+                temporary: is_temporary,
+            },
+        );
     }
 
     /// Generates a canonical key for a schema table.
@@ -555,8 +638,32 @@ impl SchemaRegistry {
     /// This is used to determine whether to suppress unresolved reference warnings.
     /// When no tables are known, we assume the caller didn't provide schema metadata
     /// and we should be permissive. Once any table is known, we warn about unknowns.
+    ///
+    /// # Forward-declared tables
+    ///
+    /// Tables discovered during the DDL pre-pass (forward declarations) are treated
+    /// specially: if the *only* known tables are forward-declared ones, we still
+    /// consider the registry as having "no known tables" for warning purposes.
+    /// This prevents false `UNRESOLVED_REFERENCE` warnings for tables that exist
+    /// in the database but aren't created within the script itself.
+    ///
+    /// For example, given a script like:
+    /// ```sql
+    /// SELECT * FROM external_table;  -- exists in DB, not in script
+    /// CREATE TABLE my_table AS SELECT 1;
+    /// ```
+    /// We want to suppress warnings about `external_table` because the user
+    /// hasn't provided any external schema metadata - `my_table` only appears
+    /// as a forward declaration from the DDL pre-pass.
     pub(crate) fn has_no_known_tables(&self) -> bool {
-        self.known_tables.is_empty()
+        if !self.imported_tables.is_empty() {
+            return false;
+        }
+        // If all known tables are forward-declared (discovered during DDL pre-pass),
+        // treat it as if no external schema was provided.
+        self.known_tables
+            .iter()
+            .all(|name| self.forward_declared_tables.contains(name))
     }
 }
 
