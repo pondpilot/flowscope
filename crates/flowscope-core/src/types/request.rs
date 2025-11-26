@@ -88,25 +88,17 @@ impl Dialect {
         }
     }
 
-    /// Get the case sensitivity behavior for this dialect
+    /// Get the case sensitivity behavior for this dialect.
+    ///
+    /// Uses generated rules from `specs/dialect-semantics/dialects.json`.
     pub fn default_case_sensitivity(&self) -> CaseSensitivity {
-        match self {
-            // Databases that fold unquoted identifiers to lowercase
-            Dialect::Postgres => CaseSensitivity::Lower,
-            Dialect::Redshift => CaseSensitivity::Lower,
-            Dialect::Duckdb => CaseSensitivity::Lower,
-            Dialect::Databricks => CaseSensitivity::Lower,
-            Dialect::Hive => CaseSensitivity::Lower,
-            Dialect::Generic => CaseSensitivity::Lower,
-            // Databases that fold unquoted identifiers to uppercase
-            Dialect::Snowflake => CaseSensitivity::Upper,
-            Dialect::Ansi => CaseSensitivity::Upper,
-            // Databases that preserve case (case-sensitive)
-            Dialect::Bigquery => CaseSensitivity::Exact,
-            Dialect::Clickhouse => CaseSensitivity::Exact,
-            Dialect::Mssql => CaseSensitivity::Exact,
-            Dialect::Mysql => CaseSensitivity::Exact,
-            Dialect::Sqlite => CaseSensitivity::Exact,
+        use crate::generated::NormalizationStrategy;
+        match self.normalization_strategy() {
+            NormalizationStrategy::Lowercase => CaseSensitivity::Lower,
+            NormalizationStrategy::Uppercase => CaseSensitivity::Upper,
+            NormalizationStrategy::CaseSensitive => CaseSensitivity::Exact,
+            // CaseInsensitive dialects use lowercase folding for comparison
+            NormalizationStrategy::CaseInsensitive => CaseSensitivity::Lower,
         }
     }
 }
@@ -231,17 +223,31 @@ mod tests {
 
     #[test]
     fn test_dialect_case_sensitivity() {
+        // Postgres folds to lowercase
         assert_eq!(
             Dialect::Postgres.default_case_sensitivity(),
             CaseSensitivity::Lower
         );
+        // Snowflake folds to uppercase
         assert_eq!(
             Dialect::Snowflake.default_case_sensitivity(),
             CaseSensitivity::Upper
         );
+        // BigQuery is case-insensitive (uses lowercase for comparison)
+        // Note: BigQuery has custom normalization for tables vs columns
         assert_eq!(
             Dialect::Bigquery.default_case_sensitivity(),
+            CaseSensitivity::Lower
+        );
+        // MySQL is case-sensitive
+        assert_eq!(
+            Dialect::Mysql.default_case_sensitivity(),
             CaseSensitivity::Exact
+        );
+        // SQLite is case-insensitive (corrected from old Exact)
+        assert_eq!(
+            Dialect::Sqlite.default_case_sensitivity(),
+            CaseSensitivity::Lower
         );
     }
 

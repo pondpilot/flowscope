@@ -12,6 +12,7 @@
 
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::error::Error;
 use std::fs;
 use std::path::Path;
 
@@ -32,40 +33,50 @@ const KNOWN_DIALECTS: &[&str] = &[
 ];
 
 fn main() {
+    if let Err(e) = run() {
+        eprintln!("Build script error: {e}");
+        std::process::exit(1);
+    }
+}
+
+fn run() -> Result<(), Box<dyn Error>> {
     let spec_dir = Path::new("specs/dialect-semantics");
 
     // Verify spec directory exists
     if !spec_dir.exists() {
-        panic!(
+        return Err(format!(
             "Spec directory not found at {:?}. Expected at crates/flowscope-core/specs/dialect-semantics/",
             spec_dir.canonicalize().unwrap_or_else(|_| spec_dir.to_path_buf())
-        );
+        ).into());
     }
 
     // Create generated directory
     let generated_dir = Path::new("src/generated");
-    fs::create_dir_all(generated_dir).expect("Failed to create src/generated directory");
+    fs::create_dir_all(generated_dir)
+        .map_err(|e| format!("Failed to create src/generated directory: {e}"))?;
 
     // Load and parse specs (JSON for full data, TOML for manually curated)
-    let dialects = load_dialects_json(spec_dir);
-    let functions = load_functions_json(spec_dir);
-    let normalization_overrides = load_normalization_overrides(spec_dir);
-    let scoping_rules = load_scoping_rules(spec_dir);
-    let dialect_behavior = load_dialect_behavior(spec_dir);
+    let dialects = load_dialects_json(spec_dir)?;
+    let functions = load_functions_json(spec_dir)?;
+    let normalization_overrides = load_normalization_overrides(spec_dir)?;
+    let scoping_rules = load_scoping_rules(spec_dir)?;
+    let dialect_behavior = load_dialect_behavior(spec_dir)?;
 
     // Validate dialect coverage
     validate_dialect_coverage(&dialects, &scoping_rules);
 
     // Generate code
-    generate_mod_rs(generated_dir);
-    generate_case_sensitivity(generated_dir, &dialects, &normalization_overrides);
-    generate_scoping_rules(generated_dir, &scoping_rules);
-    generate_function_rules(generated_dir, &dialect_behavior);
-    generate_functions(generated_dir, &functions);
+    generate_mod_rs(generated_dir)?;
+    generate_case_sensitivity(generated_dir, &dialects, &normalization_overrides)?;
+    generate_scoping_rules(generated_dir, &scoping_rules)?;
+    generate_function_rules(generated_dir, &dialect_behavior)?;
+    generate_functions(generated_dir, &functions)?;
 
     // Tell Cargo to rerun if specs change
     println!("cargo:rerun-if-changed=specs/dialect-semantics/");
     println!("cargo:rerun-if-changed=build.rs");
+
+    Ok(())
 }
 
 // ============================================================================
@@ -130,12 +141,11 @@ struct GeneratorSettings {
     custom_transforms_count: Option<usize>,
 }
 
-fn load_dialects_json(spec_dir: &Path) -> BTreeMap<String, DialectSpec> {
+fn load_dialects_json(spec_dir: &Path) -> Result<BTreeMap<String, DialectSpec>, Box<dyn Error>> {
     let path = spec_dir.join("dialects.json");
-    let content =
-        fs::read_to_string(&path).unwrap_or_else(|e| panic!("Failed to read {path:?}: {e}"));
+    let content = fs::read_to_string(&path).map_err(|e| format!("Failed to read {path:?}: {e}"))?;
 
-    serde_json::from_str(&content).unwrap_or_else(|e| panic!("Failed to parse {path:?}: {e}"))
+    serde_json::from_str(&content).map_err(|e| format!("Failed to parse {path:?}: {e}").into())
 }
 
 #[derive(Debug, Deserialize)]
@@ -153,12 +163,11 @@ struct FunctionDef {
     dialect_specific: bool,
 }
 
-fn load_functions_json(spec_dir: &Path) -> BTreeMap<String, FunctionDef> {
+fn load_functions_json(spec_dir: &Path) -> Result<BTreeMap<String, FunctionDef>, Box<dyn Error>> {
     let path = spec_dir.join("functions.json");
-    let content =
-        fs::read_to_string(&path).unwrap_or_else(|e| panic!("Failed to read {path:?}: {e}"));
+    let content = fs::read_to_string(&path).map_err(|e| format!("Failed to read {path:?}: {e}"))?;
 
-    serde_json::from_str(&content).unwrap_or_else(|e| panic!("Failed to parse {path:?}: {e}"))
+    serde_json::from_str(&content).map_err(|e| format!("Failed to parse {path:?}: {e}").into())
 }
 
 // ============================================================================
@@ -178,12 +187,13 @@ struct NormalizationOverride {
     qualified_table_case_sensitive: Option<bool>,
 }
 
-fn load_normalization_overrides(spec_dir: &Path) -> BTreeMap<String, NormalizationOverride> {
+fn load_normalization_overrides(
+    spec_dir: &Path,
+) -> Result<BTreeMap<String, NormalizationOverride>, Box<dyn Error>> {
     let path = spec_dir.join("normalization_overrides.toml");
-    let content =
-        fs::read_to_string(&path).unwrap_or_else(|e| panic!("Failed to read {path:?}: {e}"));
+    let content = fs::read_to_string(&path).map_err(|e| format!("Failed to read {path:?}: {e}"))?;
 
-    toml::from_str(&content).unwrap_or_else(|e| panic!("Failed to parse {path:?}: {e}"))
+    toml::from_str(&content).map_err(|e| format!("Failed to parse {path:?}: {e}").into())
 }
 
 #[derive(Debug, Deserialize)]
@@ -194,12 +204,11 @@ struct ScopingRule {
     lateral_column_alias: bool,
 }
 
-fn load_scoping_rules(spec_dir: &Path) -> BTreeMap<String, ScopingRule> {
+fn load_scoping_rules(spec_dir: &Path) -> Result<BTreeMap<String, ScopingRule>, Box<dyn Error>> {
     let path = spec_dir.join("scoping_rules.toml");
-    let content =
-        fs::read_to_string(&path).unwrap_or_else(|e| panic!("Failed to read {path:?}: {e}"));
+    let content = fs::read_to_string(&path).map_err(|e| format!("Failed to read {path:?}: {e}"))?;
 
-    toml::from_str(&content).unwrap_or_else(|e| panic!("Failed to parse {path:?}: {e}"))
+    toml::from_str(&content).map_err(|e| format!("Failed to parse {path:?}: {e}").into())
 }
 
 #[derive(Debug, Deserialize)]
@@ -214,12 +223,11 @@ struct UnnestBehavior {
     implicit_unnest: Vec<String>,
 }
 
-fn load_dialect_behavior(spec_dir: &Path) -> DialectBehavior {
+fn load_dialect_behavior(spec_dir: &Path) -> Result<DialectBehavior, Box<dyn Error>> {
     let path = spec_dir.join("dialect_behavior.toml");
-    let content =
-        fs::read_to_string(&path).unwrap_or_else(|e| panic!("Failed to read {path:?}: {e}"));
+    let content = fs::read_to_string(&path).map_err(|e| format!("Failed to read {path:?}: {e}"))?;
 
-    toml::from_str(&content).unwrap_or_else(|e| panic!("Failed to parse {path:?}: {e}"))
+    toml::from_str(&content).map_err(|e| format!("Failed to parse {path:?}: {e}").into())
 }
 
 // ============================================================================
@@ -252,7 +260,7 @@ fn validate_dialect_coverage(
 // Code Generation
 // ============================================================================
 
-fn generate_mod_rs(dir: &Path) {
+fn generate_mod_rs(dir: &Path) -> Result<(), Box<dyn Error>> {
     let content = r#"//! Generated dialect semantic code.
 //!
 //! DO NOT EDIT MANUALLY - generated by build.rs from specs/dialect-semantics/
@@ -268,22 +276,32 @@ pub use functions::*;
 // scoping_rules adds methods to Dialect via impl, no re-export needed
 "#;
 
-    fs::write(dir.join("mod.rs"), content).expect("Failed to write mod.rs");
+    fs::write(dir.join("mod.rs"), content)
+        .map_err(|e| format!("Failed to write mod.rs: {e}").into())
 }
 
 fn generate_case_sensitivity(
     dir: &Path,
     dialects: &BTreeMap<String, DialectSpec>,
     overrides: &BTreeMap<String, NormalizationOverride>,
-) {
+) -> Result<(), Box<dyn Error>> {
     let mut code = String::from(
         r#"//! Case sensitivity rules per dialect.
 //!
 //! Generated from dialects.json and normalization_overrides.toml
+//!
+//! This module defines how SQL identifiers (table names, column names, etc.)
+//! should be normalized for comparison. Different SQL dialects have different
+//! rules for identifier case sensitivity.
+
+use std::borrow::Cow;
 
 use crate::Dialect;
 
 /// Normalization strategy for identifier handling.
+///
+/// SQL dialects differ in how they handle identifier case. This enum represents
+/// the different strategies used for normalizing identifiers during analysis.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NormalizationStrategy {
     /// Fold to lowercase (Postgres, Redshift)
@@ -294,6 +312,51 @@ pub enum NormalizationStrategy {
     CaseInsensitive,
     /// Case-sensitive, preserve exactly
     CaseSensitive,
+}
+
+impl NormalizationStrategy {
+    /// Applies this normalization strategy to a string.
+    ///
+    /// Returns a `Cow<str>` to avoid allocation when no transformation is needed
+    /// (i.e., for `CaseSensitive` strategy or when the string is already in the
+    /// correct case).
+    ///
+    /// For `CaseInsensitive`, lowercase folding is used as the canonical form.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use std::borrow::Cow;
+    /// use flowscope_core::generated::NormalizationStrategy;
+    ///
+    /// let strategy = NormalizationStrategy::Lowercase;
+    /// assert_eq!(strategy.apply("MyTable"), "mytable");
+    ///
+    /// // CaseSensitive returns a borrowed reference (no allocation)
+    /// let strategy = NormalizationStrategy::CaseSensitive;
+    /// assert!(matches!(strategy.apply("MyTable"), Cow::Borrowed(_)));
+    /// ```
+    pub fn apply<'a>(&self, s: &'a str) -> Cow<'a, str> {
+        match self {
+            Self::CaseSensitive => Cow::Borrowed(s),
+            Self::Lowercase | Self::CaseInsensitive => {
+                // Optimization: only allocate if the string contains uppercase chars
+                if s.chars().any(|c| c.is_uppercase()) {
+                    Cow::Owned(s.to_lowercase())
+                } else {
+                    Cow::Borrowed(s)
+                }
+            }
+            Self::Uppercase => {
+                // Optimization: only allocate if the string contains lowercase chars
+                if s.chars().any(|c| c.is_lowercase()) {
+                    Cow::Owned(s.to_uppercase())
+                } else {
+                    Cow::Borrowed(s)
+                }
+            }
+        }
+    }
 }
 
 impl Dialect {
@@ -436,10 +499,14 @@ impl Dialect {
     code.push_str("            _ => &[\"\\\"\"],\n"); // Default: double quote
     code.push_str("        }\n    }\n}\n");
 
-    fs::write(dir.join("case_sensitivity.rs"), code).expect("Failed to write case_sensitivity.rs");
+    fs::write(dir.join("case_sensitivity.rs"), code)
+        .map_err(|e| format!("Failed to write case_sensitivity.rs: {e}").into())
 }
 
-fn generate_scoping_rules(dir: &Path, rules: &BTreeMap<String, ScopingRule>) {
+fn generate_scoping_rules(
+    dir: &Path,
+    rules: &BTreeMap<String, ScopingRule>,
+) -> Result<(), Box<dyn Error>> {
     let mut code = String::from(
         r#"//! Alias visibility and scoping rules per dialect.
 //!
@@ -514,28 +581,69 @@ impl Dialect {
     code.push_str("            _ => false,\n");
     code.push_str("        }\n    }\n}\n");
 
-    fs::write(dir.join("scoping_rules.rs"), code).expect("Failed to write scoping_rules.rs");
+    fs::write(dir.join("scoping_rules.rs"), code)
+        .map_err(|e| format!("Failed to write scoping_rules.rs: {e}").into())
 }
 
-fn generate_function_rules(dir: &Path, behavior: &DialectBehavior) {
+fn generate_function_rules(dir: &Path, behavior: &DialectBehavior) -> Result<(), Box<dyn Error>> {
     let mut code = String::from(
         r#"//! Function argument handling rules per dialect.
 //!
 //! Generated from dialect_behavior.toml
+//!
+//! This module provides dialect-aware rules for function argument handling,
+//! particularly for date/time functions where certain arguments are keywords
+//! (like `YEAR`, `MONTH`) rather than column references.
 
 use crate::Dialect;
 
-/// Get argument indices to skip for a function in a specific dialect.
-/// These are typically unit/part literals that shouldn't be treated as column references.
+/// Returns argument indices to skip when extracting column references from a function call.
+///
+/// Certain SQL functions take keyword arguments (e.g., `DATEDIFF(YEAR, start, end)` in Snowflake)
+/// that should not be treated as column references during lineage analysis. This function
+/// returns the indices of such arguments for the given function and dialect.
+///
+/// # Arguments
+///
+/// * `dialect` - The SQL dialect being analyzed
+/// * `func_name` - The function name (case-insensitive, underscore-insensitive)
+///
+/// # Returns
+///
+/// A slice of argument indices (0-based) to skip. Returns an empty slice for
+/// unknown functions or functions without skip rules.
+///
+/// # Example
+///
+/// ```ignore
+/// // In Snowflake, DATEDIFF takes a unit as the first argument
+/// let skip = skip_args_for_function(Dialect::Snowflake, "DATEDIFF");
+/// assert_eq!(skip, &[0]); // Skip first argument (the unit)
+///
+/// // Both DATEADD and DATE_ADD match the same rules
+/// let skip1 = skip_args_for_function(Dialect::Snowflake, "DATEADD");
+/// let skip2 = skip_args_for_function(Dialect::Snowflake, "DATE_ADD");
+/// assert_eq!(skip1, skip2);
+/// ```
 pub fn skip_args_for_function(dialect: Dialect, func_name: &str) -> &'static [usize] {
-    let func_lower = func_name.to_lowercase();
-    match func_lower.as_str() {
+    // Normalize: lowercase and remove underscores to handle both DATEADD and DATE_ADD variants
+    let func_normalized: String = func_name
+        .chars()
+        .filter(|c| *c != '_')
+        .map(|c| c.to_ascii_lowercase())
+        .collect();
+    match func_normalized.as_str() {
 "#,
     );
 
     // Group by function name
     for (func_name, dialect_rules) in &behavior.date_functions {
-        let func_lower = func_name.to_lowercase();
+        // Normalize: lowercase and remove underscores to match input normalization
+        let func_normalized: String = func_name
+            .chars()
+            .filter(|c| *c != '_')
+            .flat_map(|c| c.to_lowercase())
+            .collect();
 
         // Check for _default rule and count non-default dialect rules
         let has_default = dialect_rules.contains_key("_default");
@@ -549,23 +657,25 @@ pub fn skip_args_for_function(dialect: Dialect, func_name: &str) -> &'static [us
             if has_default {
                 let default_indices = parse_skip_indices(dialect_rules.get("_default").unwrap());
                 if default_indices.is_empty() {
-                    code.push_str(&format!("        \"{func_lower}\" => &[],\n"));
+                    code.push_str(&format!("        \"{func_normalized}\" => &[],\n"));
                 } else {
                     let idx_str = default_indices
                         .iter()
                         .map(|i| i.to_string())
                         .collect::<Vec<_>>()
                         .join(", ");
-                    code.push_str(&format!("        \"{func_lower}\" => &[{idx_str}],\n"));
+                    code.push_str(&format!("        \"{func_normalized}\" => &[{idx_str}],\n"));
                 }
             } else {
-                code.push_str(&format!("        \"{func_lower}\" => &[],\n"));
+                code.push_str(&format!("        \"{func_normalized}\" => &[],\n"));
             }
             continue;
         }
 
         // Generate match expression for functions with dialect-specific rules
-        code.push_str(&format!("        \"{func_lower}\" => match dialect {{\n"));
+        code.push_str(&format!(
+            "        \"{func_normalized}\" => match dialect {{\n"
+        ));
 
         for (dialect, value) in dialect_rules {
             if dialect == "_default" {
@@ -677,26 +787,105 @@ impl Dialect {
         ));
     }
 
-    fs::write(dir.join("function_rules.rs"), code).expect("Failed to write function_rules.rs");
+    fs::write(dir.join("function_rules.rs"), code)
+        .map_err(|e| format!("Failed to write function_rules.rs: {e}").into())
 }
 
-fn generate_functions(dir: &Path, functions: &BTreeMap<String, FunctionDef>) {
+/// Converts a PascalCase class name to a SQL function name (lowercase with underscores).
+///
+/// This function handles the conversion of class names from the sqlglot function
+/// definitions into SQL-style snake_case function names. The key challenge is
+/// correctly handling acronyms (sequences of uppercase letters) like "JSON", "JSONB",
+/// or "AI" that should remain together rather than being split at each letter.
+///
+/// # Algorithm
+///
+/// The function tracks three pieces of state as it processes each character:
+/// - Whether the previous character was uppercase (for detecting acronym boundaries)
+/// - Whether the previous character was a letter (for detecting word starts)
+/// - The current position (for avoiding a leading underscore)
+///
+/// An underscore is inserted before an uppercase letter when:
+/// 1. We're not at the start of the string, AND
+/// 2. The previous character was a letter, AND
+/// 3. Either:
+///    - The previous character was lowercase (transitioning into a new word), OR
+///    - The next character is lowercase (end of an acronym, start of a new word)
+///
+/// The third condition handles the tricky case of acronyms followed by regular words:
+/// - "JSONBObject" -> "jsonb_object" (underscore before 'O' because 'b' follows 'B')
+/// - "JSONB" -> "jsonb" (no underscore, all uppercase)
+///
+/// # Examples
+///
+/// ```text
+/// "JSONBObjectAgg"   -> "jsonb_object_agg"   // Acronym + word + word
+/// "FirstValue"       -> "first_value"        // Standard PascalCase
+/// "RowNumber"        -> "row_number"         // Standard PascalCase
+/// "AISummarizeAgg"   -> "ai_summarize_agg"   // Short acronym + words
+/// "Count"            -> "count"              // Single word
+/// "UNNEST"           -> "unnest"             // All uppercase acronym
+/// ```
+fn class_name_to_sql_name(class_name: &str) -> String {
+    let mut result = String::new();
+    let mut prev_was_upper = false;
+    let mut prev_was_letter = false;
+
+    for (i, c) in class_name.chars().enumerate() {
+        if c.is_uppercase() {
+            if i > 0 && prev_was_letter {
+                // Look ahead to see if the next character is lowercase.
+                // This detects the boundary between an acronym and a following word.
+                // For example, in "JSONBObject", when we reach 'O', we see that:
+                // - prev_was_upper is true (from 'B')
+                // - next char 'b' is lowercase
+                // So we insert an underscore: "jsonb_object"
+                let next_is_lower = class_name
+                    .chars()
+                    .nth(i + 1)
+                    .is_some_and(|nc| nc.is_lowercase());
+
+                // Insert underscore if:
+                // - Previous was lowercase (normal word boundary: "First" + "Value")
+                // - OR we're at the end of an acronym (next is lowercase)
+                if !prev_was_upper || next_is_lower {
+                    result.push('_');
+                }
+            }
+            result.push(c.to_ascii_lowercase());
+            prev_was_upper = true;
+        } else {
+            result.push(c.to_ascii_lowercase());
+            prev_was_upper = false;
+        }
+        prev_was_letter = c.is_alphabetic();
+    }
+
+    result
+}
+
+fn generate_functions(
+    dir: &Path,
+    functions: &BTreeMap<String, FunctionDef>,
+) -> Result<(), Box<dyn Error>> {
     let mut aggregates: BTreeSet<String> = BTreeSet::new();
     let mut windows: BTreeSet<String> = BTreeSet::new();
     let mut udtfs: BTreeSet<String> = BTreeSet::new();
 
-    for (name, def) in functions {
-        let name_lower = name.to_lowercase();
+    for def in functions.values() {
+        // Use the class name to derive the SQL function name, as the dictionary keys
+        // may have mangled names (e.g., "J_S_O_N_B_OBJECT_AGG" instead of "JSONB_OBJECT_AGG")
+        let sql_name = class_name_to_sql_name(&def.class);
         for cat in &def.categories {
             match cat.as_str() {
                 "aggregate" => {
-                    aggregates.insert(name_lower.clone());
+                    aggregates.insert(sql_name.clone());
                 }
                 "window" => {
-                    windows.insert(name_lower.clone());
+                    windows.insert(sql_name.clone());
                 }
                 "udtf" => {
-                    udtfs.insert(name_lower.clone());
+                    udtfs.insert(sql_name.clone());
                 }
                 _ => {}
             }
@@ -707,6 +896,10 @@ fn generate_functions(dir: &Path, functions: &BTreeMap<String, FunctionDef>) {
         r#"//! Function classification sets.
 //!
 //! Generated from functions.json
+//!
+//! This module provides sets of SQL function names categorized by their behavior
+//! (aggregate, window, table-generating). These classifications are used during
+//! lineage analysis to determine how expressions should be analyzed.
 
 use std::collections::HashSet;
 use std::sync::LazyLock;
@@ -752,26 +945,52 @@ use std::sync::LazyLock;
     }
     code.push_str("    set\n});\n\n");
 
-    // Generate helper functions
+    // Generate helper functions with ASCII lowercase optimization
     code.push_str(
-        r#"/// Check if a function is an aggregate function.
+        r#"/// Checks if a function is an aggregate function (e.g., SUM, COUNT, AVG).
+///
+/// Aggregate functions combine multiple input rows into a single output value.
+/// This classification is used to detect aggregation in SELECT expressions
+/// and validate GROUP BY semantics.
+///
+/// The check is case-insensitive. Uses ASCII lowercase for performance since
+/// SQL function names are always ASCII.
 pub fn is_aggregate_function(name: &str) -> bool {
-    AGGREGATE_FUNCTIONS.contains(name.to_lowercase().as_str())
+    // SQL function names are ASCII, so we can use the faster ASCII lowercase
+    let lower = name.to_ascii_lowercase();
+    AGGREGATE_FUNCTIONS.contains(lower.as_str())
 }
 
-/// Check if a function is a window function.
+/// Checks if a function is a window function (e.g., ROW_NUMBER, RANK, LAG).
+///
+/// Window functions perform calculations across a set of rows related to
+/// the current row, without collapsing them into a single output.
+///
+/// The check is case-insensitive. Uses ASCII lowercase for performance since
+/// SQL function names are always ASCII.
 pub fn is_window_function(name: &str) -> bool {
-    WINDOW_FUNCTIONS.contains(name.to_lowercase().as_str())
+    // SQL function names are ASCII, so we can use the faster ASCII lowercase
+    let lower = name.to_ascii_lowercase();
+    WINDOW_FUNCTIONS.contains(lower.as_str())
 }
 
-/// Check if a function is a table-generating function (UDTF).
+/// Checks if a function is a table-generating function / UDTF (e.g., UNNEST, EXPLODE).
+///
+/// UDTFs return multiple rows for each input row, expanding the result set.
+/// This classification affects how lineage is tracked through these functions.
+///
+/// The check is case-insensitive. Uses ASCII lowercase for performance since
+/// SQL function names are always ASCII.
 pub fn is_udtf_function(name: &str) -> bool {
-    UDTF_FUNCTIONS.contains(name.to_lowercase().as_str())
+    // SQL function names are ASCII, so we can use the faster ASCII lowercase
+    let lower = name.to_ascii_lowercase();
+    UDTF_FUNCTIONS.contains(lower.as_str())
 }
 "#,
     );
 
-    fs::write(dir.join("functions.rs"), code).expect("Failed to write functions.rs");
+    fs::write(dir.join("functions.rs"), code)
+        .map_err(|e| format!("Failed to write functions.rs: {e}").into())
 }
 
 // ============================================================================

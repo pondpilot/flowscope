@@ -33,7 +33,8 @@ impl<'a> Analyzer<'a> {
         ctx: &StatementContext,
         expr: &Expr,
     ) {
-        let refs = ExpressionAnalyzer::extract_column_refs(expr);
+        let dialect = self.request.dialect;
+        let refs = ExpressionAnalyzer::extract_column_refs_with_dialect(expr, dialect);
         for col_ref in refs {
             if let Some(table) = col_ref.table.as_deref() {
                 if let Some(canonical) = self.resolve_table_alias(ctx, Some(table)) {

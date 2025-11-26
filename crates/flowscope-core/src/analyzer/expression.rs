@@ -14,7 +14,9 @@
 use super::context::{ColumnRef, StatementContext};
 use super::functions;
 use super::Analyzer;
+use crate::generated;
 use crate::types::{AggregationInfo, FilterClauseType};
+use crate::Dialect;
 use sqlparser::ast::{self, Expr, FunctionArg, FunctionArgExpr};
 use std::collections::HashSet;
 
@@ -117,20 +119,26 @@ impl<'a, 'b> ExpressionAnalyzer<'a, 'b> {
         }
     }
 
-    /// Extracts all column references from an expression.
+    /// Extracts all column references from an expression (dialect-aware).
     ///
     /// Returns a vector of `ColumnRef` structs representing each column
     /// referenced in the expression, including those in nested function calls,
     /// CASE expressions, and binary operations.
     ///
+    /// The dialect parameter is used to determine which function arguments
+    /// should be skipped (e.g., date unit keywords vary by dialect).
+    ///
     /// Subquery columns are not included as they are handled separately.
-    pub(crate) fn extract_column_refs(expr: &Expr) -> Vec<ColumnRef> {
+    pub(crate) fn extract_column_refs_with_dialect(
+        expr: &Expr,
+        dialect: Dialect,
+    ) -> Vec<ColumnRef> {
         let mut refs = Vec::new();
-        Self::collect_column_refs(expr, &mut refs, 0);
+        Self::collect_column_refs(expr, &mut refs, dialect, 0);
         refs
     }
 
-    fn collect_column_refs(expr: &Expr, refs: &mut Vec<ColumnRef>, depth: usize) {
+    fn collect_column_refs(expr: &Expr, refs: &mut Vec<ColumnRef>, dialect: Dialect, depth: usize) {
         if depth > MAX_RECURSION_DEPTH {
             return;
         }
@@ -158,30 +166,31 @@ impl<'a, 'b> ExpressionAnalyzer<'a, 'b> {
                 }
             }
             Expr::BinaryOp { left, right, .. } => {
-                Self::collect_column_refs(left, refs, next_depth);
-                Self::collect_column_refs(right, refs, next_depth);
+                Self::collect_column_refs(left, refs, dialect, next_depth);
+                Self::collect_column_refs(right, refs, dialect, next_depth);
             }
             Expr::UnaryOp { expr, .. } => {
-                Self::collect_column_refs(expr, refs, next_depth);
+                Self::collect_column_refs(expr, refs, dialect, next_depth);
             }
             Expr::Function(func) => {
                 let func_name = func.name.to_string();
+                let skip_indices = generated::skip_args_for_function(dialect, &func_name);
                 match &func.args {
                     ast::FunctionArguments::List(arg_list) => {
                         for (idx, arg) in arg_list.args.iter().enumerate() {
                             // Check if this argument should be skipped (e.g., date unit keywords)
-                            if functions::should_skip_function_arg(&func_name, idx) {
+                            if skip_indices.contains(&idx) {
                                 continue;
                             }
                             match arg {
                                 FunctionArg::Unnamed(FunctionArgExpr::Expr(e)) => {
-                                    Self::collect_column_refs(e, refs, next_depth);
+                                    Self::collect_column_refs(e, refs, dialect, next_depth);
                                 }
                                 FunctionArg::Named {
                                     arg: FunctionArgExpr::Expr(e),
                                     ..
                                 } => {
-                                    Self::collect_column_refs(e, refs, next_depth);
+                                    Self::collect_column_refs(e, refs, dialect, next_depth);
                                 }
                                 _ => {}
                             }
@@ -198,57 +207,57 @@ impl<'a, 'b> ExpressionAnalyzer<'a, 'b> {
                 else_result,
             } => {
                 if let Some(op) = operand {
-                    Self::collect_column_refs(op, refs, next_depth);
+                    Self::collect_column_refs(op, refs, dialect, next_depth);
                 }
                 for cond in conditions {
-                    Self::collect_column_refs(cond, refs, next_depth);
+                    Self::collect_column_refs(cond, refs, dialect, next_depth);
                 }
                 for res in results {
-                    Self::collect_column_refs(res, refs, next_depth);
+                    Self::collect_column_refs(res, refs, dialect, next_depth);
                 }
                 if let Some(el) = else_result {
-                    Self::collect_column_refs(el, refs, next_depth);
+                    Self::collect_column_refs(el, refs, dialect, next_depth);
                 }
             }
             Expr::Cast { expr, .. } => {
-                Self::collect_column_refs(expr, refs, next_depth);
+                Self::collect_column_refs(expr, refs, dialect, next_depth);
             }
             Expr::Nested(inner) => {
-                Self::collect_column_refs(inner, refs, next_depth);
+                Self::collect_column_refs(inner, refs, dialect, next_depth);
             }
             Expr::Subquery(_) => {
                 // Subquery columns are handled separately
             }
             Expr::InList { expr, list, .. } => {
-                Self::collect_column_refs(expr, refs, next_depth);
+                Self::collect_column_refs(expr, refs, dialect, next_depth);
                 for item in list {
-                    Self::collect_column_refs(item, refs, next_depth);
+                    Self::collect_column_refs(item, refs, dialect, next_depth);
                 }
             }
             Expr::Between {
                 expr, low, high, ..
             } => {
-                Self::collect_column_refs(expr, refs, next_depth);
-                Self::collect_column_refs(low, refs, next_depth);
-                Self::collect_column_refs(high, refs, next_depth);
+                Self::collect_column_refs(expr, refs, dialect, next_depth);
+                Self::collect_column_refs(low, refs, dialect, next_depth);
+                Self::collect_column_refs(high, refs, dialect, next_depth);
             }
             Expr::IsNull(e) | Expr::IsNotNull(e) => {
-                Self::collect_column_refs(e, refs, next_depth);
+                Self::collect_column_refs(e, refs, dialect, next_depth);
             }
             Expr::IsFalse(e) | Expr::IsNotFalse(e) | Expr::IsTrue(e) | Expr::IsNotTrue(e) => {
-                Self::collect_column_refs(e, refs, next_depth);
+                Self::collect_column_refs(e, refs, dialect, next_depth);
             }
             Expr::Like { expr, pattern, .. } | Expr::ILike { expr, pattern, .. } => {
-                Self::collect_column_refs(expr, refs, next_depth);
-                Self::collect_column_refs(pattern, refs, next_depth);
+                Self::collect_column_refs(expr, refs, dialect, next_depth);
+                Self::collect_column_refs(pattern, refs, dialect, next_depth);
             }
             Expr::Tuple(exprs) => {
                 for e in exprs {
-                    Self::collect_column_refs(e, refs, next_depth);
+                    Self::collect_column_refs(e, refs, dialect, next_depth);
                 }
             }
             Expr::Extract { expr, .. } => {
-                Self::collect_column_refs(expr, refs, next_depth);
+                Self::collect_column_refs(expr, refs, dialect, next_depth);
             }
             _ => {
                 // Other expressions don't contain column references or are handled elsewhere
@@ -463,10 +472,11 @@ impl<'a, 'b> ExpressionAnalyzer<'a, 'b> {
     pub(crate) fn capture_filter_predicates(&mut self, expr: &Expr, clause_type: FilterClauseType) {
         // Split by AND and process each predicate separately
         let predicates = Self::split_by_and(expr);
+        let dialect = self.analyzer.request.dialect;
 
         for predicate in predicates {
             // Extract column references from this specific predicate
-            let column_refs = Self::extract_column_refs(predicate);
+            let column_refs = Self::extract_column_refs_with_dialect(predicate, dialect);
 
             // Find unique tables referenced in this predicate
             let mut affected_tables: HashSet<String> = HashSet::new();

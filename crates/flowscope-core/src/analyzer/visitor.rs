@@ -560,6 +560,31 @@ impl<'a, 'b> Visitor for LineageVisitor<'a, 'b> {
                     .with_statement(self.ctx.statement_index),
                 );
             }
+            TableFactor::UNNEST {
+                array_exprs, alias, ..
+            } => {
+                // UNNEST expands array columns into rows. Extract column references
+                // from the array expressions and resolve them to their source tables.
+                let dialect = self.analyzer.request.dialect;
+                for expr in array_exprs {
+                    let column_refs =
+                        ExpressionAnalyzer::extract_column_refs_with_dialect(expr, dialect);
+                    for col_ref in &column_refs {
+                        // Resolve the column to its source table and add it as a data source
+                        if let Some(table_canonical) = self.analyzer.resolve_column_table(
+                            self.ctx,
+                            col_ref.table.as_deref(),
+                            &col_ref.column,
+                        ) {
+                            self.add_source_table(&table_canonical);
+                        }
+                    }
+                }
+                if let Some(a) = alias {
+                    self.ctx
+                        .register_subquery_alias_in_scope(a.name.to_string());
+                }
+            }
             _ => {}
         }
     }

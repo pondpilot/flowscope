@@ -454,20 +454,12 @@ impl SchemaRegistry {
             }
         }
 
-        // Compute normalization
-        let effective_case = match self.case_sensitivity {
-            CaseSensitivity::Dialect => self.dialect.default_case_sensitivity(),
-            other => other,
-        };
+        let strategy = self.case_sensitivity.resolve(self.dialect);
 
         let normalized = if is_quoted_identifier(name) {
             unquote_identifier(name)
         } else {
-            match effective_case {
-                CaseSensitivity::Lower | CaseSensitivity::Dialect => name.to_lowercase(),
-                CaseSensitivity::Upper => name.to_uppercase(),
-                CaseSensitivity::Exact => name.to_string(),
-            }
+            strategy.apply(name).into_owned()
         };
 
         // Store in cache
@@ -480,10 +472,7 @@ impl SchemaRegistry {
 
     /// Normalizes a qualified table name according to dialect case sensitivity rules.
     pub(crate) fn normalize_table_name(&self, name: &str) -> String {
-        let effective_case = match self.case_sensitivity {
-            CaseSensitivity::Dialect => self.dialect.default_case_sensitivity(),
-            other => other,
-        };
+        let strategy = self.case_sensitivity.resolve(self.dialect);
 
         let parts = split_qualified_identifiers(name);
         if parts.is_empty() {
@@ -496,11 +485,7 @@ impl SchemaRegistry {
                 if is_quoted_identifier(&part) {
                     unquote_identifier(&part)
                 } else {
-                    match effective_case {
-                        CaseSensitivity::Lower | CaseSensitivity::Dialect => part.to_lowercase(),
-                        CaseSensitivity::Upper => part.to_uppercase(),
-                        CaseSensitivity::Exact => part,
-                    }
+                    strategy.apply(&part).into_owned()
                 }
             })
             .collect();

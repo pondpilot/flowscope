@@ -68,6 +68,7 @@ trino = [0]
 bigquery = []
 snowflake = [0]
 spark = []
+mssql = [0]
 
 [date_functions.EXTRACT]
 _default = [0]

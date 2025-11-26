@@ -18,6 +18,22 @@ pub enum CaseSensitivity {
     Exact,
 }
 
+impl CaseSensitivity {
+    /// Resolves this case sensitivity setting to a concrete normalization strategy.
+    ///
+    /// When `self` is `Dialect`, uses the dialect's default strategy.
+    /// Otherwise, returns the explicit strategy requested.
+    pub fn resolve(&self, dialect: crate::Dialect) -> crate::generated::NormalizationStrategy {
+        use crate::generated::NormalizationStrategy;
+        match self {
+            Self::Dialect => dialect.normalization_strategy(),
+            Self::Lower => NormalizationStrategy::Lowercase,
+            Self::Upper => NormalizationStrategy::Uppercase,
+            Self::Exact => NormalizationStrategy::CaseSensitive,
+        }
+    }
+}
+
 /// An issue encountered during SQL analysis (error, warning, or info).
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]

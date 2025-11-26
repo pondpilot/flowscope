@@ -1,5 +1,6 @@
 pub mod analyzer;
 pub mod error;
+pub mod generated;
 pub mod lineage;
 pub mod parser;
 #[cfg(test)]

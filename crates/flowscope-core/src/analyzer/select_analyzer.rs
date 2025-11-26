@@ -43,17 +43,54 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
     }
 
     fn analyze_group_by(&mut self, group_by: &ast::GroupByExpr) {
+        let dialect = self.analyzer.request.dialect;
         match group_by {
             ast::GroupByExpr::Expressions(exprs, _) => {
                 let mut processed_grouping_exprs = HashSet::new();
-                for group_by in exprs {
-                    let mut expr_analyzer = ExpressionAnalyzer::new(self.analyzer, self.ctx);
-                    let expr_str = expr_analyzer.normalize_group_by_expr(group_by);
+                for group_by_expr in exprs {
+                    // Normalize expression first without creating expr_analyzer yet
+                    let expr_str = {
+                        let ea = ExpressionAnalyzer::new(self.analyzer, self.ctx);
+                        ea.normalize_group_by_expr(group_by_expr)
+                    };
+
+                    // Check if this expression matches a SELECT alias (validation only)
+                    // This check happens before projection analysis, so output_columns
+                    // would typically be empty. For proper alias checking, we'd need
+                    // to analyze projection first, but that changes semantics.
+                    // For now, we only check if alias_in_group_by is forbidden and
+                    // the expression matches an existing output column name.
+                    let matched_alias = self
+                        .ctx
+                        .output_columns
+                        .iter()
+                        .find(|c| c.name == expr_str)
+                        .map(|c| c.name.clone());
+
+                    if let Some(alias_name) = matched_alias {
+                        if !dialect.alias_in_group_by() {
+                            use crate::types::{issue_codes, Issue};
+                            let statement_index = self.ctx.statement_index;
+                            self.analyzer.issues.push(
+                                Issue::warning(
+                                    issue_codes::UNSUPPORTED_SYNTAX,
+                                    format!(
+                                        "Dialect '{dialect:?}' does not support referencing aliases in GROUP BY (alias '{alias_name}' used). This may fail at runtime."
+                                    ),
+                                )
+                                .with_statement(statement_index),
+                            );
+                        }
+                    }
+
                     if !processed_grouping_exprs.insert(expr_str.clone()) {
                         continue;
                     }
+
+                    // Now create expr_analyzer for the actual analysis
+                    let mut expr_analyzer = ExpressionAnalyzer::new(self.analyzer, self.ctx);
                     expr_analyzer.ctx.add_grouping_column(expr_str);
-                    expr_analyzer.analyze(group_by);
+                    expr_analyzer.analyze(group_by_expr);
                 }
             }
             ast::GroupByExpr::All(_) => {
@@ -63,13 +100,14 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
     }
 
     fn analyze_projection(&mut self, projection: &[SelectItem]) {
+        let dialect = self.analyzer.request.dialect;
         for (idx, item) in projection.iter().enumerate() {
             match item {
                 SelectItem::UnnamedExpr(expr) => {
                     let (sources, name, aggregation) = {
                         let ea = ExpressionAnalyzer::new(self.analyzer, self.ctx);
                         (
-                            ExpressionAnalyzer::extract_column_refs(expr),
+                            ExpressionAnalyzer::extract_column_refs_with_dialect(expr, dialect),
                             ea.derive_column_name(expr, idx),
                             ea.detect_aggregation(expr),
                         )
@@ -99,7 +137,7 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
                     let (sources, aggregation) = {
                         let ea = ExpressionAnalyzer::new(self.analyzer, self.ctx);
                         (
-                            ExpressionAnalyzer::extract_column_refs(expr),
+                            ExpressionAnalyzer::extract_column_refs_with_dialect(expr, dialect),
                             ea.detect_aggregation(expr),
                         )
                     };
