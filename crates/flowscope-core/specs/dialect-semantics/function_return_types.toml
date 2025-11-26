@@ -1,0 +1,34 @@
+# Function return types for SQL dialects
+# PASSTHROUGH means return type matches input type
+
+[BOOLEAN]
+functions = ["And", "Between", "EQ", "Exists", "GT", "GTE", "Glob", "ILike", "In", "Is", "IsInf", "IsNan", "LT", "LTE", "Like", "NEQ", "Not", "Or", "RegexpLike", "SimilarTo", "Xor"]
+
+[BIGINT]
+# DateDiff returns integer (day count, second count, etc.)
+functions = ["Ascii", "BitLength", "Ceil", "Count", "CountIf", "DateDiff", "Day", "DayOfMonth", "DayOfWeek", "DayOfYear", "DenseRank", "Floor", "Hour", "Instr", "Length", "Minute", "Month", "Ntile", "OctetLength", "Position", "Quarter", "Rank", "RowNumber", "Second", "Sign", "Strpos", "Unicode", "Week", "Year"]
+
+[DOUBLE]
+functions = ["Acos", "Asin", "Atan", "Atan2", "Avg", "Cbrt", "Corr", "Cos", "CovarPop", "CovarSamp", "CumeDist", "Degrees", "Exp", "Ln", "Log", "Log10", "Log2", "PercentRank", "PercentileCont", "PercentileDisc", "Pow", "Power", "Radians", "Rand", "Random", "Sin", "Sqrt", "Stddev", "StddevPop", "StddevSamp", "Tan", "VarSamp", "Variance", "VariancePop"]
+
+[VARCHAR]
+functions = ["Char", "Chr", "Concat", "ConcatWs", "CurrentDatabase", "CurrentUser", "FromBase64", "Hex", "InitCap", "LTrim", "Left", "Lower", "Lpad", "MD5", "RTrim", "Repeat", "Replace", "Reverse", "Right", "Rpad", "SHA", "SHA2", "SafeConcat", "Substr", "Substring", "ToBase64", "Translate", "Trim", "TypeOf", "Unhex", "Upper"]
+
+[DATE]
+# DateDiff moved to BIGINT (returns integer), DateTrunc moved to PASSTHROUGH (returns same type as input)
+functions = ["CurrentDate", "DateAdd", "DateFromParts", "DateSub", "MakeDate", "StrToDate", "ToDate", "Today"]
+
+[TIMESTAMP]
+# TimestampTrunc moved to PASSTHROUGH (returns same type as input)
+functions = ["CurrentTimestamp", "MakeTimestamp", "Now", "StrToTime", "Sysdate", "TimestampAdd", "TimestampFromParts", "TimestampSub", "ToTimestamp"]
+
+[ARRAY]
+functions = ["Array", "ArrayAgg", "ArrayConcat", "ArrayConstruct", "ArrayFilter", "ArrayReverse", "ArraySort", "GenerateArray", "Sequence", "Split", "StringToArray"]
+
+[JSON]
+functions = ["JsonArray", "JsonExtract", "JsonExtractScalar", "JsonFormat", "JsonObject", "ParseJson", "ToJson"]
+
+[PASSTHROUGH]
+# DateTrunc returns same type as input (DATE->DATE, TIMESTAMP->TIMESTAMP)
+functions = ["Abs", "AnyValue", "Case", "Coalesce", "DateTrunc", "First", "FirstValue", "Greatest", "If", "Iff", "Ifnull", "Lag", "Last", "LastValue", "Lead", "Least", "Max", "Min", "Neg", "NthValue", "Nullif", "Nvl", "Nvl2", "Sum", "TimestampTrunc"]
+

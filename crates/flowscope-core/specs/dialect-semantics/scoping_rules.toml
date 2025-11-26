@@ -1,0 +1,143 @@
+# Scoping and alias visibility rules for SQL dialects
+# These rules determine where SELECT aliases can be referenced
+
+[bigquery]
+alias_in_group_by = true
+alias_in_having = true
+alias_in_order_by = true
+lateral_column_alias = true
+# BigQuery expands aliases early, but has special handling for ambiguous cases
+
+[clickhouse]
+alias_in_group_by = true
+alias_in_having = true
+alias_in_order_by = true
+lateral_column_alias = true
+# ClickHouse is permissive with alias references
+
+[databricks]
+alias_in_group_by = true
+alias_in_having = true
+alias_in_order_by = true
+lateral_column_alias = true
+# Databricks follows Spark rules
+
+[doris]
+alias_in_group_by = false
+alias_in_having = false
+alias_in_order_by = true
+lateral_column_alias = false
+# Using default rules for doris
+
+[drill]
+alias_in_group_by = false
+alias_in_having = false
+alias_in_order_by = true
+lateral_column_alias = false
+# Using default rules for drill
+
+[duckdb]
+alias_in_group_by = true
+alias_in_having = true
+alias_in_order_by = true
+lateral_column_alias = true
+# DuckDB is generally permissive like MySQL
+
+[hive]
+alias_in_group_by = true
+alias_in_having = true
+alias_in_order_by = true
+lateral_column_alias = true
+# Hive follows Spark-like permissiveness
+
+[mysql]
+alias_in_group_by = true
+alias_in_having = true
+alias_in_order_by = true
+lateral_column_alias = false
+# MySQL is permissive with alias references
+
+[oracle]
+alias_in_group_by = false
+alias_in_having = false
+alias_in_order_by = true
+lateral_column_alias = false
+# Oracle is strict like PostgreSQL
+
+[postgres]
+alias_in_group_by = false
+alias_in_having = false
+alias_in_order_by = true
+lateral_column_alias = false
+# PostgreSQL is strict - must use expressions or ordinal positions
+
+[presto]
+alias_in_group_by = false
+alias_in_having = false
+alias_in_order_by = true
+lateral_column_alias = false
+# Presto follows PostgreSQL-like strictness
+
+[redshift]
+alias_in_group_by = true
+alias_in_having = true
+alias_in_order_by = true
+lateral_column_alias = false
+# Redshift is based on PostgreSQL but more permissive
+
+[snowflake]
+alias_in_group_by = false
+alias_in_having = false
+alias_in_order_by = true
+lateral_column_alias = true
+# Snowflake only exposes SELECT aliases to ORDER BY (GROUP BY/HAVING still see raw expressions)
+
+[spark]
+alias_in_group_by = true
+alias_in_having = true
+alias_in_order_by = true
+lateral_column_alias = true
+# Spark/Databricks support alias expansion
+
+[sqlite]
+alias_in_group_by = true
+alias_in_having = true
+alias_in_order_by = true
+lateral_column_alias = false
+# SQLite allows alias references in GROUP BY and HAVING
+# Verified: SELECT x+y AS sum FROM (VALUES(1,2)) AS t(x,y) GROUP BY sum; works
+
+[starrocks]
+alias_in_group_by = false
+alias_in_having = false
+alias_in_order_by = true
+lateral_column_alias = false
+# Using default rules for starrocks
+
+[tableau]
+alias_in_group_by = false
+alias_in_having = false
+alias_in_order_by = true
+lateral_column_alias = false
+# Using default rules for tableau
+
+[teradata]
+alias_in_group_by = false
+alias_in_having = false
+alias_in_order_by = true
+lateral_column_alias = false
+# Using default rules for teradata
+
+[trino]
+alias_in_group_by = false
+alias_in_having = false
+alias_in_order_by = true
+lateral_column_alias = false
+# Trino (Presto fork) follows same rules
+
+[mssql]
+alias_in_group_by = false
+alias_in_having = false
+alias_in_order_by = true
+lateral_column_alias = false
+# SQL Server is strict - must repeat expression

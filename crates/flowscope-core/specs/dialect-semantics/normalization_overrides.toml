@@ -1,0 +1,82 @@
+# Dialect normalization behavior
+# has_custom_normalization = true means static NORMALIZATION_STRATEGY is insufficient
+
+[bigquery]
+normalization_strategy = "NormalizationStrategy.CASE_INSENSITIVE"
+has_custom_normalization = true
+override_reason = "mixed_case_sensitivity"
+udf_case_sensitive = true
+qualified_table_case_sensitive = true
+
+[clickhouse]
+normalization_strategy = "NormalizationStrategy.CASE_SENSITIVE"
+has_custom_normalization = false
+
+[databricks]
+normalization_strategy = "NormalizationStrategy.CASE_INSENSITIVE"
+has_custom_normalization = false
+
+[doris]
+normalization_strategy = "NormalizationStrategy.CASE_SENSITIVE"
+has_custom_normalization = false
+
+[drill]
+normalization_strategy = "NormalizationStrategy.LOWERCASE"
+has_custom_normalization = false
+
+[duckdb]
+normalization_strategy = "NormalizationStrategy.CASE_INSENSITIVE"
+has_custom_normalization = false
+
+[hive]
+normalization_strategy = "NormalizationStrategy.CASE_INSENSITIVE"
+has_custom_normalization = false
+
+[mysql]
+normalization_strategy = "NormalizationStrategy.CASE_SENSITIVE"
+has_custom_normalization = false
+
+[oracle]
+normalization_strategy = "NormalizationStrategy.UPPERCASE"
+has_custom_normalization = false
+
+[postgres]
+normalization_strategy = "NormalizationStrategy.LOWERCASE"
+has_custom_normalization = false
+
+[presto]
+normalization_strategy = "NormalizationStrategy.CASE_INSENSITIVE"
+has_custom_normalization = false
+
+[redshift]
+normalization_strategy = "NormalizationStrategy.CASE_INSENSITIVE"
+has_custom_normalization = false
+
+[snowflake]
+normalization_strategy = "NormalizationStrategy.UPPERCASE"
+has_custom_normalization = false
+
+[spark]
+normalization_strategy = "NormalizationStrategy.CASE_INSENSITIVE"
+has_custom_normalization = false
+
+[sqlite]
+normalization_strategy = "NormalizationStrategy.CASE_INSENSITIVE"
+has_custom_normalization = false
+
+[starrocks]
+normalization_strategy = "NormalizationStrategy.CASE_SENSITIVE"
+has_custom_normalization = false
+
+[teradata]
+normalization_strategy = "NormalizationStrategy.LOWERCASE"
+has_custom_normalization = false
+
+[trino]
+normalization_strategy = "NormalizationStrategy.CASE_INSENSITIVE"
+has_custom_normalization = false
+
+[mssql]
+normalization_strategy = "NormalizationStrategy.CASE_INSENSITIVE"
+has_custom_normalization = false
+

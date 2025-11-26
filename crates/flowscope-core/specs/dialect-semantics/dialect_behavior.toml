@@ -1,0 +1,92 @@
+# Additional dialect behavior rules
+
+[null_ordering]
+# Where NULLs appear in ORDER BY by default
+# nulls_are_large = NULLS LAST (Postgres, Oracle, Snowflake)
+# nulls_are_small = NULLS FIRST (BigQuery, MySQL, Spark)
+# nulls_are_last = NULLS LAST always
+bigquery = "nulls_are_small"
+clickhouse = "nulls_are_last"
+databricks = "nulls_are_small"
+doris = "nulls_are_small"
+drill = "nulls_are_last"
+duckdb = "nulls_are_last"
+hive = "nulls_are_small"
+mysql = "nulls_are_small"
+oracle = "nulls_are_large"
+postgres = "nulls_are_large"
+presto = "nulls_are_last"
+redshift = "nulls_are_large"
+snowflake = "nulls_are_large"
+spark = "nulls_are_small"
+sqlite = "nulls_are_small"
+starrocks = "nulls_are_small"
+teradata = "nulls_are_small"
+trino = "nulls_are_last"
+mssql = "nulls_are_small"
+
+[unnest]
+# Dialects with implicit UNNEST support (no explicit CROSS JOIN needed)
+implicit_unnest = ["bigquery", "redshift"]
+
+[date_functions]
+# Arguments to skip during lineage analysis (unit/part literals)
+# Format: function.dialect = [arg_indices_to_skip]
+
+[date_functions.DATEDIFF]
+# NOTE: Postgres does NOT have DATEDIFF - uses AGE(), DATE_PART(), or subtraction
+# Spark/Databricks have 2-arg datediff(end, start) returning days - no unit arg
+redshift = [0]
+snowflake = [0]
+presto = [0]
+trino = [0]
+mssql = [0]
+mysql = []
+hive = []
+bigquery = []
+duckdb = []
+spark = []
+databricks = []
+
+[date_functions.DATE_TRUNC]
+postgres = [0]
+snowflake = [0]
+redshift = [0]
+presto = [0]
+trino = [0]
+bigquery = [1]
+spark = [0]
+databricks = [0]
+duckdb = [0]
+
+[date_functions.DATE_ADD]
+postgres = []
+mysql = []
+hive = []
+presto = [0]
+trino = [0]
+bigquery = []
+snowflake = [0]
+spark = []
+
+[date_functions.EXTRACT]
+_default = [0]
+
+[date_functions.DATE_PART]
+postgres = [0]
+snowflake = [0]
+redshift = [0]
+
+[date_functions.TIMESTAMP_ADD]
+# BigQuery: TIMESTAMP_ADD(timestamp, INTERVAL n UNIT) - arg 0 is timestamp (keep), arg 1 is interval (skip)
+bigquery = [1]
+# Presto/Trino: date_add(unit, value, timestamp) - arg 0 is unit (skip)
+presto = [0]
+trino = [0]
+# Snowflake: TIMESTAMPADD(unit, value, timestamp) - arg 0 is unit (skip)
+snowflake = [0]
+
+[date_functions.TIMESTAMP_SUB]
+# Same pattern as TIMESTAMP_ADD
+bigquery = [1]
+

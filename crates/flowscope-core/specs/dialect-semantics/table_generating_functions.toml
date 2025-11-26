@@ -1,0 +1,76 @@
+# Table-generating functions (UDTFs)
+# is_table_source = true means this function produces rows, not a scalar
+# creates_scope = true means columns from this source have their own scope
+
+[EXPLODE]
+class = "Explode"
+is_table_source = true
+is_udtf = true
+creates_scope = true
+
+[EXPLODEOUTER]
+class = "ExplodeOuter"
+is_table_source = true
+is_udtf = true
+creates_scope = true
+
+[GENERATEDATEARRAY]
+class = "GenerateDateArray"
+is_table_source = true
+is_udtf = false
+creates_scope = false
+
+[GENERATESERIES]
+class = "GenerateSeries"
+is_table_source = true
+is_udtf = false
+creates_scope = false
+
+[GENERATETIMESTAMPARRAY]
+class = "GenerateTimestampArray"
+is_table_source = true
+is_udtf = false
+creates_scope = false
+
+[LATERAL]
+class = "Lateral"
+is_table_source = true
+is_udtf = true
+creates_scope = true
+
+[POSEXPLODE]
+class = "Posexplode"
+is_table_source = true
+is_udtf = true
+creates_scope = true
+
+[POSEXPLODEOUTER]
+class = "PosexplodeOuter"
+is_table_source = true
+is_udtf = true
+creates_scope = true
+
+[TABLEFROMROWS]
+class = "TableFromRows"
+is_table_source = true
+is_udtf = true
+creates_scope = true
+
+[UDTF]
+class = "UDTF"
+is_table_source = true
+is_udtf = true
+creates_scope = true
+
+[UNNEST]
+class = "Unnest"
+is_table_source = true
+is_udtf = true
+creates_scope = true
+
+[VALUES]
+class = "Values"
+is_table_source = true
+is_udtf = true
+creates_scope = true
+

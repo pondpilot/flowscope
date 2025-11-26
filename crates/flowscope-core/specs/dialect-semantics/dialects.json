@@ -1,0 +1,613 @@
+{
+  "bigquery": {
+    "normalization": "case_insensitive",
+    "pseudocolumns": [
+      "_FILE_NAME",
+      "_PARTITIONDATE",
+      "_PARTITIONTIME",
+      "_TABLE_SUFFIX"
+    ],
+    "quote_chars": {
+      "identifier_quotes": [
+        "`"
+      ],
+      "string_escapes": [
+        "\\"
+      ]
+    },
+    "parser_settings": {
+      "tablesample_csv": false,
+      "log_defaults_to_ln": true
+    },
+    "generator_settings": {
+      "limit_fetch": "LIMIT",
+      "tablesample_size_is_rows": true,
+      "locking_reads_supported": false,
+      "null_ordering_supported": false,
+      "ignore_nulls_in_func": true,
+      "can_implement_array_any": true,
+      "supports_table_alias_columns": false,
+      "unpivot_aliases_are_identifiers": false,
+      "custom_transforms_count": 192
+    },
+    "scoping_rules": {},
+    "type_mapping_count": 33
+  },
+  "clickhouse": {
+    "normalization": "case_sensitive",
+    "pseudocolumns": [],
+    "quote_chars": {
+      "identifier_quotes": [
+        "\"",
+        "`"
+      ],
+      "string_escapes": [
+        "'",
+        "\\"
+      ]
+    },
+    "parser_settings": {
+      "tablesample_csv": false,
+      "log_defaults_to_ln": true
+    },
+    "generator_settings": {
+      "limit_fetch": "ALL",
+      "tablesample_size_is_rows": false,
+      "locking_reads_supported": false,
+      "null_ordering_supported": true,
+      "ignore_nulls_in_func": false,
+      "can_implement_array_any": true,
+      "supports_table_alias_columns": true,
+      "unpivot_aliases_are_identifiers": true,
+      "custom_transforms_count": 174
+    },
+    "scoping_rules": {},
+    "type_mapping_count": 65
+  },
+  "databricks": {
+    "normalization": "case_insensitive",
+    "pseudocolumns": [],
+    "quote_chars": {
+      "identifier_quotes": [
+        "`"
+      ],
+      "string_escapes": [
+        "\\"
+      ]
+    },
+    "parser_settings": {
+      "tablesample_csv": false,
+      "log_defaults_to_ln": true
+    },
+    "generator_settings": {
+      "limit_fetch": "LIMIT",
+      "tablesample_size_is_rows": true,
+      "locking_reads_supported": false,
+      "null_ordering_supported": true,
+      "ignore_nulls_in_func": false,
+      "can_implement_array_any": true,
+      "supports_table_alias_columns": true,
+      "unpivot_aliases_are_identifiers": true,
+      "custom_transforms_count": 219
+    },
+    "scoping_rules": {},
+    "type_mapping_count": 26
+  },
+  "doris": {
+    "normalization": "case_sensitive",
+    "pseudocolumns": [],
+    "quote_chars": {
+      "identifier_quotes": [
+        "`"
+      ],
+      "string_escapes": [
+        "'",
+        "\"",
+        "\\"
+      ]
+    },
+    "parser_settings": {
+      "tablesample_csv": false,
+      "log_defaults_to_ln": true
+    },
+    "generator_settings": {
+      "limit_fetch": "LIMIT",
+      "tablesample_size_is_rows": true,
+      "locking_reads_supported": true,
+      "ignore_nulls_in_func": false,
+      "can_implement_array_any": false,
+      "supports_table_alias_columns": true,
+      "unpivot_aliases_are_identifiers": true,
+      "custom_transforms_count": 187
+    },
+    "scoping_rules": {},
+    "type_mapping_count": 18
+  },
+  "drill": {
+    "normalization": "lowercase",
+    "pseudocolumns": [],
+    "quote_chars": {
+      "identifier_quotes": [
+        "`"
+      ],
+      "string_escapes": [
+        "\\"
+      ]
+    },
+    "parser_settings": {
+      "tablesample_csv": false,
+      "log_defaults_to_ln": true
+    },
+    "generator_settings": {
+      "limit_fetch": "ALL",
+      "tablesample_size_is_rows": true,
+      "locking_reads_supported": false,
+      "null_ordering_supported": true,
+      "ignore_nulls_in_func": false,
+      "can_implement_array_any": false,
+      "supports_table_alias_columns": true,
+      "unpivot_aliases_are_identifiers": true,
+      "custom_transforms_count": 141
+    },
+    "scoping_rules": {},
+    "type_mapping_count": 21
+  },
+  "duckdb": {
+    "normalization": "case_insensitive",
+    "pseudocolumns": [],
+    "quote_chars": {
+      "identifier_quotes": [
+        "\""
+      ],
+      "string_escapes": [
+        "'"
+      ]
+    },
+    "parser_settings": {
+      "tablesample_csv": false,
+      "log_defaults_to_ln": false
+    },
+    "generator_settings": {
+      "limit_fetch": "LIMIT",
+      "tablesample_size_is_rows": true,
+      "locking_reads_supported": false,
+      "null_ordering_supported": true,
+      "ignore_nulls_in_func": true,
+      "can_implement_array_any": true,
+      "supports_table_alias_columns": true,
+      "unpivot_aliases_are_identifiers": true,
+      "custom_transforms_count": 210
+    },
+    "scoping_rules": {},
+    "type_mapping_count": 27
+  },
+  "hive": {
+    "normalization": "case_insensitive",
+    "pseudocolumns": [],
+    "quote_chars": {
+      "identifier_quotes": [
+        "`"
+      ],
+      "string_escapes": [
+        "\\"
+      ]
+    },
+    "parser_settings": {
+      "tablesample_csv": false,
+      "log_defaults_to_ln": true
+    },
+    "generator_settings": {
+      "limit_fetch": "LIMIT",
+      "tablesample_size_is_rows": true,
+      "locking_reads_supported": false,
+      "null_ordering_supported": true,
+      "ignore_nulls_in_func": false,
+      "can_implement_array_any": false,
+      "supports_table_alias_columns": true,
+      "unpivot_aliases_are_identifiers": true,
+      "custom_transforms_count": 186
+    },
+    "scoping_rules": {},
+    "type_mapping_count": 21
+  },
+  "mysql": {
+    "normalization": "case_sensitive",
+    "pseudocolumns": [],
+    "quote_chars": {
+      "identifier_quotes": [
+        "`"
+      ],
+      "string_escapes": [
+        "'",
+        "\"",
+        "\\"
+      ]
+    },
+    "parser_settings": {
+      "tablesample_csv": false,
+      "log_defaults_to_ln": true
+    },
+    "generator_settings": {
+      "limit_fetch": "LIMIT",
+      "tablesample_size_is_rows": true,
+      "locking_reads_supported": true,
+      "ignore_nulls_in_func": false,
+      "can_implement_array_any": false,
+      "supports_table_alias_columns": true,
+      "unpivot_aliases_are_identifiers": true,
+      "custom_transforms_count": 165
+    },
+    "scoping_rules": {},
+    "type_mapping_count": 17
+  },
+  "oracle": {
+    "normalization": "uppercase",
+    "pseudocolumns": [
+      "LEVEL",
+      "OBJECT_ID",
+      "OBJECT_VALUE",
+      "ROWID",
+      "ROWNUM"
+    ],
+    "quote_chars": {
+      "identifier_quotes": [
+        "\""
+      ],
+      "string_escapes": [
+        "'"
+      ]
+    },
+    "parser_settings": {
+      "tablesample_csv": false,
+      "log_defaults_to_ln": false
+    },
+    "generator_settings": {
+      "limit_fetch": "FETCH",
+      "tablesample_size_is_rows": true,
+      "locking_reads_supported": true,
+      "null_ordering_supported": true,
+      "ignore_nulls_in_func": false,
+      "can_implement_array_any": false,
+      "supports_table_alias_columns": true,
+      "unpivot_aliases_are_identifiers": true,
+      "custom_transforms_count": 136
+    },
+    "scoping_rules": {},
+    "type_mapping_count": 25
+  },
+  "postgres": {
+    "normalization": "lowercase",
+    "pseudocolumns": [],
+    "quote_chars": {
+      "identifier_quotes": [
+        "\""
+      ],
+      "string_escapes": [
+        "'"
+      ]
+    },
+    "parser_settings": {
+      "tablesample_csv": false,
+      "log_defaults_to_ln": false
+    },
+    "generator_settings": {
+      "limit_fetch": "ALL",
+      "tablesample_size_is_rows": false,
+      "locking_reads_supported": true,
+      "null_ordering_supported": true,
+      "ignore_nulls_in_func": false,
+      "can_implement_array_any": true,
+      "supports_table_alias_columns": true,
+      "unpivot_aliases_are_identifiers": true,
+      "custom_transforms_count": 176
+    },
+    "scoping_rules": {},
+    "type_mapping_count": 20
+  },
+  "presto": {
+    "normalization": "case_insensitive",
+    "pseudocolumns": [],
+    "quote_chars": {
+      "identifier_quotes": [
+        "\""
+      ],
+      "string_escapes": [
+        "'"
+      ]
+    },
+    "parser_settings": {
+      "tablesample_csv": false,
+      "log_defaults_to_ln": false
+    },
+    "generator_settings": {
+      "limit_fetch": "ALL",
+      "tablesample_size_is_rows": true,
+      "locking_reads_supported": false,
+      "null_ordering_supported": true,
+      "ignore_nulls_in_func": false,
+      "can_implement_array_any": false,
+      "supports_table_alias_columns": true,
+      "unpivot_aliases_are_identifiers": true,
+      "custom_transforms_count": 202
+    },
+    "scoping_rules": {},
+    "type_mapping_count": 25
+  },
+  "redshift": {
+    "normalization": "case_insensitive",
+    "pseudocolumns": [],
+    "quote_chars": {
+      "identifier_quotes": [
+        "\""
+      ],
+      "string_escapes": [
+        "\\",
+        "'"
+      ]
+    },
+    "parser_settings": {
+      "tablesample_csv": false,
+      "log_defaults_to_ln": false
+    },
+    "generator_settings": {
+      "limit_fetch": "LIMIT",
+      "tablesample_size_is_rows": false,
+      "locking_reads_supported": false,
+      "null_ordering_supported": true,
+      "ignore_nulls_in_func": false,
+      "can_implement_array_any": false,
+      "supports_table_alias_columns": true,
+      "unpivot_aliases_are_identifiers": true,
+      "custom_transforms_count": 183
+    },
+    "scoping_rules": {},
+    "type_mapping_count": 23
+  },
+  "snowflake": {
+    "normalization": "uppercase",
+    "pseudocolumns": [
+      "LEVEL"
+    ],
+    "quote_chars": {
+      "identifier_quotes": [
+        "\""
+      ],
+      "string_escapes": [
+        "\\",
+        "'"
+      ]
+    },
+    "parser_settings": {
+      "tablesample_csv": false,
+      "log_defaults_to_ln": false
+    },
+    "generator_settings": {
+      "limit_fetch": "ALL",
+      "tablesample_size_is_rows": true,
+      "locking_reads_supported": false,
+      "null_ordering_supported": true,
+      "ignore_nulls_in_func": false,
+      "can_implement_array_any": false,
+      "supports_table_alias_columns": true,
+      "unpivot_aliases_are_identifiers": true,
+      "custom_transforms_count": 207
+    },
+    "scoping_rules": {},
+    "type_mapping_count": 17
+  },
+  "spark": {
+    "normalization": "case_insensitive",
+    "pseudocolumns": [],
+    "quote_chars": {
+      "identifier_quotes": [
+        "`"
+      ],
+      "string_escapes": [
+        "\\"
+      ]
+    },
+    "parser_settings": {
+      "tablesample_csv": false,
+      "log_defaults_to_ln": true
+    },
+    "generator_settings": {
+      "limit_fetch": "LIMIT",
+      "tablesample_size_is_rows": true,
+      "locking_reads_supported": false,
+      "null_ordering_supported": true,
+      "ignore_nulls_in_func": false,
+      "can_implement_array_any": true,
+      "supports_table_alias_columns": true,
+      "unpivot_aliases_are_identifiers": true,
+      "custom_transforms_count": 218
+    },
+    "scoping_rules": {},
+    "type_mapping_count": 25
+  },
+  "sqlite": {
+    "normalization": "case_insensitive",
+    "pseudocolumns": [],
+    "quote_chars": {
+      "identifier_quotes": [
+        "\"",
+        [
+          "[",
+          "]"
+        ],
+        "`"
+      ],
+      "string_escapes": [
+        "'"
+      ]
+    },
+    "parser_settings": {
+      "tablesample_csv": false,
+      "log_defaults_to_ln": false
+    },
+    "generator_settings": {
+      "limit_fetch": "LIMIT",
+      "tablesample_size_is_rows": true,
+      "locking_reads_supported": false,
+      "null_ordering_supported": true,
+      "ignore_nulls_in_func": false,
+      "can_implement_array_any": false,
+      "supports_table_alias_columns": false,
+      "unpivot_aliases_are_identifiers": true,
+      "custom_transforms_count": 132
+    },
+    "scoping_rules": {},
+    "type_mapping_count": 24
+  },
+  "starrocks": {
+    "normalization": "case_sensitive",
+    "pseudocolumns": [],
+    "quote_chars": {
+      "identifier_quotes": [
+        "`"
+      ],
+      "string_escapes": [
+        "'",
+        "\"",
+        "\\"
+      ]
+    },
+    "parser_settings": {
+      "tablesample_csv": false,
+      "log_defaults_to_ln": true
+    },
+    "generator_settings": {
+      "limit_fetch": "LIMIT",
+      "tablesample_size_is_rows": true,
+      "locking_reads_supported": true,
+      "ignore_nulls_in_func": false,
+      "can_implement_array_any": false,
+      "supports_table_alias_columns": true,
+      "unpivot_aliases_are_identifiers": true,
+      "custom_transforms_count": 178
+    },
+    "scoping_rules": {},
+    "type_mapping_count": 19
+  },
+  "tableau": {
+    "normalization": "lowercase",
+    "pseudocolumns": [],
+    "quote_chars": {
+      "identifier_quotes": [
+        [
+          "[",
+          "]"
+        ]
+      ],
+      "string_escapes": [
+        "'"
+      ]
+    },
+    "parser_settings": {
+      "tablesample_csv": false,
+      "log_defaults_to_ln": false
+    },
+    "generator_settings": {
+      "limit_fetch": "ALL",
+      "tablesample_size_is_rows": true,
+      "locking_reads_supported": false,
+      "null_ordering_supported": true,
+      "ignore_nulls_in_func": false,
+      "can_implement_array_any": false,
+      "supports_table_alias_columns": true,
+      "unpivot_aliases_are_identifiers": true,
+      "custom_transforms_count": 116
+    },
+    "scoping_rules": {},
+    "type_mapping_count": 13
+  },
+  "teradata": {
+    "normalization": "lowercase",
+    "pseudocolumns": [],
+    "quote_chars": {
+      "identifier_quotes": [
+        "\""
+      ],
+      "string_escapes": [
+        "'"
+      ]
+    },
+    "parser_settings": {
+      "tablesample_csv": true,
+      "log_defaults_to_ln": false
+    },
+    "generator_settings": {
+      "limit_fetch": "ALL",
+      "tablesample_size_is_rows": true,
+      "locking_reads_supported": false,
+      "null_ordering_supported": true,
+      "ignore_nulls_in_func": false,
+      "can_implement_array_any": true,
+      "supports_table_alias_columns": true,
+      "unpivot_aliases_are_identifiers": true,
+      "custom_transforms_count": 129
+    },
+    "scoping_rules": {},
+    "type_mapping_count": 16
+  },
+  "trino": {
+    "normalization": "case_insensitive",
+    "pseudocolumns": [],
+    "quote_chars": {
+      "identifier_quotes": [
+        "\""
+      ],
+      "string_escapes": [
+        "'"
+      ]
+    },
+    "parser_settings": {
+      "tablesample_csv": false,
+      "log_defaults_to_ln": false
+    },
+    "generator_settings": {
+      "limit_fetch": "ALL",
+      "tablesample_size_is_rows": true,
+      "locking_reads_supported": false,
+      "null_ordering_supported": true,
+      "ignore_nulls_in_func": false,
+      "can_implement_array_any": false,
+      "supports_table_alias_columns": true,
+      "unpivot_aliases_are_identifiers": true,
+      "custom_transforms_count": 199
+    },
+    "scoping_rules": {},
+    "type_mapping_count": 25
+  },
+  "mssql": {
+    "normalization": "case_insensitive",
+    "pseudocolumns": [],
+    "quote_chars": {
+      "identifier_quotes": [
+        [
+          "[",
+          "]"
+        ],
+        "\""
+      ],
+      "string_escapes": [
+        "'"
+      ]
+    },
+    "parser_settings": {
+      "tablesample_csv": false,
+      "log_defaults_to_ln": true
+    },
+    "generator_settings": {
+      "limit_fetch": "FETCH",
+      "tablesample_size_is_rows": true,
+      "locking_reads_supported": false,
+      "ignore_nulls_in_func": false,
+      "can_implement_array_any": false,
+      "supports_table_alias_columns": true,
+      "unpivot_aliases_are_identifiers": true,
+      "custom_transforms_count": 144
+    },
+    "scoping_rules": {},
+    "type_mapping_count": 22
+  }
+}

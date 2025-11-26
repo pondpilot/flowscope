@@ -6,6 +6,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Core SQL lineage analysis engine"
+build = "build.rs"
 
 [features]
 default = []
@@ -19,6 +20,11 @@ schemars.workspace = true
 chrono = { version = "0.4", features = ["serde"] }
 regex = "1"
 tracing = { version = "0.1", optional = true }
+
+[build-dependencies]
+toml = "0.8.19"
+serde = { version = "1.0.215", features = ["derive"] }
+serde_json = "1.0.133"
 
 [dev-dependencies]
 rstest = "0.22"
