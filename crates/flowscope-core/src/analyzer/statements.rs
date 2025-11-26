@@ -8,7 +8,7 @@ use super::complexity;
 use super::context::StatementContext;
 use super::expression::ExpressionAnalyzer;
 use super::helpers::{classify_query_type, extract_simple_name, generate_node_id};
-use super::select::SelectAnalyzer;
+use super::visitor::{LineageVisitor, Visitor};
 use super::Analyzer;
 use crate::error::ParseError;
 use crate::types::{issue_codes, Issue, Node, NodeType, StatementLineage};
@@ -165,21 +165,26 @@ impl<'a> Analyzer<'a> {
         from: &Option<TableWithJoins>,
         selection: &Option<Expr>,
     ) {
-        let mut select_analyzer = SelectAnalyzer::new(self, ctx);
+        let target_node_id = {
+            let mut visitor = LineageVisitor::new(self, ctx, None);
 
-        // 1. Analyze the target table
-        let target_node_id = select_analyzer.analyze_dml_target_from_table_with_joins(table);
+            // 1. Analyze the target table
+            visitor.analyze_dml_target_from_table_with_joins(table)
+        };
 
-        // 2. Analyze FROM clause (Postgres style)
-        if let Some(from_table) = from {
-            select_analyzer.analyze_table_with_joins(from_table, target_node_id.as_deref());
-        }
+        // 2. Analyze FROM clause (Postgres style) and joins in target table structure
+        {
+            let target = LineageVisitor::target_from_arc(target_node_id.as_ref());
+            let mut visitor = LineageVisitor::new(self, ctx, target);
 
-        // Also analyze the joins in the target table structure itself
-        for join in &table.joins {
-            let join_type = "JOIN";
-            select_analyzer.ctx.last_operation = Some(join_type.to_string());
-            select_analyzer.analyze_table_factor(&join.relation, target_node_id.as_deref());
+            if let Some(from_table) = from {
+                visitor.visit_table_with_joins(from_table);
+            }
+
+            for join in &table.joins {
+                visitor.set_last_operation(Some("JOIN".to_string()));
+                visitor.visit_table_factor(&join.relation);
+            }
         }
 
         // 3. Analyze assignments (SET clause)
@@ -204,21 +209,21 @@ impl<'a> Analyzer<'a> {
     ) {
         let mut target_ids: Vec<Arc<str>> = Vec::new();
 
-        // Scope for SelectAnalyzer usage
+        // Scope for visitor usage
         {
-            let mut select_analyzer = SelectAnalyzer::new(self, ctx);
+            let mut visitor = LineageVisitor::new(self, ctx, None);
 
             // Pre-register aliases from sources so multi-table deletes can resolve targets.
             match from {
                 FromTable::WithFromKeyword(ts) | FromTable::WithoutKeyword(ts) => {
                     for t in ts {
-                        select_analyzer.register_aliases_in_table_with_joins(t);
+                        visitor.register_aliases_in_table_with_joins(t);
                     }
                 }
             }
             if let Some(us) = using {
                 for t in us {
-                    select_analyzer.register_aliases_in_table_with_joins(t);
+                    visitor.register_aliases_in_table_with_joins(t);
                 }
             }
 
@@ -227,16 +232,12 @@ impl<'a> Analyzer<'a> {
                 // Multi-table delete - targets may reference aliases
                 for obj in tables {
                     let name = obj.to_string();
-                    let target_canonical = select_analyzer
+                    let target_canonical = visitor
                         .resolve_table_alias(Some(&name))
-                        .unwrap_or_else(|| {
-                            select_analyzer
-                                .canonicalize_table_reference(&name)
-                                .canonical
-                        });
+                        .unwrap_or_else(|| visitor.canonicalize_table_reference(&name).canonical);
 
                     if let Some((_canonical, node_id)) =
-                        select_analyzer.analyze_dml_target(&target_canonical, None)
+                        visitor.analyze_dml_target(&target_canonical, None)
                     {
                         #[cfg(feature = "tracing")]
                         info!(target: "analyzer", "DELETE target identified: {} (ID: {})", _canonical, node_id);
@@ -252,7 +253,7 @@ impl<'a> Analyzer<'a> {
                     if let TableFactor::Table { name, alias, .. } = &first.relation {
                         let name_str = name.to_string();
                         if let Some((_canonical, node_id)) =
-                            select_analyzer.analyze_dml_target(&name_str, alias.as_ref())
+                            visitor.analyze_dml_target(&name_str, alias.as_ref())
                         {
                             #[cfg(feature = "tracing")]
                             info!(target: "analyzer", "DELETE target identified: {} (ID: {})", _canonical, node_id);
@@ -261,28 +262,34 @@ impl<'a> Analyzer<'a> {
                     }
                 }
             }
-
-            // 2. Analyze sources (FROM + USING)
-            // Helper to avoid borrow checker issues by re-using select_analyzer
-            let mut analyze_sources = |ts: &[TableWithJoins]| {
-                for t in ts {
-                    if target_ids.is_empty() {
-                        select_analyzer.analyze_table_with_joins(t, None);
-                    } else {
-                        for target_id in &target_ids {
-                            select_analyzer.analyze_table_with_joins(t, Some(target_id));
-                        }
-                    }
-                }
+        }
+        // 2. Analyze sources (FROM + USING)
+        let sources: Vec<&[TableWithJoins]> = {
+            let from_tables = match from {
+                FromTable::WithFromKeyword(ts) | FromTable::WithoutKeyword(ts) => ts.as_slice(),
             };
+            let mut sources = vec![from_tables];
+            if let Some(us) = using {
+                sources.push(us.as_slice());
+            }
+            sources
+        };
 
-            match from {
-                FromTable::WithFromKeyword(ts) | FromTable::WithoutKeyword(ts) => {
-                    analyze_sources(ts);
+        if target_ids.is_empty() {
+            let mut visitor = LineageVisitor::new(self, ctx, None);
+            for ts in sources {
+                for t in ts {
+                    visitor.visit_table_with_joins(t);
                 }
             }
-            if let Some(us) = using {
-                analyze_sources(us);
+        } else {
+            for target_id in &target_ids {
+                let mut visitor = LineageVisitor::new(self, ctx, Some(target_id.to_string()));
+                for ts in &sources {
+                    for t in *ts {
+                        visitor.visit_table_with_joins(t);
+                    }
+                }
             }
         }
 
@@ -302,13 +309,12 @@ impl<'a> Analyzer<'a> {
         on: &Expr,
         clauses: &[MergeClause],
     ) {
-        let mut select_analyzer = SelectAnalyzer::new(self, ctx);
+        // 1. Analyze Target Table and 2. Analyze Source Table (USING clause)
+        let mut visitor = LineageVisitor::new(self, ctx, None);
+        let target_id = visitor.analyze_dml_target_factor(table);
 
-        // 1. Analyze Target Table
-        let target_id = select_analyzer.analyze_dml_target_factor(table);
-
-        // 2. Analyze Source Table (USING clause)
-        select_analyzer.analyze_table_factor(source, target_id.as_deref());
+        visitor.set_target_node(LineageVisitor::target_from_arc(target_id.as_ref()));
+        visitor.visit_table_factor(source);
 
         // 3. Analyze ON predicate
         let mut expr_analyzer = ExpressionAnalyzer::new(self, ctx);

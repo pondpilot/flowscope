@@ -5,17 +5,15 @@
 //! column-level lineage graph by tracking data flow from source columns to output columns.
 
 use super::context::{ColumnRef, OutputColumn, StatementContext};
-use super::expression::ExpressionAnalyzer;
-use super::helpers::{generate_column_node_id, generate_edge_id, generate_node_id};
-use super::select::SelectAnalyzer;
+use super::helpers::{generate_column_node_id, generate_edge_id};
+use super::visitor::{LineageVisitor, Visitor};
 use super::Analyzer;
 use crate::types::{
     issue_codes, AggregationInfo, Edge, EdgeType, Issue, JoinType, Node, NodeType, ResolutionSource,
 };
 use serde_json::json;
-use sqlparser::ast::{self, Query, SetExpr, Statement};
+use sqlparser::ast::{self, Query, SetExpr};
 use std::collections::HashMap;
-use std::sync::Arc;
 
 /// Represents the information needed to add an expanded column during wildcard expansion.
 struct ExpandedColumnInfo {
@@ -36,60 +34,6 @@ pub(super) struct OutputColumnParams {
     pub aggregation: Option<AggregationInfo>,
 }
 
-struct CteAnalyzer<'a, 'b> {
-    analyzer: &'a mut Analyzer<'b>,
-    ctx: &'a mut StatementContext,
-}
-
-impl<'a, 'b> CteAnalyzer<'a, 'b> {
-    fn new(analyzer: &'a mut Analyzer<'b>, ctx: &'a mut StatementContext) -> Self {
-        Self { analyzer, ctx }
-    }
-
-    fn analyze(&mut self, ctes: &[ast::Cte]) {
-        // Pass 1: register all CTE names/nodes up front to allow forward and mutual references.
-        let mut cte_ids: Vec<(String, Arc<str>)> = Vec::new();
-        for cte in ctes {
-            let cte_name = cte.alias.name.to_string();
-
-            // Create CTE node
-            let cte_id = self.ctx.add_node(Node {
-                id: generate_node_id("cte", &cte_name),
-                node_type: NodeType::Cte,
-                label: cte_name.clone().into(),
-                qualified_name: Some(cte_name.clone().into()),
-                expression: None,
-                span: None,
-                metadata: None,
-                resolution_source: None,
-                filters: Vec::new(),
-                join_type: None,
-                join_condition: None,
-                aggregation: None,
-            });
-
-            // Register CTE for resolution
-            self.ctx
-                .cte_definitions
-                .insert(cte_name.clone(), cte_id.clone());
-            self.analyzer.all_ctes.insert(cte_name.clone());
-            cte_ids.push((cte_name, cte_id));
-        }
-
-        // Pass 2: analyze each CTE body now that all aliases are in scope.
-        for (cte, (_, cte_id)) in ctes.iter().zip(cte_ids.iter()) {
-            self.analyzer
-                .analyze_query_body(self.ctx, &cte.query.body, Some(cte_id));
-
-            // Capture CTE columns for lineage linking
-            let columns = std::mem::take(&mut self.ctx.output_columns);
-            self.ctx
-                .cte_columns
-                .insert(cte.alias.name.to_string(), columns);
-        }
-    }
-}
-
 impl<'a> Analyzer<'a> {
     pub(super) fn analyze_query(
         &mut self,
@@ -97,14 +41,8 @@ impl<'a> Analyzer<'a> {
         query: &Query,
         target_node: Option<&str>,
     ) {
-        // Use CteAnalyzer for WITH clause
-        if let Some(with) = &query.with {
-            let mut cte_analyzer = CteAnalyzer::new(self, ctx);
-            cte_analyzer.analyze(&with.cte_tables);
-        }
-
-        // Analyze main query body
-        self.analyze_query_body(ctx, &query.body, target_node);
+        let mut visitor = LineageVisitor::new(self, ctx, target_node.map(|s| s.to_string()));
+        visitor.visit_query(query);
     }
 
     pub(super) fn analyze_query_body(
@@ -113,63 +51,8 @@ impl<'a> Analyzer<'a> {
         body: &SetExpr,
         target_node: Option<&str>,
     ) {
-        match body {
-            SetExpr::Select(select) => {
-                let mut select_analyzer = SelectAnalyzer::new(self, ctx);
-                select_analyzer.analyze(select, target_node);
-            }
-            SetExpr::Query(query) => {
-                self.analyze_query(ctx, query, target_node);
-            }
-            SetExpr::SetOperation {
-                op, left, right, ..
-            } => {
-                let op_name = match op {
-                    ast::SetOperator::Union => "UNION",
-                    ast::SetOperator::Intersect => "INTERSECT",
-                    ast::SetOperator::Except => "EXCEPT",
-                };
-
-                // Analyze both branches
-                self.analyze_query_body(ctx, left, target_node);
-                self.analyze_query_body(ctx, right, target_node);
-
-                // Track operation for edges
-                if target_node.is_some() {
-                    ctx.last_operation = Some(op_name.to_string());
-                }
-            }
-            SetExpr::Values(values) => {
-                let mut expr_analyzer = ExpressionAnalyzer::new(self, ctx);
-                // Analyze expressions in VALUES clause
-                for row in &values.rows {
-                    for expr in row {
-                        expr_analyzer.analyze(expr);
-                    }
-                }
-            }
-            SetExpr::Insert(insert_stmt) => {
-                // Nested INSERT statement - analyze it
-                if let Statement::Insert(ref insert) = *insert_stmt {
-                    let target_name = insert.table_name.to_string();
-                    self.add_source_table(ctx, &target_name, target_node);
-                }
-            }
-            SetExpr::Update(_) => {
-                // Update statement
-            }
-            SetExpr::Table(tbl) => {
-                // TABLE statement - just references a table
-                let name = tbl
-                    .table_name
-                    .as_ref()
-                    .map(|n| n.to_string())
-                    .unwrap_or_default();
-                if !name.is_empty() {
-                    self.add_source_table(ctx, &name, target_node);
-                }
-            }
-        }
+        let mut visitor = LineageVisitor::new(self, ctx, target_node.map(|s| s.to_string()));
+        visitor.visit_set_expr(body);
     }
 
     // --- Shared Methods used by SelectAnalyzer, ExpressionAnalyzer, and Statements ---
@@ -192,10 +75,12 @@ impl<'a> Analyzer<'a> {
             }
             cte_id
         } else {
-            // Regular table
+            // Regular table or view
             let resolution = self.canonicalize_table_reference(table_name);
             let canonical = resolution.canonical.clone();
             canonical_for_alias = Some(canonical.clone());
+
+            // Use relation_identity to get correct node ID and type (view vs table)
             let (id, node_type) = self.relation_identity(&canonical);
 
             let exists_in_schema = resolution.matched_schema;

@@ -16,7 +16,6 @@ pub mod helpers;
 mod input;
 mod query;
 mod resolution;
-mod select;
 mod statements;
 pub mod visitor;
 
