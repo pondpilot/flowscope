@@ -66,12 +66,13 @@ impl<'a> Analyzer<'a> {
         self.tracker
             .record_produced(&canonical, ctx.statement_index);
 
+        let projection_checkpoint = ctx.projection_checkpoint();
         // Analyze source query
         self.analyze_query(ctx, query, Some(&target_id));
 
         // Capture output columns from the query to store as implied schema
-        let output_columns: Vec<ColumnSchema> = ctx
-            .output_columns
+        let projection_columns = ctx.take_output_columns_since(projection_checkpoint);
+        let output_columns: Vec<ColumnSchema> = projection_columns
             .iter()
             .map(|col| ColumnSchema {
                 name: col.name.clone(),
@@ -199,12 +200,13 @@ impl<'a> Analyzer<'a> {
         self.tracker
             .record_view_produced(&canonical, ctx.statement_index);
 
+        let projection_checkpoint = ctx.projection_checkpoint();
         // Analyze source query
         self.analyze_query(ctx, query, Some(&target_id));
 
         // Capture output columns from the query to store as implied schema
-        let output_columns: Vec<ColumnSchema> = ctx
-            .output_columns
+        let projection_columns = ctx.take_output_columns_since(projection_checkpoint);
+        let output_columns: Vec<ColumnSchema> = projection_columns
             .iter()
             .map(|col| ColumnSchema {
                 name: col.name.clone(),

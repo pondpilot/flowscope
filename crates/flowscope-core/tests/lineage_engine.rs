@@ -2833,6 +2833,49 @@ fn column_subquery_column_propagation() {
 }
 
 #[test]
+fn derived_table_alias_tracks_column_flow() {
+    let sql = r#"
+        SELECT sub.total_amount
+        FROM (
+            SELECT SUM(amount) AS total_amount
+            FROM orders
+        ) AS sub
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let stmt = first_statement(&result);
+
+    let derived_node = stmt
+        .nodes
+        .iter()
+        .find(|node| node.node_type == NodeType::Cte && &*node.label == "sub")
+        .expect("derived table node should exist");
+
+    let derived_column_id = stmt
+        .edges
+        .iter()
+        .find(|edge| edge.edge_type == EdgeType::Ownership && edge.from == derived_node.id)
+        .map(|edge| edge.to.clone())
+        .expect("derived table should own columns");
+
+    // The derived column should feed into the outer projection
+    assert!(
+        stmt.edges
+            .iter()
+            .any(|edge| { edge.edge_type == EdgeType::DataFlow && edge.from == derived_column_id }),
+        "derived column should feed outer SELECT via data flow edges"
+    );
+
+    // Source columns from orders should feed into the derived column via derivation edges
+    assert!(
+        stmt.edges
+            .iter()
+            .any(|edge| { edge.edge_type == EdgeType::Derivation && edge.to == derived_column_id }),
+        "orders.amount should derive the intermediate column before projection"
+    );
+}
+
+#[test]
 fn column_union_combines_column_sets() {
     let sql = r#"
         SELECT user_id, amount FROM orders
@@ -2863,6 +2906,39 @@ fn column_union_combines_column_sets() {
     assert!(
         tables.contains("payments"),
         "second UNION branch table should be tracked"
+    );
+}
+
+#[test]
+fn ctas_implied_schema_ignores_inner_columns() {
+    let sql = r#"
+        CREATE TABLE tgt AS
+        SELECT id
+        FROM (
+            SELECT id, extra FROM source
+        ) s
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let resolved = result
+        .resolved_schema
+        .expect("resolved schema should be present");
+
+    let tgt_table = resolved
+        .tables
+        .iter()
+        .find(|table| table.name == "tgt")
+        .expect("tgt table should exist in resolved schema");
+
+    let columns: Vec<_> = tgt_table
+        .columns
+        .iter()
+        .map(|col| col.name.clone())
+        .collect();
+    assert_eq!(
+        columns,
+        vec!["id"],
+        "tgt schema should only include columns from the outer projection"
     );
 }
 
@@ -3804,5 +3880,225 @@ fn aggregation_qualified_column_as_grouping_key() {
             .map(|a| a.is_grouping_key)
             .unwrap_or(false),
         "qualified column should match grouping key"
+    );
+}
+
+// ============================================================================
+// NESTED SUBQUERIES AND CTE CHAINS
+// ============================================================================
+
+#[test]
+fn nested_derived_tables_track_full_lineage() {
+    // Test derived table inside another derived table
+    let sql = r#"
+        SELECT outer_sub.total
+        FROM (
+            SELECT inner_sub.amount AS total
+            FROM (
+                SELECT SUM(amount) AS amount
+                FROM orders
+            ) AS inner_sub
+        ) AS outer_sub
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let stmt = first_statement(&result);
+
+    // Both derived table nodes should exist
+    let inner_node = stmt
+        .nodes
+        .iter()
+        .find(|n| n.node_type == NodeType::Cte && &*n.label == "inner_sub");
+    let outer_node = stmt
+        .nodes
+        .iter()
+        .find(|n| n.node_type == NodeType::Cte && &*n.label == "outer_sub");
+
+    assert!(
+        inner_node.is_some(),
+        "inner derived table node should exist"
+    );
+    assert!(
+        outer_node.is_some(),
+        "outer derived table node should exist"
+    );
+
+    // Source table should be tracked
+    let tables = collect_table_names(&result);
+    assert!(
+        tables.contains("orders"),
+        "base table should be tracked through nested derived tables"
+    );
+
+    // Should have derivation edges showing data flow
+    let derivations = edges_by_type(stmt, EdgeType::Derivation);
+    assert!(
+        !derivations.is_empty(),
+        "nested derived tables should produce derivation edges"
+    );
+}
+
+#[test]
+fn cte_referencing_another_cte() {
+    // Test CTE that references a previously defined CTE
+    let sql = r#"
+        WITH base_orders AS (
+            SELECT user_id, SUM(amount) AS total_amount
+            FROM orders
+            GROUP BY user_id
+        ),
+        enriched_orders AS (
+            SELECT bo.user_id, bo.total_amount, u.name
+            FROM base_orders bo
+            JOIN users u ON bo.user_id = u.id
+        )
+        SELECT user_id, name, total_amount
+        FROM enriched_orders
+        WHERE total_amount > 100
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let stmt = first_statement(&result);
+
+    // Both CTEs should exist
+    let base_cte = stmt
+        .nodes
+        .iter()
+        .find(|n| n.node_type == NodeType::Cte && &*n.label == "base_orders");
+    let enriched_cte = stmt
+        .nodes
+        .iter()
+        .find(|n| n.node_type == NodeType::Cte && &*n.label == "enriched_orders");
+
+    assert!(base_cte.is_some(), "base_orders CTE should exist");
+    assert!(enriched_cte.is_some(), "enriched_orders CTE should exist");
+
+    // Source tables should be tracked
+    let tables = collect_table_names(&result);
+    assert!(tables.contains("orders"), "orders table should be tracked");
+    assert!(tables.contains("users"), "users table should be tracked");
+
+    // Verify CTE nodes are present
+    let ctes = collect_cte_names(&result);
+    assert!(ctes.contains("base_orders"), "base_orders CTE should exist");
+    assert!(
+        ctes.contains("enriched_orders"),
+        "enriched_orders CTE should exist"
+    );
+}
+
+#[test]
+fn alias_shadows_table_name() {
+    // Test when an alias shadows an actual table name
+    let sql = r#"
+        SELECT orders.amount
+        FROM payments AS orders
+    "#;
+
+    let schema = SchemaMetadata {
+        allow_implied: false,
+        default_catalog: None,
+        default_schema: None,
+        search_path: None,
+        case_sensitivity: None,
+        tables: vec![
+            schema_table(None, None, "orders", &["id", "amount"]),
+            schema_table(None, None, "payments", &["id", "amount"]),
+        ],
+    };
+
+    let result = run_analysis(sql, Dialect::Generic, Some(schema));
+    let tables = collect_table_names(&result);
+
+    // Should reference payments (aliased as orders), not the real orders table
+    assert!(
+        tables.contains("payments"),
+        "payments table should be tracked (aliased as orders)"
+    );
+    // The real orders table should NOT be in lineage since we're using the alias
+    assert!(
+        !tables.contains("orders"),
+        "real orders table should not be tracked when alias shadows it"
+    );
+}
+
+#[test]
+fn deeply_nested_cte_chain() {
+    // Test a chain of CTEs where each references the previous one
+    let sql = r#"
+        WITH step1 AS (
+            SELECT id, amount FROM orders
+        ),
+        step2 AS (
+            SELECT id, amount * 1.1 AS adjusted FROM step1
+        ),
+        step3 AS (
+            SELECT id, adjusted * 0.9 AS final_amount FROM step2
+        )
+        SELECT id, final_amount FROM step3
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let stmt = first_statement(&result);
+
+    // All CTEs should exist
+    let ctes = collect_cte_names(&result);
+    assert!(ctes.contains("step1"), "step1 CTE should exist");
+    assert!(ctes.contains("step2"), "step2 CTE should exist");
+    assert!(ctes.contains("step3"), "step3 CTE should exist");
+
+    // Source table should be tracked
+    let tables = collect_table_names(&result);
+    assert!(
+        tables.contains("orders"),
+        "orders table should be tracked through CTE chain"
+    );
+
+    // Should have derivation edges showing transformations
+    let derivations = edges_by_type(stmt, EdgeType::Derivation);
+    assert!(
+        derivations.len() >= 2,
+        "CTE chain should produce multiple derivation edges for transformations"
+    );
+}
+
+#[test]
+fn derived_table_inside_cte() {
+    // Test derived table nested inside a CTE
+    let sql = r#"
+        WITH summary AS (
+            SELECT sub.user_id, sub.order_count
+            FROM (
+                SELECT user_id, COUNT(*) AS order_count
+                FROM orders
+                GROUP BY user_id
+            ) AS sub
+            WHERE sub.order_count > 5
+        )
+        SELECT * FROM summary
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let stmt = first_statement(&result);
+
+    // CTE should exist
+    let ctes = collect_cte_names(&result);
+    assert!(ctes.contains("summary"), "summary CTE should exist");
+
+    // Derived table inside CTE should also exist
+    let derived_node = stmt
+        .nodes
+        .iter()
+        .find(|n| n.node_type == NodeType::Cte && &*n.label == "sub");
+    assert!(
+        derived_node.is_some(),
+        "derived table inside CTE should exist as node"
+    );
+
+    // Source table should be tracked
+    let tables = collect_table_names(&result);
+    assert!(
+        tables.contains("orders"),
+        "orders table should be tracked through CTE with nested derived table"
     );
 }

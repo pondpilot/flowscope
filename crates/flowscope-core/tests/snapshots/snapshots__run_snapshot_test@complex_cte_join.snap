@@ -9,6 +9,11 @@ expression: clean_result
       "statementType": "WITH",
       "nodes": [
         {
+          "id": "column_07f2c53c2049650d",
+          "type": "column",
+          "label": "id"
+        },
+        {
           "id": "column_0dd3279d9b05299d",
           "type": "column",
           "label": "email"
@@ -18,6 +23,14 @@ expression: clean_result
           "type": "column",
           "label": "name",
           "qualifiedName": "users.name"
+        },
+        {
+          "id": "column_39710b4cabecc828",
+          "type": "column",
+          "label": "total_spend",
+          "metadata": {
+            "data_type": "NUMBER"
+          }
         },
         {
           "id": "column_3f39e80c6a14bd6c",
@@ -33,7 +46,25 @@ expression: clean_result
           }
         },
         {
+          "id": "column_6ed10d3dcc0acc1a",
+          "type": "column",
+          "label": "email"
+        },
+        {
           "id": "column_754b72f44edb529b",
+          "type": "column",
+          "label": "name"
+        },
+        {
+          "id": "column_78fe6bf4bc3534f5",
+          "type": "column",
+          "label": "order_count",
+          "metadata": {
+            "data_type": "INTEGER"
+          }
+        },
+        {
+          "id": "column_7d68dfa0bea872ed",
           "type": "column",
           "label": "name"
         },
@@ -49,6 +80,11 @@ expression: clean_result
             "isGroupingKey": false,
             "function": "SUM"
           }
+        },
+        {
+          "id": "column_984f3dfac0231178",
+          "type": "column",
+          "label": "user_id"
         },
         {
           "id": "column_a364e172f29a758b",
@@ -147,6 +183,12 @@ expression: clean_result
           "expression": "SUM(o.total)"
         },
         {
+          "id": "edge_29b08d74694c0fe8",
+          "from": "column_f9835ae7e58312a3",
+          "to": "column_984f3dfac0231178",
+          "type": "data_flow"
+        },
+        {
           "id": "edge_322548822d4b9438",
           "from": "column_c9a06119b0a87873",
           "to": "column_0dd3279d9b05299d",
@@ -157,6 +199,18 @@ expression: clean_result
           "from": "table_eaa6ebb8f158751f",
           "to": "column_d780b69ea9480267",
           "type": "ownership"
+        },
+        {
+          "id": "edge_45b299e5e192f9bc",
+          "from": "column_3f39e80c6a14bd6c",
+          "to": "column_78fe6bf4bc3534f5",
+          "type": "data_flow"
+        },
+        {
+          "id": "edge_4d1762ef9352e6a0",
+          "from": "column_91ec561dfe172758",
+          "to": "column_39710b4cabecc828",
+          "type": "data_flow"
         },
         {
           "id": "edge_5247487575dfc1b5",
@@ -199,6 +253,12 @@ expression: clean_result
           "type": "ownership"
         },
         {
+          "id": "edge_93d74edb53005f94",
+          "from": "column_a364e172f29a758b",
+          "to": "column_07f2c53c2049650d",
+          "type": "data_flow"
+        },
+        {
           "id": "edge_9e3f639e6cd7a540",
           "from": "table_eaa6ebb8f158751f",
           "to": "column_ce9b99d49d1c412c",
@@ -217,6 +277,12 @@ expression: clean_result
           "type": "ownership"
         },
         {
+          "id": "edge_ae30ae4a3faaddae",
+          "from": "column_754b72f44edb529b",
+          "to": "column_7d68dfa0bea872ed",
+          "type": "data_flow"
+        },
+        {
           "id": "edge_bc85044d80d56009",
           "from": "cte_96884c4a7cec8bbc",
           "to": "column_3f39e80c6a14bd6c",
@@ -233,6 +299,12 @@ expression: clean_result
           "from": "table_10a0682dff76cdbc",
           "to": "column_17365cc1224ceac1",
           "type": "ownership"
+        },
+        {
+          "id": "edge_cdca4b8166ab8272",
+          "from": "column_0dd3279d9b05299d",
+          "to": "column_6ed10d3dcc0acc1a",
+          "type": "data_flow"
         },
         {
           "id": "edge_dd517e925875f866",
@@ -259,6 +331,20 @@ expression: clean_result
   ],
   "globalLineage": {
     "nodes": [
+      {
+        "id": "column_07f2c53c2049650d",
+        "type": "column",
+        "label": "id",
+        "canonicalName": {
+          "name": "id"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_07f2c53c2049650d"
+          }
+        ]
+      },
       {
         "id": "column_0dd3279d9b05299d",
         "type": "column",
@@ -289,6 +375,20 @@ expression: clean_result
         ]
       },
       {
+        "id": "column_39710b4cabecc828",
+        "type": "column",
+        "label": "total_spend",
+        "canonicalName": {
+          "name": "total_spend"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_39710b4cabecc828"
+          }
+        ]
+      },
+      {
         "id": "column_3f39e80c6a14bd6c",
         "type": "column",
         "label": "order_count",
@@ -299,6 +399,20 @@ expression: clean_result
           {
             "statementIndex": 0,
             "nodeId": "column_3f39e80c6a14bd6c"
+          }
+        ]
+      },
+      {
+        "id": "column_6ed10d3dcc0acc1a",
+        "type": "column",
+        "label": "email",
+        "canonicalName": {
+          "name": "email"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_6ed10d3dcc0acc1a"
           }
         ]
       },
@@ -317,6 +431,34 @@ expression: clean_result
         ]
       },
       {
+        "id": "column_78fe6bf4bc3534f5",
+        "type": "column",
+        "label": "order_count",
+        "canonicalName": {
+          "name": "order_count"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_78fe6bf4bc3534f5"
+          }
+        ]
+      },
+      {
+        "id": "column_7d68dfa0bea872ed",
+        "type": "column",
+        "label": "name",
+        "canonicalName": {
+          "name": "name"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_7d68dfa0bea872ed"
+          }
+        ]
+      },
+      {
         "id": "column_91ec561dfe172758",
         "type": "column",
         "label": "total_spend",
@@ -327,6 +469,20 @@ expression: clean_result
           {
             "statementIndex": 0,
             "nodeId": "column_91ec561dfe172758"
+          }
+        ]
+      },
+      {
+        "id": "column_984f3dfac0231178",
+        "type": "column",
+        "label": "user_id",
+        "canonicalName": {
+          "name": "user_id"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_984f3dfac0231178"
           }
         ]
       },
@@ -504,6 +660,15 @@ expression: clean_result
         }
       },
       {
+        "id": "edge_29b08d74694c0fe8",
+        "from": "column_f9835ae7e58312a3",
+        "to": "column_984f3dfac0231178",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
         "id": "edge_322548822d4b9438",
         "from": "column_c9a06119b0a87873",
         "to": "column_0dd3279d9b05299d",
@@ -517,6 +682,24 @@ expression: clean_result
         "from": "table_eaa6ebb8f158751f",
         "to": "column_d780b69ea9480267",
         "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_45b299e5e192f9bc",
+        "from": "column_3f39e80c6a14bd6c",
+        "to": "column_78fe6bf4bc3534f5",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_4d1762ef9352e6a0",
+        "from": "column_91ec561dfe172758",
+        "to": "column_39710b4cabecc828",
+        "type": "data_flow",
         "producerStatement": {
           "statementIndex": 0
         }
@@ -576,6 +759,15 @@ expression: clean_result
         }
       },
       {
+        "id": "edge_93d74edb53005f94",
+        "from": "column_a364e172f29a758b",
+        "to": "column_07f2c53c2049650d",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
         "id": "edge_9e3f639e6cd7a540",
         "from": "table_eaa6ebb8f158751f",
         "to": "column_ce9b99d49d1c412c",
@@ -603,6 +795,15 @@ expression: clean_result
         }
       },
       {
+        "id": "edge_ae30ae4a3faaddae",
+        "from": "column_754b72f44edb529b",
+        "to": "column_7d68dfa0bea872ed",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
         "id": "edge_bc85044d80d56009",
         "from": "cte_96884c4a7cec8bbc",
         "to": "column_3f39e80c6a14bd6c",
@@ -625,6 +826,15 @@ expression: clean_result
         "from": "table_10a0682dff76cdbc",
         "to": "column_17365cc1224ceac1",
         "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_cdca4b8166ab8272",
+        "from": "column_0dd3279d9b05299d",
+        "to": "column_6ed10d3dcc0acc1a",
+        "type": "data_flow",
         "producerStatement": {
           "statementIndex": 0
         }
@@ -662,19 +872,7 @@ expression: clean_result
     {
       "severity": "info",
       "code": "APPROXIMATE_LINEAGE",
-      "message": "SELECT * from 'active_users' - column list unknown without schema metadata",
-      "statementIndex": 0
-    },
-    {
-      "severity": "info",
-      "code": "APPROXIMATE_LINEAGE",
       "message": "SELECT * from 'orders' - column list unknown without schema metadata",
-      "statementIndex": 0
-    },
-    {
-      "severity": "info",
-      "code": "APPROXIMATE_LINEAGE",
-      "message": "SELECT * from 'user_orders' - column list unknown without schema metadata",
       "statementIndex": 0
     },
     {
@@ -687,13 +885,13 @@ expression: clean_result
   "summary": {
     "statementCount": 1,
     "tableCount": 4,
-    "columnCount": 11,
+    "columnCount": 17,
     "joinCount": 1,
     "complexityScore": 40,
     "issueCount": {
       "errors": 0,
       "warnings": 0,
-      "infos": 4
+      "infos": 2
     },
     "hasErrors": false
   }

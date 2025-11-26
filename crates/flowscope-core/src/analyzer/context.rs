@@ -51,8 +51,10 @@ pub(crate) struct StatementContext {
     pub(crate) table_node_ids: HashMap<String, Arc<str>>,
     /// Output columns for this statement (for column lineage)
     pub(crate) output_columns: Vec<OutputColumn>,
-    /// CTE columns: CTE name -> list of output columns
-    pub(crate) cte_columns: HashMap<String, Vec<OutputColumn>>,
+    /// Output columns for aliased subqueries (CTEs and derived tables).
+    /// Maps the alias name to its output columns for schema resolution during wildcard
+    /// expansion and column reference lookups.
+    pub(crate) aliased_subquery_columns: HashMap<String, Vec<OutputColumn>>,
     /// Stack of scopes for proper column resolution
     /// The top of the stack (last element) is the current scope
     pub(crate) scope_stack: Vec<Scope>,
@@ -101,7 +103,7 @@ impl StatementContext {
             current_join_info: JoinInfo::default(),
             table_node_ids: HashMap::new(),
             output_columns: Vec::new(),
-            cte_columns: HashMap::new(),
+            aliased_subquery_columns: HashMap::new(),
             scope_stack: Vec::new(),
             pending_filters: HashMap::new(),
             grouping_columns: HashSet::new(),
@@ -223,8 +225,47 @@ impl StatementContext {
         if let Some(scope) = self.current_scope() {
             scope.tables.keys().cloned().collect()
         } else {
-            // Fallback to global table_node_ids if no scope (shouldn't happen normally)
-            self.table_node_ids.keys().cloned().collect()
+            Vec::new()
         }
+    }
+
+    /// Returns a checkpoint representing the current length of the output column buffer.
+    ///
+    /// This is part of the **projection checkpoint pattern** used when analyzing nested
+    /// queries (CTEs, derived tables). The pattern works as follows:
+    ///
+    /// 1. Before analyzing a subquery, call `projection_checkpoint()` to record the current
+    ///    buffer position
+    /// 2. Analyze the subquery, which appends its output columns to the buffer
+    /// 3. Call `take_output_columns_since(checkpoint)` to extract only the columns produced
+    ///    by that subquery, leaving earlier columns intact
+    ///
+    /// This ensures that columns from inner queries don't leak into the schema of outer
+    /// statements (e.g., a CTE's internal columns shouldn't appear in a CREATE TABLE AS
+    /// statement's implied schema).
+    pub(crate) fn projection_checkpoint(&self) -> usize {
+        self.output_columns.len()
+    }
+
+    /// Drains output columns produced since the provided checkpoint.
+    ///
+    /// See [`projection_checkpoint`](Self::projection_checkpoint) for usage pattern.
+    pub(crate) fn take_output_columns_since(&mut self, checkpoint: usize) -> Vec<OutputColumn> {
+        if checkpoint > self.output_columns.len() {
+            // This indicates a logic error: the checkpoint was taken from a different context
+            // or the output_columns were modified unexpectedly.
+            debug_assert!(
+                false,
+                "Invalid projection checkpoint: {} > buffer length {}",
+                checkpoint,
+                self.output_columns.len()
+            );
+            return Vec::new();
+        }
+        if checkpoint == self.output_columns.len() {
+            // No new columns were produced - this is valid (e.g., empty subquery)
+            return Vec::new();
+        }
+        self.output_columns.split_off(checkpoint)
     }
 }

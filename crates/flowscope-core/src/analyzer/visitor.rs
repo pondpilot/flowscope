@@ -347,12 +347,13 @@ impl<'a, 'b> Visitor for LineageVisitor<'a, 'b> {
             }
 
             for (cte, (_, cte_id)) in with.cte_tables.iter().zip(cte_ids.iter()) {
+                let projection_checkpoint = self.ctx.projection_checkpoint();
                 let mut cte_visitor =
                     LineageVisitor::new(self.analyzer, self.ctx, Some(cte_id.to_string()));
                 cte_visitor.visit_query(&cte.query);
-                let columns = std::mem::take(&mut self.ctx.output_columns);
+                let columns = self.ctx.take_output_columns_since(projection_checkpoint);
                 self.ctx
-                    .cte_columns
+                    .aliased_subquery_columns
                     .insert(cte.alias.name.to_string(), columns);
             }
         }
@@ -438,10 +439,46 @@ impl<'a, 'b> Visitor for LineageVisitor<'a, 'b> {
             TableFactor::Derived {
                 subquery, alias, ..
             } => {
-                self.visit_query(subquery);
-                if let Some(a) = alias {
+                // A derived table (subquery in a FROM clause) is treated like a temporary CTE.
+                // We create a node for it in the graph, analyze its subquery to determine its
+                // output columns, and then register its alias and columns in the current scope
+                // so the outer query can reference it.
+                let alias_name = alias.as_ref().map(|a| a.name.to_string());
+                let projection_checkpoint = self.ctx.projection_checkpoint();
+
+                // We model derived tables as CTEs in the graph since they are conceptually
+                // similar: both are ephemeral, named result sets scoped to a single query.
+                // This avoids introducing a separate NodeType for a very similar concept.
+                let derived_node_id = alias_name.as_ref().map(|name| {
+                    self.ctx.add_node(Node {
+                        id: generate_node_id("derived", name),
+                        node_type: NodeType::Cte,
+                        label: name.clone().into(),
+                        qualified_name: Some(name.clone().into()),
+                        expression: None,
+                        span: None,
+                        metadata: None,
+                        resolution_source: None,
+                        filters: Vec::new(),
+                        join_type: None,
+                        join_condition: None,
+                        aggregation: None,
+                    })
+                });
+
+                let mut derived_visitor = LineageVisitor::new(
+                    self.analyzer,
+                    self.ctx,
+                    derived_node_id.as_ref().map(|id| id.to_string()),
+                );
+                derived_visitor.visit_query(subquery);
+                let columns = self.ctx.take_output_columns_since(projection_checkpoint);
+
+                if let (Some(name), Some(node_id)) = (alias_name, derived_node_id) {
                     self.ctx
-                        .register_subquery_alias_in_scope(a.name.to_string());
+                        .register_table_in_scope(name.clone(), node_id.clone());
+                    self.ctx.register_alias_in_scope(name.clone(), name.clone());
+                    self.ctx.aliased_subquery_columns.insert(name, columns);
                 }
             }
             TableFactor::NestedJoin {

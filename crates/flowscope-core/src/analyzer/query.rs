@@ -23,6 +23,17 @@ struct ExpandedColumnInfo {
     data_type: Option<String>,
 }
 
+impl ExpandedColumnInfo {
+    /// Creates column info from schema metadata or output columns.
+    fn new(name: String, table_canonical: String, data_type: Option<String>) -> Self {
+        Self {
+            name,
+            table_canonical,
+            data_type,
+        }
+    }
+}
+
 /// Parameters for adding an output column.
 pub(super) struct OutputColumnParams {
     pub name: String,
@@ -308,18 +319,38 @@ impl<'a> Analyzer<'a> {
 
         for table_canonical in tables_to_expand {
             // First collect column info to avoid borrow conflict
-            let columns_to_add: Option<Vec<ExpandedColumnInfo>> =
-                self.schema.get(&table_canonical).map(|schema_entry| {
+            let columns_to_add: Option<Vec<ExpandedColumnInfo>> = self
+                .schema
+                .get(&table_canonical)
+                .map(|schema_entry| {
                     schema_entry
                         .table
                         .columns
                         .iter()
-                        .map(|col| ExpandedColumnInfo {
-                            name: col.name.clone(),
-                            table_canonical: table_canonical.clone(),
-                            data_type: col.data_type.clone(),
+                        .map(|col| {
+                            ExpandedColumnInfo::new(
+                                col.name.clone(),
+                                table_canonical.clone(),
+                                col.data_type.clone(),
+                            )
                         })
                         .collect()
+                })
+                .or_else(|| {
+                    ctx.aliased_subquery_columns
+                        .get(&table_canonical)
+                        .map(|cte_cols| {
+                            cte_cols
+                                .iter()
+                                .map(|col| {
+                                    ExpandedColumnInfo::new(
+                                        col.name.clone(),
+                                        table_canonical.clone(),
+                                        col.data_type.clone(),
+                                    )
+                                })
+                                .collect()
+                        })
                 });
 
             if let Some(columns) = columns_to_add {
@@ -423,12 +454,18 @@ impl<'a> Analyzer<'a> {
         // Use scope-based resolution: only consider tables in the current scope
         let tables_in_scope = ctx.tables_in_current_scope();
 
-        // If no tables in current scope, fall back to global (shouldn't happen normally)
-        let tables_in_scope = if tables_in_scope.is_empty() {
-            ctx.table_node_ids.keys().cloned().collect::<Vec<_>>()
-        } else {
-            tables_in_scope
-        };
+        if tables_in_scope.is_empty() {
+            let mut issue = Issue::warning(
+                issue_codes::UNRESOLVED_REFERENCE,
+                format!("Column '{column}' referenced but no tables are currently in scope"),
+            )
+            .with_statement(ctx.statement_index);
+            if let Some(span) = self.find_span(column) {
+                issue = issue.with_span(span);
+            }
+            self.issues.push(issue);
+            return None;
+        }
 
         // If only one table in scope, assume column belongs to it
         if tables_in_scope.len() == 1 {
@@ -441,8 +478,8 @@ impl<'a> Analyzer<'a> {
         // Only consider tables that are actually in the current scope
         let mut candidate_tables: Vec<String> = Vec::new();
         for table_canonical in &tables_in_scope {
-            // Check CTE columns
-            if let Some(cte_cols) = ctx.cte_columns.get(table_canonical) {
+            // Check aliased subquery columns (CTEs and derived tables)
+            if let Some(cte_cols) = ctx.aliased_subquery_columns.get(table_canonical) {
                 if cte_cols.iter().any(|c| c.name == normalized_col) {
                     candidate_tables.push(table_canonical.clone());
                     continue;
@@ -587,8 +624,8 @@ impl<'a> Analyzer<'a> {
             if let Some(ref table_canonical) = resolved_table {
                 let mut source_col_id = None;
 
-                // Try to find existing node ID if it's a known CTE
-                if let Some(cte_cols) = ctx.cte_columns.get(table_canonical) {
+                // Try to find existing node ID if it's a known aliased subquery (CTE or derived table)
+                if let Some(cte_cols) = ctx.aliased_subquery_columns.get(table_canonical) {
                     let normalized_source_col = self.normalize_identifier(&source.column);
                     if let Some(col) = cte_cols.iter().find(|c| c.name == normalized_source_col) {
                         source_col_id = Some(col.node_id.clone());
