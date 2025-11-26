@@ -19,6 +19,8 @@ use crate::types::{AggregationInfo, FilterClauseType};
 use crate::Dialect;
 use sqlparser::ast::{self, Expr, FunctionArg, FunctionArgExpr};
 use std::collections::HashSet;
+#[cfg(feature = "tracing")]
+use tracing::debug;
 
 /// Maximum recursion depth for expression traversal to prevent stack overflow
 /// on maliciously crafted or deeply nested SQL expressions.
@@ -66,6 +68,11 @@ impl<'a, 'b> ExpressionAnalyzer<'a, 'b> {
     /// on deeply nested expressions.
     fn visit_expression_for_subqueries(&mut self, expr: &Expr, depth: usize) {
         if depth > MAX_RECURSION_DEPTH {
+            #[cfg(feature = "tracing")]
+            debug!(
+                depth,
+                "Max recursion depth exceeded in visit_expression_for_subqueries"
+            );
             return;
         }
         let next_depth = depth + 1;
@@ -140,6 +147,8 @@ impl<'a, 'b> ExpressionAnalyzer<'a, 'b> {
 
     fn collect_column_refs(expr: &Expr, refs: &mut Vec<ColumnRef>, dialect: Dialect, depth: usize) {
         if depth > MAX_RECURSION_DEPTH {
+            #[cfg(feature = "tracing")]
+            debug!(depth, "Max recursion depth exceeded in collect_column_refs");
             return;
         }
         let next_depth = depth + 1;
@@ -275,6 +284,11 @@ impl<'a, 'b> ExpressionAnalyzer<'a, 'b> {
 
     fn normalize_group_by_expr_inner(&self, expr: &Expr, depth: usize) -> String {
         if depth > MAX_RECURSION_DEPTH {
+            #[cfg(feature = "tracing")]
+            debug!(
+                depth,
+                "Max recursion depth exceeded in normalize_group_by_expr_inner"
+            );
             return expr.to_string().to_lowercase();
         }
         match expr {
@@ -339,6 +353,11 @@ impl<'a, 'b> ExpressionAnalyzer<'a, 'b> {
         depth: usize,
     ) -> Option<functions::AggregateCall> {
         if depth > MAX_RECURSION_DEPTH {
+            #[cfg(feature = "tracing")]
+            debug!(
+                depth,
+                "Max recursion depth exceeded in find_aggregate_function"
+            );
             return None;
         }
         let next_depth = depth + 1;
@@ -531,6 +550,179 @@ impl<'a, 'b> ExpressionAnalyzer<'a, 'b> {
             _ => {
                 predicates.push(expr);
             }
+        }
+    }
+
+    /// Extracts simple unqualified identifiers from an expression.
+    ///
+    /// Returns a set of identifier names that appear as bare identifiers (not qualified
+    /// with table names) in the expression. Used for alias visibility checking.
+    pub(crate) fn extract_simple_identifiers(expr: &Expr) -> HashSet<String> {
+        let mut identifiers = HashSet::new();
+        Self::collect_simple_identifiers(expr, &mut identifiers, 0);
+        identifiers
+    }
+
+    fn collect_simple_identifiers(expr: &Expr, identifiers: &mut HashSet<String>, depth: usize) {
+        if depth > MAX_RECURSION_DEPTH {
+            #[cfg(feature = "tracing")]
+            debug!(
+                depth,
+                "Max recursion depth exceeded in collect_simple_identifiers"
+            );
+            return;
+        }
+        let next_depth = depth + 1;
+
+        match expr {
+            // Simple identifier - the target of our collection
+            Expr::Identifier(ident) => {
+                identifiers.insert(ident.value.clone());
+            }
+
+            // Single expression wrappers
+            Expr::UnaryOp { expr: e, .. }
+            | Expr::Cast { expr: e, .. }
+            | Expr::Nested(e)
+            | Expr::Extract { expr: e, .. }
+            | Expr::Ceil { expr: e, .. }
+            | Expr::Floor { expr: e, .. }
+            | Expr::IsNull(e)
+            | Expr::IsNotNull(e)
+            | Expr::IsFalse(e)
+            | Expr::IsNotFalse(e)
+            | Expr::IsTrue(e)
+            | Expr::IsNotTrue(e)
+            | Expr::IsUnknown(e)
+            | Expr::IsNotUnknown(e)
+            | Expr::JsonAccess { value: e, .. }
+            | Expr::CompositeAccess { expr: e, .. } => {
+                Self::collect_simple_identifiers(e, identifiers, next_depth);
+            }
+
+            // Two expression patterns (left/right)
+            Expr::BinaryOp { left, right, .. }
+            | Expr::AnyOp { left, right, .. }
+            | Expr::AllOp { left, right, .. } => {
+                Self::collect_simple_identifiers(left, identifiers, next_depth);
+                Self::collect_simple_identifiers(right, identifiers, next_depth);
+            }
+
+            // Two expression patterns (expr/pattern)
+            Expr::Like { expr, pattern, .. }
+            | Expr::ILike { expr, pattern, .. }
+            | Expr::SimilarTo { expr, pattern, .. }
+            | Expr::RLike { expr, pattern, .. } => {
+                Self::collect_simple_identifiers(expr, identifiers, next_depth);
+                Self::collect_simple_identifiers(pattern, identifiers, next_depth);
+            }
+
+            // Two expression patterns (other)
+            Expr::Position { expr, r#in } => {
+                Self::collect_simple_identifiers(expr, identifiers, next_depth);
+                Self::collect_simple_identifiers(r#in, identifiers, next_depth);
+            }
+            Expr::AtTimeZone {
+                timestamp,
+                time_zone,
+            } => {
+                Self::collect_simple_identifiers(timestamp, identifiers, next_depth);
+                Self::collect_simple_identifiers(time_zone, identifiers, next_depth);
+            }
+            Expr::InUnnest {
+                expr, array_expr, ..
+            } => {
+                Self::collect_simple_identifiers(expr, identifiers, next_depth);
+                Self::collect_simple_identifiers(array_expr, identifiers, next_depth);
+            }
+            Expr::IsDistinctFrom(e1, e2) | Expr::IsNotDistinctFrom(e1, e2) => {
+                Self::collect_simple_identifiers(e1, identifiers, next_depth);
+                Self::collect_simple_identifiers(e2, identifiers, next_depth);
+            }
+
+            // Three expression patterns
+            Expr::Between {
+                expr, low, high, ..
+            } => {
+                Self::collect_simple_identifiers(expr, identifiers, next_depth);
+                Self::collect_simple_identifiers(low, identifiers, next_depth);
+                Self::collect_simple_identifiers(high, identifiers, next_depth);
+            }
+
+            // List patterns
+            Expr::Tuple(exprs) => {
+                for e in exprs {
+                    Self::collect_simple_identifiers(e, identifiers, next_depth);
+                }
+            }
+            Expr::InList { expr, list, .. } => {
+                Self::collect_simple_identifiers(expr, identifiers, next_depth);
+                for e in list {
+                    Self::collect_simple_identifiers(e, identifiers, next_depth);
+                }
+            }
+
+            // Function arguments
+            Expr::Function(func) => {
+                if let ast::FunctionArguments::List(arg_list) = &func.args {
+                    for arg in &arg_list.args {
+                        match arg {
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(e))
+                            | FunctionArg::Named {
+                                arg: FunctionArgExpr::Expr(e),
+                                ..
+                            } => Self::collect_simple_identifiers(e, identifiers, next_depth),
+                            _ => {}
+                        }
+                    }
+                }
+            }
+
+            // CASE expression
+            Expr::Case {
+                operand,
+                conditions,
+                results,
+                else_result,
+            } => {
+                if let Some(op) = operand {
+                    Self::collect_simple_identifiers(op, identifiers, next_depth);
+                }
+                for cond in conditions {
+                    Self::collect_simple_identifiers(cond, identifiers, next_depth);
+                }
+                for res in results {
+                    Self::collect_simple_identifiers(res, identifiers, next_depth);
+                }
+                if let Some(el) = else_result {
+                    Self::collect_simple_identifiers(el, identifiers, next_depth);
+                }
+            }
+
+            // SUBSTRING with optional parts
+            Expr::Substring {
+                expr,
+                substring_from,
+                substring_for,
+                ..
+            } => {
+                Self::collect_simple_identifiers(expr, identifiers, next_depth);
+                if let Some(from) = substring_from {
+                    Self::collect_simple_identifiers(from, identifiers, next_depth);
+                }
+                if let Some(for_expr) = substring_for {
+                    Self::collect_simple_identifiers(for_expr, identifiers, next_depth);
+                }
+            }
+
+            // Skip subqueries - they have their own scope
+            Expr::Subquery(_) | Expr::InSubquery { .. } | Expr::Exists { .. } => {}
+
+            // Skip qualified names (table.column) - not simple identifiers
+            Expr::CompoundIdentifier(_) => {}
+
+            // Other expressions don't contain identifiers we care about
+            _ => {}
         }
     }
 }

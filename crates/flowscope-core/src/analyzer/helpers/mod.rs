@@ -1,9 +1,11 @@
+mod alias;
 mod id;
 mod naming;
 mod query;
 mod span;
 mod types;
 
+pub use alias::{alias_visibility_warning, lateral_alias_warning};
 pub use id::{generate_column_node_id, generate_edge_id, generate_node_id};
 pub use naming::{
     extract_simple_name, is_quoted_identifier, parse_canonical_name, split_qualified_identifiers,

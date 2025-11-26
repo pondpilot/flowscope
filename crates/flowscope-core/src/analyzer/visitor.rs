@@ -6,7 +6,7 @@
 
 use super::context::StatementContext;
 use super::expression::ExpressionAnalyzer;
-use super::helpers::generate_node_id;
+use super::helpers::{alias_visibility_warning, generate_node_id};
 use super::select_analyzer::SelectAnalyzer;
 use super::Analyzer;
 use crate::types::{issue_codes, Issue, Node, NodeType};
@@ -316,6 +316,51 @@ impl<'a, 'b> LineageVisitor<'a, 'b> {
             self.add_source_table(&name);
         }
     }
+
+    /// Emits a warning for unsupported alias usage in a clause.
+    fn emit_alias_warning(&mut self, clause_name: &str, alias_name: &str) {
+        let dialect = self.analyzer.request.dialect;
+        let statement_index = self.ctx.statement_index;
+        self.analyzer.issues.push(alias_visibility_warning(
+            dialect,
+            clause_name,
+            alias_name,
+            statement_index,
+        ));
+    }
+
+    /// Analyzes ORDER BY clause for alias visibility warnings.
+    ///
+    /// Checks if aliases from the SELECT list are used in ORDER BY expressions
+    /// and emits warnings for dialects that don't support alias references in ORDER BY.
+    fn analyze_order_by(&mut self, order_by: &ast::OrderBy) {
+        let dialect = self.analyzer.request.dialect;
+
+        // Check for alias usage in ORDER BY clause
+        if !dialect.alias_in_order_by() {
+            for order_expr in &order_by.exprs {
+                let identifiers = ExpressionAnalyzer::extract_simple_identifiers(&order_expr.expr);
+                for ident in &identifiers {
+                    let normalized_ident = self.analyzer.normalize_identifier(ident);
+                    if let Some(alias_name) = self
+                        .ctx
+                        .output_columns
+                        .iter()
+                        .find(|c| self.analyzer.normalize_identifier(&c.name) == normalized_ident)
+                        .map(|c| c.name.clone())
+                    {
+                        self.emit_alias_warning("ORDER BY", &alias_name);
+                    }
+                }
+            }
+        }
+
+        // Also analyze any subqueries in ORDER BY expressions
+        for order_expr in &order_by.exprs {
+            let mut ea = ExpressionAnalyzer::new(self.analyzer, self.ctx);
+            ea.analyze(&order_expr.expr);
+        }
+    }
 }
 
 impl<'a, 'b> Visitor for LineageVisitor<'a, 'b> {
@@ -358,6 +403,11 @@ impl<'a, 'b> Visitor for LineageVisitor<'a, 'b> {
             }
         }
         self.visit_set_expr(&query.body);
+
+        // Analyze ORDER BY for alias visibility warnings
+        if let Some(order_by) = &query.order_by {
+            self.analyze_order_by(order_by);
+        }
     }
 
     fn visit_set_expr(&mut self, set_expr: &SetExpr) {

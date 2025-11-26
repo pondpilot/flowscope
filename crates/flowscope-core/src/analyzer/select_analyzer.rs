@@ -1,6 +1,8 @@
 use super::context::StatementContext;
 use super::expression::ExpressionAnalyzer;
-use super::helpers::{infer_expr_type, is_simple_column_ref};
+use super::helpers::{
+    alias_visibility_warning, infer_expr_type, is_simple_column_ref, lateral_alias_warning,
+};
 use super::query::OutputColumnParams;
 use super::Analyzer;
 use crate::types::FilterClauseType;
@@ -42,6 +44,20 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
         self.analyze_having(&select.having);
     }
 
+    /// Analyzes GROUP BY expressions to track grouping columns.
+    ///
+    /// # Limitations
+    ///
+    /// TODO: GROUP BY alias visibility checking is incomplete because GROUP BY is
+    /// analyzed before the SELECT projection. This means `output_columns` is typically
+    /// empty when we try to detect alias references. A multi-pass analysis approach
+    /// would be needed to properly detect aliases used in GROUP BY, which would require:
+    /// 1. First pass: collect SELECT aliases
+    /// 2. Second pass: analyze GROUP BY with alias knowledge
+    /// 3. Third pass: analyze projection with grouping context
+    ///
+    /// For now, this check only catches edge cases where output_columns were populated
+    /// from a previous statement or context.
     fn analyze_group_by(&mut self, group_by: &ast::GroupByExpr) {
         let dialect = self.analyzer.request.dialect;
         match group_by {
@@ -54,12 +70,7 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
                         ea.normalize_group_by_expr(group_by_expr)
                     };
 
-                    // Check if this expression matches a SELECT alias (validation only)
-                    // This check happens before projection analysis, so output_columns
-                    // would typically be empty. For proper alias checking, we'd need
-                    // to analyze projection first, but that changes semantics.
-                    // For now, we only check if alias_in_group_by is forbidden and
-                    // the expression matches an existing output column name.
+                    // Alias visibility check (limited - see function doc comment for details)
                     let matched_alias = self
                         .ctx
                         .output_columns
@@ -69,17 +80,7 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
 
                     if let Some(alias_name) = matched_alias {
                         if !dialect.alias_in_group_by() {
-                            use crate::types::{issue_codes, Issue};
-                            let statement_index = self.ctx.statement_index;
-                            self.analyzer.issues.push(
-                                Issue::warning(
-                                    issue_codes::UNSUPPORTED_SYNTAX,
-                                    format!(
-                                        "Dialect '{dialect:?}' does not support referencing aliases in GROUP BY (alias '{alias_name}' used). This may fail at runtime."
-                                    ),
-                                )
-                                .with_statement(statement_index),
-                            );
+                            self.emit_alias_warning("GROUP BY", &alias_name);
                         }
                     }
 
@@ -101,9 +102,16 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
 
     fn analyze_projection(&mut self, projection: &[SelectItem]) {
         let dialect = self.analyzer.request.dialect;
+
+        // Track aliases defined in this SELECT list for lateral column alias checking
+        let mut defined_aliases: HashSet<String> = HashSet::new();
+
         for (idx, item) in projection.iter().enumerate() {
             match item {
                 SelectItem::UnnamedExpr(expr) => {
+                    // Check for lateral column alias usage
+                    self.check_lateral_column_alias(expr, &defined_aliases);
+
                     let (sources, name, aggregation) = {
                         let ea = ExpressionAnalyzer::new(self.analyzer, self.ctx);
                         (
@@ -134,6 +142,9 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
                     );
                 }
                 SelectItem::ExprWithAlias { expr, alias } => {
+                    // Check for lateral column alias usage
+                    self.check_lateral_column_alias(expr, &defined_aliases);
+
                     let (sources, aggregation) = {
                         let ea = ExpressionAnalyzer::new(self.analyzer, self.ctx);
                         (
@@ -149,6 +160,10 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
                         Some(expr.to_string())
                     };
                     let data_type = infer_expr_type(expr).map(|t| t.to_string());
+
+                    // Record this alias for subsequent lateral column alias checking
+                    let normalized_alias = self.analyzer.normalize_identifier(&name);
+                    defined_aliases.insert(normalized_alias);
 
                     self.analyzer.add_output_column_with_aggregation(
                         self.ctx,
@@ -179,6 +194,43 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
         }
     }
 
+    /// Emits a warning for unsupported alias usage in a clause.
+    fn emit_alias_warning(&mut self, clause_name: &str, alias_name: &str) {
+        let dialect = self.analyzer.request.dialect;
+        let statement_index = self.ctx.statement_index;
+        self.analyzer.issues.push(alias_visibility_warning(
+            dialect,
+            clause_name,
+            alias_name,
+            statement_index,
+        ));
+    }
+
+    /// Checks if an expression uses a lateral column alias (an alias defined earlier
+    /// in the same SELECT list) and emits a warning if the dialect doesn't support it.
+    fn check_lateral_column_alias(
+        &mut self,
+        expr: &sqlparser::ast::Expr,
+        defined_aliases: &HashSet<String>,
+    ) {
+        let dialect = self.analyzer.request.dialect;
+
+        if !dialect.lateral_column_alias() && !defined_aliases.is_empty() {
+            let identifiers = ExpressionAnalyzer::extract_simple_identifiers(expr);
+            for ident in &identifiers {
+                let normalized_ident = self.analyzer.normalize_identifier(ident);
+                if defined_aliases.contains(&normalized_ident) {
+                    let statement_index = self.ctx.statement_index;
+                    self.analyzer.issues.push(lateral_alias_warning(
+                        dialect,
+                        ident,
+                        statement_index,
+                    ));
+                }
+            }
+        }
+    }
+
     fn analyze_selection(&mut self, selection: &Option<sqlparser::ast::Expr>) {
         if let Some(ref where_clause) = selection {
             let mut ea = ExpressionAnalyzer::new(self.analyzer, self.ctx);
@@ -188,10 +240,36 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
     }
 
     fn analyze_having(&mut self, having: &Option<sqlparser::ast::Expr>) {
-        if let Some(ref having) = having {
+        if let Some(ref having_expr) = having {
+            let dialect = self.analyzer.request.dialect;
+
+            // Check for alias usage in HAVING clause
+            if !dialect.alias_in_having() {
+                self.check_alias_in_clause(having_expr, "HAVING");
+            }
+
             let mut ea = ExpressionAnalyzer::new(self.analyzer, self.ctx);
-            ea.analyze(having);
-            ea.capture_filter_predicates(having, FilterClauseType::Having);
+            ea.analyze(having_expr);
+            ea.capture_filter_predicates(having_expr, FilterClauseType::Having);
+        }
+    }
+
+    /// Checks if an expression references any output column aliases and emits a warning.
+    ///
+    /// Used by HAVING and can be extended to other clauses that need alias checking.
+    fn check_alias_in_clause(&mut self, expr: &sqlparser::ast::Expr, clause_name: &str) {
+        let identifiers = ExpressionAnalyzer::extract_simple_identifiers(expr);
+        for ident in &identifiers {
+            let normalized_ident = self.analyzer.normalize_identifier(ident);
+            if let Some(alias_name) = self
+                .ctx
+                .output_columns
+                .iter()
+                .find(|c| self.analyzer.normalize_identifier(&c.name) == normalized_ident)
+                .map(|c| c.name.clone())
+            {
+                self.emit_alias_warning(clause_name, &alias_name);
+            }
         }
     }
 }
