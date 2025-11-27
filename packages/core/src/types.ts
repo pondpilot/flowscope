@@ -97,6 +97,18 @@ export interface SchemaTable {
 export interface ColumnSchema {
   name: string;
   dataType?: string;
+  /** True if this column is a primary key (or part of composite PK) */
+  isPrimaryKey?: boolean;
+  /** Foreign key reference if this column references another table */
+  foreignKey?: ForeignKeyRef;
+}
+
+/** A foreign key reference to another table's column. */
+export interface ForeignKeyRef {
+  /** The referenced table name (may be qualified) */
+  table: string;
+  /** The referenced column name */
+  column: string;
 }
 
 // Response Types
@@ -390,6 +402,8 @@ export interface ResolvedSchemaTable {
   updatedAt: string;
   /** True if this is a temporary table */
   temporary?: boolean;
+  /** Table-level constraints (composite PKs, FKs, etc.) */
+  constraints?: TableConstraintInfo[];
 }
 
 /** A column in the resolved schema with origin tracking. */
@@ -398,7 +412,26 @@ export interface ResolvedColumnSchema {
   dataType?: string;
   /** Column-level origin (can differ from table origin in future merging) */
   origin?: SchemaOrigin;
+  /** True if this column is a primary key (or part of composite PK) */
+  isPrimaryKey?: boolean;
+  /** Foreign key reference if this column references another table */
+  foreignKey?: ForeignKeyRef;
 }
+
+/** Information about a table-level constraint (composite PK, FK, etc.). */
+export interface TableConstraintInfo {
+  /** Type of constraint */
+  constraintType: ConstraintType;
+  /** Columns involved in this constraint */
+  columns: string[];
+  /** For FK: the referenced table */
+  referencedTable?: string;
+  /** For FK: the referenced columns */
+  referencedColumns?: string[];
+}
+
+/** Type of table constraint. */
+export type ConstraintType = 'primary_key' | 'foreign_key' | 'unique';
 
 /** The origin of schema information. */
 export type SchemaOrigin = 'imported' | 'implied';

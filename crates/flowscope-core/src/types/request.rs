@@ -198,6 +198,22 @@ pub struct ColumnSchema {
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub data_type: Option<String>,
+    /// True if this column is a primary key (or part of composite PK)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub is_primary_key: Option<bool>,
+    /// Foreign key reference if this column references another table
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub foreign_key: Option<ForeignKeyRef>,
+}
+
+/// A foreign key reference to another table's column.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ForeignKeyRef {
+    /// The referenced table name (may be qualified)
+    pub table: String,
+    /// The referenced column name
+    pub column: String,
 }
 
 #[cfg(test)]

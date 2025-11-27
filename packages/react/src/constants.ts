@@ -45,6 +45,8 @@ export const UI_CONSTANTS = {
 
   /** Z-index for highlighted edges */
   HIGHLIGHTED_EDGE_Z_INDEX: 1000,
+  /** Base z-index for non-highlighted edge labels (keep them behind nodes) */
+  EDGE_LABEL_BASE_Z_INDEX: 0,
 
   /** Delay in milliseconds for tooltip display (fast display) */
   TOOLTIP_DELAY_FAST: 0,
@@ -63,6 +65,7 @@ export const GRAPH_CONFIG = {
   MAX_COLUMN_HEIGHT: UI_CONSTANTS.COLUMN_MAX_HEIGHT,
   TOOLTIP_DELAY: UI_CONSTANTS.TOOLTIP_DELAY_FAST,
   HIGHLIGHTED_EDGE_Z_INDEX: UI_CONSTANTS.HIGHLIGHTED_EDGE_Z_INDEX,
+  EDGE_LABEL_BASE_Z_INDEX: UI_CONSTANTS.EDGE_LABEL_BASE_Z_INDEX,
   VIRTUAL_OUTPUT_NODE_ID: 'virtual:output',
 } as const;
 
@@ -226,6 +229,33 @@ export const COLORS_DARK = {
   },
   recursive: '#F7B987', // PondPilot warning.dark
   accent: '#4C61FF', // PondPilot accent.dark
+} as const;
+
+/**
+ * Constraint badge styles for schema view
+ */
+export const CONSTRAINT_STYLES = {
+  primaryKey: {
+    fontSize: 10,
+    opacity: 0.8,
+  },
+  foreignKey: {
+    fontSize: 10,
+    opacity: 0.8,
+    color: '#6366f1', // Indigo-500
+  },
+  edge: {
+    stroke: '#6366f1',
+    strokeWidth: 2,
+  },
+  edgeLabel: {
+    fontSize: 10,
+    fill: '#6366f1',
+  },
+  edgeLabelBg: {
+    fill: 'white',
+    fillOpacity: 0.8,
+  },
 } as const;
 
 /**

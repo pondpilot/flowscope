@@ -123,10 +123,14 @@ fn golden_resolved_schema_with_imported_and_implied() {
                     ColumnSchema {
                         name: "id".to_string(),
                         data_type: Some("INTEGER".to_string()),
+                        is_primary_key: None,
+                        foreign_key: None,
                     },
                     ColumnSchema {
                         name: "username".to_string(),
                         data_type: Some("TEXT".to_string()),
+                        is_primary_key: None,
+                        foreign_key: None,
                     },
                 ],
             }],
@@ -162,10 +166,14 @@ fn golden_imported_precedence_over_create_table() {
                     ColumnSchema {
                         name: "product_id".to_string(),
                         data_type: Some("BIGINT".to_string()),
+                        is_primary_key: None,
+                        foreign_key: None,
                     },
                     ColumnSchema {
                         name: "imported_col".to_string(),
                         data_type: None,
+                        is_primary_key: None,
+                        foreign_key: None,
                     },
                 ],
             }],
@@ -203,10 +211,14 @@ fn imported_schema_preserves_qualified_names() {
                     ColumnSchema {
                         name: "id".to_string(),
                         data_type: Some("INT".to_string()),
+                        is_primary_key: None,
+                        foreign_key: None,
                     },
                     ColumnSchema {
                         name: "email".to_string(),
                         data_type: Some("TEXT".to_string()),
+                        is_primary_key: None,
+                        foreign_key: None,
                     },
                 ],
             }],
@@ -242,10 +254,14 @@ fn imported_schema_resolves_via_default_schema() {
                     ColumnSchema {
                         name: "id".to_string(),
                         data_type: None,
+                        is_primary_key: None,
+                        foreign_key: None,
                     },
                     ColumnSchema {
                         name: "email".to_string(),
                         data_type: None,
+                        is_primary_key: None,
+                        foreign_key: None,
                     },
                 ],
             }],
@@ -285,6 +301,8 @@ fn imported_schema_resolves_via_search_path_with_catalog() {
                 columns: vec![ColumnSchema {
                     name: "amount".to_string(),
                     data_type: None,
+                    is_primary_key: None,
+                    foreign_key: None,
                 }],
             }],
         }),

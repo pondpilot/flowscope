@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use super::common::{Issue, IssueCount, Span, Summary};
+use super::request::ForeignKeyRef;
 
 /// The result of analyzing SQL for data lineage.
 ///
@@ -656,6 +657,39 @@ pub struct ResolvedSchemaTable {
     /// True if this is a temporary table
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub temporary: Option<bool>,
+
+    /// Table-level constraints (composite PKs, FKs, etc.)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub constraints: Vec<TableConstraintInfo>,
+}
+
+/// Information about a table-level constraint (composite PK, FK, etc.).
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TableConstraintInfo {
+    /// Type of constraint
+    pub constraint_type: ConstraintType,
+    /// Columns involved in this constraint
+    pub columns: Vec<String>,
+    /// For FK: the referenced table
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub referenced_table: Option<String>,
+    /// For FK: the referenced columns
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub referenced_columns: Option<Vec<String>>,
+}
+
+/// Type of table constraint.
+///
+/// This enum is marked `#[non_exhaustive]` to allow adding constraint types
+/// (e.g., CHECK, EXCLUDE) in the future without breaking API compatibility.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum ConstraintType {
+    PrimaryKey,
+    ForeignKey,
+    Unique,
 }
 
 /// A column in the resolved schema with origin tracking.
@@ -669,6 +703,14 @@ pub struct ResolvedColumnSchema {
     /// Column-level origin (can differ from table origin in future merging)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub origin: Option<SchemaOrigin>,
+
+    /// True if this column is a primary key (or part of composite PK)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub is_primary_key: Option<bool>,
+
+    /// Foreign key reference if this column references another table
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub foreign_key: Option<ForeignKeyRef>,
 }
 
 /// The origin of schema information.

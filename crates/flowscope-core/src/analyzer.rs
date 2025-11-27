@@ -23,7 +23,7 @@ mod statements;
 pub mod visitor;
 
 use cross_statement::CrossStatementTracker;
-use helpers::find_identifier_span;
+use helpers::{build_column_schemas_with_constraints, find_identifier_span};
 use input::{collect_statements, StatementInput};
 use schema_registry::SchemaRegistry;
 
@@ -236,18 +236,13 @@ impl<'a> Analyzer<'a> {
         let canonical = self.normalize_table_name(&create.name.to_string());
 
         if create.query.is_none() {
-            let column_schemas: Vec<ColumnSchema> = create
-                .columns
-                .iter()
-                .map(|c| ColumnSchema {
-                    name: c.name.value.clone(),
-                    data_type: Some(c.data_type.to_string()),
-                })
-                .collect();
+            let (column_schemas, table_constraints) =
+                build_column_schemas_with_constraints(&create.columns, &create.constraints);
 
-            self.schema.seed_implied_schema(
+            self.schema.seed_implied_schema_with_constraints(
                 &canonical,
                 column_schemas,
+                table_constraints,
                 create.temporary,
                 statement_index,
             );
@@ -255,8 +250,6 @@ impl<'a> Analyzer<'a> {
             // This is a CTAS (CREATE TABLE ... AS SELECT ...).
             // We mark the table as known to prevent UNRESOLVED_REFERENCE
             // errors, but we don't have column schema yet.
-            // TODO: A more advanced implementation could perform a partial
-            // analysis of the query to infer the column schema here.
             self.schema.mark_table_known(&canonical);
         }
     }

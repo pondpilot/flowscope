@@ -9,21 +9,91 @@ import {
   Handle,
   Position,
 } from '@xyflow/react';
-import type { Node as FlowNode, NodeProps } from '@xyflow/react';
+import type { Node as FlowNode, Edge as FlowEdge, NodeProps } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
 import { getLayoutedElements } from '../utils/layout';
-import { COLORS, GRAPH_CONFIG } from '../constants';
-import type { SchemaTable, ResolvedSchemaTable, ColumnSchema, SchemaOrigin } from '@pondpilot/flowscope-core';
+import {
+  collectTableLookupKeys,
+  resolveForeignKeyTarget,
+} from '../utils/schemaUtils';
+import { COLORS, CONSTRAINT_STYLES, GRAPH_CONFIG } from '../constants';
+import type {
+  SchemaTable,
+  ResolvedSchemaTable,
+  ColumnSchema,
+  ResolvedColumnSchema,
+  SchemaOrigin,
+  ForeignKeyRef,
+} from '@pondpilot/flowscope-core';
 
 interface SchemaViewProps {
   schema: (SchemaTable | ResolvedSchemaTable)[];
 }
 
+type ColumnWithConstraints = ColumnSchema | ResolvedColumnSchema;
+
 interface SchemaTableNodeData extends Record<string, unknown> {
   label: string;
-  columns: ColumnSchema[];
+  columns: ColumnWithConstraints[];
   origin?: SchemaOrigin;
+}
+
+function isResolvedSchemaTable(
+  table: SchemaTable | ResolvedSchemaTable
+): table is ResolvedSchemaTable {
+  return 'origin' in table;
+}
+
+function buildConstraintForeignKeyMap(
+  table: SchemaTable | ResolvedSchemaTable
+): Map<string, ForeignKeyRef> | null {
+  if (!isResolvedSchemaTable(table) || !table.constraints || table.constraints.length === 0) {
+    return null;
+  }
+
+  const constraintForeignKeys = new Map<string, ForeignKeyRef>();
+  for (const constraint of table.constraints) {
+    if (constraint.constraintType !== 'foreign_key') continue;
+    const referencedTable = constraint.referencedTable;
+    if (!referencedTable) continue;
+    if (!constraint.columns || constraint.columns.length === 0) continue;
+
+    const referencedColumns = constraint.referencedColumns || [];
+    constraint.columns.forEach((columnName, idx) => {
+      if (constraintForeignKeys.has(columnName)) {
+        return;
+      }
+      const targetColumn = referencedColumns[idx] ?? referencedColumns[0] ?? 'primary_key';
+      constraintForeignKeys.set(columnName, {
+        table: referencedTable,
+        column: targetColumn,
+      });
+    });
+  }
+
+  return constraintForeignKeys.size > 0 ? constraintForeignKeys : null;
+}
+
+function getColumnsWithConstraintMetadata(
+  table: SchemaTable | ResolvedSchemaTable
+): ColumnWithConstraints[] {
+  const columns = table.columns || [];
+  const constraintForeignKeys = buildConstraintForeignKeyMap(table);
+  if (!constraintForeignKeys) {
+    return columns;
+  }
+
+  return columns.map((column) => {
+    if (column.foreignKey || !constraintForeignKeys.has(column.name)) {
+      return column;
+    }
+    const fk = constraintForeignKeys.get(column.name);
+    if (!fk) {
+      return column;
+    }
+    return { ...column, foreignKey: fk };
+  });
 }
 
 function SchemaTableNode({ data }: NodeProps<FlowNode<SchemaTableNodeData>>): JSX.Element {
@@ -57,19 +127,47 @@ function SchemaTableNode({ data }: NodeProps<FlowNode<SchemaTableNodeData>>): JS
       </div>
       {(data.columns || []).length > 0 && (
         <div style={{ padding: '6px 12px', maxHeight: GRAPH_CONFIG.MAX_COLUMN_HEIGHT, overflowY: 'auto' }}>
-          {(data.columns || []).map((col: ColumnSchema) => (
-            <div
-              key={col.name}
-              style={{
-                fontSize: 12,
-                color: palette.textSecondary,
-                padding: '3px 4px',
-                borderRadius: 4,
-              }}
-            >
-              {col.name} <span style={{ opacity: 0.6 }}>({col.dataType})</span>
-            </div>
-          ))}
+          {(data.columns || []).map((col: ColumnWithConstraints) => {
+            const isPK = col.isPrimaryKey === true;
+            const hasFK = col.foreignKey != null;
+            return (
+              <div
+                key={col.name}
+                style={{
+                  fontSize: 12,
+                  color: palette.textSecondary,
+                  padding: '3px 4px',
+                  borderRadius: 4,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                {isPK && (
+                  <span
+                    role="img"
+                    aria-label="Primary Key"
+                    title="Primary Key"
+                    style={CONSTRAINT_STYLES.primaryKey}
+                  >
+                    PK
+                  </span>
+                )}
+                {hasFK && (
+                  <span
+                    role="img"
+                    aria-label={`Foreign Key to ${col.foreignKey?.table}`}
+                    title={`FK → ${col.foreignKey?.table}`}
+                    style={CONSTRAINT_STYLES.foreignKey}
+                  >
+                    FK
+                  </span>
+                )}
+                <span>{col.name}</span>
+                {col.dataType && <span style={{ opacity: 0.6 }}>({col.dataType})</span>}
+              </div>
+            );
+          })}
         </div>
       )}
       <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
@@ -81,21 +179,59 @@ const nodeTypes = {
   schemaTableNode: SchemaTableNode,
 };
 
-function buildSchemaFlowNodes(schema: (SchemaTable | ResolvedSchemaTable)[]): FlowNode[] {
-  return schema.map((table) => {
-    // Type guard to check if table is ResolvedSchemaTable
-    const isResolvedTable = (t: SchemaTable | ResolvedSchemaTable): t is ResolvedSchemaTable => {
-      return 'origin' in t;
-    };
+export function buildSchemaFlowEdges(schema: (SchemaTable | ResolvedSchemaTable)[]): FlowEdge[] {
+  const edges: FlowEdge[] = [];
+  const seenEdgeIds = new Set<string>();
+  const tableLookup = new Map<string, string>();
 
+  for (const table of schema) {
+    for (const key of collectTableLookupKeys(table)) {
+      if (!tableLookup.has(key)) {
+        tableLookup.set(key, table.name);
+      }
+    }
+  }
+
+  for (const table of schema) {
+    const columns = getColumnsWithConstraintMetadata(table);
+    for (const col of columns) {
+      if (!col.foreignKey) continue;
+
+      const edgeId = `fk-${table.name}-${col.name}-${col.foreignKey.table}-${col.foreignKey.column}`;
+      // Skip duplicate edges (e.g., if same FK is defined in both column and table constraints)
+      if (seenEdgeIds.has(edgeId)) continue;
+      seenEdgeIds.add(edgeId);
+
+      const resolvedTarget = resolveForeignKeyTarget(col.foreignKey.table, tableLookup);
+      if (resolvedTarget) {
+        edges.push({
+          id: edgeId,
+          source: table.name,
+          target: resolvedTarget,
+          type: 'smoothstep',
+          animated: false,
+          style: CONSTRAINT_STYLES.edge,
+          label: `${col.name} → ${col.foreignKey.column}`,
+          labelStyle: CONSTRAINT_STYLES.edgeLabel,
+          labelBgStyle: CONSTRAINT_STYLES.edgeLabelBg,
+        });
+      }
+    }
+  }
+
+  return edges;
+}
+
+export function buildSchemaFlowNodes(schema: (SchemaTable | ResolvedSchemaTable)[]): FlowNode[] {
+  return schema.map((table) => {
     return {
       id: table.name,
       type: 'schemaTableNode',
       position: { x: 0, y: 0 },
       data: {
         label: table.name,
-        columns: table.columns || [],
-        origin: isResolvedTable(table) ? table.origin : undefined,
+        columns: getColumnsWithConstraintMetadata(table),
+        origin: isResolvedSchemaTable(table) ? table.origin : undefined,
       } satisfies SchemaTableNodeData,
     };
   });
@@ -105,7 +241,8 @@ export function SchemaView({ schema }: SchemaViewProps): JSX.Element {
   const { layoutedNodes, layoutedEdges } = useMemo(() => {
     if (schema.length === 0) return { layoutedNodes: [], layoutedEdges: [] };
     const rawNodes = buildSchemaFlowNodes(schema);
-    const { nodes: ln, edges: le } = getLayoutedElements(rawNodes, [], 'TB'); // 'TB' for top-to-bottom layout
+    const rawEdges = buildSchemaFlowEdges(schema);
+    const { nodes: ln, edges: le } = getLayoutedElements(rawNodes, rawEdges, 'TB');
     return { layoutedNodes: ln, layoutedEdges: le };
   }, [schema]);
 

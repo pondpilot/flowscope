@@ -99,6 +99,7 @@ export function AnimatedEdge({
   const edgeType = data?.type as EdgeType | string | undefined;
   const joinType = data?.joinType as string | undefined;
   const joinCondition = data?.joinCondition as string | undefined;
+  const labelZIndex = isHighlighted ? GRAPH_CONFIG.HIGHLIGHTED_EDGE_Z_INDEX : GRAPH_CONFIG.EDGE_LABEL_BASE_Z_INDEX;
 
   const tooltipContent = useMemo(() => {
     let content = customTooltip || '';
@@ -140,7 +141,7 @@ export function AnimatedEdge({
               position: 'absolute',
               transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
               pointerEvents: 'all',
-              zIndex: 1000,
+              zIndex: labelZIndex,
             }}
           >
             <GraphTooltipProvider>
@@ -185,7 +186,7 @@ export function AnimatedEdge({
               position: 'absolute',
               transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
               pointerEvents: 'all',
-              zIndex: 1000,
+              zIndex: labelZIndex,
             }}
           >
             <GraphTooltipProvider>

@@ -214,6 +214,8 @@ export interface TableNodeData extends Record<string, unknown> {
   isCollapsed: boolean;
   /** Whether this node matches the current search term */
   isHighlighted: boolean;
+  /** True if this table is the primary FROM/base table in a join */
+  isBaseTable?: boolean;
   /** Optional source file name */
   sourceName?: string;
   /** Number of columns hidden from resolvedSchema (0 if none) */

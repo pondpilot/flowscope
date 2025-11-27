@@ -71,6 +71,8 @@ fn parse_schema_ddl(content: &str, dialect: Dialect) -> Result<SchemaMetadata> {
                     .map(|c| ColumnSchema {
                         name: c.name,
                         data_type: c.data_type,
+                        is_primary_key: c.is_primary_key,
+                        foreign_key: c.foreign_key,
                     })
                     .collect(),
             })

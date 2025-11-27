@@ -39,6 +39,8 @@ impl<'a> Analyzer<'a> {
                         name: col.name.clone(),
                         data_type: col.data_type.clone(),
                         origin: Some(entry.origin),
+                        is_primary_key: col.is_primary_key,
+                        foreign_key: col.foreign_key.clone(),
                     })
                     .collect();
 
@@ -51,6 +53,7 @@ impl<'a> Analyzer<'a> {
                     source_statement_index: entry.source_statement_idx,
                     updated_at: entry.updated_at.to_rfc3339(),
                     temporary: if entry.temporary { Some(true) } else { None },
+                    constraints: entry.constraints.clone(),
                 }
             })
             .collect();

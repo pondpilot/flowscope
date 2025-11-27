@@ -5,10 +5,12 @@
 //! creating the appropriate nodes and edges in the lineage graph.
 
 use super::context::StatementContext;
-use super::helpers::{extract_simple_name, generate_edge_id, generate_node_id};
+use super::helpers::{
+    build_column_schemas_with_constraints, extract_simple_name, generate_edge_id, generate_node_id,
+};
 use super::Analyzer;
-use crate::types::{ColumnSchema, Edge, EdgeType, Node, NodeType};
-use sqlparser::ast::{ColumnDef, ObjectName, Query};
+use crate::types::{ColumnSchema, Edge, EdgeType, Node, NodeType, TableConstraintInfo};
+use sqlparser::ast::{ObjectName, Query, TableConstraint};
 
 impl<'a> Analyzer<'a> {
     /// Helper to register implied schema from CREATE TABLE/VIEW/CTAS statements.
@@ -77,6 +79,8 @@ impl<'a> Analyzer<'a> {
             .map(|col| ColumnSchema {
                 name: col.name.clone(),
                 data_type: col.data_type.clone(),
+                is_primary_key: None,
+                foreign_key: None,
             })
             .collect();
 
@@ -120,7 +124,8 @@ impl<'a> Analyzer<'a> {
         &mut self,
         ctx: &mut StatementContext,
         name: &ObjectName,
-        columns: &[ColumnDef],
+        columns: &[sqlparser::ast::ColumnDef],
+        table_constraints: &[TableConstraint],
         is_temporary: bool,
     ) {
         let target_name = name.to_string();
@@ -128,20 +133,18 @@ impl<'a> Analyzer<'a> {
         let resolution = self.canonicalize_table_reference(&target_name);
         let canonical = resolution.canonical.clone();
 
-        // Store schema info for subsequent statements, but only if no imported schema exists.
-        // If an implied schema already exists, replace it (to handle CREATE OR REPLACE TABLE).
-
-        let column_schemas: Vec<ColumnSchema> = columns
-            .iter()
-            .map(|c| ColumnSchema {
-                name: c.name.value.clone(),
-
-                data_type: Some(c.data_type.to_string()),
-            })
-            .collect();
+        let (column_schemas, table_constraint_infos) =
+            build_column_schemas_with_constraints(columns, table_constraints);
 
         // Register implied schema using helper
-        self.register_implied_schema(ctx, &canonical, column_schemas, is_temporary, "DDL");
+        self.register_implied_schema_with_constraints(
+            ctx,
+            &canonical,
+            column_schemas,
+            table_constraint_infos,
+            is_temporary,
+            "DDL",
+        );
 
         // Create target table node
 
@@ -211,6 +214,8 @@ impl<'a> Analyzer<'a> {
             .map(|col| ColumnSchema {
                 name: col.name.clone(),
                 data_type: col.data_type.clone(),
+                is_primary_key: None,
+                foreign_key: None,
             })
             .collect();
 
@@ -247,6 +252,31 @@ impl<'a> Analyzer<'a> {
                     approximate: None,
                 });
             }
+        }
+    }
+
+    /// Helper to register implied schema with constraint information.
+    pub(super) fn register_implied_schema_with_constraints(
+        &mut self,
+        ctx: &StatementContext,
+        canonical: &str,
+        columns: Vec<ColumnSchema>,
+        constraints: Vec<TableConstraintInfo>,
+        is_temporary: bool,
+        statement_type: &str,
+    ) {
+        if let Some(mut issue) = self.schema.register_implied_with_constraints(
+            canonical,
+            columns,
+            constraints,
+            is_temporary,
+            statement_type,
+            ctx.statement_index,
+        ) {
+            if let Some(span) = self.find_span(canonical) {
+                issue = issue.with_span(span);
+            }
+            self.issues.push(issue);
         }
     }
 }

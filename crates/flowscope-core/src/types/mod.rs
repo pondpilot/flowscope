@@ -14,12 +14,12 @@ pub mod serde_utils;
 pub use common::{issue_codes, CaseSensitivity, Issue, IssueCount, Severity, Span, Summary};
 pub use legacy::LineageResult;
 pub use request::{
-    AnalysisOptions, AnalyzeRequest, ColumnSchema, Dialect, FileSource, SchemaMetadata,
-    SchemaNamespaceHint, SchemaTable,
+    AnalysisOptions, AnalyzeRequest, ColumnSchema, Dialect, FileSource, ForeignKeyRef,
+    SchemaMetadata, SchemaNamespaceHint, SchemaTable,
 };
 pub use response::{
-    AggregationInfo, AnalyzeResult, CanonicalName, Edge, EdgeType, FilterClauseType,
-    FilterPredicate, GlobalEdge, GlobalLineage, GlobalNode, JoinType, Node, NodeType,
-    ResolutionSource, ResolvedColumnSchema, ResolvedSchemaMetadata, ResolvedSchemaTable,
-    SchemaOrigin, StatementLineage, StatementRef,
+    AggregationInfo, AnalyzeResult, CanonicalName, ConstraintType, Edge, EdgeType,
+    FilterClauseType, FilterPredicate, GlobalEdge, GlobalLineage, GlobalNode, JoinType, Node,
+    NodeType, ResolutionSource, ResolvedColumnSchema, ResolvedSchemaMetadata, ResolvedSchemaTable,
+    SchemaOrigin, StatementLineage, StatementRef, TableConstraintInfo,
 };

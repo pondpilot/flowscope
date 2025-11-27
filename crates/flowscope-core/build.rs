@@ -793,7 +793,7 @@ impl Dialect {
 
 /// Converts a PascalCase class name to a SQL function name (lowercase with underscores).
 ///
-/// This function handles the conversion of class names from the sqlglot function
+/// This function handles the conversion of class names from the spec function
 /// definitions into SQL-style snake_case function names. The key challenge is
 /// correctly handling acronyms (sequences of uppercase letters) like "JSON", "JSONB",
 /// or "AI" that should remain together rather than being split at each letter.

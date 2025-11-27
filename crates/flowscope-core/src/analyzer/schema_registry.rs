@@ -32,7 +32,7 @@
 
 use crate::types::{
     issue_codes, CaseSensitivity, ColumnSchema, Dialect, Issue, SchemaMetadata, SchemaOrigin,
-    SchemaTable,
+    SchemaTable, TableConstraintInfo,
 };
 use chrono::{DateTime, Utc};
 use std::cell::RefCell;
@@ -41,6 +41,28 @@ use std::collections::{HashMap, HashSet};
 use super::helpers::{
     extract_simple_name, is_quoted_identifier, split_qualified_identifiers, unquote_identifier,
 };
+
+/// Parameters for registering implied schema.
+///
+/// Groups the arguments for `register_implied_internal` to improve readability.
+pub(crate) struct RegisterImpliedParams<'a> {
+    /// The canonical table name.
+    pub(crate) canonical: &'a str,
+    /// Column definitions for the table.
+    pub(crate) columns: Vec<ColumnSchema>,
+    /// Table-level constraints (composite PKs, FKs, etc.).
+    pub(crate) constraints: Vec<TableConstraintInfo>,
+    /// Whether this is a temporary/session-scoped table.
+    pub(crate) is_temporary: bool,
+    /// The type of statement that created this schema (e.g., "CREATE TABLE").
+    pub(crate) statement_type: &'a str,
+    /// The index of the statement that created this schema.
+    pub(crate) statement_index: usize,
+    /// Whether to emit warnings for schema conflicts.
+    pub(crate) emit_warnings: bool,
+    /// Whether this is a seed operation (forward declaration).
+    pub(crate) is_seed: bool,
+}
 
 /// Schema table entry with origin metadata for tracking imported vs implied schema.
 ///
@@ -58,6 +80,8 @@ pub(crate) struct SchemaTableEntry {
     pub(crate) updated_at: DateTime<Utc>,
     /// Whether this is a temporary table (session-scoped).
     pub(crate) temporary: bool,
+    /// Table-level constraints (composite PKs, FKs, etc.)
+    pub(crate) constraints: Vec<TableConstraintInfo>,
 }
 
 /// Search path entry for resolving unqualified table names.
@@ -234,6 +258,7 @@ impl SchemaRegistry {
                         source_statement_idx: None,
                         updated_at: Utc::now(),
                         temporary: false,
+                        constraints: Vec::new(),
                     },
                 );
             }
@@ -272,47 +297,57 @@ impl SchemaRegistry {
         }
     }
 
-    /// Registers implied schema from DDL statements.
+    /// Internal helper for registering implied schema.
     ///
-    /// Returns an optional warning issue if there's a conflict with imported schema.
-    pub(crate) fn register_implied(
-        &mut self,
-        canonical: &str,
-        columns: Vec<ColumnSchema>,
-        is_temporary: bool,
-        statement_type: &str,
-        statement_index: usize,
-    ) -> Option<Issue> {
-        // Always treat a newly created object as known.
+    /// Consolidates the logic for both `register_implied*` and `seed_implied_schema*` methods.
+    fn register_implied_internal(&mut self, params: RegisterImpliedParams<'_>) -> Option<Issue> {
+        let RegisterImpliedParams {
+            canonical,
+            columns,
+            constraints,
+            is_temporary,
+            statement_type,
+            statement_index,
+            emit_warnings,
+            is_seed,
+        } = params;
+
         self.known_tables.insert(canonical.to_string());
-        self.forward_declared_tables.remove(canonical);
 
-        // Check for conflict with imported schema.
+        if is_seed {
+            self.forward_declared_tables.insert(canonical.to_string());
+        } else {
+            self.forward_declared_tables.remove(canonical);
+        }
+
+        // Check for conflict with imported schema (only emit warning if requested).
         if self.imported_tables.contains(canonical) {
-            if let Some(imported_entry) = self.schema_tables.get(canonical) {
-                let imported_cols: HashSet<_> = imported_entry
-                    .table
-                    .columns
-                    .iter()
-                    .map(|c| &c.name)
-                    .collect();
-                let ddl_cols: HashSet<_> = columns.iter().map(|c| &c.name).collect();
+            if emit_warnings {
+                if let Some(imported_entry) = self.schema_tables.get(canonical) {
+                    let imported_cols: HashSet<_> = imported_entry
+                        .table
+                        .columns
+                        .iter()
+                        .map(|c| &c.name)
+                        .collect();
+                    let ddl_cols: HashSet<_> = columns.iter().map(|c| &c.name).collect();
 
-                if imported_cols != ddl_cols {
-                    return Some(
-                        Issue::warning(
-                            issue_codes::SCHEMA_CONFLICT,
-                            format!(
-                                "{} for '{}' conflicts with imported schema. Using imported schema (imported has {} columns, {} has {} columns)",
-                                statement_type,
-                                canonical,
-                                imported_cols.len(),
-                                statement_type,
-                                ddl_cols.len()
-                            ),
-                        )
-                        .with_statement(statement_index),
-                    );
+                    if imported_cols != ddl_cols {
+                        return Some(
+                            Issue::warning(
+                                issue_codes::SCHEMA_CONFLICT,
+                                format!(
+                                    "{} for '{}' conflicts with imported schema. Using imported schema (imported has {} columns, {} has {} columns)",
+                                    statement_type,
+                                    canonical,
+                                    imported_cols.len(),
+                                    statement_type,
+                                    ddl_cols.len()
+                                ),
+                            )
+                            .with_statement(statement_index),
+                        );
+                    }
                 }
             }
             // Don't overwrite imported schema.
@@ -327,10 +362,12 @@ impl SchemaRegistry {
         // Parse canonical name into parts.
         let parts = split_qualified_identifiers(canonical);
         let (catalog, schema, table_name) = match parts.as_slice() {
-            [catalog, schema, table] => {
-                (Some(catalog.clone()), Some(schema.clone()), table.clone())
-            }
-            [schema, table] => (None, Some(schema.clone()), table.clone()),
+            [catalog_part, schema_part, table] => (
+                Some(catalog_part.clone()),
+                Some(schema_part.clone()),
+                table.clone(),
+            ),
+            [schema_part, table] => (None, Some(schema_part.clone()), table.clone()),
             [table] => (None, None, table.clone()),
             _ => (None, None, extract_simple_name(canonical)),
         };
@@ -348,10 +385,58 @@ impl SchemaRegistry {
                 source_statement_idx: Some(statement_index),
                 updated_at: Utc::now(),
                 temporary: is_temporary,
+                constraints,
             },
         );
 
         None
+    }
+
+    /// Registers implied schema from DDL statements.
+    ///
+    /// Returns an optional warning issue if there's a conflict with imported schema.
+    pub(crate) fn register_implied(
+        &mut self,
+        canonical: &str,
+        columns: Vec<ColumnSchema>,
+        is_temporary: bool,
+        statement_type: &str,
+        statement_index: usize,
+    ) -> Option<Issue> {
+        self.register_implied_internal(RegisterImpliedParams {
+            canonical,
+            columns,
+            constraints: Vec::new(),
+            is_temporary,
+            statement_type,
+            statement_index,
+            emit_warnings: true,
+            is_seed: false,
+        })
+    }
+
+    /// Registers implied schema from DDL statements with constraint information.
+    ///
+    /// Returns an optional warning issue if there's a conflict with imported schema.
+    pub(crate) fn register_implied_with_constraints(
+        &mut self,
+        canonical: &str,
+        columns: Vec<ColumnSchema>,
+        constraints: Vec<TableConstraintInfo>,
+        is_temporary: bool,
+        statement_type: &str,
+        statement_index: usize,
+    ) -> Option<Issue> {
+        self.register_implied_internal(RegisterImpliedParams {
+            canonical,
+            columns,
+            constraints,
+            is_temporary,
+            statement_type,
+            statement_index,
+            emit_warnings: true,
+            is_seed: false,
+        })
     }
 
     /// Marks a table as known without persisting schema information.
@@ -363,53 +448,29 @@ impl SchemaRegistry {
         self.forward_declared_tables.insert(canonical.to_string());
     }
 
-    /// Seeds implied schema metadata without emitting conflict warnings.
+    /// Seeds implied schema metadata with constraints, without emitting conflict warnings.
     ///
     /// This is used for forward declarations so earlier statements can see
-    /// column layouts from later DDL statements.
-    pub(crate) fn seed_implied_schema(
+    /// column layouts from later DDL statements, including constraint information.
+    pub(crate) fn seed_implied_schema_with_constraints(
         &mut self,
         canonical: &str,
         columns: Vec<ColumnSchema>,
+        constraints: Vec<TableConstraintInfo>,
         is_temporary: bool,
         statement_index: usize,
     ) {
-        self.known_tables.insert(canonical.to_string());
-        self.forward_declared_tables.insert(canonical.to_string());
-
-        if self.imported_tables.contains(canonical) {
-            return;
-        }
-
-        if !self.allow_implied || columns.is_empty() {
-            return;
-        }
-
-        let parts = split_qualified_identifiers(canonical);
-        let (catalog, schema, table_name) = match parts.as_slice() {
-            [catalog, schema, table] => {
-                (Some(catalog.clone()), Some(schema.clone()), table.clone())
-            }
-            [schema, table] => (None, Some(schema.clone()), table.clone()),
-            [table] => (None, None, table.clone()),
-            _ => (None, None, extract_simple_name(canonical)),
-        };
-
-        self.schema_tables.insert(
-            canonical.to_string(),
-            SchemaTableEntry {
-                table: SchemaTable {
-                    catalog,
-                    schema,
-                    name: table_name,
-                    columns,
-                },
-                origin: SchemaOrigin::Implied,
-                source_statement_idx: Some(statement_index),
-                updated_at: Utc::now(),
-                temporary: is_temporary,
-            },
-        );
+        // Ignore the return value since we don't emit warnings during seeding.
+        let _ = self.register_implied_internal(RegisterImpliedParams {
+            canonical,
+            columns,
+            constraints,
+            is_temporary,
+            statement_type: "seed",
+            statement_index,
+            emit_warnings: false,
+            is_seed: true,
+        });
     }
 
     /// Generates a canonical key for a schema table.
@@ -818,10 +879,14 @@ mod tests {
             ColumnSchema {
                 name: "id".to_string(),
                 data_type: Some("integer".to_string()),
+                is_primary_key: None,
+                foreign_key: None,
             },
             ColumnSchema {
                 name: "name".to_string(),
                 data_type: Some("text".to_string()),
+                is_primary_key: None,
+                foreign_key: None,
             },
         ];
 
@@ -845,6 +910,8 @@ mod tests {
                 columns: vec![ColumnSchema {
                     name: "id".to_string(),
                     data_type: Some("integer".to_string()),
+                    is_primary_key: None,
+                    foreign_key: None,
                 }],
             }],
             default_catalog: None,
@@ -861,10 +928,14 @@ mod tests {
             ColumnSchema {
                 name: "id".to_string(),
                 data_type: Some("integer".to_string()),
+                is_primary_key: None,
+                foreign_key: None,
             },
             ColumnSchema {
                 name: "email".to_string(),
                 data_type: Some("text".to_string()),
+                is_primary_key: None,
+                foreign_key: None,
             },
         ];
 
@@ -881,6 +952,8 @@ mod tests {
         let columns = vec![ColumnSchema {
             name: "id".to_string(),
             data_type: Some("integer".to_string()),
+            is_primary_key: None,
+            foreign_key: None,
         }];
 
         registry.register_implied("public.temp", columns, false, "CREATE TABLE", 0);
@@ -925,10 +998,14 @@ mod tests {
                     ColumnSchema {
                         name: "id".to_string(),
                         data_type: Some("integer".to_string()),
+                        is_primary_key: None,
+                        foreign_key: None,
                     },
                     ColumnSchema {
                         name: "email".to_string(),
                         data_type: Some("text".to_string()),
+                        is_primary_key: None,
+                        foreign_key: None,
                     },
                 ],
             }],
@@ -962,6 +1039,8 @@ mod tests {
                 columns: vec![ColumnSchema {
                     name: "UserName".to_string(),
                     data_type: Some("text".to_string()),
+                    is_primary_key: None,
+                    foreign_key: None,
                 }],
             }],
             default_catalog: None,
@@ -1008,6 +1087,8 @@ mod tests {
         let columns = vec![ColumnSchema {
             name: "id".to_string(),
             data_type: Some("integer".to_string()),
+            is_primary_key: None,
+            foreign_key: None,
         }];
 
         // Should still mark as known but not store schema details
@@ -1081,6 +1162,8 @@ mod tests {
                     columns: vec![ColumnSchema {
                         name: "a_col".to_string(),
                         data_type: None,
+                        is_primary_key: None,
+                        foreign_key: None,
                     }],
                 },
                 SchemaTable {
@@ -1090,6 +1173,8 @@ mod tests {
                     columns: vec![ColumnSchema {
                         name: "b_col".to_string(),
                         data_type: None,
+                        is_primary_key: None,
+                        foreign_key: None,
                     }],
                 },
             ],
@@ -1226,6 +1311,8 @@ mod tests {
                 columns: vec![ColumnSchema {
                     name: "id".to_string(),
                     data_type: Some("integer".to_string()),
+                    is_primary_key: None,
+                    foreign_key: None,
                 }],
             }],
             default_catalog: None,
@@ -1241,6 +1328,8 @@ mod tests {
         let columns = vec![ColumnSchema {
             name: "id".to_string(),
             data_type: Some("integer".to_string()),
+            is_primary_key: None,
+            foreign_key: None,
         }];
 
         let issue = registry.register_implied("public.users", columns, false, "CREATE TABLE", 0);
@@ -1269,5 +1358,115 @@ mod tests {
         let resolution = registry.canonicalize_table_reference("public.users");
         assert_eq!(resolution.canonical, "PUBLIC.USERS");
         assert!(resolution.matched_schema);
+    }
+
+    #[test]
+    fn test_column_with_primary_key() {
+        let schema = SchemaMetadata {
+            tables: vec![SchemaTable {
+                catalog: None,
+                schema: Some("public".to_string()),
+                name: "users".to_string(),
+                columns: vec![ColumnSchema {
+                    name: "id".to_string(),
+                    data_type: Some("integer".to_string()),
+                    is_primary_key: Some(true),
+                    foreign_key: None,
+                }],
+            }],
+            default_catalog: None,
+            default_schema: Some("public".to_string()),
+            search_path: None,
+            case_sensitivity: None,
+            allow_implied: true,
+        };
+
+        let (registry, _) = SchemaRegistry::new(Some(&schema), Dialect::Postgres);
+        let entry = registry.get("public.users").unwrap();
+        assert_eq!(entry.table.columns[0].is_primary_key, Some(true));
+    }
+
+    #[test]
+    fn test_column_with_foreign_key() {
+        use crate::types::ForeignKeyRef;
+
+        let schema = SchemaMetadata {
+            tables: vec![SchemaTable {
+                catalog: None,
+                schema: Some("public".to_string()),
+                name: "orders".to_string(),
+                columns: vec![ColumnSchema {
+                    name: "user_id".to_string(),
+                    data_type: Some("integer".to_string()),
+                    is_primary_key: None,
+                    foreign_key: Some(ForeignKeyRef {
+                        table: "public.users".to_string(),
+                        column: "id".to_string(),
+                    }),
+                }],
+            }],
+            default_catalog: None,
+            default_schema: Some("public".to_string()),
+            search_path: None,
+            case_sensitivity: None,
+            allow_implied: true,
+        };
+
+        let (registry, _) = SchemaRegistry::new(Some(&schema), Dialect::Postgres);
+        let entry = registry.get("public.orders").unwrap();
+        let fk = entry.table.columns[0].foreign_key.as_ref().unwrap();
+        assert_eq!(fk.table, "public.users");
+        assert_eq!(fk.column, "id");
+    }
+
+    #[test]
+    fn test_implied_schema_with_constraints() {
+        use crate::types::{ConstraintType, ForeignKeyRef};
+
+        let (mut registry, _) = SchemaRegistry::new(None, Dialect::Postgres);
+
+        let columns = vec![
+            ColumnSchema {
+                name: "id".to_string(),
+                data_type: Some("integer".to_string()),
+                is_primary_key: Some(true),
+                foreign_key: None,
+            },
+            ColumnSchema {
+                name: "order_id".to_string(),
+                data_type: Some("integer".to_string()),
+                is_primary_key: None,
+                foreign_key: Some(ForeignKeyRef {
+                    table: "orders".to_string(),
+                    column: "id".to_string(),
+                }),
+            },
+        ];
+
+        let constraints = vec![TableConstraintInfo {
+            constraint_type: ConstraintType::ForeignKey,
+            columns: vec!["order_id".to_string()],
+            referenced_table: Some("orders".to_string()),
+            referenced_columns: Some(vec!["id".to_string()]),
+        }];
+
+        registry.register_implied_with_constraints(
+            "public.order_items",
+            columns,
+            constraints,
+            false,
+            "CREATE TABLE",
+            0,
+        );
+
+        let entry = registry.get("public.order_items").unwrap();
+        assert_eq!(entry.table.columns.len(), 2);
+        assert_eq!(entry.table.columns[0].is_primary_key, Some(true));
+        assert!(entry.table.columns[1].foreign_key.is_some());
+        assert_eq!(entry.constraints.len(), 1);
+        assert_eq!(
+            entry.constraints[0].constraint_type,
+            ConstraintType::ForeignKey
+        );
     }
 }

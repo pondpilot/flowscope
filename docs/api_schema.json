@@ -277,10 +277,46 @@
               "string",
               "null"
             ]
+          },
+          "isPrimaryKey": {
+            "description": "True if this column is a primary key (or part of composite PK)",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "foreignKey": {
+            "description": "Foreign key reference if this column references another table",
+            "anyOf": [
+              {
+                "$ref": "#/definitions/ForeignKeyRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
           "name"
+        ]
+      },
+      "ForeignKeyRef": {
+        "description": "A foreign key reference to another table's column.",
+        "type": "object",
+        "properties": {
+          "table": {
+            "description": "The referenced table name (may be qualified)",
+            "type": "string"
+          },
+          "column": {
+            "description": "The referenced column name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "table",
+          "column"
         ]
       }
     }
@@ -1216,6 +1252,13 @@
               "boolean",
               "null"
             ]
+          },
+          "constraints": {
+            "description": "Table-level constraints (composite PKs, FKs, etc.)",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/TableConstraintInfo"
+            }
           }
         },
         "required": [
@@ -1248,6 +1291,24 @@
                 "type": "null"
               }
             ]
+          },
+          "isPrimaryKey": {
+            "description": "True if this column is a primary key (or part of composite PK)",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "foreignKey": {
+            "description": "Foreign key reference if this column references another table",
+            "anyOf": [
+              {
+                "$ref": "#/definitions/ForeignKeyRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -1267,6 +1328,75 @@
             "type": "string",
             "const": "implied"
           }
+        ]
+      },
+      "ForeignKeyRef": {
+        "description": "A foreign key reference to another table's column.",
+        "type": "object",
+        "properties": {
+          "table": {
+            "description": "The referenced table name (may be qualified)",
+            "type": "string"
+          },
+          "column": {
+            "description": "The referenced column name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "table",
+          "column"
+        ]
+      },
+      "TableConstraintInfo": {
+        "description": "Information about a table-level constraint (composite PK, FK, etc.).",
+        "type": "object",
+        "properties": {
+          "constraintType": {
+            "description": "Type of constraint",
+            "allOf": [
+              {
+                "$ref": "#/definitions/ConstraintType"
+              }
+            ]
+          },
+          "columns": {
+            "description": "Columns involved in this constraint",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "referencedTable": {
+            "description": "For FK: the referenced table",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "referencedColumns": {
+            "description": "For FK: the referenced columns",
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "constraintType",
+          "columns"
+        ]
+      },
+      "ConstraintType": {
+        "description": "Type of table constraint.\n\nThis enum is marked `#[non_exhaustive]` to allow adding constraint types\n(e.g., CHECK, EXCLUDE) in the future without breaking API compatibility.",
+        "type": "string",
+        "enum": [
+          "primary_key",
+          "foreign_key",
+          "unique"
         ]
       }
     }

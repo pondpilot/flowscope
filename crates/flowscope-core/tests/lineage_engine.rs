@@ -1,7 +1,7 @@
 use flowscope_core::{
-    analyze, issue_codes, AnalyzeRequest, AnalyzeResult, ColumnSchema, Dialect, Edge, EdgeType,
-    FilterClauseType, JoinType, Node, NodeType, SchemaMetadata, SchemaNamespaceHint, SchemaTable,
-    Severity, StatementLineage,
+    analyze, issue_codes, AnalyzeRequest, AnalyzeResult, ColumnSchema, ConstraintType, Dialect,
+    Edge, EdgeType, FilterClauseType, JoinType, Node, NodeType, SchemaMetadata,
+    SchemaNamespaceHint, SchemaTable, Severity, StatementLineage,
 };
 use rstest::rstest;
 use std::collections::HashSet;
@@ -74,13 +74,54 @@ fn schema_table(
         catalog: catalog.map(|c| c.to_string()),
         schema: schema.map(|s| s.to_string()),
         name: name.to_string(),
-        columns: columns
-            .iter()
-            .map(|col| ColumnSchema {
-                name: (*col).to_string(),
-                data_type: None,
-            })
-            .collect(),
+        columns: columns.iter().map(|col| column(*col)).collect(),
+    }
+}
+
+/// Create a simple column schema with just a name.
+fn column(name: &str) -> ColumnSchema {
+    ColumnSchema {
+        name: name.to_string(),
+        data_type: None,
+        is_primary_key: None,
+        foreign_key: None,
+    }
+}
+
+/// Create a column schema with a data type.
+#[allow(dead_code)]
+fn column_typed(name: &str, data_type: &str) -> ColumnSchema {
+    ColumnSchema {
+        name: name.to_string(),
+        data_type: Some(data_type.to_string()),
+        is_primary_key: None,
+        foreign_key: None,
+    }
+}
+
+/// Create a primary key column schema.
+#[allow(dead_code)]
+fn column_pk(name: &str, data_type: &str) -> ColumnSchema {
+    ColumnSchema {
+        name: name.to_string(),
+        data_type: Some(data_type.to_string()),
+        is_primary_key: Some(true),
+        foreign_key: None,
+    }
+}
+
+/// Create a foreign key column schema.
+#[allow(dead_code)]
+fn column_fk(name: &str, data_type: &str, ref_table: &str, ref_column: &str) -> ColumnSchema {
+    use flowscope_core::ForeignKeyRef;
+    ColumnSchema {
+        name: name.to_string(),
+        data_type: Some(data_type.to_string()),
+        is_primary_key: None,
+        foreign_key: Some(ForeignKeyRef {
+            table: ref_table.to_string(),
+            column: ref_column.to_string(),
+        }),
     }
 }
 
@@ -4762,4 +4803,260 @@ fn set_operations_with_all_operators() {
     assert!(tables.contains("table_b"), "table_b tracked");
     assert!(tables.contains("table_c"), "table_c tracked");
     assert!(tables.contains("table_d"), "table_d tracked");
+}
+
+// ============================================================================
+// CONSTRAINT EXTRACTION
+// ============================================================================
+
+#[test]
+fn create_table_with_inline_primary_key() {
+    let sql = r#"
+        CREATE TABLE users (
+            id INTEGER PRIMARY KEY,
+            name TEXT
+        );
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    assert!(
+        !result.summary.has_errors,
+        "CREATE TABLE with PK should parse"
+    );
+
+    let resolved_schema = result
+        .resolved_schema
+        .as_ref()
+        .expect("should have resolved schema");
+    let users_table = resolved_schema
+        .tables
+        .iter()
+        .find(|t| t.name == "users")
+        .expect("users table should exist");
+
+    let id_col = users_table
+        .columns
+        .iter()
+        .find(|c| c.name == "id")
+        .expect("id column should exist");
+    assert_eq!(
+        id_col.is_primary_key,
+        Some(true),
+        "id should be marked as PK"
+    );
+
+    let name_col = users_table
+        .columns
+        .iter()
+        .find(|c| c.name == "name")
+        .expect("name column should exist");
+    assert_eq!(name_col.is_primary_key, None, "name should not be PK");
+}
+
+#[test]
+fn create_table_with_table_level_primary_key() {
+    let sql = r#"
+        CREATE TABLE orders (
+            order_id INTEGER,
+            customer_id INTEGER,
+            total DECIMAL,
+            PRIMARY KEY (order_id)
+        );
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    assert!(
+        !result.summary.has_errors,
+        "CREATE TABLE with table-level PK should parse"
+    );
+
+    let resolved_schema = result
+        .resolved_schema
+        .as_ref()
+        .expect("should have resolved schema");
+    let orders_table = resolved_schema
+        .tables
+        .iter()
+        .find(|t| t.name == "orders")
+        .expect("orders table should exist");
+
+    let order_id_col = orders_table
+        .columns
+        .iter()
+        .find(|c| c.name == "order_id")
+        .expect("order_id column should exist");
+    assert_eq!(
+        order_id_col.is_primary_key,
+        Some(true),
+        "order_id should be marked as PK"
+    );
+
+    // Check table-level constraint
+    assert!(
+        !orders_table.constraints.is_empty(),
+        "should have table constraints"
+    );
+    let pk_constraint = orders_table
+        .constraints
+        .iter()
+        .find(|c| matches!(c.constraint_type, ConstraintType::PrimaryKey))
+        .expect("PK constraint should exist");
+    assert_eq!(pk_constraint.columns, vec!["order_id"]);
+}
+
+#[test]
+fn create_table_with_inline_foreign_key() {
+    let sql = r#"
+        CREATE TABLE order_items (
+            id INTEGER PRIMARY KEY,
+            order_id INTEGER REFERENCES orders(id),
+            product_name TEXT
+        );
+    "#;
+
+    let result = run_analysis(sql, Dialect::Postgres, None);
+    assert!(
+        !result.summary.has_errors,
+        "CREATE TABLE with FK should parse"
+    );
+
+    let resolved_schema = result
+        .resolved_schema
+        .as_ref()
+        .expect("should have resolved schema");
+    let items_table = resolved_schema
+        .tables
+        .iter()
+        .find(|t| t.name == "order_items")
+        .expect("order_items table should exist");
+
+    let order_id_col = items_table
+        .columns
+        .iter()
+        .find(|c| c.name == "order_id")
+        .expect("order_id column should exist");
+
+    let fk_ref = order_id_col
+        .foreign_key
+        .as_ref()
+        .expect("should have FK reference");
+    assert_eq!(fk_ref.table, "orders");
+    assert_eq!(fk_ref.column, "id");
+}
+
+#[test]
+fn create_table_with_table_level_foreign_key() {
+    let sql = r#"
+        CREATE TABLE order_items (
+            id INTEGER PRIMARY KEY,
+            order_id INTEGER,
+            product_id INTEGER,
+            quantity INTEGER,
+            FOREIGN KEY (order_id) REFERENCES orders(id),
+            FOREIGN KEY (product_id) REFERENCES products(product_id)
+        );
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    assert!(
+        !result.summary.has_errors,
+        "CREATE TABLE with table-level FK should parse"
+    );
+
+    let resolved_schema = result
+        .resolved_schema
+        .as_ref()
+        .expect("should have resolved schema");
+    let items_table = resolved_schema
+        .tables
+        .iter()
+        .find(|t| t.name == "order_items")
+        .expect("order_items table should exist");
+
+    // Check table-level FK constraints
+    let fk_constraints: Vec<_> = items_table
+        .constraints
+        .iter()
+        .filter(|c| matches!(c.constraint_type, ConstraintType::ForeignKey))
+        .collect();
+
+    assert_eq!(fk_constraints.len(), 2, "should have 2 FK constraints");
+
+    let order_fk = fk_constraints
+        .iter()
+        .find(|c| c.columns.contains(&"order_id".to_string()))
+        .expect("order FK should exist");
+    assert_eq!(order_fk.referenced_table.as_deref(), Some("orders"));
+    assert_eq!(
+        order_fk.referenced_columns.as_ref().map(|c| c.as_slice()),
+        Some(&["id".to_string()][..])
+    );
+
+    let product_fk = fk_constraints
+        .iter()
+        .find(|c| c.columns.contains(&"product_id".to_string()))
+        .expect("product FK should exist");
+    assert_eq!(product_fk.referenced_table.as_deref(), Some("products"));
+}
+
+#[test]
+fn create_table_with_composite_primary_key() {
+    let sql = r#"
+        CREATE TABLE order_line_items (
+            order_id INTEGER,
+            line_number INTEGER,
+            product_id INTEGER,
+            quantity INTEGER,
+            PRIMARY KEY (order_id, line_number)
+        );
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    assert!(
+        !result.summary.has_errors,
+        "CREATE TABLE with composite PK should parse"
+    );
+
+    let resolved_schema = result
+        .resolved_schema
+        .as_ref()
+        .expect("should have resolved schema");
+    let items_table = resolved_schema
+        .tables
+        .iter()
+        .find(|t| t.name == "order_line_items")
+        .expect("order_line_items table should exist");
+
+    // Both columns in composite PK should be marked
+    let order_id_col = items_table
+        .columns
+        .iter()
+        .find(|c| c.name == "order_id")
+        .expect("order_id column should exist");
+    assert_eq!(
+        order_id_col.is_primary_key,
+        Some(true),
+        "order_id should be marked as PK"
+    );
+
+    let line_num_col = items_table
+        .columns
+        .iter()
+        .find(|c| c.name == "line_number")
+        .expect("line_number column should exist");
+    assert_eq!(
+        line_num_col.is_primary_key,
+        Some(true),
+        "line_number should be marked as PK"
+    );
+
+    // Check table constraint has both columns
+    let pk_constraint = items_table
+        .constraints
+        .iter()
+        .find(|c| matches!(c.constraint_type, ConstraintType::PrimaryKey))
+        .expect("PK constraint should exist");
+    assert_eq!(pk_constraint.columns.len(), 2);
+    assert!(pk_constraint.columns.contains(&"order_id".to_string()));
+    assert!(pk_constraint.columns.contains(&"line_number".to_string()));
 }

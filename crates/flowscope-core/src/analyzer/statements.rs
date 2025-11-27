@@ -48,6 +48,7 @@ impl<'a> Analyzer<'a> {
                         &mut ctx,
                         &create.name,
                         &create.columns,
+                        &create.constraints,
                         create.temporary,
                     );
                     "CREATE_TABLE".to_string()

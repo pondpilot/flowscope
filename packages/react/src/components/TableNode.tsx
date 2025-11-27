@@ -85,6 +85,7 @@ export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
   const isView = nodeData.nodeType === 'view';
   const isVirtualOutput = nodeData.nodeType === 'virtualOutput';
   const isRecursive = !!nodeData.isRecursive;
+  const isBaseTable = !!nodeData.isBaseTable;
   const isSelected = selected || nodeData.isSelected;
   const isHighlighted = nodeData.isHighlighted;
   const isCollapsed = nodeData.isCollapsed;
@@ -234,6 +235,26 @@ export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
             {sanitizeIdentifier(nodeData.label)}
           </div>
         </div>
+
+        {isBaseTable && !isVirtualOutput && (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              backgroundColor: `${colors.accent}18`,
+              color: colors.accent,
+              borderRadius: 999,
+              padding: '3px 8px',
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: 0.3,
+              textTransform: 'uppercase',
+            }}
+            title="Primary base table for joins"
+          >
+            BASE
+          </span>
+        )}
 
         {hiddenColumnCount > 0 && (
           <button

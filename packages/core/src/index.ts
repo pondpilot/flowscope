@@ -13,6 +13,7 @@ export type {
   SchemaNamespaceHint,
   SchemaTable,
   ColumnSchema,
+  ForeignKeyRef,
   FileSource,
   // Response types
   AnalyzeResult,
