@@ -1,4 +1,5 @@
-import React, { useMemo, useState, useCallback, useRef, useEffect, memo } from 'react';
+import React, { useMemo, useState, useCallback, useRef, useEffect, memo, useId } from 'react';
+import { useDebounce } from '../hooks/useDebounce';
 import {
   Table2,
   FileCode,
@@ -16,7 +17,8 @@ import {
   Info,
   Maximize2,
   Minimize2,
-  BarChart2
+  BarChart2,
+  ScanLine
 } from 'lucide-react';
 import { useLineage } from '../store';
 import type { MatrixSubMode } from '../types';
@@ -35,6 +37,7 @@ import {
   extractScriptDependencies,
   buildTableMatrix,
   buildScriptMatrix,
+  extractAllColumnNames,
   type TableDependencyWithDetails,
   type ScriptDependency,
   type MatrixCellData,
@@ -157,6 +160,8 @@ interface MatrixCellProps {
   isDimmed: boolean;
   intensity: number; // 0 to 1
   heatmapMode: boolean;
+  filterMode: 'rows' | 'columns' | 'fields'; // Added
+  filterText: string; // Added
   onHover: (row: string, col: string) => void;
   onLeave: () => void;
   onClick: (row: string, col: string) => void;
@@ -173,6 +178,8 @@ const MatrixCell = memo(function MatrixCell({
   isDimmed,
   intensity,
   heatmapMode,
+  filterMode,
+  filterText,
   onHover,
   onLeave,
   onClick,
@@ -228,6 +235,61 @@ const MatrixCell = memo(function MatrixCell({
 
     const isWrite = cellData.type === 'write';
 
+    // Field Tracing Specific Tooltip
+    if (filterMode === 'fields' && filterText && subMode === 'tables') {
+      const details = cellData.details as TableDependencyWithDetails | undefined;
+      const lowerSearch = filterText.toLowerCase();
+      
+      if (details && details.columns) {
+        // Find matching columns
+        const matchedCols = details.columns.filter(c => 
+          c.source.toLowerCase().includes(lowerSearch) || 
+          c.target.toLowerCase().includes(lowerSearch)
+        );
+
+        if (matchedCols.length > 0) {
+          return (
+            <div className="space-y-3 min-w-[200px]">
+              <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                <div className="flex items-center gap-2 font-medium text-sm">
+                  <span className="text-slate-400">{isWrite ? displayRowName : displayColName}</span>
+                  <ArrowRight className="h-3.5 w-3.5 text-slate-500" />
+                  <span className="text-white">{isWrite ? displayColName : displayRowName}</span>
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                {matchedCols.slice(0, MAX_TOOLTIP_COLUMN_MATCHES).map((col, i) => (
+                  <div key={i} className="text-xs bg-white/5 p-2 rounded border border-white/5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={cn("font-mono text-slate-300", col.source.toLowerCase().includes(lowerSearch) && "text-amber-400 font-bold")}>
+                        {col.source}
+                      </span>
+                      <ArrowRight className="h-3 w-3 text-slate-600" />
+                      <span className={cn("font-mono text-slate-300", col.target.toLowerCase().includes(lowerSearch) && "text-amber-400 font-bold")}>
+                        {col.target}
+                      </span>
+                    </div>
+                    {col.expression && col.expression !== col.target && (
+                      <div className="text-[10px] text-slate-500 font-mono border-t border-white/5 pt-1 mt-1 truncate max-w-[250px]">
+                        = {col.expression}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {matchedCols.length > MAX_TOOLTIP_COLUMN_MATCHES && (
+                  <div className="text-[10px] text-slate-500 italic pl-1">
+                    + {matchedCols.length - MAX_TOOLTIP_COLUMN_MATCHES} more matched columns...
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        }
+      }
+    }
+
+    // Standard Tooltip
     if (subMode === 'tables') {
       const details = cellData.details as TableDependencyWithDetails | undefined;
       return (
@@ -263,7 +325,7 @@ const MatrixCell = memo(function MatrixCell({
         </div>
       );
     }
-  }, [cellData, rowName, colName, subMode, isSelf, isNone]);
+  }, [cellData, rowName, colName, subMode, isSelf, isNone, filterMode, filterText]);
 
   return (
     <GraphTooltip delayDuration={300}>
@@ -302,7 +364,9 @@ const MatrixCell = memo(function MatrixCell({
     prev.colName === next.colName &&
     prev.isDimmed === next.isDimmed &&
     prev.intensity === next.intensity &&
-    prev.heatmapMode === next.heatmapMode
+    prev.heatmapMode === next.heatmapMode &&
+    prev.filterMode === next.filterMode && // Added
+    prev.filterText === next.filterText // Added
   );
 });
 
@@ -329,13 +393,63 @@ const HEATMAP_MIN_ALPHA = 0.15;
 const HEATMAP_ALPHA_RANGE = 0.6;
 const CLUSTERING_ITERATIONS = 2;
 
+const MAX_AUTOCOMPLETE_SUGGESTIONS = 8;
+const MAX_TOOLTIP_COLUMN_MATCHES = 5;
+const SEARCH_DEBOUNCE_DELAY = 200;
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+type FilterMode = 'rows' | 'columns' | 'fields';
+type XRayFilterMode = 'dim' | 'hide';
+
+interface FilterItemsParams {
+  items: string[];
+  filterMode: FilterMode;
+  filterText: string;
+  matchingFieldNodes: Set<string> | null;
+  xRayMode: boolean;
+  xRayFilterMode: XRayFilterMode;
+  activeXRaySet: Set<string> | null;
+  targetMode: 'rows' | 'columns';
+}
+
+function filterItems({
+  items,
+  filterMode,
+  filterText,
+  matchingFieldNodes,
+  xRayMode,
+  xRayFilterMode,
+  activeXRaySet,
+  targetMode,
+}: FilterItemsParams): string[] {
+  // 1. Field Trace Filtering
+  if (filterMode === 'fields' && matchingFieldNodes) {
+    return items.filter(item => matchingFieldNodes.has(item));
+  }
+  // 2. X-Ray Filtering
+  if (xRayMode && xRayFilterMode === 'hide' && activeXRaySet) {
+    return items.filter(item => activeXRaySet.has(item));
+  }
+  // 3. Text Search (only for matching target mode)
+  if (filterMode === targetMode && filterText) {
+    const lower = filterText.toLowerCase();
+    return items.filter(item => item.toLowerCase().includes(lower));
+  }
+
+  return items;
+}
+
 export function MatrixView({ className = '' }: MatrixViewProps): JSX.Element {
   const { state, actions } = useLineage();
   const { result, matrixSubMode } = state;
   const { setMatrixSubMode, highlightSpan, requestNavigation } = actions;
 
   const [filterText, setFilterText] = useState('');
-  const [filterMode, setFilterMode] = useState<'rows' | 'columns'>('rows');
+  const debouncedFilterText = useDebounce(filterText, SEARCH_DEBOUNCE_DELAY);
+  const [filterMode, setFilterMode] = useState<FilterMode>('rows');
   const [hoveredCell, setHoveredCell] = useState<{ row: string; col: string } | null>(null);
 
   // Modes
@@ -352,6 +466,13 @@ export function MatrixView({ className = '' }: MatrixViewProps): JSX.Element {
   const [firstColumnWidth, setFirstColumnWidth] = useState(DEFAULT_FIRST_COLUMN_WIDTH);
   const [headerHeight, setHeaderHeight] = useState(DEFAULT_HEADER_HEIGHT);
   const [resizingMode, setResizingMode] = useState<'none' | 'column' | 'header'>('none');
+  
+  // Autocomplete
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+  const suggestionsListId = useId();
+  const activeOptionId = useId();
   
   const resizeStartPos = useRef(0);
   const resizeStartSize = useRef(0);
@@ -393,9 +514,10 @@ export function MatrixView({ className = '' }: MatrixViewProps): JSX.Element {
   }, [resizingMode]);
 
   // Data processing
-  const { tableDeps, scriptDepsData } = useMemo(() => ({
+  const { tableDeps, scriptDepsData, allColumnNames } = useMemo(() => ({
     tableDeps: result ? extractTableDependenciesWithDetails(result.statements) : [],
     scriptDepsData: result ? extractScriptDependencies(result.statements) : { dependencies: [], allScripts: [] },
+    allColumnNames: result ? extractAllColumnNames(result.statements) : [],
   }), [result]);
 
   const fullMatrixData = useMemo(() =>
@@ -474,33 +596,133 @@ export function MatrixView({ className = '' }: MatrixViewProps): JSX.Element {
   }, [fullMatrixData, matrixSubMode]);
 
 
-  // Filtering
-  const filteredRowItems = useMemo(() => {
-    let items = sortedItems;
-    // 1. X-Ray Filtering
-    if (xRayMode && xRayFilterMode === 'hide' && activeXRaySet) {
-       items = items.filter(item => activeXRaySet.has(item));
+  // Field Tracing Logic (uses debounced text for expensive computation)
+  const matchingFieldNodes = useMemo(() => {
+    if (!debouncedFilterText || filterMode !== 'fields') return null;
+    const lower = debouncedFilterText.toLowerCase();
+    const matchedNodes = new Set<string>();
+
+    for (const [rowId, rowCells] of fullMatrixData.cells) {
+      for (const [colId, cell] of rowCells) {
+        if (cell.type === 'write' || cell.type === 'read') {
+           // Check Table Dependencies
+           if (matrixSubMode === 'tables') {
+             const details = cell.details as TableDependencyWithDetails;
+             if (details && details.columns) {
+               const hasMatch = details.columns.some(c =>
+                 c.source.toLowerCase().includes(lower) ||
+                 c.target.toLowerCase().includes(lower)
+               );
+               if (hasMatch) {
+                 matchedNodes.add(rowId);
+                 matchedNodes.add(colId);
+               }
+             }
+           }
+           // Check Script Dependencies (if we had column data, which we don't usually, but scripts touch tables)
+           // For now, field search is primary for Table mode.
+        }
+      }
     }
-    // 2. Search
-    if (!filterText || filterMode !== 'rows') return items;
-    const lower = filterText.toLowerCase();
-    return items.filter(item => item.toLowerCase().includes(lower));
-  }, [sortedItems, filterText, filterMode, xRayMode, xRayFilterMode, activeXRaySet]);
+    return matchedNodes;
+  }, [fullMatrixData, debouncedFilterText, filterMode, matrixSubMode]);
+
+  // Filtering (uses debounced text)
+  const filteredRowItems = useMemo(() => {
+    return filterItems({
+      items: sortedItems,
+      filterMode,
+      filterText: debouncedFilterText,
+      matchingFieldNodes,
+      xRayMode,
+      xRayFilterMode,
+      activeXRaySet,
+      targetMode: 'rows',
+    });
+  }, [sortedItems, debouncedFilterText, filterMode, matchingFieldNodes, xRayMode, xRayFilterMode, activeXRaySet]);
 
   const filteredColumnItems = useMemo(() => {
-    let items = sortedItems;
-    // 1. X-Ray Filtering
-    if (xRayMode && xRayFilterMode === 'hide' && activeXRaySet) {
-       items = items.filter(item => activeXRaySet.has(item));
-    }
-    // 2. Search
-    if (!filterText || filterMode !== 'columns') return items;
-    const lower = filterText.toLowerCase();
-    return items.filter(item => item.toLowerCase().includes(lower));
-  }, [sortedItems, filterText, filterMode, xRayMode, xRayFilterMode, activeXRaySet]);
+    return filterItems({
+      items: sortedItems,
+      filterMode,
+      filterText: debouncedFilterText,
+      matchingFieldNodes,
+      xRayMode,
+      xRayFilterMode,
+      activeXRaySet,
+      targetMode: 'columns',
+    });
+  }, [sortedItems, debouncedFilterText, filterMode, matchingFieldNodes, xRayMode, xRayFilterMode, activeXRaySet]);
 
   const handleCellHover = useCallback((row: string, col: string) => {
     setHoveredCell({ row, col });
+  }, []);
+
+  // Autocomplete Logic
+  const suggestions = useMemo(() => {
+    if (!filterText) return [];
+    const lower = filterText.toLowerCase();
+    let source: string[] = [];
+    
+    if (filterMode === 'fields') {
+       source = allColumnNames;
+    } else {
+       source = sortedItems.map(getShortName);
+    }
+    
+    const matches = Array.from(new Set(source.filter(s => s.toLowerCase().includes(lower)))).slice(0, MAX_AUTOCOMPLETE_SUGGESTIONS);
+    return matches;
+  }, [filterText, filterMode, allColumnNames, sortedItems]);
+  const suggestionCount = suggestions.length;
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveSuggestionIndex(prev => Math.min(prev + 1, suggestions.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveSuggestionIndex(prev => Math.max(prev - 1, 0));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (suggestions.length > 0) {
+        const clampedIndex = Math.max(0, Math.min(activeSuggestionIndex, suggestions.length - 1));
+        const selectedSuggestion = suggestions[clampedIndex];
+        if (selectedSuggestion) {
+          if (clampedIndex !== activeSuggestionIndex) {
+            setActiveSuggestionIndex(clampedIndex);
+          }
+          setFilterText(selectedSuggestion);
+          setShowSuggestions(false);
+        }
+      }
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false);
+    }
+  };
+
+  useEffect(() => {
+    setActiveSuggestionIndex(prev => {
+      if (suggestionCount === 0) {
+        return 0;
+      }
+      const clampedIndex = Math.min(prev, suggestionCount - 1);
+      return clampedIndex < 0 ? 0 : clampedIndex;
+    });
+  }, [suggestionCount]);
+
+  useEffect(() => {
+    setActiveSuggestionIndex(0);
+  }, [filterText]);
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const handleCellClick = useCallback((rowName: string, colName: string) => {
@@ -543,7 +765,7 @@ export function MatrixView({ className = '' }: MatrixViewProps): JSX.Element {
     <GraphTooltipProvider>
       <div className={cn("flex flex-col h-full bg-white dark:bg-slate-950", className)}>
         {/* Toolbar */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 z-20 gap-4">
+        <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 z-40 gap-4">
           <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-900 p-1 rounded-lg shrink-0">
             <button
               onClick={() => { setMatrixSubMode('scripts'); setFocusedNode(null); }}
@@ -732,19 +954,84 @@ export function MatrixView({ className = '' }: MatrixViewProps): JSX.Element {
             )}
           </div>
 
-          <div className="relative group ml-auto flex items-center">
+          <div 
+            className="relative group ml-auto flex items-center"
+            ref={searchContainerRef}
+          >
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors z-10" />
             <input
               type="text"
               placeholder={`Filter ${filterMode}...`}
               value={filterText}
-              onChange={(e) => setFilterText(e.target.value)}
-              className="pl-9 pr-20 py-1.5 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all w-64"
+              onChange={(e) => {
+                setFilterText(e.target.value);
+                setShowSuggestions(true);
+              }}
+              onFocus={() => setShowSuggestions(true)}
+              onKeyDown={handleSearchKeyDown}
+              role="combobox"
+              aria-expanded={showSuggestions && (suggestions.length > 0 || filterText.length > 0)}
+              aria-haspopup="listbox"
+              aria-controls={suggestionsListId}
+              aria-activedescendant={showSuggestions && suggestions.length > 0 ? `${activeOptionId}-${activeSuggestionIndex}` : undefined}
+              aria-autocomplete="list"
+              className="pl-9 pr-28 py-1.5 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all w-72"
             />
+
+            {/* Autocomplete Dropdown */}
+            {showSuggestions && (
+              <div
+                id={suggestionsListId}
+                role="listbox"
+                aria-label="Search suggestions"
+                className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md shadow-lg z-[100] max-h-60 overflow-auto py-1"
+              >
+                {suggestions.length > 0 ? (
+                  suggestions.map((suggestion, index) => (
+                    <button
+                      key={suggestion}
+                      id={`${activeOptionId}-${index}`}
+                      role="option"
+                      aria-selected={index === activeSuggestionIndex}
+                      className={cn(
+                        "w-full text-left px-3 py-2 text-sm transition-colors flex items-center gap-2",
+                        index === activeSuggestionIndex
+                          ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300"
+                          : "text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                      )}
+                      onClick={() => {
+                        setFilterText(suggestion);
+                        setShowSuggestions(false);
+                      }}
+                      onMouseEnter={() => setActiveSuggestionIndex(index)}
+                    >
+                      {filterMode === 'fields' ? (
+                        <ScanLine className="h-3 w-3 opacity-50" />
+                      ) : (
+                        matrixSubMode === 'scripts' ? <FileCode className="h-3 w-3 opacity-50" /> : <Table2 className="h-3 w-3 opacity-50" />
+                      )}
+                      <span className="truncate">{suggestion}</span>
+                    </button>
+                  ))
+                ) : filterText.length > 0 ? (
+                  <div className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400 italic">
+                    No matches found
+                  </div>
+                ) : null}
+              </div>
+            )}
+
             <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center bg-slate-100 dark:bg-slate-800 rounded p-0.5 gap-0.5">
               <button
-                onClick={() => setFilterMode('rows')}
+                onClick={() => {
+                  if (filterMode !== 'rows') {
+                    setFilterMode('rows');
+                    setFilterText('');
+                  }
+                }}
                 title="Filter rows"
+                aria-label="Filter rows"
+                aria-pressed={filterMode === 'rows'}
                 className={cn(
                   "p-1 rounded transition-all",
                   filterMode === 'rows'
@@ -755,8 +1042,15 @@ export function MatrixView({ className = '' }: MatrixViewProps): JSX.Element {
                 <Rows3 className="h-3.5 w-3.5" />
               </button>
               <button
-                onClick={() => setFilterMode('columns')}
+                onClick={() => {
+                  if (filterMode !== 'columns') {
+                    setFilterMode('columns');
+                    setFilterText('');
+                  }
+                }}
                 title="Filter columns"
+                aria-label="Filter columns"
+                aria-pressed={filterMode === 'columns'}
                 className={cn(
                   "p-1 rounded transition-all",
                   filterMode === 'columns'
@@ -765,6 +1059,25 @@ export function MatrixView({ className = '' }: MatrixViewProps): JSX.Element {
                 )}
               >
                 <Columns3 className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => {
+                  if (filterMode !== 'fields') {
+                    setFilterMode('fields');
+                    setFilterText('');
+                  }
+                }}
+                title="Trace Column (Fields)"
+                aria-label="Trace column fields"
+                aria-pressed={filterMode === 'fields'}
+                className={cn(
+                  "p-1 rounded transition-all",
+                  filterMode === 'fields'
+                    ? "bg-white dark:bg-slate-700 text-purple-600 dark:text-purple-400 shadow-sm"
+                    : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                )}
+              >
+                <ScanLine className="h-3.5 w-3.5" />
               </button>
             </div>
           </div>
@@ -973,6 +1286,8 @@ export function MatrixView({ className = '' }: MatrixViewProps): JSX.Element {
                           isDimmed={isCellDimmed}
                           intensity={cellIntensity}
                           heatmapMode={heatmapMode}
+                          filterMode={filterMode}
+                          filterText={filterText}
                           onHover={handleCellHover}
                           onLeave={() => setHoveredCell(null)}
                           onClick={handleCellClick}

@@ -40,6 +40,22 @@ export interface MatrixData {
 // ============================================================================
 
 /**
+ * Extracts all unique column names from lineage statements.
+ * Used for search autocomplete.
+ */
+export function extractAllColumnNames(statements: StatementLineage[]): string[] {
+  const columnNames = new Set<string>();
+  for (const stmt of statements) {
+    for (const node of stmt.nodes) {
+      if (node.type === 'column') {
+        columnNames.add(node.label);
+      }
+    }
+  }
+  return Array.from(columnNames).sort();
+}
+
+/**
  * Extracts table-to-table dependencies with column-level details from lineage statements.
  * Tracks which columns flow between tables and captures source spans for navigation.
  */
