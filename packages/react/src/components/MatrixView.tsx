@@ -15,7 +15,8 @@ import {
   Columns3,
   Info,
   Maximize2,
-  Minimize2
+  Minimize2,
+  BarChart2
 } from 'lucide-react';
 import { useLineage } from '../store';
 import type { MatrixSubMode } from '../types';
@@ -68,7 +69,8 @@ function clusterItems(
   cells: Map<string, Map<string, MatrixCellData>>
 ): string[] {
   let currentOrder = [...items];
-
+  
+  // Simple heuristic: few iterations of barycenter is sufficient for good clustering
   for (let iter = 0; iter < CLUSTERING_ITERATIONS; iter++) {
     const positions = new Map(currentOrder.map((id, i) => [id, i]));
     const newOrder = [...currentOrder].sort((a, b) => {
@@ -341,6 +343,7 @@ export function MatrixView({ className = '' }: MatrixViewProps): JSX.Element {
   const [xRayMode, setXRayMode] = useState(false);
   const [xRayFilterMode, setXRayFilterMode] = useState<'dim' | 'hide'>('dim');
   const [clusterMode, setClusterMode] = useState(false);
+  const [complexityMode, setComplexityMode] = useState(false);
   const [showLegend, setShowLegend] = useState(true);
 
   // X-Ray Focus
@@ -400,6 +403,39 @@ export function MatrixView({ className = '' }: MatrixViewProps): JSX.Element {
       ? buildTableMatrix(tableDeps)
       : buildScriptMatrix(scriptDepsData.dependencies, scriptDepsData.allScripts),
   [matrixSubMode, tableDeps, scriptDepsData]);
+
+  // Complexity Metrics
+  const complexityStats = useMemo(() => {
+    const rowCounts = new Map<string, number>();
+    const colCounts = new Map<string, number>();
+    let maxRow = 0;
+    let maxCol = 0;
+
+    // Initialize
+    for (const item of fullMatrixData.items) {
+      rowCounts.set(item, 0);
+      colCounts.set(item, 0);
+    }
+
+    // Iterate 'write' relationships
+    for (const [rowId, rowCells] of fullMatrixData.cells) {
+      for (const [colId, cell] of rowCells) {
+        if (cell.type === 'write') {
+           // Row is writing (Fan-Out)
+           const r = (rowCounts.get(rowId) || 0) + 1;
+           rowCounts.set(rowId, r);
+           maxRow = Math.max(maxRow, r);
+
+           // Col is being written to (Fan-In)
+           const c = (colCounts.get(colId) || 0) + 1;
+           colCounts.set(colId, c);
+           maxCol = Math.max(maxCol, c);
+        }
+      }
+    }
+
+    return { rowCounts, colCounts, maxRow, maxCol };
+  }, [fullMatrixData]);
 
   // Clustering Logic
   const sortedItems = useMemo(() => {
@@ -554,9 +590,6 @@ export function MatrixView({ className = '' }: MatrixViewProps): JSX.Element {
                   )}
                 >
                   <Zap className="h-4 w-4" />
-                  {xRayMode && (
-                    <span className="text-[10px] font-semibold">X-RAY</span>
-                  )}
                 </button>
               </GraphTooltipTrigger>
               <GraphTooltipPortal>
@@ -636,8 +669,8 @@ export function MatrixView({ className = '' }: MatrixViewProps): JSX.Element {
                   aria-pressed={clusterMode}
                   className={cn(
                     "p-1.5 rounded-md transition-all",
-                    clusterMode
-                      ? "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 ring-1 ring-blue-500"
+                    clusterMode 
+                      ? "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 ring-1 ring-blue-500" 
                       : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                   )}
                 >
@@ -648,6 +681,31 @@ export function MatrixView({ className = '' }: MatrixViewProps): JSX.Element {
                 <GraphTooltipContent side="bottom" className="text-xs">
                   <div className="font-semibold text-slate-100">Smart Clustering</div>
                   <div className="text-slate-400">Reorders matrix to group related items.</div>
+                </GraphTooltipContent>
+              </GraphTooltipPortal>
+            </GraphTooltip>
+
+            {/* Complexity Toggle */}
+            <GraphTooltip delayDuration={300}>
+              <GraphTooltipTrigger asChild>
+                <button
+                  onClick={() => setComplexityMode(!complexityMode)}
+                  aria-label="Toggle Complexity Margins"
+                  aria-pressed={complexityMode}
+                  className={cn(
+                    "p-1.5 rounded-md transition-all",
+                    complexityMode
+                      ? "bg-teal-100 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400 ring-1 ring-teal-500"
+                      : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  )}
+                >
+                  <BarChart2 className="h-4 w-4" />
+                </button>
+              </GraphTooltipTrigger>
+              <GraphTooltipPortal>
+                <GraphTooltipContent side="bottom" className="text-xs">
+                  <div className="font-semibold text-slate-100">Complexity Margins</div>
+                  <div className="text-slate-400">Visual bars for Fan-In/Fan-Out density.</div>
                 </GraphTooltipContent>
               </GraphTooltipPortal>
             </GraphTooltip>
@@ -769,11 +827,15 @@ export function MatrixView({ className = '' }: MatrixViewProps): JSX.Element {
                 // Dim if X-Ray on, node selected, and this is NOT involved
                 const isDimmed = xRayMode && focusedNode && !isRelated && !isFocused;
 
+                // Complexity
+                const fanIn = complexityStats.colCounts.get(item) || 0;
+                const complexityPct = complexityStats.maxCol ? (fanIn / complexityStats.maxCol) * 100 : 0;
+
                 return (
                   <div
                     key={`col-${item}`}
                     className={cn(
-                      "sticky top-0 z-20 bg-white dark:bg-slate-950 border-b border-r border-slate-200 dark:border-slate-800 shadow-sm group cursor-pointer transition-colors duration-200",
+                      "sticky top-0 z-20 bg-white dark:bg-slate-950 border-b border-r border-slate-200 dark:border-slate-800 shadow-sm group cursor-pointer transition-colors duration-200 relative",
                       hoveredCell?.col === item && "bg-slate-50 dark:bg-slate-900",
                       
                       // Highlight logic
@@ -787,7 +849,15 @@ export function MatrixView({ className = '' }: MatrixViewProps): JSX.Element {
                     onClick={() => toggleFocus(item)}
                     title={xRayMode ? "Click to focus X-Ray" : item}
                   >
-                    <div className="w-full h-full flex items-end justify-center pb-2">
+                    {/* Complexity Bar (Vertical, growing from bottom) */}
+                    {complexityMode && complexityPct > 0 && (
+                      <div 
+                        className="absolute bottom-0 left-0 right-0 bg-emerald-500/10 dark:bg-emerald-400/10 transition-all z-0"
+                        style={{ height: `${complexityPct}%` }}
+                      />
+                    )}
+
+                    <div className="w-full h-full flex items-end justify-center pb-2 relative z-10">
                       <span 
                         className={cn(
                           "block text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors whitespace-nowrap overflow-hidden text-ellipsis",
@@ -816,12 +886,16 @@ export function MatrixView({ className = '' }: MatrixViewProps): JSX.Element {
                 const isRelated = isAncestor || isDescendant;
                 const isDimmed = xRayMode && focusedNode && !isRelated && !isFocused;
 
+                // Complexity
+                const fanOut = complexityStats.rowCounts.get(rowItem) || 0;
+                const complexityPct = complexityStats.maxRow ? (fanOut / complexityStats.maxRow) * 100 : 0;
+
                 return (
                   <React.Fragment key={`row-${rowItem}`}>
                     {/* Row Header */}
                     <div
                       className={cn(
-                        "sticky left-0 z-20 bg-white dark:bg-slate-950 border-b border-r border-slate-200 dark:border-slate-800 px-3 flex items-center shadow-[2px_0_5px_rgba(0,0,0,0.02)] cursor-pointer transition-colors duration-200",
+                        "sticky left-0 z-20 bg-white dark:bg-slate-950 border-b border-r border-slate-200 dark:border-slate-800 px-3 flex items-center shadow-[2px_0_5px_rgba(0,0,0,0.02)] cursor-pointer transition-colors duration-200 relative",
                         hoveredCell?.row === rowItem && "bg-slate-50 dark:bg-slate-900",
                         
                         isFocused && "bg-purple-100 dark:bg-purple-900/40",
@@ -834,9 +908,17 @@ export function MatrixView({ className = '' }: MatrixViewProps): JSX.Element {
                       onClick={() => toggleFocus(rowItem)}
                       title={xRayMode ? "Click to focus X-Ray" : rowItem}
                     >
+                      {/* Complexity Bar (Horizontal, growing from left) */}
+                      {complexityMode && complexityPct > 0 && (
+                        <div 
+                          className="absolute top-0 bottom-0 left-0 bg-blue-500/10 dark:bg-blue-400/10 transition-all z-0"
+                          style={{ width: `${complexityPct}%` }}
+                        />
+                      )}
+
                       <span 
                         className={cn(
-                          "text-xs font-medium text-slate-700 dark:text-slate-300 truncate w-full",
+                          "text-xs font-medium text-slate-700 dark:text-slate-300 truncate w-full relative z-10",
                           isFocused && "text-purple-700 dark:text-purple-300 font-bold",
                           isAncestor && "text-blue-600 dark:text-blue-400 font-semibold",
                           isDescendant && "text-emerald-600 dark:text-emerald-400 font-semibold"
@@ -930,6 +1012,13 @@ export function MatrixView({ className = '' }: MatrixViewProps): JSX.Element {
                 </div>
             </div>
             
+            <div className="flex items-center gap-4 text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
+             {xRayMode && <span className="text-purple-500 animate-pulse">X-Ray Active</span>}
+             {heatmapMode && <span className="text-orange-500">Heatmap Active</span>}
+             {clusterMode && <span className="text-blue-500">Sorted by Clusters</span>}
+             {complexityMode && <span className="text-teal-500">Complexity Margins</span>}
+            </div>
+
             <button
                 onClick={() => setShowLegend(false)}
                 aria-label="Hide Legend"
