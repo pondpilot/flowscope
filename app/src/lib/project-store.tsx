@@ -107,38 +107,45 @@ const DEFAULT_PROJECT: Project = {
       content: `/* Core Application Schema - Users & Orders */
 
 CREATE TABLE users (
-  user_id VARCHAR(50) PRIMARY KEY,
-  email VARCHAR(255) NOT NULL,
+  user_id VARCHAR(50) NOT NULL,
+  email VARCHAR(255) NOT NULL UNIQUE,
   full_name VARCHAR(100),
   signup_source VARCHAR(50),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  is_active BOOLEAN DEFAULT TRUE
+  is_active BOOLEAN DEFAULT TRUE,
+  CONSTRAINT pk_users PRIMARY KEY (user_id)
 );
 
 CREATE TABLE products (
-  product_id VARCHAR(50) PRIMARY KEY,
-  name VARCHAR(255),
+  product_id VARCHAR(50) NOT NULL,
+  name VARCHAR(255) NOT NULL,
   category VARCHAR(50),
-  price DECIMAL(10, 2),
+  price DECIMAL(10, 2) NOT NULL,
   cost DECIMAL(10, 2),
-  stock_level INTEGER
+  stock_level INTEGER DEFAULT 0,
+  CONSTRAINT pk_products PRIMARY KEY (product_id)
 );
 
 CREATE TABLE orders (
-  order_id VARCHAR(50) PRIMARY KEY,
-  user_id VARCHAR(50) REFERENCES users(user_id),
-  status VARCHAR(20), -- 'pending', 'shipped', 'cancelled'
-  total_amount DECIMAL(12, 2),
+  order_id VARCHAR(50) NOT NULL,
+  user_id VARCHAR(50) NOT NULL,
+  status VARCHAR(20) DEFAULT 'pending', -- 'pending', 'shipped', 'cancelled'
+  total_amount DECIMAL(12, 2) NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  shipping_address JSONB
+  shipping_address JSONB,
+  CONSTRAINT pk_orders PRIMARY KEY (order_id),
+  CONSTRAINT fk_orders_user FOREIGN KEY (user_id) REFERENCES users(user_id)
 );
 
 CREATE TABLE order_items (
-  item_id VARCHAR(50) PRIMARY KEY,
-  order_id VARCHAR(50) REFERENCES orders(order_id),
-  product_id VARCHAR(50) REFERENCES products(product_id),
-  quantity INTEGER,
-  unit_price DECIMAL(10, 2)
+  item_id VARCHAR(50) NOT NULL,
+  order_id VARCHAR(50) NOT NULL,
+  product_id VARCHAR(50) NOT NULL,
+  quantity INTEGER NOT NULL,
+  unit_price DECIMAL(10, 2) NOT NULL,
+  CONSTRAINT pk_order_items PRIMARY KEY (item_id),
+  CONSTRAINT fk_order_items_order FOREIGN KEY (order_id) REFERENCES orders(order_id),
+  CONSTRAINT fk_order_items_product FOREIGN KEY (product_id) REFERENCES products(product_id)
 );`
     },
     {
@@ -148,20 +155,24 @@ CREATE TABLE order_items (
       content: `/* Clickstream & Analytics Events */
 
 CREATE TABLE raw_page_views (
-  event_id VARCHAR(50),
+  event_id VARCHAR(50) NOT NULL,
   user_id VARCHAR(50),
-  session_id VARCHAR(50),
-  url VARCHAR(2048),
-  timestamp TIMESTAMP,
-  browser_info JSONB
+  session_id VARCHAR(50) NOT NULL,
+  url VARCHAR(2048) NOT NULL,
+  timestamp TIMESTAMP NOT NULL,
+  browser_info JSONB,
+  CONSTRAINT pk_raw_page_views PRIMARY KEY (event_id),
+  CONSTRAINT fk_page_views_user FOREIGN KEY (user_id) REFERENCES users(user_id)
 );
 
 CREATE TABLE raw_add_to_cart (
-  event_id VARCHAR(50),
-  session_id VARCHAR(50),
-  product_id VARCHAR(50),
-  quantity INTEGER,
-  timestamp TIMESTAMP
+  event_id VARCHAR(50) NOT NULL,
+  session_id VARCHAR(50) NOT NULL,
+  product_id VARCHAR(50) NOT NULL,
+  quantity INTEGER NOT NULL DEFAULT 1,
+  timestamp TIMESTAMP NOT NULL,
+  CONSTRAINT pk_raw_add_to_cart PRIMARY KEY (event_id),
+  CONSTRAINT fk_add_to_cart_product FOREIGN KEY (product_id) REFERENCES products(product_id)
 );
 
 -- Derived table: Session summary
@@ -226,7 +237,7 @@ LEFT JOIN user_engagement eng ON u.user_id = eng.user_id;`
       content: `/* Inventory Risk Analysis */
 
 -- Identify products with high sales velocity but low stock
-SELECT 
+SELECT
   p.name as product_name,
   p.stock_level,
   COUNT(oi.item_id) as units_sold_last_30_days,
@@ -234,9 +245,9 @@ SELECT
 FROM products p
 JOIN order_items oi ON p.product_id = oi.product_id
 JOIN orders o ON oi.order_id = o.order_id
-WHERE o.created_at >= DATE_SUB(CURRENT_DATE, INTERVAL 30 DAY)
+WHERE o.created_at >= CURRENT_DATE - INTERVAL '30 days'
 GROUP BY p.product_id, p.name, p.stock_level
-HAVING days_of_inventory < 7
+HAVING p.stock_level / NULLIF(COUNT(oi.item_id) / 30.0, 0) < 7
 ORDER BY days_of_inventory ASC;`
     },
     {
@@ -256,6 +267,61 @@ JOIN users u ON o.user_id = u.user_id
 WHERE o.status = 'shipped'
 GROUP BY 1, 2
 ORDER BY 2 DESC, 4 DESC;`
+    },
+    {
+      id: 'file-6',
+      name: '06_cart_funnel_analysis.sql',
+      language: 'sql',
+      content: `/* Marketing Funnel - Cart Analysis (Separate Domain) */
+
+-- Cart activity summary by product
+CREATE TABLE cart_product_metrics AS
+SELECT
+  atc.product_id,
+  p.name as product_name,
+  p.category,
+  p.price,
+  COUNT(DISTINCT atc.event_id) as add_to_cart_count,
+  COUNT(DISTINCT atc.session_id) as unique_sessions,
+  SUM(atc.quantity) as total_quantity_added,
+  MIN(atc.timestamp) as first_cart_add,
+  MAX(atc.timestamp) as last_cart_add
+FROM raw_add_to_cart atc
+JOIN products p ON atc.product_id = p.product_id
+GROUP BY atc.product_id, p.name, p.category, p.price;
+
+-- Daily cart abandonment funnel
+CREATE VIEW daily_cart_funnel AS
+WITH daily_carts AS (
+  SELECT
+    DATE_TRUNC('day', timestamp) as cart_date,
+    session_id,
+    COUNT(DISTINCT product_id) as products_in_cart,
+    SUM(quantity) as total_items
+  FROM raw_add_to_cart
+  GROUP BY DATE_TRUNC('day', timestamp), session_id
+)
+SELECT
+  cart_date,
+  COUNT(DISTINCT session_id) as sessions_with_cart,
+  SUM(products_in_cart) as total_products_carted,
+  SUM(total_items) as total_items_carted,
+  AVG(products_in_cart) as avg_products_per_cart,
+  AVG(total_items) as avg_items_per_cart
+FROM daily_carts
+GROUP BY cart_date
+ORDER BY cart_date DESC;
+
+-- Top carted products by category
+SELECT
+  cpm.category,
+  cpm.product_name,
+  cpm.add_to_cart_count,
+  cpm.unique_sessions,
+  cpm.total_quantity_added,
+  cpm.price * cpm.total_quantity_added as potential_revenue
+FROM cart_product_metrics cpm
+ORDER BY cpm.add_to_cart_count DESC;`
     }
   ]
 };

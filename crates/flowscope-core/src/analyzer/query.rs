@@ -14,7 +14,7 @@ use crate::types::{
 };
 use serde_json::json;
 use sqlparser::ast::{self, Query, SetExpr};
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 /// Represents the information needed to add an expanded column during wildcard expansion.
 struct ExpandedColumnInfo {
@@ -112,8 +112,33 @@ impl<'a> Analyzer<'a> {
         cte_name: &str,
     ) -> Option<(String, std::sync::Arc<str>)> {
         let cte_id = ctx.cte_definitions.get(cte_name)?.clone();
+        self.apply_join_metadata_to_existing_node(ctx, &cte_id);
         ctx.register_table_in_scope(cte_name.to_string(), cte_id.clone());
         Some((cte_name.to_string(), cte_id))
+    }
+
+    fn apply_join_metadata_to_existing_node(&self, ctx: &mut StatementContext, node_id: &Arc<str>) {
+        let join_type = ctx.current_join_info.join_type;
+        let join_condition = ctx.current_join_info.join_condition.as_deref();
+
+        if join_type.is_none() && join_condition.is_none() {
+            return;
+        }
+
+        if let Some(node) = ctx
+            .nodes
+            .iter_mut()
+            .find(|node| node.id.as_ref() == node_id.as_ref())
+        {
+            if node.join_type.is_none() {
+                node.join_type = join_type;
+            }
+            if node.join_condition.is_none() {
+                if let Some(condition) = join_condition {
+                    node.join_condition = Some(condition.into());
+                }
+            }
+        }
     }
 
     /// Resolves a regular table or view reference.

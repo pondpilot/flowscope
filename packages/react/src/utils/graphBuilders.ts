@@ -8,6 +8,7 @@ import type {
   StatementLineageWithSource,
 } from '../types';
 import { GRAPH_CONFIG, UI_CONSTANTS, JOIN_TYPE_LABELS } from '../constants';
+import { getCreatedRelationNodeIds } from './lineageHelpers';
 
 const SELECT_STATEMENT_TYPES = new Set([
   'SELECT',
@@ -512,12 +513,12 @@ function getScriptIO(stmts: StatementLineageWithSource[]) {
   const writeQualified = new Set<string>();
 
   stmts.forEach((stmt) => {
+    const createdRelationIds = getCreatedRelationNodeIds(stmt);
     stmt.nodes.forEach((node) => {
       if (node.type === 'table' || node.type === 'view') {
         const isWritten =
           stmt.edges.some((e) => e.to === node.id && e.type === 'data_flow') ||
-          stmt.statementType === 'CREATE_TABLE' ||
-          stmt.statementType === 'CREATE_VIEW';
+          createdRelationIds.has(node.id);
         const isRead = stmt.edges.some((e) => e.from === node.id && e.type === 'data_flow');
 
         if (isWritten) {
@@ -604,13 +605,13 @@ function buildHybridGraph(
 
     // Collect unique table info, prioritizing the writer for sourceName
     stmts.forEach((stmt) => {
+      const createdRelationIds = getCreatedRelationNodeIds(stmt);
       stmt.nodes.forEach((node) => {
         if (node.type === 'table' || node.type === 'view') {
           const qName = node.qualifiedName || node.label;
           const isWritten =
             stmt.edges.some((e) => e.to === node.id && e.type === 'data_flow') ||
-            stmt.statementType === 'CREATE_TABLE' ||
-            stmt.statementType === 'CREATE_VIEW';
+            createdRelationIds.has(node.id);
 
           // If this script writes the table/view, use its sourceName as the source
           if (isWritten) {

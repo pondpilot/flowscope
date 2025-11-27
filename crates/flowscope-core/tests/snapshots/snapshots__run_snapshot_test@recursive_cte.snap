@@ -60,7 +60,9 @@ expression: clean_result
           "id": "cte_55404a7d16da64f6",
           "type": "cte",
           "label": "subordinates",
-          "qualifiedName": "subordinates"
+          "qualifiedName": "subordinates",
+          "joinType": "INNER",
+          "joinCondition": "s.employee_id = e.manager_id"
         },
         {
           "id": "table_1d63721b3610a67f",
@@ -164,8 +166,8 @@ expression: clean_result
           "joinCondition": "s.employee_id = e.manager_id"
         }
       ],
-      "joinCount": 0,
-      "complexityScore": 15
+      "joinCount": 1,
+      "complexityScore": 25
     }
   ],
   "globalLineage": {
@@ -469,8 +471,8 @@ expression: clean_result
     "statementCount": 1,
     "tableCount": 2,
     "columnCount": 9,
-    "joinCount": 0,
-    "complexityScore": 15,
+    "joinCount": 1,
+    "complexityScore": 25,
     "issueCount": {
       "errors": 0,
       "warnings": 0,

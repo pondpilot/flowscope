@@ -3,6 +3,7 @@ import { useLineage } from '@pondpilot/flowscope-react';
 import {
   GraphView,
   SchemaView,
+  MatrixView,
   GraphErrorBoundary,
 } from '@pondpilot/flowscope-react';
 import {
@@ -81,6 +82,9 @@ export function AnalysisView() {
             <TabsTrigger value="lineage">
               Lineage
             </TabsTrigger>
+            <TabsTrigger value="matrix">
+              Matrix
+            </TabsTrigger>
             <TabsTrigger value="schema">
               Schema
             </TabsTrigger>
@@ -123,6 +127,10 @@ export function AnalysisView() {
             <GraphErrorBoundary>
               <GraphView graphContainerRef={graphContainerRef} className="h-full w-full" />
             </GraphErrorBoundary>
+          </TabsContent>
+
+          <TabsContent value="matrix" className="h-full mt-0 p-0 absolute inset-0">
+            <MatrixView className="h-full" />
           </TabsContent>
 
           <TabsContent value="schema" className="h-full mt-0 p-0 absolute inset-0">

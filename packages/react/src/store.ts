@@ -2,7 +2,7 @@ import { createContext, createElement, useContext, type ReactNode } from 'react'
 import { useStore } from 'zustand';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { AnalyzeResult, Span } from '@pondpilot/flowscope-core';
-import type { LineageViewMode, LayoutAlgorithm, NavigationRequest } from './types';
+import type { LineageViewMode, LayoutAlgorithm, NavigationRequest, MatrixSubMode } from './types';
 
 const VIEW_MODE_STORAGE_KEY = 'flowscope-view-mode';
 const LAYOUT_ALGORITHM_STORAGE_KEY = 'flowscope-layout-algorithm';
@@ -74,6 +74,7 @@ export interface LineageState {
   highlightedSpan: Span | null;
   searchTerm: string;
   viewMode: LineageViewMode;
+  matrixSubMode: MatrixSubMode;
   layoutAlgorithm: LayoutAlgorithm;
   collapsedNodeIds: Set<string>;
   expandedTableIds: Set<string>; // Tables with all columns shown
@@ -90,6 +91,7 @@ export interface LineageState {
   highlightSpan: (span: Span | null) => void;
   setSearchTerm: (term: string) => void;
   setViewMode: (mode: LineageViewMode) => void;
+  setMatrixSubMode: (mode: MatrixSubMode) => void;
   setLayoutAlgorithm: (algorithm: LayoutAlgorithm) => void;
   toggleShowScriptTables: () => void;
   requestNavigation: (request: NavigationRequest | null) => void;
@@ -116,6 +118,7 @@ export function createLineageStore(
     highlightedSpan: null,
     searchTerm: '',
     viewMode: initialViewMode,
+    matrixSubMode: 'tables',
     layoutAlgorithm: initialLayoutAlgorithm,
     collapsedNodeIds: new Set(),
     expandedTableIds: new Set(),
@@ -190,6 +193,8 @@ export function createLineageStore(
       set({ viewMode: mode });
     },
 
+    setMatrixSubMode: (mode) => set({ matrixSubMode: mode }),
+
     setLayoutAlgorithm: (algorithm) => {
       saveLayoutAlgorithm(algorithm);
       set({ layoutAlgorithm: algorithm });
@@ -242,6 +247,7 @@ export function useLineage() {
       highlightedSpan: store.highlightedSpan,
       searchTerm: store.searchTerm,
       viewMode: store.viewMode,
+      matrixSubMode: store.matrixSubMode,
       layoutAlgorithm: store.layoutAlgorithm,
       collapsedNodeIds: store.collapsedNodeIds,
       expandedTableIds: store.expandedTableIds,
@@ -258,6 +264,7 @@ export function useLineage() {
       highlightSpan: store.highlightSpan,
       setSearchTerm: store.setSearchTerm,
       setViewMode: store.setViewMode,
+      setMatrixSubMode: store.setMatrixSubMode,
       setLayoutAlgorithm: store.setLayoutAlgorithm,
       toggleShowScriptTables: store.toggleShowScriptTables,
       requestNavigation: store.requestNavigation,
@@ -278,6 +285,7 @@ export function useLineageState() {
   const highlightedSpan = useLineageStore((state) => state.highlightedSpan);
   const searchTerm = useLineageStore((state) => state.searchTerm);
   const viewMode = useLineageStore((state) => state.viewMode);
+  const matrixSubMode = useLineageStore((state) => state.matrixSubMode);
   const layoutAlgorithm = useLineageStore((state) => state.layoutAlgorithm);
   const collapsedNodeIds = useLineageStore((state) => state.collapsedNodeIds);
   const expandedTableIds = useLineageStore((state) => state.expandedTableIds);
@@ -292,6 +300,7 @@ export function useLineageState() {
     highlightedSpan,
     searchTerm,
     viewMode,
+    matrixSubMode,
     layoutAlgorithm,
     collapsedNodeIds,
     expandedTableIds,
@@ -313,6 +322,7 @@ export function useLineageActions() {
   const highlightSpan = useLineageStore((state) => state.highlightSpan);
   const setSearchTerm = useLineageStore((state) => state.setSearchTerm);
   const setViewMode = useLineageStore((state) => state.setViewMode);
+  const setMatrixSubMode = useLineageStore((state) => state.setMatrixSubMode);
   const setLayoutAlgorithm = useLineageStore((state) => state.setLayoutAlgorithm);
   const toggleShowScriptTables = useLineageStore((state) => state.toggleShowScriptTables);
   const requestNavigation = useLineageStore((state) => state.requestNavigation);
@@ -327,6 +337,7 @@ export function useLineageActions() {
     highlightSpan,
     setSearchTerm,
     setViewMode,
+    setMatrixSubMode,
     setLayoutAlgorithm,
     toggleShowScriptTables,
     requestNavigation,

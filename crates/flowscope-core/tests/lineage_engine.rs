@@ -147,6 +147,13 @@ fn find_table_node<'a>(lineage: &'a StatementLineage, name: &str) -> Option<&'a 
     })
 }
 
+fn find_cte_node<'a>(lineage: &'a StatementLineage, name: &str) -> Option<&'a Node> {
+    lineage
+        .nodes
+        .iter()
+        .find(|node| node.node_type == NodeType::Cte && &*node.label == name)
+}
+
 #[allow(dead_code)]
 fn has_edge(
     lineage: &StatementLineage,
@@ -3660,6 +3667,36 @@ fn multiple_join_types_captured() {
     assert!(
         inventory_node.join_condition.is_some(),
         "inventory should have join condition"
+    );
+}
+
+#[test]
+fn cte_join_metadata_captured() {
+    let sql = r#"
+        WITH user_ltv AS (
+            SELECT user_id, COUNT(*) AS total_orders
+            FROM orders
+            GROUP BY user_id
+        )
+        SELECT *
+        FROM users u
+        LEFT JOIN user_ltv ltv ON u.user_id = ltv.user_id
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let stmt = first_statement(&result);
+    let cte_node = find_cte_node(stmt, "user_ltv").expect("user_ltv CTE not found");
+
+    use flowscope_core::JoinType;
+    assert_eq!(
+        cte_node.join_type,
+        Some(JoinType::Left),
+        "CTE should capture LEFT join metadata"
+    );
+    assert_eq!(
+        cte_node.join_condition.as_deref(),
+        Some("u.user_id = ltv.user_id"),
+        "CTE should capture join condition"
     );
 }
 

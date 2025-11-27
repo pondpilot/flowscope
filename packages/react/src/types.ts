@@ -18,6 +18,12 @@ import type {
 export type LineageViewMode = 'script' | 'table' | 'column';
 
 /**
+ * Sub-mode for the matrix view.
+ * Controls whether to show table or script level dependencies.
+ */
+export type MatrixSubMode = 'tables' | 'scripts';
+
+/**
  * Layout algorithm for the graph visualization.
  */
 export type LayoutAlgorithm = 'dagre' | 'elk';
@@ -61,6 +67,8 @@ export interface LineageState {
   searchTerm: string;
   /** Current view mode for the lineage graph */
   viewMode: LineageViewMode;
+  /** Current sub-mode for the matrix view */
+  matrixSubMode: MatrixSubMode;
   /** Whether to show table details in script nodes */
   showScriptTables: boolean;
   /** Request to navigate to a specific file and location */
@@ -88,6 +96,8 @@ export interface LineageActions {
   setSearchTerm: (term: string) => void;
   /** Update the view mode for the lineage graph */
   setViewMode: (mode: LineageViewMode) => void;
+  /** Update the sub-mode for the matrix view */
+  setMatrixSubMode: (mode: MatrixSubMode) => void;
   /** Toggle showing tables in script nodes */
   toggleShowScriptTables: () => void;
   /** Request navigation to a file/location */
