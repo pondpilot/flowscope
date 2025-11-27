@@ -7,7 +7,15 @@ import {
   ArrowLeft,
   Minus,
   Database,
-  Filter
+  Filter,
+  Zap,
+  Activity,
+  Shuffle,
+  Rows3,
+  Columns3,
+  Info,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import { useLineage } from '../store';
 import type { MatrixSubMode } from '../types';
@@ -39,22 +47,98 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-/**
- * Get a display-friendly short name from a full identifier.
- * For tables with schema (e.g., "schema.table"), returns just the table name.
- * For scripts (e.g., "01_schema.sql"), removes the .sql extension.
- */
 function getShortName(name: string): string {
-  // If it looks like a file path (contains .sql), remove the extension
   if (name.endsWith('.sql')) {
     return name.slice(0, -4);
   }
-  // For qualified names like schema.table, return just the last part
   const lastDot = name.lastIndexOf('.');
   if (lastDot !== -1) {
     return name.slice(lastDot + 1);
   }
   return name;
+}
+
+// ============================================================================
+// Algorithms (Clustering & Transitive)
+// ============================================================================
+
+// Barycenter Heuristic for Clustering
+function clusterItems(
+  items: string[],
+  cells: Map<string, Map<string, MatrixCellData>>
+): string[] {
+  let currentOrder = [...items];
+
+  for (let iter = 0; iter < CLUSTERING_ITERATIONS; iter++) {
+    const positions = new Map(currentOrder.map((id, i) => [id, i]));
+    const newOrder = [...currentOrder].sort((a, b) => {
+      const getBarycenter = (node: string) => {
+        let sum = 0;
+        let count = 0;
+        const row = cells.get(node);
+        if (row) {
+          for (const [target, cell] of row.entries()) {
+            if (cell.type !== 'none' && cell.type !== 'self') {
+               sum += positions.get(target) || 0;
+               count++;
+            }
+          }
+        }
+        return count === 0 ? positions.get(node)! : sum / count;
+      };
+      return getBarycenter(a) - getBarycenter(b);
+    });
+    currentOrder = newOrder;
+  }
+  
+  return currentOrder;
+}
+
+// Split Transitive Dependency Traversal (Ancestors vs Descendants)
+interface TransitiveSet {
+  ancestors: Set<string>;
+  descendants: Set<string>;
+}
+
+function getTransitiveFlow(
+  startNode: string,
+  cells: Map<string, Map<string, MatrixCellData>>,
+  items: string[]
+): TransitiveSet {
+  const ancestors = new Set<string>();
+  const descendants = new Set<string>();
+  
+  // Find Descendants (Downstream): BFS forward writes
+  // Matrix logic: row writes to col
+  const dQueue = [startNode];
+  while (dQueue.length > 0) {
+    const current = dQueue.shift()!;
+    const row = cells.get(current);
+    if (row) {
+      for (const [target, cell] of row.entries()) {
+        if (cell.type === 'write' && !descendants.has(target) && target !== startNode) {
+          descendants.add(target);
+          dQueue.push(target);
+        }
+      }
+    }
+  }
+
+  // Find Ancestors (Upstream): BFS backward writes (who writes to current?)
+  const aQueue = [startNode];
+  // Pre-calculate reverse graph could optimize this, but N is small
+  while (aQueue.length > 0) {
+    const current = aQueue.shift()!;
+    for (const item of items) {
+      const cell = cells.get(item)?.get(current);
+      if (cell && cell.type === 'write' && !ancestors.has(item) && item !== startNode) {
+        ancestors.add(item);
+        aQueue.push(item);
+      }
+    }
+  }
+
+  return { ancestors, descendants };
 }
 
 
@@ -68,6 +152,9 @@ interface MatrixCellProps {
   colName: string;
   isRowHovered: boolean;
   isColHovered: boolean;
+  isDimmed: boolean;
+  intensity: number; // 0 to 1
+  heatmapMode: boolean;
   onHover: (row: string, col: string) => void;
   onLeave: () => void;
   onClick: (row: string, col: string) => void;
@@ -81,6 +168,9 @@ const MatrixCell = memo(function MatrixCell({
   colName,
   isRowHovered,
   isColHovered,
+  isDimmed,
+  intensity,
+  heatmapMode,
   onHover,
   onLeave,
   onClick,
@@ -97,8 +187,22 @@ const MatrixCell = memo(function MatrixCell({
     if (isRowHovered && isColHovered) return "bg-indigo-100 dark:bg-indigo-900/30 ring-1 ring-inset ring-indigo-500 z-10";
     if (isRowHovered) return "bg-slate-50 dark:bg-slate-800/50";
     if (isColHovered) return "bg-slate-50 dark:bg-slate-800/50";
+    
+    // Heatmap Logic
+    if (heatmapMode && hasDependency) {
+      return "bg-white dark:bg-slate-950"; // Base fallback
+    }
+
     return "bg-white dark:bg-slate-950";
-  }, [isRowHovered, isColHovered]);
+  }, [isRowHovered, isColHovered, heatmapMode, hasDependency]);
+
+  // Dynamic style for heatmap
+  const heatmapStyle = useMemo(() => {
+    if (!heatmapMode || !hasDependency) return {};
+    const alpha = HEATMAP_MIN_ALPHA + (intensity * HEATMAP_ALPHA_RANGE);
+    const color = cellData.type === 'write' ? `rgba(16, 185, 129, ${alpha})` : `rgba(37, 99, 235, ${alpha})`;
+    return { backgroundColor: color };
+  }, [heatmapMode, hasDependency, intensity, cellData.type]);
 
   const content = useMemo(() => {
     switch (cellData.type) {
@@ -163,8 +267,13 @@ const MatrixCell = memo(function MatrixCell({
     <GraphTooltip delayDuration={300}>
       <GraphTooltipTrigger asChild>
         <div
-          className={cn(baseClass, bgClass, hasDependency && "cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800")}
-          style={style}
+          className={cn(
+            baseClass, 
+            bgClass, 
+            hasDependency && "cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800",
+            isDimmed && "opacity-20 grayscale"
+          )}
+          style={{ ...style, ...heatmapStyle }}
           onMouseEnter={() => onHover(rowName, colName)}
           onMouseLeave={onLeave}
           onClick={() => onClick(rowName, colName)}
@@ -188,7 +297,10 @@ const MatrixCell = memo(function MatrixCell({
     prev.isColHovered === next.isColHovered &&
     prev.subMode === next.subMode &&
     prev.rowName === next.rowName &&
-    prev.colName === next.colName
+    prev.colName === next.colName &&
+    prev.isDimmed === next.isDimmed &&
+    prev.intensity === next.intensity &&
+    prev.heatmapMode === next.heatmapMode
   );
 });
 
@@ -211,17 +323,31 @@ const MAX_HEADER_HEIGHT = 400;
 const CELL_WIDTH = 48;
 const CELL_HEIGHT = 36;
 
+const HEATMAP_MIN_ALPHA = 0.15;
+const HEATMAP_ALPHA_RANGE = 0.6;
+const CLUSTERING_ITERATIONS = 2;
+
 export function MatrixView({ className = '' }: MatrixViewProps): JSX.Element {
   const { state, actions } = useLineage();
   const { result, matrixSubMode } = state;
   const { setMatrixSubMode, highlightSpan, requestNavigation } = actions;
 
   const [filterText, setFilterText] = useState('');
+  const [filterMode, setFilterMode] = useState<'rows' | 'columns'>('rows');
   const [hoveredCell, setHoveredCell] = useState<{ row: string; col: string } | null>(null);
+
+  // Modes
+  const [heatmapMode, setHeatmapMode] = useState(false);
+  const [xRayMode, setXRayMode] = useState(false);
+  const [xRayFilterMode, setXRayFilterMode] = useState<'dim' | 'hide'>('dim');
+  const [clusterMode, setClusterMode] = useState(false);
+  const [showLegend, setShowLegend] = useState(true);
+
+  // X-Ray Focus
+  const [focusedNode, setFocusedNode] = useState<string | null>(null);
   
   const [firstColumnWidth, setFirstColumnWidth] = useState(DEFAULT_FIRST_COLUMN_WIDTH);
   const [headerHeight, setHeaderHeight] = useState(DEFAULT_HEADER_HEIGHT);
-
   const [resizingMode, setResizingMode] = useState<'none' | 'column' | 'header'>('none');
   
   const resizeStartPos = useRef(0);
@@ -245,7 +371,6 @@ export function MatrixView({ className = '' }: MatrixViewProps): JSX.Element {
 
   useEffect(() => {
     if (resizingMode === 'none') return;
-
     const handleMouseMove = (e: MouseEvent) => {
       if (resizingMode === 'column') {
         const delta = e.clientX - resizeStartPos.current;
@@ -255,12 +380,9 @@ export function MatrixView({ className = '' }: MatrixViewProps): JSX.Element {
         setHeaderHeight(Math.min(MAX_HEADER_HEIGHT, Math.max(MIN_HEADER_HEIGHT, resizeStartSize.current + delta)));
       }
     };
-
     const handleMouseUp = () => setResizingMode('none');
-    
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
-    
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
@@ -279,12 +401,67 @@ export function MatrixView({ className = '' }: MatrixViewProps): JSX.Element {
       : buildScriptMatrix(scriptDepsData.dependencies, scriptDepsData.allScripts),
   [matrixSubMode, tableDeps, scriptDepsData]);
 
+  // Clustering Logic
+  const sortedItems = useMemo(() => {
+    if (!clusterMode) return fullMatrixData.items;
+    return clusterItems(fullMatrixData.items, fullMatrixData.cells);
+  }, [fullMatrixData, clusterMode]);
+
+  // Transitive Flow for X-Ray
+  const transitiveFlow = useMemo(() => {
+    if (!xRayMode || !focusedNode) return null;
+    return getTransitiveFlow(focusedNode, fullMatrixData.cells, sortedItems);
+  }, [xRayMode, focusedNode, fullMatrixData, sortedItems]);
+
+  const activeXRaySet = useMemo(() => {
+    if (!xRayMode || !focusedNode || !transitiveFlow) return null;
+    return new Set([focusedNode, ...transitiveFlow.ancestors, ...transitiveFlow.descendants]);
+  }, [xRayMode, focusedNode, transitiveFlow]);
+
+  // Max Dependency Strength for Heatmap
+  const maxIntensity = useMemo(() => {
+    let max = 0;
+    for (const row of fullMatrixData.cells.values()) {
+      for (const cell of row.values()) {
+        if (cell.type !== 'none' && cell.type !== 'self') {
+          let count = 0;
+          if (matrixSubMode === 'tables') {
+             count = (cell.details as TableDependencyWithDetails)?.columnCount || 0;
+          } else {
+             count = (cell.details as ScriptDependency)?.sharedTables.length || 0;
+          }
+          if (count > max) max = count;
+        }
+      }
+    }
+    return max || 1;
+  }, [fullMatrixData, matrixSubMode]);
+
+
   // Filtering
   const filteredRowItems = useMemo(() => {
-    if (!filterText) return fullMatrixData.items;
+    let items = sortedItems;
+    // 1. X-Ray Filtering
+    if (xRayMode && xRayFilterMode === 'hide' && activeXRaySet) {
+       items = items.filter(item => activeXRaySet.has(item));
+    }
+    // 2. Search
+    if (!filterText || filterMode !== 'rows') return items;
     const lower = filterText.toLowerCase();
-    return fullMatrixData.items.filter(item => item.toLowerCase().includes(lower));
-  }, [fullMatrixData.items, filterText]);
+    return items.filter(item => item.toLowerCase().includes(lower));
+  }, [sortedItems, filterText, filterMode, xRayMode, xRayFilterMode, activeXRaySet]);
+
+  const filteredColumnItems = useMemo(() => {
+    let items = sortedItems;
+    // 1. X-Ray Filtering
+    if (xRayMode && xRayFilterMode === 'hide' && activeXRaySet) {
+       items = items.filter(item => activeXRaySet.has(item));
+    }
+    // 2. Search
+    if (!filterText || filterMode !== 'columns') return items;
+    const lower = filterText.toLowerCase();
+    return items.filter(item => item.toLowerCase().includes(lower));
+  }, [sortedItems, filterText, filterMode, xRayMode, xRayFilterMode, activeXRaySet]);
 
   const handleCellHover = useCallback((row: string, col: string) => {
     setHoveredCell({ row, col });
@@ -308,6 +485,12 @@ export function MatrixView({ className = '' }: MatrixViewProps): JSX.Element {
       }
     }
   }, [fullMatrixData, matrixSubMode, highlightSpan, requestNavigation]);
+  
+  // Toggle Focus
+  const toggleFocus = (node: string) => {
+    if (!xRayMode) return;
+    setFocusedNode(prev => prev === node ? null : node);
+  };
 
   if (!result) {
     return (
@@ -318,16 +501,16 @@ export function MatrixView({ className = '' }: MatrixViewProps): JSX.Element {
     );
   }
 
-  const isEmpty = filteredRowItems.length === 0;
+  const isEmpty = filteredRowItems.length === 0 || filteredColumnItems.length === 0;
 
   return (
     <GraphTooltipProvider>
       <div className={cn("flex flex-col h-full bg-white dark:bg-slate-950", className)}>
         {/* Toolbar */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 z-20">
-          <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-900 p-1 rounded-lg">
+        <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 z-20 gap-4">
+          <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-900 p-1 rounded-lg shrink-0">
             <button
-              onClick={() => setMatrixSubMode('scripts')}
+              onClick={() => { setMatrixSubMode('scripts'); setFocusedNode(null); }}
               className={cn(
                 "flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all",
                 matrixSubMode === 'scripts'
@@ -339,7 +522,7 @@ export function MatrixView({ className = '' }: MatrixViewProps): JSX.Element {
               <span>Scripts</span>
             </button>
             <button
-              onClick={() => setMatrixSubMode('tables')}
+              onClick={() => { setMatrixSubMode('tables'); setFocusedNode(null); }}
               className={cn(
                 "flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all",
                 matrixSubMode === 'tables'
@@ -351,16 +534,181 @@ export function MatrixView({ className = '' }: MatrixViewProps): JSX.Element {
               <span>Tables</span>
             </button>
           </div>
+          
+          <div className="flex items-center gap-2 border-l border-slate-200 dark:border-slate-800 pl-4">
+             {/* X-Ray Toggle */}
+             <GraphTooltip delayDuration={300}>
+              <GraphTooltipTrigger asChild>
+                <button
+                  onClick={() => {
+                     setXRayMode(!xRayMode);
+                     setFocusedNode(null);
+                  }}
+                  aria-label="Toggle X-Ray Mode"
+                  aria-pressed={xRayMode}
+                  className={cn(
+                    "p-1.5 rounded-md transition-all flex items-center gap-1",
+                    xRayMode
+                      ? "bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 ring-1 ring-purple-500"
+                      : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  )}
+                >
+                  <Zap className="h-4 w-4" />
+                  {xRayMode && (
+                    <span className="text-[10px] font-semibold">X-RAY</span>
+                  )}
+                </button>
+              </GraphTooltipTrigger>
+              <GraphTooltipPortal>
+                <GraphTooltipContent side="bottom" className="text-xs">
+                  <div className="font-semibold text-slate-100">Impact X-Ray Mode</div>
+                  <div className="text-slate-400">Click a row/col header to highlight lineage flow.</div>
+                  <div className="mt-1 flex flex-col gap-1 text-[10px]">
+                    <div className="flex items-center gap-1.5"><div className="w-2 h-2 bg-blue-500 rounded-full"/>Ancestors (Upstream)</div>
+                    <div className="flex items-center gap-1.5"><div className="w-2 h-2 bg-emerald-500 rounded-full"/>Descendants (Downstream)</div>
+                  </div>
+                </GraphTooltipContent>
+              </GraphTooltipPortal>
+            </GraphTooltip>
 
-          <div className="relative group">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+            {/* X-Ray View Mode Toggle (Dim/Hide) */}
+            {xRayMode && (
+              <GraphTooltip delayDuration={300}>
+                <GraphTooltipTrigger asChild>
+                  <button
+                    onClick={() => setXRayFilterMode(prev => prev === 'dim' ? 'hide' : 'dim')}
+                    aria-label={xRayFilterMode === 'hide' ? 'Switch to dim mode' : 'Switch to hide mode'}
+                    className={cn(
+                      "p-1.5 rounded-md transition-all",
+                      xRayFilterMode === 'hide'
+                        ? "bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400"
+                        : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                    )}
+                  >
+                    {xRayFilterMode === 'hide' ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                  </button>
+                </GraphTooltipTrigger>
+                <GraphTooltipPortal>
+                   <GraphTooltipContent side="bottom" className="text-xs">
+                    <div className="font-semibold text-slate-100">X-Ray Visibility</div>
+                    <div className="text-slate-400">
+                      {xRayFilterMode === 'hide' 
+                        ? 'Focus View: Hiding unrelated rows/cols' 
+                        : 'Context View: Dimming unrelated rows/cols'}
+                    </div>
+                  </GraphTooltipContent>
+                </GraphTooltipPortal>
+              </GraphTooltip>
+            )}
+
+            {/* Heatmap Toggle */}
+             <GraphTooltip delayDuration={300}>
+              <GraphTooltipTrigger asChild>
+                <button
+                  onClick={() => setHeatmapMode(!heatmapMode)}
+                  aria-label="Toggle Heatmap Mode"
+                  aria-pressed={heatmapMode}
+                  className={cn(
+                    "p-1.5 rounded-md transition-all",
+                    heatmapMode
+                      ? "bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400 ring-1 ring-orange-500"
+                      : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  )}
+                >
+                  <Activity className="h-4 w-4" />
+                </button>
+              </GraphTooltipTrigger>
+              <GraphTooltipPortal>
+                <GraphTooltipContent side="bottom" className="text-xs">
+                  <div className="font-semibold text-slate-100">Dependency Heatmap</div>
+                  <div className="text-slate-400">Color intensity shows connection strength.</div>
+                  <div className="text-slate-500 text-[10px] mt-1">Based on column mapping count.</div>
+                </GraphTooltipContent>
+              </GraphTooltipPortal>
+            </GraphTooltip>
+
+             {/* Clustering Toggle */}
+             <GraphTooltip delayDuration={300}>
+              <GraphTooltipTrigger asChild>
+                <button
+                  onClick={() => setClusterMode(!clusterMode)}
+                  aria-label="Toggle Clustering Mode"
+                  aria-pressed={clusterMode}
+                  className={cn(
+                    "p-1.5 rounded-md transition-all",
+                    clusterMode
+                      ? "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 ring-1 ring-blue-500"
+                      : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  )}
+                >
+                  <Shuffle className="h-4 w-4" />
+                </button>
+              </GraphTooltipTrigger>
+              <GraphTooltipPortal>
+                <GraphTooltipContent side="bottom" className="text-xs">
+                  <div className="font-semibold text-slate-100">Smart Clustering</div>
+                  <div className="text-slate-400">Reorders matrix to group related items.</div>
+                </GraphTooltipContent>
+              </GraphTooltipPortal>
+            </GraphTooltip>
+
+            {/* Legend Toggle */}
+            {!showLegend && (
+              <GraphTooltip delayDuration={300}>
+                <GraphTooltipTrigger asChild>
+                  <button
+                    onClick={() => setShowLegend(true)}
+                    aria-label="Show Legend"
+                    className="p-1.5 rounded-md transition-all text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  >
+                    <Info className="h-4 w-4" />
+                  </button>
+                </GraphTooltipTrigger>
+                <GraphTooltipPortal>
+                  <GraphTooltipContent side="bottom" className="text-xs">
+                    <div className="font-semibold text-slate-100">Show Legend</div>
+                    <div className="text-slate-400">Display the dependency legend.</div>
+                  </GraphTooltipContent>
+                </GraphTooltipPortal>
+              </GraphTooltip>
+            )}
+          </div>
+
+          <div className="relative group ml-auto flex items-center">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors z-10" />
             <input
               type="text"
-              placeholder="Filter rows..."
+              placeholder={`Filter ${filterMode}...`}
               value={filterText}
               onChange={(e) => setFilterText(e.target.value)}
-              className="pl-9 pr-4 py-1.5 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all w-64"
+              className="pl-9 pr-20 py-1.5 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all w-64"
             />
+            <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center bg-slate-100 dark:bg-slate-800 rounded p-0.5 gap-0.5">
+              <button
+                onClick={() => setFilterMode('rows')}
+                title="Filter rows"
+                className={cn(
+                  "p-1 rounded transition-all",
+                  filterMode === 'rows'
+                    ? "bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm"
+                    : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                )}
+              >
+                <Rows3 className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => setFilterMode('columns')}
+                title="Filter columns"
+                className={cn(
+                  "p-1 rounded transition-all",
+                  filterMode === 'columns'
+                    ? "bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm"
+                    : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                )}
+              >
+                <Columns3 className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -381,10 +729,10 @@ export function MatrixView({ className = '' }: MatrixViewProps): JSX.Element {
             className={cn("flex-1 overflow-auto relative custom-scrollbar", resizingMode !== 'none' && (resizingMode === 'column' ? "select-none cursor-col-resize" : "select-none cursor-row-resize"))}
             ref={scrollContainerRef}
           >
-            <div 
+            <div
               className="grid"
-              style={{ 
-                gridTemplateColumns: `${firstColumnWidth}px repeat(${fullMatrixData.items.length}, ${CELL_WIDTH}px)`,
+              style={{
+                gridTemplateColumns: `${firstColumnWidth}px repeat(${filteredColumnItems.length}, ${CELL_WIDTH}px)`,
                 minWidth: 'min-content'
               }}
               role="grid"
@@ -394,7 +742,6 @@ export function MatrixView({ className = '' }: MatrixViewProps): JSX.Element {
                 className="sticky top-0 left-0 z-30 bg-white dark:bg-slate-950 border-b border-r border-slate-200 dark:border-slate-800 shadow-[2px_2px_10px_rgba(0,0,0,0.05)]"
                 style={{ height: headerHeight }}
               >
-                 {/* Width resizer */}
                  <div
                   onMouseDown={handleColumnResizeStart}
                   className={cn(
@@ -402,7 +749,6 @@ export function MatrixView({ className = '' }: MatrixViewProps): JSX.Element {
                     resizingMode === 'column' ? "bg-indigo-500" : "bg-transparent"
                   )}
                 />
-                 {/* Height resizer */}
                  <div
                   onMouseDown={handleHeaderResizeStart}
                   className={cn(
@@ -413,105 +759,186 @@ export function MatrixView({ className = '' }: MatrixViewProps): JSX.Element {
               </div>
 
               {/* Column Headers */}
-              {fullMatrixData.items.map((item) => (
-                <div
-                  key={`col-${item}`}
-                  className={cn(
-                    "sticky top-0 z-20 bg-white dark:bg-slate-950 border-b border-r border-slate-200 dark:border-slate-800 shadow-sm",
-                    hoveredCell?.col === item && "bg-slate-50 dark:bg-slate-900"
-                  )}
-                  style={{ height: headerHeight }}
-                >
-                  <div className="w-full h-full flex items-end justify-center pb-2">
-                    <span 
-                      className="block text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors whitespace-nowrap overflow-hidden text-ellipsis" 
-                      title={item}
-                      style={{
-                          writingMode: 'vertical-rl',
-                          transform: 'rotate(180deg)',
-                          maxHeight: '100%',
-                      }}
-                    >
-                      {getShortName(item)}
-                    </span>
+              {filteredColumnItems.map((item) => {
+                const isFocused = focusedNode === item;
+                
+                const isAncestor = transitiveFlow?.ancestors.has(item);
+                const isDescendant = transitiveFlow?.descendants.has(item);
+                const isRelated = isAncestor || isDescendant;
+                
+                // Dim if X-Ray on, node selected, and this is NOT involved
+                const isDimmed = xRayMode && focusedNode && !isRelated && !isFocused;
+
+                return (
+                  <div
+                    key={`col-${item}`}
+                    className={cn(
+                      "sticky top-0 z-20 bg-white dark:bg-slate-950 border-b border-r border-slate-200 dark:border-slate-800 shadow-sm group cursor-pointer transition-colors duration-200",
+                      hoveredCell?.col === item && "bg-slate-50 dark:bg-slate-900",
+                      
+                      // Highlight logic
+                      isFocused && "bg-purple-100 dark:bg-purple-900/40",
+                      isAncestor && "bg-blue-50 dark:bg-blue-900/20",
+                      isDescendant && "bg-emerald-50 dark:bg-emerald-900/20",
+                      
+                      isDimmed && "opacity-20 grayscale"
+                    )}
+                    style={{ height: headerHeight }}
+                    onClick={() => toggleFocus(item)}
+                    title={xRayMode ? "Click to focus X-Ray" : item}
+                  >
+                    <div className="w-full h-full flex items-end justify-center pb-2">
+                      <span 
+                        className={cn(
+                          "block text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors whitespace-nowrap overflow-hidden text-ellipsis",
+                          isFocused && "text-purple-700 dark:text-purple-300 font-bold",
+                          isAncestor && "text-blue-600 dark:text-blue-400 font-semibold",
+                          isDescendant && "text-emerald-600 dark:text-emerald-400 font-semibold"
+                        )}
+                        style={{
+                            writingMode: 'vertical-rl',
+                            transform: 'rotate(180deg)',
+                            maxHeight: '100%',
+                        }}
+                      >
+                        {getShortName(item)}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
 
               {/* Rows */}
-              {filteredRowItems.map((rowItem) => (
-                <React.Fragment key={`row-${rowItem}`}>
-                  {/* Row Header */}
-                  <div
-                    className={cn(
-                      "sticky left-0 z-20 bg-white dark:bg-slate-950 border-b border-r border-slate-200 dark:border-slate-800 px-3 flex items-center shadow-[2px_0_5px_rgba(0,0,0,0.02)]",
-                      hoveredCell?.row === rowItem && "bg-slate-50 dark:bg-slate-900"
-                    )}
-                    style={{ height: CELL_HEIGHT }}
-                  >
-                    <span 
-                      className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate w-full"
-                      title={rowItem}
-                    >
-                      {getShortName(rowItem)}
-                    </span>
-                    <div
-                      onMouseDown={handleColumnResizeStart}
-                      className={cn(
-                        "absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 transition-colors z-40",
-                        resizingMode === 'column' ? "bg-indigo-500" : "bg-transparent"
-                      )}
-                    />
-                  </div>
+              {filteredRowItems.map((rowItem) => {
+                const isFocused = focusedNode === rowItem;
+                const isAncestor = transitiveFlow?.ancestors.has(rowItem);
+                const isDescendant = transitiveFlow?.descendants.has(rowItem);
+                const isRelated = isAncestor || isDescendant;
+                const isDimmed = xRayMode && focusedNode && !isRelated && !isFocused;
 
-                  {/* Cells */}
-                  {fullMatrixData.items.map((colItem) => {
-                    const cellData = fullMatrixData.cells.get(rowItem)?.get(colItem);
-                    if (!cellData) return <div key={`${rowItem}-${colItem}`} />;
-                    
-                    return (
-                      <MatrixCell
-                        key={`${rowItem}-${colItem}`}
-                        cellData={cellData}
-                        rowName={rowItem}
-                        colName={colItem}
-                        isRowHovered={hoveredCell?.row === rowItem}
-                        isColHovered={hoveredCell?.col === colItem}
-                        onHover={handleCellHover}
-                        onLeave={() => setHoveredCell(null)}
-                        onClick={handleCellClick}
-                        subMode={matrixSubMode}
-                        style={{ height: CELL_HEIGHT, width: CELL_WIDTH }}
+                return (
+                  <React.Fragment key={`row-${rowItem}`}>
+                    {/* Row Header */}
+                    <div
+                      className={cn(
+                        "sticky left-0 z-20 bg-white dark:bg-slate-950 border-b border-r border-slate-200 dark:border-slate-800 px-3 flex items-center shadow-[2px_0_5px_rgba(0,0,0,0.02)] cursor-pointer transition-colors duration-200",
+                        hoveredCell?.row === rowItem && "bg-slate-50 dark:bg-slate-900",
+                        
+                        isFocused && "bg-purple-100 dark:bg-purple-900/40",
+                        isAncestor && "bg-blue-50 dark:bg-blue-900/20",
+                        isDescendant && "bg-emerald-50 dark:bg-emerald-900/20",
+                        
+                        isDimmed && "opacity-20 grayscale"
+                      )}
+                      style={{ height: CELL_HEIGHT }}
+                      onClick={() => toggleFocus(rowItem)}
+                      title={xRayMode ? "Click to focus X-Ray" : rowItem}
+                    >
+                      <span 
+                        className={cn(
+                          "text-xs font-medium text-slate-700 dark:text-slate-300 truncate w-full",
+                          isFocused && "text-purple-700 dark:text-purple-300 font-bold",
+                          isAncestor && "text-blue-600 dark:text-blue-400 font-semibold",
+                          isDescendant && "text-emerald-600 dark:text-emerald-400 font-semibold"
+                        )}
+                      >
+                        {getShortName(rowItem)}
+                      </span>
+                      <div
+                        onMouseDown={handleColumnResizeStart}
+                        className={cn(
+                          "absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 transition-colors z-40",
+                          resizingMode === 'column' ? "bg-indigo-500" : "bg-transparent"
+                        )}
                       />
-                    );
-                  })}
-                </React.Fragment>
-              ))}
+                    </div>
+
+                    {/* Cells */}
+                    {filteredColumnItems.map((colItem) => {
+                      const cellData = fullMatrixData.cells.get(rowItem)?.get(colItem);
+                      if (!cellData) return <div key={`${rowItem}-${colItem}`} />;
+                      
+                      let cellIntensity = 0;
+                      if (heatmapMode) {
+                        let count = 0;
+                        if (matrixSubMode === 'tables') {
+                          count = (cellData.details as TableDependencyWithDetails)?.columnCount || 0;
+                        } else {
+                          count = (cellData.details as ScriptDependency)?.sharedTables.length || 0;
+                        }
+                        cellIntensity = count / maxIntensity;
+                      }
+
+                      // Dimming logic
+                      let isCellDimmed = false;
+                      if (xRayMode && focusedNode) {
+                        const isRowActive = focusedNode === rowItem || transitiveFlow?.ancestors.has(rowItem) || transitiveFlow?.descendants.has(rowItem);
+                        const isColActive = focusedNode === colItem || transitiveFlow?.ancestors.has(colItem) || transitiveFlow?.descendants.has(colItem);
+                        
+                        if (!isRowActive || !isColActive) {
+                           isCellDimmed = true;
+                        }
+                      }
+
+                      return (
+                        <MatrixCell
+                          key={`${rowItem}-${colItem}`}
+                          cellData={cellData}
+                          rowName={rowItem}
+                          colName={colItem}
+                          isRowHovered={hoveredCell?.row === rowItem}
+                          isColHovered={hoveredCell?.col === colItem}
+                          isDimmed={isCellDimmed}
+                          intensity={cellIntensity}
+                          heatmapMode={heatmapMode}
+                          onHover={handleCellHover}
+                          onLeave={() => setHoveredCell(null)}
+                          onClick={handleCellClick}
+                          subMode={matrixSubMode}
+                          style={{ height: CELL_HEIGHT, width: CELL_WIDTH }}
+                        />
+                      );
+                    })}
+                  </React.Fragment>
+                );
+              })}
             </div>
           </div>
         )}
 
         {/* Legend */}
-        <div className="p-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex items-center gap-6 text-xs text-slate-500">
-          <div className="flex items-center gap-2">
-            <div className="p-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded shadow-sm">
-              <ArrowRight className="h-3 w-3 text-emerald-600 dark:text-emerald-400" strokeWidth={3} />
+        {showLegend && (
+            <div className="p-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex items-center justify-between gap-6 text-xs text-slate-500">
+            <div className="flex items-center gap-6">
+                <div className="flex items-center gap-2">
+                    <div className="p-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded shadow-sm">
+                    <ArrowRight className="h-3 w-3 text-emerald-600 dark:text-emerald-400" strokeWidth={3} />
+                    </div>
+                    <span>Writes to</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <div className="p-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded shadow-sm">
+                    <ArrowLeft className="h-3 w-3 text-blue-600 dark:text-blue-400" strokeWidth={3} />
+                    </div>
+                    <span>Reads from</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <div className="p-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded shadow-sm">
+                    <Minus className="h-3 w-3 text-slate-300" />
+                    </div>
+                    <span>Self</span>
+                </div>
             </div>
-            <span>Writes to</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="p-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded shadow-sm">
-              <ArrowLeft className="h-3 w-3 text-blue-600 dark:text-blue-400" strokeWidth={3} />
+            
+            <button
+                onClick={() => setShowLegend(false)}
+                aria-label="Hide Legend"
+                className="text-slate-400 hover:text-slate-600"
+            >
+                <Info className="h-4 w-4" />
+            </button>
             </div>
-            <span>Reads from</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="p-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded shadow-sm">
-              <Minus className="h-3 w-3 text-slate-300" />
-            </div>
-            <span>Self</span>
-          </div>
-        </div>
+        )}
       </div>
     </GraphTooltipProvider>
   );
