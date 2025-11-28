@@ -20,6 +20,7 @@ export interface SharePayload {
   s: string; // schemaSQL
   f: Array<{
     n: string; // name
+    p?: string; // path (optional, defaults to name if not provided)
     c: string; // content
     l?: 'sql' | 'json' | 'text'; // language (optional, defaults to 'sql')
   }>;
@@ -101,6 +102,8 @@ export function encodeProject(project: Project, options: EncodeOptions = {}): En
     f: filesToShare.map(f => ({
       n: f.name,
       c: f.content,
+      // Only include path if it differs from name (saves space for flat file structures)
+      ...(f.path && f.path !== f.name ? { p: f.path } : {}),
       ...(f.language !== 'sql' ? { l: f.language } : {}),
     })),
   };
@@ -201,6 +204,10 @@ function validatePayload(payload: unknown): SharePayload | null {
       file.n.length === 0 ||
       file.n.length > SHARE_LIMITS.MAX_FILE_NAME_LENGTH
     ) {
+      return null;
+    }
+    // Validate path if present
+    if (file.p !== undefined && (typeof file.p !== 'string' || file.p.length > 1024)) {
       return null;
     }
     if (typeof file.c !== 'string' || file.c.length > SHARE_LIMITS.MAX_FILE_CONTENT_SIZE) {

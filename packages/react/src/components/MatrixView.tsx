@@ -53,7 +53,11 @@ function cn(...inputs: ClassValue[]) {
 
 function getShortName(name: string): string {
   if (name.endsWith('.sql')) {
-    return name.slice(0, -4);
+    // Normalize separators to forward slash and take the last segment
+    const normalized = name.replace(/\\/g, '/');
+    const lastSlash = normalized.lastIndexOf('/');
+    const fileName = lastSlash !== -1 ? normalized.slice(lastSlash + 1) : normalized;
+    return fileName.slice(0, -4);
   }
   const lastDot = name.lastIndexOf('.');
   if (lastDot !== -1) {

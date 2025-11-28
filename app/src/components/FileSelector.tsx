@@ -3,15 +3,11 @@ import {
   ChevronDown,
   Plus,
   Upload,
-  Trash2,
-  FileCode,
+  FolderUp,
   Search,
-  Pencil,
 } from 'lucide-react';
 import { useProject } from '@/lib/project-store';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,13 +15,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { FileTree } from '@/components/FileTree';
+import { DropZone } from '@/components/DropZone';
 import { cn } from '@/lib/utils';
 import { DEFAULT_FILE_NAMES, ACCEPTED_FILE_TYPES } from '@/lib/constants';
 
@@ -50,10 +41,11 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
   const [renamingFileId, setRenamingFileId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
+  const [showDropZone, setShowDropZone] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
 
   const open = controlledOpen ?? internalOpen;
   const setOpen = onOpenChange ?? setInternalOpen;
@@ -65,13 +57,13 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
     if (!search.trim()) return currentProject.files;
     const searchLower = search.toLowerCase();
     return currentProject.files.filter(f =>
-      f.name.toLowerCase().includes(searchLower)
+      f.name.toLowerCase().includes(searchLower) ||
+      f.path.toLowerCase().includes(searchLower)
     );
   }, [currentProject?.files, search]);
 
   useEffect(() => {
     if (open && searchInputRef.current && !renamingFileId) {
-      // Use requestAnimationFrame to ensure DOM is ready after Radix animation
       requestAnimationFrame(() => {
         searchInputRef.current?.focus();
       });
@@ -81,6 +73,7 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
       setRenamingFileId(null);
       setRenameValue('');
       setDeletingFileId(null);
+      setShowDropZone(false);
     }
   }, [open, renamingFileId]);
 
@@ -96,6 +89,22 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
     }
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+  };
+
+  const handleFolderUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      importFiles(e.target.files);
+    }
+    if (folderInputRef.current) {
+      folderInputRef.current.value = '';
+    }
+  };
+
+  const handleFilesDropped = (files: File[]) => {
+    if (files.length > 0) {
+      importFiles(files);
+      setShowDropZone(false);
     }
   };
 
@@ -138,7 +147,7 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
     }
   };
 
-  const showCheckboxes = true; // Always show checkboxes for file selection
+  const showCheckboxes = true;
 
   const handleToggleSelection = (e: React.MouseEvent, fileId: string) => {
     e.preventDefault();
@@ -197,6 +206,10 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
               e.preventDefault();
               fileInputRef.current?.click();
             }
+            if ((e.key === 'f' || e.key === 'F') && !renamingFileId) {
+              e.preventDefault();
+              folderInputRef.current?.click();
+            }
           }}
         >
           {/* Search Input */}
@@ -215,215 +228,101 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
                 if (e.key === 'Enter' && filteredFiles.length > 0) {
                   handleSelectFile(filteredFiles[0].id);
                 }
-                if (e.key === 'ArrowDown') {
-                  e.preventDefault();
-                  const firstItem = listRef.current?.querySelector('[role="menuitem"]') as HTMLElement;
-                  firstItem?.focus();
-                }
               }}
               data-testid="file-search-input"
             />
           </div>
 
-          {/* File List */}
-          <ScrollArea className="max-h-[300px]">
-            <div className="p-1" ref={listRef}>
-              {filteredFiles.length > 0 ? (
-                filteredFiles.map((file) => {
-                  const isActive = currentProject?.activeFileId === file.id;
-                  const isIncluded = isFileIncludedInAnalysis(file.id);
-                  const isSelected = currentProject?.selectedFileIds?.includes(file.id) ?? false;
-                  const isRenaming = renamingFileId === file.id;
-
-                  if (isRenaming) {
-                    return (
-                      <div
-                        key={file.id}
-                        className="flex items-center gap-2 p-2"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <FileCode className="size-4 shrink-0 text-muted-foreground" />
-                        <Input
-                          ref={renameInputRef}
-                          value={renameValue}
-                          onChange={(e) => setRenameValue(e.target.value)}
-                          className="h-7 flex-1 text-sm"
-                          onKeyDown={(e) => {
-                            e.stopPropagation();
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              handleConfirmRename();
-                            }
-                            if (e.key === 'Escape') {
-                              e.preventDefault();
-                              handleCancelRename();
-                            }
-                          }}
-                          onBlur={handleConfirmRename}
-                          data-testid={`rename-input-${file.id}`}
-                        />
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <DropdownMenuItem
-                      key={file.id}
-                      onClick={() => handleSelectFile(file.id)}
-                      onKeyDown={(e) => {
-                        // When in delete confirmation mode
-                        if (deletingFileId === file.id) {
-                          if (e.key === 'Enter' || e.key === 'y' || e.key === 'Y' || e.key === 'd' || e.key === 'D') {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            deleteFile(file.id);
-                            setDeletingFileId(null);
-                            return;
-                          }
-                          if (e.key === 'Escape' || e.key === 'n' || e.key === 'N') {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handleCancelDelete();
-                            return;
-                          }
-                        }
-
-                        if (e.key === ' ' && showCheckboxes) {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          if (currentProject) {
-                            toggleFileSelection(currentProject.id, file.id);
-                          }
-                        }
-                        if (e.key === 'r' || e.key === 'R') {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleStartRename(file.id, file.name);
-                        }
-                        if ((e.key === 'd' || e.key === 'D') && currentProject && currentProject.files.length > 1) {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setDeletingFileId(file.id);
-                        }
-                      }}
-                      className="flex items-center gap-2 p-2 group cursor-pointer"
-                      data-testid={`file-option-${file.id}`}
-                    >
-                      {showCheckboxes && (
-                        <Checkbox
-                          checked={isSelected}
-                          onClick={(e) => handleToggleSelection(e, file.id)}
-                          className="shrink-0 border-muted-foreground group-data-[highlighted]:border-accent-foreground"
-                          data-testid={`file-checkbox-${file.id}`}
-                        />
-                      )}
-                      <FileCode className={cn(
-                        "size-4 shrink-0 group-data-[highlighted]:text-accent-foreground",
-                        isIncluded ? "text-primary" : "text-muted-foreground"
-                      )} />
-                      <span className={cn(
-                        "flex-1 truncate",
-                        isActive && "font-semibold italic"
-                      )}>{file.name}</span>
-                      {deletingFileId === file.id ? (
-                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                          <span className="text-xs text-destructive">Delete?</span>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 text-destructive hover:bg-destructive/10"
-                            onClick={(e) => handleDeleteClick(e, file.id)}
-                            data-testid={`confirm-delete-${file.id}`}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-data-[highlighted]:opacity-100">
-                          <TooltipProvider delayDuration={300}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-6 w-6 hover:bg-accent"
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    handleStartRename(file.id, file.name);
-                                  }}
-                                  data-testid={`rename-file-${file.id}`}
-                                >
-                                  <Pencil className="h-3 w-3" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent side="bottom">
-                                <p>Rename <kbd className="ml-1 rounded bg-muted px-1 font-mono text-xs">R</kbd></p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                          {currentProject && currentProject.files.length > 1 && (
-                            <TooltipProvider delayDuration={300}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6 hover:bg-destructive/10 hover:text-destructive"
-                                    onClick={(e) => handleDeleteClick(e, file.id)}
-                                    data-testid={`delete-file-${file.id}`}
-                                  >
-                                    <Trash2 className="h-3 w-3" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent side="bottom">
-                                  <p>Delete <kbd className="ml-1 rounded bg-muted px-1 font-mono text-xs">D</kbd></p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          )}
-                        </div>
-                      )}
-                    </DropdownMenuItem>
-                  );
-                })
-              ) : (
-                <div className="py-6 text-center text-sm text-muted-foreground">
-                  {search ? 'No files found' : 'No files in project'}
-                </div>
-              )}
+          {/* Drop Zone Toggle */}
+          {showDropZone && (
+            <div className="p-2 border-b">
+              <DropZone onFilesDropped={handleFilesDropped} />
             </div>
-          </ScrollArea>
+          )}
+
+          {/* File Tree */}
+          <div className="max-h-[300px] overflow-y-auto">
+            {filteredFiles.length > 0 ? (
+              <FileTree
+                files={filteredFiles}
+                activeFileId={currentProject?.activeFileId || null}
+                selectedFileIds={currentProject?.selectedFileIds || []}
+                showCheckboxes={showCheckboxes}
+                deletingFileId={deletingFileId}
+                renamingFileId={renamingFileId}
+                renameValue={renameValue}
+                onSelectFile={handleSelectFile}
+                onToggleSelection={handleToggleSelection}
+                onStartRename={handleStartRename}
+                onConfirmRename={handleConfirmRename}
+                onCancelRename={handleCancelRename}
+                onRenameValueChange={setRenameValue}
+                onDeleteClick={handleDeleteClick}
+                onCancelDelete={handleCancelDelete}
+                isFileIncludedInAnalysis={isFileIncludedInAnalysis}
+                canDeleteFiles={currentProject ? currentProject.files.length > 1 : false}
+                renameInputRef={renameInputRef}
+              />
+            ) : (
+              <div className="py-6 text-center text-sm text-muted-foreground">
+                {search ? 'No files found' : 'No files in project'}
+              </div>
+            )}
+          </div>
 
           {/* Actions */}
           <DropdownMenuSeparator className="my-0" />
-          <div className="p-1 flex gap-1">
+          <div className="p-1 flex flex-col gap-1">
+            <div className="flex gap-1">
+              <DropdownMenuItem
+                onClick={handleCreateFile}
+                className="flex-1 gap-2 p-2 cursor-pointer justify-between"
+                data-testid="new-file-btn"
+              >
+                <div className="flex items-center gap-2">
+                  <Plus className="size-4" />
+                  <span>New</span>
+                </div>
+                <kbd className="rounded bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">N</kbd>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => fileInputRef.current?.click()}
+                className="flex-1 gap-2 p-2 cursor-pointer justify-between"
+                data-testid="upload-files-btn"
+              >
+                <div className="flex items-center gap-2">
+                  <Upload className="size-4" />
+                  <span>Files</span>
+                </div>
+                <kbd className="rounded bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">U</kbd>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => folderInputRef.current?.click()}
+                className="flex-1 gap-2 p-2 cursor-pointer justify-between"
+                data-testid="upload-folder-btn"
+              >
+                <div className="flex items-center gap-2">
+                  <FolderUp className="size-4" />
+                  <span>Folder</span>
+                </div>
+                <kbd className="rounded bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">F</kbd>
+              </DropdownMenuItem>
+            </div>
             <DropdownMenuItem
-              onClick={handleCreateFile}
-              className="flex-1 gap-2 p-2 cursor-pointer justify-between"
-              data-testid="new-file-btn"
+              onClick={() => setShowDropZone(!showDropZone)}
+              className={cn(
+                "gap-2 p-2 cursor-pointer justify-center text-xs",
+                showDropZone && "bg-accent"
+              )}
+              data-testid="toggle-dropzone-btn"
             >
-              <div className="flex items-center gap-2">
-                <Plus className="size-4" />
-                <span>New File</span>
-              </div>
-              <kbd className="rounded bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">N</kbd>
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => fileInputRef.current?.click()}
-              className="flex-1 gap-2 p-2 cursor-pointer justify-between"
-              data-testid="upload-files-btn"
-            >
-              <div className="flex items-center gap-2">
-                <Upload className="size-4" />
-                <span>Upload</span>
-              </div>
-              <kbd className="rounded bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">U</kbd>
+              {showDropZone ? 'Hide drop zone' : 'Show drop zone for drag & drop'}
             </DropdownMenuItem>
           </div>
         </DropdownMenuContent>
       </DropdownMenu>
 
+      {/* Hidden file inputs */}
       <input
         type="file"
         multiple
@@ -432,6 +331,14 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
         accept={ACCEPTED_FILE_TYPES}
         onChange={handleFileUpload}
         data-testid="file-upload-input"
+      />
+      <input
+        type="file"
+        ref={folderInputRef}
+        className="hidden"
+        onChange={handleFolderUpload}
+        data-testid="folder-upload-input"
+        {...{ webkitdirectory: '', directory: '' } as React.InputHTMLAttributes<HTMLInputElement>}
       />
     </>
   );

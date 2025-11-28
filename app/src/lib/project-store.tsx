@@ -45,6 +45,7 @@ export type RunMode = 'current' | 'all' | 'custom';
 export interface ProjectFile {
   id: string;
   name: string;
+  path: string; // Relative path including filename, e.g., "queries/users/get-all.sql"
   content: string;
   language: 'sql' | 'json' | 'text';
 }
@@ -73,7 +74,7 @@ interface ProjectContextType {
   toggleFileSelection: (projectId: string, fileId: string) => void;
 
   // File actions for active project
-  createFile: (name: string, content?: string) => void;
+  createFile: (name: string, content?: string, path?: string) => void;
   updateFile: (fileId: string, content: string) => void;
   deleteFile: (fileId: string) => void;
   renameFile: (fileId: string, newName: string) => void;
@@ -83,7 +84,7 @@ interface ProjectContextType {
   updateSchemaSQL: (projectId: string, schemaSQL: string) => void;
 
   // Import/Export
-  importFiles: (files: FileList) => Promise<void>;
+  importFiles: (files: FileList | File[]) => Promise<void>;
 
   // Import from shared URL
   importProject: (payload: SharePayload) => string;
@@ -103,6 +104,7 @@ const DEFAULT_PROJECT: Project = {
     {
       id: 'file-1',
       name: '01_schema_core.sql',
+      path: '01_schema_core.sql',
       language: 'sql',
       content: `/* Core Application Schema - Users & Orders */
 
@@ -151,6 +153,7 @@ CREATE TABLE order_items (
     {
       id: 'file-2',
       name: '02_schema_events.sql',
+      path: '02_schema_events.sql',
       language: 'sql',
       content: `/* Clickstream & Analytics Events */
 
@@ -189,6 +192,7 @@ GROUP BY session_id;`
     {
       id: 'file-3',
       name: '03_customer_360.sql',
+      path: '03_customer_360.sql',
       language: 'sql',
       content: `/* Customer 360 View - Joining Core Data with Engagement */
 
@@ -233,6 +237,7 @@ LEFT JOIN user_engagement eng ON u.user_id = eng.user_id;`
     {
       id: 'file-4',
       name: '04_inventory_risk.sql',
+      path: '04_inventory_risk.sql',
       language: 'sql',
       content: `/* Inventory Risk Analysis */
 
@@ -253,6 +258,7 @@ ORDER BY days_of_inventory ASC;`
     {
       id: 'file-5',
       name: '05_marketing_attribution.sql',
+      path: '05_marketing_attribution.sql',
       language: 'sql',
       content: `/* Multi-touch Attribution Analysis */
 
@@ -271,6 +277,7 @@ ORDER BY 2 DESC, 4 DESC;`
     {
       id: 'file-6',
       name: '06_cart_funnel_analysis.sql',
+      path: '06_cart_funnel_analysis.sql',
       language: 'sql',
       content: `/* Marketing Funnel - Cart Analysis (Separate Domain) */
 
@@ -337,6 +344,11 @@ const loadProjectsFromStorage = (): Project[] => {
         runMode: p.runMode || 'all',
         selectedFileIds: p.selectedFileIds || [],
         schemaSQL: p.schemaSQL || '', // Default to empty string for older projects
+        // Migrate files to include path if missing
+        files: (p.files || []).map((f: Partial<ProjectFile>) => ({
+          ...f,
+          path: f.path || f.name || '', // Default path to filename for older files
+        })),
       }));
     }
   } catch (error) {
@@ -480,12 +492,13 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     return 'text';
   };
 
-  const createFile = useCallback((name: string, content: string = '') => {
+  const createFile = useCallback((name: string, content: string = '', path?: string) => {
     if (!activeProjectId) return;
 
     const newFile: ProjectFile = {
       id: uuidv4(),
       name,
+      path: path || name, // Default path to filename if not provided
       content,
       language: getFileLanguage(name),
     };
@@ -532,13 +545,25 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const renameFile = useCallback((fileId: string, newName: string) => {
     if (!activeProjectId) return;
 
-    setProjects(prev => prev.map(p => {
-      if (p.id !== activeProjectId) return p;
-      return {
-        ...p,
-        files: p.files.map(f => f.id === fileId ? { ...f, name: newName } : f)
-      };
-    }));
+    setProjects(prev =>
+      prev.map(p => {
+        if (p.id !== activeProjectId) return p;
+        return {
+          ...p,
+          files: p.files.map(f => {
+            if (f.id !== fileId) return f;
+            const lastSlashIndex = f.path.lastIndexOf('/');
+            const newPath =
+              lastSlashIndex === -1 ? newName : `${f.path.slice(0, lastSlashIndex + 1)}${newName}`;
+            return {
+              ...f,
+              name: newName,
+              path: newPath,
+            };
+          }),
+        };
+      })
+    );
   }, [activeProjectId]);
 
   const selectFile = useCallback((fileId: string) => {
@@ -558,17 +583,21 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const importFiles = useCallback(
-    async (fileList: FileList) => {
+    async (fileList: FileList | File[]) => {
       if (!activeProjectId) return;
 
       const newFiles: ProjectFile[] = [];
+      const files = Array.from(fileList);
 
-      for (let i = 0; i < fileList.length; i++) {
-        const file = fileList[i];
+      for (const file of files) {
         const content = await file.text();
+        // Use webkitRelativePath if available (folder upload), otherwise just filename
+        const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath;
+        const path = relativePath || file.name;
         newFiles.push({
           id: uuidv4(),
           name: file.name,
+          path,
           content,
           language: getFileLanguage(file.name),
         });
@@ -608,6 +637,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     const newFiles: ProjectFile[] = payload.f.map(f => ({
       id: uuidv4(),
       name: f.n,
+      path: f.p || f.n, // Use path if available, otherwise default to filename
       content: f.c,
       language: f.l || DEFAULT_FILE_LANGUAGE,
     }));
