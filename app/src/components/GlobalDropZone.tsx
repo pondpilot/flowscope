@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { Upload, FolderUp, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useProject } from '@/lib/project-store';
-import { ACCEPTED_FILE_TYPES, FILE_LIMITS } from '@/lib/constants';
+import { ACCEPTED_FILE_TYPES_ARRAY, FILE_LIMITS } from '@/lib/constants';
 
 interface FileSystemEntry {
   isFile: boolean;
@@ -49,6 +49,22 @@ interface RejectedFile {
   reason: 'size' | 'type' | 'count';
 }
 
+function isHiddenFile(name: string): boolean {
+  return name.startsWith('.');
+}
+
+function validateFile(file: File): { name: string; reason: 'type' | 'size' } | null {
+  const extension = '.' + file.name.split('.').pop()?.toLowerCase();
+  const acceptedTypes: readonly string[] = ACCEPTED_FILE_TYPES_ARRAY;
+  if (!acceptedTypes.includes(extension)) {
+    return { name: file.name, reason: 'type' };
+  }
+  if (file.size > FILE_LIMITS.MAX_SIZE) {
+    return { name: file.name, reason: 'size' };
+  }
+  return null;
+}
+
 interface ProcessResult {
   accepted: File[];
   rejected: RejectedFile[];
@@ -60,16 +76,20 @@ async function processEntry(
 ): Promise<ProcessResult> {
   const accepted: File[] = [];
   const rejected: RejectedFile[] = [];
+
+  // Skip hidden files and directories (e.g., .DS_Store, .git)
+  if (isHiddenFile(entry.name)) {
+    return { accepted, rejected };
+  }
+
   const currentPath = basePath ? `${basePath}/${entry.name}` : entry.name;
 
   if (entry.isFile) {
     const file = await readFileEntry(entry);
     if (file) {
-      const extension = '.' + file.name.split('.').pop()?.toLowerCase();
-      if (!ACCEPTED_FILE_TYPES.includes(extension)) {
-        rejected.push({ name: file.name, reason: 'type' });
-      } else if (file.size > FILE_LIMITS.MAX_SIZE) {
-        rejected.push({ name: file.name, reason: 'size' });
+      const rejection = validateFile(file);
+      if (rejection) {
+        rejected.push(rejection);
       } else {
         const fileWithPath = new File([file], file.name, { type: file.type });
         Object.defineProperty(fileWithPath, 'webkitRelativePath', {
@@ -169,11 +189,13 @@ export function GlobalDropZone() {
           if (files) {
             for (let i = 0; i < files.length; i++) {
               const file = files[i];
-              const extension = '.' + file.name.split('.').pop()?.toLowerCase();
-              if (!ACCEPTED_FILE_TYPES.includes(extension)) {
-                allRejected.push({ name: file.name, reason: 'type' });
-              } else if (file.size > FILE_LIMITS.MAX_SIZE) {
-                allRejected.push({ name: file.name, reason: 'size' });
+              // Skip hidden files
+              if (isHiddenFile(file.name)) {
+                continue;
+              }
+              const rejection = validateFile(file);
+              if (rejection) {
+                allRejected.push(rejection);
               } else {
                 allAccepted.push(file);
               }
@@ -233,7 +255,7 @@ export function GlobalDropZone() {
       case 'type':
         return 'unsupported file type';
       case 'count':
-        return 'exceeds 100 file limit';
+        return `exceeds ${FILE_LIMITS.MAX_COUNT} file limit`;
     }
   };
 
@@ -314,7 +336,8 @@ export function GlobalDropZone() {
             <div className="text-center">
               <p className="text-xl font-medium">Drop files or folders here</p>
               <p className="text-sm text-muted-foreground mt-1">
-                Supports .sql, .json, and .txt files (max 10MB each, 100 files)
+                Supports {ACCEPTED_FILE_TYPES_ARRAY.join(', ')} files (max{' '}
+                {FILE_LIMITS.MAX_SIZE / 1024 / 1024}MB each, {FILE_LIMITS.MAX_COUNT} files)
               </p>
             </div>
           </>

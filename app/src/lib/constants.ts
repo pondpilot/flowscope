@@ -4,7 +4,7 @@
 
 export const FILE_LIMITS = {
   MAX_SIZE: 10 * 1024 * 1024, // 10MB
-  MAX_COUNT: 100,
+  MAX_COUNT: 1000,
 } as const;
 
 export const SCHEMA_LIMITS = {
@@ -46,11 +46,9 @@ export const FILE_EXTENSIONS = {
   TEXT: '.txt',
 } as const;
 
-export const ACCEPTED_FILE_TYPES = [
-  FILE_EXTENSIONS.SQL,
-  FILE_EXTENSIONS.JSON,
-  FILE_EXTENSIONS.TEXT,
-].join(',');
+export const ACCEPTED_FILE_TYPES_ARRAY = [FILE_EXTENSIONS.SQL] as const;
+
+export const ACCEPTED_FILE_TYPES = ACCEPTED_FILE_TYPES_ARRAY.join(',');
 
 export const DEFAULT_FILE_NAMES = {
   NEW_QUERY: 'new_query.sql',
