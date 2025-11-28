@@ -498,7 +498,8 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
             onSearchTermChange={setLocalSearchTerm} 
           />
         </Panel>
-        <Panel position="top-right" className="flex gap-3">
+        <Panel position="top-right" className="flex gap-3 items-start">
+          <Legend viewMode={viewMode} />
           <div className="flex items-center rounded-lg border border-slate-200/60 bg-white px-1 py-1 shadow-sm backdrop-blur-sm">
             <LayoutSelector />
           </div>
@@ -518,9 +519,6 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
             return getMinimapNodeColor('table');
           }}
         />
-        <Panel position="bottom-center" className="mb-8 !z-50">
-          <Legend viewMode={viewMode} />
-        </Panel>
       </ReactFlow>
     </div>
   );

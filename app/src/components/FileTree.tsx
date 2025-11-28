@@ -105,29 +105,38 @@ function FolderNode({ node, depth, props, expandedFolders, onToggleFolder }: Fol
   const sortedChildren = sortTreeNodes(Array.from(node.children.values()));
 
   return (
-    <div>
+    <div role="treeitem" aria-expanded={isExpanded}>
       <div
         className={cn(
-          'flex items-center gap-1 py-1 px-2 rounded-md cursor-pointer hover:bg-accent group',
+          'flex items-center gap-1 py-1 px-2 rounded-md cursor-pointer hover:bg-accent hover:text-accent-foreground group',
           'text-sm text-muted-foreground'
         )}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
         onClick={() => onToggleFolder(node.path)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onToggleFolder(node.path);
+          }
+        }}
+        tabIndex={0}
+        role="button"
+        aria-label={`${isExpanded ? 'Collapse' : 'Expand'} folder ${node.name}`}
       >
         {isExpanded ? (
-          <ChevronDown className="size-4 shrink-0" />
+          <ChevronDown className="size-4 shrink-0 group-hover:text-accent-foreground" />
         ) : (
-          <ChevronRight className="size-4 shrink-0" />
+          <ChevronRight className="size-4 shrink-0 group-hover:text-accent-foreground" />
         )}
         {isExpanded ? (
-          <FolderOpen className="size-4 shrink-0 text-amber-500" />
+          <FolderOpen className="size-4 shrink-0 text-amber-500 group-hover:text-amber-400" />
         ) : (
-          <Folder className="size-4 shrink-0 text-amber-500" />
+          <Folder className="size-4 shrink-0 text-amber-500 group-hover:text-amber-400" />
         )}
-        <span className="truncate">{node.name}</span>
+        <span className="truncate group-hover:text-accent-foreground">{node.name}</span>
       </div>
       {isExpanded && (
-        <div>
+        <div role="group">
           {sortedChildren.map(child =>
             child.file ? (
               <FileNode
@@ -219,30 +228,42 @@ function FileNode({ node, depth, props }: FileNodeProps) {
 
   return (
     <div
+      role="treeitem"
+      aria-selected={isActive}
       className={cn(
         'flex items-center gap-2 py-1 px-2 rounded-md cursor-pointer hover:bg-accent group',
         isActive && 'bg-accent'
       )}
       style={{ paddingLeft: `${depth * 12 + 8}px` }}
       onClick={() => onSelectFile(file.id)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelectFile(file.id);
+        }
+      }}
+      tabIndex={0}
       data-testid={`file-tree-item-${file.id}`}
     >
       {showCheckboxes && (
         <Checkbox
           checked={isSelected}
           onClick={(e) => onToggleSelection(e, file.id)}
-          className="shrink-0 border-muted-foreground"
+          className="shrink-0 border-muted-foreground group-hover:border-accent-foreground"
           data-testid={`file-checkbox-${file.id}`}
         />
       )}
       <FileCode
         className={cn(
-          'size-4 shrink-0',
+          'size-4 shrink-0 group-hover:text-accent-foreground',
           isIncluded ? 'text-primary' : 'text-muted-foreground'
         )}
       />
       <span
-        className={cn('flex-1 truncate text-sm', isActive && 'font-semibold italic')}
+        className={cn(
+          'flex-1 truncate text-sm group-hover:text-accent-foreground',
+          isActive && 'font-semibold italic'
+        )}
       >
         {file.name}
       </span>
@@ -260,14 +281,14 @@ function FileNode({ node, depth, props }: FileNodeProps) {
           </Button>
         </div>
       ) : (
-        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
+        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 text-accent-foreground">
           <TooltipProvider delayDuration={300}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-6 w-6 hover:bg-accent"
+                  className="h-6 w-6 hover:bg-background/50"
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -293,7 +314,7 @@ function FileNode({ node, depth, props }: FileNodeProps) {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-6 w-6 hover:bg-destructive/10 hover:text-destructive"
+                    className="h-6 w-6 hover:bg-background/50 hover:text-destructive"
                     onClick={(e) => onDeleteClick(e, file.id)}
                     data-testid={`delete-file-${file.id}`}
                   >
@@ -361,7 +382,7 @@ export function FileTree(props: FileTreeProps) {
   // If no nested structure, render flat list (no need for tree)
   if (!hasNestedStructure) {
     return (
-      <div className="p-1">
+      <div className="p-1" role="tree" aria-label="File list">
         {sortedChildren.map(node => (
           <FileNode key={node.file?.id} node={node} depth={0} props={props} />
         ))}
@@ -370,7 +391,7 @@ export function FileTree(props: FileTreeProps) {
   }
 
   return (
-    <div className="p-1">
+    <div className="p-1" role="tree" aria-label="File tree">
       {sortedChildren.map(node =>
         node.file ? (
           <FileNode key={node.file.id} node={node} depth={0} props={props} />

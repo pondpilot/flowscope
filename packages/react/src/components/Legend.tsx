@@ -14,28 +14,28 @@ export function Legend({ viewMode = 'table' }: LegendProps): JSX.Element {
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
-    <div
-      className="rounded-lg border bg-white shadow-sm transition-all duration-200"
-      style={{ borderColor: COLORS.nodes.table.border }}
-    >
-      {/* Header - always visible */}
-      <button
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-sm font-medium hover:bg-gray-50"
-        style={{ color: COLORS.nodes.table.text }}
-      >
-        <span>Legend</span>
-        {isExpanded ? (
-          <ChevronDown className="h-4 w-4" />
-        ) : (
-          <ChevronUp className="h-4 w-4" />
-        )}
-      </button>
+    <div className="relative">
+      <div className="flex items-center rounded-lg border border-slate-200/60 bg-white px-1 py-1 shadow-sm backdrop-blur-sm transition-all duration-200">
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className={`
+            flex items-center gap-2 h-8 px-2 rounded transition-colors text-sm font-medium
+            ${isExpanded ? 'bg-slate-100 text-slate-900' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}
+          `}
+        >
+          <span>Legend</span>
+          {isExpanded ? (
+            <ChevronUp className="h-4 w-4" />
+          ) : (
+            <ChevronDown className="h-4 w-4" />
+          )}
+        </button>
+      </div>
 
       {/* Expanded content */}
       {isExpanded && (
         <div
-          className="border-t px-3 py-2 space-y-3"
+          className="absolute right-0 top-full mt-2 w-64 rounded-lg border bg-white shadow-lg p-3 space-y-3 z-50 animate-in fade-in zoom-in-95 duration-200"
           style={{ borderColor: COLORS.nodes.table.border }}
         >
           {/* Nodes section */}

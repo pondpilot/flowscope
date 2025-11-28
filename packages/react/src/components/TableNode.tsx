@@ -74,6 +74,7 @@ function isTableNodeData(data: unknown): data is TableNodeData {
 export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
   const { toggleNodeCollapse, toggleTableExpansion, selectNode } = useLineageActions();
   const expandedTableIds = useLineageStore((state) => state.expandedTableIds);
+  const viewMode = useLineageStore((state) => state.viewMode);
 
   if (!isTableNodeData(data)) {
     console.error('Invalid node data type for TableNode', data);
@@ -111,6 +112,11 @@ export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
 
   return (
     <div
+      onClick={() => {
+        // Allow clicking anywhere in the table to select it
+        // Columns handle their own selection and stop propagation
+        selectNode(id);
+      }}
       style={{
         minWidth: 180,
         borderRadius: 8,
@@ -335,10 +341,10 @@ export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
             return (
               <div
                 key={col.id}
-                onClick={(e) => {
+                onClick={viewMode === 'column' ? (e) => {
                   e.stopPropagation();
                   selectNode(col.id);
-                }}
+                } : undefined}
                 style={{
                   fontSize: 12,
                   color: col.isHighlighted ? colors.interactive.selection : palette.textSecondary,
@@ -347,7 +353,7 @@ export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
                   padding: '3px 4px',
                   borderRadius: 4,
                   position: 'relative',
-                  cursor: 'pointer',
+                  cursor: viewMode === 'column' ? 'pointer' : 'inherit',
                 }}
               >
                 <Handle

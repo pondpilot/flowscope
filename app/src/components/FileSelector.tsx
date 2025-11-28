@@ -16,8 +16,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { FileTree } from '@/components/FileTree';
-import { DropZone } from '@/components/DropZone';
-import { cn } from '@/lib/utils';
 import { DEFAULT_FILE_NAMES, ACCEPTED_FILE_TYPES } from '@/lib/constants';
 
 interface FileSelectorProps {
@@ -41,7 +39,6 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
   const [renamingFileId, setRenamingFileId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
-  const [showDropZone, setShowDropZone] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -73,7 +70,6 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
       setRenamingFileId(null);
       setRenameValue('');
       setDeletingFileId(null);
-      setShowDropZone(false);
     }
   }, [open, renamingFileId]);
 
@@ -98,13 +94,6 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
     }
     if (folderInputRef.current) {
       folderInputRef.current.value = '';
-    }
-  };
-
-  const handleFilesDropped = (files: File[]) => {
-    if (files.length > 0) {
-      importFiles(files);
-      setShowDropZone(false);
     }
   };
 
@@ -233,13 +222,6 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
             />
           </div>
 
-          {/* Drop Zone Toggle */}
-          {showDropZone && (
-            <div className="p-2 border-b">
-              <DropZone onFilesDropped={handleFilesDropped} />
-            </div>
-          )}
-
           {/* File Tree */}
           <div className="max-h-[300px] overflow-y-auto">
             {filteredFiles.length > 0 ? (
@@ -308,16 +290,6 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
                 <kbd className="rounded bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">F</kbd>
               </DropdownMenuItem>
             </div>
-            <DropdownMenuItem
-              onClick={() => setShowDropZone(!showDropZone)}
-              className={cn(
-                "gap-2 p-2 cursor-pointer justify-center text-xs",
-                showDropZone && "bg-accent"
-              )}
-              data-testid="toggle-dropzone-btn"
-            >
-              {showDropZone ? 'Hide drop zone' : 'Show drop zone for drag & drop'}
-            </DropdownMenuItem>
           </div>
         </DropdownMenuContent>
       </DropdownMenu>

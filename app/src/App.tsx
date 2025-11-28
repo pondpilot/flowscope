@@ -6,6 +6,7 @@ import { ProjectProvider } from './lib/project-store';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Workspace } from './components/Workspace';
 import { WelcomeModal } from './components/WelcomeModal';
+import { GlobalDropZone } from './components/GlobalDropZone';
 import { Toaster } from './components/ui/sonner';
 import { useWasmInit, useShareImport } from './hooks';
 import { DebugPanel } from './components/debug/DebugPanel';
@@ -32,6 +33,7 @@ function App() {
           </div>
           <Toaster position="bottom-right" />
           <WelcomeModal />
+          <GlobalDropZone />
           {import.meta.env.DEV && <DebugPanel />}
         </LineageProvider>
       </ProjectProvider>
