@@ -4,16 +4,62 @@
 //! supporting both file-based and inline SQL inputs.
 
 use crate::parser::parse_sql_with_dialect;
-use crate::types::{issue_codes, AnalyzeRequest, Issue};
+use crate::types::{issue_codes, AnalyzeRequest, Dialect, Issue, Span};
 use sqlparser::ast::Statement;
 use std::ops::Range;
+use std::rc::Rc;
+use thiserror::Error;
+
+/// Maximum iterations allowed when merging statement ranges to prevent infinite loops
+/// on malformed SQL input.
+const MAX_MERGE_ITERATIONS: usize = 10_000;
+
+/// Errors that can occur when aligning statement ranges.
+#[derive(Debug, Error)]
+enum RangeAlignmentError {
+    /// No ranges provided when statements were expected.
+    #[error("no ranges provided when {0} statements were expected")]
+    NoRanges(usize),
+    /// Fewer ranges than statements (cannot split a range).
+    #[error("fewer ranges ({0}) than statements ({1}), cannot split ranges")]
+    FewerRangesThanStatements(usize, usize),
+    /// Failed to merge ranges to match statement count.
+    #[error("failed to merge ranges to match statement count")]
+    MergeFailed,
+    /// Iteration limit exceeded during merge (possible infinite loop).
+    #[error("iteration limit ({0}) exceeded during merge, possible infinite loop")]
+    IterationLimitExceeded(usize),
+    /// A range extends beyond the source SQL bounds.
+    #[error("range end ({0}) exceeds source SQL length ({1})")]
+    OutOfBounds(usize, usize),
+    /// Invalid range where start exceeds end.
+    #[error("invalid range: start ({0}) > end ({1})")]
+    InvalidRange(usize, usize),
+}
+
+/// Context for parsing SQL from a single source.
+struct ParseContext<'a> {
+    /// The full SQL buffer to parse.
+    source_sql: &'a str,
+    /// Optional source file name for error reporting.
+    ///
+    /// Wrapped in `Rc` so multiple `StatementInput` instances can share
+    /// the same name without additional allocations.
+    source_name: Option<Rc<String>>,
+    /// SQL dialect for parsing.
+    dialect: Dialect,
+}
 
 /// A parsed statement alongside optional source metadata.
 pub(crate) struct StatementInput<'a> {
     /// The parsed SQL statement.
     pub(crate) statement: Statement,
     /// Optional source file name for error reporting and tracing.
-    pub(crate) source_name: Option<String>,
+    ///
+    /// Uses `Rc<String>` to avoid repeated heap allocations when the same file
+    /// contains multiple statements. All statements from a single file share
+    /// the same `Rc`, so cloning is just a reference count increment.
+    pub(crate) source_name: Option<Rc<String>>,
     /// The full SQL buffer this statement came from.
     pub(crate) source_sql: &'a str,
     /// Byte range of the statement within `source_sql`.
@@ -79,72 +125,265 @@ pub(crate) fn collect_statements<'a>(
     // Parse files first (if present)
     if let Some(files) = &request.files {
         for file in files {
-            let source_sql = file.content.as_str();
-            let statement_ranges = compute_statement_ranges(source_sql);
-            match parse_sql_with_dialect(source_sql, request.dialect) {
-                Ok(stmts) => {
-                    let ranges = align_statement_ranges(stmts.len(), &statement_ranges, source_sql);
-                    for (stmt, range) in stmts.into_iter().zip(ranges) {
-                        statements.push(StatementInput {
-                            statement: stmt,
-                            source_name: Some(file.name.clone()),
-                            source_sql,
-                            source_range: range,
-                        });
-                    }
-                }
-                Err(e) => issues.push(Issue::error(
-                    issue_codes::PARSE_ERROR,
-                    format!("Error parsing {}: {}", file.name, e),
-                )),
-            }
+            let ctx = ParseContext {
+                source_sql: file.content.as_str(),
+                source_name: Some(Rc::new(file.name.clone())),
+                dialect: request.dialect,
+            };
+            let (file_stmts, file_issues) = parse_statements_individually(&ctx);
+            statements.extend(file_stmts);
+            issues.extend(file_issues);
         }
     }
 
     // Parse inline SQL if present (appended after file statements)
     if has_sql {
-        let source_sql = request.sql.as_str();
-        let statement_ranges = compute_statement_ranges(source_sql);
-        match parse_sql_with_dialect(source_sql, request.dialect) {
-            Ok(stmts) => {
-                let ranges = align_statement_ranges(stmts.len(), &statement_ranges, source_sql);
-                statements.extend(stmts.into_iter().zip(ranges).map(|(stmt, range)| {
-                    StatementInput {
-                        statement: stmt,
-                        source_name: request.source_name.clone(),
-                        source_sql,
-                        source_range: range,
-                    }
-                }));
-            }
-            Err(e) => {
-                issues.push(Issue::error(issue_codes::PARSE_ERROR, e.to_string()));
-            }
-        }
+        let ctx = ParseContext {
+            source_sql: request.sql.as_str(),
+            source_name: request.source_name.clone().map(Rc::new),
+            dialect: request.dialect,
+        };
+        let (inline_stmts, inline_issues) = parse_statements_individually(&ctx);
+        statements.extend(inline_stmts);
+        issues.extend(inline_issues);
     }
 
     (statements, issues)
 }
 
+/// Parses SQL from a single buffer with best-effort error handling.
+///
+/// The parser first tries to process the entire buffer so statements containing
+/// embedded semicolons (e.g. procedures) remain intact. If that fails, it
+/// falls back to parsing semicolon-delimited slices individually so later
+/// statements can still be analyzed.
+fn parse_statements_individually<'a>(
+    ctx: &ParseContext<'a>,
+) -> (Vec<StatementInput<'a>>, Vec<Issue>) {
+    let statement_ranges = compute_statement_ranges(ctx.source_sql);
+
+    match parse_full_sql_buffer(ctx, &statement_ranges) {
+        Ok(statements) => (statements, Vec::new()),
+        Err(fallback_error) => {
+            let (statements, mut issues) =
+                parse_statement_ranges_best_effort(ctx, statement_ranges);
+
+            // Surface the fallback reason to users so they understand why
+            // best-effort parsing was used
+            if let Some(error) = fallback_error {
+                let source_info = ctx
+                    .source_name
+                    .as_deref()
+                    .map(|n| format!(" in {n}"))
+                    .unwrap_or_default();
+                let message = format!(
+                    "Full SQL parsing failed{source_info}, using best-effort mode: {error}"
+                );
+                issues.insert(0, Issue::warning(issue_codes::PARSE_ERROR, message));
+            }
+
+            (statements, issues)
+        }
+    }
+}
+
+/// Attempts full SQL buffer parsing with statement range alignment.
+///
+/// Returns:
+/// - `Ok(statements)` if parsing and range alignment succeeded
+/// - `Err(None)` if SQL parsing failed (no specific error to report)
+/// - `Err(Some(error))` if range alignment failed (error should be surfaced)
+fn parse_full_sql_buffer<'a>(
+    ctx: &ParseContext<'a>,
+    statement_ranges: &[Range<usize>],
+) -> Result<Vec<StatementInput<'a>>, Option<RangeAlignmentError>> {
+    let parsed = parse_sql_with_dialect(ctx.source_sql, ctx.dialect).map_err(|_| None)?;
+
+    if parsed.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let aligned_ranges =
+        match align_statement_ranges(ctx.source_sql, statement_ranges, ctx.dialect, parsed.len()) {
+            Ok(ranges) => ranges,
+            Err(e) => {
+                #[cfg(feature = "tracing")]
+                tracing::debug!(
+                    source = ?ctx.source_name.as_deref(),
+                    error = %e,
+                    "Failed to align statement ranges, falling back to best-effort parsing"
+                );
+                return Err(Some(e));
+            }
+        };
+
+    let mut statements = Vec::with_capacity(parsed.len());
+    for (stmt, range) in parsed.into_iter().zip(aligned_ranges.into_iter()) {
+        statements.push(StatementInput {
+            statement: stmt,
+            source_name: ctx.source_name.clone(),
+            source_sql: ctx.source_sql,
+            source_range: range,
+        });
+    }
+
+    Ok(statements)
+}
+
 fn align_statement_ranges(
-    statement_count: usize,
-    ranges: &[Range<usize>],
     source_sql: &str,
-) -> Vec<Range<usize>> {
+    statement_ranges: &[Range<usize>],
+    dialect: Dialect,
+    statement_count: usize,
+) -> Result<Vec<Range<usize>>, RangeAlignmentError> {
     if statement_count == 0 {
-        return Vec::new();
+        return Ok(Vec::new());
     }
 
-    if ranges.len() >= statement_count {
-        return ranges.iter().take(statement_count).cloned().collect();
+    if statement_ranges.is_empty() {
+        return Err(RangeAlignmentError::NoRanges(statement_count));
     }
 
-    let mut aligned: Vec<Range<usize>> = ranges.to_vec();
-    let fallback = 0..source_sql.len();
-    while aligned.len() < statement_count {
-        aligned.push(fallback.clone());
+    if statement_ranges.len() == statement_count {
+        return Ok(statement_ranges.to_vec());
     }
-    aligned
+
+    if statement_ranges.len() < statement_count {
+        return Err(RangeAlignmentError::FewerRangesThanStatements(
+            statement_ranges.len(),
+            statement_count,
+        ));
+    }
+
+    merge_statement_ranges(source_sql, statement_ranges, dialect, statement_count)
+}
+
+/// Re-aligns semicolon-delimited ranges with the statements parsed by `sqlparser`.
+///
+/// This is necessary because `sqlparser` may parse a single statement that contains
+/// multiple semicolons (e.g., a `CREATE PROCEDURE` block). In such cases, our
+/// naive `compute_statement_ranges` will produce more ranges than `sqlparser` produces
+/// statements. This function greedily merges consecutive ranges until the resulting
+/// SQL snippet successfully parses as a single statement, ensuring each parsed AST
+/// node is mapped to its correct, complete source text.
+fn merge_statement_ranges(
+    source_sql: &str,
+    statement_ranges: &[Range<usize>],
+    dialect: Dialect,
+    statement_count: usize,
+) -> Result<Vec<Range<usize>>, RangeAlignmentError> {
+    let mut merged = Vec::with_capacity(statement_count);
+    let mut range_index = 0usize;
+
+    // Process each expected statement, greedily merging ranges as needed
+    for _ in 0..statement_count {
+        // Ensure we have ranges left to process
+        if range_index >= statement_ranges.len() {
+            return Err(RangeAlignmentError::MergeFailed);
+        }
+
+        let mut statement_iterations = 0usize;
+
+        // Start with the current range; we'll extend it if needed
+        let mut current_range = statement_ranges[range_index].clone();
+        range_index += 1;
+
+        // Keep extending the range until we get exactly one parsed statement
+        loop {
+            statement_iterations += 1;
+            if statement_iterations > MAX_MERGE_ITERATIONS {
+                return Err(RangeAlignmentError::IterationLimitExceeded(
+                    MAX_MERGE_ITERATIONS,
+                ));
+            }
+
+            // Validate range boundaries
+            if current_range.start > current_range.end {
+                return Err(RangeAlignmentError::InvalidRange(
+                    current_range.start,
+                    current_range.end,
+                ));
+            }
+            if current_range.end > source_sql.len() {
+                return Err(RangeAlignmentError::OutOfBounds(
+                    current_range.end,
+                    source_sql.len(),
+                ));
+            }
+
+            let snippet = &source_sql[current_range.clone()];
+            match parse_sql_with_dialect(snippet, dialect) {
+                // Found exactly one statement - this range is complete
+                Ok(parsed) if parsed.len() == 1 => {
+                    merged.push(current_range);
+                    break;
+                }
+                // Either parsed multiple statements, zero statements, or failed to parse.
+                // Extend the range by including the next semicolon-delimited segment and retry.
+                _ => {
+                    if range_index >= statement_ranges.len() {
+                        return Err(RangeAlignmentError::MergeFailed);
+                    }
+                    // Merge current range with the next range
+                    current_range = current_range.start..statement_ranges[range_index].end;
+                    range_index += 1;
+                }
+            }
+        }
+    }
+
+    // Verify we consumed all ranges - if not, the merge logic is incorrect
+    if range_index != statement_ranges.len() {
+        return Err(RangeAlignmentError::MergeFailed);
+    }
+
+    Ok(merged)
+}
+
+/// Parses SQL slices defined by `statement_ranges`, recording parse errors per slice.
+fn parse_statement_ranges_best_effort<'a>(
+    ctx: &ParseContext<'a>,
+    statement_ranges: Vec<Range<usize>>,
+) -> (Vec<StatementInput<'a>>, Vec<Issue>) {
+    let mut statements = Vec::new();
+    let mut issues = Vec::new();
+
+    for range in statement_ranges {
+        // Skip invalid ranges
+        if range.start > range.end || range.end > ctx.source_sql.len() {
+            continue;
+        }
+
+        let statement_sql = &ctx.source_sql[range.clone()];
+
+        match parse_sql_with_dialect(statement_sql, ctx.dialect) {
+            Ok(parsed) => {
+                // Typically one statement per range, but handle multiple if present
+                for stmt in parsed {
+                    statements.push(StatementInput {
+                        statement: stmt,
+                        source_name: ctx.source_name.clone(),
+                        source_sql: ctx.source_sql,
+                        source_range: range.clone(),
+                    });
+                }
+            }
+            Err(e) => {
+                // Record the parse error but continue with remaining statements
+                let message = match ctx.source_name.as_deref() {
+                    Some(name) => format!("Parse error in {name}: {e}"),
+                    None => format!("Parse error: {e}"),
+                };
+
+                issues.push(
+                    Issue::error(issue_codes::PARSE_ERROR, message)
+                        .with_span(Span::new(range.start, range.end)),
+                );
+            }
+        }
+    }
+
+    (statements, issues)
 }
 
 fn compute_statement_ranges(sql: &str) -> Vec<Range<usize>> {
@@ -489,12 +728,18 @@ mod tests {
         let (statements, issues) = collect_statements(&request);
         assert!(issues.is_empty());
         assert_eq!(statements.len(), 2);
-        assert_eq!(statements[0].source_name.as_deref(), Some("file.sql"));
+        assert_eq!(
+            statements[0].source_name.as_deref().map(String::as_str),
+            Some("file.sql")
+        );
         assert_eq!(
             statements[0].source_sql[statements[0].source_range.clone()].trim(),
             "SELECT 1"
         );
-        assert_eq!(statements[1].source_name.as_deref(), Some("inline.sql"));
+        assert_eq!(
+            statements[1].source_name.as_deref().map(String::as_str),
+            Some("inline.sql")
+        );
         assert_eq!(
             statements[1].source_sql[statements[1].source_range.clone()].trim(),
             "SELECT 2"
@@ -538,5 +783,207 @@ mod tests {
             "DO $$ BEGIN RAISE NOTICE ';'; END $$"
         );
         assert_eq!(&sql[ranges[1].clone()], "SELECT 1");
+    }
+
+    #[test]
+    fn parses_procedure_with_inner_semicolons() {
+        let mut request = base_request();
+        request.dialect = Dialect::Snowflake;
+        request.sql = r#"
+            CREATE PROCEDURE demo()
+            LANGUAGE SQL
+            AS
+            BEGIN
+                SELECT 'a';
+                SELECT 'b';
+                RETURN 'done';
+            END;
+            SELECT 1;
+        "#
+        .to_string();
+
+        let (statements, issues) = collect_statements(&request);
+        assert!(issues.is_empty(), "Expected no issues, got {issues:?}");
+        assert_eq!(
+            statements.len(),
+            2,
+            "Expected procedure and trailing select"
+        );
+        assert!(matches!(
+            statements[0].statement,
+            Statement::CreateProcedure { .. }
+        ));
+        let procedure_source = &statements[0].source_sql[statements[0].source_range.clone()];
+        assert!(
+            procedure_source.contains("SELECT 'b';") && procedure_source.contains("RETURN 'done';"),
+            "Procedure source should include entire body: {procedure_source:?}"
+        );
+        assert!(matches!(statements[1].statement, Statement::Query(_)));
+    }
+
+    #[test]
+    fn best_effort_parsing_continues_after_error() {
+        // SQL with valid statement, invalid statement, then valid statement
+        let mut request = base_request();
+        request.sql = r#"
+            SELECT 1 FROM users;
+            SELECT FROM;
+            SELECT 2 FROM orders;
+        "#
+        .to_string();
+
+        let (statements, issues) = collect_statements(&request);
+
+        // Should have parsed 2 valid statements
+        assert_eq!(statements.len(), 2, "Expected 2 valid statements");
+
+        // Should have 1 parse error for the invalid statement
+        assert_eq!(issues.len(), 1, "Expected 1 parse error");
+        assert_eq!(issues[0].code, issue_codes::PARSE_ERROR);
+
+        // The error should have a span pointing to the invalid statement
+        assert!(issues[0].span.is_some(), "Error should have span info");
+    }
+
+    #[test]
+    fn best_effort_parsing_with_file_source() {
+        let mut request = base_request();
+        request.files = Some(vec![FileSource {
+            name: "test.sql".to_string(),
+            content: r#"
+                SELECT a FROM t1;
+                INVALID SYNTAX HERE;
+                SELECT b FROM t2;
+            "#
+            .to_string(),
+        }]);
+
+        let (statements, issues) = collect_statements(&request);
+
+        assert_eq!(statements.len(), 2, "Expected 2 valid statements");
+        assert_eq!(issues.len(), 1, "Expected 1 parse error");
+
+        // Error message should include file name
+        assert!(
+            issues[0].message.contains("test.sql"),
+            "Error should mention file name"
+        );
+    }
+
+    #[test]
+    fn best_effort_parsing_multiple_errors() {
+        let mut request = base_request();
+        request.sql = r#"
+            SELECT 1;
+            BROKEN STATEMENT 1;
+            SELECT 2;
+            BROKEN STATEMENT 2;
+            SELECT 3;
+        "#
+        .to_string();
+
+        let (statements, issues) = collect_statements(&request);
+
+        assert_eq!(statements.len(), 3, "Expected 3 valid statements");
+        assert_eq!(issues.len(), 2, "Expected 2 parse errors");
+    }
+
+    #[test]
+    fn empty_sql_returns_no_statements() {
+        let sql = "";
+        let ranges = compute_statement_ranges(sql);
+        assert!(ranges.is_empty(), "Empty SQL should produce no ranges");
+    }
+
+    #[test]
+    fn whitespace_only_sql_returns_no_statements() {
+        let sql = "   \n\t\r\n   ";
+        let ranges = compute_statement_ranges(sql);
+        assert!(
+            ranges.is_empty(),
+            "Whitespace-only SQL should produce no ranges"
+        );
+    }
+
+    #[test]
+    fn comments_only_sql_returns_no_statements() {
+        let sql = "-- just a comment\n/* another comment */";
+        let ranges = compute_statement_ranges(sql);
+        assert!(
+            ranges.is_empty(),
+            "Comments-only SQL should produce no ranges"
+        );
+    }
+
+    #[test]
+    fn empty_inline_sql_with_valid_file() {
+        let mut request = base_request();
+        request.sql = "   ".to_string(); // whitespace only
+        request.files = Some(vec![FileSource {
+            name: "file.sql".to_string(),
+            content: "SELECT 1".to_string(),
+        }]);
+
+        let (statements, issues) = collect_statements(&request);
+        assert!(issues.is_empty());
+        assert_eq!(statements.len(), 1);
+        assert_eq!(
+            statements[0].source_name.as_deref().map(String::as_str),
+            Some("file.sql")
+        );
+    }
+
+    #[test]
+    fn statement_ranges_handle_unicode_identifiers() {
+        // Test with multi-byte Unicode characters (Japanese, emoji, etc.)
+        let sql = "SELECT '日本語' AS 名前; SELECT '🎉' AS emoji;";
+        let ranges = compute_statement_ranges(sql);
+        assert_eq!(ranges.len(), 2);
+        assert_eq!(&sql[ranges[0].clone()], "SELECT '日本語' AS 名前");
+        assert_eq!(&sql[ranges[1].clone()], "SELECT '🎉' AS emoji");
+    }
+
+    #[test]
+    fn statement_ranges_handle_unicode_in_strings() {
+        // Ensure semicolons inside Unicode strings are not treated as delimiters
+        let sql = "SELECT '你好;世界' AS greeting; SELECT 2;";
+        let ranges = compute_statement_ranges(sql);
+        assert_eq!(ranges.len(), 2);
+        assert_eq!(&sql[ranges[0].clone()], "SELECT '你好;世界' AS greeting");
+        assert_eq!(&sql[ranges[1].clone()], "SELECT 2");
+    }
+
+    #[test]
+    fn statement_ranges_handle_mixed_ascii_unicode() {
+        // Mix of ASCII and various Unicode scripts
+        let sql = "SELECT 'café' AS drink; SELECT 'naïve' AS word; SELECT 'Müller' AS name;";
+        let ranges = compute_statement_ranges(sql);
+        assert_eq!(ranges.len(), 3);
+        assert_eq!(&sql[ranges[0].clone()], "SELECT 'café' AS drink");
+        assert_eq!(&sql[ranges[1].clone()], "SELECT 'naïve' AS word");
+        assert_eq!(&sql[ranges[2].clone()], "SELECT 'Müller' AS name");
+    }
+
+    #[test]
+    fn unicode_sql_parses_correctly() {
+        // End-to-end test: ensure Unicode SQL parses and produces correct ranges
+        let mut request = base_request();
+        request.sql = "SELECT '日本' AS country; SELECT 'émoji: 🚀' AS test;".to_string();
+
+        let (statements, issues) = collect_statements(&request);
+        assert!(issues.is_empty(), "Expected no issues, got {issues:?}");
+        assert_eq!(statements.len(), 2);
+
+        // Verify the source ranges correctly capture the Unicode content
+        let first_sql = &statements[0].source_sql[statements[0].source_range.clone()];
+        let second_sql = &statements[1].source_sql[statements[1].source_range.clone()];
+        assert!(
+            first_sql.contains("日本"),
+            "First statement should contain Japanese: {first_sql}"
+        );
+        assert!(
+            second_sql.contains("🚀"),
+            "Second statement should contain rocket emoji: {second_sql}"
+        );
     }
 }

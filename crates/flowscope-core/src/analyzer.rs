@@ -178,7 +178,7 @@ impl<'a> Analyzer<'a> {
             let _stmt_span = info_span!(
                 "analyze_statement",
                 index,
-                source = source_name.as_deref().unwrap_or("inline"),
+                source = source_name.as_deref().map_or("inline", String::as_str),
                 stmt_type = ?statement
             )
             .entered();
@@ -187,7 +187,8 @@ impl<'a> Analyzer<'a> {
                 range: source_range,
             });
 
-            let result = self.analyze_statement(index, &statement, source_name);
+            let source_name_owned = source_name.as_deref().map(String::from);
+            let result = self.analyze_statement(index, &statement, source_name_owned);
             self.current_statement_source = None;
 
             match result {
