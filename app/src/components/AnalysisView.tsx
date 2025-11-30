@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { SchemaEditor } from './SchemaEditor';
 import { SchemaAwareIssuesPanel } from './SchemaAwareIssuesPanel';
 import { ComplexityDots } from './ComplexityDots';
+import { HierarchyView } from './HierarchyView';
 import { useProject } from '@/lib/project-store';
 import { Settings } from 'lucide-react';
 import type { SchemaTable, AnalyzeResult } from '@pondpilot/flowscope-core';
@@ -82,6 +83,9 @@ export function AnalysisView() {
             <TabsTrigger value="lineage">
               Lineage
             </TabsTrigger>
+            <TabsTrigger value="hierarchy">
+              Hierarchy
+            </TabsTrigger>
             <TabsTrigger value="matrix">
               Matrix
             </TabsTrigger>
@@ -126,6 +130,12 @@ export function AnalysisView() {
           <TabsContent value="lineage" className="h-full mt-0 p-0 absolute inset-0">
             <GraphErrorBoundary>
               <GraphView graphContainerRef={graphContainerRef} className="h-full w-full" />
+            </GraphErrorBoundary>
+          </TabsContent>
+
+          <TabsContent value="hierarchy" className="h-full mt-0 p-0 absolute inset-0">
+            <GraphErrorBoundary>
+              <HierarchyView className="h-full" />
             </GraphErrorBoundary>
           </TabsContent>
 
