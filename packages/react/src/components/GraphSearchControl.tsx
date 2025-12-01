@@ -67,9 +67,10 @@ export function GraphSearchControl({ className, searchTerm, onSearchTermChange }
   if (!result) return null;
 
   return (
-    <div 
+    <div
       className={`relative flex items-center rounded-lg border border-slate-200/60 bg-white px-2 py-1 shadow-sm backdrop-blur-sm transition-all ${className}`}
       style={{ minWidth: hasResults && searchTerm ? '300px' : '200px' }}
+      data-graph-panel
     >
       <Search
         className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400"

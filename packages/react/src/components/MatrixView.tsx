@@ -194,7 +194,7 @@ const MatrixCell = memo(function MatrixCell({
   const isNone = cellData.type === 'none';
   const hasDependency = !isSelf && !isNone;
 
-  const baseClass = "flex items-center justify-center transition-all duration-200 border-r border-b border-slate-100 dark:border-slate-800";
+  const baseClass = "flex items-center justify-center transition-all duration-200 border-r border-b border-slate-100 dark:border-slate-700";
   
   const bgClass = useMemo(() => {
     if (isRowHovered && isColHovered) return "bg-indigo-100 dark:bg-indigo-900/30 ring-1 ring-inset ring-indigo-500 z-10";
@@ -203,10 +203,10 @@ const MatrixCell = memo(function MatrixCell({
     
     // Heatmap Logic
     if (heatmapMode && hasDependency) {
-      return "bg-white dark:bg-slate-950"; // Base fallback
+      return "bg-background"; // Base fallback
     }
 
-    return "bg-white dark:bg-slate-950";
+    return "bg-background";
   }, [isRowHovered, isColHovered, heatmapMode, hasDependency]);
 
   // Dynamic style for heatmap
@@ -825,9 +825,9 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
 
   return (
     <GraphTooltipProvider>
-      <div className={cn("flex flex-col h-full bg-white dark:bg-slate-950", className)}>
+      <div className={cn("flex flex-col h-full bg-background", className)}>
         {/* Toolbar */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 z-40 gap-4">
+        <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800 bg-background z-40 gap-4">
           <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-900 p-1 rounded-lg shrink-0">
             <button
               onClick={() => { setMatrixSubMode('scripts'); setFocusedNode(null); }}
@@ -1172,7 +1172,7 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
             >
               {/* Top Left Corner */}
               <div 
-                className="sticky top-0 left-0 z-30 bg-white dark:bg-slate-950 border-b border-r border-slate-200 dark:border-slate-800 shadow-[2px_2px_10px_rgba(0,0,0,0.05)]"
+                className="sticky top-0 left-0 z-30 bg-background border-b border-r border-slate-200 dark:border-slate-600 shadow-[2px_2px_10px_rgba(0,0,0,0.05)]"
                 style={{ height: headerHeight }}
               >
                  <div
@@ -1210,7 +1210,7 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
                   <div
                     key={`col-${item}`}
                     className={cn(
-                      "sticky top-0 z-20 bg-white dark:bg-slate-950 border-b border-r border-slate-200 dark:border-slate-800 shadow-sm group cursor-pointer transition-colors duration-200 relative",
+                      "sticky top-0 z-20 bg-background border-b border-r border-slate-200 dark:border-slate-600 shadow-sm group cursor-pointer transition-colors duration-200 relative",
                       hoveredCell?.col === item && "bg-slate-50 dark:bg-slate-900",
                       
                       // Highlight logic
@@ -1270,7 +1270,7 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
                     {/* Row Header */}
                     <div
                       className={cn(
-                        "sticky left-0 z-20 bg-white dark:bg-slate-950 border-b border-r border-slate-200 dark:border-slate-800 px-3 flex items-center shadow-[2px_0_5px_rgba(0,0,0,0.02)] cursor-pointer transition-colors duration-200 relative",
+                        "sticky left-0 z-20 bg-background border-b border-r border-slate-200 dark:border-slate-600 px-3 flex items-center shadow-[2px_0_5px_rgba(0,0,0,0.02)] cursor-pointer transition-colors duration-200 relative",
                         hoveredCell?.row === rowItem && "bg-slate-50 dark:bg-slate-900",
                         
                         isFocused && "bg-purple-100 dark:bg-purple-900/40",

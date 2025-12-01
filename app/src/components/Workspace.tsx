@@ -14,6 +14,7 @@ import { EditorArea } from './EditorArea';
 import { AnalysisView } from './AnalysisView';
 import { ProjectSelector } from './ProjectSelector';
 import { ShareDialog } from './ShareDialog';
+import { ThemeToggle } from './ThemeToggle';
 import { useProject } from '@/lib/project-store';
 import { NavigationProvider } from '@/lib/navigation-context';
 import { useGlobalShortcuts } from '@/hooks';
@@ -170,18 +171,21 @@ export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspacePr
           />
         </div>
 
-        {/* Share Button */}
-        {currentProject && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 gap-1.5"
-            onClick={() => setShareDialogOpen(true)}
-          >
-            <Share2 className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Share</span>
-          </Button>
-        )}
+        {/* Header Actions */}
+        <div className="flex items-center gap-1">
+          {currentProject && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 gap-1.5"
+              onClick={() => setShareDialogOpen(true)}
+            >
+              <Share2 className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Share</span>
+            </Button>
+          )}
+          <ThemeToggle />
+        </div>
       </header>
 
       {/* Share Dialog */}

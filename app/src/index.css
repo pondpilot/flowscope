@@ -50,6 +50,28 @@
     --border: 218 19% 44%;
     --input: 218 19% 44%;
     --ring: 228 100% 76%;
+
+    /* CodeMirror dark theme colors */
+    --cm-bg: 218 18% 12%;
+    --cm-gutter-bg: 218 18% 10%;
+    --cm-gutter-border: 218 19% 25%;
+    --cm-gutter-text: 218 19% 50%;
+    --cm-active-line: 218 18% 15%;
+    --cm-selection: 233 50% 30%;
+    --cm-cursor: 0 0% 90%;
+
+    /* Graph panel dark theme colors */
+    --graph-panel-bg: 218 18% 18%;
+    --graph-panel-border: 218 19% 35%;
+    --graph-panel-hover: 218 18% 25%;
+    --graph-panel-text: 0 0% 95%;
+    --graph-panel-text-secondary: 218 19% 75%;
+    --graph-panel-text-muted: 218 19% 50%;
+
+    /* Scrollbar dark theme colors */
+    --scrollbar-track: 218 18% 15%;
+    --scrollbar-thumb: 218 19% 35%;
+    --scrollbar-thumb-hover: 218 19% 45%;
   }
 }
 
@@ -88,6 +110,36 @@
   padding-left: 10px !important;
 }
 
+/* CodeMirror dark mode */
+.dark .cm-editor {
+  background-color: hsl(var(--cm-bg));
+}
+
+.dark .cm-gutters {
+  background-color: hsl(var(--cm-gutter-bg));
+  border-right-color: hsl(var(--cm-gutter-border));
+}
+
+.dark .cm-gutterElement {
+  color: hsl(var(--cm-gutter-text));
+}
+
+.dark .cm-activeLineGutter {
+  background-color: hsl(var(--cm-active-line));
+}
+
+.dark .cm-activeLine {
+  background-color: hsl(var(--cm-active-line));
+}
+
+.dark .cm-selectionBackground {
+  background-color: hsl(var(--cm-selection)) !important;
+}
+
+.dark .cm-cursor {
+  border-left-color: hsl(var(--cm-cursor));
+}
+
 /* ReactFlow customizations */
 .react-flow__node {
   @apply !cursor-grab active:!cursor-grabbing;
@@ -117,6 +169,29 @@
   @apply !bg-background-primary-light dark:!bg-background-primary-dark;
 }
 
+/* ReactFlow panel dark mode overrides */
+.dark .react-flow [data-graph-panel] {
+  background-color: hsl(var(--graph-panel-bg)) !important;
+  border-color: hsl(var(--graph-panel-border)) !important;
+}
+
+.dark .react-flow [data-graph-panel] button {
+  color: hsl(var(--graph-panel-text-secondary));
+}
+
+.dark .react-flow [data-graph-panel] button:hover {
+  background-color: hsl(var(--graph-panel-hover)) !important;
+  color: hsl(var(--graph-panel-text));
+}
+
+.dark .react-flow [data-graph-panel] input {
+  color: hsl(var(--graph-panel-text)) !important;
+}
+
+.dark .react-flow [data-graph-panel] input::placeholder {
+  color: hsl(var(--graph-panel-text-muted)) !important;
+}
+
 
 
 @layer base {
@@ -126,4 +201,28 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Scrollbar dark mode */
+.dark ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: hsl(var(--scrollbar-track));
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: hsl(var(--scrollbar-thumb));
+  border-radius: 4px;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--scrollbar-thumb-hover));
+}
+
+/* Firefox scrollbar dark mode */
+.dark * {
+  scrollbar-color: hsl(var(--scrollbar-thumb)) hsl(var(--scrollbar-track));
 }

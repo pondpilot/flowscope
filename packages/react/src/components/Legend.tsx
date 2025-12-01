@@ -15,7 +15,7 @@ export function Legend({ viewMode = 'table' }: LegendProps): JSX.Element {
 
   return (
     <div className="relative">
-      <div className="flex items-center rounded-lg border border-slate-200/60 bg-white px-1 py-1 shadow-sm backdrop-blur-sm transition-all duration-200">
+      <div className="flex items-center rounded-lg border border-slate-200/60 bg-white px-1 py-1 shadow-sm backdrop-blur-sm transition-all duration-200" data-graph-panel>
         <button
           onClick={() => setIsExpanded(!isExpanded)}
           className={`
@@ -37,6 +37,7 @@ export function Legend({ viewMode = 'table' }: LegendProps): JSX.Element {
         <div
           className="absolute right-0 top-full mt-2 w-64 rounded-lg border bg-white shadow-lg p-3 space-y-3 z-50 animate-in fade-in zoom-in-95 duration-200"
           style={{ borderColor: COLORS.nodes.table.border }}
+          data-graph-panel
         >
           {/* Nodes section */}
           <div>

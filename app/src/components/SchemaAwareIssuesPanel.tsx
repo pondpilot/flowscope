@@ -82,7 +82,7 @@ export function SchemaAwareIssuesPanel({ onOpenSchemaEditor }: SchemaAwareIssues
           <h3 className="font-semibold text-sm">Issues</h3>
           <div className="flex items-center gap-2 text-xs">
             {errors > 0 && <span className="text-red-600 font-medium">{errors} errors</span>}
-            {warnings > 0 && <span className="text-yellow-600 font-medium">{warnings} warnings</span>}
+            {warnings > 0 && <span className="text-amber-600 dark:text-amber-400 font-medium">{warnings} warnings</span>}
             {infos > 0 && <span className="text-blue-600 font-medium">{infos} info</span>}
             {sortedIssues.length === 0 && (
               <span className="text-green-600 font-medium">No issues</span>
@@ -91,9 +91,9 @@ export function SchemaAwareIssuesPanel({ onOpenSchemaEditor }: SchemaAwareIssues
         </div>
 
         {schemaIssueCount > 0 && (
-          <div className="flex items-center gap-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs">
-            <Database className="h-4 w-4 text-blue-600 flex-shrink-0" />
-            <span className="text-blue-900 flex-1">
+          <div className="flex items-center gap-2 p-2 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded text-xs">
+            <Database className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+            <span className="text-blue-900 dark:text-blue-100 flex-1">
               {schemaIssueCount} schema-related {schemaIssueCount === 1 ? 'issue' : 'issues'} detected
             </span>
             <Button
@@ -125,35 +125,35 @@ export function SchemaAwareIssuesPanel({ onOpenSchemaEditor }: SchemaAwareIssues
                     onClick={() => handleIssueClick(issue)}
                     className={`p-3 border rounded-md cursor-pointer transition-colors ${
                       issue.severity === 'error'
-                        ? 'border-red-200 bg-red-50 hover:bg-red-100'
+                        ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950 hover:bg-red-100 dark:hover:bg-red-900'
                         : issue.severity === 'warning'
-                        ? 'border-yellow-200 bg-yellow-50 hover:bg-yellow-100'
-                        : 'border-blue-200 bg-blue-50 hover:bg-blue-100'
-                    } ${isSchema ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
+                        ? 'border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-100 dark:hover:bg-amber-900/50'
+                        : 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950 hover:bg-blue-100 dark:hover:bg-blue-900'
+                    } ${isSchema ? 'ring-2 ring-blue-400 dark:ring-blue-600 ring-offset-1 dark:ring-offset-background' : ''}`}
                   >
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <div className="flex items-center gap-2">
                         <AlertCircle
                           className={`h-4 w-4 flex-shrink-0 ${
                             issue.severity === 'error'
-                              ? 'text-red-600'
+                              ? 'text-red-600 dark:text-red-400'
                               : issue.severity === 'warning'
-                              ? 'text-yellow-600'
-                              : 'text-blue-600'
+                              ? 'text-amber-600 dark:text-amber-400'
+                              : 'text-blue-600 dark:text-blue-400'
                           }`}
                         />
                         <span
                           className={`text-xs font-medium uppercase ${
                             issue.severity === 'error'
-                              ? 'text-red-700'
+                              ? 'text-red-700 dark:text-red-300'
                               : issue.severity === 'warning'
-                              ? 'text-yellow-700'
-                              : 'text-blue-700'
+                              ? 'text-amber-700 dark:text-amber-300'
+                              : 'text-blue-700 dark:text-blue-300'
                           }`}
                         >
                           {issue.severity}
                         </span>
-                        <code className="text-xs bg-black/5 px-1.5 py-0.5 rounded font-mono">
+                        <code className="text-xs bg-black/5 dark:bg-white/10 px-1.5 py-0.5 rounded font-mono">
                           {issue.code}
                         </code>
                       </div>
@@ -168,7 +168,7 @@ export function SchemaAwareIssuesPanel({ onOpenSchemaEditor }: SchemaAwareIssues
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <button
-                                className="w-6 h-6 flex items-center justify-center rounded hover:bg-black/10 text-muted-foreground hover:text-foreground"
+                                className="w-6 h-6 flex items-center justify-center rounded hover:bg-black/10 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleShowInLineage(issue);
@@ -192,7 +192,7 @@ export function SchemaAwareIssuesPanel({ onOpenSchemaEditor }: SchemaAwareIssues
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <button
-                                className="w-6 h-6 flex items-center justify-center rounded hover:bg-black/10 text-muted-foreground hover:text-foreground"
+                                className="w-6 h-6 flex items-center justify-center rounded hover:bg-black/10 dark:hover:bg-white/10 text-muted-foreground hover:text-foreground"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleOpenInEditor(issue);

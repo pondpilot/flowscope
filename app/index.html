@@ -4,6 +4,28 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>FlowScope - SQL Lineage Analyzer</title>
+    <script>
+      (function() {
+        var validThemes = ['light', 'dark', 'system'];
+        try {
+          var stored = localStorage.getItem('flowscope-theme');
+          var parsed = stored ? JSON.parse(stored) : null;
+          var theme = parsed && parsed.state && validThemes.indexOf(parsed.state.theme) !== -1
+            ? parsed.state.theme
+            : 'system';
+          var isDark = theme === 'dark' ||
+            (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (isDark) {
+            document.documentElement.classList.add('dark');
+          }
+        } catch (e) {
+          // Fallback to system preference if localStorage is unavailable or malformed
+          if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.classList.add('dark');
+          }
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -611,7 +611,7 @@ export function GraphView({
         <Background />
         <Controls />
         <Panel position="top-left" className="flex gap-3">
-          <div className="flex items-center gap-3 rounded-lg border border-slate-200/60 bg-white px-1 py-1 shadow-sm backdrop-blur-sm">
+          <div className="flex items-center gap-3 rounded-lg border border-slate-200/60 bg-white px-1 py-1 shadow-sm backdrop-blur-sm" data-graph-panel>
             <ViewModeSelector />
 
             {viewMode === 'script' && (
@@ -651,10 +651,10 @@ export function GraphView({
         </Panel>
         <Panel position="top-right" className="flex gap-3 items-start">
           <Legend viewMode={viewMode} />
-          <div className="flex items-center rounded-lg border border-slate-200/60 bg-white px-1 py-1 shadow-sm backdrop-blur-sm">
+          <div className="flex items-center rounded-lg border border-slate-200/60 bg-white px-1 py-1 shadow-sm backdrop-blur-sm" data-graph-panel>
             <LayoutSelector />
           </div>
-          <div className="flex items-center rounded-lg border border-slate-200/60 bg-white px-1 py-1 shadow-sm backdrop-blur-sm">
+          <div className="flex items-center rounded-lg border border-slate-200/60 bg-white px-1 py-1 shadow-sm backdrop-blur-sm" data-graph-panel>
             <ExportMenu graphRef={finalRef} />
           </div>
         </Panel>

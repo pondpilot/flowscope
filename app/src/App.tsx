@@ -10,6 +10,7 @@ import { GlobalDropZone } from './components/GlobalDropZone';
 import { Toaster } from './components/ui/sonner';
 import { useWasmInit, useShareImport } from './hooks';
 import { DebugPanel } from './components/debug/DebugPanel';
+import { initializeTheme } from './lib/theme-store';
 
 function ShareImportHandler() {
   useShareImport();
@@ -20,7 +21,19 @@ function App() {
   const { ready: wasmReady, error, isRetrying, retry } = useWasmInit();
 
   useEffect(() => {
-    document.documentElement.classList.remove('dark');
+    try {
+      const cleanup = initializeTheme();
+      return cleanup;
+    } catch (error) {
+      console.error('Theme initialization failed:', error);
+      // Fallback to system preference on initialization failure
+      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+      return () => {};
+    }
   }, []);
 
   return (
