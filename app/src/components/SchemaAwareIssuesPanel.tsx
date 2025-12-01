@@ -1,6 +1,13 @@
 import { useLineage } from '@pondpilot/flowscope-react';
-import { AlertCircle, Database } from 'lucide-react';
+import { AlertCircle, Database, ExternalLink, Eye } from 'lucide-react';
 import { Button } from './ui/button';
+import { useNavigation } from '@/lib/navigation-context';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import type { Issue } from '@pondpilot/flowscope-core';
 
 interface SchemaAwareIssuesPanelProps {
@@ -18,6 +25,8 @@ function isSchemaIssue(issue: Issue): boolean {
 export function SchemaAwareIssuesPanel({ onOpenSchemaEditor }: SchemaAwareIssuesPanelProps) {
   const { state, actions } = useLineage();
   const { result } = state;
+  const { navigateTo, navigateToEditor } = useNavigation();
+  const statements = result?.statements || [];
 
   const sortedIssues = result?.issues
     .slice()
@@ -25,12 +34,34 @@ export function SchemaAwareIssuesPanel({ onOpenSchemaEditor }: SchemaAwareIssues
 
   const schemaIssueCount = sortedIssues.filter(isSchemaIssue).length;
 
+  // Get the source name for an issue based on statement index
+  const getIssueSourceName = (issue: Issue): string | undefined => {
+    if (issue.statementIndex !== undefined && statements[issue.statementIndex]) {
+      return statements[issue.statementIndex].sourceName;
+    }
+    return undefined;
+  };
+
   const handleIssueClick = (issue: Issue) => {
     if (issue.span) {
       actions.highlightSpan(issue.span);
     }
     if (issue.statementIndex !== undefined) {
       actions.selectStatement(issue.statementIndex);
+    }
+  };
+
+  const handleOpenInEditor = (issue: Issue) => {
+    const sourceName = getIssueSourceName(issue);
+    if (sourceName) {
+      navigateToEditor(sourceName, issue.span);
+    }
+  };
+
+  const handleShowInLineage = (issue: Issue) => {
+    if (issue.statementIndex !== undefined) {
+      actions.selectStatement(issue.statementIndex);
+      navigateTo('lineage', { statementIndex: issue.statementIndex, fitView: true });
     }
   };
 
@@ -83,64 +114,123 @@ export function SchemaAwareIssuesPanel({ onOpenSchemaEditor }: SchemaAwareIssues
             <p className="text-sm">Analysis completed without issues</p>
           </div>
         ) : (
-          <div className="space-y-2">
-            {sortedIssues.map((issue, idx) => {
-              const isSchema = isSchemaIssue(issue);
-              return (
-                <div
-                  key={`${issue.code}-${idx}`}
-                  onClick={() => handleIssueClick(issue)}
-                  className={`p-3 border rounded-md cursor-pointer transition-colors ${
-                    issue.severity === 'error'
-                      ? 'border-red-200 bg-red-50 hover:bg-red-100'
-                      : issue.severity === 'warning'
-                      ? 'border-yellow-200 bg-yellow-50 hover:bg-yellow-100'
-                      : 'border-blue-200 bg-blue-50 hover:bg-blue-100'
-                  } ${isSchema ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
-                >
-                  <div className="flex items-start justify-between gap-2 mb-1">
-                    <div className="flex items-center gap-2">
-                      <AlertCircle
-                        className={`h-4 w-4 flex-shrink-0 ${
-                          issue.severity === 'error'
-                            ? 'text-red-600'
-                            : issue.severity === 'warning'
-                            ? 'text-yellow-600'
-                            : 'text-blue-600'
-                        }`}
-                      />
-                      <span
-                        className={`text-xs font-medium uppercase ${
-                          issue.severity === 'error'
-                            ? 'text-red-700'
-                            : issue.severity === 'warning'
-                            ? 'text-yellow-700'
-                            : 'text-blue-700'
-                        }`}
-                      >
-                        {issue.severity}
-                      </span>
-                      <code className="text-xs bg-black/5 px-1.5 py-0.5 rounded font-mono">
-                        {issue.code}
-                      </code>
+          <TooltipProvider delayDuration={300}>
+            <div className="space-y-2">
+              {sortedIssues.map((issue, idx) => {
+                const isSchema = isSchemaIssue(issue);
+                const sourceName = getIssueSourceName(issue);
+                return (
+                  <div
+                    key={`${issue.code}-${idx}`}
+                    onClick={() => handleIssueClick(issue)}
+                    className={`p-3 border rounded-md cursor-pointer transition-colors ${
+                      issue.severity === 'error'
+                        ? 'border-red-200 bg-red-50 hover:bg-red-100'
+                        : issue.severity === 'warning'
+                        ? 'border-yellow-200 bg-yellow-50 hover:bg-yellow-100'
+                        : 'border-blue-200 bg-blue-50 hover:bg-blue-100'
+                    } ${isSchema ? 'ring-2 ring-blue-400 ring-offset-1' : ''}`}
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <div className="flex items-center gap-2">
+                        <AlertCircle
+                          className={`h-4 w-4 flex-shrink-0 ${
+                            issue.severity === 'error'
+                              ? 'text-red-600'
+                              : issue.severity === 'warning'
+                              ? 'text-yellow-600'
+                              : 'text-blue-600'
+                          }`}
+                        />
+                        <span
+                          className={`text-xs font-medium uppercase ${
+                            issue.severity === 'error'
+                              ? 'text-red-700'
+                              : issue.severity === 'warning'
+                              ? 'text-yellow-700'
+                              : 'text-blue-700'
+                          }`}
+                        >
+                          {issue.severity}
+                        </span>
+                        <code className="text-xs bg-black/5 px-1.5 py-0.5 rounded font-mono">
+                          {issue.code}
+                        </code>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {isSchema && (
+                          <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                            <Database className="h-3 w-3" />
+                            Schema
+                          </span>
+                        )}
+                        {issue.statementIndex !== undefined && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                className="w-6 h-6 flex items-center justify-center rounded hover:bg-black/10 text-muted-foreground hover:text-foreground"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleShowInLineage(issue);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleShowInLineage(issue);
+                                  }
+                                }}
+                                aria-label="Show in Lineage"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="text-xs">Show in Lineage</TooltipContent>
+                          </Tooltip>
+                        )}
+                        {sourceName && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                className="w-6 h-6 flex items-center justify-center rounded hover:bg-black/10 text-muted-foreground hover:text-foreground"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenInEditor(issue);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleOpenInEditor(issue);
+                                  }
+                                }}
+                                aria-label="Open in Editor"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="text-xs">Open in Editor</TooltipContent>
+                          </Tooltip>
+                        )}
+                      </div>
                     </div>
-                    {isSchema && (
-                      <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
-                        <Database className="h-3 w-3" />
-                        Schema
-                      </span>
-                    )}
+                    <p className="text-sm text-foreground mb-1">{issue.message}</p>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      {issue.statementIndex !== undefined && (
+                        <span>Statement {issue.statementIndex + 1}</span>
+                      )}
+                      {sourceName && (
+                        <>
+                          {issue.statementIndex !== undefined && <span>•</span>}
+                          <span className="font-mono truncate max-w-[200px]">{sourceName}</span>
+                        </>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-sm text-foreground mb-1">{issue.message}</p>
-                  {issue.statementIndex !== undefined && (
-                    <span className="text-xs text-muted-foreground">
-                      Statement {issue.statementIndex + 1}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          </TooltipProvider>
         )}
       </div>
     </div>

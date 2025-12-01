@@ -10,23 +10,25 @@ export const GraphTooltipContent = React.forwardRef<
   React.ElementRef<typeof TooltipPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Content>
 >(({ className: _className, sideOffset = 5, style, ...props }, ref) => (
-  <TooltipPrimitive.Content
-    ref={ref}
-    sideOffset={sideOffset}
-    style={{
-      backgroundColor: '#333',
-      color: 'white',
-      padding: '8px 12px',
-      borderRadius: 4,
-      fontSize: 12,
-      whiteSpace: 'pre-wrap',
-      maxWidth: 300,
-      zIndex: 9999,
-      boxShadow: '0 2px 10px rgba(0,0,0,0.2)',
-      ...style,
-    }}
-    {...props}
-  />
+  <TooltipPrimitive.Portal>
+    <TooltipPrimitive.Content
+      ref={ref}
+      sideOffset={sideOffset}
+      style={{
+        backgroundColor: '#333',
+        color: 'white',
+        padding: '8px 12px',
+        borderRadius: 4,
+        fontSize: 12,
+        whiteSpace: 'pre-wrap',
+        maxWidth: 300,
+        zIndex: 9999,
+        boxShadow: '0 2px 10px rgba(0,0,0,0.2)',
+        ...style,
+      }}
+      {...props}
+    />
+  </TooltipPrimitive.Portal>
 ));
 GraphTooltipContent.displayName = TooltipPrimitive.Content.displayName;
 

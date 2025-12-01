@@ -6,13 +6,15 @@ import {
   MiniMap,
   useNodesState,
   useEdgesState,
+  useReactFlow,
   Panel,
 } from '@xyflow/react';
-import type { Node as FlowNode, Edge as FlowEdge } from '@xyflow/react';
+import type { Node as FlowNode, Edge as FlowEdge, Viewport } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { LayoutList } from 'lucide-react';
 
 import { useLineage } from '../store';
+import { useNodeFocus } from '../hooks/useNodeFocus';
 import type { GraphViewProps, TableNodeData, LayoutAlgorithm } from '../types';
 import { getLayoutedElements, getLayoutedElementsAsync } from '../utils/layout';
 import { LayoutSelector } from './LayoutSelector';
@@ -42,6 +44,121 @@ import {
   GraphTooltipPortal,
 } from './ui/graph-tooltip';
 import { UI_CONSTANTS, GRAPH_CONFIG, getMinimapNodeColor } from '../constants';
+
+/**
+ * Helper component to handle node focusing.
+ * Must be rendered inside ReactFlow to access useReactFlow hook.
+ */
+function NodeFocusHandler({
+  focusNodeId,
+  onFocusApplied,
+}: {
+  focusNodeId?: string;
+  onFocusApplied?: () => void;
+}): null {
+  useNodeFocus({ focusNodeId, onFocusApplied });
+  return null;
+}
+
+/**
+ * Helper component to trigger fitView when fitViewTrigger changes.
+ * Must be rendered inside ReactFlow to access useReactFlow hook.
+ */
+function FitViewHandler({ trigger }: { trigger?: number }): null {
+  const { fitView } = useReactFlow();
+  const lastTriggerRef = useRef(trigger);
+
+  useEffect(() => {
+    if (trigger !== undefined && trigger !== lastTriggerRef.current) {
+      lastTriggerRef.current = trigger;
+      // Small delay to ensure nodes are rendered
+      setTimeout(() => {
+        fitView({ padding: 0.2, duration: 200 });
+      }, 50);
+    }
+  }, [trigger, fitView]);
+
+  return null;
+}
+
+/**
+ * Helper component to handle viewport changes and restoration.
+ * Must be rendered inside ReactFlow to access useReactFlow hook.
+ */
+function ViewportHandler({
+  initialViewport,
+  onViewportChange,
+}: {
+  initialViewport?: Viewport;
+  onViewportChange?: (viewport: Viewport) => void;
+}): null {
+  const { setViewport, getViewport } = useReactFlow();
+  const hasRestoredRef = useRef(false);
+  const previousInitialViewportRef = useRef<Viewport | undefined>(initialViewport);
+  const viewportChangeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (viewportChangeTimerRef.current) {
+        clearTimeout(viewportChangeTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Reset restoration flag when initial viewport changes (e.g., project switch)
+  useEffect(() => {
+    if (previousInitialViewportRef.current !== initialViewport) {
+      hasRestoredRef.current = false;
+      previousInitialViewportRef.current = initialViewport;
+    }
+  }, [initialViewport]);
+
+  // Restore initial viewport as needed
+  useEffect(() => {
+    if (initialViewport && !hasRestoredRef.current) {
+      // Delay to ensure ReactFlow is ready
+      const timer = setTimeout(() => {
+        setViewport(initialViewport, { duration: 0 });
+        hasRestoredRef.current = true;
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [initialViewport, setViewport]);
+
+  // Debounced viewport change callback
+  useEffect(() => {
+    if (!onViewportChange) return;
+
+    const handleViewportChange = () => {
+      if (viewportChangeTimerRef.current) {
+        clearTimeout(viewportChangeTimerRef.current);
+      }
+      viewportChangeTimerRef.current = setTimeout(() => {
+        const viewport = getViewport();
+        onViewportChange(viewport);
+      }, 300);
+    };
+
+    // Use MutationObserver on the viewport's style attribute rather than ReactFlow's
+    // onMove/onViewportChange events. Those events fire at very high frequency during
+    // pan/zoom operations which would cause excessive state updates and re-renders.
+    // The MutationObserver approach with debouncing provides more reliable, batched updates.
+    const container = document.querySelector('.react-flow__viewport');
+    if (container) {
+      const observer = new MutationObserver(handleViewportChange);
+      observer.observe(container, { attributes: true, attributeFilter: ['style'] });
+      return () => {
+        observer.disconnect();
+        if (viewportChangeTimerRef.current) {
+          clearTimeout(viewportChangeTimerRef.current);
+        }
+      };
+    }
+  }, [onViewportChange, getViewport]);
+
+  return null;
+}
 
 // Type guard for safer type checking
 function isTableNodeData(data: unknown): data is TableNodeData {
@@ -124,14 +241,36 @@ function enhanceGraphWithHighlights(
   return { nodes: enhancedNodes, edges: enhancedEdges };
 }
 
-export function GraphView({ className, onNodeClick, graphContainerRef }: GraphViewProps): JSX.Element {
+export function GraphView({
+  className,
+  onNodeClick,
+  graphContainerRef,
+  focusNodeId,
+  onFocusApplied,
+  controlledSearchTerm,
+  onSearchTermChange,
+  initialViewport,
+  onViewportChange,
+  fitViewTrigger,
+}: GraphViewProps): JSX.Element {
   const { state, actions } = useLineage();
   const { result, selectedNodeId, searchTerm, viewMode, layoutAlgorithm, collapsedNodeIds, showScriptTables, expandedTableIds } = state;
 
-  // Local search state with debouncing
-  const [localSearchTerm, setLocalSearchTerm] = useState(searchTerm);
+  // Determine if search is controlled
+  const isSearchControlled = controlledSearchTerm !== undefined;
 
-  // Debounce search term updates
+  // Local search state that always updates immediately for the input
+  const [localSearchTerm, setLocalSearchTerm] = useState(() => controlledSearchTerm ?? searchTerm);
+
+  // Handle search term changes
+  const handleSearchTermChange = useCallback((newSearchTerm: string) => {
+    setLocalSearchTerm(newSearchTerm);
+    if (isSearchControlled) {
+      onSearchTermChange?.(newSearchTerm);
+    }
+  }, [isSearchControlled, onSearchTermChange]);
+
+  // Debounce search term updates to the lineage store
   useEffect(() => {
     const handler = setTimeout(() => {
       actions.setSearchTerm(localSearchTerm);
@@ -140,10 +279,19 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
     return () => clearTimeout(handler);
   }, [localSearchTerm, actions]);
 
-  // Sync local state when external searchTerm changes
+  // Sync local state when external searchTerm changes (only when uncontrolled)
   useEffect(() => {
-    setLocalSearchTerm(searchTerm);
-  }, [searchTerm]);
+    if (!isSearchControlled && searchTerm !== localSearchTerm) {
+      setLocalSearchTerm(searchTerm);
+    }
+  }, [searchTerm, isSearchControlled, localSearchTerm]);
+
+  // Keep local state in sync when the controlled value changes externally
+  useEffect(() => {
+    if (isSearchControlled && controlledSearchTerm !== undefined && controlledSearchTerm !== localSearchTerm) {
+      setLocalSearchTerm(controlledSearchTerm);
+    }
+  }, [controlledSearchTerm, isSearchControlled, localSearchTerm]);
 
   const statement = useMemo(() => {
     if (!result || !result.statements) return null;
@@ -453,10 +601,13 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
         onPaneClick={handlePaneClick}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
-        fitView
+        fitView={!initialViewport}
         minZoom={0.1}
         maxZoom={2}
       >
+        <NodeFocusHandler focusNodeId={focusNodeId} onFocusApplied={onFocusApplied} />
+        <ViewportHandler initialViewport={initialViewport} onViewportChange={onViewportChange} />
+        <FitViewHandler trigger={fitViewTrigger} />
         <Background />
         <Controls />
         <Panel position="top-left" className="flex gap-3">
@@ -493,9 +644,9 @@ export function GraphView({ className, onNodeClick, graphContainerRef }: GraphVi
               </>
             )}
           </div>
-          <GraphSearchControl 
-            searchTerm={localSearchTerm} 
-            onSearchTermChange={setLocalSearchTerm} 
+          <GraphSearchControl
+            searchTerm={localSearchTerm}
+            onSearchTermChange={handleSearchTermChange}
           />
         </Panel>
         <Panel position="top-right" className="flex gap-3 items-start">

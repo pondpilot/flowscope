@@ -1,19 +1,38 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { analyzeSql } from '@pondpilot/flowscope-core';
 import { useLineage } from '@pondpilot/flowscope-react';
 import { useProject } from '@/lib/project-store';
+import { useAnalysisStore } from '@/lib/analysis-store';
 import { FILE_LIMITS } from '@/lib/constants';
 import { parseSchemaSQL } from '@/lib/schema-parser';
 import type { AnalysisState, AnalysisContext, FileValidationResult } from '@/types';
 
 export function useAnalysis(wasmReady: boolean) {
-  const { currentProject } = useProject();
+  const { currentProject, activeProjectId } = useProject();
   const { actions } = useLineage();
+  const { getResult, setResult: storeResult } = useAnalysisStore();
   const [state, setState] = useState<AnalysisState>({
     isAnalyzing: false,
     error: null,
     lastAnalyzedAt: null,
   });
+
+  // Use ref for actions to avoid dependency issues (actions object changes every render)
+  const actionsRef = useRef(actions);
+  useEffect(() => {
+    actionsRef.current = actions;
+  }, [actions]);
+
+  // Restore cached analysis result when project changes
+  useEffect(() => {
+    if (!activeProjectId) {
+      actionsRef.current.setResult(null);
+      return;
+    }
+
+    const cachedResult = getResult(activeProjectId);
+    actionsRef.current.setResult(cachedResult);
+  }, [activeProjectId, getResult]);
 
   const setAnalyzing = useCallback((isAnalyzing: boolean) => {
     setState(prev => ({ ...prev, isAnalyzing }));
@@ -122,7 +141,7 @@ export function useAnalysis(wasmReady: boolean) {
           .map(f => `-- File: ${f.name}\n${f.content}`)
           .join('\n\n');
 
-        actions.setSql(representativeSql);
+        actionsRef.current.setSql(representativeSql);
 
         // Parse schema SQL to extract imported schema tables
         let importedSchema = undefined;
@@ -169,7 +188,11 @@ export function useAnalysis(wasmReady: boolean) {
           result.issues = [...(result.issues || []), ...schemaIssues];
         }
 
-        actions.setResult(result);
+        actionsRef.current.setResult(result);
+        // Store result per project for restoration when switching projects
+        if (activeProjectId) {
+          storeResult(activeProjectId, result);
+        }
         setState(prev => ({ ...prev, lastAnalyzedAt: Date.now() }));
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Analysis failed');
@@ -181,7 +204,8 @@ export function useAnalysis(wasmReady: boolean) {
     [
       wasmReady,
       currentProject,
-      actions,
+      activeProjectId,
+      storeResult,
       buildAnalysisContext,
       validateFiles,
       setAnalyzing,

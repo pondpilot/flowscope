@@ -378,8 +378,27 @@ const MatrixCell = memo(function MatrixCell({
 // Main Component
 // ============================================================================
 
+/** Exported state interface for controlled mode */
+export interface MatrixViewControlledState {
+  filterText: string;
+  filterMode: 'rows' | 'columns' | 'fields';
+  heatmapMode: boolean;
+  xRayMode: boolean;
+  xRayFilterMode: 'dim' | 'hide';
+  clusterMode: boolean;
+  complexityMode: boolean;
+  showLegend: boolean;
+  focusedNode: string | null;
+  firstColumnWidth: number;
+  headerHeight: number;
+}
+
 interface MatrixViewProps {
   className?: string;
+  /** Controlled state - when provided, component uses this state instead of internal state */
+  controlledState?: Partial<MatrixViewControlledState>;
+  /** Callback when state changes - called with the updated state slice */
+  onStateChange?: (state: Partial<MatrixViewControlledState>) => void;
 }
 
 const DEFAULT_FIRST_COLUMN_WIDTH = 200;
@@ -446,29 +465,68 @@ function filterItems({
   return items;
 }
 
-export function MatrixView({ className = '' }: MatrixViewProps): JSX.Element {
+function useImmediateControlledMatrixState<K extends keyof MatrixViewControlledState>(
+  key: K,
+  controlledState: Partial<MatrixViewControlledState> | undefined,
+  onStateChange: ((state: Partial<MatrixViewControlledState>) => void) | undefined,
+  defaultValue: MatrixViewControlledState[K]
+): [MatrixViewControlledState[K], (value: React.SetStateAction<MatrixViewControlledState[K]>) => void] {
+  const controlledValue = controlledState?.[key] as MatrixViewControlledState[K] | undefined;
+  const [value, setValue] = useState<MatrixViewControlledState[K]>(() =>
+    controlledValue !== undefined ? controlledValue : defaultValue
+  );
+
+  // Track the previous controlled value to detect external changes
+  const prevControlledValueRef = useRef(controlledValue);
+
+  useEffect(() => {
+    // Only sync if the controlled value actually changed externally,
+    // not when local state changes. This prevents the input from being
+    // reset to stale controlled values during typing.
+    if (controlledValue !== prevControlledValueRef.current) {
+      prevControlledValueRef.current = controlledValue;
+      if (controlledValue !== undefined) {
+        setValue(controlledValue);
+      }
+    }
+  }, [controlledValue]);
+
+  const setValueImmediate = useCallback((
+    valueOrUpdater: React.SetStateAction<MatrixViewControlledState[K]>
+  ) => {
+    setValue((prev) => {
+      const nextValue = typeof valueOrUpdater === 'function'
+        ? (valueOrUpdater as (prevState: MatrixViewControlledState[K]) => MatrixViewControlledState[K])(prev)
+        : valueOrUpdater;
+
+      onStateChange?.({ [key]: nextValue });
+      return nextValue;
+    });
+  }, [key, onStateChange]);
+
+  return [value, setValueImmediate];
+}
+
+export function MatrixView({ className = '', controlledState, onStateChange }: MatrixViewProps): JSX.Element {
   const { state, actions } = useLineage();
   const { result, matrixSubMode } = state;
   const { setMatrixSubMode, highlightSpan, requestNavigation } = actions;
 
-  const [filterText, setFilterText] = useState('');
+  // Immediate local state (mirrors controlled values when provided)
+  const [filterText, setFilterText] = useImmediateControlledMatrixState('filterText', controlledState, onStateChange, '');
+  const [filterMode, setFilterMode] = useImmediateControlledMatrixState('filterMode', controlledState, onStateChange, 'rows');
+  const [heatmapMode, setHeatmapMode] = useImmediateControlledMatrixState('heatmapMode', controlledState, onStateChange, false);
+  const [xRayMode, setXRayMode] = useImmediateControlledMatrixState('xRayMode', controlledState, onStateChange, false);
+  const [xRayFilterMode, setXRayFilterMode] = useImmediateControlledMatrixState('xRayFilterMode', controlledState, onStateChange, 'dim');
+  const [clusterMode, setClusterMode] = useImmediateControlledMatrixState('clusterMode', controlledState, onStateChange, false);
+  const [complexityMode, setComplexityMode] = useImmediateControlledMatrixState('complexityMode', controlledState, onStateChange, false);
+  const [showLegend, setShowLegend] = useImmediateControlledMatrixState('showLegend', controlledState, onStateChange, true);
+  const [focusedNode, setFocusedNode] = useImmediateControlledMatrixState('focusedNode', controlledState, onStateChange, null);
+  const [firstColumnWidth, setFirstColumnWidth] = useImmediateControlledMatrixState('firstColumnWidth', controlledState, onStateChange, DEFAULT_FIRST_COLUMN_WIDTH);
+  const [headerHeight, setHeaderHeight] = useImmediateControlledMatrixState('headerHeight', controlledState, onStateChange, DEFAULT_HEADER_HEIGHT);
+
   const debouncedFilterText = useDebounce(filterText, SEARCH_DEBOUNCE_DELAY);
-  const [filterMode, setFilterMode] = useState<FilterMode>('rows');
   const [hoveredCell, setHoveredCell] = useState<{ row: string; col: string } | null>(null);
-
-  // Modes
-  const [heatmapMode, setHeatmapMode] = useState(false);
-  const [xRayMode, setXRayMode] = useState(false);
-  const [xRayFilterMode, setXRayFilterMode] = useState<'dim' | 'hide'>('dim');
-  const [clusterMode, setClusterMode] = useState(false);
-  const [complexityMode, setComplexityMode] = useState(false);
-  const [showLegend, setShowLegend] = useState(true);
-
-  // X-Ray Focus
-  const [focusedNode, setFocusedNode] = useState<string | null>(null);
-  
-  const [firstColumnWidth, setFirstColumnWidth] = useState(DEFAULT_FIRST_COLUMN_WIDTH);
-  const [headerHeight, setHeaderHeight] = useState(DEFAULT_HEADER_HEIGHT);
   const [resizingMode, setResizingMode] = useState<'none' | 'column' | 'header'>('none');
   
   // Autocomplete
@@ -983,7 +1041,7 @@ export function MatrixView({ className = '' }: MatrixViewProps): JSX.Element {
             />
 
             {/* Autocomplete Dropdown */}
-            {showSuggestions && (
+            {showSuggestions && (suggestions.length > 0 || filterText.length > 0) && (
               <div
                 id={suggestionsListId}
                 role="listbox"

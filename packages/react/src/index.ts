@@ -9,6 +9,7 @@ export { ViewModeSelector } from './components/ViewModeSelector';
 export { LayoutSelector } from './components/LayoutSelector';
 export { Legend } from './components/Legend';
 export { MatrixView } from './components/MatrixView';
+export type { MatrixViewControlledState } from './components/MatrixView';
 export { type EdgeType } from './components/AnimatedEdge';
 export { ErrorBoundary, GraphErrorBoundary } from './components/ErrorBoundary';
 
@@ -35,6 +36,7 @@ export type {
   MatrixSubMode,
   LayoutAlgorithm,
   GraphViewProps,
+  ViewportState,
   SqlViewProps,
   ColumnPanelProps,
   IssuesPanelProps,

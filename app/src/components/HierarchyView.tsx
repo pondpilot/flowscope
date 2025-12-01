@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { useMemo, useCallback, useRef, useEffect, useState, createContext, useContext, useId } from 'react';
 import {
   ChevronRight,
   ChevronDown,
@@ -11,6 +11,10 @@ import {
   FileText,
   ArrowRight,
   GripHorizontal,
+  Eye,
+  Grid3X3,
+  ExternalLink,
+  ScanLine,
 } from 'lucide-react';
 import { useLineage } from '@pondpilot/flowscope-react';
 import { cn } from '@/lib/utils';
@@ -21,6 +25,26 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { useNavigation } from '@/lib/navigation-context';
+import { usePersistedHierarchyState } from '@/hooks/usePersistedHierarchyState';
+
+// Context for hierarchy view actions to reduce prop drilling
+interface HierarchyActionsContextValue {
+  getNodeDetails: (id: string) => NodeDetails | null;
+  onNavigateToLineage: (nodeId: string) => void;
+  onNavigateToSchema: (tableName: string) => void;
+  onNavigateToEditor: (scripts: string[]) => void;
+}
+
+const HierarchyActionsContext = createContext<HierarchyActionsContextValue | null>(null);
+
+function useHierarchyActions() {
+  const context = useContext(HierarchyActionsContext);
+  if (!context) {
+    throw new Error('useHierarchyActions must be used within HierarchyView');
+  }
+  return context;
+}
 
 interface LineageNode {
   id: string;
@@ -51,26 +75,72 @@ interface FlatNode {
 
 interface HierarchyViewProps {
   className?: string;
+  projectId: string | null;
 }
 
-export function HierarchyView({ className }: HierarchyViewProps) {
+export function HierarchyView({ className, projectId }: HierarchyViewProps) {
   const { state, actions } = useLineage();
   const { result } = state;
+  const { navigateTo, navigateToEditor } = useNavigation();
   const nodes = result?.globalLineage?.nodes || [];
   const edges = result?.globalLineage?.edges || [];
   const statements = result?.statements || [];
 
-  const [filter, setFilter] = useState('');
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
-  const [unusedExpanded, setUnusedExpanded] = useState(false);
-  const [detailsPanelHeight, setDetailsPanelHeight] = useState(150);
+  // Build a lookup map for O(1) node access instead of O(n) find() calls
+  const nodesById = useMemo(() => {
+    const map = new Map<string, (typeof nodes)[number]>();
+    for (const node of nodes) {
+      map.set(node.id, node);
+    }
+    return map;
+  }, [nodes]);
+
+  const getNode = useCallback((id: string) => nodesById.get(id), [nodesById]);
+
+  // Use persisted state hook for all view state
+  const {
+    expandedNodes,
+    filter,
+    detailsPanelHeight,
+    focusedNodeKey,
+    unusedExpanded,
+    setExpandedNodes,
+    setFilter,
+    setDetailsPanelHeight,
+    setFocusedNodeKey,
+    setUnusedExpanded,
+    toggleNode,
+  } = usePersistedHierarchyState(projectId);
+
+  // State for resize tracking (visual feedback) and ref (drag logic)
   const [isResizing, setIsResizing] = useState(false);
-  const [focusedNodeKey, setFocusedNodeKey] = useState<string | null>(null);
+  const isResizingRef = useRef(false);
+
+  // Autocomplete state
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+  const suggestionsListId = useId();
+  const activeOptionId = useId();
 
   const treeContainerRef = useRef<HTMLDivElement>(null);
   const filterInputRef = useRef<HTMLInputElement>(null);
 
-  const getNode = (id: string) => nodes.find((n) => n.id === id);
+  // Navigation handlers
+  const handleNavigateToLineage = useCallback((nodeId: string) => {
+    navigateTo('lineage', { tableId: nodeId });
+  }, [navigateTo]);
+
+  const handleNavigateToSchema = useCallback((tableName: string) => {
+    navigateTo('schema', { tableName });
+  }, [navigateTo]);
+
+  const handleNavigateToEditor = useCallback((scripts: string[]) => {
+    if (scripts.length > 0) {
+      // Navigate to the first script
+      navigateToEditor(scripts[0]);
+    }
+  }, [navigateToEditor]);
 
   // Build lookup maps for details
   const { columnsByTable, scriptsByTable } = useMemo(() => {
@@ -110,58 +180,90 @@ export function HierarchyView({ className }: HierarchyViewProps) {
     });
 
     return { columnsByTable: colMap, scriptsByTable: scriptMap };
-  }, [nodes, edges, statements]);
+  }, [getNode, nodes, edges, statements]);
 
-  const getMappingsForTable = (tableId: string) => {
-    const upstreamMappings: Array<{ fromTable: string; fromCol: string; toCol: string }> = [];
-    const downstreamMappings: Array<{ toTable: string; fromCol: string; toCol: string }> = [];
+  // Extract all unique column names for autocomplete
+  const allColumnNames = useMemo(() => {
+    const columnSet = new Set<string>();
+    for (const cols of columnsByTable.values()) {
+      for (const col of cols) {
+        columnSet.add(col);
+      }
+    }
+    return Array.from(columnSet).sort();
+  }, [columnsByTable]);
 
+  // Extract all table names for autocomplete
+  const allTableNames = useMemo(() => {
+    return nodes
+      .filter((n) => ['table', 'view', 'cte'].includes(n.type))
+      .map((n) => n.label)
+      .sort();
+  }, [nodes]);
+
+  // Pre-compute all table mappings for efficient lookup
+  const mappingsByTable = useMemo(() => {
+    const upstreamMap = new Map<string, Array<{ fromTable: string; fromCol: string; toCol: string }>>();
+    const downstreamMap = new Map<string, Array<{ toTable: string; fromCol: string; toCol: string }>>();
+
+    // Build ownership lookup: column ID -> table ID
+    const columnToTable = new Map<string, string>();
+    edges.forEach((e) => {
+      if (e.type === 'ownership') {
+        const childNode = getNode(e.to);
+        if (childNode?.type === 'column') {
+          columnToTable.set(e.to, e.from);
+        }
+      }
+    });
+
+    // Process data flow edges to build mappings
     edges.forEach((e) => {
       if (e.type === 'data_flow') {
         const fromNode = getNode(e.from);
         const toNode = getNode(e.to);
 
         if (fromNode?.type === 'column' && toNode?.type === 'column') {
-          const fromTableEdge = edges.find(
-            (oe) => oe.type === 'ownership' && oe.to === e.from
-          );
-          const toTableEdge = edges.find(
-            (oe) => oe.type === 'ownership' && oe.to === e.to
-          );
+          const fromTableId = columnToTable.get(e.from);
+          const toTableId = columnToTable.get(e.to);
 
-          if (fromTableEdge && toTableEdge) {
-            const fromTableNode = getNode(fromTableEdge.from);
-            const toTableNode = getNode(toTableEdge.from);
+          if (fromTableId && toTableId) {
+            const fromTableNode = getNode(fromTableId);
+            const toTableNode = getNode(toTableId);
 
-            const fromColName = fromNode.label.includes('.')
-              ? fromNode.label.split('.').pop()!
-              : fromNode.label;
-            const toColName = toNode.label.includes('.')
-              ? toNode.label.split('.').pop()!
-              : toNode.label;
+            if (fromTableNode && toTableNode) {
+              const fromColName = fromNode.label.includes('.')
+                ? fromNode.label.split('.').pop()!
+                : fromNode.label;
+              const toColName = toNode.label.includes('.')
+                ? toNode.label.split('.').pop()!
+                : toNode.label;
 
-            if (toTableEdge.from === tableId && fromTableNode) {
-              upstreamMappings.push({
+              // Add upstream mapping for the target table
+              const upstream = upstreamMap.get(toTableId) || [];
+              upstream.push({
                 fromTable: fromTableNode.label,
                 fromCol: fromColName,
                 toCol: toColName,
               });
-            }
+              upstreamMap.set(toTableId, upstream);
 
-            if (fromTableEdge.from === tableId && toTableNode) {
-              downstreamMappings.push({
+              // Add downstream mapping for the source table
+              const downstream = downstreamMap.get(fromTableId) || [];
+              downstream.push({
                 toTable: toTableNode.label,
                 fromCol: fromColName,
                 toCol: toColName,
               });
+              downstreamMap.set(fromTableId, downstream);
             }
           }
         }
       }
     });
 
-    return { upstreamMappings, downstreamMappings };
-  };
+    return { upstreamMap, downstreamMap };
+  }, [getNode, edges]);
 
   const getNodeDetails = useCallback((nodeId: string): NodeDetails | null => {
     const node = getNode(nodeId);
@@ -169,7 +271,8 @@ export function HierarchyView({ className }: HierarchyViewProps) {
 
     const columns = columnsByTable.get(nodeId) || [];
     const scripts = scriptsByTable.get(nodeId) || [];
-    const { upstreamMappings, downstreamMappings } = getMappingsForTable(nodeId);
+    const upstreamMappings = mappingsByTable.upstreamMap.get(nodeId) || [];
+    const downstreamMappings = mappingsByTable.downstreamMap.get(nodeId) || [];
 
     return {
       id: nodeId,
@@ -180,7 +283,7 @@ export function HierarchyView({ className }: HierarchyViewProps) {
       upstreamMappings,
       downstreamMappings,
     };
-  }, [columnsByTable, scriptsByTable, nodes, edges]);
+  }, [getNode, columnsByTable, scriptsByTable, mappingsByTable]);
 
   const { sinks, unusedSources } = useMemo(() => {
     const tableNodes = nodes.filter((n) => ['table', 'view', 'cte'].includes(n.type));
@@ -213,7 +316,7 @@ export function HierarchyView({ className }: HierarchyViewProps) {
       sinks: realSinks,
       unusedSources: orphanNodes,
     };
-  }, [nodes, edges]);
+  }, [getNode, nodes, edges]);
 
   const buildUpstreamTree = (
     nodeId: string,
@@ -241,8 +344,13 @@ export function HierarchyView({ className }: HierarchyViewProps) {
       .sort((a, b) => a.label.localeCompare(b.label));
 
     const label = nodeData.label || nodeData.id;
+    // Check if the table name matches
+    const nameMatches = label.toLowerCase().includes(filterLower);
+    // Check if any column name matches
+    const columns = columnsByTable.get(nodeId) || [];
+    const columnMatches = columns.some((col) => col.toLowerCase().includes(filterLower));
     const matchesFilter = filterLower
-      ? label.toLowerCase().includes(filterLower)
+      ? nameMatches || columnMatches
       : true;
     const hasMatchingDescendant = upstream.some(
       (u) => u.matchesFilter || u.hasMatchingDescendant
@@ -273,16 +381,19 @@ export function HierarchyView({ className }: HierarchyViewProps) {
     }
 
     return trees;
-  }, [sinks, edges, nodes, filter]);
+  }, [sinks, edges, nodes, filter, columnsByTable]);
 
   const filteredUnused = useMemo(() => {
     const filterLower = filter.toLowerCase().trim();
     if (!filterLower) return unusedSources;
 
-    return unusedSources.filter((n) =>
-      (n.label || n.id).toLowerCase().includes(filterLower)
-    );
-  }, [unusedSources, filter]);
+    return unusedSources.filter((n) => {
+      const nameMatches = (n.label || n.id).toLowerCase().includes(filterLower);
+      const columns = columnsByTable.get(n.id) || [];
+      const columnMatches = columns.some((col) => col.toLowerCase().includes(filterLower));
+      return nameMatches || columnMatches;
+    });
+  }, [unusedSources, filter, columnsByTable]);
 
   // Build flat list of visible nodes for keyboard navigation
   const flatNodeList = useMemo(() => {
@@ -340,17 +451,75 @@ export function HierarchyView({ className }: HierarchyViewProps) {
     setExpandedNodes(toExpand);
   }, [filter, sinkTrees]);
 
-  const toggleNode = useCallback((nodeId: string) => {
-    setExpandedNodes((prev) => {
-      const next = new Set(prev);
-      if (next.has(nodeId)) {
-        next.delete(nodeId);
-      } else {
-        next.add(nodeId);
+  // Autocomplete suggestions - combine tables and columns
+  const MAX_SUGGESTIONS = 8;
+  const suggestions = useMemo(() => {
+    if (!filter.trim()) return [];
+    const lower = filter.toLowerCase();
+
+    // Find matching tables
+    const matchingTables = allTableNames
+      .filter((name) => name.toLowerCase().includes(lower))
+      .map((name) => ({ type: 'table' as const, value: name }));
+
+    // Find matching columns
+    const matchingColumns = allColumnNames
+      .filter((name) => name.toLowerCase().includes(lower))
+      .map((name) => ({ type: 'column' as const, value: name }));
+
+    // Combine and limit
+    return [...matchingTables, ...matchingColumns].slice(0, MAX_SUGGESTIONS);
+  }, [filter, allTableNames, allColumnNames]);
+
+  // Reset suggestion index when filter changes
+  useEffect(() => {
+    setActiveSuggestionIndex(0);
+  }, [filter]);
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
       }
-      return next;
-    });
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Keyboard handler for autocomplete
+  const handleSearchKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (!showSuggestions || suggestions.length === 0) {
+      // Let ArrowDown pass through to focus tree when no suggestions
+      if (e.key === 'ArrowDown' && flatNodeList.length > 0) {
+        e.preventDefault();
+        setFocusedNodeKey(flatNodeList[0].nodeKey);
+        treeContainerRef.current?.focus();
+      }
+      return;
+    }
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setActiveSuggestionIndex((prev) => Math.min(prev + 1, suggestions.length - 1));
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setActiveSuggestionIndex((prev) => Math.max(prev - 1, 0));
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (suggestions[activeSuggestionIndex]) {
+          setFilter(suggestions[activeSuggestionIndex].value);
+          setShowSuggestions(false);
+        }
+        break;
+      case 'Escape':
+        setShowSuggestions(false);
+        break;
+    }
+  }, [showSuggestions, suggestions, activeSuggestionIndex, flatNodeList, setFilter, setFocusedNodeKey]);
 
   // Get the focused node from the flat list
   const focusedNode = useMemo(() => {
@@ -452,6 +621,7 @@ export function HierarchyView({ className }: HierarchyViewProps) {
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     setIsResizing(true);
+    isResizingRef.current = true;
 
     const startY = e.clientY;
     const startHeight = detailsPanelHeight;
@@ -463,6 +633,7 @@ export function HierarchyView({ className }: HierarchyViewProps) {
     };
 
     const handleMouseUp = () => {
+      isResizingRef.current = false;
       setIsResizing(false);
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
@@ -470,7 +641,7 @@ export function HierarchyView({ className }: HierarchyViewProps) {
 
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
-  }, [detailsPanelHeight]);
+  }, [detailsPanelHeight, setDetailsPanelHeight]);
 
   const hasContent = sinkTrees.length > 0 || filteredUnused.length > 0;
 
@@ -478,27 +649,80 @@ export function HierarchyView({ className }: HierarchyViewProps) {
     ? getNodeDetails(state.selectedNodeId)
     : null;
 
+  // Memoize context value to prevent unnecessary re-renders
+  const hierarchyActionsValue = useMemo(() => ({
+    getNodeDetails,
+    onNavigateToLineage: handleNavigateToLineage,
+    onNavigateToSchema: handleNavigateToSchema,
+    onNavigateToEditor: handleNavigateToEditor,
+  }), [getNodeDetails, handleNavigateToLineage, handleNavigateToSchema, handleNavigateToEditor]);
+
   return (
-    <TooltipProvider delayDuration={400}>
-      <div className={cn('flex flex-col h-full bg-background', className)}>
-        {/* Filter Input */}
+    <HierarchyActionsContext.Provider value={hierarchyActionsValue}>
+      <TooltipProvider delayDuration={400}>
+        <div className={cn('flex flex-col h-full bg-background', className)}>
+        {/* Filter Input with Autocomplete */}
         <div className="p-2 border-b">
-          <div className="relative">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <div className="relative" ref={searchContainerRef}>
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground z-10" />
             <Input
               ref={filterInputRef}
               className="h-8 text-xs pl-8"
-              placeholder="Filter tables..."
+              placeholder="Filter tables and columns..."
               value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'ArrowDown' && flatNodeList.length > 0) {
-                  e.preventDefault();
-                  setFocusedNodeKey(flatNodeList[0].nodeKey);
-                  treeContainerRef.current?.focus();
-                }
+              onChange={(e) => {
+                setFilter(e.target.value);
+                setShowSuggestions(true);
               }}
+              onFocus={() => setShowSuggestions(true)}
+              onKeyDown={handleSearchKeyDown}
+              role="combobox"
+              aria-expanded={showSuggestions && suggestions.length > 0}
+              aria-haspopup="listbox"
+              aria-controls={suggestionsListId}
+              aria-activedescendant={showSuggestions && suggestions.length > 0 ? `${activeOptionId}-${activeSuggestionIndex}` : undefined}
+              aria-autocomplete="list"
             />
+
+            {/* Autocomplete Dropdown */}
+            {showSuggestions && suggestions.length > 0 && (
+              <div
+                id={suggestionsListId}
+                role="listbox"
+                aria-label="Search suggestions"
+                className="absolute top-full left-0 right-0 mt-1 bg-background border rounded-md shadow-lg z-50 max-h-60 overflow-auto py-1"
+              >
+                {suggestions.map((suggestion, index) => (
+                  <button
+                    key={`${suggestion.type}-${suggestion.value}`}
+                    id={`${activeOptionId}-${index}`}
+                    role="option"
+                    aria-selected={index === activeSuggestionIndex}
+                    className={cn(
+                      'w-full text-left px-3 py-1.5 text-xs transition-colors flex items-center gap-2',
+                      index === activeSuggestionIndex
+                        ? 'bg-accent text-accent-foreground'
+                        : 'text-foreground hover:bg-muted'
+                    )}
+                    onClick={() => {
+                      setFilter(suggestion.value);
+                      setShowSuggestions(false);
+                    }}
+                    onMouseEnter={() => setActiveSuggestionIndex(index)}
+                  >
+                    {suggestion.type === 'column' ? (
+                      <ScanLine className="h-3 w-3 text-muted-foreground" />
+                    ) : (
+                      <TableIcon className="h-3 w-3 text-muted-foreground" />
+                    )}
+                    <span className="truncate">{suggestion.value}</span>
+                    <span className="ml-auto text-[10px] text-muted-foreground">
+                      {suggestion.type}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -530,7 +754,6 @@ export function HierarchyView({ className }: HierarchyViewProps) {
                   focusedKey={focusedNodeKey}
                   onFocus={setFocusedNodeKey}
                   filter={filter.toLowerCase().trim()}
-                  getNodeDetails={getNodeDetails}
                 />
               ))}
 
@@ -560,13 +783,14 @@ export function HierarchyView({ className }: HierarchyViewProps) {
                     <div className="py-1">
                       {filteredUnused.map((node, idx) => {
                         const unusedNodeKey = `unused:${idx}/${node.id}`;
+                        const details = getNodeDetails(node.id);
                         return (
                           <Tooltip key={unusedNodeKey}>
                             <TooltipTrigger asChild>
                               <div
                                 data-node-key={unusedNodeKey}
                                 className={cn(
-                                  'flex items-center gap-1.5 py-1 px-2 cursor-pointer transition-colors',
+                                  'group relative flex items-center gap-1.5 py-1 px-2 cursor-pointer transition-colors',
                                   'hover:bg-muted/50',
                                   state.selectedNodeId === node.id && 'bg-muted',
                                   focusedNodeKey === unusedNodeKey && 'ring-1 ring-inset ring-primary/50'
@@ -578,7 +802,7 @@ export function HierarchyView({ className }: HierarchyViewProps) {
                                 <NodeIcon type={node.type} className="w-3.5 h-3.5 shrink-0" />
                                 <span
                                   className={cn(
-                                    'truncate',
+                                    'truncate flex-1',
                                     filter &&
                                       (node.label || node.id).toLowerCase().includes(filter.toLowerCase()) &&
                                       'bg-yellow-200/50 dark:bg-yellow-500/30'
@@ -586,10 +810,18 @@ export function HierarchyView({ className }: HierarchyViewProps) {
                                 >
                                   {node.label || node.id}
                                 </span>
+                                {/* Hover action icons */}
+                                <div className="flex items-center gap-0.5 ml-auto shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <NodeActionButtons
+                                    nodeId={node.id}
+                                    nodeName={node.label || node.id}
+                                    scripts={details?.scripts}
+                                  />
+                                </div>
                               </div>
                             </TooltipTrigger>
                             <TooltipContent side="right" className="max-w-xs">
-                              <NodeTooltipContent details={getNodeDetails(node.id)} />
+                              <NodeTooltipContent details={details} />
                             </TooltipContent>
                           </Tooltip>
                         );
@@ -626,8 +858,9 @@ export function HierarchyView({ className }: HierarchyViewProps) {
             </div>
           </>
         )}
-      </div>
-    </TooltipProvider>
+        </div>
+      </TooltipProvider>
+    </HierarchyActionsContext.Provider>
   );
 }
 
@@ -639,6 +872,95 @@ function NodeIcon({ type, className }: { type: string; className?: string }) {
     return <FileCode className={cn(className, 'text-amber-500')} />;
   }
   return <TableIcon className={cn(className, 'text-muted-foreground')} />;
+}
+
+interface NodeActionButtonsProps {
+  nodeId: string;
+  nodeName: string;
+  scripts?: string[];
+  /** Button size variant */
+  size?: 'sm' | 'md';
+}
+
+/**
+ * Reusable action buttons for navigation to lineage, schema, and editor views.
+ * Uses HierarchyActionsContext for navigation handlers.
+ * Supports keyboard navigation with Enter/Space.
+ */
+function NodeActionButtons({
+  nodeId,
+  nodeName,
+  scripts,
+  size = 'sm',
+}: NodeActionButtonsProps) {
+  const { onNavigateToLineage, onNavigateToSchema, onNavigateToEditor } = useHierarchyActions();
+  const buttonClass = size === 'sm'
+    ? 'w-5 h-5 flex items-center justify-center rounded hover:bg-muted-foreground/20 text-muted-foreground/70 hover:text-foreground'
+    : 'w-6 h-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground';
+  const iconClass = size === 'sm' ? 'w-3 h-3' : 'w-3.5 h-3.5';
+
+  const handleKeyDown = (e: React.KeyboardEvent, action: () => void) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      e.stopPropagation();
+      action();
+    }
+  };
+
+  return (
+    <>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            className={buttonClass}
+            onClick={(e) => {
+              e.stopPropagation();
+              onNavigateToLineage(nodeId);
+            }}
+            onKeyDown={(e) => handleKeyDown(e, () => onNavigateToLineage(nodeId))}
+            aria-label="Show in Lineage"
+          >
+            <Eye className={iconClass} />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="text-xs">Show in Lineage</TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            className={buttonClass}
+            onClick={(e) => {
+              e.stopPropagation();
+              onNavigateToSchema(nodeName);
+            }}
+            onKeyDown={(e) => handleKeyDown(e, () => onNavigateToSchema(nodeName))}
+            aria-label="Show in Schema"
+          >
+            <Grid3X3 className={iconClass} />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="text-xs">Show in Schema</TooltipContent>
+      </Tooltip>
+      {scripts && scripts.length > 0 && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              className={buttonClass}
+              onClick={(e) => {
+                e.stopPropagation();
+                onNavigateToEditor(scripts);
+              }}
+              onKeyDown={(e) => handleKeyDown(e, () => onNavigateToEditor(scripts))}
+              aria-label="Open in Editor"
+            >
+              <ExternalLink className={iconClass} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="text-xs">Open in Editor</TooltipContent>
+        </Tooltip>
+      )}
+    </>
+  );
 }
 
 function NodeTooltipContent({ details }: { details: NodeDetails | null }) {
@@ -691,14 +1013,29 @@ function NodeTooltipContent({ details }: { details: NodeDetails | null }) {
   );
 }
 
-function DetailsPanel({ details }: { details: NodeDetails }) {
+function DetailsPanel({
+  details,
+}: {
+  details: NodeDetails;
+}) {
+  const { onNavigateToEditor } = useHierarchyActions();
   return (
     <div className="p-3 text-xs space-y-3">
-      {/* Header */}
-      <div className="flex items-center gap-2">
-        <NodeIcon type={details.type} className="w-4 h-4" />
-        <span className="font-medium">{details.label}</span>
-        <span className="text-muted-foreground">({details.type})</span>
+      {/* Header with navigation buttons */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <NodeIcon type={details.type} className="w-4 h-4" />
+          <span className="font-medium">{details.label}</span>
+          <span className="text-muted-foreground">({details.type})</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <NodeActionButtons
+            nodeId={details.id}
+            nodeName={details.label}
+            scripts={details.scripts}
+            size="md"
+          />
+        </div>
       </div>
 
       {/* Columns */}
@@ -721,7 +1058,7 @@ function DetailsPanel({ details }: { details: NodeDetails }) {
         </div>
       )}
 
-      {/* Scripts */}
+      {/* Scripts - clickable to open in editor */}
       {details.scripts.length > 0 && (
         <div>
           <div className="text-muted-foreground flex items-center gap-1.5 mb-1.5 text-[11px] uppercase tracking-wide">
@@ -730,9 +1067,14 @@ function DetailsPanel({ details }: { details: NodeDetails }) {
           </div>
           <div className="space-y-0.5">
             {details.scripts.map((script, i) => (
-              <div key={i} className="font-mono text-[11px] text-muted-foreground truncate">
-                {script}
-              </div>
+              <button
+                key={i}
+                className="w-full text-left font-mono text-[11px] text-muted-foreground hover:text-foreground hover:underline truncate flex items-center gap-1"
+                onClick={() => onNavigateToEditor([script])}
+              >
+                <ExternalLink className="w-3 h-3 shrink-0" />
+                <span className="truncate">{script}</span>
+              </button>
             ))}
           </div>
         </div>
@@ -808,7 +1150,6 @@ function LineageNodeItem({
   focusedKey,
   onFocus,
   filter,
-  getNodeDetails,
 }: {
   node: LineageNode;
   nodeKey: string;
@@ -820,11 +1161,12 @@ function LineageNodeItem({
   focusedKey: string | null;
   onFocus: (key: string) => void;
   filter: string;
-  getNodeDetails: (id: string) => NodeDetails | null;
 }) {
+  const { getNodeDetails } = useHierarchyActions();
   const hasChildren = node.upstream.length > 0;
   const isExpanded = expandedNodes.has(node.id);
   const showHighlight = filter && node.matchesFilter;
+  const details = getNodeDetails(node.id);
 
   return (
     <div role="treeitem" aria-expanded={hasChildren ? isExpanded : undefined}>
@@ -833,7 +1175,7 @@ function LineageNodeItem({
           <div
             data-node-key={nodeKey}
             className={cn(
-              'flex items-center gap-1.5 py-1 px-2 cursor-pointer transition-colors',
+              'group relative flex items-center gap-1.5 py-1 px-2 pr-8 cursor-pointer transition-colors',
               'hover:bg-muted/50',
               activeId === node.id && 'bg-muted',
               focusedKey === nodeKey && 'ring-1 ring-inset ring-primary/50'
@@ -865,22 +1207,32 @@ function LineageNodeItem({
 
             <span
               className={cn(
-                'truncate',
+                'truncate flex-1',
                 showHighlight && 'bg-yellow-200/50 dark:bg-yellow-500/30'
               )}
             >
               {node.label}
             </span>
 
+            {/* Hover action icons - use opacity instead of display to prevent layout shift */}
+            <div className="flex items-center gap-0.5 ml-auto shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+              <NodeActionButtons
+                nodeId={node.id}
+                nodeName={node.label}
+                scripts={details?.scripts}
+              />
+            </div>
+
+            {/* Count badge - positioned absolutely to not affect layout */}
             {!isExpanded && hasChildren && (
-              <span className="ml-auto text-muted-foreground/50 tabular-nums shrink-0">
+              <span className="absolute right-2 opacity-100 group-hover:opacity-0 transition-opacity text-muted-foreground/50 tabular-nums">
                 {node.upstream.length}
               </span>
             )}
           </div>
         </TooltipTrigger>
         <TooltipContent side="right" className="max-w-xs">
-          <NodeTooltipContent details={getNodeDetails(node.id)} />
+          <NodeTooltipContent details={details} />
         </TooltipContent>
       </Tooltip>
 
@@ -906,7 +1258,6 @@ function LineageNodeItem({
                 focusedKey={focusedKey}
                 onFocus={onFocus}
                 filter={filter}
-                getNodeDetails={getNodeDetails}
               />
             );
           })}

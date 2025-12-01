@@ -1,4 +1,4 @@
-import { useMemo, useEffect } from 'react';
+import { useMemo, useEffect, useCallback } from 'react';
 import {
   ReactFlow,
   Background,
@@ -6,6 +6,7 @@ import {
   MiniMap,
   useNodesState,
   useEdgesState,
+  ReactFlowProvider,
   Handle,
   Position,
 } from '@xyflow/react';
@@ -13,6 +14,7 @@ import type { Node as FlowNode, Edge as FlowEdge, NodeProps } from '@xyflow/reac
 import '@xyflow/react/dist/style.css';
 
 import { getLayoutedElements } from '../utils/layout';
+import { useNodeFocus } from '../hooks/useNodeFocus';
 import {
   collectTableLookupKeys,
   resolveForeignKeyTarget,
@@ -29,6 +31,10 @@ import type {
 
 interface SchemaViewProps {
   schema: (SchemaTable | ResolvedSchemaTable)[];
+  /** Table name to focus on (will center and highlight the table) */
+  selectedTableName?: string;
+  /** Callback when selection should be cleared */
+  onClearSelection?: () => void;
 }
 
 type ColumnWithConstraints = ColumnSchema | ResolvedColumnSchema;
@@ -37,6 +43,7 @@ interface SchemaTableNodeData extends Record<string, unknown> {
   label: string;
   columns: ColumnWithConstraints[];
   origin?: SchemaOrigin;
+  isSelected?: boolean;
 }
 
 function isResolvedSchemaTable(
@@ -99,17 +106,19 @@ function getColumnsWithConstraintMetadata(
 function SchemaTableNode({ data }: NodeProps<FlowNode<SchemaTableNodeData>>): JSX.Element {
   // Color coding based on origin: imported (table palette) vs implied (cte palette)
   const palette = data.origin === 'imported' ? COLORS.nodes.table : COLORS.nodes.cte;
+  const isSelected = data.isSelected === true;
 
   return (
     <div
       style={{
         minWidth: 180,
         borderRadius: 8,
-        border: `1px solid ${palette.border}`,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+        border: isSelected ? '2px solid #3b82f6' : `1px solid ${palette.border}`,
+        boxShadow: isSelected ? '0 0 0 3px rgba(59, 130, 246, 0.3)' : '0 1px 3px rgba(0,0,0,0.1)',
         overflow: 'hidden',
         backgroundColor: palette.bg,
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        transition: 'border-color 0.2s, box-shadow 0.2s',
       }}
     >
       <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
@@ -237,7 +246,10 @@ export function buildSchemaFlowNodes(schema: (SchemaTable | ResolvedSchemaTable)
   });
 }
 
-export function SchemaView({ schema }: SchemaViewProps): JSX.Element {
+function SchemaViewInner({ schema, selectedTableName, onClearSelection }: SchemaViewProps): JSX.Element {
+  // Focus on selected node when selection changes
+  useNodeFocus({ focusNodeId: selectedTableName });
+
   const { layoutedNodes, layoutedEdges } = useMemo(() => {
     if (schema.length === 0) return { layoutedNodes: [], layoutedEdges: [] };
     const rawNodes = buildSchemaFlowNodes(schema);
@@ -246,15 +258,60 @@ export function SchemaView({ schema }: SchemaViewProps): JSX.Element {
     return { layoutedNodes: ln, layoutedEdges: le };
   }, [schema]);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(layoutedNodes);
+  // Apply selection to nodes
+  const nodesWithSelection = useMemo(() => {
+    return layoutedNodes.map((node) => ({
+      ...node,
+      data: {
+        ...node.data,
+        isSelected: selectedTableName ? node.id === selectedTableName : false,
+      },
+    }));
+  }, [layoutedNodes, selectedTableName]);
+
+  const [nodes, setNodes, onNodesChange] = useNodesState(nodesWithSelection);
   const [edges, setEdges, onEdgesChange] = useEdgesState(layoutedEdges);
 
+  // Update nodes when layout or selection changes
+  // Note: setNodes/setEdges trigger re-renders if included in dependencies,
+  // causing infinite loops. They are stable callbacks and safe to omit.
   useEffect(() => {
-    setNodes(layoutedNodes);
+    setNodes(nodesWithSelection);
     setEdges(layoutedEdges);
-  }, [layoutedNodes, layoutedEdges, setNodes, setEdges]);
+  }, [nodesWithSelection, layoutedEdges]); // setNodes/setEdges omitted intentionally
 
-  if (schema.length === 0) {
+  const handlePaneClick = useCallback(() => {
+    onClearSelection?.();
+  }, [onClearSelection]);
+
+  return (
+    <div style={{ height: '100%' }}>
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onPaneClick={handlePaneClick}
+        nodeTypes={nodeTypes}
+        fitView
+        minZoom={0.1}
+        maxZoom={2}
+      >
+        <Background />
+        <Controls />
+        <MiniMap
+          nodeColor={(node) => {
+            const origin = (node.data as SchemaTableNodeData)?.origin;
+            return origin === 'imported' ? COLORS.nodes.table.accent : COLORS.nodes.cte.accent;
+          }}
+        />
+      </ReactFlow>
+    </div>
+  );
+}
+
+export function SchemaView(props: SchemaViewProps): JSX.Element {
+  if (props.schema.length === 0) {
     return (
       <div
         style={{
@@ -271,26 +328,8 @@ export function SchemaView({ schema }: SchemaViewProps): JSX.Element {
   }
 
   return (
-    <div style={{ height: '100%' }}>
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        nodeTypes={nodeTypes}
-        fitView
-        minZoom={0.1}
-        maxZoom={2}
-      >
-        <Background />
-        <Controls />
-        <MiniMap
-          nodeColor={(node) => {
-            const origin = (node.data as SchemaTableNodeData)?.origin;
-            return origin === 'imported' ? COLORS.nodes.table.accent : COLORS.nodes.cte.accent;
-          }}
-        />
-      </ReactFlow>
-    </div>
+    <ReactFlowProvider>
+      <SchemaViewInner {...props} />
+    </ReactFlowProvider>
   );
 }

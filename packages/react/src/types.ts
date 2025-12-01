@@ -115,6 +115,15 @@ export interface LineageContextValue {
 }
 
 /**
+ * Viewport state for graph visualization.
+ */
+export interface ViewportState {
+  x: number;
+  y: number;
+  zoom: number;
+}
+
+/**
  * Props for the GraphView component.
  */
 export interface GraphViewProps {
@@ -124,6 +133,20 @@ export interface GraphViewProps {
   onNodeClick?: (node: Node) => void;
   /** Ref to the graph container div for export functionality */
   graphContainerRef?: RefObject<HTMLDivElement>;
+  /** Node ID to focus/zoom to (will pan and zoom to center this node) */
+  focusNodeId?: string;
+  /** Callback when focus has been applied (so parent can clear the focusNodeId) */
+  onFocusApplied?: () => void;
+  /** Controlled search term - when provided, uses this instead of internal state */
+  controlledSearchTerm?: string;
+  /** Callback when search term changes - called with the new search term */
+  onSearchTermChange?: (searchTerm: string) => void;
+  /** Initial viewport to restore (zoom/pan position) */
+  initialViewport?: ViewportState;
+  /** Callback when viewport changes (zoom/pan) - debounced */
+  onViewportChange?: (viewport: ViewportState) => void;
+  /** Trigger to fit view to all nodes (increment to trigger) */
+  fitViewTrigger?: number;
 }
 
 /**
