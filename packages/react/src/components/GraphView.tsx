@@ -611,26 +611,26 @@ export function GraphView({
         <Background />
         <Controls />
         <Panel position="top-left" className="flex gap-3">
-          <div className="flex items-center gap-3 rounded-lg border border-slate-200/60 bg-white px-1 py-1 shadow-sm backdrop-blur-sm" data-graph-panel>
+          <div className="flex items-center gap-2 rounded-full border border-slate-200/60 dark:border-slate-700/60 bg-white/95 dark:bg-slate-900/95 px-1.5 py-1 shadow-sm backdrop-blur-sm" data-graph-panel>
             <ViewModeSelector />
 
             {viewMode === 'script' && (
               <>
-                <div className="h-5 w-px bg-slate-300" />
+                <div className="h-5 w-px bg-slate-200 dark:bg-slate-700" />
                 <GraphTooltipProvider>
                   <GraphTooltip delayDuration={300}>
                     <GraphTooltipTrigger asChild>
                       <button
                         onClick={actions.toggleShowScriptTables}
                         className={`
-                          flex h-8 w-8 shrink-0 items-center justify-center rounded transition-colors
-                          ${showScriptTables ? 'bg-slate-200 text-slate-900' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}
-                          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40
+                          inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-all duration-200
+                          ${showScriptTables ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}
+                          focus-visible:outline-none
                         `}
                         aria-label="Toggle table details"
                         aria-pressed={showScriptTables}
                       >
-                        <LayoutList className="h-4 w-4" strokeWidth={showScriptTables ? 2.5 : 1.5} />
+                        <LayoutList className="size-4" strokeWidth={showScriptTables ? 2.5 : 1.5} />
                       </button>
                     </GraphTooltipTrigger>
                     <GraphTooltipPortal>
@@ -651,10 +651,10 @@ export function GraphView({
         </Panel>
         <Panel position="top-right" className="flex gap-3 items-start">
           <Legend viewMode={viewMode} />
-          <div className="flex items-center rounded-lg border border-slate-200/60 bg-white px-1 py-1 shadow-sm backdrop-blur-sm" data-graph-panel>
+          <div className="flex items-center rounded-full border border-slate-200/60 dark:border-slate-700/60 bg-white/95 dark:bg-slate-900/95 px-1.5 py-1 shadow-sm backdrop-blur-sm" data-graph-panel>
             <LayoutSelector />
           </div>
-          <div className="flex items-center rounded-lg border border-slate-200/60 bg-white px-1 py-1 shadow-sm backdrop-blur-sm" data-graph-panel>
+          <div className="flex items-center rounded-full border border-slate-200/60 dark:border-slate-700/60 bg-white/95 dark:bg-slate-900/95 px-1.5 py-1 shadow-sm backdrop-blur-sm" data-graph-panel>
             <ExportMenu graphRef={finalRef} />
           </div>
         </Panel>

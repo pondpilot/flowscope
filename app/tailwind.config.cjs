@@ -21,17 +21,35 @@ module.exports = {
   				'monospace'
   			],
   			sans: [
+  				'Helvetica Neue',
+  				'Helvetica',
   				'-apple-system',
   				'BlinkMacSystemFont',
   				'Segoe UI',
-  				'Roboto',
   				'sans-serif'
   			]
   		},
+  		fontSize: {
+  			'xs': ['12px', { lineHeight: '1.3' }],
+  			'sm': ['14px', { lineHeight: '1.286' }],
+  			'base': ['16px', { lineHeight: '1.3' }],
+  			'lg': ['18px', { lineHeight: '1.3' }],
+  			'xl': ['20px', { lineHeight: '1.3' }],
+  			'2xl': ['24px', { lineHeight: '1.3' }],
+  			'3xl': ['32px', { lineHeight: '1.3' }],
+  		},
   		colors: {
   			border: {
-  				light: '#DBDDE1',
-  				dark: '#5B6B86',
+  				light: '#E5E9F2',
+  				dark: '#3D4654',
+  				primary: {
+  					light: '#CDD1D9',
+  					dark: '#5B6B86'
+  				},
+  				accent: {
+  					light: '#4957C1',
+  					dark: '#4C61FF'
+  				},
   				DEFAULT: 'hsl(var(--border))'
   			},
   			background: {
@@ -177,6 +195,12 @@ module.exports = {
   		animation: {
   			'accordion-down': 'accordion-down 0.2s ease-out',
   			'accordion-up': 'accordion-up 0.2s ease-out'
+  		},
+  		transitionTimingFunction: {
+  			'pondpilot': 'cubic-bezier(0.4, 0, 0.2, 1)'
+  		},
+  		transitionDuration: {
+  			'DEFAULT': '200ms'
   		}
   	}
   },

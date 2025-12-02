@@ -15,19 +15,19 @@ export function Legend({ viewMode = 'table' }: LegendProps): JSX.Element {
 
   return (
     <div className="relative">
-      <div className="flex items-center rounded-lg border border-slate-200/60 bg-white px-1 py-1 shadow-sm backdrop-blur-sm transition-all duration-200" data-graph-panel>
+      <div className="flex items-center rounded-full border border-slate-200/60 dark:border-slate-700/60 bg-white/95 dark:bg-slate-900/95 px-1.5 py-1 shadow-sm backdrop-blur-sm transition-all duration-200" data-graph-panel>
         <button
           onClick={() => setIsExpanded(!isExpanded)}
           className={`
-            flex items-center gap-2 h-8 px-2 rounded transition-colors text-sm font-medium
-            ${isExpanded ? 'bg-slate-100 text-slate-900' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}
+            flex items-center gap-2 h-7 px-3 rounded-full transition-all duration-200 text-sm font-medium
+            ${isExpanded ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'}
           `}
         >
           <span>Legend</span>
           {isExpanded ? (
-            <ChevronUp className="h-4 w-4" />
+            <ChevronUp className="size-4" />
           ) : (
-            <ChevronDown className="h-4 w-4" />
+            <ChevronDown className="size-4" />
           )}
         </button>
       </div>
@@ -35,8 +35,7 @@ export function Legend({ viewMode = 'table' }: LegendProps): JSX.Element {
       {/* Expanded content */}
       {isExpanded && (
         <div
-          className="absolute right-0 top-full mt-2 w-64 rounded-lg border bg-white shadow-lg p-3 space-y-3 z-50 animate-in fade-in zoom-in-95 duration-200"
-          style={{ borderColor: COLORS.nodes.table.border }}
+          className="absolute right-0 top-full mt-2 w-64 rounded-xl border border-slate-200/60 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-lg p-3 space-y-3 z-50 animate-in fade-in zoom-in-95 duration-200"
           data-graph-panel
         >
           {/* Nodes section */}

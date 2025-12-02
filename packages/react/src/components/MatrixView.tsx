@@ -828,29 +828,29 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
       <div className={cn("flex flex-col h-full bg-background", className)}>
         {/* Toolbar */}
         <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800 bg-background z-40 gap-4">
-          <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-900 p-1 rounded-lg shrink-0">
+          <div className="inline-flex h-9 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-900 p-1 shrink-0">
             <button
               onClick={() => { setMatrixSubMode('scripts'); setFocusedNode(null); }}
               className={cn(
-                "flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all",
+                "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium transition-all duration-200",
                 matrixSubMode === 'scripts'
                   ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-sm"
                   : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
               )}
             >
-              <FileCode className="h-4 w-4" />
+              <FileCode className="size-4" />
               <span>Scripts</span>
             </button>
             <button
               onClick={() => { setMatrixSubMode('tables'); setFocusedNode(null); }}
               className={cn(
-                "flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all",
+                "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium transition-all duration-200",
                 matrixSubMode === 'tables'
                   ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-sm"
                   : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
               )}
             >
-              <Table2 className="h-4 w-4" />
+              <Table2 className="size-4" />
               <span>Tables</span>
             </button>
           </div>

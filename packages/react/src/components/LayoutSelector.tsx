@@ -40,45 +40,44 @@ export function LayoutSelector(): JSX.Element {
 
   return (
     <GraphTooltipProvider>
-      <div className="flex items-center" role="radiogroup" aria-label="Select layout algorithm">
-        {LAYOUT_OPTIONS.map((option, index) => {
+      <div
+        className="inline-flex h-8 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 p-0.5"
+        role="radiogroup"
+        aria-label="Select layout algorithm"
+      >
+        {LAYOUT_OPTIONS.map((option) => {
           const isActive = layoutAlgorithm === option.value;
           const Icon = option.icon;
 
           return (
-            <div key={option.value} className="flex items-center">
-              <GraphTooltip delayDuration={300}>
-                <GraphTooltipTrigger asChild>
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={isActive}
-                    aria-label={option.label}
-                    onClick={() => setLayoutAlgorithm(option.value)}
-                    className={`
-                      flex h-8 w-8 shrink-0 items-center justify-center rounded transition-colors
-                      ${
-                        isActive
-                          ? 'bg-slate-200 text-slate-900'
-                          : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-                      }
-                      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40
-                    `}
-                  >
-                    <Icon className="h-4 w-4" strokeWidth={isActive ? 2.5 : 1.5} />
-                  </button>
-                </GraphTooltipTrigger>
-                <GraphTooltipPortal>
-                  <GraphTooltipContent side="bottom">
-                    <p>{option.description}</p>
-                    <GraphTooltipArrow />
-                  </GraphTooltipContent>
-                </GraphTooltipPortal>
-              </GraphTooltip>
-              {index < LAYOUT_OPTIONS.length - 1 && (
-                <div className="h-5 w-px bg-slate-300 mx-0.5" />
-              )}
-            </div>
+            <GraphTooltip key={option.value} delayDuration={300}>
+              <GraphTooltipTrigger asChild>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={isActive}
+                  aria-label={option.label}
+                  onClick={() => setLayoutAlgorithm(option.value)}
+                  className={`
+                    inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-all duration-200
+                    ${
+                      isActive
+                        ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                    }
+                    focus-visible:outline-none
+                  `}
+                >
+                  <Icon className="size-4" strokeWidth={isActive ? 2.5 : 1.5} />
+                </button>
+              </GraphTooltipTrigger>
+              <GraphTooltipPortal>
+                <GraphTooltipContent side="bottom">
+                  <p>{option.description}</p>
+                  <GraphTooltipArrow />
+                </GraphTooltipContent>
+              </GraphTooltipPortal>
+            </GraphTooltip>
           );
         })}
       </div>

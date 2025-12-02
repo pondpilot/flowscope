@@ -68,12 +68,12 @@ export function GraphSearchControl({ className, searchTerm, onSearchTermChange }
 
   return (
     <div
-      className={`relative flex items-center rounded-lg border border-slate-200/60 bg-white px-2 py-1 shadow-sm backdrop-blur-sm transition-all ${className}`}
+      className={`relative flex items-center rounded-full border border-slate-200/60 dark:border-slate-700/60 bg-white/95 dark:bg-slate-900/95 px-2 py-1 shadow-sm backdrop-blur-sm transition-all duration-200 ${className}`}
       style={{ minWidth: hasResults && searchTerm ? '300px' : '200px' }}
       data-graph-panel
     >
       <Search
-        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400"
+        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-slate-400"
         strokeWidth={1.5}
       />
       <Input
@@ -82,11 +82,11 @@ export function GraphSearchControl({ className, searchTerm, onSearchTermChange }
         value={searchTerm}
         onChange={(e) => onSearchTermChange(e.target.value)}
         onKeyDown={handleKeyDown}
-        className="h-8 border-0 bg-transparent pl-8 pr-2 text-sm shadow-none placeholder:text-slate-400 focus-visible:ring-0"
+        className="h-7 border-0 bg-transparent pl-7 pr-2 text-sm shadow-none placeholder:text-slate-400 focus-visible:ring-0 rounded-full"
       />
-      
+
       {searchTerm && (
-        <div className="flex items-center gap-1 border-l border-slate-200 pl-1 ml-1">
+        <div className="flex items-center gap-1 border-l border-slate-200 dark:border-slate-700 pl-1 ml-1">
           {hasResults ? (
             <span className="text-[10px] text-slate-400 font-mono whitespace-nowrap px-1.5 min-w-[3ch] text-center">
               {currentIndex + 1}/{results.length}
@@ -96,30 +96,30 @@ export function GraphSearchControl({ className, searchTerm, onSearchTermChange }
               0/0
             </span>
           )}
-          
+
           <div className="flex gap-0.5">
             <button
               onClick={handlePrev}
               disabled={!hasResults}
-              className="flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100 disabled:opacity-30 text-slate-600"
+              className="flex size-6 items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-30 text-slate-600 dark:text-slate-400 transition-colors duration-200"
               title="Previous (Shift+Enter)"
             >
-              <ChevronUp className="h-3.5 w-3.5" />
+              <ChevronUp className="size-3.5" />
             </button>
             <button
               onClick={handleNext}
               disabled={!hasResults}
-              className="flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100 disabled:opacity-30 text-slate-600"
+              className="flex size-6 items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-30 text-slate-600 dark:text-slate-400 transition-colors duration-200"
               title="Next (Enter)"
             >
-              <ChevronDown className="h-3.5 w-3.5" />
+              <ChevronDown className="size-3.5" />
             </button>
             <button
               onClick={handleClear}
-              className="flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100 text-slate-400 hover:text-slate-600"
+              className="flex size-6 items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors duration-200"
               title="Clear"
             >
-              <X className="h-3.5 w-3.5" />
+              <X className="size-3.5" />
             </button>
           </div>
         </div>

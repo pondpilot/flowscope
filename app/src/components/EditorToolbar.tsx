@@ -85,12 +85,12 @@ export function EditorToolbar({
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
-        <div className="flex items-center rounded-md border shadow-sm">
+        <div className="flex items-center rounded-full overflow-hidden shadow-sm">
           <Button
             onClick={onAnalyze}
             disabled={!wasmReady || isAnalyzing}
             size="sm"
-            className="h-8 gap-2 bg-brand-blue-500 hover:bg-brand-blue-600 text-white font-medium rounded-r-none border-r border-white/20"
+            className="h-[34px] gap-2 bg-brand-blue-500 hover:bg-brand-blue-600 text-white font-medium rounded-none rounded-l-full border-r border-white/20 px-5"
           >
             {isAnalyzing ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -114,10 +114,10 @@ export function EditorToolbar({
             <DropdownMenuTrigger asChild>
               <Button
                 size="sm"
-                className="h-8 px-2 bg-brand-blue-500 hover:bg-brand-blue-600 text-white rounded-l-none border-l border-black/10"
+                className="h-[34px] px-3 bg-brand-blue-500 hover:bg-brand-blue-600 text-white rounded-none rounded-r-full border-l border-black/10"
                 disabled={!wasmReady || isAnalyzing}
               >
-                <ChevronDown className="h-3 w-3" />
+                <ChevronDown className="size-3.5" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">

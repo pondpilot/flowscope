@@ -100,10 +100,10 @@ export function ExportMenu({ graphRef }: ExportMenuProps): JSX.Element {
           <GraphTooltipTrigger asChild>
             <DropdownMenuTrigger asChild>
               <button
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-500 transition-all duration-200 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-slate-100 focus-visible:outline-none"
                 aria-label="Export lineage"
               >
-                <Download className="h-4 w-4" strokeWidth={1.5} />
+                <Download className="size-4" strokeWidth={1.5} />
               </button>
             </DropdownMenuTrigger>
           </GraphTooltipTrigger>
@@ -116,25 +116,25 @@ export function ExportMenu({ graphRef }: ExportMenuProps): JSX.Element {
           <DropdownMenuContent align="end" className="w-48">
             <DropdownMenuLabel>Data Formats</DropdownMenuLabel>
             <DropdownMenuItem onClick={handleDownloadXlsx}>
-              <FileSpreadsheet className="h-4 w-4 mr-2" />
+              <FileSpreadsheet className="size-4 mr-2" />
               Excel (.xlsx)
             </DropdownMenuItem>
             <DropdownMenuItem onClick={handleDownloadJson}>
-              <FileJson className="h-4 w-4 mr-2" />
+              <FileJson className="size-4 mr-2" />
               JSON
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuLabel>Visual Formats</DropdownMenuLabel>
             <DropdownMenuItem onClick={handleDownloadPng}>
-              <Image className="h-4 w-4 mr-2" />
+              <Image className="size-4 mr-2" />
               PNG Image
             </DropdownMenuItem>
             <DropdownMenuItem onClick={handleDownloadMermaid}>
-              <FileCode className="h-4 w-4 mr-2" />
+              <FileCode className="size-4 mr-2" />
               Mermaid (.md)
             </DropdownMenuItem>
             <DropdownMenuItem onClick={handleDownloadHtml}>
-              <FileText className="h-4 w-4 mr-2" />
+              <FileText className="size-4 mr-2" />
               HTML Report
             </DropdownMenuItem>
           </DropdownMenuContent>
