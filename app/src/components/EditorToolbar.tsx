@@ -90,7 +90,7 @@ export function EditorToolbar({
             onClick={onAnalyze}
             disabled={!wasmReady || isAnalyzing}
             size="sm"
-            className="h-[34px] gap-2 bg-brand-blue-500 hover:bg-brand-blue-600 text-white font-medium rounded-none rounded-l-full border-r border-white/20 px-5"
+            className="h-[34px] gap-1.5 bg-brand-blue-500 hover:bg-brand-blue-600 text-white font-medium rounded-none rounded-l-full border-r border-white/20 px-3"
           >
             {isAnalyzing ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -98,17 +98,6 @@ export function EditorToolbar({
               <Play className="h-3.5 w-3.5 fill-current" />
             )}
             <span className="hidden sm:inline">Run</span>
-            {runMode === 'all' && (
-              <span className="text-xs opacity-80 ml-[-2px] hidden sm:inline">(All)</span>
-            )}
-            {runMode === 'custom' && (
-              <span className="text-xs opacity-80 ml-[-2px] hidden sm:inline">
-                ({selectedCount})
-              </span>
-            )}
-            {runMode === 'current' && (
-              <span className="text-xs opacity-80 ml-[-2px] hidden sm:inline">(Active)</span>
-            )}
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

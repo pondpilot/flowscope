@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import {
   ChevronRight,
   ChevronDown,
@@ -28,6 +28,7 @@ interface FileTreeProps {
   deletingFileId: string | null;
   renamingFileId: string | null;
   renameValue: string;
+  focusedFileId?: string | null;
   onSelectFile: (fileId: string) => void;
   onToggleSelection: (e: React.MouseEvent, fileId: string) => void;
   onStartRename: (fileId: string, currentName: string) => void;
@@ -92,6 +93,27 @@ function sortTreeNodes(nodes: TreeNode[]): TreeNode[] {
   });
 }
 
+// Returns files in the order they appear visually in the tree (depth-first traversal)
+export function getFilesInTreeOrder(files: ProjectFile[]): ProjectFile[] {
+  const tree = buildFileTree(files);
+  const result: ProjectFile[] = [];
+
+  function traverse(node: TreeNode) {
+    const sortedChildren = sortTreeNodes(Array.from(node.children.values()));
+    for (const child of sortedChildren) {
+      if (child.file) {
+        result.push(child.file);
+      }
+      if (child.children.size > 0) {
+        traverse(child);
+      }
+    }
+  }
+
+  traverse(tree);
+  return result;
+}
+
 interface FolderNodeProps {
   node: TreeNode;
   depth: number;
@@ -108,7 +130,7 @@ function FolderNode({ node, depth, props, expandedFolders, onToggleFolder }: Fol
     <div role="treeitem" aria-expanded={isExpanded}>
       <div
         className={cn(
-          'flex items-center gap-1 py-1 px-2 rounded-md cursor-pointer hover:bg-accent hover:text-accent-foreground group',
+          'flex items-center gap-1 py-1 px-2 rounded-md cursor-pointer hover:bg-muted/50 group',
           'text-sm text-muted-foreground'
         )}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
@@ -119,21 +141,21 @@ function FolderNode({ node, depth, props, expandedFolders, onToggleFolder }: Fol
             onToggleFolder(node.path);
           }
         }}
-        tabIndex={0}
+        tabIndex={-1}
         role="button"
         aria-label={`${isExpanded ? 'Collapse' : 'Expand'} folder ${node.name}`}
       >
         {isExpanded ? (
-          <ChevronDown className="size-4 shrink-0 group-hover:text-accent-foreground" />
+          <ChevronDown className="size-4 shrink-0" />
         ) : (
-          <ChevronRight className="size-4 shrink-0 group-hover:text-accent-foreground" />
+          <ChevronRight className="size-4 shrink-0" />
         )}
         {isExpanded ? (
-          <FolderOpen className="size-4 shrink-0 text-amber-500 group-hover:text-amber-400" />
+          <FolderOpen className="size-4 shrink-0 text-amber-500" />
         ) : (
-          <Folder className="size-4 shrink-0 text-amber-500 group-hover:text-amber-400" />
+          <Folder className="size-4 shrink-0 text-amber-500" />
         )}
-        <span className="truncate group-hover:text-accent-foreground">{node.name}</span>
+        <span className="truncate">{node.name}</span>
       </div>
       {isExpanded && (
         <div role="group">
@@ -177,6 +199,7 @@ function FileNode({ node, depth, props }: FileNodeProps) {
     deletingFileId,
     renamingFileId,
     renameValue,
+    focusedFileId,
     onSelectFile,
     onToggleSelection,
     onStartRename,
@@ -194,6 +217,7 @@ function FileNode({ node, depth, props }: FileNodeProps) {
   const isSelected = selectedFileIds.includes(file.id);
   const isRenaming = renamingFileId === file.id;
   const isDeleting = deletingFileId === file.id;
+  const isFocused = focusedFileId === file.id;
 
   if (isRenaming) {
     return (
@@ -201,6 +225,7 @@ function FileNode({ node, depth, props }: FileNodeProps) {
         className="flex items-center gap-2 py-1 px-2"
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
       >
         <FileCode className="size-4 shrink-0 text-muted-foreground" />
         <Input
@@ -226,13 +251,22 @@ function FileNode({ node, depth, props }: FileNodeProps) {
     );
   }
 
+  const itemRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isFocused && itemRef.current) {
+      itemRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }, [isFocused]);
+
   return (
     <div
+      ref={itemRef}
       role="treeitem"
       aria-selected={isActive}
       className={cn(
-        'flex items-center gap-2 py-1 px-2 rounded-md cursor-pointer hover:bg-accent group',
-        isActive && 'bg-accent'
+        'flex items-center gap-2 py-1 px-2 rounded-md cursor-pointer hover:bg-muted/50 group',
+        isFocused && 'bg-muted'
       )}
       style={{ paddingLeft: `${depth * 12 + 8}px` }}
       onClick={() => onSelectFile(file.id)}
@@ -242,26 +276,26 @@ function FileNode({ node, depth, props }: FileNodeProps) {
           onSelectFile(file.id);
         }
       }}
-      tabIndex={0}
+      tabIndex={-1}
       data-testid={`file-tree-item-${file.id}`}
     >
       {showCheckboxes && (
         <Checkbox
           checked={isSelected}
           onClick={(e) => onToggleSelection(e, file.id)}
-          className="shrink-0 border-muted-foreground group-hover:border-accent-foreground"
+          className="shrink-0 border-muted-foreground"
           data-testid={`file-checkbox-${file.id}`}
         />
       )}
       <FileCode
         className={cn(
-          'size-4 shrink-0 group-hover:text-accent-foreground',
+          'size-4 shrink-0',
           isIncluded ? 'text-primary' : 'text-muted-foreground'
         )}
       />
       <span
         className={cn(
-          'flex-1 truncate text-sm group-hover:text-accent-foreground',
+          'flex-1 truncate text-sm',
           isActive && 'font-semibold italic'
         )}
       >
@@ -281,7 +315,7 @@ function FileNode({ node, depth, props }: FileNodeProps) {
           </Button>
         </div>
       ) : (
-        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 text-accent-foreground">
+        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
           <TooltipProvider delayDuration={300}>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -300,10 +334,7 @@ function FileNode({ node, depth, props }: FileNodeProps) {
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">
-                <p>
-                  Rename{' '}
-                  <kbd className="ml-1 rounded bg-muted px-1 font-mono text-xs">R</kbd>
-                </p>
+                <p>Rename <kbd className="ml-1 rounded bg-muted px-1 font-mono text-xs">R</kbd></p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -322,10 +353,7 @@ function FileNode({ node, depth, props }: FileNodeProps) {
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
-                  <p>
-                    Delete{' '}
-                    <kbd className="ml-1 rounded bg-muted px-1 font-mono text-xs">D</kbd>
-                  </p>
+                  <p>Delete <kbd className="ml-1 rounded bg-muted px-1 font-mono text-xs">D</kbd></p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>

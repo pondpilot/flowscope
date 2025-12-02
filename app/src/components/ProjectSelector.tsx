@@ -73,9 +73,6 @@ export function ProjectSelector({ open: controlledOpen, onOpenChange }: ProjectS
           <span className="font-medium">
             {currentProject?.name || 'Select Project'}
           </span>
-          <kbd className="hidden sm:inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
-            <span className="text-xs">⌘</span>P
-          </kbd>
           <ChevronDown className="size-4 opacity-50" />
         </button>
       </DropdownMenuTrigger>
@@ -85,8 +82,11 @@ export function ProjectSelector({ open: controlledOpen, onOpenChange }: ProjectS
         sideOffset={8}
       >
         <TooltipProvider delayDuration={300}>
-          <DropdownMenuLabel className="text-xs text-muted-foreground">
-            Projects
+          <DropdownMenuLabel className="text-xs text-muted-foreground flex items-center justify-between">
+            <span>Projects</span>
+            <kbd className="hidden sm:inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium">
+              <span className="text-xs">⌘</span>P
+            </kbd>
           </DropdownMenuLabel>
 
           {projects.map((project) => (

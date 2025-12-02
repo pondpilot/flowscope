@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   ChevronDown,
   Plus,
@@ -15,7 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { FileTree } from '@/components/FileTree';
+import { FileTree, getFilesInTreeOrder } from '@/components/FileTree';
 import { DEFAULT_FILE_NAMES, ACCEPTED_FILE_TYPES } from '@/lib/constants';
 
 interface FileSelectorProps {
@@ -43,6 +43,11 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
   const folderInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const fileTreeRef = useRef<HTMLDivElement>(null);
+  const footerRef = useRef<HTMLDivElement>(null);
+
+  const [focusedFileId, setFocusedFileId] = useState<string | null>(null);
+  const [focusZone, setFocusZone] = useState<'search' | 'tree' | 'footer'>('search');
 
   const open = controlledOpen ?? internalOpen;
   const setOpen = onOpenChange ?? setInternalOpen;
@@ -59,17 +64,28 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
     );
   }, [currentProject?.files, search]);
 
+  // Files in visual tree order for keyboard navigation
+  const filesInTreeOrder = useMemo(() => {
+    return getFilesInTreeOrder(filteredFiles);
+  }, [filteredFiles]);
+
   useEffect(() => {
-    if (open && searchInputRef.current && !renamingFileId) {
-      requestAnimationFrame(() => {
+    if (open && !renamingFileId) {
+      // Use setTimeout to ensure focus happens after Radix's internal focus management
+      const timer = setTimeout(() => {
         searchInputRef.current?.focus();
-      });
+        setFocusZone('search');
+        setFocusedFileId(null);
+      }, 0);
+      return () => clearTimeout(timer);
     }
     if (!open) {
       setSearch('');
       setRenamingFileId(null);
       setRenameValue('');
       setDeletingFileId(null);
+      setFocusedFileId(null);
+      setFocusZone('search');
     }
   }, [open, renamingFileId]);
 
@@ -164,6 +180,180 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
     setRenameValue('');
   };
 
+  const [footerButtonIndex, setFooterButtonIndex] = useState(0);
+
+  const focusFooterButton = useCallback((index: number) => {
+    const buttons = footerRef.current?.querySelectorAll('[role="menuitem"]') as NodeListOf<HTMLElement>;
+    if (buttons && buttons[index]) {
+      buttons[index].focus();
+      setFooterButtonIndex(index);
+    }
+  }, []);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (renamingFileId) return;
+
+    const fileCount = filesInTreeOrder.length;
+
+    // Find current index of focused file in tree order
+    const currentIndex = focusedFileId ? filesInTreeOrder.findIndex(f => f.id === focusedFileId) : -1;
+
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.shiftKey) {
+        // Shift+Tab: go backwards
+        if (focusZone === 'footer') {
+          setFocusZone('tree');
+          setFocusedFileId(fileCount > 0 ? filesInTreeOrder[fileCount - 1].id : null);
+          fileTreeRef.current?.focus();
+        } else if (focusZone === 'tree') {
+          setFocusZone('search');
+          setFocusedFileId(null);
+          searchInputRef.current?.focus();
+        } else {
+          // From search, go to footer
+          setFocusZone('footer');
+          setFocusedFileId(null);
+          setFooterButtonIndex(0);
+          focusFooterButton(0);
+        }
+      } else {
+        // Tab: go forwards
+        if (focusZone === 'search') {
+          setFocusZone('tree');
+          setFocusedFileId(fileCount > 0 ? filesInTreeOrder[0].id : null);
+          fileTreeRef.current?.focus();
+        } else if (focusZone === 'tree') {
+          setFocusZone('footer');
+          setFocusedFileId(null);
+          setFooterButtonIndex(0);
+          focusFooterButton(0);
+        } else {
+          // From footer, go to search
+          setFocusZone('search');
+          setFocusedFileId(null);
+          searchInputRef.current?.focus();
+        }
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      e.stopPropagation();
+      if (focusZone === 'search' && fileCount > 0) {
+        setFocusZone('tree');
+        setFocusedFileId(filesInTreeOrder[0].id);
+        fileTreeRef.current?.focus();
+      } else if (focusZone === 'tree' && fileCount > 0) {
+        const nextIndex = Math.min(currentIndex + 1, fileCount - 1);
+        setFocusedFileId(filesInTreeOrder[nextIndex].id);
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      e.stopPropagation();
+      if (focusZone === 'tree') {
+        if (currentIndex <= 0) {
+          setFocusZone('search');
+          setFocusedFileId(null);
+          searchInputRef.current?.focus();
+        } else {
+          setFocusedFileId(filesInTreeOrder[currentIndex - 1].id);
+        }
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowLeft' && focusZone === 'footer') {
+      e.preventDefault();
+      e.stopPropagation();
+      const newIndex = Math.max(0, footerButtonIndex - 1);
+      focusFooterButton(newIndex);
+      return;
+    }
+
+    if (e.key === 'ArrowRight' && focusZone === 'footer') {
+      e.preventDefault();
+      e.stopPropagation();
+      const buttons = footerRef.current?.querySelectorAll('[role="menuitem"]');
+      const maxIndex = buttons ? buttons.length - 1 : 0;
+      const newIndex = Math.min(maxIndex, footerButtonIndex + 1);
+      focusFooterButton(newIndex);
+      return;
+    }
+
+    if (e.key === 'Enter' && focusZone === 'tree' && focusedFileId) {
+      e.preventDefault();
+      e.stopPropagation();
+      handleSelectFile(focusedFileId);
+      return;
+    }
+
+    // Rename shortcut
+    if ((e.key === 'r' || e.key === 'R') && focusZone === 'tree' && focusedFileId) {
+      e.preventDefault();
+      e.stopPropagation();
+      const file = filteredFiles.find(f => f.id === focusedFileId);
+      if (file) {
+        handleStartRename(focusedFileId, file.name);
+      }
+      return;
+    }
+
+    // Delete shortcut
+    if ((e.key === 'd' || e.key === 'D') && focusZone === 'tree' && focusedFileId) {
+      e.preventDefault();
+      e.stopPropagation();
+      const canDelete = currentProject ? currentProject.files.length > 1 : false;
+      if (canDelete) {
+        if (deletingFileId === focusedFileId) {
+          deleteFile(focusedFileId);
+          setDeletingFileId(null);
+        } else {
+          setDeletingFileId(focusedFileId);
+        }
+      }
+      return;
+    }
+
+    // Cancel delete or rename with Escape
+    if (e.key === 'Escape') {
+      if (deletingFileId) {
+        e.preventDefault();
+        e.stopPropagation();
+        setDeletingFileId(null);
+        return;
+      }
+      if (renamingFileId) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleCancelRename();
+        return;
+      }
+    }
+
+    // Cancel delete with N
+    if ((e.key === 'n' || e.key === 'N') && deletingFileId) {
+      e.preventDefault();
+      e.stopPropagation();
+      setDeletingFileId(null);
+      return;
+    }
+
+    // Confirm delete with Y
+    if ((e.key === 'y' || e.key === 'Y') && deletingFileId) {
+      e.preventDefault();
+      e.stopPropagation();
+      deleteFile(deletingFileId);
+      setDeletingFileId(null);
+      return;
+    }
+  }, [focusZone, focusedFileId, filesInTreeOrder, filteredFiles, renamingFileId, deletingFileId, currentProject, handleSelectFile, handleStartRename, handleCancelRename, deleteFile, footerButtonIndex, focusFooterButton]);
+
   return (
     <>
       <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -175,9 +365,6 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
             <span className="truncate">
               {activeFile?.name || 'No file selected'}
             </span>
-            <kbd className="hidden sm:inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
-              <span className="text-xs">⌘</span>O
-            </kbd>
             <ChevronDown className="size-4 opacity-50 shrink-0" />
           </button>
         </DropdownMenuTrigger>
@@ -187,6 +374,7 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
           sideOffset={8}
           onCloseAutoFocus={(e) => e.preventDefault()}
           onKeyDown={(e) => {
+            handleKeyDown(e);
             if ((e.key === 'n' || e.key === 'N') && !renamingFileId) {
               e.preventDefault();
               handleCreateFile();
@@ -209,7 +397,7 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search files..."
-              className="h-8 border-0 p-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+              className="h-8 border-0 p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
               onKeyDown={(e) => {
                 if (e.key === 'Escape') {
                   setOpen(false);
@@ -220,10 +408,17 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
               }}
               data-testid="file-search-input"
             />
+            <kbd className="hidden sm:inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground ml-2 shrink-0">
+              <span className="text-xs">⌘</span>O
+            </kbd>
           </div>
 
           {/* File Tree */}
-          <div className="max-h-[300px] overflow-y-auto">
+          <div
+            ref={fileTreeRef}
+            className="max-h-[300px] overflow-y-auto outline-none"
+            tabIndex={-1}
+          >
             {filteredFiles.length > 0 ? (
               <FileTree
                 files={filteredFiles}
@@ -233,6 +428,7 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
                 deletingFileId={deletingFileId}
                 renamingFileId={renamingFileId}
                 renameValue={renameValue}
+                focusedFileId={focusZone === 'tree' ? focusedFileId : null}
                 onSelectFile={handleSelectFile}
                 onToggleSelection={handleToggleSelection}
                 onStartRename={handleStartRename}
@@ -254,7 +450,7 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
 
           {/* Actions */}
           <DropdownMenuSeparator className="my-0" />
-          <div className="p-1 flex flex-col gap-1">
+          <div ref={footerRef} className="p-1 flex flex-col gap-1">
             <div className="flex gap-1">
               <DropdownMenuItem
                 onClick={handleCreateFile}
