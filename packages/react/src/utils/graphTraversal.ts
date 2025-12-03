@@ -1,4 +1,132 @@
-import type { Edge as FlowEdge } from '@xyflow/react';
+import type { Edge as FlowEdge, Node as FlowNode } from '@xyflow/react';
+import type { TableNodeData, ScriptNodeData } from '../types';
+
+/**
+ * Type guard for TableNodeData.
+ * Checks if a node's data has the structure of a table/view/CTE node.
+ */
+export function isTableNodeData(data: unknown): data is TableNodeData {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'label' in data &&
+    'nodeType' in data &&
+    'columns' in data
+  );
+}
+
+/**
+ * Determines whether a node should be included in a filtered graph.
+ * A node is included if its ID is in the highlight set, or if any of its columns are highlighted.
+ */
+export function shouldIncludeNode(node: FlowNode, highlightIds: Set<string>): boolean {
+  if (highlightIds.has(node.id)) return true;
+
+  if (isTableNodeData(node.data)) {
+    return node.data.columns.some((col) => highlightIds.has(col.id));
+  }
+
+  return false;
+}
+
+/**
+ * Determines whether an edge should be included in a filtered graph.
+ * An edge is included if its source, target, or any of their handles are in the highlight set.
+ */
+export function shouldIncludeEdge(edge: FlowEdge, highlightIds: Set<string>): boolean {
+  const sourceId = edge.sourceHandle || edge.source;
+  const targetId = edge.targetHandle || edge.target;
+  return highlightIds.has(sourceId) || highlightIds.has(targetId) || highlightIds.has(edge.id);
+}
+
+/**
+ * Filter graph to only include nodes and edges in the highlight set.
+ * Used when focus mode is enabled to show only lineage-related elements.
+ */
+export function filterGraphToHighlights(
+  graph: { nodes: FlowNode[]; edges: FlowEdge[] },
+  highlightIds: Set<string>
+): { nodes: FlowNode[]; edges: FlowEdge[] } {
+  const filteredNodes = graph.nodes.filter((node) => shouldIncludeNode(node, highlightIds));
+  const filteredEdges = graph.edges.filter((edge) => shouldIncludeEdge(edge, highlightIds));
+  return { nodes: filteredNodes, edges: filteredEdges };
+}
+
+/**
+ * Find all node/column IDs that match the search term based on view mode.
+ * - Column view: returns matching column IDs
+ * - Table view: returns matching table node IDs
+ * - Script view: returns matching script and table node IDs
+ */
+export function findSearchMatchIds(
+  searchTerm: string,
+  nodes: FlowNode[],
+  viewMode: 'table' | 'column' | 'script'
+): Set<string> {
+  const matchIds = new Set<string>();
+  if (!searchTerm) return matchIds;
+
+  const lowerSearch = searchTerm.toLowerCase();
+
+  for (const node of nodes) {
+    if (viewMode === 'column') {
+      // In column view, match individual columns and add their IDs
+      const data = node.data as TableNodeData;
+      if (data?.columns) {
+        for (const col of data.columns) {
+          if (col.name.toLowerCase().includes(lowerSearch)) {
+            matchIds.add(col.id);
+          }
+        }
+      }
+      // Also match table names - add all column IDs from matching tables
+      if (data?.label?.toLowerCase().includes(lowerSearch) && data?.columns) {
+        for (const col of data.columns) {
+          matchIds.add(col.id);
+        }
+      }
+    } else if (viewMode === 'table') {
+      // In table view, match table/CTE/view names
+      const data = node.data as TableNodeData;
+      if (data?.label?.toLowerCase().includes(lowerSearch)) {
+        matchIds.add(node.id);
+      }
+    } else if (viewMode === 'script') {
+      // In script view, match script names and table names
+      if (node.type === 'scriptNode') {
+        const data = node.data as ScriptNodeData;
+        if (data?.label?.toLowerCase().includes(lowerSearch)) {
+          matchIds.add(node.id);
+        }
+      } else if (node.type === 'simpleTableNode') {
+        const data = node.data as TableNodeData;
+        if (data?.label?.toLowerCase().includes(lowerSearch)) {
+          matchIds.add(node.id);
+        }
+      }
+    }
+  }
+
+  return matchIds;
+}
+
+/**
+ * Find connected elements for multiple start IDs.
+ * Returns union of all connected elements.
+ */
+export function findConnectedElementsMultiple(
+  startIds: Set<string>,
+  edges: FlowEdge[]
+): Set<string> {
+  const allConnected = new Set<string>();
+  for (const startId of startIds) {
+    const connected = findConnectedElements(startId, edges);
+    for (const id of connected) {
+      allConnected.add(id);
+    }
+  }
+  return allConnected;
+}
 
 /**
  * Traverse the graph to find all connected elements (nodes/edges) upstream and downstream.

@@ -1,11 +1,10 @@
-import { useMemo, useCallback, useRef, useEffect, useState, createContext, useContext, useId } from 'react';
+import { useMemo, useCallback, useRef, useEffect, useState, createContext, useContext } from 'react';
 import {
   ChevronRight,
   ChevronDown,
   Table as TableIcon,
   LayoutList,
   FileCode,
-  Search,
   PackageOpen,
   Columns3,
   FileText,
@@ -14,11 +13,9 @@ import {
   Eye,
   Grid3X3,
   ExternalLink,
-  ScanLine,
 } from 'lucide-react';
-import { useLineage } from '@pondpilot/flowscope-react';
+import { useLineage, SearchAutocomplete, type SearchSuggestion } from '@pondpilot/flowscope-react';
 import { cn } from '@/lib/utils';
-import { Input } from '@/components/ui/input';
 import {
   Tooltip,
   TooltipContent,
@@ -116,15 +113,7 @@ export function HierarchyView({ className, projectId }: HierarchyViewProps) {
   const [isResizing, setIsResizing] = useState(false);
   const isResizingRef = useRef(false);
 
-  // Autocomplete state
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
-  const searchContainerRef = useRef<HTMLDivElement>(null);
-  const suggestionsListId = useId();
-  const activeOptionId = useId();
-
   const treeContainerRef = useRef<HTMLDivElement>(null);
-  const filterInputRef = useRef<HTMLInputElement>(null);
 
   // Navigation handlers
   const handleNavigateToLineage = useCallback((nodeId: string) => {
@@ -181,25 +170,6 @@ export function HierarchyView({ className, projectId }: HierarchyViewProps) {
 
     return { columnsByTable: colMap, scriptsByTable: scriptMap };
   }, [getNode, nodes, edges, statements]);
-
-  // Extract all unique column names for autocomplete
-  const allColumnNames = useMemo(() => {
-    const columnSet = new Set<string>();
-    for (const cols of columnsByTable.values()) {
-      for (const col of cols) {
-        columnSet.add(col);
-      }
-    }
-    return Array.from(columnSet).sort();
-  }, [columnsByTable]);
-
-  // Extract all table names for autocomplete
-  const allTableNames = useMemo(() => {
-    return nodes
-      .filter((n) => ['table', 'view', 'cte'].includes(n.type))
-      .map((n) => n.label)
-      .sort();
-  }, [nodes]);
 
   // Pre-compute all table mappings for efficient lookup
   const mappingsByTable = useMemo(() => {
@@ -451,75 +421,13 @@ export function HierarchyView({ className, projectId }: HierarchyViewProps) {
     setExpandedNodes(toExpand);
   }, [filter, sinkTrees]);
 
-  // Autocomplete suggestions - combine tables and columns
-  const MAX_SUGGESTIONS = 8;
-  const suggestions = useMemo(() => {
-    if (!filter.trim()) return [];
-    const lower = filter.toLowerCase();
-
-    // Find matching tables
-    const matchingTables = allTableNames
-      .filter((name) => name.toLowerCase().includes(lower))
-      .map((name) => ({ type: 'table' as const, value: name }));
-
-    // Find matching columns
-    const matchingColumns = allColumnNames
-      .filter((name) => name.toLowerCase().includes(lower))
-      .map((name) => ({ type: 'column' as const, value: name }));
-
-    // Combine and limit
-    return [...matchingTables, ...matchingColumns].slice(0, MAX_SUGGESTIONS);
-  }, [filter, allTableNames, allColumnNames]);
-
-  // Reset suggestion index when filter changes
-  useEffect(() => {
-    setActiveSuggestionIndex(0);
-  }, [filter]);
-
-  // Close suggestions when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
-        setShowSuggestions(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // Keyboard handler for autocomplete
-  const handleSearchKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (!showSuggestions || suggestions.length === 0) {
-      // Let ArrowDown pass through to focus tree when no suggestions
-      if (e.key === 'ArrowDown' && flatNodeList.length > 0) {
-        e.preventDefault();
-        setFocusedNodeKey(flatNodeList[0].nodeKey);
-        treeContainerRef.current?.focus();
-      }
-      return;
-    }
-
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        setActiveSuggestionIndex((prev) => Math.min(prev + 1, suggestions.length - 1));
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        setActiveSuggestionIndex((prev) => Math.max(prev - 1, 0));
-        break;
-      case 'Enter':
-        e.preventDefault();
-        if (suggestions[activeSuggestionIndex]) {
-          setFilter(suggestions[activeSuggestionIndex].value);
-          setShowSuggestions(false);
-        }
-        break;
-      case 'Escape':
-        setShowSuggestions(false);
-        break;
-    }
-  }, [showSuggestions, suggestions, activeSuggestionIndex, flatNodeList, setFilter, setFocusedNodeKey]);
+  // Handle suggestion selection from autocomplete
+  const handleSuggestionSelect = useCallback(
+    (suggestion: SearchSuggestion) => {
+      setFilter(suggestion.label);
+    },
+    [setFilter]
+  );
 
   // Get the focused node from the flat list
   const focusedNode = useMemo(() => {
@@ -663,67 +571,14 @@ export function HierarchyView({ className, projectId }: HierarchyViewProps) {
         <div className={cn('flex flex-col h-full bg-background', className)}>
         {/* Filter Input with Autocomplete */}
         <div className="p-2 border-b">
-          <div className="relative" ref={searchContainerRef}>
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground z-10" />
-            <Input
-              ref={filterInputRef}
-              className="h-8 text-xs pl-8"
-              placeholder="Filter tables and columns..."
-              value={filter}
-              onChange={(e) => {
-                setFilter(e.target.value);
-                setShowSuggestions(true);
-              }}
-              onFocus={() => setShowSuggestions(true)}
-              onKeyDown={handleSearchKeyDown}
-              role="combobox"
-              aria-expanded={showSuggestions && suggestions.length > 0}
-              aria-haspopup="listbox"
-              aria-controls={suggestionsListId}
-              aria-activedescendant={showSuggestions && suggestions.length > 0 ? `${activeOptionId}-${activeSuggestionIndex}` : undefined}
-              aria-autocomplete="list"
-            />
-
-            {/* Autocomplete Dropdown */}
-            {showSuggestions && suggestions.length > 0 && (
-              <div
-                id={suggestionsListId}
-                role="listbox"
-                aria-label="Search suggestions"
-                className="absolute top-full left-0 right-0 mt-1 bg-background border rounded-md shadow-lg z-50 max-h-60 overflow-auto py-1"
-              >
-                {suggestions.map((suggestion, index) => (
-                  <button
-                    key={`${suggestion.type}-${suggestion.value}`}
-                    id={`${activeOptionId}-${index}`}
-                    role="option"
-                    aria-selected={index === activeSuggestionIndex}
-                    className={cn(
-                      'w-full text-left px-3 py-1.5 text-xs transition-colors flex items-center gap-2',
-                      index === activeSuggestionIndex
-                        ? 'bg-accent text-accent-foreground'
-                        : 'text-foreground hover:bg-muted'
-                    )}
-                    onClick={() => {
-                      setFilter(suggestion.value);
-                      setShowSuggestions(false);
-                    }}
-                    onMouseEnter={() => setActiveSuggestionIndex(index)}
-                  >
-                    {suggestion.type === 'column' ? (
-                      <ScanLine className="h-3 w-3 text-muted-foreground" />
-                    ) : (
-                      <TableIcon className="h-3 w-3 text-muted-foreground" />
-                    )}
-                    <span className="truncate">{suggestion.value}</span>
-                    <span className="ml-auto text-[10px] text-muted-foreground">
-                      {suggestion.type}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <SearchAutocomplete
+            initialValue={filter}
+            onSearch={setFilter}
+            searchableTypes={['table', 'view', 'cte', 'column']}
+            placeholder="Filter tables and columns..."
+            onSuggestionSelect={handleSuggestionSelect}
+            className="w-full rounded-md bg-background border-border-primary-light dark:border-border-primary-dark"
+          />
         </div>
 
         {/* Tree Content */}

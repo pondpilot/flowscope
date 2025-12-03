@@ -12,6 +12,8 @@ export { MatrixView } from './components/MatrixView';
 export type { MatrixViewControlledState } from './components/MatrixView';
 export { type EdgeType } from './components/AnimatedEdge';
 export { ErrorBoundary, GraphErrorBoundary } from './components/ErrorBoundary';
+export { SearchAutocomplete } from './components/SearchAutocomplete';
+export type { SearchAutocompleteProps } from './components/SearchAutocomplete';
 
 // Store and hooks (new Zustand-based)
 export {
@@ -22,6 +24,13 @@ export {
 } from './store';
 
 export { useGraphSearch } from './hooks/useGraphSearch';
+export { useSearchSuggestions } from './hooks/useSearchSuggestions';
+export type {
+  SearchSuggestion,
+  SearchableType,
+  UseSearchSuggestionsOptions,
+  UseSearchSuggestionsResult,
+} from './hooks/useSearchSuggestions';
 
 // Context (legacy, for backward compatibility - wraps Zustand store)
 export { LineageProvider } from './context';
@@ -88,3 +97,14 @@ export type {
   MermaidGraphType,
   StructuredLineageJson,
 } from './utils/exportUtils';
+
+// Graph traversal utilities
+export {
+  findConnectedElements,
+  findConnectedElementsMultiple,
+  findSearchMatchIds,
+  filterGraphToHighlights,
+  isTableNodeData,
+  shouldIncludeNode,
+  shouldIncludeEdge,
+} from './utils/graphTraversal';

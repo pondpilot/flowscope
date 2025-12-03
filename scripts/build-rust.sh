@@ -9,6 +9,7 @@ wasm-pack build crates/flowscope-wasm --target web --out-dir ../../packages/core
 
 echo "Copying WASM to app locations..."
 # Copy to app/public/wasm for dev server
+mkdir -p app/public/wasm
 cp packages/core/src/wasm/flowscope_wasm_bg.wasm app/public/wasm/
 cp packages/core/src/wasm/flowscope_wasm.js app/public/wasm/
 cp packages/core/src/wasm/flowscope_wasm.d.ts app/public/wasm/

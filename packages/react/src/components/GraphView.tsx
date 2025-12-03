@@ -18,7 +18,13 @@ import { useNodeFocus } from '../hooks/useNodeFocus';
 import type { GraphViewProps, TableNodeData, LayoutAlgorithm } from '../types';
 import { getLayoutedElements, getLayoutedElementsAsync } from '../utils/layout';
 import { LayoutSelector } from './LayoutSelector';
-import { findConnectedElements } from '../utils/graphTraversal';
+import {
+  findConnectedElements,
+  findSearchMatchIds,
+  findConnectedElementsMultiple,
+  filterGraphToHighlights,
+  isTableNodeData,
+} from '../utils/graphTraversal';
 import {
   mergeStatements,
   buildFlowNodes,
@@ -35,6 +41,7 @@ import { ExportMenu } from './ExportMenu';
 import { ViewModeSelector } from './ViewModeSelector';
 import { GraphSearchControl } from './GraphSearchControl';
 import { Legend } from './Legend';
+import type { SearchableType } from '../hooks/useSearchSuggestions';
 import {
   GraphTooltip,
   GraphTooltipContent,
@@ -43,7 +50,7 @@ import {
   GraphTooltipArrow,
   GraphTooltipPortal,
 } from './ui/graph-tooltip';
-import { UI_CONSTANTS, GRAPH_CONFIG, getMinimapNodeColor } from '../constants';
+import { GRAPH_CONFIG, getMinimapNodeColor } from '../constants';
 
 /**
  * Helper component to handle node focusing.
@@ -160,17 +167,6 @@ function ViewportHandler({
   return null;
 }
 
-// Type guard for safer type checking
-function isTableNodeData(data: unknown): data is TableNodeData {
-  return (
-    typeof data === 'object' &&
-    data !== null &&
-    'label' in data &&
-    'nodeType' in data &&
-    'columns' in data
-  );
-}
-
 // Type guard for data with isSelected property
 interface SelectableNodeData {
   isSelected?: boolean;
@@ -256,47 +252,46 @@ export function GraphView({
   const { state, actions } = useLineage();
   const { result, selectedNodeId, searchTerm, viewMode, layoutAlgorithm, collapsedNodeIds, showScriptTables, expandedTableIds } = state;
 
-  // Determine if search is controlled
+  // Determine if search is controlled externally
   const isSearchControlled = controlledSearchTerm !== undefined;
 
-  // Local search state that always updates immediately for the input
-  const [localSearchTerm, setLocalSearchTerm] = useState(() => controlledSearchTerm ?? searchTerm);
+  // The effective search term used for graph filtering
+  const effectiveSearchTerm = isSearchControlled ? controlledSearchTerm : searchTerm;
 
-  // Handle search term changes
+  // Focus mode - when enabled, only show nodes in the search lineage path
+  const [focusMode, setFocusMode] = useState(false);
+
+  // Handle search term changes - just update store or call callback, no local state
   const handleSearchTermChange = useCallback((newSearchTerm: string) => {
-    setLocalSearchTerm(newSearchTerm);
     if (isSearchControlled) {
       onSearchTermChange?.(newSearchTerm);
+    } else {
+      actions.setSearchTerm(newSearchTerm);
     }
-  }, [isSearchControlled, onSearchTermChange]);
+  }, [isSearchControlled, onSearchTermChange, actions]);
 
-  // Debounce search term updates to the lineage store
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      actions.setSearchTerm(localSearchTerm);
-    }, UI_CONSTANTS.SEARCH_DEBOUNCE_DELAY);
-
-    return () => clearTimeout(handler);
-  }, [localSearchTerm, actions]);
-
-  // Sync local state when external searchTerm changes (only when uncontrolled)
-  useEffect(() => {
-    if (!isSearchControlled && searchTerm !== localSearchTerm) {
-      setLocalSearchTerm(searchTerm);
-    }
-  }, [searchTerm, isSearchControlled, localSearchTerm]);
-
-  // Keep local state in sync when the controlled value changes externally
-  useEffect(() => {
-    if (isSearchControlled && controlledSearchTerm !== undefined && controlledSearchTerm !== localSearchTerm) {
-      setLocalSearchTerm(controlledSearchTerm);
-    }
-  }, [controlledSearchTerm, isSearchControlled, localSearchTerm]);
+  // Handle focus mode changes
+  const handleFocusModeChange = useCallback((enabled: boolean) => {
+    setFocusMode(enabled);
+  }, []);
 
   const statement = useMemo(() => {
     if (!result || !result.statements) return null;
     return mergeStatements(result.statements);
   }, [result]);
+
+  // Determine searchable types based on view mode
+  const searchableTypes = useMemo((): SearchableType[] => {
+    switch (viewMode) {
+      case 'script':
+        return ['script', 'table', 'view', 'cte'];
+      case 'column':
+        return ['table', 'view', 'cte', 'column', 'script'];
+      case 'table':
+      default:
+        return ['table', 'view', 'cte', 'script'];
+    }
+  }, [viewMode]);
 
   // Build raw nodes and edges (without layout)
   const { rawNodes, rawEdges, direction } = useMemo(() => {
@@ -308,47 +303,67 @@ export function GraphView({
       let dir: 'LR' | 'TB' = 'LR';
 
       if (viewMode === 'script') {
-        const tempGraph = buildScriptLevelGraph(
+        let graph = buildScriptLevelGraph(
           result.statements,
           selectedNodeId,
-          searchTerm,
+          effectiveSearchTerm,
           showScriptTables
         );
 
+        // Collect highlight IDs from selection and search matches
         let highlightIds = new Set<string>();
         if (selectedNodeId) {
-          highlightIds = findConnectedElements(selectedNodeId, tempGraph.edges);
+          highlightIds = findConnectedElements(selectedNodeId, graph.edges);
+        }
+        // Add search-based highlights (scripts and tables with their paths)
+        if (effectiveSearchTerm) {
+          const searchMatchIds = findSearchMatchIds(effectiveSearchTerm, graph.nodes, 'script');
+          const searchConnected = findConnectedElementsMultiple(searchMatchIds, graph.edges);
+          for (const id of searchConnected) {
+            highlightIds.add(id);
+          }
         }
 
-        const enhancedGraph = enhanceGraphWithHighlights(tempGraph, highlightIds);
+        // Apply focus mode filtering if enabled and we have search matches
+        if (focusMode && effectiveSearchTerm && highlightIds.size > 0) {
+          graph = filterGraphToHighlights(graph, highlightIds);
+        }
+
+        const enhancedGraph = enhanceGraphWithHighlights(graph, highlightIds);
         nodes = enhancedGraph.nodes;
         edges = enhancedGraph.edges;
         dir = 'LR';
       } else if (viewMode === 'column') {
         if (!statement) return { rawNodes: [], rawEdges: [], direction: 'LR' as const };
 
-        const tempGraph = buildColumnLevelGraph(
+        let graph = buildColumnLevelGraph(
           statement,
           selectedNodeId,
-          searchTerm,
-          new Set(),
-          expandedTableIds,
-          result.resolvedSchema
-        );
-
-        let highlightIds = new Set<string>();
-        if (selectedNodeId) {
-          highlightIds = findConnectedElements(selectedNodeId, tempGraph.edges);
-        }
-
-        const graph = buildColumnLevelGraph(
-          statement,
-          selectedNodeId,
-          searchTerm,
+          effectiveSearchTerm,
           collapsedNodeIds,
           expandedTableIds,
           result.resolvedSchema
         );
+
+        // Collect highlight IDs from selection and search matches
+        let highlightIds = new Set<string>();
+        if (selectedNodeId) {
+          highlightIds = findConnectedElements(selectedNodeId, graph.edges);
+        }
+        // Add search-based highlights (columns with their lineage paths)
+        if (effectiveSearchTerm) {
+          const searchMatchIds = findSearchMatchIds(effectiveSearchTerm, graph.nodes, 'column');
+          const searchConnected = findConnectedElementsMultiple(searchMatchIds, graph.edges);
+          for (const id of searchConnected) {
+            highlightIds.add(id);
+          }
+        }
+
+        // Apply focus mode filtering if enabled and we have search matches
+        if (focusMode && effectiveSearchTerm && highlightIds.size > 0) {
+          graph = filterGraphToHighlights(graph, highlightIds);
+        }
+
         const enhancedGraph = enhanceGraphWithHighlights(graph, highlightIds);
         nodes = enhancedGraph.nodes;
         edges = enhancedGraph.edges;
@@ -357,34 +372,37 @@ export function GraphView({
         // Table view
         if (!statement) return { rawNodes: [], rawEdges: [], direction: 'LR' as const };
 
-        const tempGraph = {
+        let graph = {
           nodes: buildFlowNodes(
             statement,
             selectedNodeId,
-            searchTerm,
-            new Set(),
-            expandedTableIds,
-            result.resolvedSchema
-          ),
-          edges: buildFlowEdges(statement),
-        };
-
-        let highlightIds = new Set<string>();
-        if (selectedNodeId) {
-          highlightIds = findConnectedElements(selectedNodeId, tempGraph.edges);
-        }
-
-        const graph = {
-          nodes: buildFlowNodes(
-            statement,
-            selectedNodeId,
-            searchTerm,
+            effectiveSearchTerm,
             collapsedNodeIds,
             expandedTableIds,
             result.resolvedSchema
           ),
           edges: buildFlowEdges(statement),
         };
+
+        // Collect highlight IDs from selection and search matches
+        let highlightIds = new Set<string>();
+        if (selectedNodeId) {
+          highlightIds = findConnectedElements(selectedNodeId, graph.edges);
+        }
+        // Add search-based highlights (tables with their lineage paths)
+        if (effectiveSearchTerm) {
+          const searchMatchIds = findSearchMatchIds(effectiveSearchTerm, graph.nodes, 'table');
+          const searchConnected = findConnectedElementsMultiple(searchMatchIds, graph.edges);
+          for (const id of searchConnected) {
+            highlightIds.add(id);
+          }
+        }
+
+        // Apply focus mode filtering if enabled and we have search matches
+        if (focusMode && effectiveSearchTerm && highlightIds.size > 0) {
+          graph = filterGraphToHighlights(graph, highlightIds);
+        }
+
         const enhancedGraph = enhanceGraphWithHighlights(graph, highlightIds);
         nodes = enhancedGraph.nodes;
         edges = enhancedGraph.edges;
@@ -396,7 +414,7 @@ export function GraphView({
       console.error('Graph building failed:', error);
       return { rawNodes: [], rawEdges: [], direction: 'LR' as const };
     }
-  }, [result, statement, selectedNodeId, searchTerm, viewMode, collapsedNodeIds, showScriptTables, expandedTableIds]);
+  }, [result, statement, selectedNodeId, effectiveSearchTerm, viewMode, collapsedNodeIds, showScriptTables, expandedTableIds, focusMode]);
 
   // State for async layout results
   const [layoutedNodes, setLayoutedNodes] = useState<FlowNode[]>([]);
@@ -645,8 +663,11 @@ export function GraphView({
             )}
           </div>
           <GraphSearchControl
-            searchTerm={localSearchTerm}
+            searchTerm={effectiveSearchTerm ?? ''}
             onSearchTermChange={handleSearchTermChange}
+            searchableTypes={searchableTypes}
+            focusMode={focusMode}
+            onFocusModeChange={handleFocusModeChange}
           />
         </Panel>
         <Panel position="top-right" className="flex gap-3 items-start">
