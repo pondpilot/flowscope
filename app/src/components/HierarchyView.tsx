@@ -577,7 +577,7 @@ export function HierarchyView({ className, projectId }: HierarchyViewProps) {
             searchableTypes={['table', 'view', 'cte', 'column']}
             placeholder="Filter tables and columns..."
             onSuggestionSelect={handleSuggestionSelect}
-            className="w-full rounded-md bg-background border-border-primary-light dark:border-border-primary-dark"
+            className="w-full"
           />
         </div>
 

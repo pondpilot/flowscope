@@ -1017,11 +1017,11 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
             )}
           </div>
 
-          <div 
-            className="relative group ml-auto flex items-center"
+          <div
+            className="relative group ml-auto flex items-center rounded-full border border-slate-200/60 dark:border-slate-700/60 bg-white/95 dark:bg-slate-900/95 h-9 shadow-sm backdrop-blur-sm"
             ref={searchContainerRef}
           >
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors z-10" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none z-10" strokeWidth={1.5} />
             <input
               type="text"
               placeholder={`Filter ${filterMode}...`}
@@ -1038,7 +1038,7 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
               aria-controls={suggestionsListId}
               aria-activedescendant={showSuggestions && suggestions.length > 0 ? `${activeOptionId}-${activeSuggestionIndex}` : undefined}
               aria-autocomplete="list"
-              className="pl-9 pr-28 py-1.5 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all w-72"
+              className="h-7 pl-8 pr-24 text-sm bg-transparent border-0 rounded-full focus:outline-none focus:ring-0 w-64 placeholder:text-slate-400"
             />
 
             {/* Autocomplete Dropdown */}
@@ -1047,7 +1047,7 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
                 id={suggestionsListId}
                 role="listbox"
                 aria-label="Search suggestions"
-                className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-md shadow-lg z-[100] max-h-60 overflow-auto py-1"
+                className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg z-[100] max-h-60 overflow-auto py-1"
               >
                 {suggestions.length > 0 ? (
                   suggestions.map((suggestion, index) => (
@@ -1084,7 +1084,7 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
               </div>
             )}
 
-            <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center bg-slate-100 dark:bg-slate-800 rounded p-0.5 gap-0.5">
+            <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center bg-slate-100 dark:bg-slate-800 rounded-full p-0.5 gap-0.5">
               <button
                 onClick={() => {
                   if (filterMode !== 'rows') {
@@ -1096,9 +1096,9 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
                 aria-label="Filter rows"
                 aria-pressed={filterMode === 'rows'}
                 className={cn(
-                  "p-1 rounded transition-all",
+                  "p-1 rounded-full transition-all",
                   filterMode === 'rows'
-                    ? "bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm"
+                    ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm"
                     : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                 )}
               >
@@ -1115,9 +1115,9 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
                 aria-label="Filter columns"
                 aria-pressed={filterMode === 'columns'}
                 className={cn(
-                  "p-1 rounded transition-all",
+                  "p-1 rounded-full transition-all",
                   filterMode === 'columns'
-                    ? "bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm"
+                    ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm"
                     : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                 )}
               >
@@ -1134,9 +1134,9 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
                 aria-label="Trace column fields"
                 aria-pressed={filterMode === 'fields'}
                 className={cn(
-                  "p-1 rounded transition-all",
+                  "p-1 rounded-full transition-all",
                   filterMode === 'fields'
-                    ? "bg-white dark:bg-slate-700 text-purple-600 dark:text-purple-400 shadow-sm"
+                    ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm"
                     : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                 )}
               >
