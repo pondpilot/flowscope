@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { ChevronDown, ChevronUp, Table2, Database, FileCode, Columns3, Eye } from 'lucide-react';
-import { COLORS, EDGE_STYLES } from '../constants';
+import { COLORS, EDGE_STYLES, PANEL_STYLES } from '../constants';
 
 interface LegendProps {
   viewMode?: 'script' | 'table' | 'column';
@@ -15,7 +15,7 @@ export function Legend({ viewMode = 'table' }: LegendProps): JSX.Element {
 
   return (
     <div className="relative">
-      <div className="flex items-center rounded-full border border-slate-200/60 dark:border-slate-700/60 bg-white/95 dark:bg-slate-900/95 px-1.5 py-1 shadow-sm backdrop-blur-sm transition-all duration-200" data-graph-panel>
+      <div className={`${PANEL_STYLES.container} px-1.5 transition-all duration-200`} data-graph-panel>
         <button
           onClick={() => setIsExpanded(!isExpanded)}
           className={`

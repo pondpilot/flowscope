@@ -1,6 +1,7 @@
 import { Network, Workflow } from 'lucide-react';
 import { useLineage } from '../store';
 import type { LayoutAlgorithm } from '../types';
+import { PANEL_STYLES } from '../constants';
 import {
   GraphTooltip,
   GraphTooltipContent,
@@ -41,9 +42,10 @@ export function LayoutSelector(): JSX.Element {
   return (
     <GraphTooltipProvider>
       <div
-        className="inline-flex h-8 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 p-0.5"
+        className={PANEL_STYLES.selector}
         role="radiogroup"
         aria-label="Select layout algorithm"
+        data-graph-panel
       >
         {LAYOUT_OPTIONS.map((option) => {
           const isActive = layoutAlgorithm === option.value;
@@ -62,7 +64,7 @@ export function LayoutSelector(): JSX.Element {
                     inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-all duration-200
                     ${
                       isActive
-                        ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                        ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100'
                         : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
                     }
                     focus-visible:outline-none

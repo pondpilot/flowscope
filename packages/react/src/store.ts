@@ -2,7 +2,7 @@ import { createContext, createElement, useContext, type ReactNode } from 'react'
 import { useStore } from 'zustand';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { AnalyzeResult, Span } from '@pondpilot/flowscope-core';
-import type { LineageViewMode, LayoutAlgorithm, NavigationRequest, MatrixSubMode } from './types';
+import type { LineageViewMode, LayoutAlgorithm, NavigationRequest, MatrixSubMode, TableFilterDirection, TableFilter } from './types';
 
 const VIEW_MODE_STORAGE_KEY = 'flowscope-view-mode';
 const LAYOUT_ALGORITHM_STORAGE_KEY = 'flowscope-layout-algorithm';
@@ -80,6 +80,7 @@ export interface LineageState {
   expandedTableIds: Set<string>; // Tables with all columns shown
   showScriptTables: boolean;
   navigationRequest: NavigationRequest | null;
+  tableFilter: TableFilter;
 
   // Actions
   setResult: (result: AnalyzeResult | null) => void;
@@ -95,6 +96,10 @@ export interface LineageState {
   setLayoutAlgorithm: (algorithm: LayoutAlgorithm) => void;
   toggleShowScriptTables: () => void;
   requestNavigation: (request: NavigationRequest | null) => void;
+  setTableFilter: (filter: TableFilter) => void;
+  toggleTableFilterSelection: (tableLabel: string) => void;
+  setTableFilterDirection: (direction: TableFilterDirection) => void;
+  clearTableFilter: () => void;
 }
 
 /**
@@ -124,6 +129,7 @@ export function createLineageStore(
     expandedTableIds: new Set(),
     showScriptTables: false,
     navigationRequest: null,
+    tableFilter: { selectedTableLabels: new Set(), direction: 'both' },
     ...initialState,
 
     // Actions
@@ -203,6 +209,37 @@ export function createLineageStore(
     toggleShowScriptTables: () => set((state) => ({ showScriptTables: !state.showScriptTables })),
 
     requestNavigation: (request) => set({ navigationRequest: request }),
+
+    setTableFilter: (filter) => set({ tableFilter: filter }),
+
+    toggleTableFilterSelection: (tableLabel) =>
+      set((state) => {
+        const newSelectedTableLabels = new Set(state.tableFilter.selectedTableLabels);
+        if (newSelectedTableLabels.has(tableLabel)) {
+          newSelectedTableLabels.delete(tableLabel);
+        } else {
+          newSelectedTableLabels.add(tableLabel);
+        }
+        return {
+          tableFilter: {
+            ...state.tableFilter,
+            selectedTableLabels: newSelectedTableLabels,
+          },
+        };
+      }),
+
+    setTableFilterDirection: (direction) =>
+      set((state) => ({
+        tableFilter: {
+          ...state.tableFilter,
+          direction,
+        },
+      })),
+
+    clearTableFilter: () =>
+      set({
+        tableFilter: { selectedTableLabels: new Set(), direction: 'both' },
+      }),
   }));
 }
 
@@ -253,6 +290,7 @@ export function useLineage() {
       expandedTableIds: store.expandedTableIds,
       showScriptTables: store.showScriptTables,
       navigationRequest: store.navigationRequest,
+      tableFilter: store.tableFilter,
     },
     actions: {
       setResult: store.setResult,
@@ -268,6 +306,10 @@ export function useLineage() {
       setLayoutAlgorithm: store.setLayoutAlgorithm,
       toggleShowScriptTables: store.toggleShowScriptTables,
       requestNavigation: store.requestNavigation,
+      setTableFilter: store.setTableFilter,
+      toggleTableFilterSelection: store.toggleTableFilterSelection,
+      setTableFilterDirection: store.setTableFilterDirection,
+      clearTableFilter: store.clearTableFilter,
     },
   };
 }
@@ -291,6 +333,7 @@ export function useLineageState() {
   const expandedTableIds = useLineageStore((state) => state.expandedTableIds);
   const showScriptTables = useLineageStore((state) => state.showScriptTables);
   const navigationRequest = useLineageStore((state) => state.navigationRequest);
+  const tableFilter = useLineageStore((state) => state.tableFilter);
 
   return {
     result,
@@ -306,6 +349,7 @@ export function useLineageState() {
     expandedTableIds,
     showScriptTables,
     navigationRequest,
+    tableFilter,
   };
 }
 
@@ -326,6 +370,10 @@ export function useLineageActions() {
   const setLayoutAlgorithm = useLineageStore((state) => state.setLayoutAlgorithm);
   const toggleShowScriptTables = useLineageStore((state) => state.toggleShowScriptTables);
   const requestNavigation = useLineageStore((state) => state.requestNavigation);
+  const setTableFilter = useLineageStore((state) => state.setTableFilter);
+  const toggleTableFilterSelection = useLineageStore((state) => state.toggleTableFilterSelection);
+  const setTableFilterDirection = useLineageStore((state) => state.setTableFilterDirection);
+  const clearTableFilter = useLineageStore((state) => state.clearTableFilter);
 
   return {
     setResult,
@@ -341,5 +389,9 @@ export function useLineageActions() {
     setLayoutAlgorithm,
     toggleShowScriptTables,
     requestNavigation,
+    setTableFilter,
+    toggleTableFilterSelection,
+    setTableFilterDirection,
+    clearTableFilter,
   };
 }

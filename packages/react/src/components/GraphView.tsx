@@ -15,16 +15,11 @@ import { LayoutList } from 'lucide-react';
 
 import { useLineage } from '../store';
 import { useNodeFocus } from '../hooks/useNodeFocus';
+import { useGraphFiltering } from '../hooks/useGraphFiltering';
 import type { GraphViewProps, TableNodeData, LayoutAlgorithm } from '../types';
 import { getLayoutedElements, getLayoutedElementsAsync } from '../utils/layout';
 import { LayoutSelector } from './LayoutSelector';
-import {
-  findConnectedElements,
-  findSearchMatchIds,
-  findConnectedElementsMultiple,
-  filterGraphToHighlights,
-  isTableNodeData,
-} from '../utils/graphTraversal';
+import { isTableNodeData } from '../utils/graphTraversal';
 import {
   mergeStatements,
   buildFlowNodes,
@@ -40,6 +35,7 @@ import { AnimatedEdge } from './AnimatedEdge';
 import { ExportMenu } from './ExportMenu';
 import { ViewModeSelector } from './ViewModeSelector';
 import { GraphSearchControl } from './GraphSearchControl';
+import { TableFilterDropdown } from './TableFilterDropdown';
 import { Legend } from './Legend';
 import type { SearchableType } from '../hooks/useSearchSuggestions';
 import {
@@ -50,7 +46,7 @@ import {
   GraphTooltipArrow,
   GraphTooltipPortal,
 } from './ui/graph-tooltip';
-import { GRAPH_CONFIG, getMinimapNodeColor } from '../constants';
+import { GRAPH_CONFIG, PANEL_STYLES, getMinimapNodeColor } from '../constants';
 
 /**
  * Helper component to handle node focusing.
@@ -250,7 +246,7 @@ export function GraphView({
   fitViewTrigger,
 }: GraphViewProps): JSX.Element {
   const { state, actions } = useLineage();
-  const { result, selectedNodeId, searchTerm, viewMode, layoutAlgorithm, collapsedNodeIds, showScriptTables, expandedTableIds } = state;
+  const { result, selectedNodeId, searchTerm, viewMode, layoutAlgorithm, collapsedNodeIds, showScriptTables, expandedTableIds, tableFilter } = state;
 
   // Determine if search is controlled externally
   const isSearchControlled = controlledSearchTerm !== undefined;
@@ -293,50 +289,28 @@ export function GraphView({
     }
   }, [viewMode]);
 
-  // Build raw nodes and edges (without layout)
-  const { rawNodes, rawEdges, direction } = useMemo(() => {
-    if (!result || !result.statements) return { rawNodes: [], rawEdges: [], direction: 'LR' as const };
+  // Build the raw graph based on view mode (before filtering)
+  const { builtGraph, direction } = useMemo(() => {
+    if (!result || !result.statements) {
+      return { builtGraph: { nodes: [], edges: [] }, direction: 'LR' as const };
+    }
 
     try {
-      let nodes: FlowNode[];
-      let edges: FlowEdge[];
-      let dir: 'LR' | 'TB' = 'LR';
-
       if (viewMode === 'script') {
-        let graph = buildScriptLevelGraph(
+        const graph = buildScriptLevelGraph(
           result.statements,
           selectedNodeId,
           effectiveSearchTerm,
           showScriptTables
         );
+        return { builtGraph: graph, direction: 'LR' as const };
+      }
 
-        // Collect highlight IDs from selection and search matches
-        let highlightIds = new Set<string>();
-        if (selectedNodeId) {
-          highlightIds = findConnectedElements(selectedNodeId, graph.edges);
+      if (viewMode === 'column') {
+        if (!statement) {
+          return { builtGraph: { nodes: [], edges: [] }, direction: 'LR' as const };
         }
-        // Add search-based highlights (scripts and tables with their paths)
-        if (effectiveSearchTerm) {
-          const searchMatchIds = findSearchMatchIds(effectiveSearchTerm, graph.nodes, 'script');
-          const searchConnected = findConnectedElementsMultiple(searchMatchIds, graph.edges);
-          for (const id of searchConnected) {
-            highlightIds.add(id);
-          }
-        }
-
-        // Apply focus mode filtering if enabled and we have search matches
-        if (focusMode && effectiveSearchTerm && highlightIds.size > 0) {
-          graph = filterGraphToHighlights(graph, highlightIds);
-        }
-
-        const enhancedGraph = enhanceGraphWithHighlights(graph, highlightIds);
-        nodes = enhancedGraph.nodes;
-        edges = enhancedGraph.edges;
-        dir = 'LR';
-      } else if (viewMode === 'column') {
-        if (!statement) return { rawNodes: [], rawEdges: [], direction: 'LR' as const };
-
-        let graph = buildColumnLevelGraph(
+        const graph = buildColumnLevelGraph(
           statement,
           selectedNodeId,
           effectiveSearchTerm,
@@ -344,77 +318,46 @@ export function GraphView({
           expandedTableIds,
           result.resolvedSchema
         );
-
-        // Collect highlight IDs from selection and search matches
-        let highlightIds = new Set<string>();
-        if (selectedNodeId) {
-          highlightIds = findConnectedElements(selectedNodeId, graph.edges);
-        }
-        // Add search-based highlights (columns with their lineage paths)
-        if (effectiveSearchTerm) {
-          const searchMatchIds = findSearchMatchIds(effectiveSearchTerm, graph.nodes, 'column');
-          const searchConnected = findConnectedElementsMultiple(searchMatchIds, graph.edges);
-          for (const id of searchConnected) {
-            highlightIds.add(id);
-          }
-        }
-
-        // Apply focus mode filtering if enabled and we have search matches
-        if (focusMode && effectiveSearchTerm && highlightIds.size > 0) {
-          graph = filterGraphToHighlights(graph, highlightIds);
-        }
-
-        const enhancedGraph = enhanceGraphWithHighlights(graph, highlightIds);
-        nodes = enhancedGraph.nodes;
-        edges = enhancedGraph.edges;
-        dir = 'LR';
-      } else {
-        // Table view
-        if (!statement) return { rawNodes: [], rawEdges: [], direction: 'LR' as const };
-
-        let graph = {
-          nodes: buildFlowNodes(
-            statement,
-            selectedNodeId,
-            effectiveSearchTerm,
-            collapsedNodeIds,
-            expandedTableIds,
-            result.resolvedSchema
-          ),
-          edges: buildFlowEdges(statement),
-        };
-
-        // Collect highlight IDs from selection and search matches
-        let highlightIds = new Set<string>();
-        if (selectedNodeId) {
-          highlightIds = findConnectedElements(selectedNodeId, graph.edges);
-        }
-        // Add search-based highlights (tables with their lineage paths)
-        if (effectiveSearchTerm) {
-          const searchMatchIds = findSearchMatchIds(effectiveSearchTerm, graph.nodes, 'table');
-          const searchConnected = findConnectedElementsMultiple(searchMatchIds, graph.edges);
-          for (const id of searchConnected) {
-            highlightIds.add(id);
-          }
-        }
-
-        // Apply focus mode filtering if enabled and we have search matches
-        if (focusMode && effectiveSearchTerm && highlightIds.size > 0) {
-          graph = filterGraphToHighlights(graph, highlightIds);
-        }
-
-        const enhancedGraph = enhanceGraphWithHighlights(graph, highlightIds);
-        nodes = enhancedGraph.nodes;
-        edges = enhancedGraph.edges;
-        dir = 'LR';
+        return { builtGraph: graph, direction: 'LR' as const };
       }
 
-      return { rawNodes: nodes, rawEdges: edges, direction: dir };
+      // Table view
+      if (!statement) {
+        return { builtGraph: { nodes: [], edges: [] }, direction: 'LR' as const };
+      }
+      const graph = {
+        nodes: buildFlowNodes(
+          statement,
+          selectedNodeId,
+          effectiveSearchTerm,
+          collapsedNodeIds,
+          expandedTableIds,
+          result.resolvedSchema
+        ),
+        edges: buildFlowEdges(statement),
+      };
+      return { builtGraph: graph, direction: 'LR' as const };
     } catch (error) {
       console.error('Graph building failed:', error);
-      return { rawNodes: [], rawEdges: [], direction: 'LR' as const };
+      return { builtGraph: { nodes: [], edges: [] }, direction: 'LR' as const };
     }
-  }, [result, statement, selectedNodeId, effectiveSearchTerm, viewMode, collapsedNodeIds, showScriptTables, expandedTableIds, focusMode]);
+  }, [result, statement, selectedNodeId, effectiveSearchTerm, viewMode, collapsedNodeIds, showScriptTables, expandedTableIds]);
+
+  // Apply filtering (focus mode, table filter) and compute highlights
+  const { filteredGraph, highlightIds } = useGraphFiltering({
+    graph: builtGraph,
+    selectedNodeId,
+    searchTerm: effectiveSearchTerm,
+    viewMode,
+    focusMode,
+    tableFilter,
+  });
+
+  // Enhance graph with highlight styling
+  const { rawNodes, rawEdges } = useMemo(() => {
+    const enhanced = enhanceGraphWithHighlights(filteredGraph, highlightIds);
+    return { rawNodes: enhanced.nodes, rawEdges: enhanced.edges };
+  }, [filteredGraph, highlightIds]);
 
   // State for async layout results
   const [layoutedNodes, setLayoutedNodes] = useState<FlowNode[]>([]);
@@ -628,40 +571,36 @@ export function GraphView({
         <FitViewHandler trigger={fitViewTrigger} />
         <Background />
         <Controls />
-        <Panel position="top-left" className="flex gap-3">
-          <div className="flex items-center gap-2 rounded-full border border-slate-200/60 dark:border-slate-700/60 bg-white/95 dark:bg-slate-900/95 px-1.5 py-1 shadow-sm backdrop-blur-sm" data-graph-panel>
-            <ViewModeSelector />
-
-            {viewMode === 'script' && (
-              <>
-                <div className="h-5 w-px bg-slate-200 dark:bg-slate-700" />
-                <GraphTooltipProvider>
-                  <GraphTooltip delayDuration={300}>
-                    <GraphTooltipTrigger asChild>
-                      <button
-                        onClick={actions.toggleShowScriptTables}
-                        className={`
-                          inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-all duration-200
-                          ${showScriptTables ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}
-                          focus-visible:outline-none
-                        `}
-                        aria-label="Toggle table details"
-                        aria-pressed={showScriptTables}
-                      >
-                        <LayoutList className="size-4" strokeWidth={showScriptTables ? 2.5 : 1.5} />
-                      </button>
-                    </GraphTooltipTrigger>
-                    <GraphTooltipPortal>
-                      <GraphTooltipContent side="bottom">
-                        <p>{showScriptTables ? 'Hide tables' : 'Show tables'}</p>
-                        <GraphTooltipArrow />
-                      </GraphTooltipContent>
-                    </GraphTooltipPortal>
-                  </GraphTooltip>
-                </GraphTooltipProvider>
-              </>
-            )}
-          </div>
+        <Panel position="top-left" className="flex gap-3 items-start">
+          <ViewModeSelector />
+          {viewMode === 'script' && (
+            <div className={PANEL_STYLES.container} data-graph-panel>
+              <GraphTooltipProvider>
+                <GraphTooltip delayDuration={300}>
+                  <GraphTooltipTrigger asChild>
+                    <button
+                      onClick={actions.toggleShowScriptTables}
+                      className={`
+                        inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-all duration-200
+                        ${showScriptTables ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}
+                        focus-visible:outline-none
+                      `}
+                      aria-label="Toggle table details"
+                      aria-pressed={showScriptTables}
+                    >
+                      <LayoutList className="size-4" strokeWidth={showScriptTables ? 2.5 : 1.5} />
+                    </button>
+                  </GraphTooltipTrigger>
+                  <GraphTooltipPortal>
+                    <GraphTooltipContent side="bottom">
+                      <p>{showScriptTables ? 'Hide tables' : 'Show tables'}</p>
+                      <GraphTooltipArrow />
+                    </GraphTooltipContent>
+                  </GraphTooltipPortal>
+                </GraphTooltip>
+              </GraphTooltipProvider>
+            </div>
+          )}
           <GraphSearchControl
             searchTerm={effectiveSearchTerm ?? ''}
             onSearchTermChange={handleSearchTermChange}
@@ -669,13 +608,12 @@ export function GraphView({
             focusMode={focusMode}
             onFocusModeChange={handleFocusModeChange}
           />
+          {viewMode !== 'script' && <TableFilterDropdown />}
         </Panel>
         <Panel position="top-right" className="flex gap-3 items-start">
           <Legend viewMode={viewMode} />
-          <div className="flex items-center rounded-full border border-slate-200/60 dark:border-slate-700/60 bg-white/95 dark:bg-slate-900/95 px-1.5 py-1 shadow-sm backdrop-blur-sm" data-graph-panel>
-            <LayoutSelector />
-          </div>
-          <div className="flex items-center rounded-full border border-slate-200/60 dark:border-slate-700/60 bg-white/95 dark:bg-slate-900/95 px-1.5 py-1 shadow-sm backdrop-blur-sm" data-graph-panel>
+          <LayoutSelector />
+          <div className={PANEL_STYLES.container} data-graph-panel>
             <ExportMenu graphRef={finalRef} />
           </div>
         </Panel>

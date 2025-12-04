@@ -14,6 +14,7 @@ export { type EdgeType } from './components/AnimatedEdge';
 export { ErrorBoundary, GraphErrorBoundary } from './components/ErrorBoundary';
 export { SearchAutocomplete } from './components/SearchAutocomplete';
 export type { SearchAutocompleteProps } from './components/SearchAutocomplete';
+export { TableFilterDropdown } from './components/TableFilterDropdown';
 
 // Store and hooks (new Zustand-based)
 export {
@@ -44,6 +45,8 @@ export type {
   LineageViewMode,
   MatrixSubMode,
   LayoutAlgorithm,
+  TableFilterDirection,
+  TableFilter,
   GraphViewProps,
   ViewportState,
   SqlViewProps,
@@ -102,9 +105,15 @@ export type {
 export {
   findConnectedElements,
   findConnectedElementsMultiple,
+  findConnectedElementsDirectional,
+  findConnectedElementsMultipleDirectional,
   findSearchMatchIds,
   filterGraphToHighlights,
   isTableNodeData,
   shouldIncludeNode,
   shouldIncludeEdge,
+  applyTableFilter,
+  buildTableLabelMap,
 } from './utils/graphTraversal';
+
+export type { ApplyTableFilterResult } from './utils/graphTraversal';

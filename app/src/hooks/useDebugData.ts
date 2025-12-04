@@ -14,6 +14,11 @@ export interface DebugData {
       issueCount: number;
       hasErrors: boolean;
     };
+    globalLineage: {
+      nodeCount: number;
+      edgeCount: number;
+      tableNodes: Array<{ id: string; label: string; type: string }>;
+    };
   };
   schema: {
     schemaSQL: string;
@@ -38,6 +43,10 @@ export interface DebugData {
       viewMode: string;
       collapsedNodeIds: string[];
       showScriptTables: boolean;
+      tableFilter: {
+        selectedTableLabels: string[];
+        direction: string;
+      };
     };
     project: {
       activeProjectId: string | null;
@@ -77,6 +86,13 @@ export function useDebugData(): DebugData {
           issueCount: lineageState.result?.issues.length ?? 0,
           hasErrors: lineageState.result?.summary.hasErrors ?? false,
         },
+        globalLineage: {
+          nodeCount: lineageState.result?.globalLineage?.nodes?.length ?? 0,
+          edgeCount: lineageState.result?.globalLineage?.edges?.length ?? 0,
+          tableNodes: (lineageState.result?.globalLineage?.nodes ?? [])
+            .filter((n: { type: string }) => n.type === 'table' || n.type === 'view' || n.type === 'cte')
+            .map((n: { id: string; label: string; type: string }) => ({ id: n.id, label: n.label, type: n.type })),
+        },
       },
       schema: {
         schemaSQL: currentProject?.schemaSQL ?? '',
@@ -101,6 +117,10 @@ export function useDebugData(): DebugData {
           viewMode: lineageState.viewMode,
           collapsedNodeIds: Array.from(lineageState.collapsedNodeIds),
           showScriptTables: lineageState.showScriptTables,
+          tableFilter: {
+            selectedTableLabels: Array.from(lineageState.tableFilter.selectedTableLabels),
+            direction: lineageState.tableFilter.direction,
+          },
         },
         project: {
           activeProjectId: projectContext?.activeProjectId ?? null,

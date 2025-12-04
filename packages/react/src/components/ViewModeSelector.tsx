@@ -1,6 +1,7 @@
 import { FileCode, Table2, Columns3 } from 'lucide-react';
 import { useLineage } from '../store';
 import type { LineageViewMode } from '../types';
+import { PANEL_STYLES } from '../constants';
 import {
   GraphTooltip,
   GraphTooltipContent,
@@ -48,9 +49,10 @@ export function ViewModeSelector(): JSX.Element {
   return (
     <GraphTooltipProvider>
       <div
-        className="inline-flex h-8 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 p-0.5"
+        className={PANEL_STYLES.selector}
         role="radiogroup"
         aria-label="Select lineage view mode"
+        data-graph-panel
       >
         {VIEW_MODES.map((mode) => {
           const isActive = viewMode === mode.value;
@@ -69,7 +71,7 @@ export function ViewModeSelector(): JSX.Element {
                     inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-all duration-200
                     ${
                       isActive
-                        ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                        ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100'
                         : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
                     }
                     focus-visible:outline-none

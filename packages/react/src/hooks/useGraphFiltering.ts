@@ -1,0 +1,92 @@
+import { useMemo } from 'react';
+import type { Node as FlowNode, Edge as FlowEdge } from '@xyflow/react';
+import type { TableFilter } from '../types';
+import {
+  findConnectedElements,
+  findSearchMatchIds,
+  findConnectedElementsMultiple,
+  applyFilters,
+} from '../utils/graphTraversal';
+
+const LARGE_GRAPH_THRESHOLD = 1000;
+
+export interface UseGraphFilteringOptions {
+  /** The graph to filter */
+  graph: { nodes: FlowNode[]; edges: FlowEdge[] };
+  /** Currently selected node ID */
+  selectedNodeId: string | null;
+  /** Search term for highlighting */
+  searchTerm: string | undefined;
+  /** View mode for determining search matching strategy */
+  viewMode: 'script' | 'column' | 'table';
+  /** Whether focus mode is enabled */
+  focusMode: boolean;
+  /** Table filter configuration */
+  tableFilter: TableFilter;
+}
+
+export interface UseGraphFilteringResult {
+  /** The filtered graph */
+  filteredGraph: { nodes: FlowNode[]; edges: FlowEdge[] };
+  /** Set of IDs that should be highlighted */
+  highlightIds: Set<string>;
+}
+
+/**
+ * Hook that applies search highlighting, focus mode filtering, and table filtering to a graph.
+ * Consolidates the repeated filter logic used across different view modes in GraphView.
+ *
+ * @param options - Filtering configuration
+ * @returns The filtered graph and highlight IDs
+ */
+export function useGraphFiltering(options: UseGraphFilteringOptions): UseGraphFilteringResult {
+  const { graph, selectedNodeId, searchTerm, viewMode, focusMode, tableFilter } = options;
+
+  return useMemo(() => {
+    // Warn about potentially expensive operations on large graphs
+    if (graph.nodes.length > LARGE_GRAPH_THRESHOLD) {
+      console.warn(
+        `[useGraphFiltering] Large graph detected: ${graph.nodes.length} nodes. ` +
+        'Consider implementing virtualization for better performance.'
+      );
+    }
+
+    // Collect highlight IDs from selection and search matches
+    let highlightIds = new Set<string>();
+
+    if (selectedNodeId) {
+      highlightIds = findConnectedElements(selectedNodeId, graph.edges);
+    }
+
+    // Add search-based highlights
+    if (searchTerm) {
+      const searchMatchIds = findSearchMatchIds(searchTerm, graph.nodes, viewMode);
+      const searchConnected = findConnectedElementsMultiple(searchMatchIds, graph.edges);
+      for (const id of searchConnected) {
+        highlightIds.add(id);
+      }
+    }
+
+    // Apply focus mode and table filter with error handling
+    try {
+      const filterResult = applyFilters({
+        graph,
+        highlightIds,
+        focusMode,
+        effectiveSearchTerm: searchTerm,
+        tableFilter,
+      });
+
+      return {
+        filteredGraph: filterResult.graph,
+        highlightIds,
+      };
+    } catch (error) {
+      console.error('[useGraphFiltering] Graph filtering failed:', error);
+      return {
+        filteredGraph: { nodes: [], edges: [] },
+        highlightIds: new Set<string>(),
+      };
+    }
+  }, [graph, selectedNodeId, searchTerm, viewMode, focusMode, tableFilter]);
+}

@@ -1,5 +1,5 @@
 import type { Edge as FlowEdge, Node as FlowNode } from '@xyflow/react';
-import type { TableNodeData, ScriptNodeData } from '../types';
+import type { TableNodeData, ScriptNodeData, TableFilterDirection, TableFilter } from '../types';
 
 /**
  * Type guard for TableNodeData.
@@ -11,7 +11,8 @@ export function isTableNodeData(data: unknown): data is TableNodeData {
     data !== null &&
     'label' in data &&
     'nodeType' in data &&
-    'columns' in data
+    'columns' in data &&
+    Array.isArray((data as { columns: unknown }).columns)
   );
 }
 
@@ -48,7 +49,25 @@ export function filterGraphToHighlights(
   highlightIds: Set<string>
 ): { nodes: FlowNode[]; edges: FlowEdge[] } {
   const filteredNodes = graph.nodes.filter((node) => shouldIncludeNode(node, highlightIds));
-  const filteredEdges = graph.edges.filter((edge) => shouldIncludeEdge(edge, highlightIds));
+
+  // Build a set of all valid node IDs after filtering (including column IDs from table nodes)
+  const validNodeIds = new Set<string>();
+  for (const node of filteredNodes) {
+    validNodeIds.add(node.id);
+    if (isTableNodeData(node.data)) {
+      for (const col of node.data.columns) {
+        validNodeIds.add(col.id);
+      }
+    }
+  }
+
+  // Only include edges where both source and target exist in the filtered graph
+  const filteredEdges = graph.edges.filter((edge) => {
+    const sourceId = edge.sourceHandle || edge.source;
+    const targetId = edge.targetHandle || edge.target;
+    return validNodeIds.has(sourceId) && validNodeIds.has(targetId);
+  });
+
   return { nodes: filteredNodes, edges: filteredEdges };
 }
 
@@ -219,4 +238,270 @@ export function findConnectedElements(
   }
 
   return visited;
+}
+
+/**
+ * Traverse the graph to find connected elements in a specific direction.
+ * @param startId The ID of the node to start the traversal from
+ * @param edges All edges in the graph
+ * @param direction Which direction to traverse: 'upstream', 'downstream', or 'both'
+ * @returns Set of all connected element IDs in the specified direction
+ */
+export function findConnectedElementsDirectional(
+  startId: string,
+  edges: FlowEdge[],
+  direction: TableFilterDirection
+): Set<string> {
+  if (!startId || !edges || !direction) {
+    return new Set(startId ? [startId] : []);
+  }
+
+  const visited = new Set<string>();
+  visited.add(startId);
+
+  // Build adjacency maps for efficient graph traversal
+  const downstreamMap = new Map<string, string[]>(); // source -> edge IDs
+  const upstreamMap = new Map<string, string[]>();   // target -> edge IDs
+  const edgeMap = new Map<string, FlowEdge>();       // edge ID -> edge object
+
+  edges.forEach(edge => {
+    edgeMap.set(edge.id, edge);
+
+    const source = edge.sourceHandle || edge.source;
+    const target = edge.targetHandle || edge.target;
+
+    if (!downstreamMap.has(source)) downstreamMap.set(source, []);
+    downstreamMap.get(source)?.push(edge.id);
+
+    if (!upstreamMap.has(target)) upstreamMap.set(target, []);
+    upstreamMap.get(target)?.push(edge.id);
+  });
+
+  // Forward traversal (downstream): Find all consumers
+  if (direction === 'downstream' || direction === 'both') {
+    const forwardQueue = [startId];
+    const forwardVisited = new Set<string>([startId]);
+    while (forwardQueue.length > 0) {
+      const currentId = forwardQueue.shift()!;
+
+      if (edgeMap.has(currentId)) {
+        const edge = edgeMap.get(currentId)!;
+        const target = edge.targetHandle || edge.target;
+        if (!forwardVisited.has(target)) {
+          forwardVisited.add(target);
+          visited.add(target);
+          forwardQueue.push(target);
+        }
+      } else {
+        const outgoingEdges = downstreamMap.get(currentId) || [];
+        outgoingEdges.forEach(edgeId => {
+          if (!forwardVisited.has(edgeId)) {
+            forwardVisited.add(edgeId);
+            visited.add(edgeId);
+            forwardQueue.push(edgeId);
+          }
+        });
+      }
+    }
+  }
+
+  // Backward traversal (upstream): Find all sources
+  if (direction === 'upstream' || direction === 'both') {
+    const backwardQueue = [startId];
+    const backwardVisited = new Set<string>([startId]);
+    while (backwardQueue.length > 0) {
+      const currentId = backwardQueue.shift()!;
+
+      if (edgeMap.has(currentId)) {
+        const edge = edgeMap.get(currentId)!;
+        const source = edge.sourceHandle || edge.source;
+        if (!backwardVisited.has(source)) {
+          backwardVisited.add(source);
+          visited.add(source);
+          backwardQueue.push(source);
+        }
+      } else {
+        const incomingEdges = upstreamMap.get(currentId) || [];
+        incomingEdges.forEach(edgeId => {
+          if (!backwardVisited.has(edgeId)) {
+            backwardVisited.add(edgeId);
+            visited.add(edgeId);
+            backwardQueue.push(edgeId);
+          }
+        });
+      }
+    }
+  }
+
+  return visited;
+}
+
+/**
+ * Find connected elements for multiple start IDs with directional support.
+ * Returns union of all connected elements in the specified direction.
+ */
+export function findConnectedElementsMultipleDirectional(
+  startIds: Set<string>,
+  edges: FlowEdge[],
+  direction: TableFilterDirection
+): Set<string> {
+  if (!startIds || startIds.size === 0 || !edges || !direction) {
+    return new Set(startIds);
+  }
+
+  const allConnected = new Set<string>();
+  for (const startId of startIds) {
+    const connected = findConnectedElementsDirectional(startId, edges, direction);
+    for (const id of connected) {
+      allConnected.add(id);
+    }
+  }
+  return allConnected;
+}
+
+export interface ApplyTableFilterResult {
+  graph: { nodes: FlowNode[]; edges: FlowEdge[] };
+}
+
+export interface ApplyFiltersOptions {
+  graph: { nodes: FlowNode[]; edges: FlowEdge[] };
+  highlightIds: Set<string>;
+  focusMode: boolean;
+  effectiveSearchTerm: string | undefined;
+  tableFilter: TableFilter;
+}
+
+export interface ApplyFiltersResult {
+  graph: { nodes: FlowNode[]; edges: FlowEdge[] };
+  tableLabelMap: Map<string, string[]>;
+}
+
+/**
+ * Apply focus mode and table filtering to a graph.
+ * This consolidates the repeated filter logic across different view modes.
+ *
+ * @param options - Configuration for filtering
+ * @returns The filtered graph and the table label map (for potential reuse)
+ */
+export function applyFilters(options: ApplyFiltersOptions): ApplyFiltersResult {
+  const { highlightIds, focusMode, effectiveSearchTerm, tableFilter } = options;
+  let graph = options.graph;
+
+  // Apply focus mode filtering if enabled and we have search matches
+  if (focusMode && effectiveSearchTerm && highlightIds.size > 0) {
+    graph = filterGraphToHighlights(graph, highlightIds);
+  }
+
+  // Apply table filter (filter only, no highlighting)
+  const tableLabelMap = buildTableLabelMap(graph.nodes);
+  const filterResult = applyTableFilter(graph, tableFilter, tableLabelMap);
+
+  return {
+    graph: filterResult.graph,
+    tableLabelMap,
+  };
+}
+
+/**
+ * Apply table filter to a graph, filtering to show only nodes connected to selected tables.
+ * This function only filters the graph - it does NOT add highlights (that's for search/selection).
+ *
+ * @param graph - The graph to filter
+ * @param tableFilter - Filter configuration with selected table labels and direction
+ * @param tableLabelToNodeIds - Pre-computed mapping from table labels to node IDs for performance
+ * @returns Filtered graph containing only nodes connected to selected tables
+ */
+export function applyTableFilter(
+  graph: { nodes: FlowNode[]; edges: FlowEdge[] },
+  tableFilter: TableFilter,
+  tableLabelToNodeIds?: Map<string, string[]>
+): ApplyTableFilterResult {
+  // Input validation
+  if (!graph || !Array.isArray(graph.nodes) || !Array.isArray(graph.edges)) {
+    return { graph: { nodes: [], edges: [] } };
+  }
+
+  if (!tableFilter || tableFilter.selectedTableLabels.size === 0) {
+    return { graph };
+  }
+
+  // Find all node IDs that match the selected labels
+  const matchingNodeIds = new Set<string>();
+  // Also collect column IDs from matching tables for column-level graph traversal
+  const matchingColumnIds = new Set<string>();
+
+  if (tableLabelToNodeIds) {
+    // Use pre-computed mapping for better performance
+    for (const label of tableFilter.selectedTableLabels) {
+      const nodeIds = tableLabelToNodeIds.get(label);
+      if (nodeIds) {
+        for (const nodeId of nodeIds) {
+          matchingNodeIds.add(nodeId);
+        }
+      }
+    }
+  } else {
+    // Fallback to iterating over nodes
+    for (const node of graph.nodes) {
+      if (isTableNodeData(node.data) && tableFilter.selectedTableLabels.has(node.data.label)) {
+        matchingNodeIds.add(node.id);
+      }
+    }
+  }
+
+  // For column-level graphs, edges use column handles rather than table IDs.
+  // We need to also include column IDs from matching tables as starting points.
+  for (const node of graph.nodes) {
+    if (matchingNodeIds.has(node.id) && isTableNodeData(node.data)) {
+      for (const col of node.data.columns) {
+        matchingColumnIds.add(col.id);
+      }
+    }
+  }
+
+  if (matchingNodeIds.size === 0) {
+    // No matching tables in the current graph, so return an empty graph to reflect the active filter
+    return { graph: { nodes: [], edges: [] } };
+  }
+
+  // Combine table IDs and column IDs for traversal
+  const allStartIds = new Set([...matchingNodeIds, ...matchingColumnIds]);
+
+  const tableFilterConnected = findConnectedElementsMultipleDirectional(
+    allStartIds,
+    graph.edges,
+    tableFilter.direction
+  );
+
+  // Also include the original table node IDs (they may not be in traversal results
+  // if they have no edges, but we still want to show them)
+  for (const nodeId of matchingNodeIds) {
+    tableFilterConnected.add(nodeId);
+  }
+
+  return {
+    graph: filterGraphToHighlights(graph, tableFilterConnected),
+  };
+}
+
+/**
+ * Build a mapping from table labels to their node IDs for efficient lookup.
+ * Use this to avoid O(n) iteration when applying table filters repeatedly.
+ */
+export function buildTableLabelMap(nodes: FlowNode[]): Map<string, string[]> {
+  const map = new Map<string, string[]>();
+
+  for (const node of nodes) {
+    if (isTableNodeData(node.data)) {
+      const label = node.data.label;
+      const existing = map.get(label);
+      if (existing) {
+        existing.push(node.id);
+      } else {
+        map.set(label, [node.id]);
+      }
+    }
+  }
+
+  return map;
 }

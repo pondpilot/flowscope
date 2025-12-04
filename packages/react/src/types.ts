@@ -29,6 +29,21 @@ export type MatrixSubMode = 'tables' | 'scripts';
 export type LayoutAlgorithm = 'dagre' | 'elk';
 
 /**
+ * Direction for table filter lineage traversal.
+ */
+export type TableFilterDirection = 'upstream' | 'downstream' | 'both';
+
+/**
+ * Configuration for filtering the graph by selected tables.
+ */
+export interface TableFilter {
+  /** Set of table/view/CTE labels (names) to filter by */
+  selectedTableLabels: Set<string>;
+  /** Direction of lineage to show: upstream, downstream, or both */
+  direction: TableFilterDirection;
+}
+
+/**
  * Props for the SchemaView component.
  */
 export interface SchemaViewProps {

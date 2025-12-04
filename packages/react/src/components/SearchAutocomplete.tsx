@@ -237,7 +237,7 @@ export function SearchAutocomplete({
     <div
       ref={containerRef}
       className={cn(
-        'relative flex items-center rounded-full border border-slate-200/60 dark:border-slate-700/60 bg-white dark:bg-slate-900 px-2 py-1 shadow-sm transition-all duration-200 min-w-[200px]',
+        'relative flex items-center rounded-full border border-slate-200/60 dark:border-slate-700/60 bg-white dark:bg-slate-900 h-9 px-2 shadow-sm transition-all duration-200 min-w-[200px]',
         className
       )}
       data-graph-panel
