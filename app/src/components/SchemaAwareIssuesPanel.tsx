@@ -81,19 +81,19 @@ export function SchemaAwareIssuesPanel({ onOpenSchemaEditor }: SchemaAwareIssues
         <div className="flex items-center justify-between mb-2">
           <h3 className="font-semibold text-sm">Issues</h3>
           <div className="flex items-center gap-2 text-xs">
-            {errors > 0 && <span className="text-red-600 font-medium">{errors} errors</span>}
-            {warnings > 0 && <span className="text-amber-600 dark:text-amber-400 font-medium">{warnings} warnings</span>}
-            {infos > 0 && <span className="text-blue-600 font-medium">{infos} info</span>}
+            {errors > 0 && <span className="text-error-light dark:text-error-dark font-medium">{errors} errors</span>}
+            {warnings > 0 && <span className="text-warning-light dark:text-warning-dark font-medium">{warnings} warnings</span>}
+            {infos > 0 && <span className="text-primary font-medium">{infos} info</span>}
             {sortedIssues.length === 0 && (
-              <span className="text-green-600 font-medium">No issues</span>
+              <span className="text-success-light dark:text-success-dark font-medium">No issues</span>
             )}
           </div>
         </div>
 
         {schemaIssueCount > 0 && (
-          <div className="flex items-center gap-2 p-2 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded text-xs">
-            <Database className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />
-            <span className="text-blue-900 dark:text-blue-100 flex-1">
+          <div className="flex items-center gap-2 p-2 bg-highlight border border-primary/20 rounded text-xs">
+            <Database className="h-4 w-4 text-primary flex-shrink-0" />
+            <span className="text-highlight-foreground flex-1">
               {schemaIssueCount} schema-related {schemaIssueCount === 1 ? 'issue' : 'issues'} detected
             </span>
             <Button
@@ -125,30 +125,30 @@ export function SchemaAwareIssuesPanel({ onOpenSchemaEditor }: SchemaAwareIssues
                     onClick={() => handleIssueClick(issue)}
                     className={`p-3 border rounded-md cursor-pointer transition-colors ${
                       issue.severity === 'error'
-                        ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950 hover:bg-red-100 dark:hover:bg-red-900'
+                        ? 'border-error-light/30 dark:border-error-dark/30 bg-error-light/10 dark:bg-error-dark/10 hover:bg-error-light/20 dark:hover:bg-error-dark/20'
                         : issue.severity === 'warning'
-                        ? 'border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/50 hover:bg-amber-100 dark:hover:bg-amber-900/50'
-                        : 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950 hover:bg-blue-100 dark:hover:bg-blue-900'
-                    } ${isSchema ? 'ring-2 ring-blue-400 dark:ring-blue-600 ring-offset-1 dark:ring-offset-background' : ''}`}
+                        ? 'border-warning-light/30 dark:border-warning-dark/30 bg-warning-light/10 dark:bg-warning-dark/10 hover:bg-warning-light/20 dark:hover:bg-warning-dark/20'
+                        : 'border-primary/20 bg-highlight hover:bg-highlight/80'
+                    } ${isSchema ? 'ring-2 ring-primary ring-offset-1 dark:ring-offset-background' : ''}`}
                   >
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <div className="flex items-center gap-2">
                         <AlertCircle
                           className={`h-4 w-4 flex-shrink-0 ${
                             issue.severity === 'error'
-                              ? 'text-red-600 dark:text-red-400'
+                              ? 'text-error-light dark:text-error-dark'
                               : issue.severity === 'warning'
-                              ? 'text-amber-600 dark:text-amber-400'
-                              : 'text-blue-600 dark:text-blue-400'
+                              ? 'text-warning-light dark:text-warning-dark'
+                              : 'text-primary'
                           }`}
                         />
                         <span
                           className={`text-xs font-medium uppercase ${
                             issue.severity === 'error'
-                              ? 'text-red-700 dark:text-red-300'
+                              ? 'text-error-light dark:text-error-dark'
                               : issue.severity === 'warning'
-                              ? 'text-amber-700 dark:text-amber-300'
-                              : 'text-blue-700 dark:text-blue-300'
+                              ? 'text-warning-light dark:text-warning-dark'
+                              : 'text-primary'
                           }`}
                         >
                           {issue.severity}
@@ -159,7 +159,7 @@ export function SchemaAwareIssuesPanel({ onOpenSchemaEditor }: SchemaAwareIssues
                       </div>
                       <div className="flex items-center gap-1">
                         {isSchema && (
-                          <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                          <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
                             <Database className="h-3 w-3" />
                             Schema
                           </span>

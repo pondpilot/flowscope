@@ -90,7 +90,7 @@ export function EditorToolbar({
             onClick={onAnalyze}
             disabled={!wasmReady || isAnalyzing}
             size="sm"
-            className="h-[34px] gap-1.5 bg-brand-blue-500 hover:bg-brand-blue-600 text-white font-medium rounded-none rounded-l-full border-r border-white/20 px-3"
+            className="h-[34px] gap-1.5 bg-brand-blue-500 hover:bg-brand-blue-700 text-white font-medium rounded-none rounded-l-full border-r border-brand-blue-400/30 px-3"
           >
             {isAnalyzing ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -103,7 +103,7 @@ export function EditorToolbar({
             <DropdownMenuTrigger asChild>
               <Button
                 size="sm"
-                className="h-[34px] px-3 bg-brand-blue-500 hover:bg-brand-blue-600 text-white rounded-none rounded-r-full border-l border-black/10"
+                className="h-[34px] px-3 bg-brand-blue-500 hover:bg-brand-blue-700 text-white rounded-none rounded-r-full border-l border-brand-blue-700/30"
                 disabled={!wasmReady || isAnalyzing}
               >
                 <ChevronDown className="size-3.5" />

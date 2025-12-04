@@ -242,6 +242,9 @@ export const COLORS_DARK = {
   },
   recursive: '#F7B987', // PondPilot warning.dark
   accent: '#4C61FF', // PondPilot accent.dark
+  filter: '#34D399', // Emerald-400 - filter predicates (brighter for dark mode)
+  aggregation: '#FBBF24', // Amber-400 - aggregation/GROUP BY (brighter for dark mode)
+  groupingKey: '#60A5FA', // Blue-400 - GROUP BY key columns (brighter for dark mode)
 } as const;
 
 /**

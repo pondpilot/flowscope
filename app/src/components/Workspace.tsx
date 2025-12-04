@@ -159,7 +159,7 @@ export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspacePr
             <div className="h-6 w-6 bg-brand-blue-500 rounded flex items-center justify-center text-white font-bold text-xs">
               FS
             </div>
-            <span className="text-xs font-medium italic text-orange-500 hidden sm:inline-block">
+            <span className="text-xs font-medium italic text-warning-light dark:text-warning-dark hidden sm:inline-block">
               BETA
             </span>
           </div>

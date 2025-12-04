@@ -162,6 +162,12 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
     }
   };
 
+  const handleToggleSelectionKeyboard = (fileId: string) => {
+    if (currentProject) {
+      toggleFileSelection(currentProject.id, fileId);
+    }
+  };
+
   const handleStartRename = (fileId: string, currentName: string) => {
     setRenamingFileId(fileId);
     setRenameValue(currentName);
@@ -293,6 +299,14 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
       return;
     }
 
+    // Space toggles file selection when in tree zone
+    if (e.key === ' ' && focusZone === 'tree' && focusedFileId && currentProject) {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleFileSelection(currentProject.id, focusedFileId);
+      return;
+    }
+
     // Rename shortcut
     if ((e.key === 'r' || e.key === 'R') && focusZone === 'tree' && focusedFileId) {
       e.preventDefault();
@@ -390,27 +404,29 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
           }}
         >
           {/* Search Input */}
-          <div className="flex items-center border-b px-3 py-2">
-            <Search className="size-4 text-muted-foreground mr-2" />
-            <Input
-              ref={searchInputRef}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search files..."
-              className="h-8 border-0 p-0 focus-visible:ring-0 focus-visible:ring-offset-0 flex-1"
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  setOpen(false);
-                }
-                if (e.key === 'Enter' && filteredFiles.length > 0) {
-                  handleSelectFile(filteredFiles[0].id);
-                }
-              }}
-              data-testid="file-search-input"
-            />
-            <kbd className="hidden sm:inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground ml-2 shrink-0">
-              <span className="text-xs">⌘</span>O
-            </kbd>
+          <div className="px-3 py-2 border-b">
+            <div className="relative flex items-center rounded-full border border-border bg-background h-9 px-2 shadow-sm">
+              <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" strokeWidth={1.5} />
+              <Input
+                ref={searchInputRef}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search files..."
+                className="h-7 border-0 bg-transparent pl-7 pr-2 text-sm shadow-none placeholder:text-muted-foreground focus-visible:ring-0 rounded-full flex-1"
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    setOpen(false);
+                  }
+                  if (e.key === 'Enter' && filteredFiles.length > 0) {
+                    handleSelectFile(filteredFiles[0].id);
+                  }
+                }}
+                data-testid="file-search-input"
+              />
+              <kbd className="hidden sm:inline-flex h-5 select-none items-center gap-1 rounded-full border border-border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground shrink-0">
+                <span className="text-xs">⌘</span>O
+              </kbd>
+            </div>
           </div>
 
           {/* File Tree */}
@@ -431,6 +447,7 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
                 focusedFileId={focusZone === 'tree' ? focusedFileId : null}
                 onSelectFile={handleSelectFile}
                 onToggleSelection={handleToggleSelection}
+                onToggleSelectionKeyboard={handleToggleSelectionKeyboard}
                 onStartRename={handleStartRename}
                 onConfirmRename={handleConfirmRename}
                 onCancelRename={handleCancelRename}

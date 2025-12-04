@@ -31,6 +31,8 @@ interface FileTreeProps {
   focusedFileId?: string | null;
   onSelectFile: (fileId: string) => void;
   onToggleSelection: (e: React.MouseEvent, fileId: string) => void;
+  /** Toggle selection via keyboard (Space key) */
+  onToggleSelectionKeyboard?: (fileId: string) => void;
   onStartRename: (fileId: string, currentName: string) => void;
   onConfirmRename: () => void;
   onCancelRename: () => void;
@@ -202,6 +204,7 @@ function FileNode({ node, depth, props }: FileNodeProps) {
     focusedFileId,
     onSelectFile,
     onToggleSelection,
+    onToggleSelectionKeyboard,
     onStartRename,
     onConfirmRename,
     onCancelRename,
@@ -271,7 +274,13 @@ function FileNode({ node, depth, props }: FileNodeProps) {
       style={{ paddingLeft: `${depth * 12 + 8}px` }}
       onClick={() => onSelectFile(file.id)}
       onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          onSelectFile(file.id);
+        } else if (e.key === ' ' && showCheckboxes && onToggleSelectionKeyboard) {
+          e.preventDefault();
+          onToggleSelectionKeyboard(file.id);
+        } else if (e.key === ' ') {
           e.preventDefault();
           onSelectFile(file.id);
         }

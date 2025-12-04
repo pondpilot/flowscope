@@ -3,18 +3,19 @@ import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { Table2 } from 'lucide-react';
 import type { TableNodeData } from '../types';
 import { sanitizeIdentifier } from '../utils/sanitize';
-import { COLORS } from '../constants';
+import { useColors } from '../hooks/useColors';
 
 /**
  * A simplified Table Node for the Script/Hybrid view.
  * Displays icon and name only, with fixed handles.
  */
 function SimpleTableNodeComponent({ data, selected }: NodeProps): JSX.Element {
+  const colors = useColors();
   const nodeData = data as TableNodeData;
   const { label, nodeType, isSelected, isHighlighted } = nodeData;
-  
+
   const active = selected || isSelected;
-  
+
   // Determine colors based on node type
   type NodePalette = {
     bg: string;
@@ -24,26 +25,26 @@ function SimpleTableNodeComponent({ data, selected }: NodeProps): JSX.Element {
     textSecondary: string;
     accent: string;
   };
-  let palette: NodePalette = COLORS.nodes.table;
+  let palette: NodePalette = colors.nodes.table;
   if (nodeType === 'cte') {
-    palette = COLORS.nodes.cte;
+    palette = colors.nodes.cte;
   } else if (nodeType === 'view') {
-    palette = COLORS.nodes.view;
+    palette = colors.nodes.view;
   } else if (nodeType === 'virtualOutput') {
-    palette = COLORS.nodes.virtualOutput;
+    palette = colors.nodes.virtualOutput;
   }
 
   return (
     <div
       className={`
-        flex items-center gap-2 px-3 py-2 rounded-lg border bg-white shadow-sm min-w-[140px] max-w-[200px]
+        flex items-center gap-2 px-3 py-2 rounded-lg border shadow-sm min-w-[140px] max-w-[200px]
         transition-all duration-200
         ${active ? 'ring-2' : ''}
       `}
       style={{
-        borderColor: active ? COLORS.accent : palette.border,
-        backgroundColor: isHighlighted ? 'hsl(var(--highlight))' : palette.bg,
-        boxShadow: active ? `0 0 0 2px ${COLORS.accent}40` : '0 1px 2px rgba(0,0,0,0.05)',
+        borderColor: active ? colors.accent : palette.border,
+        backgroundColor: isHighlighted ? colors.interactive.related : palette.bg,
+        boxShadow: active ? `0 0 0 2px ${colors.interactive.selectionRing}` : undefined,
       }}
     >
       {/* Left Handle (Target) */}

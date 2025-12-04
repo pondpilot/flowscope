@@ -123,7 +123,7 @@ export function DebugPanel() {
   return (
     <div
       ref={panelRef}
-      className="fixed bg-white border-2 border-gray-300 rounded-lg shadow-2xl z-[9999] flex flex-col"
+      className="fixed bg-background border-2 border-border rounded-lg shadow-2xl z-[9999] flex flex-col"
       style={{
         left: `${position.x}px`,
         top: `${position.y}px`,
@@ -134,17 +134,17 @@ export function DebugPanel() {
     >
       {/* Header - Draggable */}
       <div
-        className="flex items-center justify-between px-4 py-2 bg-gray-800 text-white rounded-t-md cursor-grab active:cursor-grabbing select-none"
+        className="flex items-center justify-between px-4 py-2 bg-blue-grey-800 text-white rounded-t-md cursor-grab active:cursor-grabbing select-none"
         onMouseDown={handleMouseDown}
       >
         <div className="flex items-center gap-2">
           <span className="font-semibold text-sm">🐛 Debug Panel</span>
-          <span className="text-xs text-gray-400">Ctrl+Shift+D</span>
+          <span className="text-xs text-blue-grey-400">Ctrl+Shift+D</span>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setIsMinimized(!isMinimized)}
-            className="p-1 hover:bg-gray-700 rounded"
+            className="p-1 hover:bg-blue-grey-700 rounded"
             title={isMinimized ? 'Maximize' : 'Minimize'}
           >
             {isMinimized ? (
@@ -155,7 +155,7 @@ export function DebugPanel() {
           </button>
           <button
             onClick={() => setIsVisible(false)}
-            className="p-1 hover:bg-gray-700 rounded"
+            className="p-1 hover:bg-blue-grey-700 rounded"
             title="Close"
           >
             <X className="w-4 h-4" />
@@ -167,13 +167,13 @@ export function DebugPanel() {
       {!isMinimized && (
         <>
           {/* Tabs */}
-          <div className="flex items-center gap-1 px-2 py-2 bg-gray-100 border-b border-gray-300">
+          <div className="flex items-center gap-1 px-2 py-2 bg-muted border-b border-border">
             <button
               onClick={() => setActiveTab('analysis')}
               className={`px-3 py-1 text-sm rounded ${
                 activeTab === 'analysis'
-                  ? 'bg-white border border-gray-300 font-semibold'
-                  : 'text-gray-600 hover:bg-gray-200'
+                  ? 'bg-background border border-border font-semibold'
+                  : 'text-muted-foreground hover:bg-secondary'
               }`}
             >
               Analysis Result
@@ -182,8 +182,8 @@ export function DebugPanel() {
               onClick={() => setActiveTab('schema')}
               className={`px-3 py-1 text-sm rounded ${
                 activeTab === 'schema'
-                  ? 'bg-white border border-gray-300 font-semibold'
-                  : 'text-gray-600 hover:bg-gray-200'
+                  ? 'bg-background border border-border font-semibold'
+                  : 'text-muted-foreground hover:bg-secondary'
               }`}
             >
               Schema
@@ -192,8 +192,8 @@ export function DebugPanel() {
               onClick={() => setActiveTab('uiState')}
               className={`px-3 py-1 text-sm rounded ${
                 activeTab === 'uiState'
-                  ? 'bg-white border border-gray-300 font-semibold'
-                  : 'text-gray-600 hover:bg-gray-200'
+                  ? 'bg-background border border-border font-semibold'
+                  : 'text-muted-foreground hover:bg-secondary'
               }`}
             >
               UI State
@@ -202,8 +202,8 @@ export function DebugPanel() {
               onClick={() => setActiveTab('raw')}
               className={`px-3 py-1 text-sm rounded ${
                 activeTab === 'raw'
-                  ? 'bg-white border border-gray-300 font-semibold'
-                  : 'text-gray-600 hover:bg-gray-200'
+                  ? 'bg-background border border-border font-semibold'
+                  : 'text-muted-foreground hover:bg-secondary'
               }`}
             >
               Raw JSON
@@ -211,7 +211,7 @@ export function DebugPanel() {
             <div className="flex-1" />
             <button
               onClick={handleCopyTab}
-              className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+              className="flex items-center gap-1 px-2 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90"
               title="Copy current tab data"
             >
               {copied ? (
@@ -229,7 +229,7 @@ export function DebugPanel() {
             {activeTab === 'raw' && (
               <button
                 onClick={handleCopyAll}
-                className="flex items-center gap-1 px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 ml-1"
+                className="flex items-center gap-1 px-2 py-1 text-xs bg-success-light dark:bg-success-dark text-white rounded hover:opacity-90 ml-1"
                 title="Copy all debug data"
               >
                 Copy All
@@ -238,43 +238,43 @@ export function DebugPanel() {
           </div>
 
           {/* Tab Content */}
-          <div className="flex-1 overflow-auto p-4 bg-white text-sm font-mono">
+          <div className="flex-1 overflow-auto p-4 bg-background text-sm font-mono">
             {activeTab === 'analysis' && (
               <div>
-                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded">
-                  <div className="text-xs font-sans text-gray-700 mb-2">
+                <div className="mb-4 p-3 bg-highlight border border-primary/20 rounded">
+                  <div className="text-xs font-sans text-foreground mb-2">
                     <strong>Summary:</strong>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-xs font-sans">
                     <div>
-                      <span className="text-gray-600">Engine Version:</span>{' '}
-                      <span className="font-mono text-gray-800">{engineVersion}</span>
+                      <span className="text-muted-foreground">Engine Version:</span>{' '}
+                      <span className="font-mono text-foreground">{engineVersion}</span>
                     </div>
                     <div>
-                      <span className="text-gray-600">Has Result:</span>{' '}
+                      <span className="text-muted-foreground">Has Result:</span>{' '}
                       <span className="font-semibold">
                         {debugData.analysisResult.summary.hasResult ? '✓' : '✗'}
                       </span>
                     </div>
                     <div>
-                      <span className="text-gray-600">Statements:</span>{' '}
+                      <span className="text-muted-foreground">Statements:</span>{' '}
                       <span className="font-semibold">
                         {debugData.analysisResult.summary.statementCount}
                       </span>
                     </div>
                     <div>
-                      <span className="text-gray-600">Issues:</span>{' '}
+                      <span className="text-muted-foreground">Issues:</span>{' '}
                       <span className="font-semibold">
                         {debugData.analysisResult.summary.issueCount}
                       </span>
                     </div>
                     <div>
-                      <span className="text-gray-600">Has Errors:</span>{' '}
+                      <span className="text-muted-foreground">Has Errors:</span>{' '}
                       <span
                         className={`font-semibold ${
                           debugData.analysisResult.summary.hasErrors
-                            ? 'text-red-600'
-                            : 'text-green-600'
+                            ? 'text-error-light dark:text-error-dark'
+                            : 'text-success-light dark:text-success-dark'
                         }`}
                       >
                         {debugData.analysisResult.summary.hasErrors ? 'Yes' : 'No'}
@@ -287,32 +287,32 @@ export function DebugPanel() {
             )}
             {activeTab === 'schema' && (
               <div>
-                <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded">
-                  <div className="text-xs font-sans text-gray-700 mb-2">
+                <div className="mb-4 p-3 bg-success-light/10 dark:bg-success-dark/10 border border-success-light/20 dark:border-success-dark/20 rounded">
+                  <div className="text-xs font-sans text-foreground mb-2">
                     <strong>Schema Status:</strong>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-xs font-sans">
                     <div>
-                      <span className="text-gray-600">Has Schema SQL:</span>{' '}
+                      <span className="text-muted-foreground">Has Schema SQL:</span>{' '}
                       <span className="font-semibold">
                         {debugData.schema.hasSchemaSQL ? '✓' : '✗'}
                       </span>
                     </div>
                     <div>
-                      <span className="text-gray-600">Resolved Tables:</span>{' '}
+                      <span className="text-muted-foreground">Resolved Tables:</span>{' '}
                       <span className="font-semibold">
                         {debugData.schema.resolvedTableCount}
                       </span>
                     </div>
                     <div>
-                      <span className="text-gray-600">Imported:</span>{' '}
-                      <span className="font-semibold text-green-600">
+                      <span className="text-muted-foreground">Imported:</span>{' '}
+                      <span className="font-semibold text-success-light dark:text-success-dark">
                         {debugData.schema.importedTableCount}
                       </span>
                     </div>
                     <div>
-                      <span className="text-gray-600">Implied:</span>{' '}
-                      <span className="font-semibold text-blue-600">
+                      <span className="text-muted-foreground">Implied:</span>{' '}
+                      <span className="font-semibold text-primary">
                         {debugData.schema.impliedTableCount}
                       </span>
                     </div>

@@ -3,16 +3,23 @@ import type { NodeProps } from '@xyflow/react';
 import { useLineageActions, useLineageStore } from '../store';
 import type { TableNodeData, ColumnNodeInfo } from '../types';
 import { sanitizeIdentifier } from '../utils/sanitize';
-import { GRAPH_CONFIG, COLORS, MAX_FILTER_DISPLAY_LENGTH } from '../constants';
+import { GRAPH_CONFIG, MAX_FILTER_DISPLAY_LENGTH } from '../constants';
+import { useColors } from '../hooks/useColors';
 import type { AggregationInfo } from '@pondpilot/flowscope-core';
 
-const colors = COLORS;
+interface AggregationIndicatorProps {
+  aggregation?: AggregationInfo;
+  colors: {
+    groupingKey: string;
+    aggregation: string;
+  };
+}
 
 /**
  * Render aggregation indicator for a column.
  * Shows a badge for GROUP BY keys or aggregate functions.
  */
-function AggregationIndicator({ aggregation }: { aggregation?: AggregationInfo }): JSX.Element | null {
+function AggregationIndicator({ aggregation, colors }: AggregationIndicatorProps): JSX.Element | null {
   if (!aggregation) return null;
 
   if (aggregation.isGroupingKey) {
@@ -75,6 +82,7 @@ export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
   const { toggleNodeCollapse, toggleTableExpansion, selectNode } = useLineageActions();
   const expandedTableIds = useLineageStore((state) => state.expandedTableIds);
   const viewMode = useLineageStore((state) => state.viewMode);
+  const colors = useColors();
 
   if (!isTableNodeData(data)) {
     console.error('Invalid node data type for TableNode', data);
@@ -375,7 +383,7 @@ export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {sanitizeIdentifier(col.name)}
                   </span>
-                  <AggregationIndicator aggregation={col.aggregation} />
+                  <AggregationIndicator aggregation={col.aggregation} colors={colors} />
                 </span>
                 <Handle
                   type="source"

@@ -8,7 +8,8 @@ import {
   GraphTooltipTrigger,
   GraphTooltipArrow,
 } from './ui/graph-tooltip';
-import { GRAPH_CONFIG, COLORS, EDGE_STYLES, JOIN_TYPE_LABELS } from '../constants';
+import { GRAPH_CONFIG, EDGE_STYLES, JOIN_TYPE_LABELS } from '../constants';
+import { useColors } from '../hooks/useColors';
 
 export type EdgeType = 'dataFlow' | 'derivation' | 'aggregation';
 
@@ -18,28 +19,32 @@ interface EdgeStyleConfig {
   strokeDasharray: string | undefined;
 }
 
-const EDGE_TYPE_STYLES: Record<EdgeType | 'default', EdgeStyleConfig> = {
-  dataFlow: {
-    stroke: EDGE_STYLES.dataFlow.stroke,
-    strokeWidth: EDGE_STYLES.dataFlow.strokeWidth,
-    strokeDasharray: EDGE_STYLES.dataFlow.strokeDasharray,
-  },
-  derivation: {
-    stroke: EDGE_STYLES.derivation.stroke,
-    strokeWidth: EDGE_STYLES.derivation.strokeWidth,
-    strokeDasharray: EDGE_STYLES.derivation.strokeDasharray,
-  },
-  aggregation: {
-    stroke: EDGE_STYLES.aggregation.stroke,
-    strokeWidth: EDGE_STYLES.aggregation.strokeWidth,
-    strokeDasharray: EDGE_STYLES.aggregation.strokeDasharray,
-  },
-  default: {
-    stroke: EDGE_STYLES.dataFlow.stroke,
-    strokeWidth: EDGE_STYLES.dataFlow.strokeWidth,
-    strokeDasharray: EDGE_STYLES.dataFlow.strokeDasharray,
-  },
-};
+type ColorPalette = ReturnType<typeof useColors>;
+
+function getEdgeTypeStyles(colors: ColorPalette): Record<EdgeType | 'default', EdgeStyleConfig> {
+  return {
+    dataFlow: {
+      stroke: colors.edges.dataFlow,
+      strokeWidth: EDGE_STYLES.dataFlow.strokeWidth,
+      strokeDasharray: EDGE_STYLES.dataFlow.strokeDasharray,
+    },
+    derivation: {
+      stroke: colors.edges.derivation,
+      strokeWidth: EDGE_STYLES.derivation.strokeWidth,
+      strokeDasharray: EDGE_STYLES.derivation.strokeDasharray,
+    },
+    aggregation: {
+      stroke: colors.edges.aggregation,
+      strokeWidth: EDGE_STYLES.aggregation.strokeWidth,
+      strokeDasharray: EDGE_STYLES.aggregation.strokeDasharray,
+    },
+    default: {
+      stroke: colors.edges.dataFlow,
+      strokeWidth: EDGE_STYLES.dataFlow.strokeWidth,
+      strokeDasharray: EDGE_STYLES.dataFlow.strokeDasharray,
+    },
+  };
+}
 
 /**
  * Get edge styling based on edge type and highlight state
@@ -47,13 +52,15 @@ const EDGE_TYPE_STYLES: Record<EdgeType | 'default', EdgeStyleConfig> = {
 function getEdgeStyle(
   edgeType: EdgeType | string | undefined,
   isHighlighted: boolean | undefined,
+  colors: ColorPalette,
   customStyle?: CSSProperties
 ): CSSProperties {
-  const baseStyle = EDGE_TYPE_STYLES[edgeType as EdgeType] || EDGE_TYPE_STYLES.default;
+  const edgeTypeStyles = getEdgeTypeStyles(colors);
+  const baseStyle = edgeTypeStyles[edgeType as EdgeType] || edgeTypeStyles.default;
 
   if (isHighlighted) {
     return {
-      stroke: COLORS.edges.highlighted,
+      stroke: colors.edges.highlighted,
       strokeWidth: EDGE_STYLES.highlighted.strokeWidth,
       strokeDasharray: baseStyle.strokeDasharray,
       opacity: 1,
@@ -82,6 +89,7 @@ export function AnimatedEdge({
   data,
   style,
 }: EdgeProps): JSX.Element {
+  const colors = useColors();
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
     sourceY,
@@ -122,8 +130,8 @@ export function AnimatedEdge({
   }, [customTooltip, sourceColumn, targetColumn, expression, joinType, joinCondition]);
 
   const edgeStyle = useMemo(
-    () => getEdgeStyle(edgeType, isHighlighted, style),
-    [edgeType, isHighlighted, style]
+    () => getEdgeStyle(edgeType, isHighlighted, colors, style),
+    [edgeType, isHighlighted, colors, style]
   );
 
   return (
@@ -150,9 +158,9 @@ export function AnimatedEdge({
                   <div
                     style={{
                       cursor: 'help',
-                      backgroundColor: 'white',
-                      border: `2px solid ${COLORS.edges.derivation}`,
-                      color: COLORS.edges.derivation,
+                      backgroundColor: colors.nodes.table.bg,
+                      border: `2px solid ${colors.edges.derivation}`,
+                      color: colors.edges.derivation,
                       borderRadius: 12,
                       minWidth: 20,
                       height: 20,
@@ -195,9 +203,9 @@ export function AnimatedEdge({
                   <div
                     style={{
                       cursor: joinCondition ? 'help' : 'default',
-                      backgroundColor: 'white',
-                      border: `1px solid ${COLORS.edges.dataFlow}`,
-                      color: COLORS.edges.dataFlow,
+                      backgroundColor: colors.nodes.table.bg,
+                      border: `1px solid ${colors.edges.dataFlow}`,
+                      color: colors.edges.dataFlow,
                       borderRadius: 4,
                       padding: '2px 6px',
                       fontSize: 9,

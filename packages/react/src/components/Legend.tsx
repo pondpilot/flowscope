@@ -40,10 +40,7 @@ export function Legend({ viewMode = 'table' }: LegendProps): JSX.Element {
         >
           {/* Nodes section */}
           <div>
-            <div
-              className="text-xs font-semibold uppercase tracking-wider mb-2"
-              style={{ color: COLORS.nodes.table.textSecondary }}
-            >
+            <div className="text-xs font-semibold uppercase tracking-wider mb-2 text-slate-500 dark:text-slate-400">
               Nodes
             </div>
             <div className="space-y-1.5">
@@ -88,10 +85,7 @@ export function Legend({ viewMode = 'table' }: LegendProps): JSX.Element {
 
           {/* Edges section */}
           <div>
-            <div
-              className="text-xs font-semibold uppercase tracking-wider mb-2"
-              style={{ color: COLORS.nodes.table.textSecondary }}
-            >
+            <div className="text-xs font-semibold uppercase tracking-wider mb-2 text-slate-500 dark:text-slate-400">
               Edges
             </div>
             <div className="space-y-1.5">
@@ -112,10 +106,7 @@ export function Legend({ viewMode = 'table' }: LegendProps): JSX.Element {
 
           {/* States section */}
           <div>
-            <div
-              className="text-xs font-semibold uppercase tracking-wider mb-2"
-              style={{ color: COLORS.nodes.table.textSecondary }}
-            >
+            <div className="text-xs font-semibold uppercase tracking-wider mb-2 text-slate-500 dark:text-slate-400">
               States
             </div>
             <div className="space-y-1.5">
@@ -160,11 +151,11 @@ function LegendNodeItem({ icon, label, sublabel, color, bgColor }: LegendNodeIte
         {icon}
       </div>
       <div className="flex flex-col">
-        <span className="text-xs font-medium" style={{ color: COLORS.nodes.table.text }}>
+        <span className="text-xs font-medium text-slate-900 dark:text-white">
           {label}
         </span>
         {sublabel && (
-          <span className="text-[10px]" style={{ color: COLORS.nodes.table.textSecondary }}>
+          <span className="text-[10px] text-slate-500 dark:text-slate-300">
             {sublabel}
           </span>
         )}
@@ -202,11 +193,11 @@ function LegendEdgeItem({ style, color, label, sublabel }: LegendEdgeItemProps):
         />
       </svg>
       <div className="flex flex-col">
-        <span className="text-xs font-medium" style={{ color: COLORS.nodes.table.text }}>
+        <span className="text-xs font-medium text-slate-900 dark:text-white">
           {label}
         </span>
         {sublabel && (
-          <span className="text-[10px]" style={{ color: COLORS.nodes.table.textSecondary }}>
+          <span className="text-[10px] text-slate-500 dark:text-slate-300">
             {sublabel}
           </span>
         )}
@@ -231,7 +222,7 @@ function LegendStateItem({ color, label, filled }: LegendStateItemProps): JSX.El
           backgroundColor: filled ? color : 'transparent',
         }}
       />
-      <span className="text-xs" style={{ color: COLORS.nodes.table.text }}>
+      <span className="text-xs text-slate-900 dark:text-white">
         {label}
       </span>
     </div>

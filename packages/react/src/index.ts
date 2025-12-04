@@ -26,6 +26,7 @@ export {
 
 export { useGraphSearch } from './hooks/useGraphSearch';
 export { useSearchSuggestions } from './hooks/useSearchSuggestions';
+export { useColors, useIsDarkMode } from './hooks/useColors';
 export type {
   SearchSuggestion,
   SearchableType,

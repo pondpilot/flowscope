@@ -34,15 +34,15 @@ export function JsonTreeView({ data, name, depth = 0 }: JsonTreeViewProps) {
   const getValueColor = (type: string): string => {
     switch (type) {
       case 'string':
-        return 'text-green-600';
+        return 'text-success-light dark:text-success-dark';
       case 'number':
-        return 'text-blue-600';
+        return 'text-primary';
       case 'boolean':
-        return 'text-purple-600';
+        return 'text-accent';
       case 'null':
-        return 'text-gray-500';
+        return 'text-muted-foreground';
       default:
-        return 'text-gray-900';
+        return 'text-foreground';
     }
   };
 
@@ -60,32 +60,32 @@ export function JsonTreeView({ data, name, depth = 0 }: JsonTreeViewProps) {
           <div className="flex items-center gap-2 group">
             <button
               onClick={() => setIsExpanded(!isExpanded)}
-              className="flex items-center gap-1 hover:bg-gray-100 rounded px-1"
+              className="flex items-center gap-1 hover:bg-secondary rounded px-1"
             >
               {isExpanded ? (
-                <ChevronDown className="w-4 h-4 text-gray-500" />
+                <ChevronDown className="w-4 h-4 text-muted-foreground" />
               ) : (
-                <ChevronRight className="w-4 h-4 text-gray-500" />
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
               )}
-              {key && <span className="font-semibold text-gray-700">{key}:</span>}
-              <span className="text-gray-500">
+              {key && <span className="font-semibold text-foreground">{key}:</span>}
+              <span className="text-muted-foreground">
                 {isEmpty ? '{}' : `{${keys.length}}`}
               </span>
             </button>
             <button
               onClick={() => handleCopy(value)}
-              className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-200 rounded transition-opacity"
+              className="opacity-0 group-hover:opacity-100 p-1 hover:bg-secondary rounded transition-opacity"
               title="Copy object"
             >
               {copied ? (
-                <Check className="w-3 h-3 text-green-600" />
+                <Check className="w-3 h-3 text-success-light dark:text-success-dark" />
               ) : (
-                <Copy className="w-3 h-3 text-gray-600" />
+                <Copy className="w-3 h-3 text-muted-foreground" />
               )}
             </button>
           </div>
           {isExpanded && !isEmpty && (
-            <div className="ml-4 border-l border-gray-200 pl-2">
+            <div className="ml-4 border-l border-border pl-2">
               {keys.map((k) => (
                 <JsonTreeView key={k} data={obj[k]} name={k} depth={depth + 1} />
               ))}
@@ -104,32 +104,32 @@ export function JsonTreeView({ data, name, depth = 0 }: JsonTreeViewProps) {
           <div className="flex items-center gap-2 group">
             <button
               onClick={() => setIsExpanded(!isExpanded)}
-              className="flex items-center gap-1 hover:bg-gray-100 rounded px-1"
+              className="flex items-center gap-1 hover:bg-secondary rounded px-1"
             >
               {isExpanded ? (
-                <ChevronDown className="w-4 h-4 text-gray-500" />
+                <ChevronDown className="w-4 h-4 text-muted-foreground" />
               ) : (
-                <ChevronRight className="w-4 h-4 text-gray-500" />
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
               )}
-              {key && <span className="font-semibold text-gray-700">{key}:</span>}
-              <span className="text-gray-500">
+              {key && <span className="font-semibold text-foreground">{key}:</span>}
+              <span className="text-muted-foreground">
                 {isEmpty ? '[]' : `[${arr.length}]`}
               </span>
             </button>
             <button
               onClick={() => handleCopy(value)}
-              className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-200 rounded transition-opacity"
+              className="opacity-0 group-hover:opacity-100 p-1 hover:bg-secondary rounded transition-opacity"
               title="Copy array"
             >
               {copied ? (
-                <Check className="w-3 h-3 text-green-600" />
+                <Check className="w-3 h-3 text-success-light dark:text-success-dark" />
               ) : (
-                <Copy className="w-3 h-3 text-gray-600" />
+                <Copy className="w-3 h-3 text-muted-foreground" />
               )}
             </button>
           </div>
           {isExpanded && !isEmpty && (
-            <div className="ml-4 border-l border-gray-200 pl-2">
+            <div className="ml-4 border-l border-border pl-2">
               {arr.map((item, idx) => (
                 <JsonTreeView
                   key={idx}
@@ -146,7 +146,7 @@ export function JsonTreeView({ data, name, depth = 0 }: JsonTreeViewProps) {
 
     return (
       <div className="ml-4 flex items-center gap-2">
-        {key && <span className="font-semibold text-gray-700">{key}:</span>}
+        {key && <span className="font-semibold text-foreground">{key}:</span>}
         <span className={colorClass}>
           {type === 'string' ? `"${value}"` : String(value)}
         </span>
