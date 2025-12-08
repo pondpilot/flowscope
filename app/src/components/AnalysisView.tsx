@@ -1,30 +1,35 @@
-import { useRef, useMemo, useState, useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { LineageActions } from '@pondpilot/flowscope-react';
-import { useLineage } from '@pondpilot/flowscope-react';
 import {
-  GraphView,
-  SchemaView,
-  MatrixView,
   GraphErrorBoundary,
+  GraphView,
+  MatrixView,
+  SchemaView,
+  useLineage,
 } from '@pondpilot/flowscope-react';
+import type { AnalyzeResult, SchemaTable } from '@pondpilot/flowscope-core';
+import { Settings } from 'lucide-react';
+
+import { Button } from '@/components/ui/button';
 import {
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
 } from '@/components/ui/tabs';
-import { Button } from '@/components/ui/button';
-import { SchemaEditor } from './SchemaEditor';
-import { SchemaAwareIssuesPanel } from './SchemaAwareIssuesPanel';
+import { usePersistedLineageState } from '@/hooks/usePersistedLineageState';
+import { usePersistedMatrixState } from '@/hooks/usePersistedMatrixState';
+import { usePersistedSchemaState } from '@/hooks/usePersistedSchemaState';
+import { isValidTab, useNavigation } from '@/lib/navigation-context';
+import { useProject } from '@/lib/project-store';
 import { ComplexityDots } from './ComplexityDots';
 import { HierarchyView } from './HierarchyView';
-import { useProject } from '@/lib/project-store';
-import { useNavigation, isValidTab } from '@/lib/navigation-context';
-import { usePersistedMatrixState } from '@/hooks/usePersistedMatrixState';
-import { usePersistedLineageState } from '@/hooks/usePersistedLineageState';
-import { usePersistedSchemaState } from '@/hooks/usePersistedSchemaState';
-import { Settings } from 'lucide-react';
-import type { SchemaTable, AnalyzeResult } from '@pondpilot/flowscope-core';
+import { SchemaAwareIssuesPanel } from './SchemaAwareIssuesPanel';
+import { SchemaEditor } from './SchemaEditor';
+
+interface AnalysisViewProps {
+  graphContainerRef?: React.RefObject<HTMLDivElement>;
+}
 
 /**
  * Extract schema tables from the analysis result using resolved schema metadata.
@@ -45,10 +50,11 @@ function extractSchemaFromResult(result: AnalyzeResult): SchemaTable[] {
 /**
  * Main analysis view component showing lineage graph, schema, and details.
  */
-export function AnalysisView() {
+export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisViewProps) {
   const { state, actions } = useLineage();
   const { result } = state;
-  const graphContainerRef = useRef<HTMLDivElement>(null);
+  const internalGraphRef = useRef<HTMLDivElement>(null);
+  const graphContainerRef = externalGraphRef || internalGraphRef;
 
   // Use ref to avoid stale closures and prevent unnecessary effect re-runs
   const actionsRef = useRef<LineageActions>(actions);

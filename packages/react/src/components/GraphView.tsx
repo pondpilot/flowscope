@@ -32,7 +32,6 @@ import { ColumnNode } from './ColumnNode';
 import { SimpleTableNode } from './SimpleTableNode';
 import { TableNode } from './TableNode';
 import { AnimatedEdge } from './AnimatedEdge';
-import { ExportMenu } from './ExportMenu';
 import { ViewModeSelector } from './ViewModeSelector';
 import { GraphSearchControl } from './GraphSearchControl';
 import { TableFilterDropdown } from './TableFilterDropdown';
@@ -613,9 +612,6 @@ export function GraphView({
         <Panel position="top-right" className="flex gap-3 items-start">
           <Legend viewMode={viewMode} />
           <LayoutSelector />
-          <div className={PANEL_STYLES.container} data-graph-panel>
-            <ExportMenu graphRef={finalRef} />
-          </div>
         </Panel>
         <MiniMap
           nodeColor={(node) => {

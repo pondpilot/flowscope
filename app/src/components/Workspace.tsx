@@ -1,8 +1,9 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { Share2 } from 'lucide-react';
+import { Share2, Github } from 'lucide-react';
 import { toast } from 'sonner';
-import { useLineageActions } from '@pondpilot/flowscope-react';
+import { useLineageActions, useLineageState } from '@pondpilot/flowscope-react';
 import { Button } from './ui/button';
+import { FlowScopeLogo } from './FlowScopeLogo';
 import {
   ResizablePanelGroup,
   ResizablePanel,
@@ -14,7 +15,14 @@ import { EditorArea } from './EditorArea';
 import { AnalysisView } from './AnalysisView';
 import { ProjectSelector } from './ProjectSelector';
 import { ShareDialog } from './ShareDialog';
+import { ExportDialog } from './ExportDialog';
 import { ThemeToggle } from './ThemeToggle';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from './ui/tooltip';
 import { useProject } from '@/lib/project-store';
 import { NavigationProvider } from '@/lib/navigation-context';
 import { useGlobalShortcuts } from '@/hooks';
@@ -37,12 +45,14 @@ const EDITOR_PANEL_DEFAULT_SIZE = 33;
 export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspaceProps) {
   const { currentProject, selectFile, activeProjectId } = useProject();
   const { highlightSpan } = useLineageActions();
+  const { result } = useLineageState();
   const [fileSelectorOpen, setFileSelectorOpen] = useState(false);
   const [projectSelectorOpen, setProjectSelectorOpen] = useState(false);
   const [dialectSelectorOpen, setDialectSelectorOpen] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
 
   const editorPanelRef = useRef<ImperativePanelHandle>(null);
+  const graphContainerRef = useRef<HTMLDivElement>(null);
 
   // Use ref for currentProject to avoid recreating callback on every project change
   const currentProjectRef = useRef(currentProject);
@@ -155,13 +165,16 @@ export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspacePr
       >
         <div className="flex items-center gap-2">
           {/* Logo */}
-          <div className="flex items-center gap-2">
-            <div className="h-6 w-6 bg-brand-blue-500 rounded flex items-center justify-center text-white font-bold text-xs">
-              FS
+          <div className="flex items-center gap-3">
+            <FlowScopeLogo className="w-8 h-8 text-foreground/30 dark:text-white/30" />
+            <div className="flex items-baseline gap-1">
+              <span className="text-lg font-semibold text-foreground">
+                FlowScope
+              </span>
+              <span className="text-xs font-mono text-muted-foreground">
+                Beta
+              </span>
             </div>
-            <span className="text-xs font-medium italic text-warning-light dark:text-warning-dark hidden sm:inline-block">
-              BETA
-            </span>
           </div>
 
           {/* Project Selector */}
@@ -174,16 +187,54 @@ export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspacePr
         {/* Header Actions */}
         <div className="flex items-center gap-1">
           {currentProject && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 gap-1.5"
-              onClick={() => setShareDialogOpen(true)}
-            >
-              <Share2 className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Share</span>
-            </Button>
+            <>
+              <ExportDialog
+                result={result}
+                projectName={currentProject.name}
+                graphRef={graphContainerRef}
+              />
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => setShareDialogOpen(true)}
+                    >
+                      <Share2 className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Share project</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </>
           )}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  asChild
+                >
+                  <a
+                    href="https://github.com/pondpilot/flowscope"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Github className="h-4 w-4" />
+                  </a>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>View on GitHub</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <ThemeToggle />
         </div>
       </header>
@@ -251,7 +302,7 @@ export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspacePr
               collapsedSize={0}
               data-testid="analysis-panel"
             >
-              <AnalysisView />
+              <AnalysisView graphContainerRef={graphContainerRef} />
             </ResizablePanel>
           </ResizablePanelGroup>
         </div>
