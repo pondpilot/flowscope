@@ -248,6 +248,87 @@ export const COLORS_DARK = {
 } as const;
 
 /**
+ * Schema view configuration
+ */
+export const SCHEMA_CONFIG = {
+  /** Node dimensions */
+  NODE_MIN_WIDTH: 240,
+  NODE_HEIGHT_PER_COLUMN: 28,
+  NODE_HEADER_HEIGHT: 36,
+
+  /** Layout spacing */
+  DAGRE_NODESEP_TB: 80,
+  DAGRE_RANKSEP_TB: 100,
+  DAGRE_NODESEP_LR: 100,
+  DAGRE_RANKSEP_LR: 150,
+
+  /** Animation durations */
+  TRANSITION_DURATION: '200ms',
+  EDGE_ANIMATION_DURATION: '1s',
+
+  /** Edge styling */
+  EDGE_GAP: 50,
+  EDGE_DEFAULT_WIDTH: 2,
+  EDGE_SELECTED_WIDTH: 3,
+  EDGE_DASH_PATTERN: '5,5',
+  EDGE_DASH_OFFSET: -10,
+  EDGE_GLOW_BLUR: 4,
+  EDGE_GLOW_OPACITY: 0.3,
+} as const;
+
+/**
+ * Schema view colors
+ */
+export const SCHEMA_COLORS = {
+  // Primary key indicator
+  primaryKey: '#F3A462', // Warm orange/gold
+  // Foreign key indicator
+  foreignKey: '#4957C1', // Brand blue
+  // Edge colors
+  edge: {
+    default: '#94a3b8', // Slate-400
+    selected: '#3b82f6', // Blue-500
+  },
+  // Selection highlighting
+  selection: {
+    border: '#3b82f6',
+    ring: 'rgba(59, 130, 246, 0.3)',
+    background: 'rgba(59, 130, 246, 0.05)',
+  },
+  // Highlighted columns
+  highlight: {
+    background: 'rgba(59, 130, 246, 0.1)',
+  },
+} as const;
+
+/**
+ * Schema node palettes for light and dark modes
+ * Extracted to avoid object allocation on every render
+ */
+export const SCHEMA_NODE_PALETTES = {
+  light: {
+    imported: COLORS.nodes.table,
+    cte: COLORS.nodes.cte,
+  },
+  dark: {
+    imported: {
+      bg: '#242B35',
+      headerBg: '#384252',
+      border: '#5B6B86',
+      text: '#FDFDFD',
+      textSecondary: '#A8B3C4',
+    },
+    cte: {
+      bg: '#2E1065',
+      headerBg: '#3B0764',
+      border: '#6D28D9',
+      text: '#E9D5FF',
+      textSecondary: '#C4B5FD',
+    },
+  },
+} as const;
+
+/**
  * Constraint badge styles for schema view
  */
 export const CONSTRAINT_STYLES = {

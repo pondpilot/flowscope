@@ -247,7 +247,7 @@ impl<'a, 'b> LineageVisitor<'a, 'b> {
     fn extract_identifiers_from_expr(&mut self, expr: &Expr) {
         match expr {
             Expr::Identifier(ident) => {
-                self.try_add_identifier_as_table(&[ident.clone()]);
+                self.try_add_identifier_as_table(std::slice::from_ref(ident));
             }
             Expr::CompoundIdentifier(idents) => {
                 self.try_add_identifier_as_table(idents);

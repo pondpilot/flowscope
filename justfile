@@ -6,7 +6,7 @@ default:
     @just --list
 
 # Build all components
-build: build-rust build-ts
+build: build-wasm build-ts
 
 # Build Rust workspace
 build-rust:
@@ -133,6 +133,11 @@ clean:
 install:
     yarn install
 
+# Install Rust tools (wasm-pack, cargo-watch)
+install-rust-tools:
+    @command -v wasm-pack >/dev/null 2>&1 || cargo install wasm-pack --version "^0.13"
+    @command -v cargo-watch >/dev/null 2>&1 || cargo install cargo-watch --version "^8"
+
 # Install pre-commit hooks (requires prek: https://github.com/j178/prek)
 install-hooks:
     prek install
@@ -141,7 +146,7 @@ install-hooks:
 ci: lint typecheck test
 
 # Full development setup - install deps, hooks, and build
-setup: install install-hooks build
+setup: install install-rust-tools install-hooks build
 
 # Watch and rebuild on changes (Rust)
 watch:

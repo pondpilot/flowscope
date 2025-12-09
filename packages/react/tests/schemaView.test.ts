@@ -235,9 +235,10 @@ describe('buildSchemaFlowEdges', () => {
 
     const edges = buildSchemaFlowEdges(schema);
 
-    expect(edges[0].type).toBe('smoothstep');
+    expect(edges[0].type).toBe('schemaEdge');
     expect(edges[0].animated).toBe(false);
-    expect(edges[0].style).toEqual({ stroke: '#6366f1', strokeWidth: 2 });
+    // Style is now handled by custom edge component, not inline
+    expect(edges[0].data).toEqual({ sourceColumn: 'user_id', targetColumn: 'id' });
   });
 
   it('resolves schema-qualified foreign key targets', () => {
