@@ -9,6 +9,7 @@ import type {
   SchemaTable,
   FilterPredicate,
   AggregationInfo,
+  ColumnTag,
 } from '@pondpilot/flowscope-core';
 
 /**
@@ -260,6 +261,8 @@ export interface TableNodeData extends Record<string, unknown> {
   hiddenColumnCount?: number;
   /** Filter predicates (WHERE/HAVING clauses) affecting this table */
   filters?: FilterPredicate[];
+  /** Tags applied to this table or its output */
+  tags?: ColumnTag[];
 }
 
 /**
@@ -278,6 +281,8 @@ export interface ColumnNodeInfo {
   sourceName?: string;
   /** Aggregation information if this column is aggregated or a grouping key */
   aggregation?: AggregationInfo;
+  /** Column tags propagated from upstream tables */
+  tags?: ColumnTag[];
 }
 
 /**
@@ -296,6 +301,8 @@ export interface ColumnNodeData extends Record<string, unknown> {
   isHighlighted: boolean;
   /** Optional source file name */
   sourceName?: string;
+  /** Column tags propagated to this node */
+  tags?: ColumnTag[];
 }
 
 /**

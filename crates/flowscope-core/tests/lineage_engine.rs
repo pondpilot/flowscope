@@ -16,6 +16,7 @@ fn run_analysis(sql: &str, dialect: Dialect, schema: Option<SchemaMetadata>) -> 
         source_name: Some("integration_test".into()),
         options: None,
         schema,
+        tag_hints: None,
     })
 }
 
@@ -85,6 +86,7 @@ fn column(name: &str) -> ColumnSchema {
         data_type: None,
         is_primary_key: None,
         foreign_key: None,
+        classifications: None,
     }
 }
 
@@ -96,6 +98,7 @@ fn column_typed(name: &str, data_type: &str) -> ColumnSchema {
         data_type: Some(data_type.to_string()),
         is_primary_key: None,
         foreign_key: None,
+        classifications: None,
     }
 }
 
@@ -107,6 +110,7 @@ fn column_pk(name: &str, data_type: &str) -> ColumnSchema {
         data_type: Some(data_type.to_string()),
         is_primary_key: Some(true),
         foreign_key: None,
+        classifications: None,
     }
 }
 
@@ -122,6 +126,7 @@ fn column_fk(name: &str, data_type: &str, ref_table: &str, ref_column: &str) -> 
             table: ref_table.to_string(),
             column: ref_column.to_string(),
         }),
+        classifications: None,
     }
 }
 

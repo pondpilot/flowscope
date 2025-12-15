@@ -1,10 +1,35 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import type { ColumnTag } from '@pondpilot/flowscope-core';
 import { STORAGE_KEYS, FILE_EXTENSIONS, SHARE_LIMITS, DEFAULT_FILE_LANGUAGE } from './constants';
 import type { SharePayload } from './share';
 
 const uuidv4 = () => crypto.randomUUID();
 
 const MAX_PROJECT_NAME_LENGTH = 50;
+
+function normalizeOverrides(
+  raw?: Record<string, Record<string, ColumnTag[]> | ColumnTag[]>
+): Record<string, Record<string, ColumnTag[]>> {
+  if (!raw) return {};
+  const normalized: Record<string, Record<string, ColumnTag[]>> = {};
+  for (const [tableKey, value] of Object.entries(raw)) {
+    if (!value) continue;
+    if (Array.isArray(value)) {
+      // Legacy format unsupported; skip to keep data clean
+      continue;
+    }
+    const columnMap: Record<string, ColumnTag[]> = {};
+    for (const [columnName, tags] of Object.entries(value)) {
+      if (Array.isArray(tags) && tags.length > 0) {
+        columnMap[columnName] = tags;
+      }
+    }
+    if (Object.keys(columnMap).length > 0) {
+      normalized[tableKey] = columnMap;
+    }
+  }
+  return normalized;
+}
 
 /**
  * Validates and sanitizes a project name.
@@ -59,6 +84,7 @@ export interface Project {
   runMode: RunMode;
   selectedFileIds: string[];
   schemaSQL: string; // User-provided CREATE TABLE statements for schema augmentation
+  classificationOverrides: Record<string, Record<string, ColumnTag[]>>;
 }
 
 interface ProjectContextType {
@@ -82,6 +108,9 @@ interface ProjectContextType {
 
   // Schema SQL management
   updateSchemaSQL: (projectId: string, schemaSQL: string) => void;
+  // Column classification management
+  setColumnTags: (projectId: string, tableCanonical: string, columnName: string, tags: ColumnTag[]) => void;
+  clearColumnTags: (projectId: string, tableCanonical: string, columnName: string) => void;
 
   // Import/Export
   importFiles: (files: FileList | File[]) => Promise<void>;
@@ -100,6 +129,7 @@ const DEFAULT_PROJECT: Project = {
   runMode: 'all',
   selectedFileIds: [],
   schemaSQL: '', // Empty by default - user augments as needed
+  classificationOverrides: {},
   files: [
     {
       id: 'file-1',
@@ -344,6 +374,7 @@ const loadProjectsFromStorage = (): Project[] => {
         runMode: p.runMode || 'all',
         selectedFileIds: p.selectedFileIds || [],
         schemaSQL: p.schemaSQL || '', // Default to empty string for older projects
+        classificationOverrides: normalizeOverrides(p.classificationOverrides),
         // Migrate files to include path if missing
         files: (p.files || []).map((f: Partial<ProjectFile>) => ({
           ...f,
@@ -421,7 +452,8 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       dialect: 'generic',
       runMode: 'all',
       selectedFileIds: [],
-      schemaSQL: ''
+      schemaSQL: '',
+      classificationOverrides: {},
     };
     setProjects(prev => [...prev, newProject]);
     setActiveProjectId(newProject.id);
@@ -582,6 +614,57 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
+  const setColumnTags = useCallback((projectId: string, tableCanonical: string, columnName: string, tags: ColumnTag[]) => {
+    setProjects(prev =>
+      prev.map((p) => {
+        if (p.id !== projectId) return p;
+        const nextOverrides = { ...p.classificationOverrides };
+        const tableKey = tableCanonical;
+        const columnKey = columnName;
+        if (!tags || tags.length === 0) {
+          const tableOverrides = nextOverrides[tableKey];
+          if (tableOverrides) {
+            const { [columnKey]: _removed, ...restColumns } = tableOverrides;
+            void _removed;
+            if (Object.keys(restColumns).length === 0) {
+              const { [tableKey]: _tableRemoved, ...restTables } = nextOverrides;
+              void _tableRemoved;
+              return {
+                ...p,
+                classificationOverrides: restTables,
+              };
+            }
+            return {
+              ...p,
+              classificationOverrides: {
+                ...nextOverrides,
+                [tableKey]: restColumns,
+              },
+            };
+          }
+          return p;
+        }
+
+        const tableOverrides = {
+          ...(nextOverrides[tableKey] || {}),
+          [columnKey]: tags,
+        };
+
+        return {
+          ...p,
+          classificationOverrides: {
+            ...nextOverrides,
+            [tableKey]: tableOverrides,
+          },
+        };
+      })
+    );
+  }, []);
+
+  const clearColumnTags = useCallback((projectId: string, tableCanonical: string, columnName: string) => {
+    setColumnTags(projectId, tableCanonical, columnName, []);
+  }, [setColumnTags]);
+
   const importFiles = useCallback(
     async (fileList: FileList | File[]) => {
       if (!activeProjectId) return;
@@ -656,6 +739,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       runMode: payload.r,
       selectedFileIds,
       schemaSQL: payload.s,
+      classificationOverrides: normalizeOverrides(payload.c),
     };
 
     setProjects(prev => [...prev, newProject]);
@@ -681,6 +765,8 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     renameFile,
     selectFile,
     updateSchemaSQL,
+    setColumnTags,
+    clearColumnTags,
     importFiles,
     importProject,
   };

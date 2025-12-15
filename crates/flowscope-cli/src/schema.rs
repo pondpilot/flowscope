@@ -32,6 +32,7 @@ fn parse_schema_ddl(content: &str, dialect: Dialect) -> Result<SchemaMetadata> {
             allow_implied: true,
             ..Default::default()
         }),
+        tag_hints: None,
     };
 
     let result = analyze(&request);
@@ -73,6 +74,11 @@ fn parse_schema_ddl(content: &str, dialect: Dialect) -> Result<SchemaMetadata> {
                         data_type: c.data_type,
                         is_primary_key: c.is_primary_key,
                         foreign_key: c.foreign_key,
+                        classifications: if c.classifications.is_empty() {
+                            None
+                        } else {
+                            Some(c.classifications)
+                        },
                     })
                     .collect(),
             })

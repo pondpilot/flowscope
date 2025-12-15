@@ -234,6 +234,7 @@ impl<'a> Analyzer<'a> {
             expression: None,
             span: None,
             metadata,
+            tags: Vec::new(),
             resolution_source,
             filters: Vec::new(),
             join_type: ctx.current_join_info.join_type,
@@ -289,6 +290,7 @@ impl<'a> Analyzer<'a> {
             let columns = schema_entry.table.columns.clone();
             for col in columns {
                 let col_node_id = generate_column_node_id(Some(table_node_id), &col.name);
+                let column_tags = self.collect_base_tags_for_column(table_canonical, &col.name);
 
                 // Add column node
                 let col_node = Node {
@@ -299,6 +301,7 @@ impl<'a> Analyzer<'a> {
                     expression: None,
                     span: None,
                     metadata: None,
+                    tags: column_tags,
                     resolution_source: None,
                     filters: Vec::new(),
                     join_type: None,
@@ -601,6 +604,15 @@ impl<'a> Analyzer<'a> {
     ) {
         let normalized_name = self.normalize_identifier(&params.name);
         let node_id = generate_column_node_id(params.target_node.as_deref(), &normalized_name);
+        let mut effective_tags = if let Some(target_node_id) = params.target_node.as_deref() {
+            if let Some(canonical) = self.find_canonical_by_node(ctx, target_node_id) {
+                self.collect_base_tags_for_column(canonical, &normalized_name)
+            } else {
+                Vec::new()
+            }
+        } else {
+            Vec::new()
+        };
 
         // Create column node
         let col_node = Node {
@@ -615,6 +627,7 @@ impl<'a> Analyzer<'a> {
                 m.insert("data_type".to_string(), json!(dt));
                 m
             }),
+            tags: Vec::new(),
             resolution_source: None,
             filters: Vec::new(),
             join_type: None,
@@ -624,12 +637,12 @@ impl<'a> Analyzer<'a> {
         ctx.add_node(col_node);
 
         // Create ownership edge if we have a target
-        if let Some(target) = params.target_node {
-            let edge_id = generate_edge_id(&target, &node_id);
+        if let Some(target) = &params.target_node {
+            let edge_id = generate_edge_id(target, &node_id);
             if !ctx.edge_ids.contains(&edge_id) {
                 ctx.add_edge(Edge {
                     id: edge_id,
-                    from: target.to_string().into(),
+                    from: target.clone().into(),
                     to: node_id.clone(),
                     edge_type: EdgeType::Ownership,
                     expression: None,
@@ -685,6 +698,7 @@ impl<'a> Analyzer<'a> {
                     expression: None,
                     span: None,
                     metadata: None,
+                    tags: self.collect_base_tags_for_column(table_canonical, &source.column),
                     resolution_source: None,
                     filters: Vec::new(),
                     join_type: None,
@@ -720,7 +734,7 @@ impl<'a> Analyzer<'a> {
                 if !ctx.edge_ids.contains(&flow_edge_id) {
                     ctx.add_edge(Edge {
                         id: flow_edge_id,
-                        from: source_col_id,
+                        from: source_col_id.clone(),
                         to: node_id.clone(),
                         edge_type,
                         expression: params.expression.as_deref().map(Into::into),
@@ -731,8 +745,19 @@ impl<'a> Analyzer<'a> {
                         approximate: if params.approximate { Some(true) } else { None },
                     });
                 }
+
+                let source_tags_snapshot = ctx.clone_node_tags(&source_col_id);
+                if !source_tags_snapshot.is_empty() {
+                    let mut inherited = self.inherit_tags(&source_tags_snapshot, &source_col_id);
+                    effective_tags.append(&mut inherited);
+                }
             }
         }
+
+        if !effective_tags.is_empty() {
+            Self::dedupe_tags(&mut effective_tags);
+        }
+        ctx.update_node_tags(&node_id, effective_tags);
 
         // Record output column
         ctx.output_columns.push(OutputColumn {

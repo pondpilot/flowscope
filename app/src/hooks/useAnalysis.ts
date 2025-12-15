@@ -1,11 +1,33 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { analyzeSql } from '@pondpilot/flowscope-core';
+import { analyzeSql, type TagHint } from '@pondpilot/flowscope-core';
 import { useLineage } from '@pondpilot/flowscope-react';
 import { useProject } from '@/lib/project-store';
 import { useAnalysisStore } from '@/lib/analysis-store';
 import { FILE_LIMITS } from '@/lib/constants';
 import { parseSchemaSQL } from '@/lib/schema-parser';
 import type { AnalysisState, AnalysisContext, FileValidationResult } from '@/types';
+
+function buildTagHintsFromOverrides(
+  overrides?: Record<string, Record<string, TagHint['tags']>>
+): TagHint[] {
+  if (!overrides) return [];
+  const hints: TagHint[] = [];
+  for (const [table, columns] of Object.entries(overrides)) {
+    for (const [column, tags] of Object.entries(columns)) {
+      if (tags && tags.length > 0) {
+        hints.push({
+          table,
+          column,
+          tags: tags.map((tag) => ({
+            ...tag,
+            source: tag.source ?? 'user',
+          })),
+        });
+      }
+    }
+  }
+  return hints;
+}
 
 export function useAnalysis(wasmReady: boolean) {
   const { currentProject, activeProjectId } = useProject();
@@ -166,6 +188,7 @@ export function useAnalysis(wasmReady: boolean) {
           }
         }
 
+        const tagHints = buildTagHintsFromOverrides(currentProject.classificationOverrides);
         const result = await analyzeSql({
           sql: '',
           files: context.files,
@@ -174,6 +197,7 @@ export function useAnalysis(wasmReady: boolean) {
           options: {
             enableColumnLineage: true,
           },
+          tagHints: tagHints.length > 0 ? tagHints : undefined,
         });
 
         // Inject schema parsing errors as issues in the result

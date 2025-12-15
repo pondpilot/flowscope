@@ -2,6 +2,7 @@
  * Share utilities for encoding/decoding project data into URLs
  */
 import { gzipSync, gunzipSync, strToU8, strFromU8 } from 'fflate';
+import type { ColumnTag } from '@pondpilot/flowscope-core';
 import type { Project, Dialect, RunMode } from './project-store';
 import { SHARE_LIMITS } from './constants';
 
@@ -25,6 +26,7 @@ export interface SharePayload {
     l?: 'sql' | 'json' | 'text'; // language (optional, defaults to 'sql')
   }>;
   sel?: number[]; // selected file indices
+  c?: Record<string, Record<string, ColumnTag[]>>; // classification overrides
 }
 
 export interface EncodeResult {
@@ -71,6 +73,30 @@ export interface EncodeOptions {
   includeSchema?: boolean;
 }
 
+function hasOverrides(overrides: Project['classificationOverrides']): boolean {
+  return Object.values(overrides || {}).some((columns) => Object.keys(columns).length > 0);
+}
+
+function normalizeShareOverrides(
+  overrides?: Record<string, Record<string, ColumnTag[]>>
+): Record<string, Record<string, ColumnTag[]>> {
+  if (!overrides) return {};
+  const normalized: Record<string, Record<string, ColumnTag[]>> = {};
+  for (const [table, columns] of Object.entries(overrides)) {
+    if (!columns) continue;
+    const columnMap: Record<string, ColumnTag[]> = {};
+    for (const [column, tags] of Object.entries(columns)) {
+      if (Array.isArray(tags) && tags.length > 0) {
+        columnMap[column] = tags;
+      }
+    }
+    if (Object.keys(columnMap).length > 0) {
+      normalized[table] = columnMap;
+    }
+  }
+  return normalized;
+}
+
 /**
  * Encode a project into a shareable string
  */
@@ -115,6 +141,13 @@ export function encodeProject(project: Project, options: EncodeOptions = {}): En
       .filter(i => i >= 0);
     if (indices.length > 0) {
       payload.sel = indices;
+    }
+  }
+
+  if (hasOverrides(project.classificationOverrides)) {
+    const normalized = normalizeShareOverrides(project.classificationOverrides);
+    if (Object.keys(normalized).length > 0) {
+      payload.c = normalized;
     }
   }
 
@@ -226,6 +259,10 @@ function validatePayload(payload: unknown): SharePayload | null {
   }
 
   if (p.s !== undefined && typeof p.s !== 'string') {
+    return null;
+  }
+
+  if (p.c !== undefined && (typeof p.c !== 'object' || p.c === null)) {
     return null;
   }
 

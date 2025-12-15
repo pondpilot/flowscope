@@ -1,4 +1,4 @@
-use crate::types::{Edge, FilterClauseType, FilterPredicate, JoinType, Node};
+use crate::types::{ColumnTag, Edge, FilterClauseType, FilterPredicate, JoinType, Node};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -267,5 +267,25 @@ impl StatementContext {
             return Vec::new();
         }
         self.output_columns.split_off(checkpoint)
+    }
+
+    /// Updates the tags for a node, replacing any existing values.
+    pub(crate) fn update_node_tags(&mut self, node_id: &Arc<str>, tags: Vec<ColumnTag>) {
+        if let Some(node) = self
+            .nodes
+            .iter_mut()
+            .find(|node| node.id.as_ref() == node_id.as_ref())
+        {
+            node.tags = tags;
+        }
+    }
+
+    /// Returns a clone of the tags for the requested node ID.
+    pub(crate) fn clone_node_tags(&self, node_id: &Arc<str>) -> Vec<ColumnTag> {
+        self.nodes
+            .iter()
+            .find(|node| node.id.as_ref() == node_id.as_ref())
+            .map(|node| node.tags.clone())
+            .unwrap_or_default()
     }
 }

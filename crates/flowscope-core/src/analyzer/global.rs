@@ -2,9 +2,9 @@ use super::helpers::parse_canonical_name;
 use super::Analyzer;
 use crate::types::{
     GlobalEdge, GlobalLineage, GlobalNode, IssueCount, NodeType, ResolvedColumnSchema,
-    ResolvedSchemaMetadata, ResolvedSchemaTable, StatementRef, Summary,
+    ResolvedSchemaMetadata, ResolvedSchemaTable, StatementRef, Summary, TagCount, TagFlowSummary,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 impl<'a> Analyzer<'a> {
@@ -41,6 +41,7 @@ impl<'a> Analyzer<'a> {
                         origin: Some(entry.origin),
                         is_primary_key: col.is_primary_key,
                         foreign_key: col.foreign_key.clone(),
+                        classifications: col.classifications.clone().unwrap_or_default(),
                     })
                     .collect();
 
@@ -172,6 +173,8 @@ impl<'a> Analyzer<'a> {
         let complexity_score =
             calculate_global_complexity(table_count, cte_count, join_count, filter_count);
 
+        let (tag_counts, tag_flows) = self.compute_tag_summary();
+
         Summary {
             statement_count: self.statement_lineages.len(),
             table_count: table_count + cte_count, // Keep combined for backwards compat
@@ -184,6 +187,131 @@ impl<'a> Analyzer<'a> {
                 infos: info_count,
             },
             has_errors: error_count > 0,
+            tag_counts,
+            tag_flows,
+        }
+    }
+
+    fn compute_tag_summary(&self) -> (Vec<TagCount>, Vec<TagFlowSummary>) {
+        let mut count_map: HashMap<String, TagCountAccumulator> = HashMap::new();
+        let mut flow_map: HashMap<String, TagFlowAccumulator> = HashMap::new();
+
+        for lineage in &self.statement_lineages {
+            for node in &lineage.nodes {
+                if node.tags.is_empty() {
+                    continue;
+                }
+
+                for tag in &node.tags {
+                    let key = tag.name.to_lowercase();
+                    count_map
+                        .entry(key.clone())
+                        .or_insert_with(|| TagCountAccumulator::new(&tag.name))
+                        .track(node, tag.inherited.unwrap_or(false));
+
+                    flow_map
+                        .entry(key)
+                        .or_insert_with(|| TagFlowAccumulator::new(&tag.name))
+                        .track(node, tag.inherited.unwrap_or(false));
+                }
+            }
+        }
+
+        let mut tag_counts: Vec<TagCount> = count_map
+            .into_values()
+            .map(TagCountAccumulator::into_summary)
+            .collect();
+        tag_counts.sort_by(|a, b| a.tag.cmp(&b.tag));
+
+        let mut tag_flows: Vec<TagFlowSummary> = flow_map
+            .into_values()
+            .map(TagFlowAccumulator::into_summary)
+            .collect();
+        tag_flows.sort_by(|a, b| a.tag.cmp(&b.tag));
+
+        (tag_counts, tag_flows)
+    }
+}
+
+struct TagCountAccumulator {
+    label: String,
+    columns: HashSet<String>,
+    tables: HashSet<String>,
+    sources: HashSet<String>,
+}
+
+impl TagCountAccumulator {
+    fn new(label: &str) -> Self {
+        Self {
+            label: label.to_string(),
+            columns: HashSet::new(),
+            tables: HashSet::new(),
+            sources: HashSet::new(),
+        }
+    }
+
+    fn track(&mut self, node: &crate::types::Node, inherited: bool) {
+        match node.node_type {
+            NodeType::Table | NodeType::View | NodeType::Cte => {
+                self.tables.insert(node.id.to_string());
+            }
+            NodeType::Column => {
+                self.columns.insert(node.id.to_string());
+            }
+        }
+
+        if !inherited {
+            self.sources.insert(node.id.to_string());
+        }
+    }
+
+    fn into_summary(self) -> TagCount {
+        TagCount {
+            tag: self.label,
+            columns: self.columns.len(),
+            tables: self.tables.len(),
+            sources: if self.sources.is_empty() {
+                None
+            } else {
+                Some(self.sources.len())
+            },
+        }
+    }
+}
+
+struct TagFlowAccumulator {
+    label: String,
+    sources: HashSet<String>,
+    targets: HashSet<String>,
+}
+
+impl TagFlowAccumulator {
+    fn new(label: &str) -> Self {
+        Self {
+            label: label.to_string(),
+            sources: HashSet::new(),
+            targets: HashSet::new(),
+        }
+    }
+
+    fn track(&mut self, node: &crate::types::Node, inherited: bool) {
+        if inherited {
+            self.targets.insert(node.id.to_string());
+        } else {
+            self.sources.insert(node.id.to_string());
+        }
+    }
+
+    fn into_summary(mut self) -> TagFlowSummary {
+        let mut sources: Vec<String> = self.sources.drain().collect();
+        sources.sort();
+        let mut targets: Vec<String> = self.targets.drain().collect();
+        targets.sort();
+
+        TagFlowSummary {
+            tag: self.label,
+            sources,
+            targets,
         }
     }
 }

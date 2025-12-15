@@ -46,6 +46,7 @@ fn test_alias_in_group_by_mysql_no_crash() {
             ..Default::default()
         }),
         schema: None,
+        tag_hints: None,
     };
 
     let result = analyze(&request);
@@ -81,6 +82,7 @@ fn test_alias_in_group_by_postgres_no_crash() {
             ..Default::default()
         }),
         schema: None,
+        tag_hints: None,
     };
 
     let result = analyze(&request);
@@ -109,6 +111,7 @@ fn test_alias_in_having_mysql_allowed() {
             ..Default::default()
         }),
         schema: None,
+        tag_hints: None,
     };
 
     let result = analyze(&request);
@@ -139,6 +142,7 @@ fn test_alias_in_having_postgres_warned() {
             ..Default::default()
         }),
         schema: None,
+        tag_hints: None,
     };
 
     let result = analyze(&request);
@@ -181,6 +185,7 @@ fn test_alias_in_having_snowflake_warned() {
             ..Default::default()
         }),
         schema: None,
+        tag_hints: None,
     };
 
     let result = analyze(&request);
@@ -214,6 +219,7 @@ fn test_alias_in_order_by_all_dialects_allowed() {
             ..Default::default()
         }),
         schema: None,
+        tag_hints: None,
     };
 
     let result = analyze(&request);
@@ -246,6 +252,7 @@ fn test_lateral_column_alias_bigquery_allowed() {
             ..Default::default()
         }),
         schema: None,
+        tag_hints: None,
     };
 
     let result = analyze(&request);
@@ -277,6 +284,7 @@ fn test_lateral_column_alias_postgres_warned() {
             ..Default::default()
         }),
         schema: None,
+        tag_hints: None,
     };
 
     let result = analyze(&request);
@@ -322,6 +330,7 @@ fn test_lateral_column_alias_mysql_warned() {
             ..Default::default()
         }),
         schema: None,
+        tag_hints: None,
     };
 
     let result = analyze(&request);
@@ -353,6 +362,7 @@ fn test_lateral_column_alias_snowflake_allowed() {
             ..Default::default()
         }),
         schema: None,
+        tag_hints: None,
     };
 
     let result = analyze(&request);
@@ -384,6 +394,7 @@ fn test_no_lateral_warning_for_first_item() {
             ..Default::default()
         }),
         schema: None,
+        tag_hints: None,
     };
 
     let result = analyze(&request);
@@ -417,6 +428,7 @@ fn test_multiple_lateral_violations() {
             ..Default::default()
         }),
         schema: None,
+        tag_hints: None,
     };
 
     let result = analyze(&request);
@@ -455,6 +467,7 @@ fn test_alias_shadowing_in_subquery() {
             ..Default::default()
         }),
         schema: None,
+        tag_hints: None,
     };
 
     let result = analyze(&request);
@@ -549,6 +562,7 @@ fn new_tables_are_known_when_implied_schema_disabled() {
             allow_implied: false,
             ..Default::default()
         }),
+        tag_hints: None,
     };
 
     let result = analyze(&request);
@@ -602,6 +616,7 @@ fn missing_table_warned_when_other_tables_known() {
             allow_implied: false,
             ..Default::default()
         }),
+        tag_hints: None,
     };
 
     let result = analyze(&request);

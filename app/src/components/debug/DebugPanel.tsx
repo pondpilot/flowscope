@@ -282,6 +282,61 @@ export function DebugPanel() {
                     </div>
                   </div>
                 </div>
+                <div className="mb-4 p-3 bg-warning-light/10 dark:bg-warning-dark/10 border border-warning-light/20 dark:border-warning-dark/20 rounded">
+                  <div className="text-xs font-sans text-foreground mb-2 flex items-center justify-between">
+                    <strong>Tag Propagation:</strong>
+                    <span className="text-[10px] text-muted-foreground">
+                      Updated {debugData.timestamp}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs font-sans">
+                    <div>
+                      <span className="text-muted-foreground">Override Tables:</span>{' '}
+                      <span className="font-semibold">
+                        {debugData.tags.overrides.tableCount}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Override Columns:</span>{' '}
+                      <span className="font-semibold">
+                        {debugData.tags.overrides.columnCount}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Assignments:</span>{' '}
+                      <span className="font-semibold">
+                        {debugData.tags.overrides.assignmentCount}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Analyzer Tags:</span>{' '}
+                      <span className="font-semibold">
+                        {debugData.tags.summary.availableTagCount}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="mt-3 text-xs font-sans">
+                    {debugData.tags.summary.tagCounts.length > 0 ? (
+                      <div>
+                        <div className="text-muted-foreground mb-1">Top Tags:</div>
+                        <div className="flex flex-wrap gap-1">
+                          {debugData.tags.summary.tagCounts.slice(0, 5).map((tag) => (
+                            <span
+                              key={tag.tag}
+                              className="px-2 py-0.5 border rounded bg-background/80"
+                            >
+                              {tag.tag} ({tag.columns} cols / {tag.tables} tables)
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-muted-foreground italic">
+                        No analyzer tag summary available. Run analysis after adding tags to see propagation.
+                      </p>
+                    )}
+                  </div>
+                </div>
                 <JsonTreeView data={debugData.analysisResult} />
               </div>
             )}

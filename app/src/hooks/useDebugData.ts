@@ -2,7 +2,13 @@ import { useMemo } from 'react';
 import { useLineage } from '@pondpilot/flowscope-react';
 import { useProject } from '../lib/project-store';
 import { getLastParseResult } from '../lib/schema-parser';
-import type { Issue, ResolvedSchemaTable } from '@pondpilot/flowscope-core';
+import type {
+  Issue,
+  ResolvedSchemaTable,
+  TagCount,
+  TagFlowSummary,
+  ColumnTag,
+} from '@pondpilot/flowscope-core';
 
 export interface DebugData {
   analysisResult: {
@@ -59,6 +65,20 @@ export interface DebugData {
       selectedFileIds: string[];
     };
   };
+  tags: {
+    overrides: {
+      tableCount: number;
+      columnCount: number;
+      assignmentCount: number;
+      data: Record<string, Record<string, ColumnTag[]>>;
+    };
+    summary: {
+      availableTagCount: number;
+      tagCounts: TagCount[];
+      tagFlows: TagFlowSummary[];
+      hasSummary: boolean;
+    };
+  };
   timestamp: string;
 }
 
@@ -75,6 +95,19 @@ export function useDebugData(): DebugData {
     const resolvedSchema = lineageState.result?.resolvedSchema;
     const importedCount = resolvedSchema?.tables?.filter((t: ResolvedSchemaTable) => t.origin === 'imported').length ?? 0;
     const impliedCount = resolvedSchema?.tables?.filter((t: ResolvedSchemaTable) => t.origin === 'implied').length ?? 0;
+    const overrides = currentProject?.classificationOverrides ?? {};
+    const overrideTables = Object.keys(overrides).length;
+    let overrideColumns = 0;
+    let overrideAssignments = 0;
+    Object.values(overrides).forEach((columns) => {
+      const columnKeys = Object.keys(columns ?? {});
+      overrideColumns += columnKeys.length;
+      columnKeys.forEach((col) => {
+        overrideAssignments += (columns?.[col]?.length ?? 0);
+      });
+    });
+    const tagCounts = lineageState.result?.summary.tagCounts ?? [];
+    const tagFlows = lineageState.result?.summary.tagFlows ?? [];
 
     return {
       analysisResult: {
@@ -106,6 +139,20 @@ export function useDebugData(): DebugData {
           parsedTableCount: getLastParseResult()?.resolvedSchema?.tables?.length ?? 0,
           parseErrors: getLastParseResult()?.issues?.filter((i: Issue) => i.severity === 'error').map((i: Issue) => i.message) ?? [],
           parseResult: getLastParseResult(),
+        },
+      },
+      tags: {
+        overrides: {
+          tableCount: overrideTables,
+          columnCount: overrideColumns,
+          assignmentCount: overrideAssignments,
+          data: overrides,
+        },
+        summary: {
+          availableTagCount: tagCounts.length,
+          tagCounts,
+          tagFlows,
+          hasSummary: tagCounts.length > 0 || tagFlows.length > 0,
         },
       },
       uiState: {

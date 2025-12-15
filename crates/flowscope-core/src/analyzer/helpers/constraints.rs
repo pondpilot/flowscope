@@ -139,6 +139,7 @@ pub fn build_column_schemas_with_constraints(
                 data_type: Some(c.data_type.to_string()),
                 is_primary_key,
                 foreign_key: fk_ref,
+                classifications: None,
             }
         })
         .collect();

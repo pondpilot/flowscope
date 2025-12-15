@@ -91,6 +91,7 @@ fn build_request(
             source_name: Some(sources[0].name.clone()),
             options: None,
             schema,
+            tag_hints: None,
         }
     } else {
         AnalyzeRequest {
@@ -100,6 +101,7 @@ fn build_request(
             source_name: None,
             options: None,
             schema,
+            tag_hints: None,
         }
     }
 }

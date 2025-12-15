@@ -55,6 +55,16 @@
             "type": "null"
           }
         ]
+      },
+      "tagHints": {
+        "description": "Optional tag hints provided by automation",
+        "type": [
+          "array",
+          "null"
+        ],
+        "items": {
+          "$ref": "#/definitions/TagHint"
+        }
       }
     },
     "required": [
@@ -295,6 +305,16 @@
                 "type": "null"
               }
             ]
+          },
+          "classifications": {
+            "description": "Sensitive data classifications attached to this column",
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/definitions/ColumnTag"
+            }
           }
         },
         "required": [
@@ -312,6 +332,90 @@
           "column": {
             "description": "The referenced column name",
             "type": "string"
+          }
+        },
+        "required": [
+          "table",
+          "column"
+        ]
+      },
+      "ColumnTag": {
+        "description": "Classification label describing sensitivity of a column.",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/TagSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confidence": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float"
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "inherited": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "fromColumnId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "TagSource": {
+        "description": "Origin of a classification tag.",
+        "type": "string",
+        "enum": [
+          "user",
+          "robot",
+          "inferred"
+        ]
+      },
+      "TagHint": {
+        "description": "External hint to seed classifications for a table or column.",
+        "type": "object",
+        "properties": {
+          "table": {
+            "type": "string"
+          },
+          "column": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/ColumnTag"
+            }
           }
         },
         "required": [
@@ -498,6 +602,13 @@
             ],
             "additionalProperties": true
           },
+          "tags": {
+            "description": "Propagated tags for this node/column",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/ColumnTag"
+            }
+          },
           "resolutionSource": {
             "description": "How this table was resolved (imported, implied, or unknown)",
             "anyOf": [
@@ -597,6 +708,68 @@
         "required": [
           "start",
           "end"
+        ]
+      },
+      "ColumnTag": {
+        "description": "Classification label describing sensitivity of a column.",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/definitions/TagSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confidence": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "float"
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "inherited": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "fromColumnId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "TagSource": {
+        "description": "Origin of a classification tag.",
+        "type": "string",
+        "enum": [
+          "user",
+          "robot",
+          "inferred"
         ]
       },
       "ResolutionSource": {
@@ -1143,6 +1316,20 @@
           "hasErrors": {
             "description": "Quick check: true if any errors were encountered",
             "type": "boolean"
+          },
+          "tagCounts": {
+            "description": "Aggregate counts of tags detected in the workload",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/TagCount"
+            }
+          },
+          "tagFlows": {
+            "description": "Optional breakdown showing tag flow between producers and consumers",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/TagFlowSummary"
+            }
           }
         },
         "required": [
@@ -1182,6 +1369,62 @@
           "errors",
           "warnings",
           "infos"
+        ]
+      },
+      "TagCount": {
+        "description": "Aggregate count for a specific tag label.",
+        "type": "object",
+        "properties": {
+          "tag": {
+            "type": "string"
+          },
+          "columns": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          },
+          "tables": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          },
+          "sources": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "tag",
+          "columns",
+          "tables"
+        ]
+      },
+      "TagFlowSummary": {
+        "description": "Summarizes how a tag flows throughout the lineage graph.",
+        "type": "object",
+        "properties": {
+          "tag": {
+            "type": "string"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "targets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "tag"
         ]
       },
       "ResolvedSchemaMetadata": {
@@ -1309,6 +1552,13 @@
                 "type": "null"
               }
             ]
+          },
+          "classifications": {
+            "description": "Effective classifications derived from schema and overrides",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/ColumnTag"
+            }
           }
         },
         "required": [

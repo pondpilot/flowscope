@@ -58,6 +58,7 @@ impl<'a> Analyzer<'a> {
             expression: None,
             span: None,
             metadata: None,
+            tags: Vec::new(),
             resolution_source: None,
             filters: Vec::new(),
             join_type: None,
@@ -81,6 +82,7 @@ impl<'a> Analyzer<'a> {
                 data_type: col.data_type.clone(),
                 is_primary_key: None,
                 foreign_key: None,
+                classifications: None,
             })
             .collect();
 
@@ -158,6 +160,7 @@ impl<'a> Analyzer<'a> {
             expression: None,
             span: None,
             metadata: None,
+            tags: Vec::new(),
             resolution_source: None,
             filters: Vec::new(),
             join_type: None,
@@ -193,6 +196,7 @@ impl<'a> Analyzer<'a> {
             expression: None,
             span: None,
             metadata: None,
+            tags: Vec::new(),
             resolution_source: None,
             filters: Vec::new(),
             join_type: None,
@@ -216,6 +220,7 @@ impl<'a> Analyzer<'a> {
                 data_type: col.data_type.clone(),
                 is_primary_key: None,
                 foreign_key: None,
+                classifications: None,
             })
             .collect();
 

@@ -43,6 +43,8 @@ export interface AnalyzeRequest {
   options?: AnalysisOptions;
   /** Optional schema metadata for accurate column resolution */
   schema?: SchemaMetadata;
+  /** Optional tag hints supplied by automation to seed classifications */
+  tagHints?: TagHint[];
 }
 
 export interface FileSource {
@@ -101,6 +103,8 @@ export interface ColumnSchema {
   isPrimaryKey?: boolean;
   /** Foreign key reference if this column references another table */
   foreignKey?: ForeignKeyRef;
+  /** Sensitive data classifications attached to this column */
+  classifications?: ColumnTag[];
 }
 
 /** A foreign key reference to another table's column. */
@@ -109,6 +113,37 @@ export interface ForeignKeyRef {
   table: string;
   /** The referenced column name */
   column: string;
+}
+
+/** Origin of a classification tag. */
+export type TagSource = 'user' | 'robot' | 'inferred';
+
+/** Classification label for a column. */
+export interface ColumnTag {
+  /** Tag name, e.g. "PII", "PCI", "HIPAA" */
+  name: string;
+  /** Source of this tag (user, robot, inferred) */
+  source?: TagSource;
+  /** Confidence value between 0 and 1 */
+  confidence?: number;
+  /** Optional notes or justification */
+  notes?: string;
+  /** ISO timestamp when this tag was updated */
+  updatedAt?: string;
+  /** True when propagated from upstream lineage rather than explicitly assigned */
+  inherited?: boolean;
+  /** Reference node/column id used during propagation */
+  fromColumnId?: string;
+}
+
+/** External hint for seeding tags before analysis. */
+export interface TagHint {
+  /** Canonical or best-effort table identifier */
+  table: string;
+  /** Column or wildcard ("*") when applying to entire table */
+  column: string;
+  /** Tags to associate with the column */
+  tags: ColumnTag[];
 }
 
 // Response Types
@@ -168,6 +203,8 @@ export interface Node {
   span?: Span;
   /** Extensible metadata for future use */
   metadata?: Record<string, unknown>;
+  /** Propagated tags for this node or column */
+  tags?: ColumnTag[];
   /** How this table was resolved (imported, implied, or unknown) */
   resolutionSource?: ResolutionSource;
   /** Filter predicates (WHERE clause conditions) that affect this table's rows */
@@ -352,6 +389,10 @@ export interface Summary {
   issueCount: IssueCount;
   /** Quick check: true if any errors were encountered */
   hasErrors: boolean;
+  /** Aggregate counts of tags detected in the workload */
+  tagCounts?: TagCount[];
+  /** Optional breakdown showing tag flows between producers and consumers */
+  tagFlows?: TagFlowSummary[];
 }
 
 /** Counts of issues by severity level. */
@@ -379,6 +420,27 @@ export const IssueCodes = {
   PAYLOAD_SIZE_WARNING: 'PAYLOAD_SIZE_WARNING',
   MEMORY_LIMIT_EXCEEDED: 'MEMORY_LIMIT_EXCEEDED',
 } as const;
+
+/** Aggregate count for a specific tag label. */
+export interface TagCount {
+  /** Tag name */
+  tag: string;
+  /** Number of unique columns carrying this tag */
+  columns: number;
+  /** Number of unique table nodes carrying this tag */
+  tables: number;
+  /** Number of producing statements (optional) */
+  sources?: number;
+}
+
+/** Summarizes how a tag flows through the lineage graph. */
+export interface TagFlowSummary {
+  tag: string;
+  /** IDs of nodes where this tag originates */
+  sources: string[];
+  /** IDs of nodes where this tag is observed downstream */
+  targets: string[];
+}
 
 // Resolved Schema Types
 
@@ -416,6 +478,8 @@ export interface ResolvedColumnSchema {
   isPrimaryKey?: boolean;
   /** Foreign key reference if this column references another table */
   foreignKey?: ForeignKeyRef;
+  /** Effective classifications derived from schema + overrides */
+  classifications?: ColumnTag[];
 }
 
 /** Information about a table-level constraint (composite PK, FK, etc.). */

@@ -14,6 +14,7 @@ fn golden_inline_select_tables_only() {
         source_name: None,
         options: None,
         schema: None,
+        tag_hints: None,
     };
 
     let result = analyze(&request);
@@ -39,6 +40,7 @@ fn golden_multi_file_keeps_sources() {
         source_name: None,
         options: None,
         schema: None,
+        tag_hints: None,
     };
 
     let result = analyze(&request);
@@ -55,6 +57,7 @@ fn golden_column_lineage_union_captures_outputs() {
         source_name: None,
         options: None,
         schema: None,
+        tag_hints: None,
     };
 
     let result = analyze(&request);
@@ -71,6 +74,7 @@ fn golden_window_functions_emit_columns() {
         source_name: None,
         options: None,
         schema: None,
+        tag_hints: None,
     };
 
     let result = analyze(&request);
@@ -87,6 +91,7 @@ fn golden_ctas_captures_target_columns() {
         source_name: None,
         options: None,
         schema: None,
+        tag_hints: None,
     };
 
     let result = analyze(&request);
@@ -125,16 +130,19 @@ fn golden_resolved_schema_with_imported_and_implied() {
                         data_type: Some("INTEGER".to_string()),
                         is_primary_key: None,
                         foreign_key: None,
+                        classifications: None,
                     },
                     ColumnSchema {
                         name: "username".to_string(),
                         data_type: Some("TEXT".to_string()),
                         is_primary_key: None,
                         foreign_key: None,
+                        classifications: None,
                     },
                 ],
             }],
         }),
+        tag_hints: None,
     };
 
     let result = analyze(&request);
@@ -168,16 +176,19 @@ fn golden_imported_precedence_over_create_table() {
                         data_type: Some("BIGINT".to_string()),
                         is_primary_key: None,
                         foreign_key: None,
+                        classifications: None,
                     },
                     ColumnSchema {
                         name: "imported_col".to_string(),
                         data_type: None,
                         is_primary_key: None,
                         foreign_key: None,
+                        classifications: None,
                     },
                 ],
             }],
         }),
+        tag_hints: None,
     };
 
     let result = analyze(&request);
@@ -213,16 +224,19 @@ fn imported_schema_preserves_qualified_names() {
                         data_type: Some("INT".to_string()),
                         is_primary_key: None,
                         foreign_key: None,
+                        classifications: None,
                     },
                     ColumnSchema {
                         name: "email".to_string(),
                         data_type: Some("TEXT".to_string()),
                         is_primary_key: None,
                         foreign_key: None,
+                        classifications: None,
                     },
                 ],
             }],
         }),
+        tag_hints: None,
     };
 
     let result = analyze(&request);
@@ -256,16 +270,19 @@ fn imported_schema_resolves_via_default_schema() {
                         data_type: None,
                         is_primary_key: None,
                         foreign_key: None,
+                        classifications: None,
                     },
                     ColumnSchema {
                         name: "email".to_string(),
                         data_type: None,
                         is_primary_key: None,
                         foreign_key: None,
+                        classifications: None,
                     },
                 ],
             }],
         }),
+        tag_hints: None,
     };
 
     let result = analyze(&request);
@@ -303,9 +320,11 @@ fn imported_schema_resolves_via_search_path_with_catalog() {
                     data_type: None,
                     is_primary_key: None,
                     foreign_key: None,
+                    classifications: None,
                 }],
             }],
         }),
+        tag_hints: None,
     };
 
     let result = analyze(&request);

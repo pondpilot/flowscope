@@ -36,7 +36,8 @@ fuzz_target!(|input: FuzzInput| {
         source_name: None,
         options: None,
         schema: None,
-    };
+        tag_hints: None,
+        };
 
     // The analyze function should never panic, even on invalid SQL.
     // It should return errors gracefully via the issues vector.

@@ -6,6 +6,7 @@ import { sanitizeIdentifier } from '../utils/sanitize';
 import { GRAPH_CONFIG, MAX_FILTER_DISPLAY_LENGTH } from '../constants';
 import { useColors } from '../hooks/useColors';
 import type { AggregationInfo } from '@pondpilot/flowscope-core';
+import { TagBadgeList } from './TagBadgeList';
 
 interface AggregationIndicatorProps {
   aggregation?: AggregationInfo;
@@ -66,6 +67,7 @@ function AggregationIndicator({ aggregation, colors }: AggregationIndicatorProps
     </span>
   );
 }
+
 
 // Type guard for safer type checking
 function isTableNodeData(data: unknown): data is TableNodeData {
@@ -248,6 +250,7 @@ export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
           <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {sanitizeIdentifier(nodeData.label)}
           </div>
+          <TagBadgeList tags={nodeData.tags} compact />
         </div>
 
         {isBaseTable && !isVirtualOutput && (
@@ -400,6 +403,7 @@ export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
                     background: 'transparent',
                   }}
                 />
+                <TagBadgeList tags={col.tags} compact />
               </div>
             );
           })}

@@ -144,6 +144,7 @@ impl<'a> Analyzer<'a> {
             expression: None,
             span: None,
             metadata: None,
+            tags: Vec::new(),
             resolution_source: None,
             filters: Vec::new(),
             join_type: None,

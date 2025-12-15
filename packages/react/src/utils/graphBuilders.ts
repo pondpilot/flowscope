@@ -136,6 +136,7 @@ function processTableColumns(
       id: `${nodeId}__schema_${col.name}`,
       name: col.name,
       expression: col.dataType,
+      tags: [],
     }));
     return {
       columns: [...existingColumns, ...injectedColumns],
@@ -208,6 +209,7 @@ function buildTableNodeData(
     isRecursive: options.isRecursive,
     isBaseTable: options.isBaseTable,
     filters: node.filters,
+    tags: node.tags || [],
   };
 }
 
@@ -226,6 +228,7 @@ function buildOutputNodeData(
     isSelected: GRAPH_CONFIG.VIRTUAL_OUTPUT_NODE_ID === options.selectedNodeId,
     isHighlighted: isNodeHighlighted(options.searchTerm, outputColumns),
     isCollapsed: options.isCollapsed,
+    tags: [],
   };
 }
 
@@ -276,6 +279,7 @@ export function buildFlowNodes(
           name: childNode.label,
           expression: childNode.expression,
           aggregation: childNode.aggregation,
+          tags: childNode.tags || [],
         });
         tableColumnMap.set(parentNode.id, cols);
         ownedColumnIds.add(childNode.id);
@@ -333,6 +337,7 @@ export function buildFlowNodes(
       name: col.label,
       expression: col.expression,
       aggregation: col.aggregation,
+      tags: col.tags || [],
     }));
 
   // Add virtual "Output" node only for SELECT-like statements
@@ -815,6 +820,7 @@ export function buildColumnLevelGraph(
           name: childNode.label,
           expression: childNode.expression,
           aggregation: childNode.aggregation,
+          tags: childNode.tags || [],
         });
         tableColumnMap.set(parentNode.id, cols);
         columnToTableMap.set(childNode.id, parentNode.id);
@@ -833,6 +839,7 @@ export function buildColumnLevelGraph(
         name: node.label,
         expression: node.expression,
         aggregation: node.aggregation,
+        tags: node.tags || [],
       });
     }
   }

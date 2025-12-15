@@ -12,6 +12,7 @@ fn run_snapshot_test(name: &str, sql: &str) {
         source_name: None,
         options: None,
         schema: None,
+        tag_hints: None,
     };
 
     let result = analyze(&request);

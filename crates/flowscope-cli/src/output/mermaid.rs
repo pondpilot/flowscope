@@ -413,6 +413,7 @@ mod tests {
             source_name: None,
             options: None,
             schema: None,
+            tag_hints: None,
         });
 
         let mermaid = format_mermaid(&result, MermaidViewMode::Table);
@@ -437,6 +438,7 @@ mod tests {
             source_name: None,
             options: None,
             schema: None,
+            tag_hints: None,
         });
 
         let mermaid = format_mermaid(&result, MermaidViewMode::Script);

@@ -14,6 +14,9 @@ export type {
   SchemaTable,
   ColumnSchema,
   ForeignKeyRef,
+  ColumnTag,
+  TagSource,
+  TagHint,
   FileSource,
   // Response types
   AnalyzeResult,
@@ -42,6 +45,8 @@ export type {
   ResolvedColumnSchema,
   SchemaOrigin,
   ResolutionSource,
+  TagCount,
+  TagFlowSummary,
 } from './types';
 
 // Constants and utilities

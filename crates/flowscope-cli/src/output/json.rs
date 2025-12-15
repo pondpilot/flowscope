@@ -27,6 +27,7 @@ mod tests {
             source_name: None,
             options: None,
             schema: None,
+            tag_hints: None,
         });
 
         let json = format_json(&result, false);
@@ -43,6 +44,7 @@ mod tests {
             source_name: None,
             options: None,
             schema: None,
+            tag_hints: None,
         });
 
         let json = format_json(&result, true);

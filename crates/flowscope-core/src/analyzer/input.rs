@@ -712,6 +712,7 @@ mod tests {
             source_name: None,
             options: None,
             schema: None,
+            tag_hints: None,
         }
     }
 

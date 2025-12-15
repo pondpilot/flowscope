@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import type { ColumnNodeData } from '../types';
+import { TagBadgeList } from './TagBadgeList';
 
 /**
  * React Flow node component for rendering standalone column nodes in column-level view.
@@ -8,7 +9,7 @@ import type { ColumnNodeData } from '../types';
  */
 function ColumnNodeComponent({ data }: NodeProps): JSX.Element {
   const nodeData = data as ColumnNodeData;
-  const { label, tableName, expression, isSelected, isHighlighted } = nodeData;
+  const { label, tableName, expression, isSelected, isHighlighted, tags } = nodeData;
 
   return (
     <div
@@ -29,6 +30,7 @@ function ColumnNodeComponent({ data }: NodeProps): JSX.Element {
           {expression}
         </div>
       )}
+      <TagBadgeList tags={tags} compact />
 
       <Handle type="source" position={Position.Bottom} className="w-2 h-2" />
     </div>

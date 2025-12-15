@@ -30,7 +30,8 @@ proptest! {
             source_name: None,
             options: None,
             schema: None,
-        };
+            tag_hints: None,
+                };
 
         let result = analyze(&request);
 
@@ -69,7 +70,8 @@ proptest! {
             source_name: None,
             options: None,
             schema: None,
-        };
+            tag_hints: None,
+                };
 
         let result = analyze(&request);
 
@@ -128,7 +130,8 @@ proptest! {
             source_name: None,
             options: None,
             schema: Some(schema_metadata),
-        };
+            tag_hints: None,
+                };
 
         let result = analyze(&request);
 
@@ -180,7 +183,8 @@ proptest! {
             source_name: None,
             options: None,
             schema: Some(schema_metadata),
-        };
+            tag_hints: None,
+                };
 
         let result = analyze(&request);
 
@@ -207,7 +211,8 @@ proptest! {
             source_name: None,
             options: None,
             schema: None,
-        };
+            tag_hints: None,
+                };
 
         let result = analyze(&request);
 
@@ -250,6 +255,7 @@ mod function_arg_handling {
             source_name: None,
             options: None,
             schema: None,
+            tag_hints: None,
         };
         let result = analyze(&request);
 
@@ -268,6 +274,7 @@ mod function_arg_handling {
             source_name: None,
             options: None,
             schema: None,
+            tag_hints: None,
         };
         let result = analyze(&request);
 
@@ -298,6 +305,7 @@ mod function_arg_handling {
             source_name: None,
             options: None,
             schema: None,
+            tag_hints: None,
         };
         let result = analyze(&request);
 
@@ -321,6 +329,7 @@ mod function_arg_handling {
             source_name: None,
             options: None,
             schema: None,
+            tag_hints: None,
         };
         let result = analyze(&request);
 
@@ -351,6 +360,7 @@ mod function_arg_handling {
             source_name: None,
             options: None,
             schema: None,
+            tag_hints: None,
         };
         let result = analyze(&request);
 
@@ -387,6 +397,7 @@ mod function_arg_handling {
                 source_name: None,
                 options: None,
                 schema: None,
+                tag_hints: None,
             };
 
             let result = analyze(&request);
@@ -415,6 +426,7 @@ mod function_arg_handling {
                 source_name: None,
                 options: None,
                 schema: None,
+                tag_hints: None,
             };
             let result = analyze(&request);
 
@@ -451,6 +463,7 @@ mod function_arg_handling {
             source_name: None,
             options: None,
             schema: None,
+            tag_hints: None,
         };
         let result = analyze(&request);
 
@@ -481,6 +494,7 @@ mod function_arg_handling {
             source_name: None,
             options: None,
             schema: None,
+            tag_hints: None,
         };
         let result = analyze(&request);
 
@@ -516,6 +530,7 @@ mod function_arg_handling {
             source_name: None,
             options: None,
             schema: None,
+            tag_hints: None,
         };
         let result = analyze(&request);
 
@@ -540,6 +555,7 @@ mod function_arg_handling {
                 source_name: None,
                 options: None,
                 schema: None,
+                tag_hints: None,
             };
             let result = analyze(&request);
 
@@ -565,6 +581,7 @@ mod function_arg_handling {
                 source_name: None,
                 options: None,
                 schema: None,
+                tag_hints: None,
             };
             let result = analyze(&request);
 

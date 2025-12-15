@@ -1,6 +1,6 @@
 use crate::types::*;
 use sqlparser::ast::Statement;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 use std::sync::Arc;
 #[cfg(feature = "tracing")]
@@ -22,6 +22,7 @@ mod select_analyzer;
 mod statements;
 pub mod visitor;
 
+use context::StatementContext;
 use cross_statement::CrossStatementTracker;
 use helpers::{build_column_schemas_with_constraints, find_identifier_span};
 use input::{collect_statements, StatementInput};
@@ -57,6 +58,10 @@ pub(crate) struct Analyzer<'a> {
     pub(crate) tracker: CrossStatementTracker,
     /// Whether column lineage is enabled.
     pub(crate) column_lineage_enabled: bool,
+    /// Column-level tag hints provided externally (table.column -> tags)
+    tag_hints: HashMap<String, Vec<ColumnTag>>,
+    /// Table-level default tags (table -> tags) applied to all columns
+    table_tag_defaults: HashMap<String, Vec<ColumnTag>>,
     /// Source slice for the currently analyzed statement (for span lookups).
     current_statement_source: Option<StatementSourceSlice<'a>>,
     /// Statements that already emitted a recursion-depth warning.
@@ -74,16 +79,21 @@ impl<'a> Analyzer<'a> {
 
         let (schema, init_issues) = SchemaRegistry::new(request.schema.as_ref(), request.dialect);
 
-        Self {
+        let mut analyzer = Self {
             request,
             issues: init_issues,
             statement_lineages: Vec::new(),
             schema,
             tracker: CrossStatementTracker::new(),
             column_lineage_enabled,
+            tag_hints: HashMap::new(),
+            table_tag_defaults: HashMap::new(),
             current_statement_source: None,
             depth_limit_statements: HashSet::new(),
-        }
+        };
+
+        analyzer.initialize_tag_hints();
+        analyzer
     }
 
     /// Finds the span of an identifier in the SQL text.
@@ -259,6 +269,107 @@ impl<'a> Analyzer<'a> {
     fn precollect_create_view(&mut self, name: &sqlparser::ast::ObjectName) {
         let canonical = self.normalize_table_name(&name.to_string());
         self.schema.mark_table_known(&canonical);
+    }
+
+    fn initialize_tag_hints(&mut self) {
+        if let Some(hints) = &self.request.tag_hints {
+            for hint in hints {
+                if hint.tags.is_empty() {
+                    continue;
+                }
+                let canonical_table = self.normalize_table_name(&hint.table);
+                if hint.column.trim() == "*" {
+                    self.table_tag_defaults
+                        .entry(canonical_table)
+                        .or_default()
+                        .extend(hint.tags.clone());
+                    continue;
+                }
+                let normalized_column = self.normalize_identifier(&hint.column);
+                self.tag_hints
+                    .entry(Self::tag_key(&canonical_table, &normalized_column))
+                    .or_default()
+                    .extend(hint.tags.clone());
+            }
+        }
+    }
+
+    fn collect_base_tags_for_column(&self, canonical: &str, column_name: &str) -> Vec<ColumnTag> {
+        let normalized_column = self.normalize_identifier(column_name);
+        let mut tags: Vec<ColumnTag> = Vec::new();
+
+        if let Some(entry) = self.schema.get(canonical) {
+            if let Some(schema_column) = entry
+                .table
+                .columns
+                .iter()
+                .find(|col| self.normalize_identifier(&col.name) == normalized_column)
+            {
+                if let Some(classifications) = &schema_column.classifications {
+                    tags.extend(classifications.clone());
+                }
+            }
+        }
+
+        if let Some(defaults) = self.table_tag_defaults.get(canonical) {
+            tags.extend(defaults.clone());
+        }
+
+        if let Some(hints) = self
+            .tag_hints
+            .get(&Self::tag_key(canonical, &normalized_column))
+        {
+            tags.extend(hints.clone());
+        }
+
+        Self::dedupe_tags(&mut tags);
+        tags
+    }
+
+    fn inherit_tags(&self, tags: &[ColumnTag], source_id: &Arc<str>) -> Vec<ColumnTag> {
+        tags.iter()
+            .map(|tag| {
+                let mut inherited = tag.clone();
+                inherited.inherited = Some(true);
+                inherited.from_column_id = Some(source_id.to_string());
+                inherited
+            })
+            .collect()
+    }
+
+    fn dedupe_tags(tags: &mut Vec<ColumnTag>) {
+        let mut seen: HashSet<(String, String, bool)> = HashSet::new();
+        tags.retain(|tag| {
+            let key = (
+                tag.name.to_lowercase(),
+                tag.from_column_id.clone().unwrap_or_default(),
+                tag.inherited.unwrap_or(false),
+            );
+            if seen.contains(&key) {
+                false
+            } else {
+                seen.insert(key);
+                true
+            }
+        });
+    }
+
+    fn find_canonical_by_node<'b>(
+        &self,
+        ctx: &'b StatementContext,
+        node_id: &str,
+    ) -> Option<&'b String> {
+        ctx.table_node_ids.iter().find_map(|(canonical, id)| {
+            if id.as_ref() == node_id {
+                Some(canonical)
+            } else {
+                None
+            }
+        })
+    }
+
+    fn tag_key(table: &str, column: &str) -> String {
+        format!("{table}.{column}")
     }
 }
 

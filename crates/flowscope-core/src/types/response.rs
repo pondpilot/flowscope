@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use super::common::{Issue, IssueCount, Span, Summary};
-use super::request::ForeignKeyRef;
+use super::request::{ColumnTag, ForeignKeyRef};
 
 /// The result of analyzing SQL for data lineage.
 ///
@@ -53,6 +53,8 @@ impl AnalyzeResult {
                     infos: 0,
                 },
                 has_errors: true,
+                tag_counts: Vec::new(),
+                tag_flows: Vec::new(),
             },
             resolved_schema: None,
         }
@@ -130,6 +132,10 @@ pub struct Node {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, serde_json::Value>>,
 
+    /// Propagated tags for this node/column
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<ColumnTag>,
+
     /// How this table was resolved (imported, implied, or unknown)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub resolution_source: Option<ResolutionSource>,
@@ -168,6 +174,7 @@ impl Node {
             expression: None,
             span: None,
             metadata: None,
+            tags: Vec::new(),
             resolution_source: None,
             filters: Vec::new(),
             join_type: None,
@@ -186,6 +193,7 @@ impl Node {
             expression: None,
             span: None,
             metadata: None,
+            tags: Vec::new(),
             resolution_source: None,
             filters: Vec::new(),
             join_type: None,
@@ -204,6 +212,7 @@ impl Node {
             expression: None,
             span: None,
             metadata: None,
+            tags: Vec::new(),
             resolution_source: None,
             filters: Vec::new(),
             join_type: None,
@@ -711,6 +720,10 @@ pub struct ResolvedColumnSchema {
     /// Foreign key reference if this column references another table
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub foreign_key: Option<ForeignKeyRef>,
+
+    /// Effective classifications derived from schema and overrides
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub classifications: Vec<ColumnTag>,
 }
 
 /// The origin of schema information.
@@ -754,6 +767,7 @@ mod tests {
                     expression: None,
                     span: None,
                     metadata: None,
+                    tags: Vec::new(),
                     resolution_source: None,
                     filters: Vec::new(),
                     join_type: None,

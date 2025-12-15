@@ -66,7 +66,7 @@ export interface IssuesViewState {
 
 /** All view states for a single project */
 export interface ProjectViewStates {
-  activeTab: 'lineage' | 'hierarchy' | 'matrix' | 'schema' | 'issues';
+  activeTab: 'lineage' | 'hierarchy' | 'matrix' | 'schema' | 'tags' | 'issues';
   hierarchy: Partial<HierarchyViewState>;
   lineage: Partial<LineageViewState>;
   matrix: Partial<MatrixViewState>;

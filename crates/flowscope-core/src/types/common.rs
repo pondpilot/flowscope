@@ -146,6 +146,14 @@ pub struct Summary {
 
     /// Quick check: true if any errors were encountered
     pub has_errors: bool,
+
+    /// Aggregate counts of tags detected in the workload
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tag_counts: Vec<TagCount>,
+
+    /// Optional breakdown showing tag flow between producers and consumers
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tag_flows: Vec<TagFlowSummary>,
 }
 
 /// Counts of issues by severity level.
@@ -175,6 +183,28 @@ pub mod issue_codes {
     pub const PAYLOAD_SIZE_WARNING: &str = "PAYLOAD_SIZE_WARNING";
     pub const MEMORY_LIMIT_EXCEEDED: &str = "MEMORY_LIMIT_EXCEEDED";
     pub const SCHEMA_CONFLICT: &str = "SCHEMA_CONFLICT";
+}
+
+/// Aggregate count for a specific tag label.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct TagCount {
+    pub tag: String,
+    pub columns: usize,
+    pub tables: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sources: Option<usize>,
+}
+
+/// Summarizes how a tag flows throughout the lineage graph.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct TagFlowSummary {
+    pub tag: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sources: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub targets: Vec<String>,
 }
 
 #[cfg(test)]

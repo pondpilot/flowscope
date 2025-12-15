@@ -11,11 +11,14 @@ mod response;
 pub mod serde_utils;
 
 // Re-export all public types
-pub use common::{issue_codes, CaseSensitivity, Issue, IssueCount, Severity, Span, Summary};
+pub use common::{
+    issue_codes, CaseSensitivity, Issue, IssueCount, Severity, Span, Summary, TagCount,
+    TagFlowSummary,
+};
 pub use legacy::LineageResult;
 pub use request::{
-    AnalysisOptions, AnalyzeRequest, ColumnSchema, Dialect, FileSource, ForeignKeyRef,
-    SchemaMetadata, SchemaNamespaceHint, SchemaTable,
+    AnalysisOptions, AnalyzeRequest, ColumnSchema, ColumnTag, Dialect, FileSource, ForeignKeyRef,
+    SchemaMetadata, SchemaNamespaceHint, SchemaTable, TagHint, TagSource,
 };
 pub use response::{
     AggregationInfo, AnalyzeResult, CanonicalName, ConstraintType, Edge, EdgeType,

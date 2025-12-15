@@ -881,12 +881,14 @@ mod tests {
                 data_type: Some("integer".to_string()),
                 is_primary_key: None,
                 foreign_key: None,
+                classifications: None,
             },
             ColumnSchema {
                 name: "name".to_string(),
                 data_type: Some("text".to_string()),
                 is_primary_key: None,
                 foreign_key: None,
+                classifications: None,
             },
         ];
 
@@ -912,6 +914,7 @@ mod tests {
                     data_type: Some("integer".to_string()),
                     is_primary_key: None,
                     foreign_key: None,
+                    classifications: None,
                 }],
             }],
             default_catalog: None,
@@ -930,12 +933,14 @@ mod tests {
                 data_type: Some("integer".to_string()),
                 is_primary_key: None,
                 foreign_key: None,
+                classifications: None,
             },
             ColumnSchema {
                 name: "email".to_string(),
                 data_type: Some("text".to_string()),
                 is_primary_key: None,
                 foreign_key: None,
+                classifications: None,
             },
         ];
 
@@ -954,6 +959,7 @@ mod tests {
             data_type: Some("integer".to_string()),
             is_primary_key: None,
             foreign_key: None,
+            classifications: None,
         }];
 
         registry.register_implied("public.temp", columns, false, "CREATE TABLE", 0);
@@ -1000,12 +1006,14 @@ mod tests {
                         data_type: Some("integer".to_string()),
                         is_primary_key: None,
                         foreign_key: None,
+                        classifications: None,
                     },
                     ColumnSchema {
                         name: "email".to_string(),
                         data_type: Some("text".to_string()),
                         is_primary_key: None,
                         foreign_key: None,
+                        classifications: None,
                     },
                 ],
             }],
@@ -1041,6 +1049,7 @@ mod tests {
                     data_type: Some("text".to_string()),
                     is_primary_key: None,
                     foreign_key: None,
+                    classifications: None,
                 }],
             }],
             default_catalog: None,
@@ -1089,6 +1098,7 @@ mod tests {
             data_type: Some("integer".to_string()),
             is_primary_key: None,
             foreign_key: None,
+            classifications: None,
         }];
 
         // Should still mark as known but not store schema details
@@ -1164,6 +1174,7 @@ mod tests {
                         data_type: None,
                         is_primary_key: None,
                         foreign_key: None,
+                        classifications: None,
                     }],
                 },
                 SchemaTable {
@@ -1175,6 +1186,7 @@ mod tests {
                         data_type: None,
                         is_primary_key: None,
                         foreign_key: None,
+                        classifications: None,
                     }],
                 },
             ],
@@ -1313,6 +1325,7 @@ mod tests {
                     data_type: Some("integer".to_string()),
                     is_primary_key: None,
                     foreign_key: None,
+                    classifications: None,
                 }],
             }],
             default_catalog: None,
@@ -1330,6 +1343,7 @@ mod tests {
             data_type: Some("integer".to_string()),
             is_primary_key: None,
             foreign_key: None,
+            classifications: None,
         }];
 
         let issue = registry.register_implied("public.users", columns, false, "CREATE TABLE", 0);
@@ -1372,6 +1386,7 @@ mod tests {
                     data_type: Some("integer".to_string()),
                     is_primary_key: Some(true),
                     foreign_key: None,
+                    classifications: None,
                 }],
             }],
             default_catalog: None,
@@ -1403,6 +1418,7 @@ mod tests {
                         table: "public.users".to_string(),
                         column: "id".to_string(),
                     }),
+                    classifications: None,
                 }],
             }],
             default_catalog: None,
@@ -1431,6 +1447,7 @@ mod tests {
                 data_type: Some("integer".to_string()),
                 is_primary_key: Some(true),
                 foreign_key: None,
+                classifications: None,
             },
             ColumnSchema {
                 name: "order_id".to_string(),
@@ -1440,6 +1457,7 @@ mod tests {
                     table: "orders".to_string(),
                     column: "id".to_string(),
                 }),
+                classifications: None,
             },
         ];
 

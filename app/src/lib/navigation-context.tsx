@@ -1,9 +1,9 @@
 import { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect, type ReactNode } from 'react';
 import { useViewStateStore } from './view-state-store';
 
-export type AnalysisTab = 'lineage' | 'hierarchy' | 'matrix' | 'schema' | 'issues';
+export type AnalysisTab = 'lineage' | 'hierarchy' | 'matrix' | 'schema' | 'tags' | 'issues';
 
-const VALID_TABS: readonly AnalysisTab[] = ['lineage', 'hierarchy', 'matrix', 'schema', 'issues'];
+const VALID_TABS: readonly AnalysisTab[] = ['lineage', 'hierarchy', 'matrix', 'schema', 'tags', 'issues'];
 
 export function isValidTab(tab: string): tab is AnalysisTab {
   return VALID_TABS.includes(tab as AnalysisTab);

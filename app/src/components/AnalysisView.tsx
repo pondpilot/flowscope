@@ -26,6 +26,7 @@ import { ComplexityDots } from './ComplexityDots';
 import { HierarchyView } from './HierarchyView';
 import { SchemaAwareIssuesPanel } from './SchemaAwareIssuesPanel';
 import { SchemaEditor } from './SchemaEditor';
+import { TagImpactView } from './TagImpactView';
 
 interface AnalysisViewProps {
   graphContainerRef?: React.RefObject<HTMLDivElement>;
@@ -61,7 +62,7 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
   useEffect(() => {
     actionsRef.current = actions;
   }, [actions]);
-  const { currentProject, updateSchemaSQL, activeProjectId } = useProject();
+  const { currentProject, updateSchemaSQL, activeProjectId, setColumnTags, clearColumnTags } = useProject();
   const [schemaEditorOpen, setSchemaEditorOpen] = useState(false);
   const { activeTab, setActiveTab, navigationTarget, clearNavigationTarget } = useNavigation();
   const [lineageFocusNodeId, setLineageFocusNodeId] = useState<string | undefined>(undefined);
@@ -119,6 +120,7 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
 
   const summary = result?.summary;
   const hasIssues = summary ? (summary.issueCount.errors > 0 || summary.issueCount.warnings > 0) : false;
+  const totalTaggedColumns = summary?.tagCounts?.reduce((sum, count) => sum + count.columns, 0) ?? 0;
 
   // Redirect from issues tab if there are no issues
   // This effect must be before any early returns to satisfy Rules of Hooks
@@ -158,6 +160,9 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
             <TabsTrigger value="schema">
               Schema
             </TabsTrigger>
+            <TabsTrigger value="tags">
+              Tags
+            </TabsTrigger>
             {hasIssues && (
               <TabsTrigger value="issues" className="text-warning-light dark:text-warning-dark">
                 Issues ({summary.issueCount.errors + summary.issueCount.warnings})
@@ -179,6 +184,12 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
               <span className="font-semibold text-foreground">{summary.joinCount}</span>
               <span>joins</span>
             </div>
+            {summary.tagCounts && summary.tagCounts.length > 0 && (
+              <div className="flex items-center gap-1">
+                <span className="font-semibold text-foreground">{totalTaggedColumns}</span>
+                <span>tagged cols</span>
+              </div>
+            )}
             <ComplexityDots score={summary.complexityScore} />
             <Button
               variant="outline"
@@ -229,6 +240,24 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
               schema={schema}
               selectedTableName={schemaState.selectedTableName}
               onClearSelection={schemaState.clearSelection}
+            />
+          </TabsContent>
+
+          <TabsContent value="tags" forceMount className="h-full mt-0 p-0 absolute inset-0 data-[state=inactive]:hidden">
+            <TagImpactView
+              result={result}
+              schema={schema}
+              overrides={currentProject?.classificationOverrides}
+              onUpdateTags={(table, column, tags) => {
+                if (currentProject) {
+                  setColumnTags(currentProject.id, table, column, tags);
+                }
+              }}
+              onClearTags={(table, column) => {
+                if (currentProject) {
+                  clearColumnTags(currentProject.id, table, column);
+                }
+              }}
             />
           </TabsContent>
 

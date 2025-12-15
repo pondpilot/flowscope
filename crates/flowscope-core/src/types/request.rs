@@ -33,6 +33,10 @@ pub struct AnalyzeRequest {
     /// Optional schema metadata for accurate column resolution
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub schema: Option<SchemaMetadata>,
+
+    /// Optional tag hints provided by automation
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tag_hints: Option<Vec<TagHint>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -204,6 +208,9 @@ pub struct ColumnSchema {
     /// Foreign key reference if this column references another table
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub foreign_key: Option<ForeignKeyRef>,
+    /// Sensitive data classifications attached to this column
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub classifications: Option<Vec<ColumnTag>>,
 }
 
 /// A foreign key reference to another table's column.
@@ -214,6 +221,44 @@ pub struct ForeignKeyRef {
     pub table: String,
     /// The referenced column name
     pub column: String,
+}
+
+/// Classification label describing sensitivity of a column.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ColumnTag {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<TagSource>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confidence: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updated_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inherited: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from_column_id: Option<String>,
+}
+
+/// Origin of a classification tag.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum TagSource {
+    User,
+    Robot,
+    Inferred,
+}
+
+/// External hint to seed classifications for a table or column.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TagHint {
+    pub table: String,
+    pub column: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<ColumnTag>,
 }
 
 #[cfg(test)]
@@ -229,6 +274,7 @@ mod tests {
             source_name: None,
             options: None,
             schema: None,
+            tag_hints: None,
         };
         let json = serde_json::to_string(&request).unwrap();
         assert!(json.contains("\"dialect\":\"postgres\""));
