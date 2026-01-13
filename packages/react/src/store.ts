@@ -12,6 +12,7 @@ const STORAGE_KEYS = {
   layoutAlgorithm: 'flowscope-layout-algorithm',
   defaultCollapsed: 'flowscope-default-collapsed',
   columnEdges: 'flowscope-column-edges',
+  hideCTEs: 'flowscope-hide-ctes',
 } as const;
 
 /**
@@ -120,6 +121,19 @@ function saveColumnEdges(show: boolean): void {
   saveToStorage(STORAGE_KEYS.columnEdges, String(show));
 }
 
+function loadHideCTEs(): boolean {
+  return loadFromStorage(
+    STORAGE_KEYS.hideCTEs,
+    (v) => v === 'true' || v === 'false',
+    (v) => v === 'true',
+    false
+  );
+}
+
+function saveHideCTEs(hide: boolean): void {
+  saveToStorage(STORAGE_KEYS.hideCTEs, String(hide));
+}
+
 export interface LineageState {
   // Data
   result: AnalyzeResult | null;
@@ -140,6 +154,7 @@ export interface LineageState {
   expandedTableIds: Set<string>; // Tables with all columns shown
   defaultCollapsed: boolean; // Whether tables are collapsed by default
   showColumnEdges: boolean; // Whether to show column-level edges instead of table-level
+  hideCTEs: boolean; // Whether to hide CTEs and show bypass edges (A→CTE→B becomes A→B)
   showScriptTables: boolean;
   navigationRequest: NavigationRequest | null;
   tableFilter: TableFilter;
@@ -164,6 +179,7 @@ export interface LineageState {
   setMatrixSubMode: (mode: MatrixSubMode) => void;
   setLayoutAlgorithm: (algorithm: LayoutAlgorithm) => void;
   toggleColumnEdges: () => void;
+  toggleHideCTEs: () => void;
   toggleShowScriptTables: () => void;
   requestNavigation: (request: NavigationRequest | null) => void;
   setTableFilter: (filter: TableFilter) => void;
@@ -185,6 +201,7 @@ export function createLineageStore(
     initialState?.layoutAlgorithm ?? loadLayoutAlgorithm(fallbackAlgorithm);
   const initialDefaultCollapsed = initialState?.defaultCollapsed ?? loadDefaultCollapsed();
   const initialColumnEdges = initialState?.showColumnEdges ?? loadColumnEdges();
+  const initialHideCTEs = initialState?.hideCTEs ?? loadHideCTEs();
 
   return createStore<LineageState>((set) => ({
     // Initial state
@@ -201,6 +218,7 @@ export function createLineageStore(
     expandedTableIds: new Set(),
     defaultCollapsed: initialDefaultCollapsed,
     showColumnEdges: initialColumnEdges,
+    hideCTEs: initialHideCTEs,
     showScriptTables: false,
     navigationRequest: null,
     tableFilter: { selectedTableLabels: new Set(), direction: 'both' },
@@ -295,6 +313,13 @@ export function createLineageStore(
         return { showColumnEdges: newValue };
       }),
 
+    toggleHideCTEs: () =>
+      set((state) => {
+        const newValue = !state.hideCTEs;
+        saveHideCTEs(newValue);
+        return { hideCTEs: newValue };
+      }),
+
     toggleShowScriptTables: () => set((state) => ({ showScriptTables: !state.showScriptTables })),
 
     requestNavigation: (request) => set({ navigationRequest: request }),
@@ -379,6 +404,7 @@ export function useLineage() {
       expandedTableIds: store.expandedTableIds,
       defaultCollapsed: store.defaultCollapsed,
       showColumnEdges: store.showColumnEdges,
+      hideCTEs: store.hideCTEs,
       showScriptTables: store.showScriptTables,
       navigationRequest: store.navigationRequest,
       tableFilter: store.tableFilter,
@@ -397,6 +423,7 @@ export function useLineage() {
       setMatrixSubMode: store.setMatrixSubMode,
       setLayoutAlgorithm: store.setLayoutAlgorithm,
       toggleColumnEdges: store.toggleColumnEdges,
+      toggleHideCTEs: store.toggleHideCTEs,
       toggleShowScriptTables: store.toggleShowScriptTables,
       requestNavigation: store.requestNavigation,
       setTableFilter: store.setTableFilter,
@@ -426,6 +453,7 @@ export function useLineageState() {
   const expandedTableIds = useLineageStore((state) => state.expandedTableIds);
   const defaultCollapsed = useLineageStore((state) => state.defaultCollapsed);
   const showColumnEdges = useLineageStore((state) => state.showColumnEdges);
+  const hideCTEs = useLineageStore((state) => state.hideCTEs);
   const showScriptTables = useLineageStore((state) => state.showScriptTables);
   const navigationRequest = useLineageStore((state) => state.navigationRequest);
   const tableFilter = useLineageStore((state) => state.tableFilter);
@@ -444,6 +472,7 @@ export function useLineageState() {
     expandedTableIds,
     defaultCollapsed,
     showColumnEdges,
+    hideCTEs,
     showScriptTables,
     navigationRequest,
     tableFilter,
@@ -467,6 +496,7 @@ export function useLineageActions() {
   const setMatrixSubMode = useLineageStore((state) => state.setMatrixSubMode);
   const setLayoutAlgorithm = useLineageStore((state) => state.setLayoutAlgorithm);
   const toggleColumnEdges = useLineageStore((state) => state.toggleColumnEdges);
+  const toggleHideCTEs = useLineageStore((state) => state.toggleHideCTEs);
   const toggleShowScriptTables = useLineageStore((state) => state.toggleShowScriptTables);
   const requestNavigation = useLineageStore((state) => state.requestNavigation);
   const setTableFilter = useLineageStore((state) => state.setTableFilter);
@@ -488,6 +518,7 @@ export function useLineageActions() {
     setMatrixSubMode,
     setLayoutAlgorithm,
     toggleColumnEdges,
+    toggleHideCTEs,
     toggleShowScriptTables,
     requestNavigation,
     setTableFilter,

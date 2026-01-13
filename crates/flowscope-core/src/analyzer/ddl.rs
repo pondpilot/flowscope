@@ -6,10 +6,10 @@
 
 use super::context::StatementContext;
 use super::helpers::{
-    build_column_schemas_with_constraints, extract_simple_name, generate_edge_id, generate_node_id,
+    build_column_schemas_with_constraints, extract_simple_name, generate_node_id,
 };
 use super::Analyzer;
-use crate::types::{ColumnSchema, Edge, EdgeType, Node, NodeType, TableConstraintInfo};
+use crate::types::{ColumnSchema, Node, NodeType, TableConstraintInfo};
 use sqlparser::ast::{ObjectName, Query, TableConstraint};
 
 impl<'a> Analyzer<'a> {
@@ -92,32 +92,8 @@ impl<'a> Analyzer<'a> {
             is_temporary,
             "CREATE TABLE AS",
         );
-
-        // Create edges from all source tables to target
-        let source_nodes: Vec<_> = ctx
-            .nodes
-            .iter()
-            .filter(|n| n.id != target_id && n.node_type.is_table_like())
-            .map(|n| n.id.clone())
-            .collect();
-
-        for source_id in source_nodes {
-            let edge_id = generate_edge_id(&source_id, &target_id);
-            if !ctx.edge_ids.contains(&edge_id) {
-                ctx.add_edge(Edge {
-                    id: edge_id,
-                    from: source_id,
-                    to: target_id.clone(),
-                    edge_type: EdgeType::DataFlow,
-                    expression: None,
-                    operation: None,
-                    join_type: None,
-                    join_condition: None,
-                    metadata: None,
-                    approximate: None,
-                });
-            }
-        }
+        // Column-level lineage from analyze_query handles the data flow edges.
+        // No need to create redundant table-to-table edges here.
     }
 
     pub(super) fn analyze_create_table(
@@ -227,32 +203,8 @@ impl<'a> Analyzer<'a> {
             is_temporary,
             "VIEW definition",
         );
-
-        // Create edges from all source tables to target
-        let source_nodes: Vec<_> = ctx
-            .nodes
-            .iter()
-            .filter(|n| n.id != target_id && n.node_type.is_table_like())
-            .map(|n| n.id.clone())
-            .collect();
-
-        for source_id in source_nodes {
-            let edge_id = generate_edge_id(&source_id, &target_id);
-            if !ctx.edge_ids.contains(&edge_id) {
-                ctx.add_edge(Edge {
-                    id: edge_id,
-                    from: source_id,
-                    to: target_id.clone(),
-                    edge_type: EdgeType::DataFlow,
-                    expression: None,
-                    operation: None,
-                    join_type: None,
-                    join_condition: None,
-                    metadata: None,
-                    approximate: None,
-                });
-            }
-        }
+        // Column-level lineage from analyze_query handles the data flow edges.
+        // No need to create redundant table-to-table edges here.
     }
 
     /// Helper to register implied schema with constraint information.

@@ -4,20 +4,29 @@
  * Manages per-project analysis results in memory.
  * Results are NOT persisted to localStorage due to size constraints.
  * When the user switches projects, we restore their cached result if available.
+ *
+ * Each cached result tracks the hideCTEs setting used during analysis,
+ * allowing cache validation when options change.
  */
 
 import { create } from 'zustand';
 import type { AnalyzeResult } from '@pondpilot/flowscope-core';
 
+interface CachedResult {
+  result: AnalyzeResult;
+  /** The hideCTEs value used when this result was computed */
+  hideCTEs: boolean;
+}
+
 interface AnalysisStore {
-  /** Analysis results keyed by project ID */
-  results: Record<string, AnalyzeResult>;
+  /** Analysis results keyed by project ID, with metadata for cache validation */
+  results: Record<string, CachedResult>;
 
-  /** Get analysis result for a project */
-  getResult: (projectId: string) => AnalyzeResult | null;
+  /** Get analysis result for a project if cache is valid for given hideCTEs */
+  getResult: (projectId: string, hideCTEs: boolean) => AnalyzeResult | null;
 
-  /** Set analysis result for a project */
-  setResult: (projectId: string, result: AnalyzeResult) => void;
+  /** Set analysis result for a project with its hideCTEs context */
+  setResult: (projectId: string, result: AnalyzeResult, hideCTEs: boolean) => void;
 
   /** Clear analysis result for a project */
   clearResult: (projectId: string) => void;
@@ -29,13 +38,20 @@ interface AnalysisStore {
 export const useAnalysisStore = create<AnalysisStore>((set, get) => ({
   results: {},
 
-  getResult: (projectId) => get().results[projectId] ?? null,
+  getResult: (projectId, hideCTEs) => {
+    const cached = get().results[projectId];
+    // Return cached result only if it was computed with the same hideCTEs setting
+    if (cached && cached.hideCTEs === hideCTEs) {
+      return cached.result;
+    }
+    return null;
+  },
 
-  setResult: (projectId, result) =>
+  setResult: (projectId, result, hideCTEs) =>
     set((state) => ({
       results: {
         ...state.results,
-        [projectId]: result,
+        [projectId]: { result, hideCTEs },
       },
     })),
 

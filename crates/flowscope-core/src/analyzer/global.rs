@@ -9,12 +9,30 @@ use std::sync::Arc;
 
 impl<'a> Analyzer<'a> {
     pub(super) fn build_result(&self) -> crate::AnalyzeResult {
-        let global_lineage = self.build_global_lineage();
+        // Apply CTE filtering if requested
+        let hide_ctes = self
+            .request
+            .options
+            .as_ref()
+            .and_then(|o| o.hide_ctes)
+            .unwrap_or(false);
+
+        let statements = if hide_ctes {
+            let mut filtered = self.statement_lineages.clone();
+            for lineage in &mut filtered {
+                super::transform::filter_cte_nodes(lineage);
+            }
+            filtered
+        } else {
+            self.statement_lineages.clone()
+        };
+
+        let global_lineage = self.build_global_lineage_from(&statements);
         let summary = self.build_summary(&global_lineage);
         let resolved_schema = self.build_resolved_schema();
 
         crate::AnalyzeResult {
-            statements: self.statement_lineages.clone(),
+            statements,
             global_lineage,
             issues: self.issues.clone(),
             summary,
@@ -64,12 +82,15 @@ impl<'a> Analyzer<'a> {
         Some(ResolvedSchemaMetadata { tables })
     }
 
-    pub(super) fn build_global_lineage(&self) -> GlobalLineage {
+    fn build_global_lineage_from(
+        &self,
+        statements: &[crate::types::StatementLineage],
+    ) -> GlobalLineage {
         let mut global_nodes: HashMap<Arc<str>, GlobalNode> = HashMap::new();
         let mut global_edges: Vec<GlobalEdge> = Vec::new();
 
         // Collect all nodes from all statements
-        for lineage in &self.statement_lineages {
+        for lineage in statements {
             for node in &lineage.nodes {
                 let canonical = node.qualified_name.clone().unwrap_or(node.label.clone());
                 let canonical_name = parse_canonical_name(&canonical);

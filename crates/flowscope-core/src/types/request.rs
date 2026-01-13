@@ -129,6 +129,10 @@ pub struct AnalysisOptions {
     /// Preferred graph detail level for visualization (does not affect analysis)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub graph_detail_level: Option<GraphDetailLevel>,
+
+    /// Hide CTEs from output, creating bypass edges (A→CTE→B becomes A→B)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hide_ctes: Option<bool>,
 }
 
 /// Schema metadata for accurate column and table resolution.

@@ -64,7 +64,7 @@ export function ProjectSelector({ open: controlledOpen, onOpenChange }: ProjectS
     <DropdownMenu open={open} onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger asChild>
         <button
-          className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent focus:outline-none"
+          className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm focus:outline-none"
           data-testid="project-selector-trigger"
         >
           <div className="flex size-6 items-center justify-center rounded-md border bg-background">

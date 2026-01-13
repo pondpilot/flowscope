@@ -74,7 +74,7 @@ fn schema_table(
         catalog: catalog.map(|c| c.to_string()),
         schema: schema.map(|s| s.to_string()),
         name: name.to_string(),
-        columns: columns.iter().map(|col| column(*col)).collect(),
+        columns: columns.iter().map(|col| column(col)).collect(),
     }
 }
 
@@ -161,7 +161,7 @@ fn issue_codes_list(result: &AnalyzeResult) -> Vec<String> {
         .collect()
 }
 
-fn edges_by_type<'a>(lineage: &'a StatementLineage, edge_type: EdgeType) -> Vec<&'a Edge> {
+fn edges_by_type(lineage: &StatementLineage, edge_type: EdgeType) -> Vec<&Edge> {
     lineage
         .edges
         .iter()
@@ -2869,7 +2869,7 @@ fn column_wildcard_expansion_with_schema() {
     // With schema, SELECT * should expand to individual columns
     let cols = column_labels(stmt);
     assert!(
-        cols.len() >= 1,
+        !cols.is_empty(),
         "SELECT * with schema should produce column nodes"
     );
 
@@ -3385,7 +3385,7 @@ fn column_lineage_cte_transformation_chain_with_reuse() {
 
                 columns_by_name
                     .entry(node.label.to_string())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push((node, owners));
             }
         }
@@ -4988,7 +4988,7 @@ fn create_table_with_table_level_foreign_key() {
         .expect("order FK should exist");
     assert_eq!(order_fk.referenced_table.as_deref(), Some("orders"));
     assert_eq!(
-        order_fk.referenced_columns.as_ref().map(|c| c.as_slice()),
+        order_fk.referenced_columns.as_deref(),
         Some(&["id".to_string()][..])
     );
 

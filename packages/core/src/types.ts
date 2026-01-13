@@ -59,6 +59,8 @@ export interface AnalysisOptions {
   enableColumnLineage?: boolean;
   /** Preferred graph detail level for visualization (does not affect analysis) */
   graphDetailLevel?: GraphDetailLevel;
+  /** Hide CTEs from output, creating bypass edges (A→CTE→B becomes A→B) */
+  hideCtes?: boolean;
 }
 
 /**

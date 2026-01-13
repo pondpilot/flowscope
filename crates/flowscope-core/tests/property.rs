@@ -212,7 +212,7 @@ proptest! {
         let result = analyze(&request);
 
         // Empty SQL should produce one issue (no input) but not crash
-        prop_assert!(result.issues.len() >= 1 || result.summary.statement_count == 0);
+        prop_assert!(!result.issues.is_empty() || result.summary.statement_count == 0);
     }
 }
 
@@ -393,13 +393,8 @@ mod function_arg_handling {
 
             // All dialects should produce a result without panicking
             // (syntax support varies, but analysis should complete)
-            // Just verify we got a result - the statement_count being non-negative is implicit for usize
-            let _ = result.summary.statement_count; // Verify we can access it
-            assert!(
-                true,
-                "Dialect {:?} should handle DATE_ADD gracefully",
-                dialect
-            );
+            // Just verify we got a result - accessing summary proves the analysis completed
+            let _ = result.summary.statement_count;
         }
     }
 

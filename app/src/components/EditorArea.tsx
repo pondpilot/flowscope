@@ -1,7 +1,7 @@
 import { useEffect, useCallback, useRef, useMemo } from 'react';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { SqlView } from '@pondpilot/flowscope-react';
+import { SqlView, useLineageState } from '@pondpilot/flowscope-react';
 import { cn } from '@/lib/utils';
 import { useProject } from '@/lib/project-store';
 import { useAnalysis, useDebounce, useFileNavigation, useGlobalShortcuts } from '@/hooks';
@@ -31,7 +31,12 @@ export function EditorArea({ wasmReady, className, fileSelectorOpen, onFileSelec
   const activeFile = currentProject?.files.find(f => f.id === currentProject.activeFileId);
   const editorContainerRef = useRef<HTMLDivElement>(null);
 
+  // Track previous values to detect changes (null means initial mount)
   const previousSchema = useRef<string | null>(null);
+  const previousHideCTEs = useRef<boolean | null>(null);
+
+  // Get hideCTEs from lineage state for re-analysis trigger
+  const { hideCTEs } = useLineageState();
 
   const { isAnalyzing, error, runAnalysis, setError } = useAnalysis(wasmReady);
 
@@ -67,24 +72,30 @@ export function EditorArea({ wasmReady, className, fileSelectorOpen, onFileSelec
     }
   }, [activeFile?.id]);
 
-  // Auto-trigger re-analysis when debounced schema changes.
-  // activeFile.content is intentionally omitted from the dependency array to prevent
-  // re-analysis on every keystroke in the editor. We only want to re-analyze when
-  // the schema SQL changes, not when the active file content changes.
+  // Auto-trigger re-analysis when schema or hideCTEs changes.
+  // Consolidated into a single effect to prevent duplicate analyses when both change.
+  // activeFile.content is intentionally omitted to prevent re-analysis on keystrokes.
   useEffect(() => {
     if (!wasmReady || !currentProject || !activeFile) {
       return;
     }
-    const hasChanged = previousSchema.current !== null && previousSchema.current !== debouncedSchemaSQL;
-    previousSchema.current = debouncedSchemaSQL;
 
-    if (hasChanged) {
+    const schemaChanged = previousSchema.current !== null && previousSchema.current !== debouncedSchemaSQL;
+    const hideCTEsChanged = previousHideCTEs.current !== null && previousHideCTEs.current !== hideCTEs;
+
+    previousSchema.current = debouncedSchemaSQL;
+    previousHideCTEs.current = hideCTEs;
+
+    if (schemaChanged || hideCTEsChanged) {
       runAnalysis(activeFile.content, activeFile.name).catch((err) => {
-        console.error('Auto-analysis after schema change failed:', err);
-        setError(err instanceof Error ? err.message : 'Failed to re-run analysis after schema change');
+        const reason = schemaChanged ? 'schema change' : 'CTE toggle';
+        console.error(`Auto-analysis after ${reason} failed:`, err);
+        setError(err instanceof Error ? err.message : `Failed to re-run analysis after ${reason}`);
       });
     }
-  }, [wasmReady, debouncedSchemaSQL, activeFile?.id, activeFile?.name, runAnalysis, setError]);
+  // Note: currentProject is used in the guard but excluded from deps because activeFile
+  // (derived from currentProject) already captures project changes via activeFile.id
+  }, [wasmReady, debouncedSchemaSQL, hideCTEs, activeFile?.id, activeFile?.name, runAnalysis, setError]);
 
   const handleAnalyze = useCallback(() => {
     if (activeFile) {

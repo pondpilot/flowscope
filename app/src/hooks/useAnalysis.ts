@@ -9,7 +9,8 @@ import type { AnalysisState, AnalysisContext, FileValidationResult } from '@/typ
 
 export function useAnalysis(wasmReady: boolean) {
   const { currentProject, activeProjectId } = useProject();
-  const { actions } = useLineage();
+  const { actions, state: lineageState } = useLineage();
+  const { hideCTEs } = lineageState;
   const { getResult, setResult: storeResult } = useAnalysisStore();
   const [state, setState] = useState<AnalysisState>({
     isAnalyzing: false,
@@ -23,16 +24,18 @@ export function useAnalysis(wasmReady: boolean) {
     actionsRef.current = actions;
   }, [actions]);
 
-  // Restore cached analysis result when project changes
+  // Restore cached analysis result when project or hideCTEs changes.
+  // Cache validation is built into getResult - it returns null if the cached
+  // result was computed with a different hideCTEs setting.
   useEffect(() => {
     if (!activeProjectId) {
       actionsRef.current.setResult(null);
       return;
     }
 
-    const cachedResult = getResult(activeProjectId);
+    const cachedResult = getResult(activeProjectId, hideCTEs);
     actionsRef.current.setResult(cachedResult);
-  }, [activeProjectId, getResult]);
+  }, [activeProjectId, hideCTEs, getResult]);
 
   const setAnalyzing = useCallback((isAnalyzing: boolean) => {
     setState(prev => ({ ...prev, isAnalyzing }));
@@ -173,6 +176,7 @@ export function useAnalysis(wasmReady: boolean) {
           schema: importedSchema,
           options: {
             enableColumnLineage: true,
+            hideCtes: hideCTEs,
           },
         });
 
@@ -191,7 +195,7 @@ export function useAnalysis(wasmReady: boolean) {
         actionsRef.current.setResult(result);
         // Store result per project for restoration when switching projects
         if (activeProjectId) {
-          storeResult(activeProjectId, result);
+          storeResult(activeProjectId, result, hideCTEs);
         }
         setState(prev => ({ ...prev, lastAnalyzedAt: Date.now() }));
       } catch (err) {
@@ -210,6 +214,7 @@ export function useAnalysis(wasmReady: boolean) {
       validateFiles,
       setAnalyzing,
       setError,
+      hideCTEs,
     ]
   );
 

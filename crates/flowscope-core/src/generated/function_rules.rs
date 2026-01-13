@@ -93,6 +93,7 @@ pub fn skip_args_for_function(dialect: Dialect, func_name: &str) -> &'static [us
     }
 }
 
+
 /// NULL ordering behavior in ORDER BY.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NullOrdering {

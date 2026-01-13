@@ -575,7 +575,7 @@ fn new_tables_are_known_when_implied_schema_disabled() {
         select_tables[0]
             .metadata
             .as_ref()
-            .map_or(true, |m| !m.contains_key("placeholder")),
+            .is_none_or(|m| !m.contains_key("placeholder")),
         "Table node should not be marked as placeholder"
     );
 }

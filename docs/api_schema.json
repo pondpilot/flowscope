@@ -118,6 +118,13 @@
                 "type": "null"
               }
             ]
+          },
+          "hideCtes": {
+            "description": "Hide CTEs from output, creating bypass edges (A→CTE→B becomes A→B)",
+            "type": [
+              "boolean",
+              "null"
+            ]
           }
         }
       },

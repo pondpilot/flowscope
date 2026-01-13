@@ -36,6 +36,20 @@ function getTypeIcon(type: 'table' | 'view' | 'cte') {
   }
 }
 
+function getFilterStatusMessage(
+  hasTableSelection: boolean,
+  hideCTEs: boolean,
+  selectedCount: number
+): string {
+  if (hasTableSelection && hideCTEs) {
+    return `${selectedCount} table${selectedCount > 1 ? 's' : ''} selected, CTEs hidden`;
+  }
+  if (hasTableSelection) {
+    return `Showing lineage for ${selectedCount} selected table${selectedCount > 1 ? 's' : ''}`;
+  }
+  return 'CTEs are hidden from the graph';
+}
+
 export function TableFilterDropdown(): JSX.Element | null {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -47,6 +61,8 @@ export function TableFilterDropdown(): JSX.Element | null {
   const toggleTableFilterSelection = useLineageStore((state) => state.toggleTableFilterSelection);
   const setTableFilterDirection = useLineageStore((state) => state.setTableFilterDirection);
   const clearTableFilter = useLineageStore((state) => state.clearTableFilter);
+  const hideCTEs = useLineageStore((state) => state.hideCTEs);
+  const toggleHideCTEs = useLineageStore((state) => state.toggleHideCTEs);
 
   // Build list of all tables/views/CTEs from global lineage
   const allTables = useMemo((): TableItem[] => {
@@ -86,15 +102,17 @@ export function TableFilterDropdown(): JSX.Element | null {
     return allTables.filter((table) => table.label.toLowerCase().includes(lowerSearch));
   }, [allTables, searchTerm]);
 
-  // Close dropdown when clicking outside
+  // Close dropdown when clicking outside.
+  // Uses capture phase (true) to ensure we see clicks before other handlers that might
+  // stopPropagation, preventing issues where inside clicks could cause premature closing.
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('mousedown', handleClickOutside, true);
+    return () => document.removeEventListener('mousedown', handleClickOutside, true);
   }, []);
 
   // Close on Escape key
@@ -132,7 +150,8 @@ export function TableFilterDropdown(): JSX.Element | null {
     setIsOpen(false);
   }, [clearTableFilter]);
 
-  const hasActiveFilter = tableFilter.selectedTableLabels.size > 0;
+  const hasTableSelection = tableFilter.selectedTableLabels.size > 0;
+  const hasActiveFilter = hasTableSelection || hideCTEs;
   const selectedCount = tableFilter.selectedTableLabels.size;
 
   if (!result) return null;
@@ -156,9 +175,7 @@ export function TableFilterDropdown(): JSX.Element | null {
           aria-expanded={isOpen}
         >
           <Filter className="size-4" strokeWidth={hasActiveFilter ? 2.5 : 1.5} />
-          <span>
-            {hasActiveFilter ? `Tables (${selectedCount})` : 'Tables'}
-          </span>
+          <span>Tables</span>
           {isOpen ? (
             <ChevronUp className="size-4" />
           ) : (
@@ -197,6 +214,34 @@ export function TableFilterDropdown(): JSX.Element | null {
             />
           </div>
 
+          {/* Quick Filters */}
+          <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-700">
+            <div className="text-xs text-slate-500 dark:text-slate-400 mb-1.5">Quick Filters</div>
+            <button
+              type="button"
+              onClick={toggleHideCTEs}
+              className={cn(
+                'w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded-md transition-colors',
+                hideCTEs
+                  ? 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+              )}
+            >
+              <div
+                className={cn(
+                  'size-4 rounded border flex items-center justify-center flex-shrink-0',
+                  hideCTEs
+                    ? 'bg-amber-500 border-amber-500'
+                    : 'border-slate-300 dark:border-slate-600'
+                )}
+              >
+                {hideCTEs && <Check className="size-3 text-white" />}
+              </div>
+              <Layers className="size-3.5 text-slate-400" />
+              <span>Hide all CTEs</span>
+            </button>
+          </div>
+
           {/* Direction selector */}
           <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-700">
             <div className="text-xs text-slate-500 dark:text-slate-400 mb-1.5">Direction</div>
@@ -233,32 +278,44 @@ export function TableFilterDropdown(): JSX.Element | null {
             ) : (
               filteredTables.map((table) => {
                 const isSelected = tableFilter.selectedTableLabels.has(table.label);
+                const isCTE = table.type === 'cte';
+                const isDimmed = isCTE && hideCTEs;
+
+                // Row styles based on state
+                const rowStyles = isDimmed
+                  ? 'opacity-40 cursor-not-allowed'
+                  : isSelected
+                    ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300'
+                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50';
+
+                // Checkbox styles based on state
+                const checkboxStyles = !isDimmed && isSelected
+                  ? 'bg-blue-500 border-blue-500'
+                  : 'border-slate-300 dark:border-slate-600';
+
                 return (
                   <button
                     key={table.label}
                     type="button"
                     onClick={() => handleTableToggle(table.label)}
+                    disabled={isDimmed}
                     className={cn(
                       'w-full text-left px-3 py-2 text-sm transition-colors flex items-center gap-2',
-                      isSelected
-                        ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300'
-                        : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                      rowStyles
                     )}
                   >
                     <div
                       className={cn(
                         'size-4 rounded border flex items-center justify-center flex-shrink-0',
-                        isSelected
-                          ? 'bg-blue-500 border-blue-500'
-                          : 'border-slate-300 dark:border-slate-600'
+                        checkboxStyles
                       )}
                     >
-                      {isSelected && <Check className="size-3 text-white" />}
+                      {!isDimmed && isSelected && <Check className="size-3 text-white" />}
                     </div>
                     {getTypeIcon(table.type)}
                     <span className="truncate flex-1">{table.label}</span>
                     <span className="text-xs text-slate-400 dark:text-slate-500 ml-auto">
-                      {table.refCount > 1 ? `${table.refCount}x` : ''}
+                      {isDimmed ? '(hidden)' : table.refCount > 1 ? `${table.refCount}x` : ''}
                     </span>
                   </button>
                 );
@@ -270,7 +327,7 @@ export function TableFilterDropdown(): JSX.Element | null {
           {hasActiveFilter && (
             <div className="px-3 py-2 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Showing lineage for {selectedCount} selected table{selectedCount > 1 ? 's' : ''}
+                {getFilterStatusMessage(hasTableSelection, hideCTEs, selectedCount)}
               </p>
             </div>
           )}

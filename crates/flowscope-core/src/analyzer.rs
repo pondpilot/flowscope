@@ -20,6 +20,7 @@ mod query;
 pub(crate) mod schema_registry;
 mod select_analyzer;
 mod statements;
+mod transform;
 pub mod visitor;
 
 use cross_statement::CrossStatementTracker;

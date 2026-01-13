@@ -3,15 +3,7 @@ pub mod error;
 pub mod extractors;
 pub mod generated;
 pub mod parser;
-#[cfg(test)]
-pub mod test_utils;
 pub mod types;
-
-// Internal helper exposure for tests only
-#[cfg(test)]
-pub mod analyzer_helpers {
-    pub use crate::analyzer::helpers;
-}
 
 // Re-export main types and functions
 pub use analyzer::analyze;
@@ -65,3 +57,12 @@ pub use types::{
     Summary,
     TableConstraintInfo,
 };
+
+// Test utilities and helper exposure (must be at end of file)
+#[cfg(test)]
+pub mod test_utils;
+
+#[cfg(test)]
+pub mod analyzer_helpers {
+    pub use crate::analyzer::helpers;
+}

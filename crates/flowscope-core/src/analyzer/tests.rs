@@ -1,4 +1,7 @@
 use super::*;
+use crate::test_utils::{load_schema_fixture, load_sql_fixture};
+use crate::types::AnalysisOptions;
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 fn make_request(sql: &str) -> AnalyzeRequest {
     AnalyzeRequest {
@@ -9,6 +12,20 @@ fn make_request(sql: &str) -> AnalyzeRequest {
         options: None,
         schema: None,
     }
+}
+
+fn make_request_with_options(
+    sql: &str,
+    hide_ctes: bool,
+    enable_column_lineage: bool,
+) -> AnalyzeRequest {
+    let mut request = make_request(sql);
+    request.options = Some(AnalysisOptions {
+        enable_column_lineage: Some(enable_column_lineage),
+        hide_ctes: Some(hide_ctes),
+        ..Default::default()
+    });
+    request
 }
 
 fn schema_with_known_table() -> SchemaMetadata {
@@ -156,4 +173,358 @@ fn depth_limit_warning_emitted_once_per_statement() {
 
     assert_eq!(analyzer.issues.len(), 1, "warning should be deduplicated");
     assert_eq!(analyzer.issues[0].code, issue_codes::APPROXIMATE_LINEAGE);
+}
+
+#[test]
+fn hide_ctes_option_filters_statement_and_global_lineage() {
+    let sql = "WITH temp AS (SELECT * FROM source_table) SELECT * FROM temp";
+
+    let without_hiding = analyze(&make_request_with_options(sql, false, false));
+    let with_hiding = analyze(&make_request_with_options(sql, true, false));
+
+    let stmt_without = &without_hiding.statements[0];
+    assert!(
+        stmt_without
+            .nodes
+            .iter()
+            .any(|n| n.node_type == NodeType::Cte),
+        "expected CTE nodes when hide_ctes is disabled"
+    );
+    assert!(
+        without_hiding
+            .global_lineage
+            .nodes
+            .iter()
+            .any(|n| n.node_type == NodeType::Cte),
+        "global lineage should include CTE nodes when not hidden"
+    );
+
+    let stmt_with = &with_hiding.statements[0];
+    assert!(
+        stmt_with.nodes.iter().all(|n| n.node_type != NodeType::Cte),
+        "CTE nodes should be filtered when hide_ctes is enabled"
+    );
+    assert!(
+        with_hiding
+            .global_lineage
+            .nodes
+            .iter()
+            .all(|n| n.node_type != NodeType::Cte),
+        "global lineage should exclude CTE nodes when hidden"
+    );
+
+    assert!(
+        stmt_with.nodes.len() < stmt_without.nodes.len(),
+        "hiding CTEs should reduce statement node count"
+    );
+    assert!(
+        with_hiding.summary.table_count < without_hiding.summary.table_count,
+        "summary table_count should decrease when CTE nodes are hidden"
+    );
+    assert!(
+        with_hiding.summary.complexity_score < without_hiding.summary.complexity_score,
+        "complexity score should decrease when CTE nodes are hidden"
+    );
+}
+
+#[test]
+fn hide_ctes_customer_360_preserves_relationships() {
+    let sql = load_sql_fixture("generic", "09_customer_360.sql");
+    let schema = load_schema_fixture("customer_360_schema.json");
+
+    let mut request = make_request_with_options(&sql, true, true);
+    request.schema = Some(schema);
+
+    let result = analyze(&request);
+    let statement = &result.statements[0];
+
+    assert!(statement
+        .nodes
+        .iter()
+        .all(|node| node.node_type != NodeType::Cte));
+
+    let node_types: HashMap<&str, NodeType> = statement
+        .nodes
+        .iter()
+        .map(|node| (node.id.as_ref(), node.node_type))
+        .collect();
+    let node_labels: HashMap<&str, &str> = statement
+        .nodes
+        .iter()
+        .map(|node| (node.id.as_ref(), node.label.as_ref()))
+        .collect();
+    let node_by_id: HashMap<&str, &Node> = statement
+        .nodes
+        .iter()
+        .map(|node| (node.id.as_ref(), node))
+        .collect();
+    let node_ids: HashSet<&str> = node_types.keys().copied().collect();
+
+    for edge in &statement.edges {
+        assert!(node_ids.contains(edge.from.as_ref()));
+        assert!(node_ids.contains(edge.to.as_ref()));
+    }
+
+    let forbidden_labels: HashSet<&str> = ["user_ltv", "user_engagement"].into_iter().collect();
+    assert!(statement
+        .nodes
+        .iter()
+        .all(|node| !forbidden_labels.contains(node.label.as_ref())));
+
+    let table_pairs: HashSet<String> = statement
+        .edges
+        .iter()
+        .filter(|edge| {
+            matches!(
+                node_types.get(edge.from.as_ref()),
+                Some(NodeType::Table) | Some(NodeType::View)
+            ) && matches!(
+                node_types.get(edge.to.as_ref()),
+                Some(NodeType::Table) | Some(NodeType::View)
+            )
+        })
+        .filter_map(|edge| {
+            let from_label = node_labels.get(edge.from.as_ref())?;
+            let to_label = node_labels.get(edge.to.as_ref())?;
+            Some(format!("{from_label}->{to_label}"))
+        })
+        .collect();
+
+    let expected_table_pairs: HashSet<String> = [
+        "orders->customer_360",
+        "users->customer_360",
+        "session_summary->customer_360",
+    ]
+    .into_iter()
+    .map(String::from)
+    .collect();
+
+    assert_eq!(table_pairs, expected_table_pairs);
+
+    let view_id = statement
+        .nodes
+        .iter()
+        .find(|node| node.node_type == NodeType::View && node.label.as_ref() == "customer_360")
+        .expect("customer_360 view node")
+        .id
+        .to_string();
+
+    let base_column_id = |qualified_name: &str| -> String {
+        statement
+            .nodes
+            .iter()
+            .find(|node| {
+                node.node_type == NodeType::Column
+                    && node
+                        .qualified_name
+                        .as_ref()
+                        .is_some_and(|name| name.as_ref() == qualified_name)
+            })
+            .unwrap_or_else(|| panic!("missing column node {qualified_name}"))
+            .id
+            .to_string()
+    };
+
+    let view_column_id = |column_name: &str| -> String {
+        statement
+            .edges
+            .iter()
+            .find(|edge| {
+                edge.edge_type == EdgeType::Ownership
+                    && edge.from.as_ref() == view_id.as_str()
+                    && node_by_id
+                        .get(edge.to.as_ref())
+                        .is_some_and(|node| node.label.as_ref() == column_name)
+            })
+            .unwrap_or_else(|| panic!("missing view column node {column_name}"))
+            .to
+            .to_string()
+    };
+
+    let view_column_labels: HashSet<&str> = statement
+        .edges
+        .iter()
+        .filter(|edge| {
+            edge.edge_type == EdgeType::Ownership && edge.from.as_ref() == view_id.as_str()
+        })
+        .filter_map(|edge| {
+            node_by_id
+                .get(edge.to.as_ref())
+                .map(|node| node.label.as_ref())
+        })
+        .collect();
+
+    let expected_view_columns: HashSet<&str> = [
+        "user_id",
+        "email",
+        "signup_source",
+        "total_orders",
+        "lifetime_value",
+        "last_order_date",
+        "total_sessions",
+        "last_seen",
+        "customer_segment",
+    ]
+    .into_iter()
+    .collect();
+
+    assert_eq!(view_column_labels, expected_view_columns);
+
+    let edges: HashSet<(String, String)> = statement
+        .edges
+        .iter()
+        .map(|edge| (edge.from.to_string(), edge.to.to_string()))
+        .collect();
+
+    let base_prefixes = ["users.", "orders.", "session_summary."];
+    let edge_type_name = |edge_type: EdgeType| -> &'static str {
+        match edge_type {
+            EdgeType::Ownership => "ownership",
+            EdgeType::DataFlow => "data_flow",
+            EdgeType::Derivation => "derivation",
+            EdgeType::CrossStatement => "cross_statement",
+        }
+    };
+
+    let base_columns: HashMap<&str, String> = [
+        ("users.user_id", base_column_id("users.user_id")),
+        ("users.email", base_column_id("users.email")),
+        ("users.signup_source", base_column_id("users.signup_source")),
+        ("orders.order_id", base_column_id("orders.order_id")),
+        ("orders.total_amount", base_column_id("orders.total_amount")),
+        ("orders.created_at", base_column_id("orders.created_at")),
+        (
+            "session_summary.session_id",
+            base_column_id("session_summary.session_id"),
+        ),
+        (
+            "session_summary.session_end",
+            base_column_id("session_summary.session_end"),
+        ),
+    ]
+    .into_iter()
+    .collect();
+
+    let view_columns: HashMap<&str, String> = [
+        ("user_id", view_column_id("user_id")),
+        ("email", view_column_id("email")),
+        ("signup_source", view_column_id("signup_source")),
+        ("total_orders", view_column_id("total_orders")),
+        ("lifetime_value", view_column_id("lifetime_value")),
+        ("last_order_date", view_column_id("last_order_date")),
+        ("total_sessions", view_column_id("total_sessions")),
+        ("last_seen", view_column_id("last_seen")),
+        ("customer_segment", view_column_id("customer_segment")),
+    ]
+    .into_iter()
+    .collect();
+
+    let expected_sources: HashMap<&str, BTreeSet<(String, &'static str)>> = [
+        (
+            "user_id",
+            BTreeSet::from([("users.user_id".to_string(), "data_flow")]),
+        ),
+        (
+            "email",
+            BTreeSet::from([("users.email".to_string(), "data_flow")]),
+        ),
+        (
+            "signup_source",
+            BTreeSet::from([("users.signup_source".to_string(), "data_flow")]),
+        ),
+        (
+            "total_orders",
+            BTreeSet::from([("orders.order_id".to_string(), "derivation")]),
+        ),
+        (
+            "lifetime_value",
+            BTreeSet::from([("orders.total_amount".to_string(), "derivation")]),
+        ),
+        (
+            "last_order_date",
+            BTreeSet::from([("orders.created_at".to_string(), "derivation")]),
+        ),
+        (
+            "total_sessions",
+            BTreeSet::from([("session_summary.session_id".to_string(), "derivation")]),
+        ),
+        (
+            "last_seen",
+            BTreeSet::from([("session_summary.session_end".to_string(), "derivation")]),
+        ),
+        (
+            "customer_segment",
+            BTreeSet::from([("orders.total_amount".to_string(), "derivation")]),
+        ),
+    ]
+    .into_iter()
+    .collect();
+
+    for view_column in &expected_view_columns {
+        let view_column_id = view_columns
+            .get(view_column)
+            .expect("view column id")
+            .clone();
+        let incoming_edges: Vec<_> = statement
+            .edges
+            .iter()
+            .filter(|edge| {
+                edge.to.as_ref() == view_column_id.as_str()
+                    && matches!(edge.edge_type, EdgeType::DataFlow | EdgeType::Derivation)
+            })
+            .collect();
+
+        assert!(
+            !incoming_edges.is_empty(),
+            "expected incoming edge for view column {view_column}"
+        );
+
+        let mut actual_sources = BTreeSet::new();
+        for edge in incoming_edges {
+            assert!(edge.approximate.is_none());
+            let source_node = node_by_id
+                .get(edge.from.as_ref())
+                .expect("source node exists");
+            assert_eq!(
+                source_node.node_type,
+                NodeType::Column,
+                "expected column source for view column {view_column}"
+            );
+            let qualified = source_node
+                .qualified_name
+                .as_ref()
+                .expect("source column qualified name");
+            assert!(
+                base_prefixes
+                    .iter()
+                    .any(|prefix| qualified.as_ref().starts_with(prefix)),
+                "unexpected source column {qualified} for view column {view_column}"
+            );
+            actual_sources.insert((qualified.to_string(), edge_type_name(edge.edge_type)));
+        }
+
+        let expected = expected_sources
+            .get(view_column)
+            .unwrap_or_else(|| panic!("missing expected sources for {view_column}"));
+        assert_eq!(&actual_sources, expected);
+    }
+
+    let expected_column_edges = [
+        ("users.user_id", "user_id"),
+        ("users.email", "email"),
+        ("users.signup_source", "signup_source"),
+        ("orders.order_id", "total_orders"),
+        ("orders.total_amount", "lifetime_value"),
+        ("orders.created_at", "last_order_date"),
+        ("session_summary.session_id", "total_sessions"),
+        ("session_summary.session_end", "last_seen"),
+        ("orders.total_amount", "customer_segment"),
+    ];
+
+    for (base_col, view_col) in expected_column_edges {
+        assert!(
+            edges.contains(&(base_columns[base_col].clone(), view_columns[view_col].clone())),
+            "expected edge from {base_col} to {view_col}"
+        );
+    }
 }

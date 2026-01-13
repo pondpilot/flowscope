@@ -1,0 +1,32 @@
+{
+  "defaultCatalog": null,
+  "defaultSchema": null,
+  "tables": [
+    {
+      "name": "users",
+      "columns": [
+        { "name": "user_id" },
+        { "name": "email" },
+        { "name": "signup_source" }
+      ]
+    },
+    {
+      "name": "orders",
+      "columns": [
+        { "name": "order_id" },
+        { "name": "user_id" },
+        { "name": "total_amount" },
+        { "name": "status" },
+        { "name": "created_at" }
+      ]
+    },
+    {
+      "name": "session_summary",
+      "columns": [
+        { "name": "session_id" },
+        { "name": "user_id" },
+        { "name": "session_end" }
+      ]
+    }
+  ]
+}
