@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, type JSX } from 'react';
 import { toPng } from 'html-to-image';
 import { toast } from 'sonner';
 import {
@@ -44,7 +44,7 @@ import { useIsDarkMode } from '@pondpilot/flowscope-react';
 export interface ExportDialogProps {
   result: AnalyzeResult | null;
   projectName: string;
-  graphRef?: React.RefObject<HTMLDivElement>;
+  graphRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 interface IssueExport {

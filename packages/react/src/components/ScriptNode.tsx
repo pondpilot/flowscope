@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, type JSX } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { FileCode } from 'lucide-react';
 import type { ScriptNodeData } from '../types';

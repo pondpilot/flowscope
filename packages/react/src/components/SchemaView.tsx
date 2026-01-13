@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useCallback, useState, memo } from 'react';
+import { useMemo, useEffect, useCallback, useState, memo, type JSX } from 'react';
 import {
   ReactFlow,
   Background,

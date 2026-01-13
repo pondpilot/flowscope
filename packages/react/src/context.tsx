@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode, type JSX } from 'react';
 import type { AnalyzeResult } from '@pondpilot/flowscope-core';
 import { createLineageStore, LineageStoreProvider, type LineageState } from './store';
 import type { LayoutAlgorithm } from './types';
@@ -41,7 +41,7 @@ export function LineageProvider({
   initialSql = '',
   defaultLayoutAlgorithm,
 }: LineageProviderProps): JSX.Element {
-  const storeRef = useRef<StoreApi<LineageState>>();
+  const storeRef = useRef<StoreApi<LineageState> | null>(null);
 
   if (!storeRef.current) {
     storeRef.current = createLineageStore(undefined, { defaultLayoutAlgorithm });

@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, type JSX } from 'react';
 import { toPng } from 'html-to-image';
 import {
   Download,

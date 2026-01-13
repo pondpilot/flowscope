@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback, useRef, useEffect, memo, useId } from 'react';
+import React, { useMemo, useState, useCallback, useRef, useEffect, memo, useId, type JSX } from 'react';
 import { useDebounce } from '../hooks/useDebounce';
 import {
   Table2,

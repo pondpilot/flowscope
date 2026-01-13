@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import { FileCode, Table2 } from 'lucide-react';
 import { useLineage } from '../store';
 import type { LineageViewMode } from '../types';

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, type JSX } from 'react';
 import { useLineage } from '../store';
 import { LineageProvider } from '../context';
 import { GraphView } from './GraphView';

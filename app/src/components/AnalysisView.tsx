@@ -28,7 +28,7 @@ import { SchemaAwareIssuesPanel } from './SchemaAwareIssuesPanel';
 import { SchemaEditor } from './SchemaEditor';
 
 interface AnalysisViewProps {
-  graphContainerRef?: React.RefObject<HTMLDivElement>;
+  graphContainerRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 /**

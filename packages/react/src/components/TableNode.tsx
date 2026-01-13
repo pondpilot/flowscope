@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
 import { useLineageActions, useLineageStore } from '../store';

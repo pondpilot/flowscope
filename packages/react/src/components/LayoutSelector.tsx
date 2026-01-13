@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import { Network, Workflow } from 'lucide-react';
 import { useLineage } from '../store';
 import type { LayoutAlgorithm } from '../types';

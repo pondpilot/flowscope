@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import type { ElementType } from 'react';
+import type { ElementType, JSX } from 'react';
 import { Filter, X, Table2, Eye, Layers, ChevronDown, ChevronUp, ArrowUp, ArrowDown, ArrowLeftRight, Check } from 'lucide-react';
 import { cn } from './ui/button';
 import { useLineageStore } from '../store';

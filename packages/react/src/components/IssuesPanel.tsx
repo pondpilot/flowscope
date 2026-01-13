@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import { useLineage } from '../store';
 import type { IssuesPanelProps, Issue } from '../types';
 

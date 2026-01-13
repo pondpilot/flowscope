@@ -31,8 +31,8 @@
   },
   "peerDependencies": {
     "@pondpilot/flowscope-core": "^0.1.0",
-    "react": ">=18.0.0",
-    "react-dom": ">=18.0.0"
+    "react": ">=19.0.0",
+    "react-dom": ">=19.0.0"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.18.0",
@@ -47,27 +47,27 @@
     "@radix-ui/react-slot": "^1.2.3",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@uiw/react-codemirror": "^4.23.6",
-    "@xyflow/react": "^12.3.6",
+    "@xyflow/react": "^12.10.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "codemirror": "^6.0.0",
     "dagre": "^0.8.5",
     "elkjs": "^0.11.0",
     "html-to-image": "^1.11.13",
-    "lucide-react": "^0.554.0",
+    "lucide-react": "^0.562.0",
     "tailwind-merge": "^3.4.0",
     "xlsx": "^0.18.5",
-    "zustand": "^5.0.8"
+    "zustand": "^5.0.10"
   },
   "devDependencies": {
-    "@testing-library/react": "^14.0.0",
+    "@testing-library/react": "^16.3.0",
     "@types/dagre": "^0.7.53",
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
-    "@vitejs/plugin-react": "^4.2.0",
-    "jsdom": "^23.0.0",
-    "typescript": "^5.0.0",
-    "vitest": "^1.0.0"
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^4.4.0",
+    "jsdom": "^26.1.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
   },
   "keywords": [
     "sql",

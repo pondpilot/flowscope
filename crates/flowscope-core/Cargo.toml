@@ -30,4 +30,4 @@ serde_json = "1.0.133"
 [dev-dependencies]
 rstest = "0.26"
 proptest = "1.9"
-insta = { version = "1.44.1", features = ["json"] }
+insta = { version = "1.45", features = ["json"] }

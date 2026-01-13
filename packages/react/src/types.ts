@@ -147,7 +147,7 @@ export interface GraphViewProps {
   /** Callback when a node is clicked */
   onNodeClick?: (node: Node) => void;
   /** Ref to the graph container div for export functionality */
-  graphContainerRef?: RefObject<HTMLDivElement>;
+  graphContainerRef?: RefObject<HTMLDivElement | null>;
   /** Node ID to focus/zoom to (will pan and zoom to center this node) */
   focusNodeId?: string;
   /** Callback when focus has been applied (so parent can clear the focusNodeId) */

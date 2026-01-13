@@ -41,7 +41,7 @@ interface FileTreeProps {
   onCancelDelete: () => void;
   isFileIncludedInAnalysis: (fileId: string) => boolean;
   canDeleteFiles: boolean;
-  renameInputRef: React.RefObject<HTMLInputElement>;
+  renameInputRef: React.RefObject<HTMLInputElement | null>;
 }
 
 interface TreeNode {
