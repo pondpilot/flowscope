@@ -36,9 +36,9 @@ function ScriptNodeComponent({ data, selected }: NodeProps): JSX.Element {
               borderColor: active ? colors.interactive.selection : scriptColors.border,
               boxShadow: active ? `0 0 0 2px ${colors.interactive.selectionRing}` : undefined,
             }}
-            className="min-w-[180px] rounded-lg border shadow-sm transition-all duration-200"
+            className="min-w-[180px] rounded-lg border shadow-xs transition-all duration-200"
           >
-            <Handle type="target" position={Position.Left} className="!bg-transparent !border-none" />
+            <Handle type="target" position={Position.Left} className="bg-transparent! border-none!" />
 
             <div className="flex items-center gap-2 px-3 py-2.5">
               <div
@@ -64,7 +64,7 @@ function ScriptNodeComponent({ data, selected }: NodeProps): JSX.Element {
               </div>
             </div>
 
-            <Handle type="source" position={Position.Right} className="!bg-transparent !border-none" />
+            <Handle type="source" position={Position.Right} className="bg-transparent! border-none!" />
           </div>
         </GraphTooltipTrigger>
 

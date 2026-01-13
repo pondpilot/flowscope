@@ -68,7 +68,7 @@ export function LayoutSelector(): JSX.Element {
                         ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100'
                         : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
                     }
-                    focus-visible:outline-none
+                    focus-visible:outline-hidden
                   `}
                 >
                   <Icon className="size-4" strokeWidth={isActive ? 2.5 : 1.5} />

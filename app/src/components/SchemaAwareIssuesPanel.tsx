@@ -92,7 +92,7 @@ export function SchemaAwareIssuesPanel({ onOpenSchemaEditor }: SchemaAwareIssues
 
         {schemaIssueCount > 0 && (
           <div className="flex items-center gap-2 p-2 bg-highlight border border-primary/20 rounded text-xs">
-            <Database className="h-4 w-4 text-primary flex-shrink-0" />
+            <Database className="h-4 w-4 text-primary shrink-0" />
             <span className="text-highlight-foreground flex-1">
               {schemaIssueCount} schema-related {schemaIssueCount === 1 ? 'issue' : 'issues'} detected
             </span>
@@ -134,7 +134,7 @@ export function SchemaAwareIssuesPanel({ onOpenSchemaEditor }: SchemaAwareIssues
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <div className="flex items-center gap-2">
                         <AlertCircle
-                          className={`h-4 w-4 flex-shrink-0 ${
+                          className={`h-4 w-4 shrink-0 ${
                             issue.severity === 'error'
                               ? 'text-error-light dark:text-error-dark'
                               : issue.severity === 'warning'

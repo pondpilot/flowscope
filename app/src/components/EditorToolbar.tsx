@@ -85,7 +85,7 @@ export function EditorToolbar({
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
-        <div className="flex items-center rounded-full overflow-hidden shadow-sm">
+        <div className="flex items-center rounded-full overflow-hidden shadow-xs">
           <Button
             onClick={onAnalyze}
             disabled={!wasmReady || isAnalyzing}

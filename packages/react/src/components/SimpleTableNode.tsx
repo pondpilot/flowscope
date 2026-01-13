@@ -37,7 +37,7 @@ function SimpleTableNodeComponent({ data, selected }: NodeProps): JSX.Element {
   return (
     <div
       className={`
-        flex items-center gap-2 px-3 py-2 rounded-lg border shadow-sm min-w-[140px] max-w-[200px]
+        flex items-center gap-2 px-3 py-2 rounded-lg border shadow-xs min-w-[140px] max-w-[200px]
         transition-all duration-200
         ${active ? 'ring-2' : ''}
       `}
@@ -51,7 +51,7 @@ function SimpleTableNodeComponent({ data, selected }: NodeProps): JSX.Element {
       <Handle 
         type="target" 
         position={Position.Left} 
-        className="!w-2 !h-2 !bg-slate-300 !border-none hover:!bg-slate-400"
+        className="w-2! h-2! bg-slate-300! border-none! hover:bg-slate-400!"
       />
 
       <div 
@@ -71,7 +71,7 @@ function SimpleTableNodeComponent({ data, selected }: NodeProps): JSX.Element {
       <Handle 
         type="source" 
         position={Position.Right} 
-        className="!w-2 !h-2 !bg-slate-300 !border-none hover:!bg-slate-400"
+        className="w-2! h-2! bg-slate-300! border-none! hover:bg-slate-400!"
       />
     </div>
   );

@@ -173,7 +173,7 @@ export function ProjectMenuItem({
           {isActive && (
             <span className="text-xs text-muted-foreground">Active</span>
           )}
-          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-data-[highlighted]:opacity-100">
+          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-data-highlighted:opacity-100">
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button

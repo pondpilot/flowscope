@@ -123,7 +123,7 @@ export function DebugPanel() {
   return (
     <div
       ref={panelRef}
-      className="fixed bg-background border-2 border-border rounded-lg shadow-2xl z-[9999] flex flex-col"
+      className="fixed bg-background border-2 border-border rounded-lg shadow-2xl z-9999 flex flex-col"
       style={{
         left: `${position.x}px`,
         top: `${position.y}px`,

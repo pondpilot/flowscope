@@ -1,6 +1,189 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+@plugin 'tailwindcss-animate';
+
+@source '../../packages/react/src/**/*.{js,ts,jsx,tsx}';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --breakpoint-*: initial;
+  --breakpoint-xs: 36em;
+  --breakpoint-sm: 48em;
+  --breakpoint-md: 62em;
+  --breakpoint-lg: 75em;
+  --breakpoint-xl: 88em;
+
+  --font-mono: IBM Plex Mono, monospace;
+  --font-sans:
+    Helvetica Neue, Helvetica, -apple-system, BlinkMacSystemFont, Segoe UI,
+    sans-serif;
+
+  --text-xs: 12px;
+  --text-xs--line-height: 1.3;
+  --text-sm: 14px;
+  --text-sm--line-height: 1.286;
+  --text-base: 16px;
+  --text-base--line-height: 1.3;
+  --text-lg: 18px;
+  --text-lg--line-height: 1.3;
+  --text-xl: 20px;
+  --text-xl--line-height: 1.3;
+  --text-2xl: 24px;
+  --text-2xl--line-height: 1.3;
+  --text-3xl: 32px;
+  --text-3xl--line-height: 1.3;
+
+  --color-border-light: #e5e9f2;
+  --color-border-dark: #3d4654;
+
+  --color-border-primary-light: #cdd1d9;
+  --color-border-primary-dark: #5b6b86;
+
+  --color-border-accent-light: #4957c1;
+  --color-border-accent-dark: #4c61ff;
+
+  --color-border: hsl(var(--border));
+
+  --color-background: hsl(var(--background));
+
+  --color-background-primary-light: #fdfdfd;
+  --color-background-primary-dark: #242b35;
+
+  --color-background-secondary-light: #f2f4f8;
+  --color-background-secondary-dark: #191d24;
+
+  --color-background-tertiary-light: #e5e9f2;
+  --color-background-tertiary-dark: #5b6b86;
+
+  --color-foreground: hsl(var(--foreground));
+
+  --color-text-primary-light: #212328;
+  --color-text-primary-dark: #fdfdfd;
+
+  --color-text-secondary-light: #6f7785;
+  --color-text-secondary-dark: #a8b3c4;
+
+  --color-text-tertiary-light: #aeb2bb;
+  --color-text-tertiary-dark: #8292aa;
+
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-accent-light: #4957c1;
+  --color-accent-dark: #4c61ff;
+
+  --color-brand-blue-50: #f4f4fb;
+  --color-brand-blue-100: #e5e7f6;
+  --color-brand-blue-200: #b8bde7;
+  --color-brand-blue-300: #98a0dc;
+  --color-brand-blue-400: #737ecf;
+  --color-brand-blue-500: #4957c1;
+  --color-brand-blue-600: #737ecf;
+  --color-brand-blue-700: #26349e;
+  --color-brand-blue-800: #252e6d;
+  --color-brand-blue-900: #131738;
+
+  --color-blue-grey-50: #ffffff;
+  --color-blue-grey-100: #f2f4f8;
+  --color-blue-grey-200: #e5e9f2;
+  --color-blue-grey-300: #c8ced9;
+  --color-blue-grey-400: #a8b3c4;
+  --color-blue-grey-500: #8292aa;
+  --color-blue-grey-600: #5b6b86;
+  --color-blue-grey-700: #384252;
+  --color-blue-grey-800: #242b35;
+  --color-blue-grey-900: #191d24;
+
+  --color-grey-50: #fdfdfd;
+  --color-grey-100: #f6f6f7;
+  --color-grey-200: #ebecee;
+  --color-grey-300: #dbdde1;
+  --color-grey-400: #c7cad0;
+  --color-grey-500: #aeb2bb;
+  --color-grey-600: #9096a3;
+  --color-grey-700: #6f7785;
+  --color-grey-800: #3e434b;
+  --color-grey-900: #212328;
+
+  --color-success-light: #4cae4f;
+  --color-success-dark: #75c277;
+
+  --color-warning-light: #f4a462;
+  --color-warning-dark: #f7b987;
+
+  --color-error-light: #ef486f;
+  --color-error-dark: #f37391;
+
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+
+  --color-highlight: hsl(var(--highlight));
+  --color-highlight-foreground: hsl(var(--highlight-foreground));
+
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+
+  --ease-pondpilot: cubic-bezier(0.4, 0, 0.2, 1);
+
+  --default-transition-duration: 200ms;
+
+  @keyframes accordion-down {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(--radix-accordion-content-height);
+    }
+  }
+  @keyframes accordion-up {
+    from {
+      height: var(--radix-accordion-content-height);
+    }
+    to {
+      height: 0;
+    }
+  }
+}
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}
 
 @layer base {
   :root {
@@ -91,105 +274,107 @@
   }
 }
 
-/* CodeMirror customizations */
-.cm-editor {
-  @apply bg-transparent;
-  font-family: 'IBM Plex Mono', monospace !important;
-}
+@layer utilities {
+  /* CodeMirror customizations */
+  .cm-editor {
+    @apply bg-transparent;
+    font-family: 'IBM Plex Mono', monospace !important;
+  }
 
-.cm-content {
-  font-family: 'IBM Plex Mono', monospace !important;
-}
+  .cm-content {
+    font-family: 'IBM Plex Mono', monospace !important;
+  }
 
-.cm-editor.cm-focused {
-  outline: none;
-}
+  .cm-editor.cm-focused {
+    outline: none;
+  }
 
-.cm-gutterElement {
-  font-family: 'IBM Plex Mono', monospace;
-  padding-left: 10px !important;
-}
+  .cm-gutterElement {
+    font-family: 'IBM Plex Mono', monospace;
+    padding-left: 10px !important;
+  }
 
-/* CodeMirror dark mode */
-.dark .cm-editor {
-  background-color: hsl(var(--cm-bg));
-}
+  /* CodeMirror dark mode */
+  .dark .cm-editor {
+    background-color: hsl(var(--cm-bg));
+  }
 
-.dark .cm-gutters {
-  background-color: hsl(var(--cm-gutter-bg));
-  border-right-color: hsl(var(--cm-gutter-border));
-}
+  .dark .cm-gutters {
+    background-color: hsl(var(--cm-gutter-bg));
+    border-right-color: hsl(var(--cm-gutter-border));
+  }
 
-.dark .cm-gutterElement {
-  color: hsl(var(--cm-gutter-text));
-}
+  .dark .cm-gutterElement {
+    color: hsl(var(--cm-gutter-text));
+  }
 
-.dark .cm-activeLineGutter {
-  background-color: hsl(var(--cm-active-line));
-}
+  .dark .cm-activeLineGutter {
+    background-color: hsl(var(--cm-active-line));
+  }
 
-.dark .cm-activeLine {
-  background-color: hsl(var(--cm-active-line));
-}
+  .dark .cm-activeLine {
+    background-color: hsl(var(--cm-active-line));
+  }
 
-.dark .cm-selectionBackground {
-  background-color: hsl(var(--cm-selection)) !important;
-}
+  .dark .cm-selectionBackground {
+    background-color: hsl(var(--cm-selection)) !important;
+  }
 
-.dark .cm-cursor {
-  border-left-color: hsl(var(--cm-cursor));
-}
+  .dark .cm-cursor {
+    border-left-color: hsl(var(--cm-cursor));
+  }
 
-/* ReactFlow customizations */
-.react-flow__node {
-  @apply !cursor-grab active:!cursor-grabbing;
-}
+  /* ReactFlow customizations */
+  .react-flow__node {
+    @apply cursor-grab! active:cursor-grabbing!;
+  }
 
-.react-flow__handle {
-  @apply !w-2.5 !h-2.5 !bg-blue-500;
-}
+  .react-flow__handle {
+    @apply w-2.5! h-2.5! bg-blue-500!;
+  }
 
-.react-flow__minimap {
-  @apply !bg-background-secondary-light dark:!bg-background-secondary-dark !border !border-border-light dark:!border-border-dark rounded;
-}
+  .react-flow__minimap {
+    @apply bg-background-secondary-light! dark:bg-background-secondary-dark! border! border-border-light! dark:border-border-dark! rounded;
+  }
 
-.react-flow__controls {
-  @apply !border !border-border-light dark:!border-border-dark !rounded !shadow-md;
-}
+  .react-flow__controls {
+    @apply border! border-border-light! dark:border-border-dark! rounded! shadow-md!;
+  }
 
-.react-flow__controls button {
-  @apply !bg-white dark:!bg-slate-800 !border-border-light dark:!border-border-dark hover:!bg-slate-100 dark:hover:!bg-slate-700;
-}
+  .react-flow__controls button {
+    @apply bg-white! dark:bg-slate-800! border-border-light! dark:border-border-dark! hover:bg-slate-100! dark:hover:bg-slate-700!;
+  }
 
-.react-flow__controls button svg {
-  @apply fill-slate-700 dark:fill-slate-300;
-}
+  .react-flow__controls button svg {
+    @apply fill-slate-700 dark:fill-slate-300;
+  }
 
-.react-flow__background {
-  @apply !bg-background-primary-light dark:!bg-background-primary-dark;
-}
+  .react-flow__background {
+    @apply bg-background-primary-light! dark:bg-background-primary-dark!;
+  }
 
-/* ReactFlow panel dark mode overrides */
-.dark .react-flow [data-graph-panel] {
-  background-color: hsl(var(--graph-panel-bg)) !important;
-  border-color: hsl(var(--graph-panel-border)) !important;
-}
+  /* ReactFlow panel dark mode overrides */
+  .dark .react-flow [data-graph-panel] {
+    background-color: hsl(var(--graph-panel-bg)) !important;
+    border-color: hsl(var(--graph-panel-border)) !important;
+  }
 
-.dark .react-flow [data-graph-panel] button {
-  color: hsl(var(--graph-panel-text-secondary));
-}
+  .dark .react-flow [data-graph-panel] button {
+    color: hsl(var(--graph-panel-text-secondary));
+  }
 
-.dark .react-flow [data-graph-panel] button:hover {
-  background-color: hsl(var(--graph-panel-hover)) !important;
-  color: hsl(var(--graph-panel-text));
-}
+  .dark .react-flow [data-graph-panel] button:hover {
+    background-color: hsl(var(--graph-panel-hover)) !important;
+    color: hsl(var(--graph-panel-text));
+  }
 
-.dark .react-flow [data-graph-panel] input {
-  color: hsl(var(--graph-panel-text)) !important;
-}
+  .dark .react-flow [data-graph-panel] input {
+    color: hsl(var(--graph-panel-text)) !important;
+  }
 
-.dark .react-flow [data-graph-panel] input::placeholder {
-  color: hsl(var(--graph-panel-text-muted)) !important;
+  .dark .react-flow [data-graph-panel] input::placeholder {
+    color: hsl(var(--graph-panel-text-muted)) !important;
+  }
 }
 
 

@@ -305,7 +305,7 @@ export function GlobalDropZone() {
       aria-label="File drop zone"
       className={cn(
         'fixed inset-0 z-50 flex items-center justify-center',
-        'bg-background/80 backdrop-blur-sm',
+        'bg-background/80 backdrop-blur-xs',
         'transition-opacity duration-200',
         isDragOver ? 'opacity-100' : 'opacity-0 pointer-events-none'
       )}

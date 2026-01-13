@@ -100,7 +100,7 @@ export function ExportMenu({ graphRef }: ExportMenuProps): JSX.Element {
           <GraphTooltipTrigger asChild>
             <DropdownMenuTrigger asChild>
               <button
-                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-500 transition-all duration-200 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-slate-100 focus-visible:outline-none"
+                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-500 transition-all duration-200 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-slate-100 focus-visible:outline-hidden"
                 aria-label="Export lineage"
               >
                 <Download className="size-4" strokeWidth={1.5} />

@@ -13,7 +13,7 @@ function ColumnNodeComponent({ data }: NodeProps): JSX.Element {
   return (
     <div
       className={`
-        px-3 py-2 rounded border bg-white shadow-sm min-w-[120px] max-w-[200px]
+        px-3 py-2 rounded border bg-white shadow-xs min-w-[120px] max-w-[200px]
         ${isSelected ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-300'}
         ${isHighlighted ? 'ring-2 ring-yellow-300' : ''}
         transition-all duration-200

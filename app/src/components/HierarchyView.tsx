@@ -584,7 +584,7 @@ export function HierarchyView({ className, projectId }: HierarchyViewProps) {
         {/* Tree Content */}
         <div
           ref={treeContainerRef}
-          className="flex-1 min-h-0 overflow-auto focus:outline-none"
+          className="flex-1 min-h-0 overflow-auto focus:outline-hidden"
           tabIndex={0}
           onKeyDown={handleKeyDown}
           role="tree"
@@ -618,7 +618,7 @@ export function HierarchyView({ className, projectId }: HierarchyViewProps) {
                     className={cn(
                       'w-full flex items-center gap-1.5 px-2 py-1.5 text-[11px]',
                       'text-muted-foreground hover:bg-muted/50 transition-colors',
-                      'focus:outline-none focus-visible:ring-1 focus-visible:ring-ring'
+                      'focus:outline-hidden focus-visible:ring-1 focus-visible:ring-ring'
                     )}
                     onClick={() => setUnusedExpanded(!unusedExpanded)}
                   >

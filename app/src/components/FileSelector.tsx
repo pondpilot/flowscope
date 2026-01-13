@@ -373,7 +373,7 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
       <DropdownMenu open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger asChild>
           <button
-            className="flex h-[30px] items-center justify-between gap-2 rounded-full border border-border-primary-light dark:border-border-primary-dark bg-background px-4 text-xs transition-all duration-200 ease-pondpilot placeholder:text-muted-foreground focus:outline-none focus:border-accent-light dark:focus:border-accent-dark disabled:cursor-not-allowed disabled:opacity-60 [&>span]:line-clamp-1 hover:border-accent-light dark:hover:border-accent-dark min-w-0 shrink"
+            className="flex h-[30px] items-center justify-between gap-2 rounded-full border border-border-primary-light dark:border-border-primary-dark bg-background px-4 text-xs transition-all duration-200 ease-pondpilot placeholder:text-muted-foreground focus:outline-hidden focus:border-accent-light dark:focus:border-accent-dark disabled:cursor-not-allowed disabled:opacity-60 [&>span]:line-clamp-1 hover:border-accent-light dark:hover:border-accent-dark min-w-0 shrink"
             data-testid="file-selector-trigger"
           >
             <span className="truncate">
@@ -405,7 +405,7 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
         >
           {/* Search Input */}
           <div className="px-3 py-2 border-b">
-            <div className="relative flex items-center rounded-full border border-border bg-background h-9 px-2 shadow-sm">
+            <div className="relative flex items-center rounded-full border border-border bg-background h-9 px-2 shadow-xs">
               <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" strokeWidth={1.5} />
               <Input
                 ref={searchInputRef}
@@ -432,7 +432,7 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
           {/* File Tree */}
           <div
             ref={fileTreeRef}
-            className="max-h-[300px] overflow-y-auto outline-none"
+            className="max-h-[300px] overflow-y-auto outline-hidden"
             tabIndex={-1}
           >
             {filteredFiles.length > 0 ? (

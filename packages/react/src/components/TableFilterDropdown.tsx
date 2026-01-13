@@ -186,7 +186,7 @@ export function TableFilterDropdown(): JSX.Element | null {
 
       {/* Dropdown Panel */}
       {isOpen && (
-        <div className="absolute top-full left-0 mt-2 w-72 bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-700/60 rounded-xl shadow-lg z-[100] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <div className="absolute top-full left-0 mt-2 w-72 bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-700/60 rounded-xl shadow-lg z-100 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
           {/* Header */}
           <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-700">
             <div className="flex items-center justify-between mb-2">
@@ -210,7 +210,7 @@ export function TableFilterDropdown(): JSX.Element | null {
               placeholder="Search tables..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-2.5 py-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full px-2.5 py-1.5 text-sm border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-hidden focus:ring-1 focus:ring-blue-500"
             />
           </div>
 
@@ -229,7 +229,7 @@ export function TableFilterDropdown(): JSX.Element | null {
             >
               <div
                 className={cn(
-                  'size-4 rounded border flex items-center justify-center flex-shrink-0',
+                  'size-4 rounded border flex items-center justify-center shrink-0',
                   hideCTEs
                     ? 'bg-amber-500 border-amber-500'
                     : 'border-slate-300 dark:border-slate-600'
@@ -306,7 +306,7 @@ export function TableFilterDropdown(): JSX.Element | null {
                   >
                     <div
                       className={cn(
-                        'size-4 rounded border flex items-center justify-center flex-shrink-0',
+                        'size-4 rounded border flex items-center justify-center shrink-0',
                         checkboxStyles
                       )}
                     >

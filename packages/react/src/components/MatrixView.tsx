@@ -352,7 +352,7 @@ const MatrixCell = memo(function MatrixCell({
         </div>
       </GraphTooltipTrigger>
       <GraphTooltipPortal>
-        <GraphTooltipContent side="top" className="!max-w-none">
+        <GraphTooltipContent side="top" className="max-w-none!">
           {tooltipContent}
           <GraphTooltipArrow />
         </GraphTooltipContent>
@@ -1018,7 +1018,7 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
           </div>
 
           <div
-            className="relative group ml-auto flex items-center rounded-full border border-slate-200/60 dark:border-slate-700/60 bg-white/95 dark:bg-slate-900/95 h-9 shadow-sm backdrop-blur-sm"
+            className="relative group ml-auto flex items-center rounded-full border border-slate-200/60 dark:border-slate-700/60 bg-white/95 dark:bg-slate-900/95 h-9 shadow-xs backdrop-blur-xs"
             ref={searchContainerRef}
           >
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none z-10" strokeWidth={1.5} />
@@ -1038,7 +1038,7 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
               aria-controls={suggestionsListId}
               aria-activedescendant={showSuggestions && suggestions.length > 0 ? `${activeOptionId}-${activeSuggestionIndex}` : undefined}
               aria-autocomplete="list"
-              className="h-7 pl-8 pr-24 text-sm bg-transparent border-0 rounded-full focus:outline-none focus:ring-0 w-64 placeholder:text-slate-400"
+              className="h-7 pl-8 pr-24 text-sm bg-transparent border-0 rounded-full focus:outline-hidden focus:ring-0 w-64 placeholder:text-slate-400"
             />
 
             {/* Autocomplete Dropdown */}
@@ -1047,7 +1047,7 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
                 id={suggestionsListId}
                 role="listbox"
                 aria-label="Search suggestions"
-                className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg z-[100] max-h-60 overflow-auto py-1"
+                className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg z-100 max-h-60 overflow-auto py-1"
               >
                 {suggestions.length > 0 ? (
                   suggestions.map((suggestion, index) => (
@@ -1098,7 +1098,7 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
                 className={cn(
                   "p-1 rounded-full transition-all",
                   filterMode === 'rows'
-                    ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm"
+                    ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-xs"
                     : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                 )}
               >
@@ -1117,7 +1117,7 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
                 className={cn(
                   "p-1 rounded-full transition-all",
                   filterMode === 'columns'
-                    ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm"
+                    ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-xs"
                     : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                 )}
               >
@@ -1136,7 +1136,7 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
                 className={cn(
                   "p-1 rounded-full transition-all",
                   filterMode === 'fields'
-                    ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm"
+                    ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-xs"
                     : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                 )}
               >
@@ -1211,7 +1211,7 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
                   <div
                     key={`col-${item}`}
                     className={cn(
-                      "sticky top-0 z-20 bg-background border-b border-r border-slate-200 dark:border-slate-600 shadow-sm group cursor-pointer transition-colors duration-200 relative",
+                      "sticky top-0 z-20 bg-background border-b border-r border-slate-200 dark:border-slate-600 shadow-xs group cursor-pointer transition-colors duration-200 relative",
                       hoveredCell?.col === item && "bg-slate-50 dark:bg-slate-900",
                       
                       // Highlight logic
@@ -1371,19 +1371,19 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
             <div className="p-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex items-center justify-between gap-6 text-xs text-slate-500">
             <div className="flex items-center gap-6">
                 <div className="flex items-center gap-2">
-                    <div className="p-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded shadow-sm">
+                    <div className="p-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded shadow-xs">
                     <ArrowRight className="h-3 w-3 text-emerald-600 dark:text-emerald-400" strokeWidth={3} />
                     </div>
                     <span>Writes to</span>
                 </div>
                 <div className="flex items-center gap-2">
-                    <div className="p-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded shadow-sm">
+                    <div className="p-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded shadow-xs">
                     <ArrowLeft className="h-3 w-3 text-blue-600 dark:text-blue-400" strokeWidth={3} />
                     </div>
                     <span>Reads from</span>
                 </div>
                 <div className="flex items-center gap-2">
-                    <div className="p-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded shadow-sm">
+                    <div className="p-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded shadow-xs">
                     <Minus className="h-3 w-3 text-slate-300" />
                     </div>
                     <span>Self</span>

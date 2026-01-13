@@ -33,11 +33,11 @@ export const JOIN_TYPE_LABELS: Record<string, string> = {
  */
 export const PANEL_STYLES = {
   /** Base panel styling with border, background, and shadow */
-  base: 'rounded-full border border-slate-200/60 dark:border-slate-700/60 bg-white/95 dark:bg-slate-900/95 shadow-sm backdrop-blur-sm',
+  base: 'rounded-full border border-slate-200/60 dark:border-slate-700/60 bg-white/95 dark:bg-slate-900/95 shadow-xs backdrop-blur-xs',
   /** Panel with flex layout and standard height */
-  container: 'flex items-center rounded-full border border-slate-200/60 dark:border-slate-700/60 bg-white/95 dark:bg-slate-900/95 h-9 px-1 shadow-sm backdrop-blur-sm',
+  container: 'flex items-center rounded-full border border-slate-200/60 dark:border-slate-700/60 bg-white/95 dark:bg-slate-900/95 h-9 px-1 shadow-xs backdrop-blur-xs',
   /** Inline-flex variant for selector components */
-  selector: 'inline-flex h-9 items-center justify-center rounded-full border border-slate-200/60 dark:border-slate-700/60 bg-white/95 dark:bg-slate-900/95 shadow-sm backdrop-blur-sm p-1',
+  selector: 'inline-flex h-9 items-center justify-center rounded-full border border-slate-200/60 dark:border-slate-700/60 bg-white/95 dark:bg-slate-900/95 shadow-xs backdrop-blur-xs p-1',
 } as const;
 
 export const UI_CONSTANTS = {
