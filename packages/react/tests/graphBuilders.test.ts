@@ -1,7 +1,29 @@
 import { describe, it, expect } from 'vitest';
 import type { StatementLineage } from '@pondpilot/flowscope-core';
-import { buildFlowEdges, buildFlowNodes, mergeStatements } from '../src/utils/graphBuilders';
+import { buildFlowEdges, buildFlowNodes, mergeStatements, computeIsCollapsed } from '../src/utils/graphBuilders';
 import { GRAPH_CONFIG } from '../src/constants';
+
+describe('computeIsCollapsed', () => {
+  it('returns true when defaultCollapsed is true and node is not in overrides', () => {
+    const overrides = new Set<string>();
+    expect(computeIsCollapsed('node-1', true, overrides)).toBe(true);
+  });
+
+  it('returns false when defaultCollapsed is true and node is in overrides (expanded)', () => {
+    const overrides = new Set(['node-1']);
+    expect(computeIsCollapsed('node-1', true, overrides)).toBe(false);
+  });
+
+  it('returns false when defaultCollapsed is false and node is not in overrides', () => {
+    const overrides = new Set<string>();
+    expect(computeIsCollapsed('node-1', false, overrides)).toBe(false);
+  });
+
+  it('returns true when defaultCollapsed is false and node is in overrides (collapsed)', () => {
+    const overrides = new Set(['node-1']);
+    expect(computeIsCollapsed('node-1', false, overrides)).toBe(true);
+  });
+});
 
 const createInsertLineage = (): StatementLineage => ({
   statementIndex: 0,

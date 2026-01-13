@@ -81,7 +81,7 @@ function isTableNodeData(data: unknown): data is TableNodeData {
 export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
   const { toggleNodeCollapse, toggleTableExpansion, selectNode } = useLineageActions();
   const expandedTableIds = useLineageStore((state) => state.expandedTableIds);
-  const viewMode = useLineageStore((state) => state.viewMode);
+  const showColumnEdges = useLineageStore((state) => state.showColumnEdges);
   const colors = useColors();
 
   if (!isTableNodeData(data)) {
@@ -349,7 +349,7 @@ export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
             return (
               <div
                 key={col.id}
-                onClick={viewMode === 'column' ? (e) => {
+                onClick={showColumnEdges ? (e) => {
                   e.stopPropagation();
                   selectNode(col.id);
                 } : undefined}
@@ -361,7 +361,7 @@ export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
                   padding: '3px 4px',
                   borderRadius: 4,
                   position: 'relative',
-                  cursor: viewMode === 'column' ? 'pointer' : 'inherit',
+                  cursor: showColumnEdges ? 'pointer' : 'inherit',
                 }}
               >
                 <Handle

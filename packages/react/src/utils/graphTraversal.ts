@@ -73,14 +73,15 @@ export function filterGraphToHighlights(
 
 /**
  * Find all node/column IDs that match the search term based on view mode.
- * - Column view: returns matching column IDs
- * - Table view: returns matching table node IDs
+ * - Table view with column edges: returns matching column IDs
+ * - Table view without column edges: returns matching table node IDs
  * - Script view: returns matching script and table node IDs
  */
 export function findSearchMatchIds(
   searchTerm: string,
   nodes: FlowNode[],
-  viewMode: 'table' | 'column' | 'script'
+  viewMode: 'table' | 'script',
+  showColumnEdges: boolean = false
 ): Set<string> {
   const matchIds = new Set<string>();
   if (!searchTerm) return matchIds;
@@ -88,8 +89,8 @@ export function findSearchMatchIds(
   const lowerSearch = searchTerm.toLowerCase();
 
   for (const node of nodes) {
-    if (viewMode === 'column') {
-      // In column view, match individual columns and add their IDs
+    if (viewMode === 'table' && showColumnEdges) {
+      // With column edges, match individual columns and add their IDs
       const data = node.data as TableNodeData;
       if (data?.columns) {
         for (const col of data.columns) {

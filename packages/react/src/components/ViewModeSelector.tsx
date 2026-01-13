@@ -1,4 +1,4 @@
-import { FileCode, Table2, Columns3 } from 'lucide-react';
+import { FileCode, Table2 } from 'lucide-react';
 import { useLineage } from '../store';
 import type { LineageViewMode } from '../types';
 import { PANEL_STYLES } from '../constants';
@@ -29,17 +29,11 @@ const VIEW_MODES: Array<{
     description: 'Show tables with relationships (default view)',
     icon: Table2,
   },
-  {
-    value: 'column',
-    label: 'Column',
-    description: 'Show individual columns with full lineage paths',
-    icon: Columns3,
-  },
 ];
 
 /**
  * Segmented control for switching between different lineage view modes.
- * Displays three options: Script, Table, and Column views.
+ * Displays two options: Script and Table views.
  */
 export function ViewModeSelector(): JSX.Element {
   const { state, actions } = useLineage();

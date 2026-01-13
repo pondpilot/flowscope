@@ -3,7 +3,7 @@ import { ChevronDown, ChevronUp, Table2, Database, FileCode, Columns3, Eye } fro
 import { COLORS, EDGE_STYLES, PANEL_STYLES } from '../constants';
 
 interface LegendProps {
-  viewMode?: 'script' | 'table' | 'column';
+  viewMode?: 'script' | 'table';
 }
 
 /**

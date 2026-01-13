@@ -15,7 +15,7 @@ import type {
  * View mode for the lineage graph visualization.
  * Controls the level of detail displayed in the graph.
  */
-export type LineageViewMode = 'script' | 'table' | 'column';
+export type LineageViewMode = 'script' | 'table';
 
 /**
  * Sub-mode for the matrix view.

@@ -4,63 +4,120 @@ import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { AnalyzeResult, Span } from '@pondpilot/flowscope-core';
 import type { LineageViewMode, LayoutAlgorithm, NavigationRequest, MatrixSubMode, TableFilterDirection, TableFilter } from './types';
 
-const VIEW_MODE_STORAGE_KEY = 'flowscope-view-mode';
-const LAYOUT_ALGORITHM_STORAGE_KEY = 'flowscope-layout-algorithm';
 const DEFAULT_LAYOUT_ALGORITHM: LayoutAlgorithm = 'dagre';
 
+// Storage keys
+const STORAGE_KEYS = {
+  viewMode: 'flowscope-view-mode',
+  layoutAlgorithm: 'flowscope-layout-algorithm',
+  defaultCollapsed: 'flowscope-default-collapsed',
+  columnEdges: 'flowscope-column-edges',
+} as const;
+
 /**
- * Load the view mode from localStorage, defaulting to 'table' if not found or invalid.
+ * Generic localStorage helper for loading values with validation.
+ * Returns the default value if localStorage is unavailable or the value is invalid.
  */
+function loadFromStorage<T>(
+  key: string,
+  isValid: (value: string) => boolean,
+  parse: (value: string) => T,
+  defaultValue: T
+): T {
+  try {
+    const stored = localStorage.getItem(key);
+    if (stored !== null && isValid(stored)) {
+      return parse(stored);
+    }
+  } catch {
+    // localStorage might not be available (SSR, etc.)
+  }
+  return defaultValue;
+}
+
+/**
+ * Generic localStorage helper for saving values.
+ * Silently fails if localStorage is unavailable.
+ */
+function saveToStorage(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // localStorage might not be available
+  }
+}
+
+/**
+ * Migrate legacy 'column' view mode to 'table' with column edges enabled.
+ * Returns true if migration was performed.
+ */
+function migrateLegacyColumnViewMode(): boolean {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEYS.viewMode);
+    if (stored === 'column') {
+      localStorage.setItem(STORAGE_KEYS.viewMode, 'table');
+      localStorage.setItem(STORAGE_KEYS.columnEdges, 'true');
+      return true;
+    }
+  } catch {
+    // localStorage might not be available
+  }
+  return false;
+}
+
 function loadViewMode(): LineageViewMode {
-  try {
-    const stored = localStorage.getItem(VIEW_MODE_STORAGE_KEY);
-    if (stored === 'script' || stored === 'table' || stored === 'column') {
-      return stored;
-    }
-  } catch {
-    // localStorage might not be available (SSR, etc.)
-  }
-  return 'table';
+  // Migrate legacy column view mode first
+  migrateLegacyColumnViewMode();
+
+  return loadFromStorage(
+    STORAGE_KEYS.viewMode,
+    (v) => v === 'script' || v === 'table',
+    (v) => v as LineageViewMode,
+    'table'
+  );
 }
 
-/**
- * Save the view mode to localStorage.
- */
 function saveViewMode(mode: LineageViewMode): void {
-  try {
-    localStorage.setItem(VIEW_MODE_STORAGE_KEY, mode);
-  } catch {
-    // localStorage might not be available
-  }
+  saveToStorage(STORAGE_KEYS.viewMode, mode);
 }
 
-/**
- * Load the layout algorithm from localStorage, defaulting to the provided value
- * (or dagre) if not found or invalid.
- */
-function loadLayoutAlgorithm(
-  defaultAlgorithm: LayoutAlgorithm = DEFAULT_LAYOUT_ALGORITHM
-): LayoutAlgorithm {
-  try {
-    const stored = localStorage.getItem(LAYOUT_ALGORITHM_STORAGE_KEY);
-    if (stored === 'dagre' || stored === 'elk') {
-      return stored;
-    }
-  } catch {
-    // localStorage might not be available (SSR, etc.)
-  }
-  return defaultAlgorithm;
+function loadLayoutAlgorithm(defaultAlgorithm: LayoutAlgorithm = DEFAULT_LAYOUT_ALGORITHM): LayoutAlgorithm {
+  return loadFromStorage(
+    STORAGE_KEYS.layoutAlgorithm,
+    (v) => v === 'dagre' || v === 'elk',
+    (v) => v as LayoutAlgorithm,
+    defaultAlgorithm
+  );
 }
 
-/**
- * Save the layout algorithm to localStorage.
- */
 function saveLayoutAlgorithm(algorithm: LayoutAlgorithm): void {
-  try {
-    localStorage.setItem(LAYOUT_ALGORITHM_STORAGE_KEY, algorithm);
-  } catch {
-    // localStorage might not be available
-  }
+  saveToStorage(STORAGE_KEYS.layoutAlgorithm, algorithm);
+}
+
+function loadDefaultCollapsed(): boolean {
+  return loadFromStorage(
+    STORAGE_KEYS.defaultCollapsed,
+    (v) => v === 'true' || v === 'false',
+    (v) => v === 'true',
+    true
+  );
+}
+
+function saveDefaultCollapsed(collapsed: boolean): void {
+  saveToStorage(STORAGE_KEYS.defaultCollapsed, String(collapsed));
+}
+
+function loadColumnEdges(): boolean {
+  return loadFromStorage(
+    STORAGE_KEYS.columnEdges,
+    (v) => v === 'true' || v === 'false',
+    (v) => v === 'true',
+    false
+  );
+}
+
+function saveColumnEdges(show: boolean): void {
+  saveToStorage(STORAGE_KEYS.columnEdges, String(show));
 }
 
 export interface LineageState {
@@ -76,8 +133,13 @@ export interface LineageState {
   viewMode: LineageViewMode;
   matrixSubMode: MatrixSubMode;
   layoutAlgorithm: LayoutAlgorithm;
+  // Node IDs whose collapsed state differs from defaultCollapsed.
+  // When defaultCollapsed is true, these are expanded nodes (overrides).
+  // When defaultCollapsed is false, these are collapsed nodes (overrides).
   collapsedNodeIds: Set<string>;
   expandedTableIds: Set<string>; // Tables with all columns shown
+  defaultCollapsed: boolean; // Whether tables are collapsed by default
+  showColumnEdges: boolean; // Whether to show column-level edges instead of table-level
   showScriptTables: boolean;
   navigationRequest: NavigationRequest | null;
   tableFilter: TableFilter;
@@ -88,12 +150,20 @@ export interface LineageState {
   selectNode: (nodeId: string | null) => void;
   toggleNodeCollapse: (nodeId: string) => void;
   toggleTableExpansion: (tableId: string) => void;
+  /**
+   * Set all nodes to collapsed or expanded state.
+   * This updates the defaultCollapsed setting and clears all per-node overrides
+   * (collapsedNodeIds), resetting all nodes to the new default state.
+   * Only affects table/column nodes, not script nodes.
+   */
+  setAllNodesCollapsed: (collapsed: boolean) => void;
   selectStatement: (index: number) => void;
   highlightSpan: (span: Span | null) => void;
   setSearchTerm: (term: string) => void;
   setViewMode: (mode: LineageViewMode) => void;
   setMatrixSubMode: (mode: MatrixSubMode) => void;
   setLayoutAlgorithm: (algorithm: LayoutAlgorithm) => void;
+  toggleColumnEdges: () => void;
   toggleShowScriptTables: () => void;
   requestNavigation: (request: NavigationRequest | null) => void;
   setTableFilter: (filter: TableFilter) => void;
@@ -113,6 +183,8 @@ export function createLineageStore(
   const fallbackAlgorithm = options?.defaultLayoutAlgorithm ?? DEFAULT_LAYOUT_ALGORITHM;
   const initialLayoutAlgorithm =
     initialState?.layoutAlgorithm ?? loadLayoutAlgorithm(fallbackAlgorithm);
+  const initialDefaultCollapsed = initialState?.defaultCollapsed ?? loadDefaultCollapsed();
+  const initialColumnEdges = initialState?.showColumnEdges ?? loadColumnEdges();
 
   return createStore<LineageState>((set) => ({
     // Initial state
@@ -127,6 +199,8 @@ export function createLineageStore(
     layoutAlgorithm: initialLayoutAlgorithm,
     collapsedNodeIds: new Set(),
     expandedTableIds: new Set(),
+    defaultCollapsed: initialDefaultCollapsed,
+    showColumnEdges: initialColumnEdges,
     showScriptTables: false,
     navigationRequest: null,
     tableFilter: { selectedTableLabels: new Set(), direction: 'both' },
@@ -182,6 +256,14 @@ export function createLineageStore(
         return { expandedTableIds: newExpandedTableIds };
       }),
 
+    setAllNodesCollapsed: (collapsed) => {
+      saveDefaultCollapsed(collapsed);
+      set({
+        defaultCollapsed: collapsed,
+        collapsedNodeIds: new Set(),
+      });
+    },
+
     selectStatement: (index) =>
       set({
         selectedStatementIndex: index,
@@ -205,6 +287,13 @@ export function createLineageStore(
       saveLayoutAlgorithm(algorithm);
       set({ layoutAlgorithm: algorithm });
     },
+
+    toggleColumnEdges: () =>
+      set((state) => {
+        const newValue = !state.showColumnEdges;
+        saveColumnEdges(newValue);
+        return { showColumnEdges: newValue };
+      }),
 
     toggleShowScriptTables: () => set((state) => ({ showScriptTables: !state.showScriptTables })),
 
@@ -288,6 +377,8 @@ export function useLineage() {
       layoutAlgorithm: store.layoutAlgorithm,
       collapsedNodeIds: store.collapsedNodeIds,
       expandedTableIds: store.expandedTableIds,
+      defaultCollapsed: store.defaultCollapsed,
+      showColumnEdges: store.showColumnEdges,
       showScriptTables: store.showScriptTables,
       navigationRequest: store.navigationRequest,
       tableFilter: store.tableFilter,
@@ -298,12 +389,14 @@ export function useLineage() {
       selectNode: store.selectNode,
       toggleNodeCollapse: store.toggleNodeCollapse,
       toggleTableExpansion: store.toggleTableExpansion,
+      setAllNodesCollapsed: store.setAllNodesCollapsed,
       selectStatement: store.selectStatement,
       highlightSpan: store.highlightSpan,
       setSearchTerm: store.setSearchTerm,
       setViewMode: store.setViewMode,
       setMatrixSubMode: store.setMatrixSubMode,
       setLayoutAlgorithm: store.setLayoutAlgorithm,
+      toggleColumnEdges: store.toggleColumnEdges,
       toggleShowScriptTables: store.toggleShowScriptTables,
       requestNavigation: store.requestNavigation,
       setTableFilter: store.setTableFilter,
@@ -331,6 +424,8 @@ export function useLineageState() {
   const layoutAlgorithm = useLineageStore((state) => state.layoutAlgorithm);
   const collapsedNodeIds = useLineageStore((state) => state.collapsedNodeIds);
   const expandedTableIds = useLineageStore((state) => state.expandedTableIds);
+  const defaultCollapsed = useLineageStore((state) => state.defaultCollapsed);
+  const showColumnEdges = useLineageStore((state) => state.showColumnEdges);
   const showScriptTables = useLineageStore((state) => state.showScriptTables);
   const navigationRequest = useLineageStore((state) => state.navigationRequest);
   const tableFilter = useLineageStore((state) => state.tableFilter);
@@ -347,6 +442,8 @@ export function useLineageState() {
     layoutAlgorithm,
     collapsedNodeIds,
     expandedTableIds,
+    defaultCollapsed,
+    showColumnEdges,
     showScriptTables,
     navigationRequest,
     tableFilter,
@@ -362,12 +459,14 @@ export function useLineageActions() {
   const selectNode = useLineageStore((state) => state.selectNode);
   const toggleNodeCollapse = useLineageStore((state) => state.toggleNodeCollapse);
   const toggleTableExpansion = useLineageStore((state) => state.toggleTableExpansion);
+  const setAllNodesCollapsed = useLineageStore((state) => state.setAllNodesCollapsed);
   const selectStatement = useLineageStore((state) => state.selectStatement);
   const highlightSpan = useLineageStore((state) => state.highlightSpan);
   const setSearchTerm = useLineageStore((state) => state.setSearchTerm);
   const setViewMode = useLineageStore((state) => state.setViewMode);
   const setMatrixSubMode = useLineageStore((state) => state.setMatrixSubMode);
   const setLayoutAlgorithm = useLineageStore((state) => state.setLayoutAlgorithm);
+  const toggleColumnEdges = useLineageStore((state) => state.toggleColumnEdges);
   const toggleShowScriptTables = useLineageStore((state) => state.toggleShowScriptTables);
   const requestNavigation = useLineageStore((state) => state.requestNavigation);
   const setTableFilter = useLineageStore((state) => state.setTableFilter);
@@ -381,12 +480,14 @@ export function useLineageActions() {
     selectNode,
     toggleNodeCollapse,
     toggleTableExpansion,
+    setAllNodesCollapsed,
     selectStatement,
     highlightSpan,
     setSearchTerm,
     setViewMode,
     setMatrixSubMode,
     setLayoutAlgorithm,
+    toggleColumnEdges,
     toggleShowScriptTables,
     requestNavigation,
     setTableFilter,

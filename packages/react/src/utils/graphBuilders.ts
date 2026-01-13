@@ -20,6 +20,22 @@ const SELECT_STATEMENT_TYPES = new Set([
 ]);
 
 /**
+ * Determine if a node should be collapsed based on the default state and overrides.
+ *
+ * When defaultCollapsed is true, nodes are collapsed by default and the overrideIds
+ * contains nodes that should be expanded (exceptions to the default).
+ * When defaultCollapsed is false, nodes are expanded by default and the overrideIds
+ * contains nodes that should be collapsed.
+ */
+export function computeIsCollapsed(
+  nodeId: string,
+  defaultCollapsed: boolean,
+  overrideIds: Set<string>
+): boolean {
+  return defaultCollapsed ? !overrideIds.has(nodeId) : overrideIds.has(nodeId);
+}
+
+/**
  * Merge multiple statements into a single statement for visualization
  */
 export function mergeStatements(statements: StatementLineage[]): StatementLineage {
@@ -238,7 +254,8 @@ export function buildFlowNodes(
   searchTerm: string,
   collapsedNodeIds: Set<string>,
   expandedTableIds: Set<string> = new Set(),
-  resolvedSchema: ResolvedSchemaMetadata | null | undefined = null
+  resolvedSchema: ResolvedSchemaMetadata | null | undefined = null,
+  defaultCollapsed: boolean = false
 ): FlowNode[] {
   const tableNodes = statement.nodes.filter((n) => isTableLikeType(n.type));
   const columnNodes = statement.nodes.filter((n) => n.type === 'column');
@@ -315,7 +332,7 @@ export function buildFlowNodes(
       data: buildTableNodeData(node, columns, {
         selectedNodeId,
         searchTerm,
-        isCollapsed: collapsedNodeIds.has(node.id),
+        isCollapsed: computeIsCollapsed(node.id, defaultCollapsed, collapsedNodeIds),
         hiddenColumnCount,
         isRecursive: recursiveNodeIds.has(node.id),
         isBaseTable: baseTableIds.has(node.id),
@@ -345,7 +362,7 @@ export function buildFlowNodes(
       data: buildOutputNodeData(outputColumns, {
         selectedNodeId,
         searchTerm,
-        isCollapsed: collapsedNodeIds.has(outputNodeId),
+        isCollapsed: computeIsCollapsed(outputNodeId, defaultCollapsed, collapsedNodeIds),
       }),
     });
   }
@@ -391,7 +408,12 @@ function formatJoinType(joinType: string | undefined | null): string | undefined
  * - Handles fallback cases where edges connect columns to tables directly (e.g., CREATE VIEW)
  * - Deduplicates edges to avoid rendering multiple edges between the same table pair
  */
-export function buildFlowEdges(statement: StatementLineage): FlowEdge[] {
+export function buildFlowEdges(
+  statement: StatementLineage,
+  showColumnEdges: boolean = false,
+  defaultCollapsed: boolean = false,
+  collapsedNodeIds: Set<string> = new Set()
+): FlowEdge[] {
   const tableNodes = statement.nodes.filter((n) => isTableLikeType(n.type));
   const columnNodes = statement.nodes.filter((n) => n.type === 'column');
   const outputNodeId = GRAPH_CONFIG.VIRTUAL_OUTPUT_NODE_ID;
@@ -414,8 +436,69 @@ export function buildFlowEdges(statement: StatementLineage): FlowEdge[] {
     }
   }
 
-  // DML/DDL statement (INSERT, UPDATE, CREATE TABLE AS, MERGE, CREATE VIEW, etc.)
-  // Render backend edges directly between tables
+  // For SELECT statements, map output columns to the virtual output node
+  if (isSelect) {
+    columnNodes.forEach((col) => {
+      if (!columnToTableMap.has(col.id)) {
+        columnToTableMap.set(col.id, outputNodeId);
+      }
+    });
+  }
+
+  // Column-level edges: one edge per column lineage connection
+  if (showColumnEdges) {
+    const flowEdges: FlowEdge[] = [];
+
+    // Build column ID -> Node map for O(1) lookups (avoids O(E × C) find operations)
+    const columnNodeMap = new Map<string, Node>();
+    for (const col of columnNodes) {
+      columnNodeMap.set(col.id, col);
+    }
+
+    statement.edges
+      .filter((e) => e.type === 'derivation' || e.type === 'data_flow')
+      .forEach((edge) => {
+        const sourceCol = columnNodeMap.get(edge.from);
+        const targetCol = columnNodeMap.get(edge.to);
+
+        if (sourceCol && targetCol) {
+          const sourceTableId = columnToTableMap.get(edge.from);
+          const targetTableId = columnToTableMap.get(edge.to);
+
+          // Only create edges between different tables (skip self-loops)
+          if (sourceTableId && targetTableId && sourceTableId !== targetTableId) {
+            const hasExpression = edge.expression || targetCol.expression;
+            const isDerivedColumn = edge.type === 'derivation' || hasExpression;
+
+            const isSourceCollapsed = computeIsCollapsed(sourceTableId, defaultCollapsed, collapsedNodeIds);
+            const isTargetCollapsed = computeIsCollapsed(targetTableId, defaultCollapsed, collapsedNodeIds);
+
+            flowEdges.push({
+              id: edge.id,
+              source: sourceTableId,
+              target: targetTableId,
+              sourceHandle: isSourceCollapsed ? null : edge.from,
+              targetHandle: isTargetCollapsed ? null : edge.to,
+              type: 'animated',
+              data: {
+                type: edge.type,
+                expression: edge.expression || targetCol.expression,
+                sourceColumn: sourceCol.label,
+                targetColumn: targetCol.label,
+                isDerived: isDerivedColumn,
+              },
+              style: {
+                strokeDasharray: isDerivedColumn ? '5,5' : undefined,
+              },
+            });
+          }
+        }
+      });
+
+    return flowEdges;
+  }
+
+  // Table-level edges: one edge per table pair (deduplicated)
   const flowEdges: FlowEdge[] = [];
   const seenEdges = new Set<string>();
   const outputColumnIds = new Set<string>();
@@ -772,161 +855,3 @@ export function buildScriptLevelGraph(
   }
 }
 
-/**
- * Build column-level graph with column-to-column lineage
- */
-export function buildColumnLevelGraph(
-  statement: StatementLineage,
-  selectedNodeId: string | null,
-  searchTerm: string,
-  collapsedNodeIds: Set<string>,
-  expandedTableIds: Set<string> = new Set(),
-  resolvedSchema: ResolvedSchemaMetadata | null | undefined = null
-): { nodes: FlowNode[]; edges: FlowEdge[] } {
-  const tableNodes = statement.nodes.filter((n) => isTableLikeType(n.type));
-  const columnNodes = statement.nodes.filter((n) => n.type === 'column');
-  const isSelect = isSelectStatement(statement);
-  const hasJoinNodes = tableNodes.some((node) => !!node.joinType);
-  // Identify the "base" table in a join sequence. The base table is the first table
-  // in the FROM clause, which does not have an associated joinType (e.g., LEFT, INNER).
-  // Subsequent tables in the join chain have a joinType indicating how they join.
-  const baseTableIds = new Set<string>();
-  if (hasJoinNodes) {
-    tableNodes.forEach((node) => {
-      if (node.type !== 'table') return;
-      if (!node.joinType) {
-        baseTableIds.add(node.id);
-      }
-    });
-  }
-
-  // Build table-to-columns map
-  const tableColumnMap = new Map<string, ColumnNodeInfo[]>();
-  const columnToTableMap = new Map<string, string>();
-
-  for (const edge of statement.edges) {
-    if (edge.type === 'ownership') {
-      const parentNode = tableNodes.find((n) => n.id === edge.from);
-      const childNode = columnNodes.find((n) => n.id === edge.to);
-      if (parentNode && childNode) {
-        const cols = tableColumnMap.get(parentNode.id) || [];
-        cols.push({
-          id: childNode.id,
-          name: childNode.label,
-          expression: childNode.expression,
-          aggregation: childNode.aggregation,
-        });
-        tableColumnMap.set(parentNode.id, cols);
-        columnToTableMap.set(childNode.id, parentNode.id);
-      }
-    }
-  }
-
-  const flowNodes: FlowNode[] = [];
-
-  // Collect output columns (columns not owned by any table)
-  const outputColumns: ColumnNodeInfo[] = [];
-  for (const node of columnNodes) {
-    if (!columnToTableMap.has(node.id)) {
-      outputColumns.push({
-        id: node.id,
-        name: node.label,
-        expression: node.expression,
-        aggregation: node.aggregation,
-      });
-    }
-  }
-
-  for (const node of tableNodes) {
-    const existingColumns = tableColumnMap.get(node.id) || [];
-    const isExpanded = expandedTableIds.has(node.id);
-
-    // Process columns with schema injection
-    const { columns, hiddenColumnCount } = processTableColumns(
-      node.label,
-      node.qualifiedName,
-      node.id,
-      existingColumns,
-      isExpanded,
-      resolvedSchema
-    );
-
-    flowNodes.push({
-      id: node.id,
-      type: 'tableNode',
-      position: { x: 0, y: 0 },
-      data: buildTableNodeData(node, columns, {
-        selectedNodeId,
-        searchTerm,
-        isCollapsed: collapsedNodeIds.has(node.id),
-        hiddenColumnCount,
-        isBaseTable: baseTableIds.has(node.id),
-      }),
-    });
-  }
-
-  // Add virtual "Output" table node for SELECT-like statements only
-  if (isSelect && outputColumns.length > 0) {
-    const outputNodeId = GRAPH_CONFIG.VIRTUAL_OUTPUT_NODE_ID;
-    flowNodes.push({
-      id: outputNodeId,
-      type: 'tableNode',
-      position: { x: 0, y: 0 },
-      data: buildOutputNodeData(outputColumns, {
-        selectedNodeId,
-        searchTerm,
-        isCollapsed: collapsedNodeIds.has(outputNodeId),
-      }),
-    });
-
-    // Update columnToTableMap for output columns
-    outputColumns.forEach((col) => {
-      columnToTableMap.set(col.id, outputNodeId);
-    });
-  }
-
-  // Build one edge per column lineage connection
-  const flowEdges: FlowEdge[] = [];
-
-  statement.edges
-    .filter((e) => e.type === 'derivation' || e.type === 'data_flow')
-    .forEach((edge) => {
-      const sourceCol = columnNodes.find((c) => c.id === edge.from);
-      const targetCol = columnNodes.find((c) => c.id === edge.to);
-
-      if (sourceCol && targetCol) {
-        const sourceTableId = columnToTableMap.get(edge.from);
-        const targetTableId = columnToTableMap.get(edge.to);
-
-        // Only create edges between different tables (skip self-loops)
-        if (sourceTableId && targetTableId && sourceTableId !== targetTableId) {
-          const hasExpression = edge.expression || targetCol.expression;
-          const isDerivedColumn = edge.type === 'derivation' || hasExpression;
-
-          const isSourceCollapsed = collapsedNodeIds.has(sourceTableId);
-          const isTargetCollapsed = collapsedNodeIds.has(targetTableId);
-
-          flowEdges.push({
-            id: edge.id,
-            source: sourceTableId,
-            target: targetTableId,
-            sourceHandle: isSourceCollapsed ? null : edge.from,
-            targetHandle: isTargetCollapsed ? null : edge.to,
-            type: 'animated',
-            data: {
-              type: edge.type,
-              expression: edge.expression || targetCol.expression,
-              sourceColumn: sourceCol.label,
-              targetColumn: targetCol.label,
-              isDerived: isDerivedColumn,
-            },
-            style: {
-              strokeDasharray: isDerivedColumn ? '5,5' : undefined,
-            },
-          });
-        }
-      }
-    });
-
-  return { nodes: flowNodes, edges: flowEdges };
-}

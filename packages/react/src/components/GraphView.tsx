@@ -11,7 +11,7 @@ import {
 } from '@xyflow/react';
 import type { Node as FlowNode, Edge as FlowEdge, Viewport } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { LayoutList } from 'lucide-react';
+import { LayoutList, Maximize2, Minimize2, Route, GitBranch } from 'lucide-react';
 
 import { useLineage } from '../store';
 import { useNodeFocus } from '../hooks/useNodeFocus';
@@ -25,7 +25,6 @@ import {
   buildFlowNodes,
   buildFlowEdges,
   buildScriptLevelGraph,
-  buildColumnLevelGraph,
 } from '../utils/graphBuilders';
 import { ScriptNode } from './ScriptNode';
 import { ColumnNode } from './ColumnNode';
@@ -183,6 +182,55 @@ const edgeTypes = {
   animated: AnimatedEdge,
 };
 
+interface ToolbarToggleButtonProps {
+  isActive: boolean;
+  onClick: () => void;
+  ariaLabel: string;
+  tooltip: string;
+  icon: React.ReactNode;
+}
+
+/**
+ * Reusable toggle button for graph toolbar actions.
+ * Provides consistent styling and tooltip behavior.
+ */
+function ToolbarToggleButton({
+  isActive,
+  onClick,
+  ariaLabel,
+  tooltip,
+  icon,
+}: ToolbarToggleButtonProps): JSX.Element {
+  return (
+    <div className={PANEL_STYLES.container} data-graph-panel>
+      <GraphTooltipProvider>
+        <GraphTooltip delayDuration={300}>
+          <GraphTooltipTrigger asChild>
+            <button
+              onClick={onClick}
+              className={`
+                inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-all duration-200
+                ${isActive ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}
+                focus-visible:outline-none
+              `}
+              aria-label={ariaLabel}
+              aria-pressed={isActive}
+            >
+              {icon}
+            </button>
+          </GraphTooltipTrigger>
+          <GraphTooltipPortal>
+            <GraphTooltipContent side="bottom">
+              <p>{tooltip}</p>
+              <GraphTooltipArrow />
+            </GraphTooltipContent>
+          </GraphTooltipPortal>
+        </GraphTooltip>
+      </GraphTooltipProvider>
+    </div>
+  );
+}
+
 function enhanceGraphWithHighlights(
   graph: { nodes: FlowNode[]; edges: FlowEdge[] },
   highlightIds: Set<string>
@@ -245,7 +293,7 @@ export function GraphView({
   fitViewTrigger,
 }: GraphViewProps): JSX.Element {
   const { state, actions } = useLineage();
-  const { result, selectedNodeId, searchTerm, viewMode, layoutAlgorithm, collapsedNodeIds, showScriptTables, expandedTableIds, tableFilter } = state;
+  const { result, selectedNodeId, searchTerm, viewMode, layoutAlgorithm, collapsedNodeIds, defaultCollapsed, showColumnEdges, showScriptTables, expandedTableIds, tableFilter } = state;
 
   // Determine if search is controlled externally
   const isSearchControlled = controlledSearchTerm !== undefined;
@@ -275,18 +323,19 @@ export function GraphView({
     return mergeStatements(result.statements);
   }, [result]);
 
-  // Determine searchable types based on view mode
+  // Determine searchable types based on view mode and column edges setting
   const searchableTypes = useMemo((): SearchableType[] => {
     switch (viewMode) {
       case 'script':
         return ['script', 'table', 'view', 'cte'];
-      case 'column':
-        return ['table', 'view', 'cte', 'column', 'script'];
       case 'table':
       default:
-        return ['table', 'view', 'cte', 'script'];
+        // When showing column edges, include columns in searchable types
+        return showColumnEdges
+          ? ['table', 'view', 'cte', 'column', 'script']
+          : ['table', 'view', 'cte', 'script'];
     }
-  }, [viewMode]);
+  }, [viewMode, showColumnEdges]);
 
   // Build the raw graph based on view mode (before filtering)
   const { builtGraph, direction } = useMemo(() => {
@@ -305,22 +354,7 @@ export function GraphView({
         return { builtGraph: graph, direction: 'LR' as const };
       }
 
-      if (viewMode === 'column') {
-        if (!statement) {
-          return { builtGraph: { nodes: [], edges: [] }, direction: 'LR' as const };
-        }
-        const graph = buildColumnLevelGraph(
-          statement,
-          selectedNodeId,
-          effectiveSearchTerm,
-          collapsedNodeIds,
-          expandedTableIds,
-          result.resolvedSchema
-        );
-        return { builtGraph: graph, direction: 'LR' as const };
-      }
-
-      // Table view
+      // Table view (with optional column-level edges)
       if (!statement) {
         return { builtGraph: { nodes: [], edges: [] }, direction: 'LR' as const };
       }
@@ -331,16 +365,17 @@ export function GraphView({
           effectiveSearchTerm,
           collapsedNodeIds,
           expandedTableIds,
-          result.resolvedSchema
+          result.resolvedSchema,
+          defaultCollapsed
         ),
-        edges: buildFlowEdges(statement),
+        edges: buildFlowEdges(statement, showColumnEdges, defaultCollapsed, collapsedNodeIds),
       };
       return { builtGraph: graph, direction: 'LR' as const };
     } catch (error) {
       console.error('Graph building failed:', error);
       return { builtGraph: { nodes: [], edges: [] }, direction: 'LR' as const };
     }
-  }, [result, statement, selectedNodeId, effectiveSearchTerm, viewMode, collapsedNodeIds, showScriptTables, expandedTableIds]);
+  }, [result, statement, selectedNodeId, effectiveSearchTerm, viewMode, collapsedNodeIds, defaultCollapsed, showColumnEdges, showScriptTables, expandedTableIds]);
 
   // Apply filtering (focus mode, table filter) and compute highlights
   const { filteredGraph, highlightIds } = useGraphFiltering({
@@ -348,6 +383,7 @@ export function GraphView({
     selectedNodeId,
     searchTerm: effectiveSearchTerm,
     viewMode,
+    showColumnEdges,
     focusMode,
     tableFilter,
   });
@@ -573,32 +609,13 @@ export function GraphView({
         <Panel position="top-left" className="flex gap-3 items-start">
           <ViewModeSelector />
           {viewMode === 'script' && (
-            <div className={PANEL_STYLES.container} data-graph-panel>
-              <GraphTooltipProvider>
-                <GraphTooltip delayDuration={300}>
-                  <GraphTooltipTrigger asChild>
-                    <button
-                      onClick={actions.toggleShowScriptTables}
-                      className={`
-                        inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-all duration-200
-                        ${showScriptTables ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}
-                        focus-visible:outline-none
-                      `}
-                      aria-label="Toggle table details"
-                      aria-pressed={showScriptTables}
-                    >
-                      <LayoutList className="size-4" strokeWidth={showScriptTables ? 2.5 : 1.5} />
-                    </button>
-                  </GraphTooltipTrigger>
-                  <GraphTooltipPortal>
-                    <GraphTooltipContent side="bottom">
-                      <p>{showScriptTables ? 'Hide tables' : 'Show tables'}</p>
-                      <GraphTooltipArrow />
-                    </GraphTooltipContent>
-                  </GraphTooltipPortal>
-                </GraphTooltip>
-              </GraphTooltipProvider>
-            </div>
+            <ToolbarToggleButton
+              isActive={showScriptTables}
+              onClick={actions.toggleShowScriptTables}
+              ariaLabel="Toggle table details"
+              tooltip={showScriptTables ? 'Hide tables' : 'Show tables'}
+              icon={<LayoutList className="size-4" strokeWidth={showScriptTables ? 2.5 : 1.5} />}
+            />
           )}
           <GraphSearchControl
             searchTerm={effectiveSearchTerm ?? ''}
@@ -607,6 +624,24 @@ export function GraphView({
             focusMode={focusMode}
             onFocusModeChange={handleFocusModeChange}
           />
+          {viewMode !== 'script' && (
+            <ToolbarToggleButton
+              isActive={!defaultCollapsed}
+              onClick={() => actions.setAllNodesCollapsed(!defaultCollapsed)}
+              ariaLabel={defaultCollapsed ? 'Expand all tables' : 'Collapse all tables'}
+              tooltip={defaultCollapsed ? 'Expand all tables' : 'Collapse all tables'}
+              icon={defaultCollapsed ? <Maximize2 className="size-4" strokeWidth={1.5} /> : <Minimize2 className="size-4" strokeWidth={1.5} />}
+            />
+          )}
+          {viewMode !== 'script' && (
+            <ToolbarToggleButton
+              isActive={showColumnEdges}
+              onClick={actions.toggleColumnEdges}
+              ariaLabel={showColumnEdges ? 'Show table connections' : 'Show column lineage'}
+              tooltip={showColumnEdges ? 'Show table connections' : 'Show column lineage'}
+              icon={showColumnEdges ? <GitBranch className="size-4" strokeWidth={1.5} /> : <Route className="size-4" strokeWidth={1.5} />}
+            />
+          )}
           {viewMode !== 'script' && <TableFilterDropdown />}
         </Panel>
         <Panel position="top-right" className="flex gap-3 items-start">

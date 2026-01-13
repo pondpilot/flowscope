@@ -18,7 +18,9 @@ export interface UseGraphFilteringOptions {
   /** Search term for highlighting */
   searchTerm: string | undefined;
   /** View mode for determining search matching strategy */
-  viewMode: 'script' | 'column' | 'table';
+  viewMode: 'script' | 'table';
+  /** Whether column-level edges are shown (affects search matching in table view) */
+  showColumnEdges?: boolean;
   /** Whether focus mode is enabled */
   focusMode: boolean;
   /** Table filter configuration */
@@ -40,7 +42,7 @@ export interface UseGraphFilteringResult {
  * @returns The filtered graph and highlight IDs
  */
 export function useGraphFiltering(options: UseGraphFilteringOptions): UseGraphFilteringResult {
-  const { graph, selectedNodeId, searchTerm, viewMode, focusMode, tableFilter } = options;
+  const { graph, selectedNodeId, searchTerm, viewMode, showColumnEdges = false, focusMode, tableFilter } = options;
 
   return useMemo(() => {
     // Warn about potentially expensive operations on large graphs
@@ -60,7 +62,7 @@ export function useGraphFiltering(options: UseGraphFilteringOptions): UseGraphFi
 
     // Add search-based highlights
     if (searchTerm) {
-      const searchMatchIds = findSearchMatchIds(searchTerm, graph.nodes, viewMode);
+      const searchMatchIds = findSearchMatchIds(searchTerm, graph.nodes, viewMode, showColumnEdges);
       const searchConnected = findConnectedElementsMultiple(searchMatchIds, graph.edges);
       for (const id of searchConnected) {
         highlightIds.add(id);
@@ -88,5 +90,5 @@ export function useGraphFiltering(options: UseGraphFilteringOptions): UseGraphFi
         highlightIds: new Set<string>(),
       };
     }
-  }, [graph, selectedNodeId, searchTerm, viewMode, focusMode, tableFilter]);
+  }, [graph, selectedNodeId, searchTerm, viewMode, showColumnEdges, focusMode, tableFilter]);
 }

@@ -32,9 +32,9 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
-  readonly enable_tracing: () => void;
-  readonly analyze_sql_json: (a: number, b: number) => [number, number];
   readonly analyze_sql: (a: number, b: number) => [number, number, number, number];
+  readonly analyze_sql_json: (a: number, b: number) => [number, number];
+  readonly enable_tracing: () => void;
   readonly get_version: () => [number, number];
   readonly set_panic_hook: () => void;
   readonly __wbindgen_free: (a: number, b: number, c: number) => void;
