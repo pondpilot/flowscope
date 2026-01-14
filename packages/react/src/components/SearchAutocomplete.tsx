@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useId } from 'react';
+import { useState, useEffect, useRef, useCallback, useId, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { Search, X, Table2, FileCode, ScanLine, Eye, Focus } from 'lucide-react';
 import { cn } from './ui/button';
 import { Input } from './ui/input';
@@ -15,6 +15,22 @@ import {
   GraphTooltipArrow,
   GraphTooltipPortal,
 } from './ui/graph-tooltip';
+
+/**
+ * Normalize a searchInputId to be safe for use in data attributes.
+ * - Converts to lowercase
+ * - Replaces invalid characters with hyphens
+ * - Removes leading/trailing hyphens
+ * - Falls back to 'search' if result is empty
+ */
+function normalizeSearchInputId(id: string): string {
+  const normalized = id
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  return normalized || 'search';
+}
 
 export interface SearchAutocompleteProps {
   /** Controlled value for the search input */
@@ -43,6 +59,16 @@ export interface SearchAutocompleteProps {
   onFocusModeChange?: (enabled: boolean) => void;
   /** Initial focus mode state */
   initialFocusMode?: boolean;
+  /** Custom data attribute identifier for keyboard focus (e.g., 'hierarchy' creates data-hierarchy-search-input) */
+  searchInputId?: string;
+  /** Called when ArrowDown is pressed with no suggestions to navigate (for focus transfer) */
+  onArrowDownExit?: () => void;
+}
+
+/** Ref handle for SearchAutocomplete - exposes focus method */
+export interface SearchAutocompleteRef {
+  /** Focus the search input */
+  focus: () => void;
 }
 
 function getTypeIcon(type: SearchableType) {
@@ -60,7 +86,7 @@ function getTypeIcon(type: SearchableType) {
   }
 }
 
-export function SearchAutocomplete({
+export const SearchAutocomplete = forwardRef<SearchAutocompleteRef, SearchAutocompleteProps>(function SearchAutocomplete({
   value,
   initialValue = '',
   onSearch,
@@ -74,7 +100,9 @@ export function SearchAutocomplete({
   showFocusToggle = false,
   onFocusModeChange,
   initialFocusMode = false,
-}: SearchAutocompleteProps) {
+  searchInputId = 'graph',
+  onArrowDownExit,
+}, ref) {
   const [inputValue, setInputValue] = useState(value ?? initialValue);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
@@ -82,6 +110,16 @@ export function SearchAutocomplete({
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const suggestionsListId = useId();
+
+  // Normalize searchInputId for safe use in data attributes
+  const normalizedInputId = useMemo(() => normalizeSearchInputId(searchInputId), [searchInputId]);
+
+  // Expose focus method via ref
+  useImperativeHandle(ref, () => ({
+    focus: () => {
+      inputRef.current?.focus();
+    },
+  }), []);
   const activeOptionId = useId();
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastControlledValueRef = useRef<string | undefined>(value);
@@ -221,6 +259,12 @@ export function SearchAutocomplete({
         handleClear();
         inputRef.current?.blur();
       }
+
+      // ArrowDown with no suggestions - transfer focus to next element
+      if (e.key === 'ArrowDown' && onArrowDownExit && (!showSuggestions || !hasSuggestions)) {
+        e.preventDefault();
+        onArrowDownExit();
+      }
     },
     [
       stopKeyboardPropagation,
@@ -230,6 +274,7 @@ export function SearchAutocomplete({
       activeSuggestionIndex,
       handleSuggestionSelect,
       handleClear,
+      onArrowDownExit,
     ]
   );
 
@@ -263,6 +308,7 @@ export function SearchAutocomplete({
           showSuggestions && hasSuggestions ? `${activeOptionId}-${activeSuggestionIndex}` : undefined
         }
         aria-autocomplete="list"
+        {...{ [`data-${normalizedInputId}-search-input`]: true }}
       />
 
       {/* Autocomplete Dropdown */}
@@ -344,4 +390,4 @@ export function SearchAutocomplete({
       )}
     </div>
   );
-}
+});

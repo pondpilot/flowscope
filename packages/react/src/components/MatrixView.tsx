@@ -226,6 +226,7 @@ const MatrixCell = memo(function MatrixCell({
         return <ArrowRight className="h-4 w-4 text-emerald-600 dark:text-emerald-400" strokeWidth={2.5} />;
       case 'read':
         return <ArrowLeft className="h-4 w-4 text-blue-600 dark:text-blue-400" strokeWidth={2.5} />;
+      case 'none':
       default:
         return null;
     }
@@ -1038,6 +1039,7 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
               aria-controls={suggestionsListId}
               aria-activedescendant={showSuggestions && suggestions.length > 0 ? `${activeOptionId}-${activeSuggestionIndex}` : undefined}
               aria-autocomplete="list"
+              data-matrix-search-input
               className="h-7 pl-8 pr-24 text-sm bg-transparent border-0 rounded-full focus:outline-hidden focus:ring-0 w-64 placeholder:text-slate-400"
             />
 

@@ -11,6 +11,15 @@ import type { AnalyzeResult, SchemaTable } from '@pondpilot/flowscope-core';
 import { Settings } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { useGlobalShortcuts } from '@/hooks';
+import type { GlobalShortcut } from '@/hooks';
+import { getShortcutDisplay } from '@/lib/shortcuts';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import {
   Tabs,
   TabsContent,
@@ -23,7 +32,7 @@ import { usePersistedSchemaState } from '@/hooks/usePersistedSchemaState';
 import { isValidTab, useNavigation } from '@/lib/navigation-context';
 import { useProject } from '@/lib/project-store';
 import { ComplexityDots } from './ComplexityDots';
-import { HierarchyView } from './HierarchyView';
+import { HierarchyView, type HierarchyViewRef } from './HierarchyView';
 import { SchemaAwareIssuesPanel } from './SchemaAwareIssuesPanel';
 import { SchemaEditor } from './SchemaEditor';
 
@@ -55,12 +64,25 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
   const { result } = state;
   const internalGraphRef = useRef<HTMLDivElement>(null);
   const graphContainerRef = externalGraphRef || internalGraphRef;
+  const hierarchyViewRef = useRef<HierarchyViewRef>(null);
 
-  // Use ref to avoid stale closures and prevent unnecessary effect re-runs
+  // Helper to focus search inputs with development-mode warnings
+  const focusSearchInput = useCallback((selector: string, fallbackName: string) => {
+    const element = document.querySelector(selector) as HTMLInputElement;
+    if (element) {
+      element.focus();
+    } else if (import.meta.env.DEV) {
+      console.warn(`Focus target "${fallbackName}" not found with selector: ${selector}`);
+    }
+  }, []);
+
+  // Use refs to avoid stale closures and prevent unnecessary shortcut re-memoization
   const actionsRef = useRef<LineageActions>(actions);
+  const stateRef = useRef(state);
   useEffect(() => {
     actionsRef.current = actions;
-  }, [actions]);
+    stateRef.current = state;
+  }, [actions, state]);
   const { currentProject, updateSchemaSQL, activeProjectId } = useProject();
   const [schemaEditorOpen, setSchemaEditorOpen] = useState(false);
   const { activeTab, setActiveTab, navigationTarget, clearNavigationTarget } = useNavigation();
@@ -71,6 +93,16 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
   const matrixState = usePersistedMatrixState(activeProjectId);
   const lineageState = usePersistedLineageState(activeProjectId);
   const schemaState = usePersistedSchemaState(activeProjectId);
+
+  // Refs for shortcut handlers to access latest values without re-memoization
+  const activeTabRef = useRef(activeTab);
+  const matrixStateRef = useRef(matrixState);
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
+  useEffect(() => {
+    matrixStateRef.current = matrixState;
+  }, [matrixState]);
 
   // Handle navigation target for GraphView - select and focus node/statement when navigating to lineage tab
   useEffect(() => {
@@ -120,6 +152,112 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
   const summary = result?.summary;
   const hasIssues = summary ? (summary.issueCount.errors > 0 || summary.issueCount.warnings > 0) : false;
 
+  // Tab switching and schema editor shortcuts
+  // Uses refs for frequently-changing values to avoid re-memoization on every state change
+  const tabShortcuts = useMemo<GlobalShortcut[]>(() => [
+    { key: '1', handler: () => setActiveTab('lineage') },
+    { key: '2', handler: () => setActiveTab('hierarchy') },
+    { key: '3', handler: () => setActiveTab('matrix') },
+    { key: '4', handler: () => setActiveTab('schema') },
+    { key: '5', handler: () => { if (hasIssues) setActiveTab('issues'); } },
+    // Schema editor shortcut
+    {
+      key: 'k',
+      cmdOrCtrl: true,
+      shift: true,
+      handler: () => setSchemaEditorOpen(true),
+    },
+    // Lineage view shortcuts (only active when on lineage tab)
+    {
+      key: 'v',
+      handler: () => {
+        if (activeTabRef.current === 'lineage') {
+          const newMode = stateRef.current.viewMode === 'table' ? 'script' : 'table';
+          actionsRef.current.setViewMode(newMode);
+        }
+      },
+    },
+    {
+      key: 'c',
+      handler: () => {
+        if (activeTabRef.current === 'lineage') {
+          actionsRef.current.toggleColumnEdges();
+        }
+      },
+    },
+    {
+      key: 'e',
+      handler: () => {
+        if (activeTabRef.current === 'lineage') {
+          actionsRef.current.setAllNodesCollapsed(false); // Expand all
+        }
+      },
+    },
+    {
+      key: 'e',
+      shift: true,
+      handler: () => {
+        if (activeTabRef.current === 'lineage') {
+          actionsRef.current.setAllNodesCollapsed(true); // Collapse all
+        }
+      },
+    },
+    {
+      key: 't',
+      handler: () => {
+        if (activeTabRef.current === 'lineage') {
+          actionsRef.current.toggleShowScriptTables();
+        }
+      },
+    },
+    {
+      key: 'l',
+      handler: () => {
+        if (activeTabRef.current === 'lineage') {
+          const newLayout = stateRef.current.layoutAlgorithm === 'dagre' ? 'elk' : 'dagre';
+          actionsRef.current.setLayoutAlgorithm(newLayout);
+        }
+      },
+    },
+    {
+      key: '/',
+      handler: () => {
+        // Focus the search input in the current view
+        if (activeTabRef.current === 'lineage') {
+          focusSearchInput('[data-graph-search-input]', 'lineage search');
+        } else if (activeTabRef.current === 'hierarchy') {
+          // Use ref for hierarchy view (app layer, full control)
+          hierarchyViewRef.current?.focusSearch();
+        } else if (activeTabRef.current === 'matrix') {
+          focusSearchInput('[data-matrix-search-input]', 'matrix search');
+        }
+      },
+    },
+    // Matrix view shortcuts
+    {
+      key: 'h',
+      handler: () => {
+        if (activeTabRef.current === 'matrix') {
+          const ms = matrixStateRef.current;
+          const currentHeatmap = ms.controlledState.heatmapMode ?? false;
+          ms.onStateChange({ heatmapMode: !currentHeatmap });
+        }
+      },
+    },
+    {
+      key: 'x',
+      handler: () => {
+        if (activeTabRef.current === 'matrix') {
+          const ms = matrixStateRef.current;
+          const currentXRay = ms.controlledState.xRayMode ?? false;
+          ms.onStateChange({ xRayMode: !currentXRay });
+        }
+      },
+    },
+  ], [setActiveTab, hasIssues, focusSearchInput]);
+
+  useGlobalShortcuts(tabShortcuts);
+
   // Redirect from issues tab if there are no issues
   // This effect must be before any early returns to satisfy Rules of Hooks
   useEffect(() => {
@@ -146,18 +284,10 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
       <Tabs value={activeTab} onValueChange={handleTabChange} className="flex-1 flex flex-col min-h-0">
         <div className="px-4 py-2 border-b flex items-center justify-between bg-muted/10 h-[44px] shrink-0">
           <TabsList>
-            <TabsTrigger value="lineage">
-              Lineage
-            </TabsTrigger>
-            <TabsTrigger value="hierarchy">
-              Hierarchy
-            </TabsTrigger>
-            <TabsTrigger value="matrix">
-              Matrix
-            </TabsTrigger>
-            <TabsTrigger value="schema">
-              Schema
-            </TabsTrigger>
+            <TabsTrigger value="lineage">Lineage</TabsTrigger>
+            <TabsTrigger value="hierarchy">Hierarchy</TabsTrigger>
+            <TabsTrigger value="matrix">Matrix</TabsTrigger>
+            <TabsTrigger value="schema">Schema</TabsTrigger>
             {hasIssues && (
               <TabsTrigger value="issues" className="text-warning-light dark:text-warning-dark">
                 Issues ({summary.issueCount.errors + summary.issueCount.warnings})
@@ -180,15 +310,27 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
               <span>joins</span>
             </div>
             <ComplexityDots score={summary.complexityScore} />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setSchemaEditorOpen(true)}
-              className="h-7 text-xs"
-            >
-              <Settings className="h-3 w-3 mr-1" />
-              Edit Schema
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSchemaEditorOpen(true)}
+                    className="h-7 text-xs"
+                  >
+                    <Settings className="h-3 w-3 mr-1" />
+                    Edit Schema
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="flex items-center gap-2">
+                    Edit schema
+                    <kbd className="px-1.5 py-0.5 text-xs bg-muted rounded border font-mono">{getShortcutDisplay('edit-schema')}</kbd>
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </div>
 
@@ -212,7 +354,7 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
 
           <TabsContent value="hierarchy" forceMount className="h-full mt-0 p-0 absolute inset-0 data-[state=inactive]:hidden">
             <GraphErrorBoundary>
-              <HierarchyView className="h-full" projectId={activeProjectId} />
+              <HierarchyView ref={hierarchyViewRef} className="h-full" projectId={activeProjectId} />
             </GraphErrorBoundary>
           </TabsContent>
 

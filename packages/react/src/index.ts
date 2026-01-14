@@ -13,7 +13,7 @@ export type { MatrixViewControlledState } from './components/MatrixView';
 export { type EdgeType } from './components/AnimatedEdge';
 export { ErrorBoundary, GraphErrorBoundary } from './components/ErrorBoundary';
 export { SearchAutocomplete } from './components/SearchAutocomplete';
-export type { SearchAutocompleteProps } from './components/SearchAutocomplete';
+export type { SearchAutocompleteProps, SearchAutocompleteRef } from './components/SearchAutocomplete';
 export { TableFilterDropdown } from './components/TableFilterDropdown';
 
 // Store and hooks (new Zustand-based)

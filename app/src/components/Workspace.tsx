@@ -17,6 +17,8 @@ import { ProjectSelector } from './ProjectSelector';
 import { ShareDialog } from './ShareDialog';
 import { ExportDialog } from './ExportDialog';
 import { ThemeToggle } from './ThemeToggle';
+import { KeyboardShortcutsDialog } from './KeyboardShortcutsDialog';
+import { CommandPalette } from './CommandPalette';
 import {
   Tooltip,
   TooltipContent,
@@ -25,8 +27,12 @@ import {
 } from './ui/tooltip';
 import { useProject } from '@/lib/project-store';
 import { NavigationProvider } from '@/lib/navigation-context';
+import { FocusRegistryProvider } from '@/lib/focus-registry';
 import { useGlobalShortcuts } from '@/hooks';
 import type { GlobalShortcut } from '@/hooks';
+import { useThemeStore, type Theme } from '@/lib/theme-store';
+import { useViewStateStore } from '@/lib/view-state-store';
+import { getShortcutDisplay } from '@/lib/shortcuts';
 
 interface WorkspaceProps {
   wasmReady: boolean;
@@ -44,12 +50,26 @@ const EDITOR_PANEL_DEFAULT_SIZE = 33;
 
 export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspaceProps) {
   const { currentProject, selectFile, activeProjectId } = useProject();
-  const { highlightSpan } = useLineageActions();
-  const { result } = useLineageState();
+  const lineageActions = useLineageActions();
+  const { highlightSpan, setViewMode, toggleColumnEdges, setAllNodesCollapsed, toggleShowScriptTables, setLayoutAlgorithm } = lineageActions;
+  const lineageState = useLineageState();
+  const { result, viewMode, layoutAlgorithm } = lineageState;
   const [fileSelectorOpen, setFileSelectorOpen] = useState(false);
   const [projectSelectorOpen, setProjectSelectorOpen] = useState(false);
   const [dialectSelectorOpen, setDialectSelectorOpen] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [shortcutsDialogOpen, setShortcutsDialogOpen] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+
+  // Theme cycling for keyboard shortcut
+  const { theme, setTheme } = useThemeStore();
+  const cycleTheme = useCallback(() => {
+    const themes: Theme[] = ['light', 'dark', 'system'];
+    const currentIndex = themes.indexOf(theme);
+    const nextTheme = themes[(currentIndex + 1) % themes.length];
+    setTheme(nextTheme);
+    toast.success(`Theme: ${nextTheme.charAt(0).toUpperCase() + nextTheme.slice(1)}`);
+  }, [theme, setTheme]);
 
   const editorPanelRef = useRef<ImperativePanelHandle>(null);
   const graphContainerRef = useRef<HTMLDivElement>(null);
@@ -152,9 +172,134 @@ export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspacePr
       cmdOrCtrl: true,
       handler: toggleEditorPanel,
     },
-  ], [toggleEditorPanel]);
+    // Help dialog
+    {
+      key: '?',
+      handler: () => setShortcutsDialogOpen(true),
+    },
+    // Share dialog
+    {
+      key: 's',
+      cmdOrCtrl: true,
+      shift: true,
+      handler: () => {
+        if (currentProject) {
+          setShareDialogOpen(true);
+        }
+      },
+    },
+    // Theme toggle (Cmd+\ to avoid browser conflict with Cmd+Shift+T)
+    {
+      key: '\\',
+      cmdOrCtrl: true,
+      handler: cycleTheme,
+    },
+    // Command palette
+    {
+      key: 'k',
+      cmdOrCtrl: true,
+      handler: () => setCommandPaletteOpen(true),
+    },
+  ], [toggleEditorPanel, currentProject, cycleTheme]);
 
   useGlobalShortcuts(shortcuts);
+
+  // View state store for tab switching via command palette
+  const setActiveTab = useViewStateStore(s => s.setActiveTab);
+  const getActiveTab = useViewStateStore(s => s.getActiveTab);
+  const currentActiveTab = activeProjectId ? getActiveTab(activeProjectId) : 'lineage';
+
+  // Command palette handler
+  const handleExecuteCommand = useCallback((commandId: string) => {
+    switch (commandId) {
+      // Navigation
+      case 'help':
+        setShortcutsDialogOpen(true);
+        break;
+      case 'command-palette':
+        setCommandPaletteOpen(true);
+        break;
+      case 'open-files':
+        setFileSelectorOpen(true);
+        break;
+      case 'open-projects':
+        setProjectSelectorOpen(true);
+        break;
+      case 'open-dialect':
+        setDialectSelectorOpen(true);
+        break;
+      case 'toggle-editor':
+        toggleEditorPanel();
+        break;
+
+      // Tab switching
+      case 'tab-lineage':
+        if (activeProjectId) setActiveTab(activeProjectId, 'lineage');
+        break;
+      case 'tab-hierarchy':
+        if (activeProjectId) setActiveTab(activeProjectId, 'hierarchy');
+        break;
+      case 'tab-matrix':
+        if (activeProjectId) setActiveTab(activeProjectId, 'matrix');
+        break;
+      case 'tab-schema':
+        if (activeProjectId) setActiveTab(activeProjectId, 'schema');
+        break;
+      case 'tab-issues':
+        if (activeProjectId) setActiveTab(activeProjectId, 'issues');
+        break;
+
+      // Actions
+      case 'share':
+        if (currentProject) setShareDialogOpen(true);
+        break;
+
+      // Settings
+      case 'toggle-theme':
+        cycleTheme();
+        break;
+
+      // Lineage view commands - execute via lineage actions
+      case 'toggle-view-mode':
+        setViewMode(viewMode === 'table' ? 'script' : 'table');
+        break;
+      case 'toggle-column-edges':
+        toggleColumnEdges();
+        break;
+      case 'expand-all':
+        setAllNodesCollapsed(false);
+        break;
+      case 'collapse-all':
+        setAllNodesCollapsed(true);
+        break;
+      case 'toggle-script-tables':
+        toggleShowScriptTables();
+        break;
+      case 'cycle-layout':
+        setLayoutAlgorithm(layoutAlgorithm === 'dagre' ? 'elk' : 'dagre');
+        break;
+      case 'focus-search':
+        // Focus search is context-dependent, use keyboard shortcut
+        toast.info('Press / to focus search');
+        break;
+
+      default:
+        console.warn(`Unknown command: ${commandId}`);
+    }
+  }, [
+    toggleEditorPanel,
+    activeProjectId,
+    setActiveTab,
+    currentProject,
+    cycleTheme,
+    setViewMode,
+    viewMode,
+    toggleColumnEdges,
+    setAllNodesCollapsed,
+    toggleShowScriptTables,
+    setLayoutAlgorithm,
+    layoutAlgorithm,
+  ]);
 
   return (
     <div className="flex flex-col h-svh">
@@ -206,7 +351,10 @@ export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspacePr
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p>Share project</p>
+                    <p className="flex items-center gap-2">
+                      Share project
+                      <kbd className="px-1.5 py-0.5 text-xs bg-muted rounded border font-mono">{getShortcutDisplay('share')}</kbd>
+                    </p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -248,6 +396,20 @@ export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspacePr
         />
       )}
 
+      {/* Keyboard Shortcuts Help Dialog */}
+      <KeyboardShortcutsDialog
+        open={shortcutsDialogOpen}
+        onOpenChange={setShortcutsDialogOpen}
+        activeTab={currentActiveTab}
+      />
+
+      {/* Command Palette */}
+      <CommandPalette
+        open={commandPaletteOpen}
+        onOpenChange={setCommandPaletteOpen}
+        onExecuteCommand={handleExecuteCommand}
+      />
+
       {/* Global Error Banner */}
       {error && (
         <div
@@ -272,6 +434,7 @@ export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspacePr
 
       {/* Main Split View - 2 columns */}
       <NavigationProvider projectId={activeProjectId} onNavigateToEditor={handleNavigateToEditor}>
+        <FocusRegistryProvider>
         <div className="flex-1 overflow-hidden">
           <ResizablePanelGroup direction="horizontal">
             {/* Left: Editor */}
@@ -306,6 +469,7 @@ export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspacePr
             </ResizablePanel>
           </ResizablePanelGroup>
         </div>
+        </FocusRegistryProvider>
       </NavigationProvider>
     </div>
   );

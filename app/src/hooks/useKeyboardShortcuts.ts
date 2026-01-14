@@ -43,14 +43,75 @@ export function useKeyboardShortcuts(shortcuts: KeyboardShortcutHandler[]) {
  * Hook for global keyboard shortcuts with simplified API.
  * Handles cross-platform Cmd/Ctrl and input field detection automatically.
  */
+/**
+ * Check if the event target is an editable element where bare key shortcuts shouldn't fire.
+ */
+function isEditableElement(target: HTMLElement): boolean {
+  const tagName = target.tagName;
+  if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') {
+    return true;
+  }
+  // Check for contentEditable
+  if (target.isContentEditable) {
+    return true;
+  }
+  // Check for role="textbox" (custom editable components)
+  if (target.getAttribute('role') === 'textbox') {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Generate a unique key for a shortcut to detect collisions.
+ */
+function getShortcutKey(shortcut: GlobalShortcut): string {
+  const parts: string[] = [];
+  if (shortcut.cmdOrCtrl) parts.push('cmd');
+  if (shortcut.shift) parts.push('shift');
+  if (shortcut.alt) parts.push('alt');
+  parts.push(shortcut.key.toLowerCase());
+  return parts.join('+');
+}
+
+/**
+ * Check for duplicate shortcuts and warn in development mode.
+ */
+function detectCollisions(shortcuts: GlobalShortcut[]): void {
+  if (!import.meta.env.DEV) return;
+
+  const seen = new Map<string, number>();
+  shortcuts.forEach((shortcut, index) => {
+    const key = getShortcutKey(shortcut);
+    const existingIndex = seen.get(key);
+    if (existingIndex !== undefined) {
+      console.warn(
+        `Shortcut collision detected: "${key}" is registered at indices ${existingIndex} and ${index}. ` +
+        'The first handler will always be used.'
+      );
+    } else {
+      seen.set(key, index);
+    }
+  });
+}
+
 export function useGlobalShortcuts(shortcuts: GlobalShortcut[]) {
+  // Detect shortcut collisions in development mode
+  useEffect(() => {
+    detectCollisions(shortcuts);
+  }, [shortcuts]);
+
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     const target = e.target as HTMLElement;
-    const isInInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
+    const isInEditable = isEditableElement(target);
 
     for (const shortcut of shortcuts) {
-      // Skip if in input field and not explicitly allowed
-      if (isInInput && !shortcut.allowInInput) {
+      // Modifier shortcuts (Cmd/Ctrl+key) are safe in inputs by default
+      // Bare key shortcuts (no modifiers) are blocked in inputs unless explicitly allowed
+      const hasModifier = shortcut.cmdOrCtrl || shortcut.alt;
+      const blockedInEditable = isInEditable && !hasModifier && !shortcut.allowInInput;
+
+      if (blockedInEditable) {
         continue;
       }
 

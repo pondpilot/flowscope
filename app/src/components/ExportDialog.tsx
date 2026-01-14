@@ -36,6 +36,7 @@ import {
 } from '@pondpilot/flowscope-react';
 import * as XLSX from 'xlsx';
 import { useIsDarkMode } from '@pondpilot/flowscope-react';
+import { getShortcutDisplay } from '@/lib/shortcuts';
 
 // ============================================================================
 // Types
@@ -423,13 +424,17 @@ function generateMermaidTableView(result: AnalyzeResult): string {
       if (!tableIds.has(key)) {
         const id = sanitizeMermaidId(key);
         tableIds.set(key, id);
+        const escapedLabel = escapeMermaidLabel(node.label);
         let shape: string;
-        if (node.type === 'cte') {
-          shape = `(["${escapeMermaidLabel(node.label)}"])`;
-        } else if (node.type === 'view') {
-          shape = `[/"${escapeMermaidLabel(node.label)}"/]`;
-        } else {
-          shape = `["${escapeMermaidLabel(node.label)}"]`;
+        switch (node.type) {
+          case 'cte':
+            shape = `(["${escapedLabel}"])`;
+            break;
+          case 'view':
+            shape = `[/"${escapedLabel}"/]`;
+            break;
+          default:
+            shape = `["${escapedLabel}"]`;
         }
         lines.push(`    ${id}${shape}`);
       }
@@ -867,7 +872,10 @@ export function ExportDialog({ result, projectName, graphRef }: ExportDialogProp
             </DropdownMenuTrigger>
           </TooltipTrigger>
           <TooltipContent>
-            <p>Export lineage data</p>
+            <p className="flex items-center gap-2">
+              Export lineage data
+              <kbd className="px-1.5 py-0.5 text-xs bg-muted rounded border font-mono">{getShortcutDisplay('export')}</kbd>
+            </p>
           </TooltipContent>
         </Tooltip>
         <DropdownMenuContent align="end" className="w-52">

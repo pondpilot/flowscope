@@ -1,4 +1,4 @@
-import { useMemo, useCallback, useRef, useEffect, useState, createContext, useContext } from 'react';
+import { useMemo, useCallback, useRef, useEffect, useState, createContext, useContext, forwardRef, useImperativeHandle } from 'react';
 import {
   ChevronRight,
   ChevronDown,
@@ -14,7 +14,7 @@ import {
   Grid3X3,
   ExternalLink,
 } from 'lucide-react';
-import { useLineage, SearchAutocomplete, type SearchSuggestion } from '@pondpilot/flowscope-react';
+import { useLineage, SearchAutocomplete, type SearchSuggestion, type SearchAutocompleteRef } from '@pondpilot/flowscope-react';
 import { cn } from '@/lib/utils';
 import {
   Tooltip,
@@ -75,7 +75,13 @@ interface HierarchyViewProps {
   projectId: string | null;
 }
 
-export function HierarchyView({ className, projectId }: HierarchyViewProps) {
+/** Ref handle for HierarchyView - exposes focus methods */
+export interface HierarchyViewRef {
+  /** Focus the search input */
+  focusSearch: () => void;
+}
+
+export const HierarchyView = forwardRef<HierarchyViewRef, HierarchyViewProps>(function HierarchyView({ className, projectId }, ref) {
   const { state, actions } = useLineage();
   const { result } = state;
   const { navigateTo, navigateToEditor } = useNavigation();
@@ -114,6 +120,22 @@ export function HierarchyView({ className, projectId }: HierarchyViewProps) {
   const isResizingRef = useRef(false);
 
   const treeContainerRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<SearchAutocompleteRef>(null);
+
+  // Focus tree when ArrowDown pressed in search with no suggestions
+  const handleSearchArrowDownExit = useCallback(() => {
+    treeContainerRef.current?.focus();
+  }, []);
+
+  /** Focus the search input - exposed for keyboard shortcuts */
+  const focusSearch = useCallback(() => {
+    searchRef.current?.focus();
+  }, []);
+
+  // Expose focus methods via ref
+  useImperativeHandle(ref, () => ({
+    focusSearch,
+  }), [focusSearch]);
 
   // Navigation handlers
   const handleNavigateToLineage = useCallback((nodeId: string) => {
@@ -572,11 +594,14 @@ export function HierarchyView({ className, projectId }: HierarchyViewProps) {
         {/* Filter Input with Autocomplete */}
         <div className="p-2 border-b">
           <SearchAutocomplete
+            ref={searchRef}
             initialValue={filter}
             onSearch={setFilter}
             searchableTypes={['table', 'view', 'cte', 'column']}
             placeholder="Filter tables and columns..."
             onSuggestionSelect={handleSuggestionSelect}
+            searchInputId="hierarchy"
+            onArrowDownExit={handleSearchArrowDownExit}
             className="w-full"
           />
         </div>
@@ -717,16 +742,17 @@ export function HierarchyView({ className, projectId }: HierarchyViewProps) {
       </TooltipProvider>
     </HierarchyActionsContext.Provider>
   );
-}
+});
 
 function NodeIcon({ type, className }: { type: string; className?: string }) {
-  if (type === 'view') {
-    return <LayoutList className={cn(className, 'text-blue-500')} />;
+  switch (type) {
+    case 'view':
+      return <LayoutList className={cn(className, 'text-blue-500')} />;
+    case 'cte':
+      return <FileCode className={cn(className, 'text-amber-500')} />;
+    default:
+      return <TableIcon className={cn(className, 'text-muted-foreground')} />;
   }
-  if (type === 'cte') {
-    return <FileCode className={cn(className, 'text-amber-500')} />;
-  }
-  return <TableIcon className={cn(className, 'text-muted-foreground')} />;
 }
 
 interface NodeActionButtonsProps {

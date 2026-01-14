@@ -74,6 +74,10 @@ export interface LineageState {
   selectedNodeId: string | null;
   /** Set of IDs for nodes that are currently collapsed */
   collapsedNodeIds: Set<string>;
+  /** Set of IDs for tables with all columns shown */
+  expandedTableIds: Set<string>;
+  /** Whether tables are collapsed by default */
+  defaultCollapsed: boolean;
   /** Index of the currently selected SQL statement */
   selectedStatementIndex: number;
   /** The currently highlighted span in the SQL editor, or null if none */
@@ -84,10 +88,18 @@ export interface LineageState {
   viewMode: LineageViewMode;
   /** Current sub-mode for the matrix view */
   matrixSubMode: MatrixSubMode;
+  /** Current layout algorithm */
+  layoutAlgorithm: LayoutAlgorithm;
+  /** Whether to show column-level edges */
+  showColumnEdges: boolean;
+  /** Whether to hide CTEs and show bypass edges */
+  hideCTEs: boolean;
   /** Whether to show table details in script nodes */
   showScriptTables: boolean;
   /** Request to navigate to a specific file and location */
   navigationRequest: NavigationRequest | null;
+  /** Table filter configuration */
+  tableFilter: TableFilter;
 }
 
 /**
@@ -103,6 +115,10 @@ export interface LineageActions {
   selectNode: (nodeId: string | null) => void;
   /** Toggle the collapsed state of a node */
   toggleNodeCollapse: (nodeId: string) => void;
+  /** Toggle the expansion state of a table (show/hide all columns) */
+  toggleTableExpansion: (tableId: string) => void;
+  /** Set all nodes to collapsed or expanded state */
+  setAllNodesCollapsed: (collapsed: boolean) => void;
   /** Select a statement by index */
   selectStatement: (index: number) => void;
   /** Highlight a span in the SQL editor, or null to clear */
@@ -113,10 +129,24 @@ export interface LineageActions {
   setViewMode: (mode: LineageViewMode) => void;
   /** Update the sub-mode for the matrix view */
   setMatrixSubMode: (mode: MatrixSubMode) => void;
+  /** Update the layout algorithm */
+  setLayoutAlgorithm: (algorithm: LayoutAlgorithm) => void;
+  /** Toggle column-level edge visibility */
+  toggleColumnEdges: () => void;
+  /** Toggle hiding of CTEs (showing bypass edges) */
+  toggleHideCTEs: () => void;
   /** Toggle showing tables in script nodes */
   toggleShowScriptTables: () => void;
   /** Request navigation to a file/location */
   requestNavigation: (request: NavigationRequest | null) => void;
+  /** Set the table filter */
+  setTableFilter: (filter: TableFilter) => void;
+  /** Toggle selection of a table in the filter */
+  toggleTableFilterSelection: (tableLabel: string) => void;
+  /** Set the direction of the table filter */
+  setTableFilterDirection: (direction: TableFilterDirection) => void;
+  /** Clear the table filter */
+  clearTableFilter: () => void;
 }
 
 /**
