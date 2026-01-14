@@ -1,5 +1,5 @@
 import type { Node as FlowNode, Edge as FlowEdge } from '@xyflow/react';
-import type { Node, Edge, StatementLineage, ResolvedSchemaMetadata } from '@pondpilot/flowscope-core';
+import type { Node, Edge, StatementLineage, ResolvedSchemaMetadata, GlobalLineage, GlobalNode } from '@pondpilot/flowscope-core';
 import { isTableLikeType } from '@pondpilot/flowscope-core';
 import type {
   TableNodeData,
@@ -205,7 +205,8 @@ function isNodeHighlighted(
 function buildTableNodeData(
   node: Node,
   columns: ColumnNodeInfo[],
-  options: TableNodeBuilderOptions
+  options: TableNodeBuilderOptions,
+  globalNodeMap?: Map<string, GlobalNode>
 ): TableNodeData {
   let nodeType: 'table' | 'view' | 'cte' | 'virtualOutput' = 'table';
   if (node.type === 'cte') {
@@ -213,6 +214,16 @@ function buildTableNodeData(
   } else if (node.type === 'view') {
     nodeType = 'view';
   }
+
+  // Look up canonical info from GlobalNode (more reliable than parsing qualifiedName)
+  const globalNode = globalNodeMap?.get(node.id);
+  const canonical = globalNode?.canonicalName;
+
+  // Construct qualified name from canonical components
+  const qualifiedName = canonical
+    ? [canonical.catalog, canonical.schema, canonical.name].filter(Boolean).join('.')
+    : node.label;
+
   return {
     label: node.label,
     nodeType,
@@ -224,6 +235,9 @@ function buildTableNodeData(
     isRecursive: options.isRecursive,
     isBaseTable: options.isBaseTable,
     filters: node.filters,
+    qualifiedName,
+    schema: canonical?.schema,
+    database: canonical?.catalog,
   };
 }
 
@@ -255,8 +269,17 @@ export function buildFlowNodes(
   collapsedNodeIds: Set<string>,
   expandedTableIds: Set<string> = new Set(),
   resolvedSchema: ResolvedSchemaMetadata | null | undefined = null,
-  defaultCollapsed: boolean = false
+  defaultCollapsed: boolean = false,
+  globalLineage?: GlobalLineage
 ): FlowNode[] {
+  // Create lookup map for GlobalNode canonical info
+  const globalNodeMap = new Map<string, GlobalNode>();
+  if (globalLineage?.nodes) {
+    for (const gn of globalLineage.nodes) {
+      globalNodeMap.set(gn.id, gn);
+    }
+  }
+
   const tableNodes = statement.nodes.filter((n) => isTableLikeType(n.type));
   const columnNodes = statement.nodes.filter((n) => n.type === 'column');
   const isSelect = isSelectStatement(statement);
@@ -336,7 +359,7 @@ export function buildFlowNodes(
         hiddenColumnCount,
         isRecursive: recursiveNodeIds.has(node.id),
         isBaseTable: baseTableIds.has(node.id),
-      }),
+      }, globalNodeMap),
     });
   }
 

@@ -78,6 +78,12 @@ export {
   sanitizeIdentifier,
 } from './utils/sanitize';
 
+// Namespace/schema utilities
+export {
+  NAMESPACE_COLORS,
+  getNamespaceColor,
+} from './constants';
+
 // Export utilities
 export {
   downloadXlsx,

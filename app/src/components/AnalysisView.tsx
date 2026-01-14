@@ -30,9 +30,11 @@ import { usePersistedLineageState } from '@/hooks/usePersistedLineageState';
 import { usePersistedMatrixState } from '@/hooks/usePersistedMatrixState';
 import { usePersistedSchemaState } from '@/hooks/usePersistedSchemaState';
 import { isValidTab, useNavigation } from '@/lib/navigation-context';
+import { useViewStateStore, getNamespaceFilterStateWithDefaults } from '@/lib/view-state-store';
 import { useProject } from '@/lib/project-store';
 import { ComplexityDots } from './ComplexityDots';
 import { HierarchyView, type HierarchyViewRef } from './HierarchyView';
+import { NamespaceFilterBar } from './NamespaceFilterBar';
 import { SchemaAwareIssuesPanel } from './SchemaAwareIssuesPanel';
 import { SchemaEditor } from './SchemaEditor';
 
@@ -134,6 +136,41 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
   const schema = useMemo(() => {
     if (!result) return [];
     return extractSchemaFromResult(result);
+  }, [result]);
+
+  // Read namespace filter state from view state store
+  const storedNamespaceFilter = useViewStateStore(
+    (state) => activeProjectId ? state.viewStates[activeProjectId]?.namespaceFilter : undefined
+  );
+  const namespaceFilter = useMemo(
+    () => getNamespaceFilterStateWithDefaults(storedNamespaceFilter),
+    [storedNamespaceFilter]
+  );
+
+  // Extract unique schemas and databases from globalLineage nodes
+  const { availableSchemas, availableDatabases } = useMemo(() => {
+    if (!result?.globalLineage?.nodes) {
+      return { availableSchemas: [], availableDatabases: [] };
+    }
+
+    const schemas = new Set<string>();
+    const databases = new Set<string>();
+
+    for (const node of result.globalLineage.nodes) {
+      // Skip column nodes - their canonicalName structure differs:
+      // columns have qualified_name like "schema.table.column" which
+      // parse_canonical_name incorrectly interprets as "catalog.schema.table"
+      if (node.type === 'column') continue;
+
+      const { schema, catalog } = node.canonicalName || {};
+      if (schema) schemas.add(schema);
+      if (catalog) databases.add(catalog);
+    }
+
+    return {
+      availableSchemas: Array.from(schemas).sort(),
+      availableDatabases: Array.from(databases).sort(),
+    };
   }, [result]);
 
   const handleSaveSchema = useCallback((schemaSQL: string) => {
@@ -334,6 +371,15 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
           </div>
         </div>
 
+        {/* Namespace filter bar - only shown when schemas/databases are available */}
+        {activeProjectId && (availableSchemas.length > 0 || availableDatabases.length > 0) && (
+          <NamespaceFilterBar
+            projectId={activeProjectId}
+            availableSchemas={availableSchemas}
+            availableDatabases={availableDatabases}
+          />
+        )}
+
         <div className="flex-1 overflow-hidden relative">
           {/* forceMount keeps components mounted when switching tabs to preserve state */}
           <TabsContent value="lineage" forceMount className="h-full mt-0 p-0 absolute inset-0 data-[state=inactive]:hidden">
@@ -348,6 +394,7 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
                 initialViewport={lineageState.initialViewport}
                 onViewportChange={lineageState.onViewportChange}
                 fitViewTrigger={fitViewTrigger}
+                namespaceFilter={namespaceFilter}
               />
             </GraphErrorBoundary>
           </TabsContent>

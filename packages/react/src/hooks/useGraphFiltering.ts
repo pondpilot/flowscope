@@ -1,11 +1,13 @@
 import { useMemo } from 'react';
 import type { Node as FlowNode, Edge as FlowEdge } from '@xyflow/react';
-import type { TableFilter } from '../types';
+import type { TableFilter, NamespaceFilter } from '../types';
 import {
   findConnectedElements,
   findSearchMatchIds,
   findConnectedElementsMultiple,
   applyFilters,
+  pruneDanglingEdges,
+  filterByNamespace,
 } from '../utils/graphTraversal';
 
 const LARGE_GRAPH_THRESHOLD = 1000;
@@ -25,6 +27,8 @@ export interface UseGraphFilteringOptions {
   focusMode: boolean;
   /** Table filter configuration */
   tableFilter: TableFilter;
+  /** Namespace filter configuration - filter by schema/database */
+  namespaceFilter?: NamespaceFilter;
 }
 
 export interface UseGraphFilteringResult {
@@ -42,7 +46,7 @@ export interface UseGraphFilteringResult {
  * @returns The filtered graph and highlight IDs
  */
 export function useGraphFiltering(options: UseGraphFilteringOptions): UseGraphFilteringResult {
-  const { graph, selectedNodeId, searchTerm, viewMode, showColumnEdges = false, focusMode, tableFilter } = options;
+  const { graph, selectedNodeId, searchTerm, viewMode, showColumnEdges = false, focusMode, tableFilter, namespaceFilter } = options;
 
   return useMemo(() => {
     // Warn about potentially expensive operations on large graphs
@@ -53,17 +57,27 @@ export function useGraphFiltering(options: UseGraphFilteringOptions): UseGraphFi
       );
     }
 
+    const sanitizedGraph = pruneDanglingEdges(graph);
+
+    // Apply namespace filter first (schema/database filtering)
+    const namespaceFilteredGraph = filterByNamespace(sanitizedGraph, namespaceFilter);
+
     // Collect highlight IDs from selection and search matches
     let highlightIds = new Set<string>();
 
     if (selectedNodeId) {
-      highlightIds = findConnectedElements(selectedNodeId, graph.edges);
+      highlightIds = findConnectedElements(selectedNodeId, namespaceFilteredGraph.edges);
     }
 
     // Add search-based highlights
     if (searchTerm) {
-      const searchMatchIds = findSearchMatchIds(searchTerm, graph.nodes, viewMode, showColumnEdges);
-      const searchConnected = findConnectedElementsMultiple(searchMatchIds, graph.edges);
+      const searchMatchIds = findSearchMatchIds(
+        searchTerm,
+        namespaceFilteredGraph.nodes,
+        viewMode,
+        showColumnEdges
+      );
+      const searchConnected = findConnectedElementsMultiple(searchMatchIds, namespaceFilteredGraph.edges);
       for (const id of searchConnected) {
         highlightIds.add(id);
       }
@@ -72,7 +86,7 @@ export function useGraphFiltering(options: UseGraphFilteringOptions): UseGraphFi
     // Apply focus mode and table filter with error handling
     try {
       const filterResult = applyFilters({
-        graph,
+        graph: namespaceFilteredGraph,
         highlightIds,
         focusMode,
         effectiveSearchTerm: searchTerm,
@@ -90,5 +104,5 @@ export function useGraphFiltering(options: UseGraphFilteringOptions): UseGraphFi
         highlightIds: new Set<string>(),
       };
     }
-  }, [graph, selectedNodeId, searchTerm, viewMode, showColumnEdges, focusMode, tableFilter]);
+  }, [graph, selectedNodeId, searchTerm, viewMode, showColumnEdges, focusMode, tableFilter, namespaceFilter]);
 }

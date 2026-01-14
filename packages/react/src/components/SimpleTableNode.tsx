@@ -3,7 +3,8 @@ import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { Table2 } from 'lucide-react';
 import type { TableNodeData } from '../types';
 import { sanitizeIdentifier } from '../utils/sanitize';
-import { useColors } from '../hooks/useColors';
+import { useColors, useIsDarkMode } from '../hooks/useColors';
+import { getNamespaceColor } from '../constants';
 
 /**
  * A simplified Table Node for the Script/Hybrid view.
@@ -11,10 +12,14 @@ import { useColors } from '../hooks/useColors';
  */
 function SimpleTableNodeComponent({ data, selected }: NodeProps): JSX.Element {
   const colors = useColors();
+  const isDark = useIsDarkMode();
   const nodeData = data as TableNodeData;
-  const { label, nodeType, isSelected, isHighlighted } = nodeData;
+  const { label, nodeType, isSelected, isHighlighted, schema, database, qualifiedName } = nodeData;
 
   const active = selected || isSelected;
+
+  // Get schema color for left border band
+  const schemaColor = getNamespaceColor(schema, isDark);
 
   // Determine colors based on node type
   type NodePalette = {
@@ -43,6 +48,8 @@ function SimpleTableNodeComponent({ data, selected }: NodeProps): JSX.Element {
       `}
       style={{
         borderColor: active ? colors.accent : palette.border,
+        borderLeftWidth: schemaColor ? 3 : undefined,
+        borderLeftColor: schemaColor,
         backgroundColor: isHighlighted ? colors.interactive.related : palette.bg,
         boxShadow: active ? `0 0 0 2px ${colors.interactive.selectionRing}` : undefined,
       }}
@@ -62,9 +69,23 @@ function SimpleTableNodeComponent({ data, selected }: NodeProps): JSX.Element {
       </div>
 
       <div className="flex-1 min-w-0">
-        <div className="truncate text-xs font-medium" style={{ color: palette.text }}>
+        <div
+          className="truncate text-xs font-medium"
+          style={{ color: palette.text }}
+          title={qualifiedName || label}
+        >
           {sanitizeIdentifier(label)}
         </div>
+        {/* Show namespace when available */}
+        {(database || schema) && (
+          <div
+            className="truncate text-[10px] uppercase"
+            style={{ color: palette.textSecondary, opacity: 0.7 }}
+            title={qualifiedName || undefined}
+          >
+            {database && schema ? `${database}.${schema}` : schema}
+          </div>
+        )}
       </div>
 
       {/* Right Handle (Source) */}

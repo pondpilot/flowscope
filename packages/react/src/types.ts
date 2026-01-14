@@ -169,6 +169,20 @@ export interface ViewportState {
 }
 
 /**
+ * Namespace filter for filtering nodes by database/schema.
+ *
+ * Note: This interface mirrors NamespaceFilterState in app/src/lib/view-state-store.ts.
+ * They are intentionally separate because this is a library type while the app has its
+ * own persistence layer. If you change one, update the other.
+ */
+export interface NamespaceFilter {
+  /** Selected schemas to filter by (empty = show all) */
+  schemas: string[];
+  /** Selected databases/catalogs to filter by (empty = show all) */
+  databases: string[];
+}
+
+/**
  * Props for the GraphView component.
  */
 export interface GraphViewProps {
@@ -192,6 +206,8 @@ export interface GraphViewProps {
   onViewportChange?: (viewport: ViewportState) => void;
   /** Trigger to fit view to all nodes (increment to trigger) */
   fitViewTrigger?: number;
+  /** Namespace filter - when provided, only shows nodes matching the filter */
+  namespaceFilter?: NamespaceFilter;
 }
 
 /**
@@ -290,6 +306,12 @@ export interface TableNodeData extends Record<string, unknown> {
   hiddenColumnCount?: number;
   /** Filter predicates (WHERE/HAVING clauses) affecting this table */
   filters?: FilterPredicate[];
+  /** Fully qualified name (e.g., "catalog.schema.table") */
+  qualifiedName?: string;
+  /** Schema name extracted from qualified name */
+  schema?: string;
+  /** Database/catalog name extracted from qualified name */
+  database?: string;
 }
 
 /**

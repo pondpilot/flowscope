@@ -1,6 +1,24 @@
 import { describe, it, expect } from 'vitest';
-import { findConnectedElements } from '../src/utils/graphTraversal';
-import type { Edge as FlowEdge } from '@xyflow/react';
+import { findConnectedElements, pruneDanglingEdges, filterByNamespace } from '../src/utils/graphTraversal';
+import type { Edge as FlowEdge, Node as FlowNode } from '@xyflow/react';
+import type { TableNodeData, NamespaceFilter } from '../src/types';
+
+const makeTableNode = (
+  id: string,
+  columns: Array<{ id: string; name: string }> = []
+): FlowNode => ({
+  id,
+  type: 'tableNode',
+  position: { x: 0, y: 0 },
+  data: {
+    label: id,
+    nodeType: 'table',
+    columns,
+    isSelected: false,
+    isCollapsed: false,
+    isHighlighted: false,
+  } satisfies TableNodeData,
+});
 
 describe('findConnectedElements', () => {
   describe('linear graph traversal', () => {
@@ -344,6 +362,311 @@ describe('findConnectedElements', () => {
       expect(result).not.toContain('table1.col_b');
       expect(result).not.toContain('table2.col_y');
       expect(result).not.toContain('edge2');
+    });
+  });
+});
+
+describe('pruneDanglingEdges', () => {
+  it('drops edges that reference missing nodes', () => {
+    const nodes: FlowNode[] = [makeTableNode('table1')];
+    const edges: FlowEdge[] = [
+      {
+        id: 'edge1',
+        source: 'table1',
+        target: 'table2',
+      },
+    ];
+
+    const result = pruneDanglingEdges({ nodes, edges });
+
+    expect(result.edges).toHaveLength(0);
+  });
+
+  it('drops edges that reference missing handles', () => {
+    const nodes: FlowNode[] = [
+      makeTableNode('table1', [{ id: 'col1', name: 'col1' }]),
+      makeTableNode('table2', [{ id: 'col2', name: 'col2' }]),
+    ];
+    const edges: FlowEdge[] = [
+      {
+        id: 'edge1',
+        source: 'table1',
+        target: 'table2',
+        sourceHandle: 'col1',
+        targetHandle: 'col2',
+      },
+      {
+        id: 'edge2',
+        source: 'table1',
+        target: 'table2',
+        sourceHandle: 'col1',
+        targetHandle: 'missing',
+      },
+      {
+        id: 'edge3',
+        source: 'table1',
+        target: 'table2',
+        sourceHandle: 'missing',
+        targetHandle: 'col2',
+      },
+    ];
+
+    const result = pruneDanglingEdges({ nodes, edges });
+
+    expect(result.edges).toHaveLength(1);
+    expect(result.edges[0].id).toBe('edge1');
+  });
+
+  it('keeps edges without handles when nodes exist', () => {
+    const nodes: FlowNode[] = [makeTableNode('table1'), makeTableNode('table2')];
+    const edges: FlowEdge[] = [
+      {
+        id: 'edge1',
+        source: 'table1',
+        target: 'table2',
+      },
+    ];
+
+    const result = pruneDanglingEdges({ nodes, edges });
+
+    expect(result.edges).toEqual(edges);
+  });
+});
+
+const makeTableNodeWithNamespace = (
+  id: string,
+  options: { schema?: string; database?: string; columns?: Array<{ id: string; name: string }> } = {}
+): FlowNode => ({
+  id,
+  type: 'tableNode',
+  position: { x: 0, y: 0 },
+  data: {
+    label: id,
+    nodeType: 'table',
+    columns: options.columns || [],
+    isSelected: false,
+    isCollapsed: false,
+    isHighlighted: false,
+    schema: options.schema,
+    database: options.database,
+  } satisfies TableNodeData,
+});
+
+const makeScriptNode = (id: string): FlowNode => ({
+  id,
+  type: 'scriptNode',
+  position: { x: 0, y: 0 },
+  data: {
+    label: id,
+    sourceName: id,
+    tablesRead: [],
+    tablesWritten: [],
+    statementCount: 1,
+    isSelected: false,
+    isHighlighted: false,
+  },
+});
+
+describe('filterByNamespace', () => {
+  describe('no filter (show all)', () => {
+    it('returns graph unchanged when namespaceFilter is undefined', () => {
+      const nodes: FlowNode[] = [
+        makeTableNodeWithNamespace('table1', { schema: 'public' }),
+        makeTableNodeWithNamespace('table2', { schema: 'private' }),
+      ];
+      const edges: FlowEdge[] = [{ id: 'edge1', source: 'table1', target: 'table2' }];
+
+      const result = filterByNamespace({ nodes, edges }, undefined);
+
+      expect(result.nodes).toHaveLength(2);
+      expect(result.edges).toHaveLength(1);
+    });
+
+    it('returns graph unchanged when both filter arrays are empty', () => {
+      const nodes: FlowNode[] = [
+        makeTableNodeWithNamespace('table1', { schema: 'public' }),
+        makeTableNodeWithNamespace('table2', { schema: 'private' }),
+      ];
+      const edges: FlowEdge[] = [{ id: 'edge1', source: 'table1', target: 'table2' }];
+      const filter: NamespaceFilter = { schemas: [], databases: [] };
+
+      const result = filterByNamespace({ nodes, edges }, filter);
+
+      expect(result.nodes).toHaveLength(2);
+      expect(result.edges).toHaveLength(1);
+    });
+  });
+
+  describe('schema filtering', () => {
+    it('filters nodes by schema', () => {
+      const nodes: FlowNode[] = [
+        makeTableNodeWithNamespace('table1', { schema: 'public' }),
+        makeTableNodeWithNamespace('table2', { schema: 'private' }),
+        makeTableNodeWithNamespace('table3', { schema: 'public' }),
+      ];
+      const edges: FlowEdge[] = [];
+      const filter: NamespaceFilter = { schemas: ['public'], databases: [] };
+
+      const result = filterByNamespace({ nodes, edges }, filter);
+
+      expect(result.nodes).toHaveLength(2);
+      expect(result.nodes.map((n) => n.id)).toEqual(['table1', 'table3']);
+    });
+
+    it('allows multiple schemas', () => {
+      const nodes: FlowNode[] = [
+        makeTableNodeWithNamespace('table1', { schema: 'public' }),
+        makeTableNodeWithNamespace('table2', { schema: 'private' }),
+        makeTableNodeWithNamespace('table3', { schema: 'analytics' }),
+      ];
+      const edges: FlowEdge[] = [];
+      const filter: NamespaceFilter = { schemas: ['public', 'private'], databases: [] };
+
+      const result = filterByNamespace({ nodes, edges }, filter);
+
+      expect(result.nodes).toHaveLength(2);
+      expect(result.nodes.map((n) => n.id)).toEqual(['table1', 'table2']);
+    });
+  });
+
+  describe('database filtering', () => {
+    it('filters nodes by database', () => {
+      const nodes: FlowNode[] = [
+        makeTableNodeWithNamespace('table1', { database: 'prod' }),
+        makeTableNodeWithNamespace('table2', { database: 'staging' }),
+        makeTableNodeWithNamespace('table3', { database: 'prod' }),
+      ];
+      const edges: FlowEdge[] = [];
+      const filter: NamespaceFilter = { schemas: [], databases: ['prod'] };
+
+      const result = filterByNamespace({ nodes, edges }, filter);
+
+      expect(result.nodes).toHaveLength(2);
+      expect(result.nodes.map((n) => n.id)).toEqual(['table1', 'table3']);
+    });
+  });
+
+  describe('combined schema and database filtering', () => {
+    it('filters by both schema AND database', () => {
+      const nodes: FlowNode[] = [
+        makeTableNodeWithNamespace('table1', { schema: 'public', database: 'prod' }),
+        makeTableNodeWithNamespace('table2', { schema: 'public', database: 'staging' }),
+        makeTableNodeWithNamespace('table3', { schema: 'private', database: 'prod' }),
+      ];
+      const edges: FlowEdge[] = [];
+      const filter: NamespaceFilter = { schemas: ['public'], databases: ['prod'] };
+
+      const result = filterByNamespace({ nodes, edges }, filter);
+
+      expect(result.nodes).toHaveLength(1);
+      expect(result.nodes[0].id).toBe('table1');
+    });
+  });
+
+  describe('unscoped nodes behavior', () => {
+    it('keeps nodes without schema when schema filter is active', () => {
+      const nodes: FlowNode[] = [
+        makeTableNodeWithNamespace('table1', { schema: 'public' }),
+        makeTableNodeWithNamespace('table2', { schema: undefined }), // No schema
+        makeTableNodeWithNamespace('table3', { schema: 'private' }),
+      ];
+      const edges: FlowEdge[] = [];
+      const filter: NamespaceFilter = { schemas: ['public'], databases: [] };
+
+      const result = filterByNamespace({ nodes, edges }, filter);
+
+      expect(result.nodes).toHaveLength(2);
+      expect(result.nodes.map((n) => n.id)).toEqual(['table1', 'table2']);
+    });
+
+    it('keeps nodes without database when database filter is active', () => {
+      const nodes: FlowNode[] = [
+        makeTableNodeWithNamespace('table1', { database: 'prod' }),
+        makeTableNodeWithNamespace('table2', { database: undefined }), // No database
+        makeTableNodeWithNamespace('table3', { database: 'staging' }),
+      ];
+      const edges: FlowEdge[] = [];
+      const filter: NamespaceFilter = { schemas: [], databases: ['prod'] };
+
+      const result = filterByNamespace({ nodes, edges }, filter);
+
+      expect(result.nodes).toHaveLength(2);
+      expect(result.nodes.map((n) => n.id)).toEqual(['table1', 'table2']);
+    });
+  });
+
+  describe('non-table nodes', () => {
+    it('always preserves non-table nodes (like script nodes)', () => {
+      const nodes: FlowNode[] = [
+        makeTableNodeWithNamespace('table1', { schema: 'public' }),
+        makeScriptNode('script1'),
+        makeTableNodeWithNamespace('table2', { schema: 'private' }),
+      ];
+      const edges: FlowEdge[] = [];
+      const filter: NamespaceFilter = { schemas: ['public'], databases: [] };
+
+      const result = filterByNamespace({ nodes, edges }, filter);
+
+      expect(result.nodes).toHaveLength(2);
+      expect(result.nodes.map((n) => n.id)).toEqual(['table1', 'script1']);
+    });
+  });
+
+  describe('edge filtering', () => {
+    it('removes edges to filtered-out nodes', () => {
+      const nodes: FlowNode[] = [
+        makeTableNodeWithNamespace('table1', { schema: 'public' }),
+        makeTableNodeWithNamespace('table2', { schema: 'private' }),
+      ];
+      const edges: FlowEdge[] = [{ id: 'edge1', source: 'table1', target: 'table2' }];
+      const filter: NamespaceFilter = { schemas: ['public'], databases: [] };
+
+      const result = filterByNamespace({ nodes, edges }, filter);
+
+      expect(result.nodes).toHaveLength(1);
+      expect(result.edges).toHaveLength(0);
+    });
+
+    it('keeps edges between preserved nodes', () => {
+      const nodes: FlowNode[] = [
+        makeTableNodeWithNamespace('table1', { schema: 'public' }),
+        makeTableNodeWithNamespace('table2', { schema: 'public' }),
+      ];
+      const edges: FlowEdge[] = [{ id: 'edge1', source: 'table1', target: 'table2' }];
+      const filter: NamespaceFilter = { schemas: ['public'], databases: [] };
+
+      const result = filterByNamespace({ nodes, edges }, filter);
+
+      expect(result.nodes).toHaveLength(2);
+      expect(result.edges).toHaveLength(1);
+    });
+
+    it('handles column-level edges correctly', () => {
+      const nodes: FlowNode[] = [
+        makeTableNodeWithNamespace('table1', {
+          schema: 'public',
+          columns: [{ id: 'col1', name: 'col1' }],
+        }),
+        makeTableNodeWithNamespace('table2', {
+          schema: 'public',
+          columns: [{ id: 'col2', name: 'col2' }],
+        }),
+        makeTableNodeWithNamespace('table3', {
+          schema: 'private',
+          columns: [{ id: 'col3', name: 'col3' }],
+        }),
+      ];
+      const edges: FlowEdge[] = [
+        { id: 'edge1', source: 'table1', target: 'table2', sourceHandle: 'col1', targetHandle: 'col2' },
+        { id: 'edge2', source: 'table2', target: 'table3', sourceHandle: 'col2', targetHandle: 'col3' },
+      ];
+      const filter: NamespaceFilter = { schemas: ['public'], databases: [] };
+
+      const result = filterByNamespace({ nodes, edges }, filter);
+
+      expect(result.nodes).toHaveLength(2);
+      expect(result.edges).toHaveLength(1);
+      expect(result.edges[0].id).toBe('edge1');
     });
   });
 });

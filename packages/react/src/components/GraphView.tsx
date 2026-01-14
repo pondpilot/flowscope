@@ -292,6 +292,7 @@ export function GraphView({
   initialViewport,
   onViewportChange,
   fitViewTrigger,
+  namespaceFilter,
 }: GraphViewProps): JSX.Element {
   const { state, actions } = useLineage();
   const { result, selectedNodeId, searchTerm, viewMode, layoutAlgorithm, collapsedNodeIds, defaultCollapsed, showColumnEdges, showScriptTables, expandedTableIds, tableFilter } = state;
@@ -367,7 +368,8 @@ export function GraphView({
           collapsedNodeIds,
           expandedTableIds,
           result.resolvedSchema,
-          defaultCollapsed
+          defaultCollapsed,
+          result.globalLineage
         ),
         edges: buildFlowEdges(statement, showColumnEdges, defaultCollapsed, collapsedNodeIds),
       };
@@ -378,7 +380,7 @@ export function GraphView({
     }
   }, [result, statement, selectedNodeId, effectiveSearchTerm, viewMode, collapsedNodeIds, defaultCollapsed, showColumnEdges, showScriptTables, expandedTableIds]);
 
-  // Apply filtering (focus mode, table filter) and compute highlights
+  // Apply filtering (focus mode, table filter, namespace filter) and compute highlights
   const { filteredGraph, highlightIds } = useGraphFiltering({
     graph: builtGraph,
     selectedNodeId,
@@ -387,6 +389,7 @@ export function GraphView({
     showColumnEdges,
     focusMode,
     tableFilter,
+    namespaceFilter,
   });
 
   // Enhance graph with highlight styling

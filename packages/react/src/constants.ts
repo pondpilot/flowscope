@@ -382,6 +382,72 @@ export const EDGE_STYLES = {
 } as const;
 
 /**
+ * Color palette for database/schema namespaces
+ * Used to visually distinguish tables from different schemas via color-coded borders
+ * 12 distinct hues (30° apart on color wheel) for maximum differentiation
+ */
+export const NAMESPACE_COLORS = {
+  light: [
+    '#E11D48', // Rose-600
+    '#EA580C', // Orange-600
+    '#CA8A04', // Yellow-600
+    '#65A30D', // Lime-600
+    '#16A34A', // Green-600
+    '#0D9488', // Teal-600
+    '#0891B2', // Cyan-600
+    '#0284C7', // Sky-600
+    '#2563EB', // Blue-600
+    '#7C3AED', // Violet-600
+    '#C026D3', // Fuchsia-600
+    '#DB2777', // Pink-600
+  ],
+  dark: [
+    '#FB7185', // Rose-400
+    '#FB923C', // Orange-400
+    '#FACC15', // Yellow-400
+    '#A3E635', // Lime-400
+    '#4ADE80', // Green-400
+    '#2DD4BF', // Teal-400
+    '#22D3EE', // Cyan-400
+    '#38BDF8', // Sky-400
+    '#60A5FA', // Blue-400
+    '#A78BFA', // Violet-400
+    '#E879F9', // Fuchsia-400
+    '#F472B6', // Pink-400
+  ],
+} as const;
+
+/**
+ * Simple string hash function for consistent color assignment.
+ * Uses djb2 algorithm variant for good distribution.
+ * Returns a number between 0 and NAMESPACE_COLORS.light.length - 1
+ */
+function hashString(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash |= 0; // Convert to 32-bit integer
+  }
+  return Math.abs(hash) % NAMESPACE_COLORS.light.length;
+}
+
+/**
+ * Get a consistent color for a schema/database namespace
+ * @param namespace - The schema or database name
+ * @param isDark - Whether dark mode is active
+ * @returns A hex color string
+ */
+export function getNamespaceColor(
+  namespace: string | undefined,
+  isDark: boolean
+): string | undefined {
+  if (!namespace) return undefined;
+  const index = hashString(namespace);
+  return isDark ? NAMESPACE_COLORS.dark[index] : NAMESPACE_COLORS.light[index];
+}
+
+/**
  * Get minimap node color based on node type
  */
 export function getMinimapNodeColor(nodeType: string): string {

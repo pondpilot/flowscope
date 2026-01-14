@@ -64,6 +64,20 @@ export interface IssuesViewState {
   // Future: collapsed categories, sort order, etc.
 }
 
+/**
+ * Namespace filter state - shared across all views.
+ *
+ * Note: This interface mirrors NamespaceFilter in packages/react/src/types.ts.
+ * They are intentionally separate because this is for app persistence while the
+ * library has its own type. If you change one, update the other.
+ */
+export interface NamespaceFilterState {
+  /** Selected schemas to filter by (empty = show all) */
+  schemas: string[];
+  /** Selected databases/catalogs to filter by (empty = show all) */
+  databases: string[];
+}
+
 /** All view states for a single project */
 export interface ProjectViewStates {
   activeTab: 'lineage' | 'hierarchy' | 'matrix' | 'schema' | 'issues';
@@ -72,6 +86,8 @@ export interface ProjectViewStates {
   matrix: Partial<MatrixViewState>;
   schema: Partial<SchemaViewState>;
   issues: Partial<IssuesViewState>;
+  /** Namespace filter - shared across all views */
+  namespaceFilter: Partial<NamespaceFilterState>;
 }
 
 // ============================================================================
@@ -112,6 +128,11 @@ const DEFAULT_SCHEMA_STATE: SchemaViewState = {
 
 const DEFAULT_ISSUES_STATE: IssuesViewState = {};
 
+const DEFAULT_NAMESPACE_FILTER_STATE: NamespaceFilterState = {
+  schemas: [],
+  databases: [],
+};
+
 function getDefaultProjectViewStates(): ProjectViewStates {
   return {
     activeTab: 'lineage',
@@ -120,6 +141,7 @@ function getDefaultProjectViewStates(): ProjectViewStates {
     matrix: {},
     schema: {},
     issues: {},
+    namespaceFilter: {},
   };
 }
 
@@ -264,6 +286,18 @@ export function getIssuesStateWithDefaults(
 ): IssuesViewState {
   return {
     ...DEFAULT_ISSUES_STATE,
+    ...stored,
+  };
+}
+
+/**
+ * Get the full namespace filter state with defaults applied
+ */
+export function getNamespaceFilterStateWithDefaults(
+  stored: Partial<NamespaceFilterState> | undefined
+): NamespaceFilterState {
+  return {
+    ...DEFAULT_NAMESPACE_FILTER_STATE,
     ...stored,
   };
 }

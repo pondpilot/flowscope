@@ -1,5 +1,5 @@
 import type { Edge as FlowEdge, Node as FlowNode } from '@xyflow/react';
-import type { TableNodeData, ScriptNodeData, TableFilterDirection, TableFilter } from '../types';
+import type { TableNodeData, ScriptNodeData, TableFilterDirection, TableFilter, NamespaceFilter } from '../types';
 
 /**
  * Type guard for TableNodeData.
@@ -62,6 +62,137 @@ export function filterGraphToHighlights(
   }
 
   // Only include edges where both source and target exist in the filtered graph
+  const filteredEdges = graph.edges.filter((edge) => {
+    const sourceId = edge.sourceHandle || edge.source;
+    const targetId = edge.targetHandle || edge.target;
+    return validNodeIds.has(sourceId) && validNodeIds.has(targetId);
+  });
+
+  return { nodes: filteredNodes, edges: filteredEdges };
+}
+
+/**
+ * Remove edges that reference missing nodes or handles.
+ * This guards against dangling connections when nodes are filtered or rebuilt.
+ */
+export function pruneDanglingEdges(
+  graph: { nodes: FlowNode[]; edges: FlowEdge[] }
+): { nodes: FlowNode[]; edges: FlowEdge[] } {
+  // Defensive check: graph may be undefined during initial render or state transitions
+  if (!graph || !Array.isArray(graph.nodes) || !Array.isArray(graph.edges)) {
+    return { nodes: [], edges: [] };
+  }
+
+  const nodeById = new Map<string, FlowNode>();
+  const handleIdsByNodeId = new Map<string, Set<string>>();
+
+  for (const node of graph.nodes) {
+    nodeById.set(node.id, node);
+    if (isTableNodeData(node.data)) {
+      handleIdsByNodeId.set(
+        node.id,
+        new Set(node.data.columns.map((col) => col.id))
+      );
+    }
+  }
+
+  const filteredEdges = graph.edges.filter((edge) => {
+    if (!nodeById.has(edge.source) || !nodeById.has(edge.target)) {
+      return false;
+    }
+
+    if (typeof edge.sourceHandle === 'string' && edge.sourceHandle.length > 0) {
+      const sourceHandles = handleIdsByNodeId.get(edge.source);
+      if (!sourceHandles || !sourceHandles.has(edge.sourceHandle)) {
+        return false;
+      }
+    }
+
+    if (typeof edge.targetHandle === 'string' && edge.targetHandle.length > 0) {
+      const targetHandles = handleIdsByNodeId.get(edge.target);
+      if (!targetHandles || !targetHandles.has(edge.targetHandle)) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  if (filteredEdges.length === graph.edges.length) {
+    return graph;
+  }
+
+  return { ...graph, edges: filteredEdges };
+}
+
+/**
+ * Filter nodes by namespace (schema/database).
+ *
+ * Filtering behavior:
+ * - If schemas are selected: nodes with a schema must have it in the selected list
+ * - If databases are selected: nodes with a database must have it in the selected list
+ * - Nodes without schema/database ("unscoped") always pass through
+ * - Non-table nodes (like script nodes) are always preserved
+ * - Empty filter arrays mean "show all" for that dimension
+ */
+export function filterByNamespace(
+  graph: { nodes: FlowNode[]; edges: FlowEdge[] },
+  namespaceFilter: NamespaceFilter | undefined
+): { nodes: FlowNode[]; edges: FlowEdge[] } {
+  if (!namespaceFilter) return graph;
+
+  const { schemas, databases } = namespaceFilter;
+
+  // If no filters selected, show all
+  if (schemas.length === 0 && databases.length === 0) {
+    return graph;
+  }
+
+  // Use Sets for O(1) lookups
+  const schemaSet = new Set(schemas);
+  const databaseSet = new Set(databases);
+
+  // Filter nodes by their schema/database
+  const filteredNodes = graph.nodes.filter((node) => {
+    if (!isTableNodeData(node.data)) {
+      // Non-table nodes (like script nodes) don't have namespace info, so keep them.
+      // Edge pruning will handle removing edges to filtered-out tables.
+      return true;
+    }
+
+    const nodeData = node.data as TableNodeData;
+
+    // Check schema filter - only filter nodes that HAVE a schema value
+    // Nodes without schema are "unscoped" and pass through the filter
+    if (schemaSet.size > 0 && nodeData.schema) {
+      if (!schemaSet.has(nodeData.schema)) {
+        return false;
+      }
+    }
+
+    // Check database filter - only filter nodes that HAVE a database value
+    // Nodes without database are "unscoped" and pass through the filter
+    if (databaseSet.size > 0 && nodeData.database) {
+      if (!databaseSet.has(nodeData.database)) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
+  // Get valid node IDs (including column IDs from table nodes)
+  const validNodeIds = new Set<string>();
+  for (const node of filteredNodes) {
+    validNodeIds.add(node.id);
+    if (isTableNodeData(node.data)) {
+      for (const col of node.data.columns) {
+        validNodeIds.add(col.id);
+      }
+    }
+  }
+
+  // Filter edges to only include those connecting valid nodes
   const filteredEdges = graph.edges.filter((edge) => {
     const sourceId = edge.sourceHandle || edge.source;
     const targetId = edge.targetHandle || edge.target;

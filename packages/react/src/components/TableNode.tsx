@@ -4,8 +4,8 @@ import type { NodeProps } from '@xyflow/react';
 import { useLineageActions, useLineageStore } from '../store';
 import type { TableNodeData, ColumnNodeInfo } from '../types';
 import { sanitizeIdentifier } from '../utils/sanitize';
-import { GRAPH_CONFIG, MAX_FILTER_DISPLAY_LENGTH } from '../constants';
-import { useColors } from '../hooks/useColors';
+import { GRAPH_CONFIG, MAX_FILTER_DISPLAY_LENGTH, getNamespaceColor } from '../constants';
+import { useColors, useIsDarkMode } from '../hooks/useColors';
 import type { AggregationInfo } from '@pondpilot/flowscope-core';
 
 interface AggregationIndicatorProps {
@@ -79,11 +79,29 @@ function isTableNodeData(data: unknown): data is TableNodeData {
   );
 }
 
+/**
+ * Get the header label text for a table node.
+ * Shows namespace (database.schema) when available, falls back to node type.
+ */
+function getNodeHeaderLabel(nodeData: TableNodeData, isVirtualOutput: boolean): string {
+  if (isVirtualOutput) {
+    return 'OUTPUT';
+  }
+  if (nodeData.database && nodeData.schema) {
+    return `${nodeData.database}.${nodeData.schema}`;
+  }
+  if (nodeData.schema) {
+    return nodeData.schema;
+  }
+  return nodeData.nodeType;
+}
+
 export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
   const { toggleNodeCollapse, toggleTableExpansion, selectNode } = useLineageActions();
   const expandedTableIds = useLineageStore((state) => state.expandedTableIds);
   const showColumnEdges = useLineageStore((state) => state.showColumnEdges);
   const colors = useColors();
+  const isDark = useIsDarkMode();
 
   if (!isTableNodeData(data)) {
     console.error('Invalid node data type for TableNode', data);
@@ -119,6 +137,9 @@ export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
     palette = colors.nodes.virtualOutput;
   }
 
+  // Get schema color for left border band
+  const schemaColor = getNamespaceColor(nodeData.schema, isDark);
+
   return (
     <div
       onClick={() => {
@@ -130,6 +151,7 @@ export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
         minWidth: 180,
         borderRadius: 8,
         border: `1px solid ${isSelected ? colors.interactive.selection : palette.border}`,
+        borderLeft: schemaColor ? `3px solid ${schemaColor}` : undefined,
         boxShadow: isSelected
           ? `0 0 0 2px ${colors.interactive.selectionRing}`
           : isRecursive
@@ -242,11 +264,18 @@ export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
               fontWeight: 600,
               lineHeight: 1,
               marginBottom: 2,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
             }}
+            title={nodeData.qualifiedName || undefined}
           >
-            {isVirtualOutput ? 'OUTPUT' : nodeData.nodeType}
+            {getNodeHeaderLabel(nodeData, isVirtualOutput)}
           </div>
-          <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div
+            style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+            title={nodeData.qualifiedName || nodeData.label}
+          >
             {sanitizeIdentifier(nodeData.label)}
           </div>
         </div>
