@@ -25,6 +25,7 @@ import {
   buildFlowNodes,
   buildFlowEdges,
   buildScriptLevelGraph,
+  computeIsCollapsed,
 } from '../utils/graphBuilders';
 import { ScriptNode } from './ScriptNode';
 import { ColumnNode } from './ColumnNode';
@@ -443,18 +444,33 @@ export function GraphView({
   const lastViewMode = useRef<string | null>(null);
   const lastShowTables = useRef<boolean | null>(null);
   const lastLayoutAlgorithm = useRef<LayoutAlgorithm | null>(null);
+  const lastAppliedDefaultCollapsed = useRef<boolean | null>(null);
 
   useEffect(() => {
-    const currentResultId = result ? JSON.stringify(result.summary) : null;
+    if (layoutedNodes.length === 0) return;
 
-    const needsUpdate =
+    // Verify layout was computed with current collapse settings before applying.
+    // This prevents rendering stale layout when settings change but layout
+    // hasn't been recomputed yet.
+    const layoutIsStale = layoutedNodes.some((node) => {
+      const expectedCollapsed = computeIsCollapsed(node.id, defaultCollapsed, collapsedNodeIds);
+      return node.data?.isCollapsed !== expectedCollapsed;
+    });
+    if (layoutIsStale) return;
+
+    const currentResultId = result ? JSON.stringify(result.summary) : null;
+    const collapseStateChanged = defaultCollapsed !== lastAppliedDefaultCollapsed.current;
+
+    // Trigger full layout reapplication when view-affecting settings change
+    const needsFullUpdate =
       !isInitialized.current ||
       currentResultId !== lastResultId.current ||
       viewMode !== lastViewMode.current ||
       showScriptTables !== lastShowTables.current ||
-      layoutAlgorithm !== lastLayoutAlgorithm.current;
+      layoutAlgorithm !== lastLayoutAlgorithm.current ||
+      collapseStateChanged;
 
-    if (needsUpdate && layoutedNodes.length > 0) {
+    if (needsFullUpdate) {
       setNodes(layoutedNodes);
       setEdges(layoutedEdges);
       isInitialized.current = true;
@@ -462,15 +478,14 @@ export function GraphView({
       lastViewMode.current = viewMode;
       lastShowTables.current = showScriptTables;
       lastLayoutAlgorithm.current = layoutAlgorithm;
-    } else if (layoutedNodes.length > 0) {
+      lastAppliedDefaultCollapsed.current = defaultCollapsed;
+    } else {
+      // Preserve user-adjusted positions while updating node data
       setNodes((currentNodes) => {
         return layoutedNodes.map((layoutNode) => {
           const currentNode = currentNodes.find((n) => n.id === layoutNode.id);
           if (currentNode) {
-            return {
-              ...layoutNode,
-              position: currentNode.position,
-            };
+            return { ...layoutNode, position: currentNode.position };
           }
           return layoutNode;
         });
@@ -486,9 +501,9 @@ export function GraphView({
     viewMode,
     layoutAlgorithm,
     collapsedNodeIds,
+    defaultCollapsed,
     showScriptTables,
   ]);
-
 
   const internalGraphRef = useRef<HTMLDivElement>(null);
   const finalRef = graphContainerRef || internalGraphRef;
