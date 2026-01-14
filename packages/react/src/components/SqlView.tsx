@@ -3,6 +3,7 @@ import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror';
 import { sql } from '@codemirror/lang-sql';
 import { EditorView, Decoration, type DecorationSet } from '@codemirror/view';
 import { StateField, StateEffect } from '@codemirror/state';
+import { oneDark } from '@codemirror/theme-one-dark';
 
 import { useLineage } from '../store';
 import type { SqlViewProps } from '../types';
@@ -54,10 +55,10 @@ const baseTheme = EditorView.baseTheme({
   },
 });
 
-export function SqlView({ className, editable = false, onChange, value }: SqlViewProps): JSX.Element {
+export function SqlView({ className, editable = false, onChange, value, isDark }: SqlViewProps): JSX.Element {
   const { state, actions } = useLineage();
   const isControlled = value !== undefined;
-  
+
   const sqlText = isControlled ? value : state.sql;
   const highlightedSpan = isControlled ? null : state.highlightedSpan;
   const issueHighlights = useMemo<HighlightRange[]>(() => {
@@ -88,6 +89,8 @@ export function SqlView({ className, editable = false, onChange, value }: SqlVie
     () => [sql(), highlightField, baseTheme, EditorView.lineWrapping, EditorView.editable.of(editable)],
     [editable]
   );
+
+  const theme = useMemo(() => (isDark ? oneDark : 'light'), [isDark]);
 
   const handleChange = useCallback(
     (val: string) => {
@@ -135,6 +138,7 @@ export function SqlView({ className, editable = false, onChange, value }: SqlVie
         onChange={handleChange}
         extensions={extensions}
         editable={editable}
+        theme={theme}
         basicSetup={{
           lineNumbers: true,
           highlightActiveLineGutter: true,

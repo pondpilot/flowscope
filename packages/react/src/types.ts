@@ -29,6 +29,17 @@ export type MatrixSubMode = 'tables' | 'scripts';
 export type LayoutAlgorithm = 'dagre' | 'elk';
 
 /**
+ * Performance metrics for layout computation.
+ */
+export interface LayoutMetrics {
+  lastDurationMs: number | null;
+  nodeCount: number;
+  edgeCount: number;
+  algorithm: LayoutAlgorithm | null;
+  lastUpdatedAt: number | null;
+}
+
+/**
  * Direction for table filter lineage traversal.
  */
 export type TableFilterDirection = 'upstream' | 'downstream' | 'both';
@@ -90,6 +101,8 @@ export interface LineageState {
   matrixSubMode: MatrixSubMode;
   /** Current layout algorithm */
   layoutAlgorithm: LayoutAlgorithm;
+  /** Layout performance metrics */
+  layoutMetrics: LayoutMetrics;
   /** Whether to show column-level edges */
   showColumnEdges: boolean;
   /** Whether to hide CTEs and show bypass edges */
@@ -131,6 +144,8 @@ export interface LineageActions {
   setMatrixSubMode: (mode: MatrixSubMode) => void;
   /** Update the layout algorithm */
   setLayoutAlgorithm: (algorithm: LayoutAlgorithm) => void;
+  /** Update layout performance metrics */
+  setLayoutMetrics: (metrics: LayoutMetrics) => void;
   /** Toggle column-level edge visibility */
   toggleColumnEdges: () => void;
   /** Toggle hiding of CTEs (showing bypass edges) */
@@ -222,6 +237,8 @@ export interface SqlViewProps {
   onChange?: (sql: string) => void;
   /** Controlled value for the SQL editor. When provided, uses controlled mode. */
   value?: string;
+  /** Whether dark mode is active (for editor theming) */
+  isDark?: boolean;
 }
 
 /**

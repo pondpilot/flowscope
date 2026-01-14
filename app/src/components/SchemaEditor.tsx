@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from './ui/dialog';
 import { Button } from './ui/button';
+import { useThemeStore, resolveTheme } from '@/lib/theme-store';
 import type { Dialect } from '@/lib/project-store';
 
 interface SchemaEditorProps {
@@ -26,6 +27,8 @@ export function SchemaEditor({
   onSave,
 }: SchemaEditorProps) {
   const [editedSQL, setEditedSQL] = useState(schemaSQL);
+  const theme = useThemeStore((state) => state.theme);
+  const isDark = resolveTheme(theme) === 'dark';
 
   // Reset to prop value when dialog opens
   const handleOpenChange = useCallback((newOpen: boolean) => {
@@ -62,6 +65,7 @@ export function SchemaEditor({
             onChange={setEditedSQL}
             className="h-full"
             editable={true}
+            isDark={isDark}
           />
         </div>
 

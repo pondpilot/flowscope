@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { SqlView, useLineageState } from '@pondpilot/flowscope-react';
 import { cn } from '@/lib/utils';
 import { useProject } from '@/lib/project-store';
+import { useThemeStore, resolveTheme } from '@/lib/theme-store';
 import { useAnalysis, useDebounce, useFileNavigation, useGlobalShortcuts } from '@/hooks';
 import type { GlobalShortcut } from '@/hooks';
 import { EditorToolbar } from './EditorToolbar';
@@ -27,6 +28,9 @@ export function EditorArea({ wasmReady, className, fileSelectorOpen, onFileSelec
     setProjectDialect,
     setRunMode,
   } = useProject();
+
+  const theme = useThemeStore((state) => state.theme);
+  const isDark = resolveTheme(theme) === 'dark';
 
   const activeFile = currentProject?.files.find(f => f.id === currentProject.activeFileId);
   const editorContainerRef = useRef<HTMLDivElement>(null);
@@ -167,6 +171,7 @@ export function EditorArea({ wasmReady, className, fileSelectorOpen, onFileSelec
           onChange={val => updateFile(activeFile.id, val)}
           className="h-full text-sm"
           editable={true}
+          isDark={isDark}
         />
       </div>
     </div>
