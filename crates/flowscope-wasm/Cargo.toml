@@ -16,6 +16,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 flowscope-core = { path = "../flowscope-core", default-features = false }
+flowscope-export = { path = "../flowscope-export", default-features = false }
 wasm-bindgen.workspace = true
 serde.workspace = true
 serde_json.workspace = true

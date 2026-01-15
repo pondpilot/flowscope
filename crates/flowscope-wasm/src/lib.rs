@@ -1,4 +1,5 @@
 use flowscope_core::{analyze, AnalyzeRequest, AnalyzeResult};
+use flowscope_export::export_sql;
 use wasm_bindgen::prelude::*;
 
 /// Enable tracing logs to the browser console (requires `tracing` feature).
@@ -70,6 +71,54 @@ pub fn analyze_sql(sql_input: &str) -> Result<String, JsValue> {
 #[wasm_bindgen]
 pub fn get_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
+}
+
+/// Export analysis result to SQL statements for DuckDB-WASM.
+///
+/// Takes a JSON AnalyzeResult and returns SQL statements (DDL + INSERT)
+/// that can be executed by duckdb-wasm in the browser.
+///
+/// This is the WASM-compatible export path - generates SQL text that
+/// duckdb-wasm can execute to create a queryable database in the browser.
+#[wasm_bindgen]
+pub fn export_to_duckdb_sql(result_json: &str) -> Result<String, JsValue> {
+    // Parse the analysis result
+    let result: AnalyzeResult = serde_json::from_str(result_json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid result JSON: {e}")))?;
+
+    // Generate SQL
+    export_sql(&result).map_err(|e| JsValue::from_str(&format!("Export error: {e}")))
+}
+
+/// Analyze SQL and export to DuckDB SQL statements in one step.
+///
+/// Convenience function that combines analyze_sql_json + export_to_duckdb_sql.
+/// Takes a JSON AnalyzeRequest and returns SQL statements for duckdb-wasm.
+#[wasm_bindgen]
+pub fn analyze_and_export_sql(request_json: &str) -> Result<String, JsValue> {
+    // Parse the request
+    let request: AnalyzeRequest = serde_json::from_str(request_json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid request format: {e}")))?;
+
+    // Perform analysis
+    let result = analyze(&request);
+
+    // Check for critical errors
+    if result.summary.has_errors {
+        let issues: Vec<String> = result
+            .issues
+            .iter()
+            .filter(|i| i.severity == flowscope_core::types::Severity::Error)
+            .map(|i| i.message.clone())
+            .collect();
+        return Err(JsValue::from_str(&format!(
+            "Analysis failed: {}",
+            issues.join("; ")
+        )));
+    }
+
+    // Generate SQL
+    export_sql(&result).map_err(|e| JsValue::from_str(&format!("Export error: {e}")))
 }
 
 #[cfg(test)]
@@ -154,4 +203,8 @@ mod tests {
         let version = get_version();
         assert!(!version.is_empty());
     }
+
+    // Note: Tests for export_to_duckdb_sql and analyze_and_export_sql cannot run
+    // on native targets because they return Result<_, JsValue> which only works
+    // on wasm32. These functions are tested via wasm-pack test.
 }
