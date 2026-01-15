@@ -3,6 +3,7 @@ members = [
     "crates/flowscope-core",
     "crates/flowscope-wasm",
     "crates/flowscope-cli",
+    "crates/flowscope-export",
 ]
 resolver = "2"
 
