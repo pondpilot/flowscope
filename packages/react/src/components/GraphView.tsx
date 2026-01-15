@@ -1,4 +1,4 @@
-import { useMemo, useCallback, useEffect, useRef, useState, type JSX } from 'react';
+import { useMemo, useCallback, useEffect, useRef, useState, useDeferredValue, type JSX } from 'react';
 import {
   ReactFlow,
   Background,
@@ -12,12 +12,13 @@ import {
 import type { Node as FlowNode, Edge as FlowEdge, Viewport } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { LayoutList, Maximize2, Minimize2, Route, GitBranch } from 'lucide-react';
+import type { AnalyzeResult } from '@pondpilot/flowscope-core';
 
-import { useLineage } from '../store';
+import { useLineage, useLineageStore } from '../store';
 import { useNodeFocus } from '../hooks/useNodeFocus';
 import { useGraphFiltering } from '../hooks/useGraphFiltering';
 import type { GraphViewProps, TableNodeData, LayoutAlgorithm } from '../types';
-import { getLayoutedElements, getLayoutedElementsAsync } from '../utils/layout';
+import { getLayoutedElements, getLayoutedElementsInWorker, getFastLayoutedNodes, cancelLayoutRequests } from '../utils/layout';
 import { LayoutSelector } from './LayoutSelector';
 import { isTableNodeData } from '../utils/graphTraversal';
 import {
@@ -25,7 +26,6 @@ import {
   buildFlowNodes,
   buildFlowEdges,
   buildScriptLevelGraph,
-  computeIsCollapsed,
 } from '../utils/graphBuilders';
 import { ScriptNode } from './ScriptNode';
 import { ColumnNode } from './ColumnNode';
@@ -46,6 +46,16 @@ import {
   GraphTooltipPortal,
 } from './ui/graph-tooltip';
 import { GRAPH_CONFIG, PANEL_STYLES, getMinimapNodeColor } from '../constants';
+
+const MINIMAP_NODE_LIMIT = 2000;
+const ELK_NODE_LIMIT = 2000;
+
+const nowMs = () => {
+  if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
+    return performance.now();
+  }
+  return Date.now();
+};
 
 /**
  * Helper component to handle node focusing.
@@ -295,7 +305,10 @@ export function GraphView({
   namespaceFilter,
 }: GraphViewProps): JSX.Element {
   const { state, actions } = useLineage();
+  const setLayoutMetrics = useLineageStore((store) => store.setLayoutMetrics);
+  const setGraphMetrics = useLineageStore((store) => store.setGraphMetrics);
   const { result, selectedNodeId, searchTerm, viewMode, layoutAlgorithm, collapsedNodeIds, defaultCollapsed, showColumnEdges, showScriptTables, expandedTableIds, tableFilter } = state;
+  const deferredResult = useDeferredValue(result);
 
   // Determine if search is controlled externally
   const isSearchControlled = controlledSearchTerm !== undefined;
@@ -321,9 +334,9 @@ export function GraphView({
   }, []);
 
   const statement = useMemo(() => {
-    if (!result || !result.statements) return null;
-    return mergeStatements(result.statements);
-  }, [result]);
+    if (!deferredResult || !deferredResult.statements) return null;
+    return mergeStatements(deferredResult.statements);
+  }, [deferredResult]);
 
   // Determine searchable types based on view mode and column edges setting
   const searchableTypes = useMemo((): SearchableType[] => {
@@ -340,25 +353,31 @@ export function GraphView({
   }, [viewMode, showColumnEdges]);
 
   // Build the raw graph based on view mode (before filtering)
-  const { builtGraph, direction } = useMemo(() => {
-    if (!result || !result.statements) {
-      return { builtGraph: { nodes: [], edges: [] }, direction: 'LR' as const };
+  const { builtGraph, direction, buildDurationMs } = useMemo(() => {
+    const buildStart = nowMs();
+
+    if (!deferredResult || !deferredResult.statements) {
+      return { builtGraph: { nodes: [], edges: [] }, direction: 'LR' as const, buildDurationMs: null };
     }
 
     try {
       if (viewMode === 'script') {
         const graph = buildScriptLevelGraph(
-          result.statements,
+          deferredResult.statements,
           selectedNodeId,
           effectiveSearchTerm,
           showScriptTables
         );
-        return { builtGraph: graph, direction: 'LR' as const };
+        return {
+          builtGraph: graph,
+          direction: 'LR' as const,
+          buildDurationMs: nowMs() - buildStart,
+        };
       }
 
       // Table view (with optional column-level edges)
       if (!statement) {
-        return { builtGraph: { nodes: [], edges: [] }, direction: 'LR' as const };
+        return { builtGraph: { nodes: [], edges: [] }, direction: 'LR' as const, buildDurationMs: null };
       }
       const graph = {
         nodes: buildFlowNodes(
@@ -367,18 +386,22 @@ export function GraphView({
           effectiveSearchTerm,
           collapsedNodeIds,
           expandedTableIds,
-          result.resolvedSchema,
+          deferredResult.resolvedSchema,
           defaultCollapsed,
-          result.globalLineage
+          deferredResult.globalLineage
         ),
         edges: buildFlowEdges(statement, showColumnEdges, defaultCollapsed, collapsedNodeIds),
       };
-      return { builtGraph: graph, direction: 'LR' as const };
+      return {
+        builtGraph: graph,
+        direction: 'LR' as const,
+        buildDurationMs: nowMs() - buildStart,
+      };
     } catch (error) {
       console.error('Graph building failed:', error);
-      return { builtGraph: { nodes: [], edges: [] }, direction: 'LR' as const };
+      return { builtGraph: { nodes: [], edges: [] }, direction: 'LR' as const, buildDurationMs: null };
     }
-  }, [result, statement, selectedNodeId, effectiveSearchTerm, viewMode, collapsedNodeIds, defaultCollapsed, showColumnEdges, showScriptTables, expandedTableIds]);
+  }, [deferredResult, statement, selectedNodeId, effectiveSearchTerm, viewMode, collapsedNodeIds, defaultCollapsed, showColumnEdges, showScriptTables, expandedTableIds]);
 
   // Apply filtering (focus mode, table filter, namespace filter) and compute highlights
   const { filteredGraph, highlightIds } = useGraphFiltering({
@@ -398,49 +421,123 @@ export function GraphView({
     return { rawNodes: enhanced.nodes, rawEdges: enhanced.edges };
   }, [filteredGraph, highlightIds]);
 
+  const showMiniMap = rawNodes.length > 0 && rawNodes.length <= MINIMAP_NODE_LIMIT;
+
+  useEffect(() => {
+    if (!deferredResult) {
+      return;
+    }
+
+    setGraphMetrics({
+      lastDurationMs: buildDurationMs,
+      nodeCount: builtGraph.nodes.length,
+      edgeCount: builtGraph.edges.length,
+      lastUpdatedAt: Date.now(),
+    });
+  }, [deferredResult, buildDurationMs, builtGraph.nodes.length, builtGraph.edges.length, setGraphMetrics]);
+
+  const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<FlowEdge>([]);
+
   // State for async layout results
   const [layoutedNodes, setLayoutedNodes] = useState<FlowNode[]>([]);
   const [layoutedEdges, setLayoutedEdges] = useState<FlowEdge[]>([]);
+  const layoutStartRef = useRef<number | null>(null);
+  const layoutSnapshotRef = useRef<{
+    resultSummary: AnalyzeResult['summary'] | null;
+    viewMode: typeof viewMode;
+    showScriptTables: typeof showScriptTables;
+    layoutAlgorithm: LayoutAlgorithm;
+    defaultCollapsed: boolean;
+  } | null>(null);
 
-  // Apply layout (sync for dagre, async for elk)
+  // Apply layout using Web Worker for non-blocking UI.
+  //
+  // This effect implements a two-stage progressive rendering pattern:
+  // 1. Immediately update nodes with preserved positions to avoid jarring resets
+  // 2. Asynchronously compute layout in worker, then apply final positions
+  //
+  // The "double render" is intentional - it provides immediate visual feedback
+  // while the layout computes, preventing a blank → populated transition.
   useEffect(() => {
     if (rawNodes.length === 0) {
       setLayoutedNodes([]);
       setLayoutedEdges([]);
+      setNodes([]);
+      setEdges([]);
       return;
     }
 
-    let cancelled = false;
+    const effectiveLayoutAlgorithm =
+      layoutAlgorithm === 'elk' && rawNodes.length > ELK_NODE_LIMIT ? 'dagre' : layoutAlgorithm;
 
-    if (layoutAlgorithm === 'elk') {
-      getLayoutedElementsAsync(rawNodes, rawEdges, direction, 'elk')
-        .then(({ nodes, edges }) => {
-          if (!cancelled) {
-            setLayoutedNodes(nodes);
-            setLayoutedEdges(edges);
-          }
-        })
-        .catch((error) => {
-          console.error('ELK layout failed, falling back to dagre:', error);
-          if (!cancelled) {
-            const { nodes, edges } = getLayoutedElements(rawNodes, rawEdges, direction, 'dagre');
-            setLayoutedNodes(nodes);
-            setLayoutedEdges(edges);
-          }
-        });
-    } else {
-      const { nodes, edges } = getLayoutedElements(rawNodes, rawEdges, direction, 'dagre');
-      setLayoutedNodes(nodes);
-      setLayoutedEdges(edges);
-    }
+    let cancelled = false;
+    layoutStartRef.current = performance.now();
+    layoutSnapshotRef.current = {
+      resultSummary: deferredResult ? deferredResult.summary : null,
+      viewMode,
+      showScriptTables,
+      layoutAlgorithm: effectiveLayoutAlgorithm,
+      defaultCollapsed,
+    };
+
+    // Stage 1: Preserve existing node positions for smoother transitions.
+    // This prevents nodes from jumping to origin (0,0) while layout computes.
+    setNodes((currentNodes) => {
+      if (currentNodes.length === 0) {
+        return getFastLayoutedNodes(rawNodes, direction);
+      }
+      const positionMap = new Map(currentNodes.map((node) => [node.id, node.position]));
+      return rawNodes.map((node) => {
+        const position = positionMap.get(node.id);
+        return position ? { ...node, position } : node;
+      });
+    });
+    setEdges(rawEdges);
+
+    // Use worker-based layout for both algorithms to keep UI responsive
+    getLayoutedElementsInWorker(rawNodes, rawEdges, direction, effectiveLayoutAlgorithm)
+      .then(({ nodes, edges }) => {
+        if (!cancelled) {
+          setLayoutedNodes(nodes);
+          setLayoutedEdges(edges);
+          const durationMs = layoutStartRef.current !== null
+            ? performance.now() - layoutStartRef.current
+            : null;
+          setLayoutMetrics({
+            lastDurationMs: durationMs,
+            nodeCount: nodes.length,
+            edgeCount: edges.length,
+            algorithm: effectiveLayoutAlgorithm,
+            lastUpdatedAt: Date.now(),
+          });
+        }
+      })
+      .catch((error) => {
+        console.error('Layout failed:', error);
+        // Final fallback to sync dagre on main thread
+        if (!cancelled) {
+          const { nodes, edges } = getLayoutedElements(rawNodes, rawEdges, direction, 'dagre');
+          setLayoutedNodes(nodes);
+          setLayoutedEdges(edges);
+          const durationMs = layoutStartRef.current !== null
+            ? performance.now() - layoutStartRef.current
+            : null;
+          setLayoutMetrics({
+            lastDurationMs: durationMs,
+            nodeCount: nodes.length,
+            edgeCount: edges.length,
+            algorithm: 'dagre',
+            lastUpdatedAt: Date.now(),
+          });
+        }
+      });
 
     return () => {
       cancelled = true;
+      cancelLayoutRequests();
     };
-  }, [rawNodes, rawEdges, direction, layoutAlgorithm]);
-
-  const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<FlowEdge>([]);
+  }, [rawNodes, rawEdges, direction, layoutAlgorithm, defaultCollapsed, showScriptTables, viewMode, deferredResult, setNodes, setEdges, setLayoutMetrics]);
 
   const isInitialized = useRef(false);
   const lastResultId = useRef<string | null>(null);
@@ -449,39 +546,59 @@ export function GraphView({
   const lastLayoutAlgorithm = useRef<LayoutAlgorithm | null>(null);
   const lastAppliedDefaultCollapsed = useRef<boolean | null>(null);
 
+  // Track last applied collapse states to detect individual node collapse changes
+  const lastAppliedCollapseStates = useRef<Map<string, boolean>>(new Map());
+
+  // Stage 2: Apply computed layout positions once the worker completes.
+  // This effect runs when layoutedNodes/layoutedEdges update, applying the
+  // final positions. It handles two cases:
+  // - Full update: apply all computed positions (view mode change, new data, etc.)
+  // - Incremental update: preserve user-dragged positions, only update node data
   useEffect(() => {
     if (layoutedNodes.length === 0) return;
 
-    // Verify layout was computed with current collapse settings before applying.
-    // This prevents rendering stale layout when settings change but layout
-    // hasn't been recomputed yet.
-    const layoutIsStale = layoutedNodes.some((node) => {
-      const expectedCollapsed = computeIsCollapsed(node.id, defaultCollapsed, collapsedNodeIds);
-      return node.data?.isCollapsed !== expectedCollapsed;
-    });
-    if (layoutIsStale) return;
+    const layoutSnapshot = layoutSnapshotRef.current;
+    if (!layoutSnapshot) {
+      return;
+    }
 
-    const currentResultId = result ? JSON.stringify(result.summary) : null;
-    const collapseStateChanged = defaultCollapsed !== lastAppliedDefaultCollapsed.current;
+    // Note: The layoutIsStale check was removed because it's incompatible with
+    // async Web Worker layout. With async layout, layoutedNodes always reflects
+    // the collapsed state at the time layout was computed, and we should render
+    // that state rather than blocking until a new layout completes.
+
+    const currentResultId = layoutSnapshot.resultSummary
+      ? JSON.stringify(layoutSnapshot.resultSummary)
+      : null;
+    const defaultCollapseChanged = layoutSnapshot.defaultCollapsed !== lastAppliedDefaultCollapsed.current;
+
+    // Check if any individual node's collapse state changed (affects node height/layout)
+    const nodeCollapseChanged = layoutedNodes.some((node) => {
+      if (!isTableNodeData(node.data)) return false;
+      const currentCollapsed = node.data.isCollapsed ?? false;
+      const lastCollapsed = lastAppliedCollapseStates.current.get(node.id);
+      return lastCollapsed !== undefined && lastCollapsed !== currentCollapsed;
+    });
 
     // Trigger full layout reapplication when view-affecting settings change
     const needsFullUpdate =
       !isInitialized.current ||
       currentResultId !== lastResultId.current ||
-      viewMode !== lastViewMode.current ||
-      showScriptTables !== lastShowTables.current ||
-      layoutAlgorithm !== lastLayoutAlgorithm.current ||
-      collapseStateChanged;
+      layoutSnapshot.viewMode !== lastViewMode.current ||
+      layoutSnapshot.showScriptTables !== lastShowTables.current ||
+      layoutSnapshot.layoutAlgorithm !== lastLayoutAlgorithm.current ||
+      defaultCollapseChanged ||
+      nodeCollapseChanged;
 
     if (needsFullUpdate) {
       setNodes(layoutedNodes);
       setEdges(layoutedEdges);
       isInitialized.current = true;
       lastResultId.current = currentResultId;
-      lastViewMode.current = viewMode;
-      lastShowTables.current = showScriptTables;
-      lastLayoutAlgorithm.current = layoutAlgorithm;
-      lastAppliedDefaultCollapsed.current = defaultCollapsed;
+      lastViewMode.current = layoutSnapshot.viewMode;
+      lastShowTables.current = layoutSnapshot.showScriptTables;
+      lastLayoutAlgorithm.current = layoutSnapshot.layoutAlgorithm;
+      lastAppliedDefaultCollapsed.current = layoutSnapshot.defaultCollapsed;
     } else {
       // Preserve user-adjusted positions while updating node data
       setNodes((currentNodes) => {
@@ -495,18 +612,16 @@ export function GraphView({
       });
       setEdges(layoutedEdges);
     }
-  }, [
-    layoutedNodes,
-    layoutedEdges,
-    setNodes,
-    setEdges,
-    result,
-    viewMode,
-    layoutAlgorithm,
-    collapsedNodeIds,
-    defaultCollapsed,
-    showScriptTables,
-  ]);
+
+    // Update tracked collapse states
+    const newCollapseStates = new Map<string, boolean>();
+    for (const node of layoutedNodes) {
+      if (isTableNodeData(node.data)) {
+        newCollapseStates.set(node.id, node.data.isCollapsed ?? false);
+      }
+    }
+    lastAppliedCollapseStates.current = newCollapseStates;
+  }, [layoutedNodes, layoutedEdges, setNodes, setEdges]);
 
   const internalGraphRef = useRef<HTMLDivElement>(null);
   const finalRef = graphContainerRef || internalGraphRef;
@@ -618,6 +733,7 @@ export function GraphView({
         fitView={!initialViewport}
         minZoom={0.1}
         maxZoom={2}
+        onlyRenderVisibleElements
       >
         <NodeFocusHandler focusNodeId={focusNodeId} onFocusApplied={onFocusApplied} />
         <ViewportHandler initialViewport={initialViewport} onViewportChange={onViewportChange} />
@@ -666,18 +782,20 @@ export function GraphView({
           <Legend viewMode={viewMode} />
           <LayoutSelector />
         </Panel>
-        <MiniMap
-          nodeColor={(node) => {
-            if (isTableNodeData(node.data)) {
-              return getMinimapNodeColor(node.data.nodeType || 'table');
-            }
-            // For script nodes, check node type from id prefix
-            if (node.id.startsWith('script:')) {
-              return getMinimapNodeColor('script');
-            }
-            return getMinimapNodeColor('table');
-          }}
-        />
+        {showMiniMap && (
+          <MiniMap
+            nodeColor={(node) => {
+              if (isTableNodeData(node.data)) {
+                return getMinimapNodeColor(node.data.nodeType || 'table');
+              }
+              // For script nodes, check node type from id prefix
+              if (node.id.startsWith('script:')) {
+                return getMinimapNodeColor('script');
+              }
+              return getMinimapNodeColor('table');
+            }}
+          />
+        )}
       </ReactFlow>
     </div>
   );

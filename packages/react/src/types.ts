@@ -40,6 +40,16 @@ export interface LayoutMetrics {
 }
 
 /**
+ * Performance metrics for graph build computation.
+ */
+export interface GraphBuildMetrics {
+  lastDurationMs: number | null;
+  nodeCount: number;
+  edgeCount: number;
+  lastUpdatedAt: number | null;
+}
+
+/**
  * Direction for table filter lineage traversal.
  */
 export type TableFilterDirection = 'upstream' | 'downstream' | 'both';
@@ -103,6 +113,8 @@ export interface LineageState {
   layoutAlgorithm: LayoutAlgorithm;
   /** Layout performance metrics */
   layoutMetrics: LayoutMetrics;
+  /** Graph build performance metrics */
+  graphMetrics: GraphBuildMetrics;
   /** Whether to show column-level edges */
   showColumnEdges: boolean;
   /** Whether to hide CTEs and show bypass edges */
@@ -146,6 +158,8 @@ export interface LineageActions {
   setLayoutAlgorithm: (algorithm: LayoutAlgorithm) => void;
   /** Update layout performance metrics */
   setLayoutMetrics: (metrics: LayoutMetrics) => void;
+  /** Update graph build performance metrics */
+  setGraphMetrics: (metrics: GraphBuildMetrics) => void;
   /** Toggle column-level edge visibility */
   toggleColumnEdges: () => void;
   /** Toggle hiding of CTEs (showing bypass edges) */

@@ -24,7 +24,7 @@ app/src/
 │   ├── useFileNavigation.ts # Graph-to-editor navigation
 │   ├── useGlobalShortcuts.ts # Keyboard shortcut system
 │   ├── useShareImport.ts   # Import/Export logic
-│   └── useWasmInit.ts      # WASM initialization
+│   └── useAnalysisWorkerInit.ts  # Analysis worker initialization
 ├── lib/                # Core utilities and state
 │   ├── constants.ts        # App-wide configuration
 │   ├── project-store.tsx   # Global Project State (Context)

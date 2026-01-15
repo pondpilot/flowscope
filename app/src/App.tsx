@@ -8,7 +8,7 @@ import { Workspace } from './components/Workspace';
 import { WelcomeModal } from './components/WelcomeModal';
 import { GlobalDropZone } from './components/GlobalDropZone';
 import { Toaster } from './components/ui/sonner';
-import { useWasmInit, useShareImport } from './hooks';
+import { useAnalysisWorkerInit, useShareImport } from './hooks';
 import { DebugPanel } from './components/debug/DebugPanel';
 import { initializeTheme } from './lib/theme-store';
 
@@ -18,21 +18,17 @@ function ShareImportHandler() {
 }
 
 function App() {
-  const { ready: wasmReady, error, isRetrying, retry } = useWasmInit();
+  const { ready: wasmReady, error, isRetrying, retry } = useAnalysisWorkerInit();
 
   useEffect(() => {
     try {
-      const cleanup = initializeTheme();
-      return cleanup;
+      return initializeTheme();
     } catch (error) {
       console.error('Theme initialization failed:', error);
-      // Fallback to system preference on initialization failure
-      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
-      return () => {};
+      document.documentElement.classList.toggle(
+        'dark',
+        window.matchMedia('(prefers-color-scheme: dark)').matches
+      );
     }
   }, []);
 

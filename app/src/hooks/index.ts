@@ -3,5 +3,5 @@ export { useDebounce } from './useDebounce';
 export { useFileNavigation } from './useFileNavigation';
 export { useKeyboardShortcuts, useGlobalShortcuts } from './useKeyboardShortcuts';
 export type { GlobalShortcut } from './useKeyboardShortcuts';
-export { useWasmInit } from './useWasmInit';
+export { useAnalysisWorkerInit } from './useAnalysisWorkerInit';
 export { useShareImport } from './useShareImport';

@@ -28,6 +28,8 @@ describe('computeIsCollapsed', () => {
 const createInsertLineage = (): StatementLineage => ({
   statementIndex: 0,
   statementType: 'INSERT',
+  joinCount: 0,
+  complexityScore: 1,
   nodes: [
     {
       id: 'table:staging.orders',
@@ -267,6 +269,8 @@ describe('graphBuilders DML handling', () => {
     const statement: StatementLineage = {
       statementIndex: 0,
       statementType: 'SELECT',
+      joinCount: 0,
+      complexityScore: 1,
       nodes: [
         { id: 'table:source', type: 'table', label: 'source', qualifiedName: 'source' },
         { id: 'table:target', type: 'table', label: 'target', qualifiedName: 'target' },

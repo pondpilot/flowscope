@@ -2,7 +2,7 @@ import { createContext, createElement, useContext, type ReactNode } from 'react'
 import { useStore } from 'zustand';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { AnalyzeResult, Span } from '@pondpilot/flowscope-core';
-import type { LineageViewMode, LayoutAlgorithm, NavigationRequest, MatrixSubMode, TableFilterDirection, TableFilter } from './types';
+import type { LineageViewMode, LayoutAlgorithm, LayoutMetrics, GraphBuildMetrics, NavigationRequest, MatrixSubMode, TableFilterDirection, TableFilter } from './types';
 
 const DEFAULT_LAYOUT_ALGORITHM: LayoutAlgorithm = 'dagre';
 
@@ -147,6 +147,8 @@ export interface LineageState {
   viewMode: LineageViewMode;
   matrixSubMode: MatrixSubMode;
   layoutAlgorithm: LayoutAlgorithm;
+  layoutMetrics: LayoutMetrics;
+  graphMetrics: GraphBuildMetrics;
   // Node IDs whose collapsed state differs from defaultCollapsed.
   // When defaultCollapsed is true, these are expanded nodes (overrides).
   // When defaultCollapsed is false, these are collapsed nodes (overrides).
@@ -178,6 +180,8 @@ export interface LineageState {
   setViewMode: (mode: LineageViewMode) => void;
   setMatrixSubMode: (mode: MatrixSubMode) => void;
   setLayoutAlgorithm: (algorithm: LayoutAlgorithm) => void;
+  setLayoutMetrics: (metrics: LayoutMetrics) => void;
+  setGraphMetrics: (metrics: GraphBuildMetrics) => void;
   toggleColumnEdges: () => void;
   toggleHideCTEs: () => void;
   toggleShowScriptTables: () => void;
@@ -214,6 +218,19 @@ export function createLineageStore(
     viewMode: initialViewMode,
     matrixSubMode: 'tables',
     layoutAlgorithm: initialLayoutAlgorithm,
+    layoutMetrics: {
+      lastDurationMs: null,
+      nodeCount: 0,
+      edgeCount: 0,
+      algorithm: null,
+      lastUpdatedAt: null,
+    },
+    graphMetrics: {
+      lastDurationMs: null,
+      nodeCount: 0,
+      edgeCount: 0,
+      lastUpdatedAt: null,
+    },
     collapsedNodeIds: new Set(),
     expandedTableIds: new Set(),
     defaultCollapsed: initialDefaultCollapsed,
@@ -305,6 +322,10 @@ export function createLineageStore(
       saveLayoutAlgorithm(algorithm);
       set({ layoutAlgorithm: algorithm });
     },
+
+    setLayoutMetrics: (metrics: LayoutMetrics) => set({ layoutMetrics: metrics }),
+
+    setGraphMetrics: (metrics: GraphBuildMetrics) => set({ graphMetrics: metrics }),
 
     toggleColumnEdges: () =>
       set((state) => {
@@ -400,6 +421,8 @@ export function useLineage() {
       viewMode: store.viewMode,
       matrixSubMode: store.matrixSubMode,
       layoutAlgorithm: store.layoutAlgorithm,
+      layoutMetrics: store.layoutMetrics,
+      graphMetrics: store.graphMetrics,
       collapsedNodeIds: store.collapsedNodeIds,
       expandedTableIds: store.expandedTableIds,
       defaultCollapsed: store.defaultCollapsed,
@@ -422,6 +445,8 @@ export function useLineage() {
       setViewMode: store.setViewMode,
       setMatrixSubMode: store.setMatrixSubMode,
       setLayoutAlgorithm: store.setLayoutAlgorithm,
+      setLayoutMetrics: store.setLayoutMetrics,
+      setGraphMetrics: store.setGraphMetrics,
       toggleColumnEdges: store.toggleColumnEdges,
       toggleHideCTEs: store.toggleHideCTEs,
       toggleShowScriptTables: store.toggleShowScriptTables,
@@ -449,6 +474,8 @@ export function useLineageState() {
   const viewMode = useLineageStore((state) => state.viewMode);
   const matrixSubMode = useLineageStore((state) => state.matrixSubMode);
   const layoutAlgorithm = useLineageStore((state) => state.layoutAlgorithm);
+  const layoutMetrics = useLineageStore((state) => state.layoutMetrics);
+  const graphMetrics = useLineageStore((state) => state.graphMetrics);
   const collapsedNodeIds = useLineageStore((state) => state.collapsedNodeIds);
   const expandedTableIds = useLineageStore((state) => state.expandedTableIds);
   const defaultCollapsed = useLineageStore((state) => state.defaultCollapsed);
@@ -468,6 +495,8 @@ export function useLineageState() {
     viewMode,
     matrixSubMode,
     layoutAlgorithm,
+    layoutMetrics,
+    graphMetrics,
     collapsedNodeIds,
     expandedTableIds,
     defaultCollapsed,
@@ -495,6 +524,8 @@ export function useLineageActions() {
   const setViewMode = useLineageStore((state) => state.setViewMode);
   const setMatrixSubMode = useLineageStore((state) => state.setMatrixSubMode);
   const setLayoutAlgorithm = useLineageStore((state) => state.setLayoutAlgorithm);
+  const setLayoutMetrics = useLineageStore((state) => state.setLayoutMetrics);
+  const setGraphMetrics = useLineageStore((state) => state.setGraphMetrics);
   const toggleColumnEdges = useLineageStore((state) => state.toggleColumnEdges);
   const toggleHideCTEs = useLineageStore((state) => state.toggleHideCTEs);
   const toggleShowScriptTables = useLineageStore((state) => state.toggleShowScriptTables);
@@ -517,6 +548,8 @@ export function useLineageActions() {
     setViewMode,
     setMatrixSubMode,
     setLayoutAlgorithm,
+    setLayoutMetrics,
+    setGraphMetrics,
     toggleColumnEdges,
     toggleHideCTEs,
     toggleShowScriptTables,

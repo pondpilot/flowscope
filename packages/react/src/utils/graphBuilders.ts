@@ -471,6 +471,42 @@ export function buildFlowEdges(
   // Column-level edges: one edge per column lineage connection
   if (showColumnEdges) {
     const flowEdges: FlowEdge[] = [];
+    const tableEdgeKeys = new Set<string>();
+
+    const isTableCollapsed = (tableId: string) => {
+      if (!tableNodeMap.has(tableId)) {
+        return false;
+      }
+      return computeIsCollapsed(tableId, defaultCollapsed, collapsedNodeIds);
+    };
+
+    const pushTableEdge = (sourceTableId: string, targetTableId: string, edgeType: string) => {
+      if (sourceTableId === targetTableId) {
+        return;
+      }
+
+      const edgeKey = `${sourceTableId}_to_${targetTableId}`;
+      if (tableEdgeKeys.has(edgeKey)) {
+        return;
+      }
+
+      tableEdgeKeys.add(edgeKey);
+      const sourceNode = tableNodeMap.get(sourceTableId);
+      const joinType = formatJoinType(sourceNode?.joinType);
+
+      flowEdges.push({
+        id: `edge_${edgeKey}`,
+        source: sourceTableId,
+        target: targetTableId,
+        type: 'animated',
+        label: joinType,
+        data: {
+          type: edgeType,
+          joinType: sourceNode?.joinType,
+          joinCondition: sourceNode?.joinCondition,
+        },
+      });
+    };
 
     // Build column ID -> Node map for O(1) lookups (avoids O(E × C) find operations)
     const columnNodeMap = new Map<string, Node>();
@@ -493,15 +529,20 @@ export function buildFlowEdges(
             const hasExpression = edge.expression || targetCol.expression;
             const isDerivedColumn = edge.type === 'derivation' || hasExpression;
 
-            const isSourceCollapsed = computeIsCollapsed(sourceTableId, defaultCollapsed, collapsedNodeIds);
-            const isTargetCollapsed = computeIsCollapsed(targetTableId, defaultCollapsed, collapsedNodeIds);
+            const isSourceCollapsed = isTableCollapsed(sourceTableId);
+            const isTargetCollapsed = isTableCollapsed(targetTableId);
+
+            if (isSourceCollapsed || isTargetCollapsed) {
+              pushTableEdge(sourceTableId, targetTableId, edge.type);
+              return;
+            }
 
             flowEdges.push({
               id: edge.id,
               source: sourceTableId,
               target: targetTableId,
-              sourceHandle: isSourceCollapsed ? null : edge.from,
-              targetHandle: isTargetCollapsed ? null : edge.to,
+              sourceHandle: edge.from,
+              targetHandle: edge.to,
               type: 'animated',
               data: {
                 type: edge.type,

@@ -11,6 +11,17 @@ export const SCHEMA_LIMITS = {
   MAX_SIZE: 1 * 1024 * 1024, // 1MB for schema DDL
 } as const;
 
+export const ANALYSIS_CACHE_LIMITS = {
+  MAX_SIZE_MB: 250,
+} as const;
+
+export const ANALYSIS_CACHE_MAX_BYTES = ANALYSIS_CACHE_LIMITS.MAX_SIZE_MB * 1024 * 1024;
+
+export const ANALYSIS_SQL_PREVIEW_LIMITS = {
+  MAX_CHARS: 250_000,
+  MAX_FILES: 50,
+} as const;
+
 export const KEYBOARD_SHORTCUTS = {
   RUN_ANALYSIS: { key: 'Enter', modifiers: ['metaKey', 'ctrlKey'] },
   TOGGLE_SIDEBAR: { key: 'b', modifiers: ['metaKey', 'ctrlKey'] },

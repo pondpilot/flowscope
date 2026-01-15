@@ -46,6 +46,8 @@ export type {
   LineageViewMode,
   MatrixSubMode,
   LayoutAlgorithm,
+  LayoutMetrics,
+  GraphBuildMetrics,
   TableFilterDirection,
   TableFilter,
   GraphViewProps,

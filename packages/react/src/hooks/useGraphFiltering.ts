@@ -2,15 +2,19 @@ import { useMemo } from 'react';
 import type { Node as FlowNode, Edge as FlowEdge } from '@xyflow/react';
 import type { TableFilter, NamespaceFilter } from '../types';
 import {
-  findConnectedElements,
+  buildGraphIndex,
+  findConnectedElementsIndexed,
   findSearchMatchIds,
-  findConnectedElementsMultiple,
+  findConnectedElementsMultipleIndexed,
   applyFilters,
   pruneDanglingEdges,
   filterByNamespace,
 } from '../utils/graphTraversal';
 
 const LARGE_GRAPH_THRESHOLD = 1000;
+
+// Track if we've already warned about large graphs this session
+let hasWarnedLargeGraph = false;
 
 export interface UseGraphFilteringOptions {
   /** The graph to filter */
@@ -49,8 +53,9 @@ export function useGraphFiltering(options: UseGraphFilteringOptions): UseGraphFi
   const { graph, selectedNodeId, searchTerm, viewMode, showColumnEdges = false, focusMode, tableFilter, namespaceFilter } = options;
 
   return useMemo(() => {
-    // Warn about potentially expensive operations on large graphs
-    if (graph.nodes.length > LARGE_GRAPH_THRESHOLD) {
+    // Warn once per session about potentially expensive operations on large graphs
+    if (!hasWarnedLargeGraph && graph.nodes.length > LARGE_GRAPH_THRESHOLD) {
+      hasWarnedLargeGraph = true;
       console.warn(
         `[useGraphFiltering] Large graph detected: ${graph.nodes.length} nodes. ` +
         'Consider implementing virtualization for better performance.'
@@ -62,11 +67,14 @@ export function useGraphFiltering(options: UseGraphFilteringOptions): UseGraphFi
     // Apply namespace filter first (schema/database filtering)
     const namespaceFilteredGraph = filterByNamespace(sanitizedGraph, namespaceFilter);
 
+    // Build graph index once for all traversal operations (performance optimization)
+    const graphIndex = buildGraphIndex(namespaceFilteredGraph.edges);
+
     // Collect highlight IDs from selection and search matches
     let highlightIds = new Set<string>();
 
     if (selectedNodeId) {
-      highlightIds = findConnectedElements(selectedNodeId, namespaceFilteredGraph.edges);
+      highlightIds = findConnectedElementsIndexed(selectedNodeId, graphIndex);
     }
 
     // Add search-based highlights
@@ -77,7 +85,7 @@ export function useGraphFiltering(options: UseGraphFilteringOptions): UseGraphFi
         viewMode,
         showColumnEdges
       );
-      const searchConnected = findConnectedElementsMultiple(searchMatchIds, namespaceFilteredGraph.edges);
+      const searchConnected = findConnectedElementsMultipleIndexed(searchMatchIds, graphIndex);
       for (const id of searchConnected) {
         highlightIds.add(id);
       }
@@ -91,6 +99,7 @@ export function useGraphFiltering(options: UseGraphFilteringOptions): UseGraphFi
         focusMode,
         effectiveSearchTerm: searchTerm,
         tableFilter,
+        graphIndex, // Pass pre-built index for efficient table filter traversal
       });
 
       return {

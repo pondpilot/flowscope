@@ -1,12 +1,17 @@
-import type { JSX } from 'react';
+import { memo, type JSX, type CSSProperties, useCallback, type ReactElement } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import type { NodeProps } from '@xyflow/react';
+import { List } from 'react-window';
 import { useLineageActions, useLineageStore } from '../store';
 import type { TableNodeData, ColumnNodeInfo } from '../types';
 import { sanitizeIdentifier } from '../utils/sanitize';
 import { GRAPH_CONFIG, MAX_FILTER_DISPLAY_LENGTH, getNamespaceColor } from '../constants';
 import { useColors, useIsDarkMode } from '../hooks/useColors';
 import type { AggregationInfo } from '@pondpilot/flowscope-core';
+
+// Virtualization thresholds
+const COLUMN_VIRTUALIZATION_THRESHOLD = 20;
+const COLUMN_ROW_HEIGHT = 24;
 
 interface AggregationIndicatorProps {
   aggregation?: AggregationInfo;
@@ -68,6 +73,133 @@ function AggregationIndicator({ aggregation, colors }: AggregationIndicatorProps
   );
 }
 
+interface AriaAttributes {
+  'aria-posinset': number;
+  'aria-setsize': number;
+  role: 'listitem';
+}
+
+interface ColumnRowProps {
+  col: ColumnNodeInfo;
+  style?: CSSProperties;
+  ariaAttributes?: AriaAttributes;
+  showColumnEdges: boolean;
+  onSelectColumn: (id: string) => void;
+  colors: ReturnType<typeof useColors>;
+  textSecondary: string;
+}
+
+/**
+ * Single column row component, extracted for virtualization support.
+ */
+function ColumnRow({ col, style, ariaAttributes, showColumnEdges, onSelectColumn, colors, textSecondary }: ColumnRowProps): JSX.Element {
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    if (showColumnEdges) {
+      e.stopPropagation();
+      onSelectColumn(col.id);
+    }
+  }, [showColumnEdges, onSelectColumn, col.id]);
+
+  return (
+    <div
+      style={{
+        ...style,
+        fontSize: 12,
+        color: col.isHighlighted ? colors.interactive.selection : textSecondary,
+        fontWeight: col.isHighlighted ? 600 : 400,
+        backgroundColor: col.isHighlighted ? colors.interactive.hover : 'transparent',
+        padding: '3px 4px',
+        borderRadius: 4,
+        position: 'relative',
+        cursor: showColumnEdges ? 'pointer' : 'inherit',
+        boxSizing: 'border-box',
+      }}
+      onClick={handleClick}
+      {...ariaAttributes}
+    >
+      <Handle
+        type="target"
+        position={Position.Left}
+        id={col.id}
+        style={{
+          width: 8,
+          height: 8,
+          left: -4,
+          top: '50%',
+          transform: 'translateY(-50%)',
+          opacity: 0,
+          border: 'none',
+          background: 'transparent',
+        }}
+      />
+      <span style={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {sanitizeIdentifier(col.name)}
+        </span>
+        <AggregationIndicator aggregation={col.aggregation} colors={colors} />
+      </span>
+      <Handle
+        type="source"
+        position={Position.Right}
+        id={col.id}
+        style={{
+          width: 8,
+          height: 8,
+          right: -4,
+          top: '50%',
+          transform: 'translateY(-50%)',
+          opacity: 0,
+          border: 'none',
+          background: 'transparent',
+        }}
+      />
+    </div>
+  );
+}
+
+/**
+ * Props passed to the virtualized row component via rowProps.
+ */
+interface VirtualizedColumnRowProps {
+  columns: ColumnNodeInfo[];
+  showColumnEdges: boolean;
+  onSelectColumn: (id: string) => void;
+  colors: ReturnType<typeof useColors>;
+  textSecondary: string;
+}
+
+/**
+ * Row component for react-window v2 virtualized list.
+ * Receives index and style from List, plus custom props via rowProps.
+ */
+function VirtualizedColumnRow({
+  index,
+  style,
+  ariaAttributes,
+  columns,
+  showColumnEdges,
+  onSelectColumn,
+  colors,
+  textSecondary,
+}: {
+  index: number;
+  style: CSSProperties;
+  ariaAttributes: AriaAttributes;
+} & VirtualizedColumnRowProps): ReactElement {
+  const col = columns[index];
+  return (
+    <ColumnRow
+      col={col}
+      style={style}
+      ariaAttributes={ariaAttributes}
+      showColumnEdges={showColumnEdges}
+      onSelectColumn={onSelectColumn}
+      colors={colors}
+      textSecondary={textSecondary}
+    />
+  );
+}
+
 // Type guard for safer type checking
 function isTableNodeData(data: unknown): data is TableNodeData {
   return (
@@ -96,9 +228,10 @@ function getNodeHeaderLabel(nodeData: TableNodeData, isVirtualOutput: boolean): 
   return nodeData.nodeType;
 }
 
-export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
+function TableNodeComponent({ id, data, selected }: NodeProps): JSX.Element {
   const { toggleNodeCollapse, toggleTableExpansion, selectNode } = useLineageActions();
-  const expandedTableIds = useLineageStore((state) => state.expandedTableIds);
+  // Use derived selector to avoid new Set reference on each render
+  const isExpanded = useLineageStore((state) => state.expandedTableIds.has(id));
   const showColumnEdges = useLineageStore((state) => state.showColumnEdges);
   const colors = useColors();
   const isDark = useIsDarkMode();
@@ -117,7 +250,7 @@ export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
   const isSelected = selected || nodeData.isSelected;
   const isHighlighted = nodeData.isHighlighted;
   const isCollapsed = nodeData.isCollapsed;
-  const isExpanded = expandedTableIds.has(id);
+  // isExpanded is now derived directly from the store selector above
   const hiddenColumnCount = nodeData.hiddenColumnCount || 0;
 
   type NodePalette = {
@@ -220,11 +353,6 @@ export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
           }}
         />
 
-        {isCollapsed && (
-          <>
-            {/* Collapsed specific handles if needed, but the above covers it */}
-          </>
-        )}
 
         <button
           onClick={(e) => {
@@ -374,65 +502,44 @@ export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
       </div>
 
       {!isCollapsed && nodeData.columns.length > 0 && (
-        <div style={{ padding: '6px 12px', maxHeight: GRAPH_CONFIG.MAX_COLUMN_HEIGHT, overflowY: 'auto', position: 'relative' }}>
-          {nodeData.columns.map((col: ColumnNodeInfo) => {
-            return (
-              <div
-                key={col.id}
-                onClick={showColumnEdges ? (e) => {
-                  e.stopPropagation();
-                  selectNode(col.id);
-                } : undefined}
-                style={{
-                  fontSize: 12,
-                  color: col.isHighlighted ? colors.interactive.selection : palette.textSecondary,
-                  fontWeight: col.isHighlighted ? 600 : 400,
-                  backgroundColor: col.isHighlighted ? colors.interactive.hover : 'transparent',
-                  padding: '3px 4px',
-                  borderRadius: 4,
-                  position: 'relative',
-                  cursor: showColumnEdges ? 'pointer' : 'inherit',
-                }}
-              >
-                <Handle
-                  type="target"
-                  position={Position.Left}
-                  id={col.id}
-                  style={{
-                    width: 8,
-                    height: 8,
-                    left: -4,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    opacity: 0,
-                    border: 'none',
-                    background: 'transparent',
-                  }}
+        <div style={{ padding: '6px 12px', position: 'relative' }}>
+          {nodeData.columns.length >= COLUMN_VIRTUALIZATION_THRESHOLD ? (
+            // Virtualized list for large column counts
+            <List
+              style={{
+                height: Math.min(
+                  nodeData.columns.length * COLUMN_ROW_HEIGHT,
+                  GRAPH_CONFIG.MAX_COLUMN_HEIGHT
+                ),
+              }}
+              rowCount={nodeData.columns.length}
+              rowHeight={COLUMN_ROW_HEIGHT}
+              rowComponent={VirtualizedColumnRow}
+              rowProps={{
+                columns: nodeData.columns,
+                showColumnEdges,
+                onSelectColumn: selectNode,
+                colors,
+                textSecondary: palette.textSecondary,
+              }}
+              overscanCount={5}
+            />
+          ) : (
+            // Regular rendering for small column counts (avoid virtualization overhead)
+            // maxHeight ensures consistent behavior with virtualized list
+            <div style={{ maxHeight: GRAPH_CONFIG.MAX_COLUMN_HEIGHT, overflowY: 'auto' }}>
+              {nodeData.columns.map((col: ColumnNodeInfo) => (
+                <ColumnRow
+                  key={col.id}
+                  col={col}
+                  showColumnEdges={showColumnEdges}
+                  onSelectColumn={selectNode}
+                  colors={colors}
+                  textSecondary={palette.textSecondary}
                 />
-                <span style={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {sanitizeIdentifier(col.name)}
-                  </span>
-                  <AggregationIndicator aggregation={col.aggregation} colors={colors} />
-                </span>
-                <Handle
-                  type="source"
-                  position={Position.Right}
-                  id={col.id}
-                  style={{
-                    width: 8,
-                    height: 8,
-                    right: -4,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    opacity: 0,
-                    border: 'none',
-                    background: 'transparent',
-                  }}
-                />
-              </div>
-            );
-          })}
+              ))}
+            </div>
+          )}
         </div>
       )}
       {!isCollapsed && nodeData.filters && nodeData.filters.length > 0 && (
@@ -497,3 +604,92 @@ export function TableNode({ id, data, selected }: NodeProps): JSX.Element {
     </div>
   );
 }
+
+/**
+ * Memoized TableNode component to prevent unnecessary re-renders.
+ *
+ * Custom comparison checks specific props that affect visual output.
+ * This is more efficient than deep equality checks but requires maintenance
+ * when new visual properties are added to TableNodeData.
+ *
+ * IMPORTANT: When adding new properties to TableNodeData that affect rendering,
+ * update this comparator to include the new property. Otherwise, the component
+ * may not re-render when the new property changes.
+ *
+ * Properties currently checked:
+ * - Node identity: id, selected
+ * - Visual state: isCollapsed, isSelected, isHighlighted, isRecursive, isBaseTable
+ * - Display data: label, nodeType, schema, database, hiddenColumnCount
+ * - Columns: id, name, isHighlighted (for each column)
+ * - Filters: expression (for each filter)
+ */
+export const TableNode = memo(TableNodeComponent, (prev, next) => {
+  // Fast path: check primitive props first
+  if (prev.id !== next.id) return false;
+  if (prev.selected !== next.selected) return false;
+
+  // Check data object properties that affect rendering
+  const prevData = prev.data as TableNodeData | undefined;
+  const nextData = next.data as TableNodeData | undefined;
+
+  if (!prevData || !nextData) return prevData === nextData;
+
+  // Check all properties that affect visual output
+  if (prevData.isCollapsed !== nextData.isCollapsed) return false;
+  if (prevData.isSelected !== nextData.isSelected) return false;
+  if (prevData.isHighlighted !== nextData.isHighlighted) return false;
+  if (prevData.label !== nextData.label) return false;
+  if (prevData.nodeType !== nextData.nodeType) return false;
+  if (prevData.schema !== nextData.schema) return false;
+  if (prevData.database !== nextData.database) return false;
+  if (prevData.isRecursive !== nextData.isRecursive) return false;
+  if (prevData.isBaseTable !== nextData.isBaseTable) return false;
+  if (prevData.hiddenColumnCount !== nextData.hiddenColumnCount) return false;
+
+  // Check columns array
+  if (prevData.columns.length !== nextData.columns.length) return false;
+
+  // For large column arrays, use sampling to avoid O(n) comparison on every render.
+  // This checks first, middle, last + a few samples for a balance of accuracy and performance.
+  const columnCount = prevData.columns.length;
+  const SAMPLING_THRESHOLD = 50;
+
+  const compareColumn = (index: number): boolean => {
+    const prevCol = prevData.columns[index];
+    const nextCol = nextData.columns[index];
+    return (
+      prevCol.id === nextCol.id &&
+      prevCol.name === nextCol.name &&
+      prevCol.isHighlighted === nextCol.isHighlighted
+    );
+  };
+
+  if (columnCount > SAMPLING_THRESHOLD) {
+    // Sample-based comparison for large arrays: first, last, middle, quartiles
+    const sampleIndices = [
+      0,
+      Math.floor(columnCount / 4),
+      Math.floor(columnCount / 2),
+      Math.floor((columnCount * 3) / 4),
+      columnCount - 1,
+    ];
+    for (const idx of sampleIndices) {
+      if (!compareColumn(idx)) return false;
+    }
+  } else {
+    // Full comparison for small arrays
+    for (let i = 0; i < columnCount; i++) {
+      if (!compareColumn(i)) return false;
+    }
+  }
+
+  // Check filters array
+  const prevFilters = prevData.filters || [];
+  const nextFilters = nextData.filters || [];
+  if (prevFilters.length !== nextFilters.length) return false;
+  for (let i = 0; i < prevFilters.length; i++) {
+    if (prevFilters[i].expression !== nextFilters[i].expression) return false;
+  }
+
+  return true;
+});

@@ -2,9 +2,16 @@ import { useState, useEffect, useRef } from 'react';
 import { X, Minimize2, Maximize2, Copy, Check } from 'lucide-react';
 import { useDebugData } from '../../hooks/useDebugData';
 import { JsonTreeView } from './JsonTreeView';
-import { getEngineVersion, isWasmInitialized } from '@pondpilot/flowscope-core';
+import { getAnalysisWorkerVersion } from '@/lib/analysis-worker';
 
 type TabId = 'analysis' | 'schema' | 'uiState' | 'raw';
+
+const TABS: { id: TabId; label: string }[] = [
+  { id: 'analysis', label: 'Analysis Result' },
+  { id: 'schema', label: 'Schema' },
+  { id: 'uiState', label: 'UI State' },
+  { id: 'raw', label: 'Raw JSON' },
+];
 
 interface Position {
   x: number;
@@ -25,13 +32,27 @@ export function DebugPanel() {
   const debugData = useDebugData();
 
   useEffect(() => {
-    if (isVisible && isWasmInitialized()) {
-      try {
-        setEngineVersion(getEngineVersion());
-      } catch (e) {
-        console.warn('Could not fetch engine version', e);
-      }
+    if (!isVisible) {
+      return;
     }
+
+    let cancelled = false;
+
+    getAnalysisWorkerVersion()
+      .then((version) => {
+        if (!cancelled && version) {
+          setEngineVersion(version);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          console.warn('Could not fetch engine version', error);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [isVisible]);
 
   useEffect(() => {
@@ -168,46 +189,19 @@ export function DebugPanel() {
         <>
           {/* Tabs */}
           <div className="flex items-center gap-1 px-2 py-2 bg-muted border-b border-border">
-            <button
-              onClick={() => setActiveTab('analysis')}
-              className={`px-3 py-1 text-sm rounded ${
-                activeTab === 'analysis'
-                  ? 'bg-background border border-border font-semibold'
-                  : 'text-muted-foreground hover:bg-secondary'
-              }`}
-            >
-              Analysis Result
-            </button>
-            <button
-              onClick={() => setActiveTab('schema')}
-              className={`px-3 py-1 text-sm rounded ${
-                activeTab === 'schema'
-                  ? 'bg-background border border-border font-semibold'
-                  : 'text-muted-foreground hover:bg-secondary'
-              }`}
-            >
-              Schema
-            </button>
-            <button
-              onClick={() => setActiveTab('uiState')}
-              className={`px-3 py-1 text-sm rounded ${
-                activeTab === 'uiState'
-                  ? 'bg-background border border-border font-semibold'
-                  : 'text-muted-foreground hover:bg-secondary'
-              }`}
-            >
-              UI State
-            </button>
-            <button
-              onClick={() => setActiveTab('raw')}
-              className={`px-3 py-1 text-sm rounded ${
-                activeTab === 'raw'
-                  ? 'bg-background border border-border font-semibold'
-                  : 'text-muted-foreground hover:bg-secondary'
-              }`}
-            >
-              Raw JSON
-            </button>
+            {TABS.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-3 py-1 text-sm rounded ${
+                  activeTab === tab.id
+                    ? 'bg-background border border-border font-semibold'
+                    : 'text-muted-foreground hover:bg-secondary'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
             <div className="flex-1" />
             <button
               onClick={handleCopyTab}

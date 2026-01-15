@@ -38,6 +38,11 @@ use chrono::{DateTime, Utc};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
+/// Maximum cache size for identifier and table resolution caches.
+/// When exceeded, the cache is cleared to prevent unbounded memory growth.
+/// This is a safety measure - in practice, caches are bounded by the SQL content.
+const MAX_CACHE_ENTRIES: usize = 10_000;
+
 use super::helpers::{
     extract_simple_name, is_quoted_identifier, split_qualified_identifiers, unquote_identifier,
 };
@@ -191,6 +196,9 @@ pub(crate) struct SchemaRegistry {
     allow_implied: bool,
     /// Cache for identifier normalization to avoid repeated string operations.
     identifier_cache: RefCell<HashMap<String, String>>,
+    /// Cache for table reference resolution to avoid repeated lookups.
+    /// Cleared when known_tables changes.
+    table_resolution_cache: RefCell<HashMap<String, TableResolution>>,
 }
 
 impl SchemaRegistry {
@@ -208,6 +216,7 @@ impl SchemaRegistry {
             dialect,
             allow_implied: true,
             identifier_cache: RefCell::new(HashMap::new()),
+            table_resolution_cache: RefCell::new(HashMap::new()),
         };
 
         let issues = registry.initialize_from_metadata(schema);
@@ -272,6 +281,12 @@ impl SchemaRegistry {
         self.allow_implied
     }
 
+    /// Clears the table resolution cache.
+    /// Called when known_tables changes to ensure consistency.
+    fn invalidate_resolution_cache(&self) {
+        self.table_resolution_cache.borrow_mut().clear();
+    }
+
     /// Gets a schema table entry by canonical name.
     pub(crate) fn get(&self, canonical: &str) -> Option<&SchemaTableEntry> {
         self.schema_tables.get(canonical)
@@ -294,6 +309,7 @@ impl SchemaRegistry {
             self.schema_tables.remove(canonical);
             self.known_tables.remove(canonical);
             self.forward_declared_tables.remove(canonical);
+            self.invalidate_resolution_cache();
         }
     }
 
@@ -313,6 +329,7 @@ impl SchemaRegistry {
         } = params;
 
         self.known_tables.insert(canonical.to_string());
+        self.invalidate_resolution_cache();
 
         if is_seed {
             self.forward_declared_tables.insert(canonical.to_string());
@@ -446,6 +463,7 @@ impl SchemaRegistry {
     pub(crate) fn mark_table_known(&mut self, canonical: &str) {
         self.known_tables.insert(canonical.to_string());
         self.forward_declared_tables.insert(canonical.to_string());
+        self.invalidate_resolution_cache();
     }
 
     /// Seeds implied schema metadata with constraints, without emitting conflict warnings.
@@ -487,8 +505,35 @@ impl SchemaRegistry {
     }
 
     /// Canonicalizes a table reference using search path and defaults.
+    ///
+    /// Results are cached to avoid repeated lookups for the same table names.
+    /// Cache is cleared if it exceeds MAX_CACHE_ENTRIES to prevent unbounded growth.
     #[cfg_attr(feature = "tracing", tracing::instrument(skip(self), fields(input = name)))]
     pub(crate) fn canonicalize_table_reference(&self, name: &str) -> TableResolution {
+        // Check cache first
+        {
+            let cache = self.table_resolution_cache.borrow();
+            if let Some(cached) = cache.get(name) {
+                return cached.clone();
+            }
+        }
+
+        let resolution = self.canonicalize_table_reference_uncached(name);
+
+        // Store in cache with size limit enforcement
+        {
+            let mut cache = self.table_resolution_cache.borrow_mut();
+            if cache.len() >= MAX_CACHE_ENTRIES {
+                cache.clear();
+            }
+            cache.insert(name.to_string(), resolution.clone());
+        }
+
+        resolution
+    }
+
+    /// Internal uncached implementation of table reference canonicalization.
+    fn canonicalize_table_reference_uncached(&self, name: &str) -> TableResolution {
         let parts = split_qualified_identifiers(name);
         if parts.is_empty() {
             return TableResolution {
@@ -589,6 +634,7 @@ impl SchemaRegistry {
     /// Normalizes an identifier according to dialect case sensitivity rules.
     ///
     /// Results are cached to avoid repeated string operations for the same identifiers.
+    /// Cache is cleared if it exceeds MAX_CACHE_ENTRIES to prevent unbounded growth.
     pub(crate) fn normalize_identifier(&self, name: &str) -> String {
         // Check cache first
         {
@@ -606,10 +652,14 @@ impl SchemaRegistry {
             strategy.apply(name).into_owned()
         };
 
-        // Store in cache
-        self.identifier_cache
-            .borrow_mut()
-            .insert(name.to_string(), normalized.clone());
+        // Store in cache with size limit enforcement
+        {
+            let mut cache = self.identifier_cache.borrow_mut();
+            if cache.len() >= MAX_CACHE_ENTRIES {
+                cache.clear();
+            }
+            cache.insert(name.to_string(), normalized.clone());
+        }
 
         normalized
     }

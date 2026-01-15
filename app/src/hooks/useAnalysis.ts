@@ -1,41 +1,38 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { analyzeSql } from '@pondpilot/flowscope-core';
 import { useLineage } from '@pondpilot/flowscope-react';
+import { analyzeWithWorker, getCachedAnalysis, syncAnalysisFiles } from '@/lib/analysis-worker';
 import { useProject } from '@/lib/project-store';
+import type { Project } from '@/lib/project-store';
 import { useAnalysisStore } from '@/lib/analysis-store';
-import { FILE_LIMITS } from '@/lib/constants';
-import { parseSchemaSQL } from '@/lib/schema-parser';
+import { FILE_LIMITS, ANALYSIS_SQL_PREVIEW_LIMITS } from '@/lib/constants';
+import { AnalysisErrorCode, isAnalysisError } from '@/types';
 import type { AnalysisState, AnalysisContext, FileValidationResult } from '@/types';
+
+// Maximum retry attempts for file sync errors to prevent infinite loops
+const MAX_FILE_SYNC_RETRIES = 1;
 
 export function useAnalysis(wasmReady: boolean) {
   const { currentProject, activeProjectId } = useProject();
   const { actions, state: lineageState } = useLineage();
   const { hideCTEs } = lineageState;
-  const { getResult, setResult: storeResult } = useAnalysisStore();
+  const { getResult, getMetrics, setResult: storeResult, setMetrics } = useAnalysisStore();
   const [state, setState] = useState<AnalysisState>({
     isAnalyzing: false,
     error: null,
     lastAnalyzedAt: null,
   });
+  const analysisRequestRef = useRef(0);
+  const currentProjectRef = useRef<Project | null>(currentProject);
+
+  useEffect(() => {
+    currentProjectRef.current = currentProject;
+  }, [currentProject]);
 
   // Use ref for actions to avoid dependency issues (actions object changes every render)
   const actionsRef = useRef(actions);
   useEffect(() => {
     actionsRef.current = actions;
   }, [actions]);
-
-  // Restore cached analysis result when project or hideCTEs changes.
-  // Cache validation is built into getResult - it returns null if the cached
-  // result was computed with a different hideCTEs setting.
-  useEffect(() => {
-    if (!activeProjectId) {
-      actionsRef.current.setResult(null);
-      return;
-    }
-
-    const cachedResult = getResult(activeProjectId, hideCTEs);
-    actionsRef.current.setResult(cachedResult);
-  }, [activeProjectId, hideCTEs, getResult]);
 
   const setAnalyzing = useCallback((isAnalyzing: boolean) => {
     setState(prev => ({ ...prev, isAnalyzing }));
@@ -73,25 +70,25 @@ export function useAnalysis(wasmReady: boolean) {
   );
 
   const buildAnalysisContext = useCallback(
-    (activeFileContent?: string, activeFileName?: string): AnalysisContext | null => {
-      if (!currentProject) return null;
+    (project: Project | null, activeFileContent?: string, activeFileName?: string): AnalysisContext | null => {
+      if (!project) return null;
 
       let contextDescription = '';
       let filesToAnalyze: Array<{ name: string; content: string }> = [];
-      const runMode = currentProject.runMode;
+      const runMode = project.runMode;
 
       if (runMode === 'current' && activeFileContent && activeFileName) {
         filesToAnalyze = [{ name: activeFileName, content: activeFileContent }];
         contextDescription = `Analyzing file: ${activeFileName}`;
       } else if (runMode === 'custom') {
-        const selectedIds = currentProject.selectedFileIds || [];
-        const selectedFiles = currentProject.files.filter(
+        const selectedIds = project.selectedFileIds || [];
+        const selectedFiles = project.files.filter(
           f => selectedIds.includes(f.id) && f.name.endsWith('.sql')
         );
         filesToAnalyze = selectedFiles.map(f => ({ name: f.name, content: f.content }));
         contextDescription = `Analyzing selected: ${filesToAnalyze.length} files`;
       } else {
-        const sqlFiles = currentProject.files.filter(f => f.name.endsWith('.sql'));
+        const sqlFiles = project.files.filter(f => f.name.endsWith('.sql'));
         filesToAnalyze = sqlFiles.map(f => ({ name: f.name, content: f.content }));
         contextDescription = `Analyzing project: ${sqlFiles.length} files`;
       }
@@ -102,18 +99,122 @@ export function useAnalysis(wasmReady: boolean) {
         files: filesToAnalyze,
       };
     },
-    [currentProject]
+    []
   );
+
+  useEffect(() => {
+    if (!wasmReady || !currentProject) {
+      return;
+    }
+
+    let cancelled = false;
+    const sqlFiles = currentProject.files.filter(file => file.name.endsWith('.sql'));
+
+    syncAnalysisFiles(sqlFiles)
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          console.warn('Failed to sync analysis files:', error);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentProject, wasmReady]);
+
+  // Restore cached analysis result from memory when project or hideCTEs changes.
+  // Cache validation is built into getResult - it returns null if the cached
+  // result was computed with a different hideCTEs setting.
+  useEffect(() => {
+    if (!activeProjectId) {
+      actionsRef.current.setResult(null);
+      return;
+    }
+
+    const cachedResult = getResult(activeProjectId, hideCTEs);
+    actionsRef.current.setResult(cachedResult);
+
+    if (cachedResult || !wasmReady) {
+      return;
+    }
+  }, [activeProjectId, hideCTEs, getResult, wasmReady]);
+
+  // Check worker's IndexedDB cache for persisted analysis results.
+  // This runs after the memory cache effect and may update the result
+  // if a cached result is found in the worker's persistent storage.
+  useEffect(() => {
+    if (!wasmReady || !activeProjectId) {
+      return;
+    }
+
+    const cachedResult = getResult(activeProjectId, hideCTEs);
+    if (cachedResult) {
+      return;
+    }
+
+    const project = currentProjectRef.current;
+    if (!project) {
+      return;
+    }
+
+    const activeFile = project.files.find(file => file.id === project.activeFileId);
+    const context = buildAnalysisContext(project, activeFile?.content, activeFile?.name);
+    if (!context || context.files.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+    const cacheStart = performance.now();
+
+    syncAnalysisFiles(context.files)
+      .then(() => getCachedAnalysis({
+        fileNames: context.files.map((file) => file.name),
+        dialect: project.dialect,
+        schemaSQL: project.schemaSQL ?? '',
+        hideCTEs,
+        enableColumnLineage: true,
+      }))
+      .then((cached) => {
+        if (cancelled || !cached?.result) {
+          return;
+        }
+        const durationMs = performance.now() - cacheStart;
+        actionsRef.current.setResult(cached.result);
+        storeResult(activeProjectId, cached.result, hideCTEs);
+        setMetrics(activeProjectId, {
+          lastDurationMs: durationMs,
+          lastCacheHit: true,
+          lastCacheKey: cached.cacheKey,
+          lastAnalyzedAt: Date.now(),
+          workerTimings: cached.timings ?? null,
+        });
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          console.warn('Failed to restore cached analysis:', error);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeProjectId, hideCTEs, getResult, storeResult, setMetrics, wasmReady, buildAnalysisContext]);
 
   const runAnalysis = useCallback(
     async (activeFileContent?: string, activeFileName?: string) => {
       if (!wasmReady || !currentProject) return;
 
+      const requestId = analysisRequestRef.current + 1;
+      analysisRequestRef.current = requestId;
+
       setAnalyzing(true);
       setError(null);
 
+      const analysisStart = performance.now();
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
       try {
-        const context = buildAnalysisContext(activeFileContent, activeFileName);
+        const context = buildAnalysisContext(currentProject, activeFileContent, activeFileName);
 
         if (!context) {
           setError('No project context available');
@@ -140,69 +241,92 @@ export function useAnalysis(wasmReady: boolean) {
 
         console.log(context.description);
 
-        const representativeSql = context.files
-          .map(f => `-- File: ${f.name}\n${f.content}`)
-          .join('\n\n');
+        let shouldBuildPreview = context.files.length <= ANALYSIS_SQL_PREVIEW_LIMITS.MAX_FILES;
+        let totalChars = 0;
 
-        actionsRef.current.setSql(representativeSql);
-
-        // Parse schema SQL to extract imported schema tables
-        let importedSchema = undefined;
-        const schemaParsingErrors: string[] = [];
-        if (currentProject.schemaSQL && currentProject.schemaSQL.trim()) {
-          const { tables, errors } = await parseSchemaSQL(
-            currentProject.schemaSQL,
-            currentProject.dialect,
-            analyzeSql
-          );
-
-          if (errors.length > 0) {
-            console.warn('Schema SQL parsing errors:', errors);
-            schemaParsingErrors.push(...errors);
-          }
-
-          if (tables.length > 0) {
-            importedSchema = {
-              allowImplied: true, // Still capture implied schema from DDL in queries
-              tables,
-            };
-          }
+        if (shouldBuildPreview) {
+          totalChars = context.files.reduce((sum, file) => sum + file.content.length, 0);
+          shouldBuildPreview = totalChars <= ANALYSIS_SQL_PREVIEW_LIMITS.MAX_CHARS;
         }
 
-        const result = await analyzeSql({
-          sql: '',
-          files: context.files,
+        if (shouldBuildPreview) {
+          const representativeSql = context.files
+            .map(f => `-- File: ${f.name}\n${f.content}`)
+            .join('\n\n');
+          actionsRef.current.setSql(representativeSql);
+        } else if (activeFileContent) {
+          actionsRef.current.setSql(activeFileContent);
+        }
+
+        const analysisPayload = {
+          fileNames: context.files.map((file) => file.name),
           dialect: currentProject.dialect,
-          schema: importedSchema,
-          options: {
-            enableColumnLineage: true,
-            hideCtes: hideCTEs,
-          },
-        });
+          schemaSQL: currentProject.schemaSQL ?? '',
+          hideCTEs,
+          enableColumnLineage: true,
+        };
 
-        // Inject schema parsing errors as issues in the result
-        if (schemaParsingErrors.length > 0) {
-          const schemaIssues = schemaParsingErrors.map((errorMsg) => ({
-            severity: 'warning' as const,
-            code: 'SCHEMA_PARSE_ERROR',
-            message: `Schema DDL: ${errorMsg}`,
-            locations: [],
-          }));
+        const cachedResult = activeProjectId ? getResult(activeProjectId, hideCTEs) : null;
+        const knownCacheKey = cachedResult && activeProjectId
+          ? getMetrics(activeProjectId)?.lastCacheKey ?? null
+          : null;
 
-          result.issues = [...(result.issues || []), ...schemaIssues];
+        let analysisResponse: Awaited<ReturnType<typeof analyzeWithWorker>>;
+        let fileSyncRetries = 0;
+
+        while (true) {
+          try {
+            analysisResponse = await analyzeWithWorker(analysisPayload, { knownCacheKey });
+            break;
+          } catch (error) {
+            // Handle missing file content by syncing files and retrying.
+            // Uses structured error codes instead of string matching for reliability.
+            // Limited retries prevent infinite loops if sync consistently fails.
+            if (
+              isAnalysisError(error, AnalysisErrorCode.MISSING_FILE_CONTENT) &&
+              fileSyncRetries < MAX_FILE_SYNC_RETRIES
+            ) {
+              fileSyncRetries++;
+              await syncAnalysisFiles(context.files);
+              continue;
+            }
+            throw error;
+          }
         }
 
-        actionsRef.current.setResult(result);
-        // Store result per project for restoration when switching projects
+        if (analysisRequestRef.current !== requestId) {
+          return;
+        }
+
+        const durationMs = performance.now() - analysisStart;
+
+        if (!analysisResponse.skipped && analysisResponse.result) {
+          actionsRef.current.setResult(analysisResponse.result);
+          if (activeProjectId) {
+            storeResult(activeProjectId, analysisResponse.result, hideCTEs);
+          }
+        }
+
         if (activeProjectId) {
-          storeResult(activeProjectId, result, hideCTEs);
+          setMetrics(activeProjectId, {
+            lastDurationMs: durationMs,
+            lastCacheHit: analysisResponse.cacheHit,
+            lastCacheKey: analysisResponse.cacheKey,
+            lastAnalyzedAt: Date.now(),
+            workerTimings: analysisResponse.timings ?? null,
+          });
         }
         setState(prev => ({ ...prev, lastAnalyzedAt: Date.now() }));
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Analysis failed');
-        console.error(err);
+      } catch (error) {
+        if (analysisRequestRef.current !== requestId) {
+          return;
+        }
+        setError(error instanceof Error ? error.message : 'Analysis failed');
+        console.error(error);
       } finally {
-        setAnalyzing(false);
+        if (analysisRequestRef.current === requestId) {
+          setAnalyzing(false);
+        }
       }
     },
     [
@@ -210,6 +334,9 @@ export function useAnalysis(wasmReady: boolean) {
       currentProject,
       activeProjectId,
       storeResult,
+      setMetrics,
+      getMetrics,
+      getResult,
       buildAnalysisContext,
       validateFiles,
       setAnalyzing,

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useLineage } from '@pondpilot/flowscope-react';
 import { useProject } from '../lib/project-store';
 import { getLastParseResult } from '../lib/schema-parser';
+import { useAnalysisStore } from '../lib/analysis-store';
 import type { Issue, ResolvedSchemaTable } from '@pondpilot/flowscope-core';
 
 export interface DebugData {
@@ -13,6 +14,18 @@ export interface DebugData {
       statementCount: number;
       issueCount: number;
       hasErrors: boolean;
+    };
+    performance: {
+      lastDurationMs: number | null;
+      lastCacheHit: boolean | null;
+      lastCacheKey: string | null;
+      lastAnalyzedAt: number | null;
+      workerTimings: {
+        totalMs: number;
+        cacheReadMs: number;
+        schemaParseMs: number;
+        analyzeMs: number;
+      } | null;
     };
     globalLineage: {
       nodeCount: number;
@@ -47,6 +60,19 @@ export interface DebugData {
         selectedTableLabels: string[];
         direction: string;
       };
+      layoutMetrics: {
+        lastDurationMs: number | null;
+        nodeCount: number;
+        edgeCount: number;
+        algorithm: string | null;
+        lastUpdatedAt: number | null;
+      };
+      graphMetrics: {
+        lastDurationMs: number | null;
+        nodeCount: number;
+        edgeCount: number;
+        lastUpdatedAt: number | null;
+      };
     };
     project: {
       activeProjectId: string | null;
@@ -65,6 +91,7 @@ export interface DebugData {
 export function useDebugData(): DebugData {
   const { state: lineageState } = useLineage();
   const projectContext = useProject();
+  const getMetrics = useAnalysisStore((state) => state.getMetrics);
 
   const debugData = useMemo<DebugData>(() => {
     const currentProject = projectContext?.currentProject;
@@ -76,6 +103,8 @@ export function useDebugData(): DebugData {
     const importedCount = resolvedSchema?.tables?.filter((t: ResolvedSchemaTable) => t.origin === 'imported').length ?? 0;
     const impliedCount = resolvedSchema?.tables?.filter((t: ResolvedSchemaTable) => t.origin === 'implied').length ?? 0;
 
+    const metrics = currentProject?.id ? getMetrics(currentProject.id) : null;
+
     return {
       analysisResult: {
         result: lineageState.result,
@@ -85,6 +114,13 @@ export function useDebugData(): DebugData {
           statementCount: lineageState.result?.statements.length ?? 0,
           issueCount: lineageState.result?.issues.length ?? 0,
           hasErrors: lineageState.result?.summary.hasErrors ?? false,
+        },
+        performance: {
+          lastDurationMs: metrics?.lastDurationMs ?? null,
+          lastCacheHit: metrics?.lastCacheHit ?? null,
+          lastCacheKey: metrics?.lastCacheKey ?? null,
+          lastAnalyzedAt: metrics?.lastAnalyzedAt ?? null,
+          workerTimings: metrics?.workerTimings ?? null,
         },
         globalLineage: {
           nodeCount: lineageState.result?.globalLineage?.nodes?.length ?? 0,
@@ -121,6 +157,19 @@ export function useDebugData(): DebugData {
             selectedTableLabels: Array.from(lineageState.tableFilter.selectedTableLabels),
             direction: lineageState.tableFilter.direction,
           },
+          layoutMetrics: {
+            lastDurationMs: lineageState.layoutMetrics.lastDurationMs,
+            nodeCount: lineageState.layoutMetrics.nodeCount,
+            edgeCount: lineageState.layoutMetrics.edgeCount,
+            algorithm: lineageState.layoutMetrics.algorithm,
+            lastUpdatedAt: lineageState.layoutMetrics.lastUpdatedAt,
+          },
+          graphMetrics: {
+            lastDurationMs: lineageState.graphMetrics.lastDurationMs,
+            nodeCount: lineageState.graphMetrics.nodeCount,
+            edgeCount: lineageState.graphMetrics.edgeCount,
+            lastUpdatedAt: lineageState.graphMetrics.lastUpdatedAt,
+          },
         },
         project: {
           activeProjectId: projectContext?.activeProjectId ?? null,
@@ -135,7 +184,7 @@ export function useDebugData(): DebugData {
       },
       timestamp: new Date().toISOString(),
     };
-  }, [lineageState, projectContext]);
+  }, [lineageState, projectContext, getMetrics]);
 
   return debugData;
 }
