@@ -11,7 +11,9 @@ Export analysis results to a queryable DuckDB database, enabling ad-hoc lineage 
 - Compliance/governance teams tracing PII flows
 - Developers debugging complex SQL
 
-**Architecture:** New `flowscope-export` Rust crate, compiled to WASM for frontend, used natively by CLI.
+**Architecture:** New `flowscope-export` Rust crate with two export paths:
+- **Native (CLI):** Creates binary DuckDB database file
+- **WASM (browser):** Generates SQL statements (DDL + INSERT) for duckdb-wasm
 
 ## Architecture
 
@@ -19,12 +21,15 @@ Export analysis results to a queryable DuckDB database, enabling ad-hoc lineage 
 flowscope-core (types + analysis)
        ↑
 flowscope-export (database generation)
-       ↑
-flowscope-wasm (WASM bindings)
-flowscope-cli (native binary)
+       ↑                       ↑
+flowscope-cli          flowscope-wasm
+(native binary)        (SQL text output)
 ```
 
-The crate returns `Vec<u8>` (raw database bytes) so WASM can pass it to JavaScript for download.
+The native CLI path creates a binary DuckDB file via the `bundled` feature.
+The WASM path generates SQL text that can be executed by duckdb-wasm in the browser.
+
+**Note:** DuckDB's native code cannot compile to WASM, so the browser uses SQL text generation.
 
 ## Crate Structure
 
@@ -32,27 +37,33 @@ The crate returns `Vec<u8>` (raw database bytes) so WASM can pass it to JavaScri
 crates/flowscope-export/
 ├── Cargo.toml
 └── src/
-    ├── lib.rs              # Public API
-    ├── schema.rs           # Table DDL generation
-    ├── writer.rs           # Backend trait
-    ├── views.rs            # View DDL definitions
-    └── backends/
-        ├── mod.rs
-        └── duckdb.rs       # DuckDB implementation
+    ├── lib.rs              # Public API (Format enum, export functions)
+    ├── error.rs            # Error types
+    ├── schema.rs           # DDL generation (tables + views)
+    ├── writer.rs           # Backend trait (for future SQLite)
+    ├── duckdb_backend.rs   # Native DuckDB export (feature-gated)
+    └── sql_backend.rs      # SQL text generation (WASM-compatible)
 ```
 
 ## Public API
 
 ```rust
-use flowscope_core::types::AnalyzeResult;
+use flowscope_core::AnalyzeResult;
 
 pub enum Format {
-    DuckDB,
-    // SQLite,  // Future
+    DuckDB,   // Native binary (requires duckdb feature)
+    Sql,      // SQL text (WASM-compatible)
 }
 
+// Generic export (bytes for DuckDB/Sql)
 pub fn export(result: &AnalyzeResult, format: Format) -> Result<Vec<u8>, ExportError>;
+
+// Native DuckDB binary export (CLI only)
+#[cfg(feature = "duckdb")]
 pub fn export_duckdb(result: &AnalyzeResult) -> Result<Vec<u8>, ExportError>;
+
+// SQL text export (WASM-compatible)
+pub fn export_sql(result: &AnalyzeResult) -> Result<String, ExportError>;
 ```
 
 ## Database Schema
@@ -514,23 +525,41 @@ GROUP BY st.id, st.catalog, st.schema, st.name, st.resolution_source,
 ### CLI
 
 ```bash
-flowscope analyze query.sql --output duckdb -o lineage.duckdb
+# Export to binary DuckDB file
+flowscope analyze query.sql --format duckdb -o lineage.duckdb
+
+# Query the exported database
+duckdb lineage.duckdb -c "SELECT * FROM column_lineage"
 ```
 
 ### WASM
 
 ```rust
+// Returns SQL text (DDL + INSERT statements)
 #[wasm_bindgen]
-pub fn export_to_duckdb(result_json: &str) -> Result<Vec<u8>, JsError>;
+pub fn export_to_duckdb_sql(result_json: &str) -> Result<String, JsError>;
+
+// Combined analyze + export
+#[wasm_bindgen]
+pub fn analyze_and_export_sql(request_json: &str) -> Result<String, JsError>;
 ```
 
-### Frontend
+### Frontend (TypeScript)
 
 ```typescript
-async function exportToDuckDB(result: AnalyzeResult, filename: string) {
-  const bytes = export_to_duckdb(JSON.stringify(result));
-  // Trigger download...
-}
+import { exportToDuckDbSql } from '@pondpilot/flowscope-core';
+
+// Export via analysis worker
+const sql = await exportToDuckDbSql(result);
+
+// Download as .sql file
+const blob = new Blob([sql], { type: 'text/sql' });
+// ... trigger download
+
+// Or execute in duckdb-wasm
+const db = await initDuckDB();
+await db.query(sql);
+const lineage = await db.query('SELECT * FROM column_lineage');
 ```
 
 ## Example Queries
