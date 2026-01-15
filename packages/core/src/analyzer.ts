@@ -3,6 +3,7 @@ import type { AnalyzeRequest, AnalyzeResult, Dialect } from './types';
 
 // Import WASM functions (will be available after init)
 let analyzeSqlJson: ((request: string) => string) | null = null;
+let exportToDuckDbSqlFn: ((resultJson: string) => string) | null = null;
 let panicHookInstalled = false;
 
 async function ensureWasmReady(): Promise<void> {
@@ -14,6 +15,10 @@ async function ensureWasmReady(): Promise<void> {
 
   if (!analyzeSqlJson) {
     analyzeSqlJson = wasmModule.analyze_sql_json;
+  }
+
+  if (!exportToDuckDbSqlFn) {
+    exportToDuckDbSqlFn = wasmModule.export_to_duckdb_sql;
   }
 
   // Install panic hook for better error messages
@@ -113,4 +118,34 @@ export async function analyzeSimple(
   dialect: Dialect = 'generic'
 ): Promise<AnalyzeResult> {
   return analyzeSql({ sql, dialect });
+}
+
+/**
+ * Export an analysis result to SQL statements for DuckDB.
+ *
+ * Returns DDL (CREATE TABLE/VIEW) + INSERT statements that can be
+ * executed by duckdb-wasm in the browser to create a queryable database.
+ *
+ * @param result - The analysis result to export
+ * @returns SQL statements as a string
+ *
+ * @example
+ * ```typescript
+ * const result = await analyzeSql({ sql: 'SELECT * FROM users', dialect: 'postgres' });
+ * const sql = await exportToDuckDbSql(result);
+ * // Execute 'sql' with duckdb-wasm to create a queryable lineage database
+ * ```
+ */
+export async function exportToDuckDbSql(result: AnalyzeResult): Promise<string> {
+  await ensureWasmReady();
+
+  if (!exportToDuckDbSqlFn) {
+    throw new Error('WASM module not properly initialized');
+  }
+
+  // Serialize result to JSON
+  const resultJson = JSON.stringify(result);
+
+  // Call WASM function
+  return exportToDuckDbSqlFn(resultJson);
 }

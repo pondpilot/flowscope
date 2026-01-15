@@ -1,4 +1,4 @@
-import { analyzeSql, initWasm, getEngineVersion } from '@pondpilot/flowscope-core';
+import { analyzeSql, initWasm, getEngineVersion, exportToDuckDbSql } from '@pondpilot/flowscope-core';
 import type { AnalyzeResult, Dialect } from '@pondpilot/flowscope-core';
 import { parseSchemaSQL } from '../lib/schema-parser';
 import { readCachedAnalysisResult, writeCachedAnalysisResult } from '../lib/analysis-cache';
@@ -19,11 +19,16 @@ export interface SyncFilesPayload {
   replace?: boolean;
 }
 
+export interface ExportPayload {
+  result: AnalyzeResult;
+}
+
 export interface AnalysisWorkerRequest {
-  type: 'init' | 'analyze' | 'get-cache' | 'get-version' | 'sync-files' | 'clear-files';
+  type: 'init' | 'analyze' | 'get-cache' | 'get-version' | 'sync-files' | 'clear-files' | 'export';
   requestId: string;
   payload?: AnalysisWorkerPayload;
   syncPayload?: SyncFilesPayload;
+  exportPayload?: ExportPayload;
   cacheMaxBytes?: number;
   knownCacheKey?: string | null;
 }
@@ -48,7 +53,7 @@ export const WorkerErrorCode = {
 export type WorkerErrorCode = (typeof WorkerErrorCode)[keyof typeof WorkerErrorCode];
 
 export interface AnalysisWorkerResponse {
-  type: 'init-result' | 'analyze-result' | 'cache-result' | 'version-result' | 'sync-result';
+  type: 'init-result' | 'analyze-result' | 'cache-result' | 'version-result' | 'sync-result' | 'export-result';
   requestId: string;
   result?: AnalyzeResult | null;
   cacheKey?: string;
@@ -56,6 +61,8 @@ export interface AnalysisWorkerResponse {
   skipResult?: boolean;
   timings?: AnalysisWorkerTimings;
   version?: string;
+  /** SQL statements for DuckDB export */
+  exportSql?: string;
   error?: string;
   /** Structured error code for programmatic handling */
   errorCode?: WorkerErrorCode;
@@ -291,7 +298,7 @@ async function getCachedAnalysis(payload: AnalysisWorkerPayload): Promise<Analys
 }
 
 self.onmessage = async (event: MessageEvent<AnalysisWorkerRequest>) => {
-  const { type, requestId, payload, syncPayload, cacheMaxBytes, knownCacheKey } = event.data;
+  const { type, requestId, payload, syncPayload, exportPayload, cacheMaxBytes, knownCacheKey } = event.data;
 
   try {
     if (type === 'sync-files') {
@@ -347,6 +354,28 @@ self.onmessage = async (event: MessageEvent<AnalysisWorkerRequest>) => {
         type: 'version-result',
         requestId,
         version: getEngineVersion(),
+      };
+      self.postMessage(response);
+      return;
+    }
+
+    if (type === 'export') {
+      if (!exportPayload) {
+        const response: AnalysisWorkerResponse = {
+          type: 'export-result',
+          requestId,
+          error: 'Missing export payload',
+        };
+        self.postMessage(response);
+        return;
+      }
+
+      await ensureWasmReady();
+      const sql = await exportToDuckDbSql(exportPayload.result);
+      const response: AnalysisWorkerResponse = {
+        type: 'export-result',
+        requestId,
+        exportSql: sql,
       };
       self.postMessage(response);
       return;

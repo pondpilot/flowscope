@@ -198,3 +198,22 @@ export function terminateAnalysisWorker(): void {
     pendingRequests.delete(requestId);
   }
 }
+
+/**
+ * Export analysis result to SQL statements for DuckDB.
+ *
+ * @param result - The analysis result to export
+ * @returns SQL statements (DDL + INSERT) for DuckDB
+ */
+export async function exportToDuckDbSql(result: AnalyzeResult): Promise<string> {
+  const response = await sendRequest({
+    type: 'export',
+    exportPayload: { result },
+  });
+
+  if (!response.exportSql) {
+    throw new Error('Worker returned empty export SQL');
+  }
+
+  return response.exportSql;
+}

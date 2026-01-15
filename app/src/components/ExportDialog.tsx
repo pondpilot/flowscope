@@ -9,7 +9,9 @@ import {
   FileCode,
   FileText,
   FileDown,
+  Database,
 } from 'lucide-react';
+import { exportToDuckDbSql } from '@/lib/analysis-worker';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -856,6 +858,18 @@ export function ExportDialog({ result, projectName, graphRef }: ExportDialogProp
     }
   }, [result, projectName]);
 
+  const handleDownloadDuckDb = useCallback(async () => {
+    if (!result) return;
+    try {
+      const sql = await exportToDuckDbSql(result);
+      downloadBlob(sql, generateFilename(projectName, 'sql'), 'text/sql');
+      toast.success('DuckDB SQL export downloaded');
+    } catch (err) {
+      console.error('Failed to export DuckDB:', err);
+      toast.error('Failed to export DuckDB SQL');
+    }
+  }, [result, projectName]);
+
   if (!result) {
     return null;
   }
@@ -891,6 +905,10 @@ export function ExportDialog({ result, projectName, graphRef }: ExportDialogProp
           <DropdownMenuItem onClick={handleDownloadCsv}>
             <FileDown className="size-4 mr-2" />
             CSV (Column Mappings)
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={handleDownloadDuckDb}>
+            <Database className="size-4 mr-2" />
+            DuckDB SQL
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuLabel>Visual Formats</DropdownMenuLabel>
