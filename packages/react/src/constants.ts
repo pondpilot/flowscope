@@ -135,6 +135,7 @@ export const COLORS = {
   edges: {
     dataFlow: '#94A3B8', // Slate gray - direct data movement
     derivation: '#8B5CF6', // Purple - transformation
+    joinDependency: '#10B981', // Green - join-only dependency
     aggregation: '#F59E0B', // Amber - GROUP BY / aggregates
     highlighted: '#4C61FF', // Bright blue - selected
     muted: '#CBD5E1', // Light gray - dimmed edges
@@ -219,6 +220,7 @@ export const COLORS_DARK = {
   edges: {
     dataFlow: '#8292AA', // PondPilot blue-grey-500
     derivation: '#A78BFA',
+    joinDependency: '#34D399', // Emerald-400
     aggregation: '#F7B987', // PondPilot warning.dark
     highlighted: '#4C61FF', // PondPilot accent.dark
     muted: '#5B6B86', // PondPilot blue-grey-600
@@ -368,6 +370,11 @@ export const EDGE_STYLES = {
     stroke: COLORS.edges.derivation,
     strokeWidth: 2,
     strokeDasharray: '6 4', // Dashed line
+  },
+  joinDependency: {
+    stroke: COLORS.edges.joinDependency,
+    strokeWidth: 2,
+    strokeDasharray: '2 2', // Dotted line
   },
   aggregation: {
     stroke: COLORS.edges.aggregation,

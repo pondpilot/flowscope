@@ -126,6 +126,32 @@ describe('extractTableDependenciesWithDetails', () => {
     expect(deps[0].spans).toHaveLength(1);
     expect(deps[0].spans[0]).toEqual({ start: 10, end: 20 });
   });
+
+  it('includes join-only dependencies to output', () => {
+    const outputNodeType = 'output' as StatementLineage['nodes'][number]['type'];
+    const joinDependencyType = 'join_dependency' as StatementLineage['edges'][number]['type'];
+
+    const statements: StatementLineage[] = [
+      {
+        statementIndex: 0,
+        statementType: 'SELECT',
+        joinCount: 1,
+        complexityScore: 5,
+        nodes: [
+          { id: 't1', type: 'table', label: 'table1', qualifiedName: 'table1' },
+          { id: 'out1', type: outputNodeType, label: 'Output' },
+        ],
+        edges: [
+          { id: 'e1', from: 't1', to: 'out1', type: joinDependencyType },
+        ],
+      },
+    ];
+
+    const deps = extractTableDependenciesWithDetails(statements);
+    const joinDep = deps.find((dep) => dep.sourceTable === 'table1' && dep.targetTable === 'Output');
+    expect(joinDep).toBeDefined();
+    expect(joinDep!.columns).toHaveLength(0);
+  });
 });
 
 describe('extractScriptDependencies', () => {

@@ -1,6 +1,6 @@
 use flowscope_core::{
-    analyze, AnalyzeRequest, CaseSensitivity, Dialect, SchemaMetadata, SchemaNamespaceHint,
-    SchemaTable,
+    analyze, AnalyzeRequest, CaseSensitivity, Dialect, NodeType, SchemaMetadata,
+    SchemaNamespaceHint, SchemaTable,
 };
 use proptest::prelude::*;
 
@@ -78,7 +78,8 @@ proptest! {
         prop_assert!(result.summary.table_count >= 1);
 
         // Check the table name in global lineage reflects case handling
-        if let Some(node) = result.global_lineage.nodes.first() {
+        // Find the table node (skip output nodes)
+        if let Some(node) = result.global_lineage.nodes.iter().find(|n| n.node_type == NodeType::Table) {
             let expected = match dialect {
                 Dialect::Snowflake => table_name.to_uppercase(),
                 Dialect::Mysql => table_name.clone(), // preserves exact case
@@ -136,7 +137,8 @@ proptest! {
         prop_assert_eq!(result.summary.statement_count, 1);
 
         // The resolved table should have the correct schema and name
-        if let Some(node) = result.global_lineage.nodes.first() {
+        // Find the table node (skip output nodes)
+        if let Some(node) = result.global_lineage.nodes.iter().find(|n| n.node_type == NodeType::Table) {
             let got_schema = node.canonical_name.schema.as_deref();
             let got_name = &node.canonical_name.name;
             prop_assert_eq!(got_schema, Some(target_schema.as_str()), "Schema mismatch");
@@ -187,7 +189,8 @@ proptest! {
         prop_assert_eq!(result.summary.statement_count, 1);
 
         // Should resolve to the explicitly qualified name
-        if let Some(node) = result.global_lineage.nodes.first() {
+        // Find the table node (skip output nodes)
+        if let Some(node) = result.global_lineage.nodes.iter().find(|n| n.node_type == NodeType::Table) {
             let got_schema = node.canonical_name.schema.as_deref();
             let got_name = &node.canonical_name.name;
             prop_assert_eq!(got_schema, Some(schema.as_str()), "Schema mismatch");

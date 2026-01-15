@@ -230,7 +230,7 @@ fn generate_table_view(result: &AnalyzeResult) -> String {
         let table_nodes: Vec<_> = stmt
             .nodes
             .iter()
-            .filter(|n| n.node_type.is_table_like())
+            .filter(|n| n.node_type.is_table_like() || n.node_type == NodeType::Output)
             .collect();
 
         // Add table nodes
@@ -245,6 +245,7 @@ fn generate_table_view(result: &AnalyzeResult) -> String {
                 let shape = match node.node_type {
                     NodeType::Cte => format!("([\"{}\"])", escape_label(&node.label)),
                     NodeType::View => format!("[/\"{}\"/]", escape_label(&node.label)),
+                    NodeType::Output => format!("([\"{}\"])", escape_label(&node.label)),
                     _ => format!("[\"{}\"]", escape_label(&node.label)),
                 };
                 lines.push(format!("    {id}{shape}"));
@@ -253,7 +254,10 @@ fn generate_table_view(result: &AnalyzeResult) -> String {
 
         // Add edges
         for edge in &stmt.edges {
-            if edge.edge_type == EdgeType::DataFlow || edge.edge_type == EdgeType::Derivation {
+            if edge.edge_type == EdgeType::DataFlow
+                || edge.edge_type == EdgeType::Derivation
+                || edge.edge_type == EdgeType::JoinDependency
+            {
                 let source_node = table_nodes.iter().find(|n| n.id == edge.from);
                 let target_node = table_nodes.iter().find(|n| n.id == edge.to);
 

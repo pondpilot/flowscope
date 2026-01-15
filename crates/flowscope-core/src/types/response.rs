@@ -449,6 +449,8 @@ pub enum NodeType {
     View,
     /// A Common Table Expression (WITH clause)
     Cte,
+    /// A virtual output node for SELECT statements
+    Output,
     /// A column
     Column,
 }
@@ -458,6 +460,17 @@ impl NodeType {
     /// These nodes can contain columns and appear in FROM clauses.
     pub fn is_table_like(self) -> bool {
         matches!(self, NodeType::Table | NodeType::View | NodeType::Cte)
+    }
+
+    /// Returns true if this is a relation-like node that can be a source or sink in lineage.
+    ///
+    /// Includes table-like nodes plus Output nodes (virtual sinks for SELECT statements).
+    /// Use this when building lineage graphs where Output nodes participate as targets.
+    pub fn is_relation(self) -> bool {
+        matches!(
+            self,
+            NodeType::Table | NodeType::View | NodeType::Cte | NodeType::Output
+        )
     }
 
     /// Returns true if this is a table or view (excludes CTEs).
@@ -506,6 +519,8 @@ pub enum EdgeType {
     DataFlow,
     /// Output derived from inputs (with transformation)
     Derivation,
+    /// Join-only dependency from a source to output
+    JoinDependency,
     /// Cross-statement dependency
     CrossStatement,
 }

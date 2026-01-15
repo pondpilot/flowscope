@@ -270,7 +270,7 @@ const SchemaTableNodeComponent = ({ data }: NodeProps<FlowNode<SchemaTableNodeDa
           gap: 8,
           cursor: 'grab',
         }}
-        className="nodrag"
+        className="schema-node-header"
       >
         <NodeIcon size={14} style={{ opacity: 0.7, flexShrink: 0 }} />
         <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -280,7 +280,10 @@ const SchemaTableNodeComponent = ({ data }: NodeProps<FlowNode<SchemaTableNodeDa
 
       {/* Columns */}
       {(data.columns || []).length > 0 && (
-        <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+        <div
+          style={{ maxHeight: 400, overflowY: 'auto', overflowX: 'hidden' }}
+          className="nodrag"
+        >
           {(data.columns || []).map((col: ColumnWithConstraints) => {
             const isPK = col.isPrimaryKey === true;
             const hasFK = col.foreignKey != null;
@@ -736,6 +739,7 @@ const edgeTypes = {
 export function buildSchemaFlowEdges(schema: (SchemaTable | ResolvedSchemaTable)[]): FlowEdge[] {
   const edges: FlowEdge[] = [];
   const seenEdgeIds = new Set<string>();
+  const normalizedEdgeKeys = new Set<string>();
   const tableLookup = new Map<string, string>();
 
   for (const table of schema) {
@@ -757,6 +761,19 @@ export function buildSchemaFlowEdges(schema: (SchemaTable | ResolvedSchemaTable)
 
       const resolvedTarget = resolveForeignKeyTarget(col.foreignKey.table, tableLookup);
       if (resolvedTarget) {
+        // Use sorted array for consistent ordering regardless of case sensitivity
+        const [first, second] = [table.name, resolvedTarget].sort();
+        const [firstCol, secondCol] =
+          first === table.name
+            ? [col.name, col.foreignKey.column]
+            : [col.foreignKey.column, col.name];
+        const normalizedKey = `${first}.${firstCol}->${second}.${secondCol}`;
+
+        if (normalizedEdgeKeys.has(normalizedKey)) {
+          continue;
+        }
+
+        normalizedEdgeKeys.add(normalizedKey);
         edges.push({
           id: edgeId,
           source: table.name,
@@ -782,6 +799,7 @@ export function buildSchemaFlowNodes(schema: (SchemaTable | ResolvedSchemaTable)
       id: table.name,
       type: 'schemaTableNode',
       position: { x: 0, y: 0 },
+      dragHandle: '.schema-node-header',
       data: {
         label: table.name,
         columns: getColumnsWithConstraintMetadata(table),

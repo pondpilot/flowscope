@@ -21,6 +21,8 @@ const createMockResult = (): AnalyzeResult => ({
       statementIndex: 0,
       statementType: 'SELECT',
       sourceName: 'script1.sql',
+      joinCount: 0,
+      complexityScore: 1,
       nodes: [
         { id: 'table1', type: 'table', label: 'users', qualifiedName: 'public.users' },
         { id: 'table2', type: 'table', label: 'orders', qualifiedName: 'public.orders' },
@@ -40,6 +42,8 @@ const createMockResult = (): AnalyzeResult => ({
       statementIndex: 1,
       statementType: 'INSERT',
       sourceName: 'script2.sql',
+      joinCount: 0,
+      complexityScore: 1,
       nodes: [
         { id: 'table3', type: 'table', label: 'summary', qualifiedName: 'public.summary' },
         { id: 'table2_ref', type: 'table', label: 'orders', qualifiedName: 'public.orders' },
@@ -99,6 +103,8 @@ describe('extractScriptInfo', () => {
       {
         statementIndex: 0,
         statementType: 'SELECT',
+        joinCount: 0,
+        complexityScore: 1,
         nodes: [{ id: 't1', type: 'table', label: 'test' }],
         edges: [],
       },
@@ -129,6 +135,8 @@ describe('extractTableInfo', () => {
       {
         statementIndex: 0,
         statementType: 'SELECT',
+        joinCount: 0,
+        complexityScore: 1,
         nodes: [{ id: 'cte1', type: 'cte', label: 'temp_data' }],
         edges: [],
       },
@@ -279,11 +287,37 @@ describe('extractTableDependencies', () => {
     expect(deps).toHaveLength(0);
   });
 
+  it('includes join-only dependencies to output', () => {
+    const outputNodeType = 'output' as StatementLineage['nodes'][number]['type'];
+    const joinDependencyType = 'join_dependency' as StatementLineage['edges'][number]['type'];
+    const statements: StatementLineage[] = [
+      {
+        statementIndex: 0,
+        statementType: 'SELECT',
+        joinCount: 1,
+        complexityScore: 1,
+        nodes: [
+          { id: 't1', type: 'table', label: 'source', qualifiedName: 'db.source' },
+          { id: 'out1', type: outputNodeType, label: 'Output' },
+        ],
+        edges: [
+          { id: 'e1', from: 't1', to: 'out1', type: joinDependencyType },
+        ],
+      },
+    ];
+
+    const deps = extractTableDependencies(statements);
+    expect(deps).toHaveLength(1);
+    expect(deps[0]).toEqual({ sourceTable: 'db.source', targetTable: 'Output' });
+  });
+
   it('deduplicates identical dependencies', () => {
     const statements: StatementLineage[] = [
       {
         statementIndex: 0,
         statementType: 'SELECT',
+        joinCount: 0,
+        complexityScore: 1,
         nodes: [
           { id: 't1', type: 'table', label: 'source', qualifiedName: 'db.source' },
           { id: 't2', type: 'table', label: 'target', qualifiedName: 'db.target' },

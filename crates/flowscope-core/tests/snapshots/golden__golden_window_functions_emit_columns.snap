@@ -9,24 +9,29 @@ expression: cleaned
       "statementType": "SELECT",
       "nodes": [
         {
-          "id": "column_07f2c53c2049650d",
-          "type": "column",
-          "label": "id"
-        },
-        {
           "id": "column_208687717881053c",
           "type": "column",
           "label": "id",
           "qualifiedName": "employees.id"
         },
         {
-          "id": "column_ca661975347e1ac3",
+          "id": "column_a4be1b20b5f604d9",
           "type": "column",
           "label": "rn",
           "expression": "ROW_NUMBER() OVER (PARTITION BY dept)",
           "metadata": {
             "data_type": "INTEGER"
           }
+        },
+        {
+          "id": "column_d8bba385e09d94a9",
+          "type": "column",
+          "label": "id"
+        },
+        {
+          "id": "output_b558dd754c71cfa6",
+          "type": "output",
+          "label": "Output"
         },
         {
           "id": "table_1d63721b3610a67f",
@@ -37,10 +42,22 @@ expression: cleaned
       ],
       "edges": [
         {
-          "id": "edge_67cf78c40623a924",
+          "id": "edge_0d4efff970b71ad2",
           "from": "column_208687717881053c",
-          "to": "column_07f2c53c2049650d",
+          "to": "column_d8bba385e09d94a9",
           "type": "data_flow"
+        },
+        {
+          "id": "edge_4c64818a03f23ebe",
+          "from": "output_b558dd754c71cfa6",
+          "to": "column_a4be1b20b5f604d9",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_b1adfd2ed7cda1e5",
+          "from": "output_b558dd754c71cfa6",
+          "to": "column_d8bba385e09d94a9",
+          "type": "ownership"
         },
         {
           "id": "edge_d0d8e0de8ab72937",
@@ -55,20 +72,6 @@ expression: cleaned
   ],
   "globalLineage": {
     "nodes": [
-      {
-        "id": "column_07f2c53c2049650d",
-        "type": "column",
-        "label": "id",
-        "canonicalName": {
-          "name": "id"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "column_07f2c53c2049650d"
-          }
-        ]
-      },
       {
         "id": "column_208687717881053c",
         "type": "column",
@@ -85,7 +88,7 @@ expression: cleaned
         ]
       },
       {
-        "id": "column_ca661975347e1ac3",
+        "id": "column_a4be1b20b5f604d9",
         "type": "column",
         "label": "rn",
         "canonicalName": {
@@ -94,7 +97,35 @@ expression: cleaned
         "statementRefs": [
           {
             "statementIndex": 0,
-            "nodeId": "column_ca661975347e1ac3"
+            "nodeId": "column_a4be1b20b5f604d9"
+          }
+        ]
+      },
+      {
+        "id": "column_d8bba385e09d94a9",
+        "type": "column",
+        "label": "id",
+        "canonicalName": {
+          "name": "id"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_d8bba385e09d94a9"
+          }
+        ]
+      },
+      {
+        "id": "output_b558dd754c71cfa6",
+        "type": "output",
+        "label": "Output",
+        "canonicalName": {
+          "name": "Output"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "output_b558dd754c71cfa6"
           }
         ]
       },
@@ -115,10 +146,28 @@ expression: cleaned
     ],
     "edges": [
       {
-        "id": "edge_67cf78c40623a924",
+        "id": "edge_0d4efff970b71ad2",
         "from": "column_208687717881053c",
-        "to": "column_07f2c53c2049650d",
+        "to": "column_d8bba385e09d94a9",
         "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_4c64818a03f23ebe",
+        "from": "output_b558dd754c71cfa6",
+        "to": "column_a4be1b20b5f604d9",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_b1adfd2ed7cda1e5",
+        "from": "output_b558dd754c71cfa6",
+        "to": "column_d8bba385e09d94a9",
+        "type": "ownership",
         "producerStatement": {
           "statementIndex": 0
         }

@@ -183,7 +183,7 @@ export interface Node {
 }
 
 /** The type of a node in the lineage graph. */
-export type NodeType = 'table' | 'view' | 'cte' | 'column';
+export type NodeType = 'table' | 'view' | 'cte' | 'output' | 'column';
 
 /** Table-like node types that can contain columns and appear in FROM clauses. */
 export type TableLikeNodeType = 'table' | 'view' | 'cte';
@@ -244,7 +244,12 @@ export interface Edge {
 }
 
 /** The type of an edge in the lineage graph. */
-export type EdgeType = 'ownership' | 'data_flow' | 'derivation' | 'cross_statement';
+export type EdgeType =
+  | 'ownership'
+  | 'data_flow'
+  | 'derivation'
+  | 'join_dependency'
+  | 'cross_statement';
 
 /** The type of SQL JOIN operation. */
 export type JoinType =

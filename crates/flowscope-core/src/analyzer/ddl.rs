@@ -9,8 +9,16 @@ use super::helpers::{
     build_column_schemas_with_constraints, extract_simple_name, generate_node_id,
 };
 use super::Analyzer;
-use crate::types::{ColumnSchema, Node, NodeType, TableConstraintInfo};
+use crate::types::{
+    ColumnSchema, ConstraintType, ForeignKeyRef, Node, NodeType, TableConstraintInfo,
+};
 use sqlparser::ast::{ObjectName, Query, TableConstraint};
+use std::collections::BTreeMap;
+
+/// Statement type used when registering source tables (tables being read from).
+/// Source tables are always used in a SELECT-like context, regardless of the
+/// outer statement type (SELECT, CREATE TABLE AS, INSERT INTO...SELECT, etc.).
+const SOURCE_TABLE_STATEMENT_TYPE: &str = "SELECT";
 
 impl<'a> Analyzer<'a> {
     /// Helper to register implied schema from CREATE TABLE/VIEW/CTAS statements.
@@ -36,6 +44,92 @@ impl<'a> Analyzer<'a> {
                 issue = issue.with_span(span);
             }
             self.issues.push(issue);
+        }
+    }
+
+    /// Register implied schema for source tables referenced in a query.
+    ///
+    /// This captures the tables and columns referenced in SELECT, CREATE TABLE AS,
+    /// CREATE VIEW, and other query-containing statements. Unlike `register_implied_schema`
+    /// which captures target tables, this captures source tables.
+    pub(super) fn register_source_tables_schema(&mut self, ctx: &StatementContext) {
+        if !self.allow_implied() {
+            return;
+        }
+
+        for (canonical, columns) in &ctx.source_table_columns {
+            // Skip CTEs and subqueries (they're not real tables)
+            if ctx.cte_definitions.contains_key(canonical)
+                || ctx.subquery_aliases.contains(canonical)
+            {
+                continue;
+            }
+
+            // Skip if already in imported schema (user-provided takes precedence)
+            if self.schema.is_imported(canonical) {
+                continue;
+            }
+
+            // Sort columns by name for deterministic output
+            let mut column_list: Vec<_> = columns.iter().collect();
+            column_list.sort_by(|a, b| a.0.cmp(b.0));
+
+            let column_schemas: Vec<ColumnSchema> = column_list
+                .into_iter()
+                .map(|(name, data_type)| {
+                    // Look up any implied FK relationship for this column
+                    let foreign_key = ctx
+                        .implied_foreign_keys
+                        .get(&(canonical.clone(), name.clone()))
+                        .map(|(ref_table, ref_column)| ForeignKeyRef {
+                            table: ref_table.clone(),
+                            column: ref_column.clone(),
+                        });
+
+                    ColumnSchema {
+                        name: name.clone(),
+                        data_type: data_type.clone(),
+                        is_primary_key: None,
+                        foreign_key,
+                    }
+                })
+                .collect();
+
+            if column_schemas.is_empty() {
+                continue;
+            }
+
+            let mut constraints_by_table: BTreeMap<String, BTreeMap<String, String>> =
+                BTreeMap::new();
+            for ((from_table, from_column), (to_table, to_column)) in
+                ctx.implied_foreign_keys.iter()
+            {
+                if from_table == canonical {
+                    constraints_by_table
+                        .entry(to_table.clone())
+                        .or_default()
+                        .insert(from_column.clone(), to_column.clone());
+                }
+            }
+
+            let constraints: Vec<TableConstraintInfo> = constraints_by_table
+                .into_iter()
+                .map(|(referenced_table, column_map)| TableConstraintInfo {
+                    constraint_type: ConstraintType::ForeignKey,
+                    columns: column_map.keys().cloned().collect(),
+                    referenced_table: Some(referenced_table),
+                    referenced_columns: Some(column_map.values().cloned().collect()),
+                })
+                .collect();
+
+            self.register_implied_schema_with_constraints(
+                ctx,
+                canonical,
+                column_schemas,
+                constraints,
+                false,
+                SOURCE_TABLE_STATEMENT_TYPE,
+            );
         }
     }
 

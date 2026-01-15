@@ -5,7 +5,12 @@
 
 import type { StatementLineage, Span } from '@pondpilot/flowscope-core';
 import { isTableLikeType } from '@pondpilot/flowscope-core';
-import { getCreatedRelationNodeIds } from './lineageHelpers';
+import {
+  getCreatedRelationNodeIds,
+  OUTPUT_NODE_TYPE,
+  JOIN_DEPENDENCY_EDGE_TYPE,
+  buildColumnOwnershipMap,
+} from './lineageHelpers';
 
 // ============================================================================
 // Types
@@ -66,22 +71,20 @@ export function extractTableDependenciesWithDetails(
 
   for (const stmt of statements) {
     const tableNodes = stmt.nodes.filter((n) => isTableLikeType(n.type));
+    const outputNodes = stmt.nodes.filter((n) => n.type === OUTPUT_NODE_TYPE);
+    const relationNodes = [...tableNodes, ...outputNodes];
     const columnNodes = stmt.nodes.filter((n) => n.type === 'column');
 
-    const columnToTable = new Map<string, string>();
-    for (const edge of stmt.edges) {
-      if (edge.type === 'ownership') {
-        const tableNode = tableNodes.find((t) => t.id === edge.from);
-        if (tableNode) {
-          columnToTable.set(edge.to, tableNode.qualifiedName || tableNode.label);
-        }
-      }
-    }
+    const columnToTable = buildColumnOwnershipMap(
+      stmt.edges,
+      relationNodes,
+      (n) => n.qualifiedName || n.label
+    );
 
     for (const edge of stmt.edges) {
-      if (edge.type === 'data_flow') {
-        const sourceNode = tableNodes.find((n) => n.id === edge.from);
-        const targetNode = tableNodes.find((n) => n.id === edge.to);
+      if (edge.type === 'data_flow' || edge.type === JOIN_DEPENDENCY_EDGE_TYPE) {
+        const sourceNode = relationNodes.find((n) => n.id === edge.from);
+        const targetNode = relationNodes.find((n) => n.id === edge.to);
 
         if (sourceNode && targetNode) {
           const sourceKey = sourceNode.qualifiedName || sourceNode.label;

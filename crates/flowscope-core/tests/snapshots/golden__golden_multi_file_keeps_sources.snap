@@ -1,5 +1,6 @@
 ---
 source: crates/flowscope-core/tests/golden.rs
+assertion_line: 46
 expression: cleaned
 ---
 {
@@ -10,13 +11,26 @@ expression: cleaned
       "sourceName": "alpha.sql",
       "nodes": [
         {
+          "id": "output_b558dd754c71cfa6",
+          "type": "output",
+          "label": "Output"
+        },
+        {
           "id": "table_b1180f6188cee2e2",
           "type": "table",
           "label": "alpha_table",
           "qualifiedName": "alpha_table"
         }
       ],
-      "edges": [],
+      "edges": [
+        {
+          "id": "edge_8da7ba8511ace3fa",
+          "from": "table_b1180f6188cee2e2",
+          "to": "output_b558dd754c71cfa6",
+          "type": "data_flow",
+          "approximate": true
+        }
+      ],
       "joinCount": 0,
       "complexityScore": 5
     },
@@ -26,19 +40,60 @@ expression: cleaned
       "sourceName": "beta.sql",
       "nodes": [
         {
+          "id": "output_de579a76d9dbae52",
+          "type": "output",
+          "label": "Output (2)"
+        },
+        {
           "id": "table_8d1cecbc26a50f36",
           "type": "table",
           "label": "beta_table",
           "qualifiedName": "beta_table"
         }
       ],
-      "edges": [],
+      "edges": [
+        {
+          "id": "edge_9671bebac1b861c0",
+          "from": "table_8d1cecbc26a50f36",
+          "to": "output_de579a76d9dbae52",
+          "type": "data_flow",
+          "approximate": true
+        }
+      ],
       "joinCount": 0,
       "complexityScore": 5
     }
   ],
   "globalLineage": {
     "nodes": [
+      {
+        "id": "output_b558dd754c71cfa6",
+        "type": "output",
+        "label": "Output",
+        "canonicalName": {
+          "name": "Output"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "output_b558dd754c71cfa6"
+          }
+        ]
+      },
+      {
+        "id": "output_de579a76d9dbae52",
+        "type": "output",
+        "label": "Output (2)",
+        "canonicalName": {
+          "name": "Output (2)"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 1,
+            "nodeId": "output_de579a76d9dbae52"
+          }
+        ]
+      },
       {
         "id": "table_8d1cecbc26a50f36",
         "type": "table",
@@ -68,7 +123,26 @@ expression: cleaned
         ]
       }
     ],
-    "edges": []
+    "edges": [
+      {
+        "id": "edge_8da7ba8511ace3fa",
+        "from": "table_b1180f6188cee2e2",
+        "to": "output_b558dd754c71cfa6",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_9671bebac1b861c0",
+        "from": "table_8d1cecbc26a50f36",
+        "to": "output_de579a76d9dbae52",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 1
+        }
+      }
+    ]
   },
   "issues": [
     {

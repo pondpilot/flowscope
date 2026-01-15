@@ -8,7 +8,12 @@ import type {
   StatementLineageWithSource,
 } from '../types';
 import { GRAPH_CONFIG, UI_CONSTANTS, JOIN_TYPE_LABELS } from '../constants';
-import { getCreatedRelationNodeIds } from './lineageHelpers';
+import {
+  getCreatedRelationNodeIds,
+  OUTPUT_NODE_TYPE,
+  JOIN_DEPENDENCY_EDGE_TYPE,
+  buildColumnOwnershipMap,
+} from './lineageHelpers';
 
 const SELECT_STATEMENT_TYPES = new Set([
   'SELECT',
@@ -282,6 +287,8 @@ export function buildFlowNodes(
 
   const tableNodes = statement.nodes.filter((n) => isTableLikeType(n.type));
   const columnNodes = statement.nodes.filter((n) => n.type === 'column');
+  const outputNode = statement.nodes.find((n) => n.type === OUTPUT_NODE_TYPE);
+  const outputNodeId = outputNode?.id ?? GRAPH_CONFIG.VIRTUAL_OUTPUT_NODE_ID;
   const isSelect = isSelectStatement(statement);
   const hasJoinNodes = tableNodes.some((node) => !!node.joinType);
   // Identify the "base" table in a join sequence. The base table is the first table
@@ -363,11 +370,23 @@ export function buildFlowNodes(
     });
   }
 
+  const outputColumnIds = new Set<string>();
+  if (outputNode) {
+    statement.edges
+      .filter((edge) => edge.type === 'ownership' && edge.from === outputNode.id)
+      .forEach((edge) => outputColumnIds.add(edge.to));
+  }
+
   // Find final output columns. These are columns projected in the top-level SELECT,
   // identified by having no qualifiedName (not belonging to a source table) and not
   // being owned by an intermediate node (like a CTE) within the statement.
   const outputColumns: ColumnNodeInfo[] = columnNodes
-    .filter((col) => !col.qualifiedName && !ownedColumnIds.has(col.id))
+    .filter((col) => {
+      if (outputNode) {
+        return outputColumnIds.has(col.id);
+      }
+      return !col.qualifiedName && !ownedColumnIds.has(col.id);
+    })
     .map((col) => ({
       id: col.id,
       name: col.label,
@@ -375,9 +394,8 @@ export function buildFlowNodes(
       aggregation: col.aggregation,
     }));
 
-  // Add virtual "Output" node only for SELECT-like statements
-  if (isSelect && outputColumns.length > 0) {
-    const outputNodeId = GRAPH_CONFIG.VIRTUAL_OUTPUT_NODE_ID;
+  // Add virtual "Output" node for SELECT-like statements
+  if (isSelect && (outputNode || outputColumns.length > 0)) {
     flowNodes.push({
       id: outputNodeId,
       type: 'tableNode',
@@ -439,7 +457,8 @@ export function buildFlowEdges(
 ): FlowEdge[] {
   const tableNodes = statement.nodes.filter((n) => isTableLikeType(n.type));
   const columnNodes = statement.nodes.filter((n) => n.type === 'column');
-  const outputNodeId = GRAPH_CONFIG.VIRTUAL_OUTPUT_NODE_ID;
+  const outputNode = statement.nodes.find((n) => n.type === OUTPUT_NODE_TYPE);
+  const outputNodeId = outputNode?.id ?? GRAPH_CONFIG.VIRTUAL_OUTPUT_NODE_ID;
   const isSelect = isSelectStatement(statement);
 
   // Build table ID -> Node map for join type lookup
@@ -449,14 +468,13 @@ export function buildFlowEdges(
   }
 
   // Build ownership map: column ID -> table ID
-  const columnToTableMap = new Map<string, string>();
-  for (const edge of statement.edges) {
-    if (edge.type === 'ownership') {
-      const parentNode = tableNodes.find((n) => n.id === edge.from);
-      if (parentNode) {
-        columnToTableMap.set(edge.to, parentNode.id);
-      }
-    }
+  const columnToTableMap = buildColumnOwnershipMap(statement.edges, tableNodes, (n) => n.id);
+
+  // Add output node columns to the map
+  if (outputNode) {
+    statement.edges
+      .filter((edge) => edge.type === 'ownership' && edge.from === outputNode.id)
+      .forEach((edge) => columnToTableMap.set(edge.to, outputNodeId));
   }
 
   // For SELECT statements, map output columns to the virtual output node
@@ -472,6 +490,7 @@ export function buildFlowEdges(
   if (showColumnEdges) {
     const flowEdges: FlowEdge[] = [];
     const tableEdgeKeys = new Set<string>();
+    const tablePairsFromColumns = new Set<string>();
 
     const isTableCollapsed = (tableId: string) => {
       if (!tableNodeMap.has(tableId)) {
@@ -494,6 +513,9 @@ export function buildFlowEdges(
       const sourceNode = tableNodeMap.get(sourceTableId);
       const joinType = formatJoinType(sourceNode?.joinType);
 
+      // Map core edge type to UI edge type (snake_case -> camelCase)
+      const uiEdgeType = edgeType === JOIN_DEPENDENCY_EDGE_TYPE ? 'joinDependency' : edgeType;
+
       flowEdges.push({
         id: `edge_${edgeKey}`,
         source: sourceTableId,
@@ -501,7 +523,7 @@ export function buildFlowEdges(
         type: 'animated',
         label: joinType,
         data: {
-          type: edgeType,
+          type: uiEdgeType,
           joinType: sourceNode?.joinType,
           joinCondition: sourceNode?.joinCondition,
         },
@@ -526,6 +548,8 @@ export function buildFlowEdges(
 
           // Only create edges between different tables (skip self-loops)
           if (sourceTableId && targetTableId && sourceTableId !== targetTableId) {
+            const tablePairKey = `${sourceTableId}_to_${targetTableId}`;
+            tablePairsFromColumns.add(tablePairKey);
             const hasExpression = edge.expression || targetCol.expression;
             const isDerivedColumn = edge.type === 'derivation' || hasExpression;
 
@@ -559,6 +583,29 @@ export function buildFlowEdges(
         }
       });
 
+    const relationNodeIds = new Set(tableNodes.map((node) => node.id));
+    if (outputNode) {
+      relationNodeIds.add(outputNode.id);
+    }
+
+    statement.edges
+      .filter(
+        (edge) =>
+          edge.type === 'data_flow' || edge.type === 'derivation' || edge.type === JOIN_DEPENDENCY_EDGE_TYPE
+      )
+      .forEach((edge) => {
+        if (!relationNodeIds.has(edge.from) || !relationNodeIds.has(edge.to)) {
+          return;
+        }
+
+        const edgeKey = `${edge.from}_to_${edge.to}`;
+        if (tablePairsFromColumns.has(edgeKey)) {
+          return;
+        }
+
+        pushTableEdge(edge.from, edge.to, edge.type);
+      });
+
     return flowEdges;
   }
 
@@ -566,7 +613,12 @@ export function buildFlowEdges(
   const flowEdges: FlowEdge[] = [];
   const seenEdges = new Set<string>();
   const outputColumnIds = new Set<string>();
-  if (isSelect) {
+  if (isSelect && outputNode) {
+    statement.edges
+      .filter((edge) => edge.type === 'ownership' && edge.from === outputNode.id)
+      .forEach((edge) => outputColumnIds.add(edge.to));
+  }
+  if (isSelect && outputColumnIds.size === 0) {
     columnNodes.forEach((col) => {
       if (!columnToTableMap.has(col.id)) {
         outputColumnIds.add(col.id);
@@ -647,6 +699,41 @@ export function buildFlowEdges(
       }
     }
   }
+
+  statement.edges
+    .filter((edge) => edge.type === JOIN_DEPENDENCY_EDGE_TYPE)
+    .forEach((edge) => {
+      const sourceId = edge.from;
+      const targetId = edge.to;
+
+      if (sourceId === targetId) {
+        return;
+      }
+
+      const edgeKey = `${sourceId}_to_${targetId}`;
+      if (seenEdges.has(edgeKey)) {
+        return;
+      }
+
+      seenEdges.add(edgeKey);
+
+      const sourceNode = tableNodeMap.get(sourceId);
+      const joinType = formatJoinType(edge.joinType || sourceNode?.joinType);
+
+      flowEdges.push({
+        id: edge.id,
+        source: sourceId,
+        target: targetId,
+        type: 'animated',
+        label: joinType,
+        data: {
+          // Map core edge type to UI edge type (snake_case -> camelCase)
+          type: 'joinDependency',
+          joinType: edge.joinType || sourceNode?.joinType,
+          joinCondition: edge.joinCondition || sourceNode?.joinCondition,
+        },
+      });
+    });
 
   if (isSelect && selectSourceTableIds.size > 0) {
     selectSourceTableIds.forEach((tableId) => {

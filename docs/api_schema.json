@@ -578,6 +578,11 @@
             "const": "cte"
           },
           {
+            "description": "A virtual output node for SELECT statements",
+            "type": "string",
+            "const": "output"
+          },
+          {
             "description": "A column",
             "type": "string",
             "const": "column"
@@ -855,6 +860,11 @@
             "description": "Output derived from inputs (with transformation)",
             "type": "string",
             "const": "derivation"
+          },
+          {
+            "description": "Join-only dependency from a source to output",
+            "type": "string",
+            "const": "join_dependency"
           },
           {
             "description": "Cross-statement dependency",

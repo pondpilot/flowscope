@@ -67,10 +67,24 @@ fn write_summary(out: &mut String, result: &AnalyzeResult, colored: bool) {
 }
 
 fn write_lineage(out: &mut String, result: &AnalyzeResult, colored: bool) {
-    // Build table relationships from global lineage
+    // Build table relationships from global lineage.
+    //
+    // Note: "Output" nodes are virtual sinks representing SELECT statement results.
+    // They appear in lineage to show which tables contribute to each SELECT's output,
+    // including join-only tables that don't contribute projected columns. This gives
+    // a complete picture of data dependencies for queries that don't write to tables.
     let mut source_tables: HashMap<String, HashSet<String>> = HashMap::new();
 
     for edge in &result.global_lineage.edges {
+        if !matches!(
+            edge.edge_type,
+            flowscope_core::EdgeType::DataFlow
+                | flowscope_core::EdgeType::Derivation
+                | flowscope_core::EdgeType::JoinDependency
+        ) {
+            continue;
+        }
+
         let from_node = result
             .global_lineage
             .nodes
@@ -79,9 +93,8 @@ fn write_lineage(out: &mut String, result: &AnalyzeResult, colored: bool) {
         let to_node = result.global_lineage.nodes.iter().find(|n| n.id == edge.to);
 
         if let (Some(from), Some(to)) = (from_node, to_node) {
-            if matches!(from.node_type, NodeType::Table | NodeType::View)
-                && matches!(to.node_type, NodeType::Table | NodeType::View)
-            {
+            // Include Output nodes as relation-like targets to show SELECT dependencies
+            if from.node_type.is_relation() && to.node_type.is_relation() {
                 source_tables
                     .entry(to.label.to_string())
                     .or_default()

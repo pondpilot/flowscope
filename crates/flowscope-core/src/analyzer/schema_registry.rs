@@ -298,7 +298,6 @@ impl SchemaRegistry {
     }
 
     /// Checks if a table was imported (user-provided).
-    #[cfg(test)]
     pub(crate) fn is_imported(&self, canonical: &str) -> bool {
         self.imported_tables.contains(canonical)
     }

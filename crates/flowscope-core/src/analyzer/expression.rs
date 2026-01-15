@@ -62,6 +62,7 @@ impl<'a, 'b> ExpressionAnalyzer<'a, 'b> {
     }
 
     /// Extracts column references from an expression and validates each one.
+    /// Also records column references for implied schema tracking.
     fn validate_column_refs(&mut self, expr: &Expr) {
         let column_refs = self.extract_column_refs_with_warning(expr);
         for col_ref in column_refs {
@@ -69,6 +70,10 @@ impl<'a, 'b> ExpressionAnalyzer<'a, 'b> {
                 if let Some(canonical) = self.analyzer.resolve_table_alias(self.ctx, Some(table)) {
                     self.analyzer
                         .validate_column(self.ctx, &canonical, &col_ref.column);
+
+                    // Record column for implied schema (type will be added later if known)
+                    self.ctx
+                        .record_source_column(&canonical, &col_ref.column, None);
                 }
             }
         }

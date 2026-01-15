@@ -137,6 +137,119 @@ impl<'a, 'b> LineageVisitor<'a, 'b> {
         self.ctx.last_operation = op;
     }
 
+    /// Extract the expression from a JoinOperator's constraint, if any.
+    fn extract_join_constraint_expr(op: &ast::JoinOperator) -> Option<&Expr> {
+        let constraint = match op {
+            ast::JoinOperator::Join(c)
+            | ast::JoinOperator::Inner(c)
+            | ast::JoinOperator::Left(c)
+            | ast::JoinOperator::LeftOuter(c)
+            | ast::JoinOperator::Right(c)
+            | ast::JoinOperator::RightOuter(c)
+            | ast::JoinOperator::FullOuter(c)
+            | ast::JoinOperator::Semi(c)
+            | ast::JoinOperator::LeftSemi(c)
+            | ast::JoinOperator::RightSemi(c)
+            | ast::JoinOperator::Anti(c)
+            | ast::JoinOperator::LeftAnti(c)
+            | ast::JoinOperator::RightAnti(c)
+            | ast::JoinOperator::StraightJoin(c) => Some(c),
+            ast::JoinOperator::AsOf { constraint, .. } => Some(constraint),
+            ast::JoinOperator::CrossJoin(_)
+            | ast::JoinOperator::CrossApply
+            | ast::JoinOperator::OuterApply => None,
+        };
+
+        constraint.and_then(|c| match c {
+            ast::JoinConstraint::On(expr) => Some(expr),
+            _ => None,
+        })
+    }
+
+    /// Extract and record implied foreign key relationships from a JOIN condition.
+    ///
+    /// For equality expressions like `t1.a = t2.b`, we record **both directions**
+    /// as potential FK relationships. This is intentional because:
+    ///
+    /// 1. **No authoritative direction**: From syntax alone, we cannot determine
+    ///    which column is the FK and which is the referenced PK. The true direction
+    ///    depends on schema knowledge we may not have.
+    ///
+    /// 2. **Consumer deduplication**: Downstream consumers (like the React SchemaView)
+    ///    normalize and deduplicate reciprocal FK edges before rendering, so storing
+    ///    both directions doesn't create duplicate visual edges.
+    ///
+    /// 3. **Heuristic accuracy**: Recording both ensures we capture the relationship
+    ///    regardless of how the user wrote the JOIN condition (`a.id = b.a_id` vs
+    ///    `b.a_id = a.id`).
+    ///
+    /// Self-joins are excluded since `t.a = t.b` within the same table doesn't
+    /// imply a cross-table FK relationship (see [`StatementContext::record_implied_foreign_key`]).
+    fn record_join_fk_relationships(&mut self, expr: &Expr) {
+        use sqlparser::ast::BinaryOperator;
+
+        match expr {
+            Expr::BinaryOp { left, op, right } if *op == BinaryOperator::And => {
+                // Recurse into AND conditions (common in multi-column joins)
+                self.record_join_fk_relationships(left);
+                self.record_join_fk_relationships(right);
+            }
+            Expr::BinaryOp { left, op, right } if *op == BinaryOperator::Eq => {
+                self.record_equality_fk(left, right);
+            }
+            Expr::Nested(inner) => self.record_join_fk_relationships(inner),
+            _ => {}
+        }
+    }
+
+    /// Record FK relationships from an equality expression (t1.a = t2.b).
+    fn record_equality_fk(&mut self, left: &Expr, right: &Expr) {
+        let Some(left_ref) = Self::extract_column_ref(left) else {
+            return;
+        };
+        let Some(right_ref) = Self::extract_column_ref(right) else {
+            return;
+        };
+
+        let left_table = left_ref
+            .0
+            .as_ref()
+            .and_then(|t| self.resolve_table_alias(Some(t)));
+        let right_table = right_ref
+            .0
+            .as_ref()
+            .and_then(|t| self.resolve_table_alias(Some(t)));
+
+        let (Some(left_table), Some(right_table)) = (left_table, right_table) else {
+            return;
+        };
+
+        // Record FK in both directions (see record_join_fk_relationships docs for rationale)
+        self.ctx
+            .record_implied_foreign_key(&left_table, &left_ref.1, &right_table, &right_ref.1);
+        self.ctx
+            .record_implied_foreign_key(&right_table, &right_ref.1, &left_table, &left_ref.1);
+    }
+
+    /// Extract a (table, column) pair from a simple column reference expression.
+    fn extract_column_ref(expr: &Expr) -> Option<(Option<String>, String)> {
+        match expr {
+            Expr::Identifier(ident) => Some((None, ident.value.clone())),
+            Expr::CompoundIdentifier(idents) if idents.len() == 2 => {
+                Some((Some(idents[0].value.clone()), idents[1].value.clone()))
+            }
+            Expr::CompoundIdentifier(idents) if idents.len() >= 2 => {
+                // schema.table.column - take last two parts
+                let len = idents.len();
+                Some((
+                    Some(idents[len - 2].value.clone()),
+                    idents[len - 1].value.clone(),
+                ))
+            }
+            _ => None,
+        }
+    }
+
     pub fn add_source_table(&mut self, table_name: &str) -> Option<String> {
         self.analyzer
             .add_source_table(self.ctx, table_name, self.target_node.as_deref())
@@ -460,8 +573,9 @@ impl<'a, 'b> Visitor for LineageVisitor<'a, 'b> {
             self.visit_table_with_joins(table_with_joins);
         }
         if self.analyzer.column_lineage_enabled {
-            let mut select_analyzer =
-                SelectAnalyzer::new(self.analyzer, self.ctx, self.target_node.clone());
+            let output_node = self.ctx.output_node_id().map(|node_id| node_id.to_string());
+            let target_node = self.target_node.clone().or(output_node);
+            let mut select_analyzer = SelectAnalyzer::new(self.analyzer, self.ctx, target_node);
             select_analyzer.analyze(select);
         }
         self.ctx.pop_scope();
@@ -475,6 +589,16 @@ impl<'a, 'b> Visitor for LineageVisitor<'a, 'b> {
             self.ctx.current_join_info.join_condition = join_condition;
             self.ctx.last_operation = Analyzer::join_type_to_operation(join_type);
             self.visit_table_factor(&join.relation);
+
+            // Analyze JOIN condition expression to capture column references for implied schema
+            if let Some(expr) = Self::extract_join_constraint_expr(&join.join_operator) {
+                let mut ea = ExpressionAnalyzer::new(self.analyzer, self.ctx);
+                ea.analyze(expr);
+
+                // Extract implied FK relationships from equality conditions
+                self.record_join_fk_relationships(expr);
+            }
+
             self.ctx.current_join_info.join_type = None;
             self.ctx.current_join_info.join_condition = None;
         }

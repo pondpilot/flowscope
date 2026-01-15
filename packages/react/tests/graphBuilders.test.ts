@@ -241,6 +241,68 @@ describe('buildFlowEdges table consistency', () => {
     expect(tablePairs).toContain('cte:user_ltv->view:customer_360');
     expect(tablePairs).toContain('cte:user_engagement->view:customer_360');
   });
+
+  it('retains join-only table edges in column view', () => {
+    const statement: StatementLineage = {
+      statementIndex: 0,
+      statementType: 'CREATE_VIEW',
+      joinCount: 1,
+      complexityScore: 1,
+      nodes: [
+        { id: 'view:report', type: 'view', label: 'report', qualifiedName: 'report' },
+        { id: 'table:table1', type: 'table', label: 'table1', qualifiedName: 'table1' },
+        {
+          id: 'table:table2',
+          type: 'table',
+          label: 'table2',
+          qualifiedName: 'table2',
+          joinType: 'LEFT',
+          joinCondition: 't1.a = t2.a',
+        },
+        { id: 'column:table1.a', type: 'column', label: 'a', qualifiedName: 'table1.a' },
+        { id: 'column:table1.b', type: 'column', label: 'b', qualifiedName: 'table1.b' },
+        { id: 'column:report.a', type: 'column', label: 'a' },
+        { id: 'column:report.b', type: 'column', label: 'b' },
+      ],
+      edges: [
+        { id: 'own:table1.a', from: 'table:table1', to: 'column:table1.a', type: 'ownership' },
+        { id: 'own:table1.b', from: 'table:table1', to: 'column:table1.b', type: 'ownership' },
+        { id: 'own:view.a', from: 'view:report', to: 'column:report.a', type: 'ownership' },
+        { id: 'own:view.b', from: 'view:report', to: 'column:report.b', type: 'ownership' },
+        {
+          id: 'flow:table1->view',
+          from: 'table:table1',
+          to: 'view:report',
+          type: 'data_flow',
+        },
+        {
+          id: 'flow:table2->view',
+          from: 'table:table2',
+          to: 'view:report',
+          type: 'data_flow',
+          joinType: 'LEFT',
+          joinCondition: 't1.a = t2.a',
+        },
+        {
+          id: 'der:table1.a',
+          from: 'column:table1.a',
+          to: 'column:report.a',
+          type: 'derivation',
+        },
+        {
+          id: 'der:table1.b',
+          from: 'column:table1.b',
+          to: 'column:report.b',
+          type: 'derivation',
+        },
+      ],
+    };
+
+    const columnEdges = buildFlowEdges(statement, true);
+    const tablePairs = columnEdges.map((edge) => `${edge.source}->${edge.target}`);
+
+    expect(tablePairs).toContain('table:table2->view:report');
+  });
 });
 
 describe('graphBuilders DML handling', () => {

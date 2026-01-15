@@ -96,6 +96,12 @@ export function Legend({ viewMode = 'table' }: LegendProps): JSX.Element {
                 sublabel="Direct movement"
               />
               <LegendEdgeItem
+                style="dotted"
+                color={EDGE_STYLES.joinDependency.stroke}
+                label="Join dependency"
+                sublabel="Join-only filter"
+              />
+              <LegendEdgeItem
                 style="dashed"
                 color={EDGE_STYLES.derivation.stroke}
                 label="Derivation"

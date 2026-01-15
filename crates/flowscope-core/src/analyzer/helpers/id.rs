@@ -34,3 +34,8 @@ pub fn generate_column_node_id(parent_id: Option<&str>, column_name: &str) -> Ar
 
     format!("column_{hash:016x}").into()
 }
+
+/// Generate a deterministic output node ID scoped to a statement.
+pub fn generate_output_node_id(statement_index: usize) -> Arc<str> {
+    generate_node_id("output", &format!("statement_{statement_index}"))
+}

@@ -511,6 +511,7 @@ function TableNodeComponent({ id, data, selected }: NodeProps): JSX.Element {
                   nodeData.columns.length * COLUMN_ROW_HEIGHT,
                   GRAPH_CONFIG.MAX_COLUMN_HEIGHT
                 ),
+                overflowX: 'hidden',
               }}
               rowCount={nodeData.columns.length}
               rowHeight={COLUMN_ROW_HEIGHT}
@@ -527,7 +528,13 @@ function TableNodeComponent({ id, data, selected }: NodeProps): JSX.Element {
           ) : (
             // Regular rendering for small column counts (avoid virtualization overhead)
             // maxHeight ensures consistent behavior with virtualized list
-            <div style={{ maxHeight: GRAPH_CONFIG.MAX_COLUMN_HEIGHT, overflowY: 'auto' }}>
+            <div
+              style={{
+                maxHeight: GRAPH_CONFIG.MAX_COLUMN_HEIGHT,
+                overflowY: 'auto',
+                overflowX: 'hidden',
+              }}
+            >
               {nodeData.columns.map((col: ColumnNodeInfo) => (
                 <ColumnRow
                   key={col.id}

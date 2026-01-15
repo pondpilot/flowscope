@@ -11,7 +11,7 @@ import {
 import { GRAPH_CONFIG, EDGE_STYLES, JOIN_TYPE_LABELS } from '../constants';
 import { useColors } from '../hooks/useColors';
 
-export type EdgeType = 'dataFlow' | 'derivation' | 'aggregation';
+export type EdgeType = 'dataFlow' | 'derivation' | 'joinDependency' | 'aggregation';
 
 interface EdgeStyleConfig {
   stroke: string;
@@ -32,6 +32,11 @@ function getEdgeTypeStyles(colors: ColorPalette): Record<EdgeType | 'default', E
       stroke: colors.edges.derivation,
       strokeWidth: EDGE_STYLES.derivation.strokeWidth,
       strokeDasharray: EDGE_STYLES.derivation.strokeDasharray,
+    },
+    joinDependency: {
+      stroke: colors.edges.joinDependency,
+      strokeWidth: EDGE_STYLES.joinDependency.strokeWidth,
+      strokeDasharray: EDGE_STYLES.joinDependency.strokeDasharray,
     },
     aggregation: {
       stroke: colors.edges.aggregation,

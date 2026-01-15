@@ -1,4 +1,5 @@
-use crate::types::{Edge, FilterClauseType, FilterPredicate, JoinType, Node};
+use super::helpers::generate_output_node_id;
+use crate::types::{Edge, FilterClauseType, FilterPredicate, JoinType, Node, NodeType};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -51,6 +52,8 @@ pub(crate) struct StatementContext {
     pub(crate) table_node_ids: HashMap<String, Arc<str>>,
     /// Output columns for this statement (for column lineage)
     pub(crate) output_columns: Vec<OutputColumn>,
+    /// Output node ID for SELECT statements
+    pub(crate) output_node_id: Option<Arc<str>>,
     /// Output columns for aliased subqueries (CTEs and derived tables).
     /// Maps the alias name to its output columns for schema resolution during wildcard
     /// expansion and column reference lookups.
@@ -66,6 +69,12 @@ pub(crate) struct StatementContext {
     pub(crate) grouping_columns: HashSet<String>,
     /// True if the current SELECT has a GROUP BY clause
     pub(crate) has_group_by: bool,
+    /// Columns referenced per source table (canonical_name → column_name → data_type).
+    /// Used to build implied schema for source tables in SELECT queries.
+    pub(crate) source_table_columns: HashMap<String, HashMap<String, Option<String>>>,
+    /// Implied foreign key relationships from JOIN conditions.
+    /// Key: (from_table, from_column), Value: (to_table, to_column)
+    pub(crate) implied_foreign_keys: HashMap<(String, String), (String, String)>,
 }
 
 /// Represents an output column in the SELECT list
@@ -103,11 +112,14 @@ impl StatementContext {
             current_join_info: JoinInfo::default(),
             table_node_ids: HashMap::new(),
             output_columns: Vec::new(),
+            output_node_id: None,
             aliased_subquery_columns: HashMap::new(),
             scope_stack: Vec::new(),
             pending_filters: HashMap::new(),
             grouping_columns: HashSet::new(),
             has_group_by: false,
+            source_table_columns: HashMap::new(),
+            implied_foreign_keys: HashMap::new(),
         }
     }
 
@@ -126,6 +138,63 @@ impl StatementContext {
     /// Check if an expression matches a grouping column
     pub(crate) fn is_grouping_column(&self, expr: &str) -> bool {
         self.grouping_columns.contains(expr)
+    }
+
+    /// Record a column reference for a source table.
+    ///
+    /// This is used to build implied schema for source tables. If the column
+    /// already exists without a type and a type is provided, the type is updated.
+    pub(crate) fn record_source_column(
+        &mut self,
+        canonical_table: &str,
+        column_name: &str,
+        data_type: Option<String>,
+    ) {
+        let columns = self
+            .source_table_columns
+            .entry(canonical_table.to_string())
+            .or_default();
+
+        columns
+            .entry(column_name.to_string())
+            .and_modify(|existing| {
+                // Update type if we have one and don't already have one
+                if existing.is_none() && data_type.is_some() {
+                    *existing = data_type.clone();
+                }
+            })
+            .or_insert(data_type);
+    }
+
+    /// Record an implied foreign key relationship from a JOIN condition.
+    ///
+    /// When we see `ON t1.a = t2.b`, we record that t1.a references t2.b.
+    /// The "from" side is considered the FK column, "to" is the referenced column.
+    ///
+    /// ## Self-Join Exclusion
+    ///
+    /// Conditions where `from_table == to_table` are **intentionally excluded**.
+    /// While self-referential FKs do exist (e.g., `employees.manager_id → employees.id`
+    /// for hierarchical data), detecting them from JOIN conditions alone would produce
+    /// too many false positives. For example, `SELECT * FROM t t1 JOIN t t2 ON t1.x = t2.y`
+    /// is a common pattern that doesn't imply a self-FK.
+    ///
+    /// If self-referential FK detection is needed, users should provide explicit schema
+    /// via the `schema` field in the request.
+    pub(crate) fn record_implied_foreign_key(
+        &mut self,
+        from_table: &str,
+        from_column: &str,
+        to_table: &str,
+        to_column: &str,
+    ) {
+        // Skip self-joins (see doc comment for rationale)
+        if from_table != to_table {
+            self.implied_foreign_keys.insert(
+                (from_table.to_string(), from_column.to_string()),
+                (to_table.to_string(), to_column.to_string()),
+            );
+        }
     }
 
     /// Add a filter predicate for a specific table.
@@ -163,6 +232,42 @@ impl StatementContext {
         if self.edge_ids.insert(id) {
             self.edges.push(edge);
         }
+    }
+
+    pub(crate) fn ensure_output_node(&mut self) -> Arc<str> {
+        if let Some(existing) = self.output_node_id.as_ref() {
+            return existing.clone();
+        }
+
+        let node_id = generate_output_node_id(self.statement_index);
+        // Include statement index in label for disambiguation in multi-statement analysis
+        let label = if self.statement_index == 0 {
+            "Output".to_string()
+        } else {
+            format!("Output ({})", self.statement_index + 1)
+        };
+        let output_node = Node {
+            id: node_id.clone(),
+            node_type: NodeType::Output,
+            label: label.into(),
+            qualified_name: None,
+            expression: None,
+            span: None,
+            metadata: None,
+            resolution_source: None,
+            filters: Vec::new(),
+            join_type: None,
+            join_condition: None,
+            aggregation: None,
+        };
+
+        self.add_node(output_node);
+        self.output_node_id = Some(node_id.clone());
+        node_id
+    }
+
+    pub(crate) fn output_node_id(&self) -> Option<&Arc<str>> {
+        self.output_node_id.as_ref()
     }
 
     /// Push a new scope onto the stack (entering a SELECT/subquery)

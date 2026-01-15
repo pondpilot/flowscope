@@ -7,15 +7,20 @@
 use super::complexity;
 use super::context::StatementContext;
 use super::expression::ExpressionAnalyzer;
-use super::helpers::{classify_query_type, extract_simple_name, generate_node_id};
+use super::helpers::{
+    classify_query_type, extract_simple_name, generate_edge_id, generate_node_id,
+};
 use super::visitor::{LineageVisitor, Visitor};
 use super::Analyzer;
 use crate::error::ParseError;
-use crate::types::{issue_codes, Issue, Node, NodeType, StatementLineage};
+use crate::types::{
+    issue_codes, Edge, EdgeType, Issue, JoinType, Node, NodeType, StatementLineage,
+};
 use sqlparser::ast::{
     self, Assignment, Expr, FromTable, MergeAction, MergeClause, MergeInsertKind, ObjectName,
     Statement, TableFactor, TableWithJoins, UpdateTableFromKind,
 };
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 #[cfg(feature = "tracing")]
 use tracing::{info, info_span};
@@ -32,6 +37,7 @@ impl<'a> Analyzer<'a> {
 
         let statement_type = match statement {
             Statement::Query(query) => {
+                ctx.ensure_output_node();
                 self.analyze_query(&mut ctx, query, None);
                 classify_query_type(query)
             }
@@ -114,6 +120,10 @@ impl<'a> Analyzer<'a> {
 
         // Apply pending filter predicates to table nodes before finalizing
         self.apply_pending_filters(&mut ctx);
+        self.add_join_dependency_edges(&mut ctx);
+
+        // Register implied schema for source tables referenced in the query
+        self.register_source_tables_schema(&ctx);
 
         // Calculate statement-level stats
         let join_count = complexity::count_joins(&ctx.nodes);
@@ -129,6 +139,75 @@ impl<'a> Analyzer<'a> {
             join_count,
             complexity_score,
         })
+    }
+
+    fn add_join_dependency_edges(&self, ctx: &mut StatementContext) {
+        let output_node_id = match ctx.output_node_id.as_ref() {
+            Some(node_id) => node_id.clone(),
+            None => return,
+        };
+
+        let output_column_ids: HashSet<_> = ctx
+            .edges
+            .iter()
+            .filter(|edge| edge.edge_type == EdgeType::Ownership && edge.from == output_node_id)
+            .map(|edge| edge.to.clone())
+            .collect();
+
+        if output_column_ids.is_empty() {
+            return;
+        }
+
+        let mut table_columns: HashMap<Arc<str>, Vec<Arc<str>>> = HashMap::new();
+        for edge in &ctx.edges {
+            if edge.edge_type == EdgeType::Ownership {
+                table_columns
+                    .entry(edge.from.clone())
+                    .or_default()
+                    .push(edge.to.clone());
+            }
+        }
+
+        let join_nodes: Vec<(Arc<str>, Option<JoinType>, Option<Arc<str>>)> = ctx
+            .nodes
+            .iter()
+            .filter(|node| node.node_type.is_table_like() && node.join_type.is_some())
+            .map(|node| (node.id.clone(), node.join_type, node.join_condition.clone()))
+            .collect();
+
+        for (node_id, join_type, join_condition) in join_nodes {
+            let owned_columns = table_columns.get(&node_id).cloned().unwrap_or_default();
+
+            let contributes_to_output = !owned_columns.is_empty()
+                && ctx.edges.iter().any(|edge| {
+                    matches!(edge.edge_type, EdgeType::DataFlow | EdgeType::Derivation)
+                        && owned_columns.iter().any(|col| col == &edge.from)
+                        && output_column_ids.contains(&edge.to)
+                });
+
+            if contributes_to_output {
+                continue;
+            }
+
+            let edge_key = format!("join_dependency:{node_id}");
+            let edge_id = generate_edge_id(&edge_key, output_node_id.as_ref());
+            if ctx.edge_ids.contains(&edge_id) {
+                continue;
+            }
+
+            ctx.add_edge(Edge {
+                id: edge_id,
+                from: node_id,
+                to: output_node_id.clone(),
+                edge_type: EdgeType::JoinDependency,
+                expression: None,
+                operation: None,
+                join_type,
+                join_condition,
+                metadata: None,
+                approximate: None,
+            });
+        }
     }
 
     pub(super) fn analyze_insert(&mut self, ctx: &mut StatementContext, insert: &ast::Insert) {

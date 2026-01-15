@@ -8,8 +8,14 @@ import type {
   AnalyzeResult,
   StatementLineage,
   Node,
+  Edge,
 } from '@pondpilot/flowscope-core';
 import { isTableLikeType } from '@pondpilot/flowscope-core';
+import {
+  OUTPUT_NODE_TYPE,
+  JOIN_DEPENDENCY_EDGE_TYPE,
+  buildColumnOwnershipMap,
+} from './lineageHelpers';
 
 // ============================================================================
 // Types
@@ -135,15 +141,7 @@ export function extractColumnMappings(statements: StatementLineage[]): ColumnMap
     const columnNodes = stmt.nodes.filter((n) => n.type === 'column');
 
     // Build column-to-table lookup
-    const columnToTable = new Map<string, Node>();
-    for (const edge of stmt.edges) {
-      if (edge.type === 'ownership') {
-        const tableNode = tableNodes.find((t) => t.id === edge.from);
-        if (tableNode) {
-          columnToTable.set(edge.to, tableNode);
-        }
-      }
-    }
+    const columnToTable = buildColumnOwnershipMap(stmt.edges, tableNodes, (n) => n);
 
     // Find derivation/data_flow edges between columns
     for (const edge of stmt.edges) {
@@ -189,12 +187,14 @@ export function extractTableDependencies(statements: StatementLineage[]): TableD
 
   for (const stmt of statements) {
     const tableNodes = stmt.nodes.filter((n) => isTableLikeType(n.type));
+    const outputNodes = stmt.nodes.filter((n) => n.type === OUTPUT_NODE_TYPE);
+    const relationNodes = [...tableNodes, ...outputNodes];
 
-    // Find data_flow edges between tables
+    // Find data_flow/join_dependency edges between relations
     for (const edge of stmt.edges) {
-      if (edge.type === 'data_flow') {
-        const sourceNode = tableNodes.find((n) => n.id === edge.from);
-        const targetNode = tableNodes.find((n) => n.id === edge.to);
+      if (edge.type === 'data_flow' || edge.type === JOIN_DEPENDENCY_EDGE_TYPE) {
+        const sourceNode = relationNodes.find((n) => n.id === edge.from);
+        const targetNode = relationNodes.find((n) => n.id === edge.to);
 
         if (sourceNode && targetNode) {
           const sourceKey = sourceNode.qualifiedName || sourceNode.label;

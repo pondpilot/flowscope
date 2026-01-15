@@ -2304,7 +2304,7 @@ fn mixed_table_view_cte_in_pipeline() {
             NodeType::Table => table_count += 1,
             NodeType::View => view_count += 1,
             NodeType::Cte => cte_count += 1,
-            NodeType::Column => {}
+            NodeType::Column | NodeType::Output => {}
         }
     }
 
@@ -3023,6 +3023,90 @@ fn ctas_implied_schema_ignores_inner_columns() {
     );
 }
 
+#[test]
+fn implied_schema_captures_join_relationships() {
+    let sql = r#"
+        CREATE TABLE b AS
+        SELECT
+            CAST(t1.a AS INT) AS a,
+            CAST(t1.b AS INT) AS b,
+            CAST(t1.c AS INT) AS c
+        FROM table1 AS t1
+        LEFT JOIN table2 AS t2 ON t1.a = t2.a
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let resolved = result
+        .resolved_schema
+        .expect("resolved schema should be present");
+
+    let table1 = resolved
+        .tables
+        .iter()
+        .find(|table| table.name == "table1")
+        .expect("table1 should exist in resolved schema");
+    let table2 = resolved
+        .tables
+        .iter()
+        .find(|table| table.name == "table2")
+        .expect("table2 should exist in resolved schema");
+
+    let table1_fk = table1.constraints.iter().find(|constraint| {
+        constraint.constraint_type == ConstraintType::ForeignKey
+            && constraint.referenced_table.as_deref() == Some("table2")
+            && constraint.columns == ["a"]
+            && constraint
+                .referenced_columns
+                .as_ref()
+                .map(|cols| cols.as_slice() == ["a"])
+                .unwrap_or(false)
+    });
+    assert!(
+        table1_fk.is_some(),
+        "table1 should have a foreign key constraint to table2"
+    );
+
+    let table2_fk = table2.constraints.iter().find(|constraint| {
+        constraint.constraint_type == ConstraintType::ForeignKey
+            && constraint.referenced_table.as_deref() == Some("table1")
+            && constraint.columns == ["a"]
+            && constraint
+                .referenced_columns
+                .as_ref()
+                .map(|cols| cols.as_slice() == ["a"])
+                .unwrap_or(false)
+    });
+    assert!(
+        table2_fk.is_some(),
+        "table2 should have a foreign key constraint to table1"
+    );
+
+    let table1_column = table1
+        .columns
+        .iter()
+        .find(|column| column.name == "a")
+        .expect("table1.a should exist");
+    let table2_column = table2
+        .columns
+        .iter()
+        .find(|column| column.name == "a")
+        .expect("table2.a should exist");
+
+    let table1_fk_ref = table1_column
+        .foreign_key
+        .as_ref()
+        .expect("table1.a should have foreign key metadata");
+    assert_eq!(table1_fk_ref.table, "table2");
+    assert_eq!(table1_fk_ref.column, "a");
+
+    let table2_fk_ref = table2_column
+        .foreign_key
+        .as_ref()
+        .expect("table2.a should have foreign key metadata");
+    assert_eq!(table2_fk_ref.table, "table1");
+    assert_eq!(table2_fk_ref.column, "a");
+}
+
 // ============================================================================
 // ADDITIONAL EDGE CASES
 // ============================================================================
@@ -3506,6 +3590,38 @@ fn joined_tables_all_present_without_join_edges() {
     assert!(
         !data_flow_edges.is_empty(),
         "Should have column-level data_flow edges"
+    );
+}
+
+#[test]
+fn join_only_tables_emit_output_dependency() {
+    let sql = r#"
+        SELECT
+            t1.a,
+            t1.b
+        FROM table1 t1
+        LEFT JOIN table2 t2 ON t1.a = t2.a
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let stmt = first_statement(&result);
+
+    let output_node = stmt
+        .nodes
+        .iter()
+        .find(|node| node.node_type == NodeType::Output)
+        .expect("Output node should exist");
+    let table2_node = find_table_node(stmt, "table2").expect("table2 not found");
+
+    let join_dependency = stmt.edges.iter().find(|edge| {
+        edge.edge_type == EdgeType::JoinDependency
+            && edge.from == table2_node.id
+            && edge.to == output_node.id
+    });
+
+    assert!(
+        join_dependency.is_some(),
+        "join-only table should connect to output"
     );
 }
 

@@ -1,4 +1,4 @@
-use super::context::StatementContext;
+use super::context::{ColumnRef, StatementContext};
 use super::expression::ExpressionAnalyzer;
 use super::helpers::{
     alias_visibility_warning, infer_expr_type, is_simple_column_ref, lateral_alias_warning,
@@ -127,6 +127,8 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
                     };
                     let data_type = infer_expr_type(expr).map(|t| t.to_string());
 
+                    self.record_source_columns_with_type(&sources, &data_type);
+
                     self.analyzer.add_output_column_with_aggregation(
                         self.ctx,
                         OutputColumnParams {
@@ -157,6 +159,8 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
                         Some(expr.to_string())
                     };
                     let data_type = infer_expr_type(expr).map(|t| t.to_string());
+
+                    self.record_source_columns_with_type(&sources, &data_type);
 
                     // Record this alias for subsequent lateral column alias checking
                     let normalized_alias = self.analyzer.normalize_identifier(&name);
@@ -267,6 +271,26 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
             {
                 self.emit_alias_warning(clause_name, &alias_name);
             }
+        }
+    }
+
+    /// Record source columns with inferred data types for implied schema tracking.
+    fn record_source_columns_with_type(
+        &mut self,
+        sources: &[ColumnRef],
+        data_type: &Option<String>,
+    ) {
+        let Some(ref dt) = data_type else { return };
+
+        for col_ref in sources {
+            let Some(table) = col_ref.table.as_deref() else {
+                continue;
+            };
+            let Some(canonical) = self.analyzer.resolve_table_alias(self.ctx, Some(table)) else {
+                continue;
+            };
+            self.ctx
+                .record_source_column(&canonical, &col_ref.column, Some(dt.clone()));
         }
     }
 }

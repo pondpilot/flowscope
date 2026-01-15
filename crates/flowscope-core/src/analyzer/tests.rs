@@ -51,9 +51,18 @@ fn test_simple_select() {
 
     assert_eq!(result.statements.len(), 1);
     assert_eq!(result.statements[0].statement_type, "SELECT");
-    assert_eq!(result.statements[0].nodes.len(), 1);
-    assert_eq!(&*result.statements[0].nodes[0].label, "users");
-    assert_eq!(result.statements[0].nodes[0].node_type, NodeType::Table);
+    // Expect 2 nodes: table + output
+    assert_eq!(result.statements[0].nodes.len(), 2);
+    let table_node = result.statements[0]
+        .nodes
+        .iter()
+        .find(|n| n.node_type == NodeType::Table)
+        .expect("should have a table node");
+    assert_eq!(&*table_node.label, "users");
+    assert!(result.statements[0]
+        .nodes
+        .iter()
+        .any(|n| n.node_type == NodeType::Output));
     assert!(!result.summary.has_errors);
 }
 
@@ -382,6 +391,7 @@ fn hide_ctes_customer_360_preserves_relationships() {
             EdgeType::Ownership => "ownership",
             EdgeType::DataFlow => "data_flow",
             EdgeType::Derivation => "derivation",
+            EdgeType::JoinDependency => "join_dependency",
             EdgeType::CrossStatement => "cross_statement",
         }
     };
@@ -523,8 +533,99 @@ fn hide_ctes_customer_360_preserves_relationships() {
 
     for (base_col, view_col) in expected_column_edges {
         assert!(
-            edges.contains(&(base_columns[base_col].clone(), view_columns[view_col].clone())),
+            edges.contains(&(
+                base_columns[base_col].clone(),
+                view_columns[view_col].clone()
+            )),
             "expected edge from {base_col} to {view_col}"
         );
     }
+}
+
+#[test]
+fn test_source_tables_in_resolved_schema() {
+    // This test verifies that source tables from SELECT queries appear in resolved_schema
+    let sql = "SELECT cast(t1.a as int) as a, cast(t1.b as int) as b, cast(t2.c as int) as c
+               FROM table1 AS t1 LEFT JOIN table2 AS t2 ON t1.a = t2.a";
+    let request = make_request(sql);
+    let result = analyze(&request);
+
+    assert!(!result.summary.has_errors);
+    let resolved_schema = result.resolved_schema.expect("should have resolved_schema");
+
+    // Collect table names from resolved schema
+    let table_names: HashSet<_> = resolved_schema
+        .tables
+        .iter()
+        .map(|t| t.name.as_str())
+        .collect();
+
+    assert!(
+        table_names.contains("table1"),
+        "table1 should be in resolved schema, got: {:?}",
+        table_names
+    );
+    assert!(
+        table_names.contains("table2"),
+        "table2 should be in resolved schema, got: {:?}",
+        table_names
+    );
+
+    // Verify table1 has columns a, b
+    let table1 = resolved_schema
+        .tables
+        .iter()
+        .find(|t| t.name == "table1")
+        .expect("table1");
+    let t1_cols: HashSet<_> = table1.columns.iter().map(|c| c.name.as_str()).collect();
+    assert!(t1_cols.contains("a"), "table1 should have column 'a'");
+    assert!(t1_cols.contains("b"), "table1 should have column 'b'");
+
+    // Verify table2 has columns a (from join condition), c (from projection)
+    let table2 = resolved_schema
+        .tables
+        .iter()
+        .find(|t| t.name == "table2")
+        .expect("table2");
+    let t2_cols: HashSet<_> = table2.columns.iter().map(|c| c.name.as_str()).collect();
+    assert!(
+        t2_cols.contains("a"),
+        "table2 should have column 'a' from join condition, got: {:?}",
+        t2_cols
+    );
+    assert!(
+        t2_cols.contains("c"),
+        "table2 should have column 'c' from projection, got: {:?}",
+        t2_cols
+    );
+
+    // Verify FK relationships inferred from JOIN condition (t1.a = t2.a)
+    let t1_col_a = table1
+        .columns
+        .iter()
+        .find(|c| c.name == "a")
+        .expect("table1.a");
+    let t2_col_a = table2
+        .columns
+        .iter()
+        .find(|c| c.name == "a")
+        .expect("table2.a");
+
+    // table1.a should reference table2.a
+    assert!(
+        t1_col_a.foreign_key.is_some(),
+        "table1.a should have a foreign key reference"
+    );
+    let t1_fk = t1_col_a.foreign_key.as_ref().unwrap();
+    assert_eq!(t1_fk.table, "table2");
+    assert_eq!(t1_fk.column, "a");
+
+    // table2.a should reference table1.a (bidirectional)
+    assert!(
+        t2_col_a.foreign_key.is_some(),
+        "table2.a should have a foreign key reference"
+    );
+    let t2_fk = t2_col_a.foreign_key.as_ref().unwrap();
+    assert_eq!(t2_fk.table, "table1");
+    assert_eq!(t2_fk.column, "a");
 }

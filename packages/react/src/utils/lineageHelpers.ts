@@ -1,6 +1,12 @@
-import type { StatementLineage } from '@pondpilot/flowscope-core';
+import type { StatementLineage, Node, Edge } from '@pondpilot/flowscope-core';
 
 const CREATE_STATEMENT_TYPES = new Set(['CREATE_TABLE', 'CREATE_TABLE_AS', 'CREATE_VIEW']);
+
+/** Node type constant for output nodes. */
+export const OUTPUT_NODE_TYPE = 'output' as Node['type'];
+
+/** Edge type constant for join dependency edges. */
+export const JOIN_DEPENDENCY_EDGE_TYPE = 'join_dependency' as Edge['type'];
 
 /**
  * Returns the node ids for relations created by a statement (e.g. CREATE TABLE/VIEW).
@@ -40,4 +46,27 @@ export function getCreatedRelationNodeIds(stmt: StatementLineage): Set<string> {
   }
 
   return createdNodeIds;
+}
+
+/**
+ * Build a map from column IDs to their owning table info.
+ * @param edges - The edges to search for ownership relationships
+ * @param tableNodes - The table/relation nodes to look up
+ * @param mapper - Function to extract the desired value from a table node
+ */
+export function buildColumnOwnershipMap<T>(
+  edges: Edge[],
+  tableNodes: Node[],
+  mapper: (node: Node) => T
+): Map<string, T> {
+  const result = new Map<string, T>();
+  for (const edge of edges) {
+    if (edge.type === 'ownership') {
+      const tableNode = tableNodes.find((t) => t.id === edge.from);
+      if (tableNode) {
+        result.set(edge.to, mapper(tableNode));
+      }
+    }
+  }
+  return result;
 }

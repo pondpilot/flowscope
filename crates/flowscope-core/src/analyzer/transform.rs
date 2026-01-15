@@ -131,7 +131,8 @@ pub fn filter_cte_nodes(lineage: &mut StatementLineage) {
                 EdgeType::Ownership => 0u8.hash(state),
                 EdgeType::DataFlow => 1u8.hash(state),
                 EdgeType::Derivation => 2u8.hash(state),
-                EdgeType::CrossStatement => 3u8.hash(state),
+                EdgeType::JoinDependency => 3u8.hash(state),
+                EdgeType::CrossStatement => 4u8.hash(state),
             }
             self.expression.hash(state);
             self.operation.hash(state);

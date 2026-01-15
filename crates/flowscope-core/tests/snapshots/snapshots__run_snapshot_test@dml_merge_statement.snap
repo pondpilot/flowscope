@@ -1,6 +1,5 @@
 ---
 source: crates/flowscope-core/tests/snapshots.rs
-assertion_line: 25
 expression: clean_result
 ---
 {
@@ -90,5 +89,41 @@ expression: clean_result
       "infos": 0
     },
     "hasErrors": false
+  },
+  "resolvedSchema": {
+    "tables": [
+      {
+        "name": "daily_shipments",
+        "columns": [
+          {
+            "name": "product_id",
+            "origin": "implied"
+          },
+          {
+            "name": "quantity",
+            "origin": "implied"
+          }
+        ],
+        "origin": "implied",
+        "sourceStatementIndex": 0,
+        "updatedAt": "2024-01-01T00:00:00Z"
+      },
+      {
+        "name": "inventory",
+        "columns": [
+          {
+            "name": "product_id",
+            "origin": "implied"
+          },
+          {
+            "name": "quantity",
+            "origin": "implied"
+          }
+        ],
+        "origin": "implied",
+        "sourceStatementIndex": 0,
+        "updatedAt": "2024-01-01T00:00:00Z"
+      }
+    ]
   }
 }

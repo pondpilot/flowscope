@@ -157,6 +157,41 @@ describe('buildSchemaFlowEdges', () => {
     expect(edges).toHaveLength(0);
   });
 
+  it('deduplicates reciprocal foreign keys', () => {
+    const schema: ResolvedSchemaTable[] = [
+      {
+        name: 'table1',
+        columns: [
+          {
+            name: 'a',
+            dataType: 'INT',
+            foreignKey: { table: 'table2', column: 'a' },
+          },
+        ],
+        origin: 'implied',
+        updatedAt: '2025-01-01T00:00:00Z',
+      },
+      {
+        name: 'table2',
+        columns: [
+          {
+            name: 'a',
+            dataType: 'INT',
+            foreignKey: { table: 'table1', column: 'a' },
+          },
+        ],
+        origin: 'implied',
+        updatedAt: '2025-01-01T00:00:00Z',
+      },
+    ];
+
+    const edges = buildSchemaFlowEdges(schema);
+
+    expect(edges).toHaveLength(1);
+    expect(edges[0].source).toBe('table1');
+    expect(edges[0].target).toBe('table2');
+  });
+
   it('handles empty schema', () => {
     const edges = buildSchemaFlowEdges([]);
     expect(edges).toHaveLength(0);
