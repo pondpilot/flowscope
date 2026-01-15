@@ -4,12 +4,7 @@
  */
 
 import * as XLSX from 'xlsx';
-import type {
-  AnalyzeResult,
-  StatementLineage,
-  Node,
-  Edge,
-} from '@pondpilot/flowscope-core';
+import type { AnalyzeResult, StatementLineage } from '@pondpilot/flowscope-core';
 import { isTableLikeType } from '@pondpilot/flowscope-core';
 import {
   OUTPUT_NODE_TYPE,
