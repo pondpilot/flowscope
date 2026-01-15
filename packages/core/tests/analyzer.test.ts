@@ -17,6 +17,7 @@ const baseResult: AnalyzeResult = {
 const wasmModuleMock = vi.hoisted(() => ({
   default: vi.fn(async () => undefined),
   analyze_sql_json: vi.fn(() => JSON.stringify(baseResult)),
+  export_to_duckdb_sql: vi.fn(() => '-- DuckDB SQL export'),
   set_panic_hook: vi.fn(() => undefined),
 }));
 
