@@ -424,10 +424,10 @@ WHERE e.edge_type IN ('data_flow', 'derivation');
 -- Impact analysis: columns by source table
 CREATE VIEW columns_by_source_table AS
 SELECT DISTINCT
-    ancestor_table AS source_table,
-    ancestor_column AS source_column,
-    column_table AS affected_table,
-    column_name AS affected_column,
+    column_table AS source_table,
+    column_name AS source_column,
+    descendant_table AS affected_table,
+    descendant_column AS affected_column,
     depth AS distance
 FROM column_descendants;
 

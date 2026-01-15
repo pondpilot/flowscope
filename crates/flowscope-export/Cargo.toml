@@ -15,6 +15,7 @@ duckdb = ["dep:duckdb"]
 flowscope-core = { path = "../flowscope-core" }
 thiserror = "2.0"
 duckdb = { version = "1.0", features = ["bundled"], optional = true }
+chrono = "0.4"
+tempfile = "3"
 
 [dev-dependencies]
-tempfile = "3"
