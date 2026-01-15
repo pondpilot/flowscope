@@ -89,6 +89,8 @@ pub enum OutputFormat {
     Json,
     /// Mermaid diagram
     Mermaid,
+    /// DuckDB database file
+    Duckdb,
 }
 
 /// Graph detail level for visualization

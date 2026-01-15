@@ -13,6 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 flowscope-core = { path = "../flowscope-core" }
+flowscope-export = { path = "../flowscope-export" }
 clap = { version = "4", features = ["derive"] }
 serde.workspace = true
 serde_json.workspace = true

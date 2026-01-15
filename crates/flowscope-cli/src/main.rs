@@ -8,6 +8,7 @@ mod schema;
 use anyhow::{Context, Result};
 use clap::Parser;
 use flowscope_core::{analyze, AnalyzeRequest, FileSource};
+use flowscope_export::export_duckdb;
 use std::fs;
 use std::io::{self, Write};
 use std::process::ExitCode;
@@ -65,6 +66,11 @@ fn run() -> Result<bool> {
             };
             format_mermaid(&result, view)
         }
+        OutputFormat::Duckdb => {
+            // DuckDB outputs bytes, not string
+            let bytes = export_duckdb(&result).context("Failed to export to DuckDB")?;
+            return write_binary_output(&args.output, &bytes, result.summary.has_errors);
+        }
     };
 
     // Write output
@@ -118,6 +124,23 @@ fn write_output(path: &Option<std::path::PathBuf>, content: &str) -> Result<()> 
         }
     }
     Ok(())
+}
+
+fn write_binary_output(
+    path: &Option<std::path::PathBuf>,
+    content: &[u8],
+    has_errors: bool,
+) -> Result<bool> {
+    if let Some(path) = path {
+        fs::write(path, content)
+            .with_context(|| format!("Failed to write to {}", path.display()))?;
+    } else {
+        // Binary to stdout - just write raw bytes
+        io::stdout()
+            .write_all(content)
+            .context("Failed to write to stdout")?;
+    }
+    Ok(has_errors)
 }
 
 fn print_issues_to_stderr(result: &flowscope_core::AnalyzeResult) {
