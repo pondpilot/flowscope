@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Run publish dry-run'
+        required: false
+        default: 'true'
 
 env:
   CARGO_TERM_COLOR: always
@@ -12,6 +18,8 @@ jobs:
   publish-core:
     name: Publish @pondpilot/flowscope-core
     runs-on: ubuntu-latest
+    env:
+      DRY_RUN: ${{ inputs.dry_run }}
     steps:
       - uses: actions/checkout@v4
 
@@ -39,7 +47,13 @@ jobs:
       - name: Build core package
         run: yarn workspace @pondpilot/flowscope-core build
 
+      - name: Dry-run npm pack
+        if: ${{ env.DRY_RUN == 'true' }}
+        working-directory: packages/core
+        run: npm pack --dry-run --workspaces=false
+
       - name: Publish npm package
+        if: ${{ env.DRY_RUN != 'true' }}
         working-directory: packages/core
         run: npm publish --workspaces=false
         env:

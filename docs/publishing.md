@@ -43,6 +43,10 @@ git push origin v0.1.0
 
 The workflow builds wasm + TypeScript and runs `npm publish --workspaces=false` from `packages/core`.
 
+## Workflow dry-run
+
+Use the manual workflow trigger with `dry_run=true` to validate packaging without publishing. The job runs `npm pack --dry-run --workspaces=false` after the build.
+
 ## WASM usage
 
 ```typescript
