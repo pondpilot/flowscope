@@ -1,4 +1,4 @@
-import { useCallback, type JSX } from 'react';
+import { useCallback, useState, type JSX } from 'react';
 import { toPng } from 'html-to-image';
 import { toast } from 'sonner';
 import {
@@ -27,7 +27,18 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from './ui/tooltip';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from './ui/dialog';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
 import type { AnalyzeResult, Issue, ResolvedSchemaMetadata } from '@pondpilot/flowscope-core';
+import { validateSchemaName, formatSchemaError } from '@pondpilot/flowscope-core';
 import {
   extractScriptInfo,
   extractTableInfo,
@@ -777,6 +788,12 @@ function downloadBlob(content: string | ArrayBuffer, filename: string, mimeType:
 export function ExportDialog({ result, projectName, graphRef }: ExportDialogProps): JSX.Element | null {
   const isDarkMode = useIsDarkMode();
 
+  // DuckDB export dialog state
+  const [duckDbDialogOpen, setDuckDbDialogOpen] = useState(false);
+  const [schemaInput, setSchemaInput] = useState('');
+  const [schemaError, setSchemaError] = useState<string | undefined>();
+  const [isExporting, setIsExporting] = useState(false);
+
   const handleDownloadXlsx = useCallback(() => {
     if (!result) return;
     try {
@@ -858,74 +875,148 @@ export function ExportDialog({ result, projectName, graphRef }: ExportDialogProp
     }
   }, [result, projectName]);
 
-  const handleDownloadDuckDb = useCallback(async () => {
-    if (!result) return;
+  const handleOpenDuckDbDialog = useCallback(() => {
+    setSchemaInput('');
+    setSchemaError(undefined);
+    setDuckDbDialogOpen(true);
+  }, []);
+
+  const handleSchemaInputChange = useCallback((value: string) => {
+    setSchemaInput(value);
+    // Validate trimmed value for consistency with export behavior
+    setSchemaError(validateSchemaName(value.trim()));
+  }, []);
+
+  const handleDuckDbExport = useCallback(async () => {
+    if (!result || isExporting) return;
+
+    const trimmed = schemaInput.trim();
+    const error = validateSchemaName(trimmed);
+    if (error) {
+      setSchemaError(error);
+      return;
+    }
+
+    setIsExporting(true);
     try {
-      const sql = await exportToDuckDbSql(result);
+      const schema = trimmed || undefined;
+      const sql = await exportToDuckDbSql(result, schema);
       downloadBlob(sql, generateFilename(projectName, 'sql'), 'text/sql');
-      toast.success('DuckDB SQL export downloaded');
+      toast.success(
+        schema
+          ? `DuckDB SQL export downloaded (schema: ${schema})`
+          : 'DuckDB SQL export downloaded'
+      );
+      setDuckDbDialogOpen(false);
     } catch (err) {
       console.error('Failed to export DuckDB:', err);
-      toast.error('Failed to export DuckDB SQL');
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      toast.error(`Failed to export DuckDB SQL: ${message}`);
+    } finally {
+      setIsExporting(false);
     }
-  }, [result, projectName]);
+  }, [result, projectName, schemaInput, isExporting]);
 
   if (!result) {
     return null;
   }
 
   return (
-    <TooltipProvider>
-      <DropdownMenu>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <Download className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p className="flex items-center gap-2">
-              Export lineage data
-              <kbd className="px-1.5 py-0.5 text-xs bg-muted rounded border font-mono">{getShortcutDisplay('export')}</kbd>
-            </p>
-          </TooltipContent>
-        </Tooltip>
-        <DropdownMenuContent align="end" className="w-52">
-          <DropdownMenuLabel>Data Formats</DropdownMenuLabel>
-          <DropdownMenuItem onClick={handleDownloadXlsx}>
-            <FileSpreadsheet className="size-4 mr-2" />
-            Excel (.xlsx)
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleDownloadJson}>
-            <FileJson className="size-4 mr-2" />
-            JSON
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleDownloadCsv}>
-            <FileDown className="size-4 mr-2" />
-            CSV (Column Mappings)
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleDownloadDuckDb}>
-            <Database className="size-4 mr-2" />
-            DuckDB SQL
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuLabel>Visual Formats</DropdownMenuLabel>
-          <DropdownMenuItem onClick={handleDownloadPng}>
-            <Image className="size-4 mr-2" />
-            PNG Image
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleDownloadMermaid}>
-            <FileCode className="size-4 mr-2" />
-            Mermaid (.md)
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleDownloadHtml}>
-            <FileText className="size-4 mr-2" />
-            HTML Report
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </TooltipProvider>
+    <>
+      <TooltipProvider>
+        <DropdownMenu>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <Download className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p className="flex items-center gap-2">
+                Export lineage data
+                <kbd className="px-1.5 py-0.5 text-xs bg-muted rounded border font-mono">{getShortcutDisplay('export')}</kbd>
+              </p>
+            </TooltipContent>
+          </Tooltip>
+          <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuLabel>Data Formats</DropdownMenuLabel>
+            <DropdownMenuItem onClick={handleDownloadXlsx}>
+              <FileSpreadsheet className="size-4 mr-2" />
+              Excel (.xlsx)
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleDownloadJson}>
+              <FileJson className="size-4 mr-2" />
+              JSON
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleDownloadCsv}>
+              <FileDown className="size-4 mr-2" />
+              CSV (Column Mappings)
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleOpenDuckDbDialog}>
+              <Database className="size-4 mr-2" />
+              DuckDB SQL
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>Visual Formats</DropdownMenuLabel>
+            <DropdownMenuItem onClick={handleDownloadPng}>
+              <Image className="size-4 mr-2" />
+              PNG Image
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleDownloadMermaid}>
+              <FileCode className="size-4 mr-2" />
+              Mermaid (.md)
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleDownloadHtml}>
+              <FileText className="size-4 mr-2" />
+              HTML Report
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </TooltipProvider>
+
+      <Dialog open={duckDbDialogOpen} onOpenChange={setDuckDbDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Export to DuckDB SQL</DialogTitle>
+            <DialogDescription>
+              Optionally specify a schema name to prefix all tables and views.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="schema-name">Schema name (optional)</Label>
+              <Input
+                id="schema-name"
+                placeholder="e.g., lineage"
+                value={schemaInput}
+                onChange={(e) => handleSchemaInputChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !schemaError && !isExporting) {
+                    handleDuckDbExport();
+                  }
+                }}
+                disabled={isExporting}
+              />
+              {schemaError && (
+                <p className="text-sm text-destructive">{formatSchemaError(schemaError)}</p>
+              )}
+              <p className="text-sm text-muted-foreground">
+                Leave empty to create tables without a schema prefix.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDuckDbDialogOpen(false)} disabled={isExporting}>
+              Cancel
+            </Button>
+            <Button onClick={handleDuckDbExport} disabled={!!schemaError || isExporting}>
+              {isExporting ? 'Exporting...' : 'Export'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

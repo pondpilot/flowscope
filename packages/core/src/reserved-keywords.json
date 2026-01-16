@@ -1,0 +1,16 @@
+{
+  "description": "SQL reserved keywords that cannot be used as unquoted schema names. This list is shared between Rust (flowscope-export) and TypeScript (packages/core).",
+  "keywords": [
+    "alter", "create", "database", "drop", "index", "schema", "table", "view",
+    "delete", "insert", "select", "update",
+    "as", "by", "from", "group", "having", "join", "limit", "offset", "on",
+    "order", "where", "with",
+    "all", "and", "any", "between", "case", "distinct", "else", "end", "exists",
+    "false", "in", "is", "like", "not", "null", "or", "then", "true", "when",
+    "cross", "full", "inner", "left", "natural", "outer", "right",
+    "except", "intersect", "union",
+    "check", "constraint", "default", "foreign", "key", "primary", "references",
+    "unique",
+    "asc", "desc", "values"
+  ]
+}

@@ -1,9 +1,11 @@
 /* tslint:disable */
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
+export const analyze_and_export_sql: (a: number, b: number) => [number, number, number, number];
 export const analyze_sql: (a: number, b: number) => [number, number, number, number];
 export const analyze_sql_json: (a: number, b: number) => [number, number];
 export const enable_tracing: () => void;
+export const export_to_duckdb_sql: (a: number, b: number) => [number, number, number, number];
 export const get_version: () => [number, number];
 export const set_panic_hook: () => void;
 export const __wbindgen_free: (a: number, b: number, c: number) => void;

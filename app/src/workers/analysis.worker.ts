@@ -21,6 +21,8 @@ export interface SyncFilesPayload {
 
 export interface ExportPayload {
   result: AnalyzeResult;
+  /** Optional schema name to prefix all tables/views (e.g., "lineage") */
+  schema?: string;
 }
 
 export interface AnalysisWorkerRequest {
@@ -371,7 +373,7 @@ self.onmessage = async (event: MessageEvent<AnalysisWorkerRequest>) => {
       }
 
       await ensureWasmReady();
-      const sql = await exportToDuckDbSql(exportPayload.result);
+      const sql = await exportToDuckDbSql(exportPayload.result, exportPayload.schema);
       const response: AnalysisWorkerResponse = {
         type: 'export-result',
         requestId,

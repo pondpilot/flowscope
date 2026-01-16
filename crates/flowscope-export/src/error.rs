@@ -13,6 +13,9 @@ pub enum ExportError {
 
     #[error("Unsupported format: {0}")]
     UnsupportedFormat(&'static str),
+
+    #[error("Invalid schema name: {0}")]
+    InvalidSchema(String),
 }
 
 #[cfg(feature = "duckdb")]

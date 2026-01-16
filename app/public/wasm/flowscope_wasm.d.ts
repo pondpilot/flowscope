@@ -2,6 +2,17 @@
 /* eslint-disable */
 
 /**
+ * Analyze SQL and export to DuckDB SQL statements in one step.
+ *
+ * Convenience function that combines analyze_sql_json + export_to_duckdb_sql.
+ * Takes a JSON AnalyzeRequest and returns SQL statements for duckdb-wasm.
+ *
+ * Note: This function does not support the schema parameter. Use
+ * analyze_sql_json + export_to_duckdb_sql separately for schema support.
+ */
+export function analyze_and_export_sql(request_json: string): string;
+
+/**
  * Legacy simple API - accepts SQL string, returns JSON with table names
  * Kept for backwards compatibility
  */
@@ -19,6 +30,20 @@ export function analyze_sql_json(request_json: string): string;
 export function enable_tracing(): void;
 
 /**
+ * Export analysis result to SQL statements for DuckDB-WASM.
+ *
+ * Takes a JSON object with:
+ * - `result`: The AnalyzeResult to export
+ * - `schema` (optional): Schema name to prefix all tables/views (e.g., "lineage")
+ *
+ * Returns SQL statements (DDL + INSERT) that can be executed by duckdb-wasm.
+ *
+ * This is the WASM-compatible export path - generates SQL text that
+ * duckdb-wasm can execute to create a queryable database in the browser.
+ */
+export function export_to_duckdb_sql(request_json: string): string;
+
+/**
  * Get version information
  */
 export function get_version(): string;
@@ -32,9 +57,11 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
   readonly memory: WebAssembly.Memory;
+  readonly analyze_and_export_sql: (a: number, b: number) => [number, number, number, number];
   readonly analyze_sql: (a: number, b: number) => [number, number, number, number];
   readonly analyze_sql_json: (a: number, b: number) => [number, number];
   readonly enable_tracing: () => void;
+  readonly export_to_duckdb_sql: (a: number, b: number) => [number, number, number, number];
   readonly get_version: () => [number, number];
   readonly set_panic_hook: () => void;
   readonly __wbindgen_free: (a: number, b: number, c: number) => void;

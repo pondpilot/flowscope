@@ -37,7 +37,7 @@ pub fn export(result: &AnalyzeResult, format: Format) -> Result<Vec<u8>, ExportE
         Format::DuckDB => duckdb_backend::export(result),
         #[cfg(not(feature = "duckdb"))]
         Format::DuckDB => Err(ExportError::UnsupportedFormat("DuckDB feature not enabled")),
-        Format::Sql => Ok(sql_backend::export_sql(result)?.into_bytes()),
+        Format::Sql => Ok(sql_backend::export_sql(result, None)?.into_bytes()),
     }
 }
 
@@ -55,6 +55,9 @@ pub fn export_duckdb(result: &AnalyzeResult) -> Result<Vec<u8>, ExportError> {
 /// executed by duckdb-wasm in the browser.
 ///
 /// This is the WASM-compatible export path.
-pub fn export_sql(result: &AnalyzeResult) -> Result<String, ExportError> {
-    sql_backend::export_sql(result)
+///
+/// If `schema` is provided, all tables and views will be prefixed with that schema
+/// (e.g., "myschema.tablename") and a `CREATE SCHEMA IF NOT EXISTS` statement will be added.
+pub fn export_sql(result: &AnalyzeResult, schema: Option<&str>) -> Result<String, ExportError> {
+    sql_backend::export_sql(result, schema)
 }

@@ -36,11 +36,11 @@ pub fn export(result: &AnalyzeResult) -> Result<Vec<u8>, ExportError> {
 }
 
 fn create_schema(conn: &Connection) -> Result<(), ExportError> {
-    // Execute table DDL
-    conn.execute_batch(tables_ddl())?;
+    // Execute table DDL (no prefix for standalone DuckDB file)
+    conn.execute_batch(&tables_ddl(""))?;
 
     // Execute view DDL
-    conn.execute_batch(views_ddl())?;
+    conn.execute_batch(&views_ddl(""))?;
 
     Ok(())
 }
@@ -56,7 +56,15 @@ fn write_data(conn: &Connection, result: &AnalyzeResult) -> Result<(), ExportErr
     Ok(())
 }
 
+/// Schema version for the export format.
+/// Increment this when making breaking changes to the schema structure.
+const SCHEMA_VERSION: &str = "1";
+
 fn write_meta(conn: &Connection) -> Result<(), ExportError> {
+    conn.execute(
+        "INSERT INTO _meta (key, value) VALUES (?, ?)",
+        params!["schema_version", SCHEMA_VERSION],
+    )?;
     conn.execute(
         "INSERT INTO _meta (key, value) VALUES (?, ?)",
         params!["version", env!("CARGO_PKG_VERSION")],
@@ -100,15 +108,15 @@ fn write_nodes(conn: &Connection, result: &AnalyzeResult) -> Result<(), ExportEr
     )?;
 
     let mut join_stmt = conn.prepare(
-        "INSERT INTO joins (id, node_id, join_type, join_condition) VALUES (?, ?, ?, ?)",
+        "INSERT INTO joins (id, node_id, statement_id, join_type, join_condition) VALUES (?, ?, ?, ?, ?)",
     )?;
 
     let mut filter_stmt = conn.prepare(
-        "INSERT INTO filters (id, node_id, predicate, filter_type) VALUES (?, ?, ?, ?)",
+        "INSERT INTO filters (id, node_id, statement_id, predicate, filter_type) VALUES (?, ?, ?, ?, ?)",
     )?;
 
     let mut agg_stmt = conn.prepare(
-        "INSERT INTO aggregations (node_id, is_grouping_key, function, is_distinct) VALUES (?, ?, ?, ?)",
+        "INSERT INTO aggregations (node_id, statement_id, is_grouping_key, function, is_distinct) VALUES (?, ?, ?, ?, ?)",
     )?;
 
     let mut join_id: i64 = 0;
@@ -143,6 +151,7 @@ fn write_nodes(conn: &Connection, result: &AnalyzeResult) -> Result<(), ExportEr
                 join_stmt.execute(params![
                     join_id,
                     node.id.as_ref(),
+                    stmt_idx as i64,
                     jt,
                     node.join_condition.as_ref().map(|s| s.as_ref()),
                 ])?;
@@ -152,7 +161,13 @@ fn write_nodes(conn: &Connection, result: &AnalyzeResult) -> Result<(), ExportEr
             // Write filters
             for filter in &node.filters {
                 let ft = format!("{:?}", filter.clause_type).to_lowercase();
-                filter_stmt.execute(params![filter_id, node.id.as_ref(), &filter.expression, ft,])?;
+                filter_stmt.execute(params![
+                    filter_id,
+                    node.id.as_ref(),
+                    stmt_idx as i64,
+                    &filter.expression,
+                    ft,
+                ])?;
                 filter_id += 1;
             }
 
@@ -160,6 +175,7 @@ fn write_nodes(conn: &Connection, result: &AnalyzeResult) -> Result<(), ExportEr
             if let Some(agg) = &node.aggregation {
                 agg_stmt.execute(params![
                     node.id.as_ref(),
+                    stmt_idx as i64,
                     agg.is_grouping_key,
                     &agg.function,
                     agg.distinct,

@@ -203,12 +203,16 @@ export function terminateAnalysisWorker(): void {
  * Export analysis result to SQL statements for DuckDB.
  *
  * @param result - The analysis result to export
+ * @param schema - Optional schema name to prefix all tables/views (e.g., "lineage")
  * @returns SQL statements (DDL + INSERT) for DuckDB
  */
-export async function exportToDuckDbSql(result: AnalyzeResult): Promise<string> {
+export async function exportToDuckDbSql(
+  result: AnalyzeResult,
+  schema?: string
+): Promise<string> {
   const response = await sendRequest({
     type: 'export',
-    exportPayload: { result },
+    exportPayload: { result, schema },
   });
 
   if (!response.exportSql) {

@@ -94,6 +94,38 @@ if (!('encodeInto' in cachedTextEncoder)) {
 let WASM_VECTOR_LEN = 0;
 
 /**
+ * Analyze SQL and export to DuckDB SQL statements in one step.
+ *
+ * Convenience function that combines analyze_sql_json + export_to_duckdb_sql.
+ * Takes a JSON AnalyzeRequest and returns SQL statements for duckdb-wasm.
+ *
+ * Note: This function does not support the schema parameter. Use
+ * analyze_sql_json + export_to_duckdb_sql separately for schema support.
+ * @param {string} request_json
+ * @returns {string}
+ */
+export function analyze_and_export_sql(request_json) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(request_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.analyze_and_export_sql(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
  * Legacy simple API - accepts SQL string, returns JSON with table names
  * Kept for backwards compatibility
  * @param {string} sql_input
@@ -146,6 +178,41 @@ export function analyze_sql_json(request_json) {
  */
 export function enable_tracing() {
     wasm.enable_tracing();
+}
+
+/**
+ * Export analysis result to SQL statements for DuckDB-WASM.
+ *
+ * Takes a JSON object with:
+ * - `result`: The AnalyzeResult to export
+ * - `schema` (optional): Schema name to prefix all tables/views (e.g., "lineage")
+ *
+ * Returns SQL statements (DDL + INSERT) that can be executed by duckdb-wasm.
+ *
+ * This is the WASM-compatible export path - generates SQL text that
+ * duckdb-wasm can execute to create a queryable database in the browser.
+ * @param {string} request_json
+ * @returns {string}
+ */
+export function export_to_duckdb_sql(request_json) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(request_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.export_to_duckdb_sql(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
 }
 
 /**

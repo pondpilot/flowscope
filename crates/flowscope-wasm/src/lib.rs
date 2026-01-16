@@ -1,6 +1,17 @@
 use flowscope_core::{analyze, AnalyzeRequest, AnalyzeResult};
 use flowscope_export::export_sql;
+use serde::Deserialize;
 use wasm_bindgen::prelude::*;
+
+/// Request payload for export_to_duckdb_sql.
+#[derive(Deserialize)]
+struct ExportRequest {
+    /// The analysis result to export
+    result: AnalyzeResult,
+    /// Optional schema name to prefix all tables/views
+    #[serde(default)]
+    schema: Option<String>,
+}
 
 /// Enable tracing logs to the browser console (requires `tracing` feature).
 #[wasm_bindgen]
@@ -75,25 +86,32 @@ pub fn get_version() -> String {
 
 /// Export analysis result to SQL statements for DuckDB-WASM.
 ///
-/// Takes a JSON AnalyzeResult and returns SQL statements (DDL + INSERT)
-/// that can be executed by duckdb-wasm in the browser.
+/// Takes a JSON object with:
+/// - `result`: The AnalyzeResult to export
+/// - `schema` (optional): Schema name to prefix all tables/views (e.g., "lineage")
+///
+/// Returns SQL statements (DDL + INSERT) that can be executed by duckdb-wasm.
 ///
 /// This is the WASM-compatible export path - generates SQL text that
 /// duckdb-wasm can execute to create a queryable database in the browser.
 #[wasm_bindgen]
-pub fn export_to_duckdb_sql(result_json: &str) -> Result<String, JsValue> {
-    // Parse the analysis result
-    let result: AnalyzeResult = serde_json::from_str(result_json)
-        .map_err(|e| JsValue::from_str(&format!("Invalid result JSON: {e}")))?;
+pub fn export_to_duckdb_sql(request_json: &str) -> Result<String, JsValue> {
+    // Parse the export request
+    let request: ExportRequest = serde_json::from_str(request_json)
+        .map_err(|e| JsValue::from_str(&format!("Invalid request JSON: {e}")))?;
 
-    // Generate SQL
-    export_sql(&result).map_err(|e| JsValue::from_str(&format!("Export error: {e}")))
+    // Generate SQL with optional schema prefix
+    export_sql(&request.result, request.schema.as_deref())
+        .map_err(|e| JsValue::from_str(&format!("Export error: {e}")))
 }
 
 /// Analyze SQL and export to DuckDB SQL statements in one step.
 ///
 /// Convenience function that combines analyze_sql_json + export_to_duckdb_sql.
 /// Takes a JSON AnalyzeRequest and returns SQL statements for duckdb-wasm.
+///
+/// Note: This function does not support the schema parameter. Use
+/// analyze_sql_json + export_to_duckdb_sql separately for schema support.
 #[wasm_bindgen]
 pub fn analyze_and_export_sql(request_json: &str) -> Result<String, JsValue> {
     // Parse the request
@@ -117,8 +135,8 @@ pub fn analyze_and_export_sql(request_json: &str) -> Result<String, JsValue> {
         )));
     }
 
-    // Generate SQL
-    export_sql(&result).map_err(|e| JsValue::from_str(&format!("Export error: {e}")))
+    // Generate SQL (no schema prefix in this convenience function)
+    export_sql(&result, None).map_err(|e| JsValue::from_str(&format!("Export error: {e}")))
 }
 
 #[cfg(test)]

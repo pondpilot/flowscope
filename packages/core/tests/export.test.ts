@@ -66,11 +66,13 @@ describe('exportToDuckDbSql', () => {
   it('passes serialized result to WASM function', async () => {
     const { exportToDuckDbSql } = await loadAnalyzer();
 
-    await exportToDuckDbSql(baseResult);
+    await exportToDuckDbSql(baseResult, 'my_schema');
 
     const payload = JSON.parse(wasmModuleMock.export_to_duckdb_sql.mock.calls[0][0]);
-    expect(payload.statements).toHaveLength(1);
-    expect(payload.summary.statementCount).toBe(1);
+    // Payload structure is { result: AnalyzeResult, schema?: string }
+    expect(payload.result.statements).toHaveLength(1);
+    expect(payload.result.summary.statementCount).toBe(1);
+    expect(payload.schema).toBe('my_schema');
   });
 
   it('handles empty result gracefully', async () => {
@@ -92,5 +94,25 @@ describe('exportToDuckDbSql', () => {
 
     expect(sql).toBeTruthy();
     expect(wasmModuleMock.export_to_duckdb_sql).toHaveBeenCalledTimes(1);
+  });
+
+  it('validates schema name before export', async () => {
+    const { exportToDuckDbSql } = await loadAnalyzer();
+
+    // Valid schema names should work
+    await expect(exportToDuckDbSql(baseResult, 'valid_schema')).resolves.toBeTruthy();
+    await expect(exportToDuckDbSql(baseResult, '_private')).resolves.toBeTruthy();
+    await expect(exportToDuckDbSql(baseResult, 'Schema123')).resolves.toBeTruthy();
+
+    // Invalid schema names should throw
+    await expect(exportToDuckDbSql(baseResult, '123invalid')).rejects.toThrow(
+      'Invalid schema name: must start with a letter or underscore'
+    );
+    await expect(exportToDuckDbSql(baseResult, 'invalid-schema')).rejects.toThrow(
+      'Invalid schema name: can only contain letters, numbers, and underscores'
+    );
+    await expect(exportToDuckDbSql(baseResult, 'a'.repeat(64))).rejects.toThrow(
+      'Invalid schema name: must be 63 characters or fewer'
+    );
   });
 });
