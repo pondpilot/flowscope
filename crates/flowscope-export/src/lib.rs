@@ -9,7 +9,6 @@
 mod error;
 mod schema;
 mod sql_backend;
-mod writer;
 
 #[cfg(feature = "duckdb")]
 mod duckdb_backend;

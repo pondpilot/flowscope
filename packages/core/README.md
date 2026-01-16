@@ -17,11 +17,11 @@ npm install @pondpilot/flowscope-core
 ```typescript
 import { initWasm, analyzeSql } from '@pondpilot/flowscope-core';
 
-await initWasm();
+await initWasm({ wasmUrl: '/wasm/flowscope_wasm_bg.wasm' });
 
 const result = await analyzeSql({
   sql: 'SELECT * FROM users',
-  dialect: 'postgres'
+  dialect: 'duckdb'
 });
 ```
 

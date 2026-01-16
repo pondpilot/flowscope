@@ -1,0 +1,60 @@
+name: Publish Core Package
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Run publish dry-run'
+        required: false
+        default: 'true'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  publish-core:
+    name: Publish @pondpilot/flowscope-core
+    runs-on: ubuntu-latest
+    env:
+      DRY_RUN: ${{ inputs.dry_run }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install
+
+      - name: Build WASM
+        run: wasm-pack build crates/flowscope-wasm --target web --out-dir ../../packages/core/wasm
+
+      - name: Build core package
+        run: yarn workspace @pondpilot/flowscope-core build
+
+      - name: Dry-run npm pack
+        if: ${{ env.DRY_RUN == 'true' }}
+        working-directory: packages/core
+        run: npm pack --dry-run --workspaces=false
+
+      - name: Publish npm package
+        if: ${{ env.DRY_RUN != 'true' }}
+        working-directory: packages/core
+        run: npm publish --workspaces=false
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
