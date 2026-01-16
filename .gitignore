@@ -18,6 +18,8 @@ build/
 packages/core/src/wasm/
 *.wasm
 pkg/
+!packages/core/wasm/
+!packages/core/wasm/**
 
 # IDE
 .vscode/

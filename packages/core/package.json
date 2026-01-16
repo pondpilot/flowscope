@@ -1,6 +1,6 @@
 {
   "name": "@pondpilot/flowscope-core",
-  "version": "0.1.0",
+  "version": "0.1.0-beta.5",
   "description": "SQL lineage analysis engine for the browser",
   "type": "module",
   "main": "dist/index.js",
@@ -18,7 +18,9 @@
     "wasm"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "yarn build:wasm && tsc",
+    "build:wasm": "wasm-pack build ../../crates/flowscope-wasm --target web --out-dir ../../packages/core/wasm && node -e \"require('fs').writeFileSync('../../packages/core/wasm/.gitignore', '# Keep wasm artifacts available for publishing\\n')\"",
+    "prepublishOnly": "yarn build",
     "test": "vitest run --pool=threads --poolOptions.threads.singleThread=true",
     "test:watch": "vitest",
     "clean": "rm -rf dist",
@@ -41,6 +43,10 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/pondpilot/flowscope"
+  },
+  "homepage": "https://github.com/pondpilot/flowscope",
+  "publishConfig": {
+    "access": "public"
   },
   "devDependencies": {
     "ajv": "^8.12.0",
