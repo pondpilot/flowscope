@@ -332,6 +332,18 @@ export async function getLayoutedElementsInWorker<N extends NodeData, E extends 
     return { nodes: cachedNodes, edges };
   }
 
+  // ELK uses its own internal web worker, so run it on main thread directly.
+  // Running ELK inside our layout worker would create nested workers which fail.
+  if (algorithm === 'elk') {
+    const layouted = await getLayoutedElementsAsync(nodes, edges, direction, algorithm);
+    const positions: Record<string, { x: number; y: number }> = {};
+    layouted.nodes.forEach((node) => {
+      positions[node.id] = node.position;
+    });
+    writeLayoutCache(cacheKey, positions);
+    return layouted;
+  }
+
   // Fall back to main thread if workers aren't supported
   if (!isWorkerSupported()) {
     const layouted = await getLayoutedElementsAsync(nodes, edges, direction, algorithm);

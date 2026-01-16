@@ -1,9 +1,12 @@
 /**
  * Web Worker for graph layout computation.
- * Runs dagre/elk layout off the main thread to prevent UI blocking.
+ * Runs dagre layout off the main thread to prevent UI blocking.
+ *
+ * Note: ELK layout is NOT supported in the worker because ELK.js tries to spawn
+ * its own internal web worker, which fails in a nested worker context.
+ * ELK requests are handled on the main thread instead (see layout.ts).
  */
 import dagre from 'dagre';
-import ELK from 'elkjs/lib/elk.bundled.js';
 import {
   NODE_WIDTH,
   NODE_HEIGHT_BASE,
@@ -18,9 +21,6 @@ import {
 } from '../utils/layoutConstants';
 
 export type LayoutAlgorithm = 'dagre' | 'elk';
-
-// ELK instance
-const elk = new ELK();
 
 /**
  * Serializable node data for worker communication.
@@ -130,51 +130,6 @@ function computeDagreLayout(
   return positions;
 }
 
-/**
- * Compute layout using ELK.
- */
-async function computeElkLayout(
-  nodes: WorkerNodeData[],
-  edges: WorkerEdgeData[],
-  direction: 'LR' | 'TB'
-): Promise<Record<string, { x: number; y: number }>> {
-  const elkDirection = direction === 'LR' ? 'RIGHT' : 'DOWN';
-
-  const graph = {
-    id: 'root',
-    layoutOptions: {
-      'elk.algorithm': 'layered',
-      'elk.direction': elkDirection,
-      'elk.layered.spacing.nodeNodeBetweenLayers': '150',
-      'elk.spacing.nodeNode': '80',
-      'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
-      'elk.edgeRouting': 'ORTHOGONAL',
-    },
-    children: nodes.map((node) => ({
-      id: node.id,
-      width: NODE_WIDTH,
-      height: calculateNodeHeight(node),
-    })),
-    edges: edges.map((edge) => ({
-      id: edge.id,
-      sources: [edge.source],
-      targets: [edge.target],
-    })),
-  };
-
-  const layoutedGraph = await elk.layout(graph);
-
-  const positions: Record<string, { x: number; y: number }> = {};
-  for (const child of layoutedGraph.children || []) {
-    positions[child.id] = {
-      x: child.x ?? 0,
-      y: child.y ?? 0,
-    };
-  }
-
-  return positions;
-}
-
 // Worker message handler
 self.onmessage = async (event: MessageEvent<LayoutRequest>) => {
   const { type, requestId, nodes, edges, direction, algorithm } = event.data;
@@ -184,13 +139,12 @@ self.onmessage = async (event: MessageEvent<LayoutRequest>) => {
   }
 
   try {
-    let positions: Record<string, { x: number; y: number }>;
-
+    // ELK is not supported in worker - it tries to spawn nested workers which fail
     if (algorithm === 'elk') {
-      positions = await computeElkLayout(nodes, edges, direction);
-    } else {
-      positions = computeDagreLayout(nodes, edges, direction);
+      throw new Error('ELK layout not supported in worker');
     }
+
+    const positions = computeDagreLayout(nodes, edges, direction);
 
     const response: LayoutResponse = {
       type: 'layout-result',
