@@ -37,9 +37,16 @@ export interface EncodeResult {
 
 /**
  * Convert a Uint8Array to URL-safe base64
+ * Uses chunked processing to avoid stack overflow on large arrays
  */
 function base64UrlEncode(data: Uint8Array): string {
-  const binary = String.fromCharCode(...data);
+  // Process in chunks to avoid "Maximum call stack size exceeded"
+  const chunkSize = 0x8000; // 32KB chunks
+  let binary = '';
+  for (let i = 0; i < data.length; i += chunkSize) {
+    const chunk = data.subarray(i, i + chunkSize);
+    binary += String.fromCharCode.apply(null, chunk as unknown as number[]);
+  }
   return btoa(binary)
     .replace(/\+/g, '-')
     .replace(/\//g, '_')

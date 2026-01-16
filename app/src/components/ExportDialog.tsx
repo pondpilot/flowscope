@@ -54,7 +54,7 @@ import {
 import * as XLSX from 'xlsx';
 import { useIsDarkMode } from '@pondpilot/flowscope-react';
 import { getShortcutDisplay } from '@/lib/shortcuts';
-import { base64UrlEncode, formatBytes, SHARE_URL_SOFT_LIMIT } from '@/lib/share';
+import { base64UrlEncode, formatBytes, SHARE_URL_SOFT_LIMIT, SHARE_URL_HARD_LIMIT } from '@/lib/share';
 
 // ============================================================================
 // Types
@@ -818,6 +818,7 @@ export function ExportDialog({ result, projectName, graphRef }: ExportDialogProp
   const [schemaInput, setSchemaInput] = useState('');
   const [schemaError, setSchemaError] = useState<string | undefined>();
   const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | undefined>();
 
   const handleDownloadXlsx = useCallback(() => {
     if (!result) return;
@@ -903,69 +904,72 @@ export function ExportDialog({ result, projectName, graphRef }: ExportDialogProp
   const handleOpenDuckDbDialog = useCallback(() => {
     setSchemaInput('');
     setSchemaError(undefined);
+    setExportError(undefined);
     setDuckDbDialogOpen(true);
   }, []);
 
   const handleSchemaInputChange = useCallback((value: string) => {
     setSchemaInput(value);
-    // Validate trimmed value for consistency with export behavior
-    setSchemaError(validateSchemaName(value.trim()));
+    // Only validate if non-empty (schema is optional)
+    const trimmed = value.trim();
+    setSchemaError(trimmed ? validateSchemaName(trimmed) : undefined);
   }, []);
 
-  const generateDuckDbSql = useCallback(async (): Promise<string | null> => {
-    if (!result || isExporting) return null;
-
-    const trimmed = schemaInput.trim();
-    const error = validateSchemaName(trimmed);
-    if (error) {
-      setSchemaError(error);
-      return null;
-    }
+  const handleDuckDbExport = useCallback(async () => {
+    if (!result) return;
 
     setIsExporting(true);
+    setExportError(undefined);
     try {
-      const schema = trimmed || undefined;
-      return await exportToDuckDbSql(result, schema);
+      const schema = schemaInput.trim() || undefined;
+      const sql = await exportToDuckDbSql(result, schema);
+      downloadBlob(sql, generateFilename(projectName, 'sql'), 'text/sql');
+      toast.success(
+        schema
+          ? `DuckDB SQL export downloaded (schema: ${schema})`
+          : 'DuckDB SQL export downloaded'
+      );
+      setDuckDbDialogOpen(false);
     } catch (err) {
-      console.error('Failed to generate DuckDB SQL:', err);
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      toast.error(`Failed to generate DuckDB SQL: ${message}`);
-      return null;
+      console.error('Failed to export DuckDB SQL:', err);
+      toast.error('Failed to export DuckDB SQL');
     } finally {
       setIsExporting(false);
     }
-  }, [result, schemaInput, isExporting]);
-
-  const handleDuckDbExport = useCallback(async () => {
-    const sql = await generateDuckDbSql();
-    if (!sql) return;
-
-    const schema = schemaInput.trim() || undefined;
-    downloadBlob(sql, generateFilename(projectName, 'sql'), 'text/sql');
-    toast.success(
-      schema
-        ? `DuckDB SQL export downloaded (schema: ${schema})`
-        : 'DuckDB SQL export downloaded'
-    );
-    setDuckDbDialogOpen(false);
-  }, [generateDuckDbSql, projectName, schemaInput]);
+  }, [result, projectName, schemaInput]);
 
   const handleOpenInPondPilot = useCallback(async () => {
-    const sql = await generateDuckDbSql();
-    if (!sql) return;
+    if (!result) return;
 
-    const fileName = `${sanitizeFilename(projectName)}-lineage`;
-    const { url, compressedSize } = createPondPilotUrl(fileName, sql);
+    setIsExporting(true);
+    setExportError(undefined);
+    try {
+      const schema = schemaInput.trim() || undefined;
+      const sql = await exportToDuckDbSql(result, schema);
+      const fileName = `${sanitizeFilename(projectName)}-lineage`;
+      const { url, compressedSize } = createPondPilotUrl(fileName, sql);
 
-    if (compressedSize > SHARE_URL_SOFT_LIMIT) {
-      toast.warning('Large export may not work in all browsers', {
-        description: `Compressed size: ${formatBytes(compressedSize)}`,
-      });
+      if (compressedSize > SHARE_URL_HARD_LIMIT) {
+        setExportError('File is too large for URL sharing. Please download the SQL file and open it in PondPilot manually.');
+        return;
+      }
+
+      if (compressedSize > SHARE_URL_SOFT_LIMIT) {
+        toast.warning('Large export may not work in all browsers', {
+          description: `Compressed size: ${formatBytes(compressedSize)}`,
+        });
+      }
+
+      window.open(url, '_blank');
+      setDuckDbDialogOpen(false);
+    } catch (err) {
+      console.error('Failed to open in PondPilot:', err);
+      const message = err instanceof Error ? err.message : String(err);
+      setExportError(`Failed to open in PondPilot: ${message}`);
+    } finally {
+      setIsExporting(false);
     }
-
-    window.open(url, '_blank');
-    setDuckDbDialogOpen(false);
-  }, [generateDuckDbSql, projectName]);
+  }, [result, projectName, schemaInput]);
 
   if (!result) {
     return null;
@@ -1061,8 +1065,14 @@ export function ExportDialog({ result, projectName, graphRef }: ExportDialogProp
               </p>
             </div>
           </div>
+          {exportError && (
+            <p className="text-sm text-destructive">{exportError}</p>
+          )}
           <DialogFooter className="sm:justify-center">
-            <Button onClick={handleDuckDbExport} disabled={!!schemaError || isExporting}>
+            <Button
+              onClick={handleDuckDbExport}
+              disabled={!!schemaError || isExporting}
+            >
               <Download className="size-4 mr-2" />
               {isExporting ? 'Exporting...' : 'Download'}
             </Button>
