@@ -18,8 +18,9 @@
     "wasm"
   ],
   "scripts": {
-    "build": "yarn build:wasm && tsc",
+    "build": "yarn build:wasm && tsc && yarn copy:wasm",
     "build:wasm": "wasm-pack build ../../crates/flowscope-wasm --target web --out-dir ../../packages/core/wasm && node -e \"require('fs').writeFileSync('../../packages/core/wasm/.gitignore', '# Keep wasm artifacts available for publishing\\n')\"",
+    "copy:wasm": "rm -rf dist/wasm && mkdir -p dist/wasm && cp -R wasm/* dist/wasm/",
     "prepublishOnly": "yarn build",
     "test": "vitest run --pool=threads --poolOptions.threads.singleThread=true",
     "test:watch": "vitest",

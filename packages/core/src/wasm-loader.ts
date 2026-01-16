@@ -1,5 +1,5 @@
-let wasmModule: typeof import('../wasm/flowscope_wasm') | null = null;
-let initPromise: Promise<typeof import('../wasm/flowscope_wasm')> | null = null;
+let wasmModule: typeof import('./wasm/flowscope_wasm') | null = null;
+let initPromise: Promise<typeof import('./wasm/flowscope_wasm')> | null = null;
 
 export interface InitWasmOptions {
   wasmUrl?: string;
@@ -12,7 +12,7 @@ export interface InitWasmOptions {
  */
 export async function initWasm(
   options: InitWasmOptions = {}
-): Promise<typeof import('../wasm/flowscope_wasm')> {
+): Promise<typeof import('./wasm/flowscope_wasm')> {
   // Return cached module if already initialized
   if (wasmModule) {
     return wasmModule;
@@ -27,7 +27,7 @@ export async function initWasm(
     try {
       // Dynamic import of the wasm module
       // With vite-plugin-wasm, the module auto-initializes on import
-      const wasm = await import('../wasm/flowscope_wasm');
+      const wasm = await import('./wasm/flowscope_wasm');
 
       // Explicitly initialize the WASM module
       if (typeof wasm.default === 'function') {
@@ -68,7 +68,7 @@ export function isWasmInitialized(): boolean {
 /**
  * Get the initialized WASM module. Throws if not initialized.
  */
-export function getWasmModule(): typeof import('../wasm/flowscope_wasm') {
+export function getWasmModule(): typeof import('./wasm/flowscope_wasm') {
   if (!wasmModule) {
     throw new Error('WASM module not initialized. Call initWasm() first.');
   }
