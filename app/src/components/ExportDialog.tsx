@@ -12,6 +12,7 @@ import {
   FileDown,
   Database,
   ExternalLink,
+  X,
 } from 'lucide-react';
 import { exportToDuckDbSql } from '@/lib/analysis-worker';
 import {
@@ -31,6 +32,7 @@ import {
 } from './ui/tooltip';
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -52,6 +54,7 @@ import {
 import * as XLSX from 'xlsx';
 import { useIsDarkMode } from '@pondpilot/flowscope-react';
 import { getShortcutDisplay } from '@/lib/shortcuts';
+import { base64UrlEncode, formatBytes, SHARE_URL_SOFT_LIMIT } from '@/lib/share';
 
 // ============================================================================
 // Types
@@ -189,18 +192,6 @@ function escapeMermaidLabel(label: string): string {
 // ============================================================================
 
 const PONDPILOT_URL = 'https://app.pondpilot.io';
-const PONDPILOT_SIZE_WARNING_THRESHOLD = 50 * 1024; // 50KB
-
-/**
- * Convert a Uint8Array to URL-safe base64
- */
-function base64UrlEncode(data: Uint8Array): string {
-  const binary = String.fromCharCode(...data);
-  return btoa(binary)
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
-}
 
 /**
  * Create a PondPilot shareable URL for the given SQL content.
@@ -966,9 +957,9 @@ export function ExportDialog({ result, projectName, graphRef }: ExportDialogProp
     const fileName = `${sanitizeFilename(projectName)}-lineage`;
     const { url, compressedSize } = createPondPilotUrl(fileName, sql);
 
-    if (compressedSize > PONDPILOT_SIZE_WARNING_THRESHOLD) {
+    if (compressedSize > SHARE_URL_SOFT_LIMIT) {
       toast.warning('Large export may not work in all browsers', {
-        description: `Compressed size: ${Math.round(compressedSize / 1024)}KB`,
+        description: `Compressed size: ${formatBytes(compressedSize)}`,
       });
     }
 
@@ -1037,6 +1028,10 @@ export function ExportDialog({ result, projectName, graphRef }: ExportDialogProp
 
       <Dialog open={duckDbDialogOpen} onOpenChange={setDuckDbDialogOpen}>
         <DialogContent className="sm:max-w-md">
+          <DialogClose className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </DialogClose>
           <DialogHeader>
             <DialogTitle>Export to DuckDB SQL</DialogTitle>
             <DialogDescription>
@@ -1066,16 +1061,13 @@ export function ExportDialog({ result, projectName, graphRef }: ExportDialogProp
               </p>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDuckDbDialogOpen(false)} disabled={isExporting}>
-              Cancel
-            </Button>
+          <DialogFooter className="sm:justify-center">
             <Button onClick={handleDuckDbExport} disabled={!!schemaError || isExporting}>
               <Download className="size-4 mr-2" />
               {isExporting ? 'Exporting...' : 'Download'}
             </Button>
             <Button
-              variant="secondary"
+              variant="outline"
               onClick={handleOpenInPondPilot}
               disabled={!!schemaError || isExporting}
             >

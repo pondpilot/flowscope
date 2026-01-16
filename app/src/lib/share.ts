@@ -289,4 +289,4 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export { formatBytes, SHARE_URL_SOFT_LIMIT, SHARE_URL_HARD_LIMIT };
+export { base64UrlEncode, formatBytes, SHARE_URL_SOFT_LIMIT, SHARE_URL_HARD_LIMIT };
