@@ -1,0 +1,9 @@
+---
+source: crates/flowscope-core/tests/completion_snapshots.rs
+expression: result
+---
+{
+  "clause": "on",
+  "shouldShow": false,
+  "items": []
+}

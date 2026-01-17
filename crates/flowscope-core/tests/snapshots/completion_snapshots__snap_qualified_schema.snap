@@ -1,0 +1,42 @@
+---
+source: crates/flowscope-core/tests/completion_snapshots.rs
+expression: result
+---
+{
+  "clause": "from",
+  "token": {
+    "value": ".",
+    "kind": "symbol",
+    "span": {
+      "start": 20,
+      "end": 21
+    }
+  },
+  "shouldShow": true,
+  "items": [
+    {
+      "label": "public.orders",
+      "insertText": "orders",
+      "kind": "schemaTable",
+      "category": "schemaTable",
+      "score": 1000,
+      "clauseSpecific": false
+    },
+    {
+      "label": "public.products",
+      "insertText": "products",
+      "kind": "schemaTable",
+      "category": "schemaTable",
+      "score": 1000,
+      "clauseSpecific": false
+    },
+    {
+      "label": "public.users",
+      "insertText": "users",
+      "kind": "schemaTable",
+      "category": "schemaTable",
+      "score": 1000,
+      "clauseSpecific": false
+    }
+  ]
+}
