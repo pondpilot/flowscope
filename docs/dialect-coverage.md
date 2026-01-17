@@ -1,120 +1,44 @@
-# Dialect Coverage Matrix
+# Dialect Coverage
 
-This document shows SQL feature support across different dialects in FlowScope.
+FlowScope relies on `sqlparser-rs` for parsing and applies its own semantic rules for lineage. Coverage depends on the dialect parser and the analyzer’s supported statements.
 
-## Supported Dialects
+## Supported Dialects (API)
 
-| Dialect | Parser | Case Sensitivity | Status |
-|---------|--------|------------------|--------|
-| `generic` | sqlparser-rs Generic | Lower | ✅ Stable |
-| `ansi` | sqlparser-rs ANSI | Upper | ✅ Stable |
-| `bigquery` | sqlparser-rs BigQuery | Exact | ✅ Stable |
-| `clickhouse` | sqlparser-rs ClickHouse | Exact | ✅ Stable |
-| `databricks` | sqlparser-rs Databricks | Lower | ✅ Stable |
-| `duckdb` | sqlparser-rs DuckDB | Lower | ✅ Stable |
-| `hive` | sqlparser-rs Hive | Lower | ✅ Stable |
-| `mssql` | sqlparser-rs MS SQL Server | Exact | ✅ Stable |
-| `mysql` | sqlparser-rs MySQL | Exact | ✅ Stable |
-| `postgres` | sqlparser-rs PostgreSQL | Lower | ✅ Stable |
-| `redshift` | sqlparser-rs Redshift | Lower | ✅ Stable |
-| `snowflake` | sqlparser-rs Snowflake | Upper | ✅ Stable |
-| `sqlite` | sqlparser-rs SQLite | Exact | ✅ Stable |
+These are the dialects exposed by the TypeScript API (`packages/core/src/types.ts`):
 
-## Statement Support
+- `generic`
+- `ansi`
+- `bigquery`
+- `clickhouse`
+- `databricks`
+- `duckdb`
+- `hive`
+- `mssql`
+- `mysql`
+- `postgres`
+- `redshift`
+- `snowflake`
+- `sqlite`
 
-| Statement Type | Generic | Postgres | Snowflake | BigQuery |
-|----------------|---------|----------|-----------|----------|
-| `SELECT` | ✅ | ✅ | ✅ | ✅ |
-| `SELECT ... JOIN` | ✅ | ✅ | ✅ | ✅ |
-| `SELECT ... UNION` | ✅ | ✅ | ✅ | ✅ |
-| `WITH ... SELECT` (CTE) | ✅ | ✅ | ✅ | ✅ |
-| `INSERT INTO ... SELECT` | ✅ | ✅ | ✅ | ✅ |
-| `CREATE TABLE AS SELECT` | ✅ | ✅ | ✅ | ✅ |
-| Subqueries in FROM | ✅ | ✅ | ✅ | ✅ |
-| `UPDATE` | ✅ | ✅ | ✅ | ✅ |
-| `DELETE` | ✅ | ✅ | ✅ | ✅ |
-| `MERGE` | ✅ | ✅ | ✅ | ✅ |
+## Statement Coverage
 
-**Legend:** ✅ Supported | ⚠️ Partial | ⏳ Planned | ❌ Not Supported
+The analyzer provides lineage for these statement types when parsing succeeds:
 
-## JOIN Types
+- `SELECT` / `WITH` / set operations
+- `INSERT INTO ... SELECT`
+- `CREATE TABLE` / `CREATE TABLE AS SELECT`
+- `CREATE VIEW`
+- `UPDATE`
+- `DELETE`
+- `MERGE`
+- `DROP` (schema tracking)
 
-| Join Type | Generic | Postgres | Snowflake | BigQuery |
-|-----------|---------|----------|-----------|----------|
-| `INNER JOIN` | ✅ | ✅ | ✅ | ✅ |
-| `LEFT JOIN` | ✅ | ✅ | ✅ | ✅ |
-| `RIGHT JOIN` | ✅ | ✅ | ✅ | ✅ |
-| `FULL OUTER JOIN` | ✅ | ✅ | ✅ | ✅ |
-| `CROSS JOIN` | ✅ | ✅ | ✅ | ✅ |
-| `NATURAL JOIN` | ✅ | ✅ | ✅ | ✅ |
+Unsupported constructs emit `UNSUPPORTED_SYNTAX` issues and return partial lineage when possible.
 
-## Set Operations
+## Dialect Semantics
 
-| Operation | Generic | Postgres | Snowflake | BigQuery |
-|-----------|---------|----------|-----------|----------|
-| `UNION` | ✅ | ✅ | ✅ | ✅ |
-| `UNION ALL` | ✅ | ✅ | ✅ | ✅ |
-| `INTERSECT` | ✅ | ✅ | ✅ | ✅ |
-| `EXCEPT` | ✅ | ✅ | ✅ | ✅ |
+Dialect-specific normalization, scoping, and function rules are sourced from the semantic specs under:
 
-## CTE Features
+- `crates/flowscope-core/specs/dialect-semantics/`
 
-| Feature | Generic | Postgres | Snowflake | BigQuery |
-|---------|---------|----------|-----------|----------|
-| Basic CTE | ✅ | ✅ | ✅ | ✅ |
-| Multiple CTEs | ✅ | ✅ | ✅ | ✅ |
-| CTE referencing CTE | ✅ | ✅ | ✅ | ✅ |
-| Recursive CTE | ✅ | ✅ | ✅ | ✅ |
-
-**Note:** Recursive CTEs are fully analyzed for table and column lineage, including self-referential edges; no warnings are emitted.
-
-## Dialect-Specific Syntax
-
-### Snowflake
-
-| Feature | Status |
-|---------|--------|
-| `QUALIFY` clause | ✅ Parsed |
-| `FLATTEN` / `LATERAL` | ✅ Parsed |
-| `ILIKE` operator | ✅ Parsed |
-| `INSERT OVERWRITE` | ✅ Parsed |
-| `CLUSTER BY` | ✅ Parsed |
-
-### BigQuery
-
-| Feature | Status |
-|---------|--------|
-| Backtick identifiers | ✅ Parsed |
-| `UNNEST` | ✅ Parsed |
-| STRUCT access | ✅ Parsed |
-| Partitioned tables | ✅ Parsed |
-
-### PostgreSQL
-
-| Feature | Status |
-|---------|--------|
-| `INTERVAL` expressions | ✅ Parsed |
-| Array operators | ✅ Parsed |
-| `DATE_TRUNC` | ✅ Parsed |
-| Schema-qualified names | ✅ Parsed |
-
-## Lineage Features
-
-| Feature | Status |
-|---------|--------|
-| Table-level lineage | ✅ Stable |
-| Column-level lineage | ✅ Stable |
-| `SELECT *` expansion | ✅ Stable |
-| Expression tracking | ✅ Stable |
-| Cross-statement lineage | ✅ Stable |
-
-## Test Coverage
-
-Each dialect has test fixtures covering:
-- Basic SELECT
-- JOIN queries
-- CTE queries
-- INSERT INTO SELECT
-- CREATE TABLE AS SELECT
-
-See `crates/flowscope-core/tests/fixtures/` for examples.
+See `dialect_compliance_spec.md` and `comprehensive_dialect_rules.md` for details on how that data is used.

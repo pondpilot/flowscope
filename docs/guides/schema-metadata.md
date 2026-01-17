@@ -1,38 +1,35 @@
 # Schema Metadata Format
 
-FlowScope accepts optional schema metadata to improve lineage accuracy and enable table/column validation.
+FlowScope accepts optional schema metadata to improve lineage accuracy and enable validation.
 
 ## Basic Structure
 
 ```typescript
 interface SchemaMetadata {
-  // Default catalog for unqualified names (optional)
   defaultCatalog?: string;
-
-  // Default schema for unqualified names (optional)
   defaultSchema?: string;
-
-  // Case sensitivity setting (optional)
-  caseSensitivity?: 'preserve' | 'lower' | 'upper';
-
-  // Table definitions
-  tables: SchemaTable[];
+  searchPath?: SchemaNamespaceHint[];
+  caseSensitivity?: 'dialect' | 'lower' | 'upper' | 'exact';
+  tables?: SchemaTable[];
+  allowImplied?: boolean;
 }
+```
 
+## Table Definitions
+
+```typescript
 interface SchemaTable {
-  // Fully qualified table name (e.g., "public.users" or "catalog.schema.table")
+  catalog?: string;
+  schema?: string;
   name: string;
-
-  // Column definitions
-  columns: ColumnSchema[];
+  columns?: ColumnSchema[];
 }
 
 interface ColumnSchema {
-  // Column name
   name: string;
-
-  // Data type (optional, for future use)
   dataType?: string;
+  isPrimaryKey?: boolean;
+  foreignKey?: { table: string; column: string };
 }
 ```
 
@@ -43,22 +40,9 @@ const schema: SchemaMetadata = {
   defaultSchema: 'public',
   tables: [
     {
-      name: 'public.users',
-      columns: [
-        { name: 'id' },
-        { name: 'name' },
-        { name: 'email' },
-        { name: 'created_at' },
-      ],
-    },
-    {
-      name: 'public.orders',
-      columns: [
-        { name: 'order_id' },
-        { name: 'user_id' },
-        { name: 'total' },
-        { name: 'order_date' },
-      ],
+      schema: 'public',
+      name: 'users',
+      columns: [{ name: 'id' }, { name: 'name' }, { name: 'email' }],
     },
   ],
 };
@@ -73,31 +57,10 @@ const schema: SchemaMetadata = {
   caseSensitivity: 'upper',
   tables: [
     {
-      name: 'MY_DATABASE.ANALYTICS.USERS',
-      columns: [
-        { name: 'ID' },
-        { name: 'NAME' },
-        { name: 'EMAIL' },
-      ],
-    },
-  ],
-};
-```
-
-## Example: BigQuery
-
-```typescript
-const schema: SchemaMetadata = {
-  defaultCatalog: 'my-project',
-  defaultSchema: 'my_dataset',
-  tables: [
-    {
-      name: 'my-project.my_dataset.users',
-      columns: [
-        { name: 'id' },
-        { name: 'name' },
-        { name: 'email' },
-      ],
+      catalog: 'MY_DATABASE',
+      schema: 'ANALYTICS',
+      name: 'USERS',
+      columns: [{ name: 'ID' }, { name: 'NAME' }, { name: 'EMAIL' }],
     },
   ],
 };
@@ -105,12 +68,6 @@ const schema: SchemaMetadata = {
 
 ## Validation Behavior
 
-When schema is provided:
-- Tables referenced in SQL are validated against the schema
-- Unknown tables generate `UNKNOWN_TABLE` warnings
-- Column validation is available for column-level lineage
-
-When schema is not provided:
-- FlowScope extracts table names from SQL as-is
-- No validation is performed
-- `SELECT *` cannot be expanded
+- Known tables/columns are validated against the schema.
+- Unknown tables/columns emit `UNKNOWN_TABLE` / `UNKNOWN_COLUMN` warnings.
+- Missing schema results in best-effort lineage and `APPROXIMATE_LINEAGE` when needed.

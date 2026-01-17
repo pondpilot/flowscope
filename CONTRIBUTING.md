@@ -41,11 +41,13 @@ FlowScope is organized as a monorepo with the following structure:
 - `crates/` - Rust workspace
   - `flowscope-core/` - Core lineage engine
   - `flowscope-wasm/` - WASM bindings
+  - `flowscope-cli/` - CLI wrapper
+  - `flowscope-export/` - Export helpers
 - `packages/` - NPM workspace
   - `core/` - TypeScript wrapper (@pondpilot/flowscope-core)
   - `react/` - React components (@pondpilot/flowscope-react)
-- `examples/` - Example applications
-  - `web-demo/` - Browser-based demo
+- `app/` - Demo Vite application
+- `vscode/` - VS Code extension + webview UI
 - `docs/` - Documentation
 
 ## Development Workflow
@@ -73,6 +75,11 @@ just check
 just fmt
 ```
 
+6. Keep docs in sync:
+```bash
+# See docs/README.md for canonical references.
+```
+
 ### Running the Demo
 
 ```bash
@@ -90,7 +97,12 @@ just dev
 - Use strict TypeScript
 - Single quotes for strings
 - Trailing commas in multiline structures
-- Run `yarn prettier:write` before committing
+- Run `just fmt` before committing
+
+## Code Generation
+
+- Dialect semantic specs in `crates/flowscope-core/specs/dialect-semantics/` are compiled into `crates/flowscope-core/src/generated/` by `build.rs`.
+- API schema snapshots live in `docs/api_schema.json` and can be refreshed with `just update-schema`.
 
 ## Testing
 

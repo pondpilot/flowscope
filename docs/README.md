@@ -1,60 +1,49 @@
-# FlowScope – In-Browser SQL Lineage Engine (Spec Pack)
+# FlowScope Documentation
 
-**Part of the PondPilot project ecosystem**
-
-This repo describes **FlowScope**, a **fully client-side SQL parsing and lineage engine** built on **Rust + WebAssembly + TypeScript**, with optional React UI components.
-
-The core idea:
-
-> Give developers an embeddable, privacy-preserving "SQLFlow-style" lineage engine that runs entirely in the browser (or other JS runtimes), with multi-dialect support and table/column-level lineage.
+This folder contains the canonical documentation for FlowScope. The public API and behavior are defined by the Rust/TypeScript code, and these docs are kept in sync with the current implementation.
 
 ## Document Map
 
-### Core Specifications
+### Core References
 
-- [`core-engine-spec.md`](./core-engine-spec.md)
-  Rust lineage engine: parsing, dialects, lineage computation, internal models.
+- `architecture-overview.md`
+  System-level overview of Rust, WASM, and TS layers.
+- `workspace-structure.md`
+  Monorepo layout, package relationships, and build entry points.
+- `core-engine-spec.md`
+  Behavior and responsibilities of the Rust analyzer.
+- `api-types.md`
+  API surface for the TS wrapper (mirrors `packages/core/src/types.ts`).
+- `schema-handling-design.md`
+  Schema metadata rules, implied schema capture, and resolution behavior.
+- `column_lineage.md`
+  Column lineage semantics and edge types.
+- `dialect-coverage.md`
+  Supported dialect list and high-level statement coverage.
+- `dialect_compliance_spec.md`
+  Dialect normalization and scoping rules used by the analyzer.
+- `comprehensive_dialect_rules.md`
+  Source of truth for dialect semantics in `crates/flowscope-core/specs/`.
+- `error-codes.md`
+  Issue code reference for `AnalyzeResult.issues`.
 
-- [`api-types.md`](./api-types.md)
-  Exact TypeScript/Rust type definitions for the WASM boundary.
+### Guides
 
-### Quality & Planning
+- `guides/quickstart.md`
+  TypeScript quickstart and usage patterns.
+- `guides/schema-metadata.md`
+  How to pass schema metadata for better lineage.
+- `guides/error-handling.md`
+  Interpreting issues and handling partial results.
 
-- [`dialect-coverage.md`](./dialect-coverage.md)
-  SQL feature support matrix across supported dialects.
+### Generated Artifacts
 
-### Implementation Guide
+- `api_schema.json`
+  JSON schema snapshot generated from Rust types.
+- `crates/flowscope-core/src/generated/`
+  Rust code generated from `crates/flowscope-core/specs/dialect-semantics/` via `build.rs`.
 
-- [`schema-handling-design.md`](./schema-handling-design.md)
-  Advanced schema inference logic and precedence rules.
+### Release Docs
 
-## High-Level Summary
-
-- **Core engine:**
-  Rust crates (`flowscope-core`, `flowscope-wasm`) using `sqlparser-rs` for multi-dialect SQL parsing and a custom lineage engine that computes **table- and column-level lineage graphs** from SQL.
-
-- **Runtime environment:**
-  Compiled to WebAssembly for **pure client-side** execution in browsers and JS runtimes (Node/Deno is a nice-to-have, not a hard requirement).
-
-- **JS/TS wrapper:**
-  An NPM package (`@pondpilot/flowscope-core`) providing:
-  - WASM initialization and lifecycle.
-  - A single high-level `analyzeSql(...)` style entrypoint that returns a **lineage graph** plus **issues** and **summary** metadata.
-  - Optional Web Worker helper for UI apps.
-
-- **Input requirements:**
-  Host applications must provide **fully rendered SQL text**. dbt/Dagster templating, macros, or other preprocessing happens entirely outside this engine.
-
-- **UI layer (optional but in scope):**
-  React-based components (`@pondpilot/flowscope-react`) for:
-  - Rendering lineage graphs.
-  - Showing column-level lineage and expressions.
-  - Highlighting the originating SQL.
-
-- **Cross-statement insight:**
-  Results include both per-statement lineage and a **global dependency graph** so UIs can answer impact-analysis questions across entire scripts.
-
-- **Security/privacy stance:**
-  No network calls from the engine. Host apps retain full control of SQL/schema data (can keep everything local to the browser).
-
-This spec is written to be directly consumable by a coding agent/team with minimal back-and-forth.
+- `publishing.md`
+  NPM publishing flow for `@pondpilot/flowscope-core`.

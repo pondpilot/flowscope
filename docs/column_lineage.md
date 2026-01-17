@@ -1,14 +1,35 @@
-# Column Lineage Semantics (FlowScope Core)
+# Column Lineage Semantics
 
-This note captures the intended column-level lineage rules so changes are easy to validate and reason about.
+This document summarizes how FlowScope represents column-level lineage in statement graphs.
 
-- **Ownership edges**: Every physical table/CTE node owns its columns. These edges link table/CTE nodes to column nodes.
-- **Data flow edges**: A data-flow edge connects a source column to a target column when the target is a direct projection (`SELECT src_col AS target`). No transformation is implied.
-- **Derivation edges**: A derivation edge connects source columns to a computed target (`SELECT f(a, b) AS c`, window functions, CASE, aggregates). The `expression` is preserved on the target node and edge.
-- **Wildcard expansion**: With schema metadata, `*`/`table.*` expands to concrete columns; without schema, expansion is approximate and emits `APPROXIMATE_LINEAGE`.
-- **Set operations**: UNION/INTERSECT/EXCEPT emit derivation edges from each branch’s output columns to the combined output columns.
-- **Aggregation**: Grouping columns flow directly; aggregated expressions are derivations. HAVING and window clauses do not create new columns, only derivations.
-- **Write targets**: INSERT/CTAS/CREATE VIEW attach ownership edges for target columns and data-flow/derivation edges from source columns based on projection semantics.
-- **Cross-statement**: Produced tables connect to downstream consumers via `cross_statement` edges in the global graph.
+## Edge Types
 
-Tests should assert these behaviors with stable summaries rather than hash-based node IDs.***
+- **Ownership**: table/CTE/view/output owns its columns.
+- **Data flow**: direct projection from a source column.
+- **Derivation**: computed column derived from one or more inputs.
+- **Join dependency**: output depends on all joined sources.
+- **Cross-statement**: global graph links producers to downstream consumers.
+
+## Column Rules
+
+- **Direct projection** (`SELECT col AS alias`) → `data_flow` edge.
+- **Computed expressions** (`SELECT a + b AS total`) → `derivation` edge and `expression` metadata.
+- **Aggregations**:
+  - Grouping columns flow directly (`data_flow`).
+  - Aggregated outputs are `derivation` with `aggregation` metadata.
+- **Set operations** map branch outputs to combined outputs via `derivation`.
+- **Write targets** (INSERT/CTAS/VIEW) create `ownership` edges on target columns plus flow/derivation edges from sources.
+
+## Approximate Lineage
+
+- When schema is missing and `SELECT *` is used, column lineage can be marked `approximate`.
+- Approximate edges indicate uncertainty rather than failure.
+
+## Node/Edge Metadata
+
+- Nodes may include `joinType`, `joinCondition`, `filters`, and `resolutionSource`.
+- Edges may include `operation`, `joinType`, `joinCondition`, and `approximate`.
+
+## Testing Guidance
+
+Prefer stable summaries of column lineage (labels, types, and counts) over hash IDs, which are content-derived and subject to change.
