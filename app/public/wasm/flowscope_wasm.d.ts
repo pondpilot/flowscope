@@ -31,6 +31,11 @@ export function analyze_sql_json(request_json: string): string;
 export function completion_context_json(request_json: string): string;
 
 /**
+ * Compute ranked completion items for a cursor position.
+ */
+export function completion_items_json(request_json: string): string;
+
+/**
  * Enable tracing logs to the browser console (requires `tracing` feature).
  */
 export function enable_tracing(): void;
@@ -72,6 +77,7 @@ export interface InitOutput {
   readonly analyze_sql: (a: number, b: number) => [number, number, number, number];
   readonly analyze_sql_json: (a: number, b: number) => [number, number];
   readonly completion_context_json: (a: number, b: number) => [number, number];
+  readonly completion_items_json: (a: number, b: number) => [number, number];
   readonly enable_tracing: () => void;
   readonly export_to_duckdb_sql: (a: number, b: number) => [number, number, number, number];
   readonly get_version: () => [number, number];

@@ -112,8 +112,8 @@ jobs:
       - name: Build core package
         run: yarn workspace @pondpilot/flowscope-core build
 
-      - name: Build web demo
-        run: yarn workspace web-demo build
+      - name: Build demo app
+        run: yarn workspace @pondpilot/flowscope-app build
 
   schema-compat:
     name: Schema Compatibility (Rust ↔ TS)

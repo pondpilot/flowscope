@@ -79,7 +79,7 @@ pub fn analyze_sql_json(request_json: &str) -> String {
     handle_wasm_json_request(
         request_json,
         |req: AnalyzeRequest| analyze(&req),
-        |msg| AnalyzeResult::from_error("REQUEST_PARSE_ERROR", msg),
+        |msg| AnalyzeResult::from_error("INVALID_REQUEST", msg),
     )
 }
 

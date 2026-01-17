@@ -9,6 +9,8 @@ const baseResult: AnalyzeResult = {
     statementCount: 0,
     tableCount: 0,
     columnCount: 0,
+    joinCount: 0,
+    complexityScore: 0,
     issueCount: { errors: 0, warnings: 0, infos: 0 },
     hasErrors: false,
   },
@@ -16,7 +18,7 @@ const baseResult: AnalyzeResult = {
 
 const wasmModuleMock = vi.hoisted(() => ({
   default: vi.fn(async () => undefined),
-  analyze_sql_json: vi.fn(() => JSON.stringify(baseResult)),
+  analyze_sql_json: vi.fn<(request: string) => string>(() => JSON.stringify(baseResult)),
   export_to_duckdb_sql: vi.fn(() => '-- DuckDB SQL export'),
   completion_items_json: vi.fn(() => JSON.stringify({ clause: 'unknown', items: [] })),
   split_statements_json: vi.fn(() => JSON.stringify({ statements: [] })),
@@ -51,7 +53,9 @@ describe('analyzer', () => {
 
     expect(result.summary.hasErrors).toBe(false);
     expect(wasmModuleMock.analyze_sql_json).toHaveBeenCalledTimes(1);
-    const payload = JSON.parse(wasmModuleMock.analyze_sql_json.mock.calls[0][0]);
+    const payloadJson = wasmModuleMock.analyze_sql_json.mock.calls[0]?.[0];
+    expect(payloadJson).toBeDefined();
+    const payload = JSON.parse(payloadJson as string);
     expect(payload.sql).toBe('SELECT 1');
     expect(payload.dialect).toBe('generic');
   });
@@ -66,7 +70,7 @@ describe('analyzer', () => {
   it('validates dialect values', async () => {
     const { analyzeSql } = await loadAnalyzer();
     await expect(
-      analyzeSql({ sql: 'SELECT 1', dialect: 'oracle' as never })
+      analyzeSql({ sql: 'SELECT 1', dialect: 'unsupported' as never })
     ).rejects.toThrow(/Invalid dialect/);
   });
 
@@ -82,7 +86,9 @@ describe('analyzer', () => {
     const { analyzeSimple } = await loadAnalyzer();
 
     await analyzeSimple('SELECT 1');
-    const payload = JSON.parse(wasmModuleMock.analyze_sql_json.mock.calls[0][0]);
+    const payloadJson = wasmModuleMock.analyze_sql_json.mock.calls[0]?.[0];
+    expect(payloadJson).toBeDefined();
+    const payload = JSON.parse(payloadJson as string);
     expect(payload.dialect).toBe('generic');
   });
 });

@@ -22,7 +22,7 @@ Key areas:
 - Use `just` as the task runner (see `justfile`).
 - Use `yarn` for Node workspaces.
 - Use `cargo` for Rust workspace.
-- Node.js 18+ and Rust 1.70+ expected (see `README.md`).
+- Node.js 18+ and Rust 1.82+ expected (see `README.md`).
 
 ## Build Commands
 

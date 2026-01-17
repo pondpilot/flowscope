@@ -629,7 +629,9 @@ mod integration_tests {
 
         // Verify meta table
         let version: String = conn
-            .query_row("SELECT value FROM _meta WHERE key = 'version'", [], |row| row.get(0))
+            .query_row("SELECT value FROM _meta WHERE key = 'version'", [], |row| {
+                row.get(0)
+            })
             .expect("Should have version in meta");
         assert!(!version.is_empty(), "Version should not be empty");
 

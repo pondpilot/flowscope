@@ -5,6 +5,7 @@ export const analyze_and_export_sql: (a: number, b: number) => [number, number, 
 export const analyze_sql: (a: number, b: number) => [number, number, number, number];
 export const analyze_sql_json: (a: number, b: number) => [number, number];
 export const completion_context_json: (a: number, b: number) => [number, number];
+export const completion_items_json: (a: number, b: number) => [number, number];
 export const enable_tracing: () => void;
 export const export_to_duckdb_sql: (a: number, b: number) => [number, number, number, number];
 export const get_version: () => [number, number];

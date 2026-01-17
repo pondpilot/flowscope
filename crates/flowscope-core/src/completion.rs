@@ -6,12 +6,29 @@ use crate::analyzer::schema_registry::SchemaRegistry;
 use crate::types::{
     CompletionClause, CompletionColumn, CompletionContext, CompletionItem, CompletionItemCategory,
     CompletionItemKind, CompletionItemsResult, CompletionKeywordHints, CompletionKeywordSet,
-    CompletionRequest, CompletionTable, CompletionToken, CompletionTokenKind, Dialect, Span,
+    CompletionRequest, CompletionTable, CompletionToken, CompletionTokenKind, Dialect,
+    SchemaMetadata, Span,
 };
 
 /// Maximum SQL input size (10MB) to prevent memory exhaustion.
 /// This matches the TypeScript validation limit.
 const MAX_SQL_LENGTH: usize = 10 * 1024 * 1024;
+
+// Scoring constants for completion item ranking.
+// Higher scores = higher priority in completion list.
+
+/// Bonus for column name prefix matches (when typing matches the column name portion of "table.column")
+const SCORE_COLUMN_NAME_MATCH_BONUS: i32 = 150;
+/// Bonus for items that are specific to the current clause context
+const SCORE_CLAUSE_SPECIFIC_BONUS: i32 = 50;
+/// Special boost for FROM keyword when typing 'f' in SELECT clause (most common transition)
+const SCORE_FROM_KEYWORD_BOOST: i32 = 800;
+/// Penalty for non-FROM keywords when typing 'f' in SELECT clause
+const SCORE_OTHER_KEYWORD_PENALTY: i32 = -200;
+/// Penalty for function names starting with 'f' to deprioritize vs FROM keyword
+const SCORE_F_FUNCTION_PENALTY: i32 = -250;
+/// Additional penalty for functions starting with 'from_' (e.g., from_json)
+const SCORE_FROM_FUNCTION_PENALTY: i32 = -300;
 
 #[derive(Debug, Clone)]
 struct TokenInfo {
@@ -73,28 +90,8 @@ const GLOBAL_KEYWORDS: &[&str] = &[
 ];
 
 const OPERATOR_HINTS: &[&str] = &[
-    "=",
-    "!=",
-    "<>",
-    "<",
-    "<=",
-    ">",
-    ">=",
-    "+",
-    "-",
-    "*",
-    "/",
-    "%",
-    "||",
-    "AND",
-    "OR",
-    "NOT",
-    "IN",
-    "LIKE",
-    "ILIKE",
-    "IS",
-    "IS NOT",
-    "BETWEEN",
+    "=", "!=", "<>", "<", "<=", ">", ">=", "+", "-", "*", "/", "%", "||", "AND", "OR", "NOT", "IN",
+    "LIKE", "ILIKE", "IS", "IS NOT", "BETWEEN",
 ];
 
 const AGGREGATE_HINTS: &[&str] = &[
@@ -121,49 +118,17 @@ const SNIPPET_HINTS: &[&str] = &[
 ];
 
 const SELECT_KEYWORDS: &[&str] = &[
-    "DISTINCT",
-    "ALL",
-    "AS",
-    "CASE",
-    "WHEN",
-    "THEN",
-    "ELSE",
-    "END",
-    "NULLIF",
-    "COALESCE",
-    "CAST",
-    "FILTER",
-    "OVER",
+    "DISTINCT", "ALL", "AS", "CASE", "WHEN", "THEN", "ELSE", "END", "NULLIF", "COALESCE", "CAST",
+    "FILTER", "OVER",
 ];
 
 const FROM_KEYWORDS: &[&str] = &[
-    "JOIN",
-    "LEFT",
-    "RIGHT",
-    "FULL",
-    "INNER",
-    "CROSS",
-    "OUTER",
-    "LATERAL",
-    "UNNEST",
-    "AS",
-    "ON",
+    "JOIN", "LEFT", "RIGHT", "FULL", "INNER", "CROSS", "OUTER", "LATERAL", "UNNEST", "AS", "ON",
     "USING",
 ];
 
 const WHERE_KEYWORDS: &[&str] = &[
-    "AND",
-    "OR",
-    "NOT",
-    "IN",
-    "EXISTS",
-    "LIKE",
-    "ILIKE",
-    "IS",
-    "NULL",
-    "TRUE",
-    "FALSE",
-    "BETWEEN",
+    "AND", "OR", "NOT", "IN", "EXISTS", "LIKE", "ILIKE", "IS", "NULL", "TRUE", "FALSE", "BETWEEN",
 ];
 
 const GROUP_BY_KEYWORDS: &[&str] = &["HAVING", "ROLLUP", "CUBE", "GROUPING", "SETS"];
@@ -195,7 +160,10 @@ fn keyword_set_for_clause(clause: CompletionClause) -> CompletionKeywordSet {
         keywords: keywords.iter().map(|k| k.to_string()).collect(),
         operators: OPERATOR_HINTS.iter().map(|op| op.to_string()).collect(),
         aggregates: AGGREGATE_HINTS.iter().map(|agg| agg.to_string()).collect(),
-        snippets: SNIPPET_HINTS.iter().map(|snippet| snippet.to_string()).collect(),
+        snippets: SNIPPET_HINTS
+            .iter()
+            .map(|snippet| snippet.to_string())
+            .collect(),
     }
 }
 
@@ -204,7 +172,10 @@ fn global_keyword_set() -> CompletionKeywordSet {
         keywords: GLOBAL_KEYWORDS.iter().map(|k| k.to_string()).collect(),
         operators: OPERATOR_HINTS.iter().map(|op| op.to_string()).collect(),
         aggregates: AGGREGATE_HINTS.iter().map(|agg| agg.to_string()).collect(),
-        snippets: SNIPPET_HINTS.iter().map(|snippet| snippet.to_string()).collect(),
+        snippets: SNIPPET_HINTS
+            .iter()
+            .map(|snippet| snippet.to_string())
+            .collect(),
     }
 }
 
@@ -423,7 +394,11 @@ fn token_kind(token: &Token) -> CompletionTokenKind {
     }
 }
 
-fn find_token_at_cursor(tokens: &[TokenInfo], cursor_offset: usize, sql: &str) -> Option<CompletionToken> {
+fn find_token_at_cursor(
+    tokens: &[TokenInfo],
+    cursor_offset: usize,
+    sql: &str,
+) -> Option<CompletionToken> {
     for token in tokens {
         if cursor_offset >= token.span.start && cursor_offset <= token.span.end {
             let value = sql
@@ -572,10 +547,7 @@ fn parse_alias(tokens: &[TokenInfo], start: usize) -> (Option<String>, usize) {
     (None, index)
 }
 
-fn build_columns(
-    tables: &[CompletionTable],
-    registry: &SchemaRegistry,
-) -> Vec<CompletionColumn> {
+fn build_columns(tables: &[CompletionTable], registry: &SchemaRegistry) -> Vec<CompletionColumn> {
     let mut columns = Vec::new();
     let mut column_counts = std::collections::HashMap::new();
 
@@ -649,7 +621,10 @@ pub fn completion_context(request: &CompletionRequest) -> CompletionContext {
         ));
     }
 
-    let (registry, _) = SchemaRegistry::new(request.schema.as_ref(), request.dialect);
+    // SchemaRegistry::new returns (registry, issues) where issues contains schema validation
+    // warnings. We intentionally discard these for completion context since we want to
+    // provide completions even when schema metadata has minor issues.
+    let (registry, _schema_issues) = SchemaRegistry::new(request.schema.as_ref(), request.dialect);
 
     let tokens = match tokenize_sql(sql, request.dialect) {
         Ok(tokens) => tokens,
@@ -844,6 +819,19 @@ fn prefix_score(label: &str, token: &str) -> i32 {
     0
 }
 
+/// Extracts the column name portion from a potentially qualified label.
+///
+/// Used for prefix scoring to match user input against just the column name,
+/// even when the label includes a table qualifier for disambiguation.
+///
+/// # Examples
+/// - `"name"` → `"name"`
+/// - `"users.name"` → `"name"`
+/// - `"public.users.name"` → `"name"`
+fn column_name_from_label(label: &str) -> &str {
+    label.rsplit_once('.').map(|(_, col)| col).unwrap_or(label)
+}
+
 fn should_show_for_cursor(sql: &str, cursor_offset: usize, token_value: &str) -> bool {
     if !token_value.is_empty() {
         return true;
@@ -863,8 +851,430 @@ fn should_show_for_cursor(sql: &str, cursor_offset: usize, token_value: &str) ->
     true
 }
 
+/// Checks if a character is valid in an unquoted SQL identifier.
+///
+/// Currently only handles ASCII identifiers (alphanumeric, underscore, dollar sign).
+/// Note: Some SQL dialects support Unicode identifiers, but this function intentionally
+/// restricts to ASCII for consistent cross-dialect behavior. Quoted identifiers can
+/// still contain any Unicode characters.
+fn is_identifier_char(ch: char) -> bool {
+    ch.is_ascii_alphanumeric() || ch == '_' || ch == '$'
+}
+
+/// Extracts the last identifier from a SQL fragment.
+///
+/// Handles both quoted identifiers (e.g., `"My Table"`) and unquoted identifiers.
+/// Returns `None` if the source is empty or contains only non-identifier characters.
+///
+/// # Examples
+/// - `"SELECT users"` → `Some("users")`
+/// - `"\"My Table\""` → `Some("My Table")`
+/// - `"schema.table"` → `Some("table")`
+fn extract_last_identifier(source: &str) -> Option<String> {
+    let trimmed = source.trim_end();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    if let Some(stripped) = trimmed.strip_suffix('"') {
+        if let Some(start) = stripped.rfind('"') {
+            return Some(stripped[start + 1..].to_string());
+        }
+    }
+
+    let end = trimmed.len();
+    let mut start = end;
+    for (idx, ch) in trimmed.char_indices().rev() {
+        if is_identifier_char(ch) {
+            start = idx;
+        } else {
+            break;
+        }
+    }
+
+    if start == end {
+        None
+    } else {
+        Some(trimmed[start..end].to_string())
+    }
+}
+
+/// Extracts the qualifier (table alias or schema name) from SQL at the cursor position.
+///
+/// This function identifies when the user is typing after a dot (`.`), indicating
+/// they want completions scoped to a specific table, alias, or schema.
+///
+/// # Examples
+/// - `"users."` at offset 6 → `Some("users")` (trailing dot)
+/// - `"u.name"` at offset 6 → `Some("u")` (mid-token after dot)
+/// - `"SELECT"` at offset 6 → `None` (no qualifier)
+///
+/// # Safety
+/// Returns `None` if `cursor_offset` is out of bounds or not on a valid UTF-8 boundary.
+fn extract_qualifier(sql: &str, cursor_offset: usize) -> Option<String> {
+    if cursor_offset == 0 || cursor_offset > sql.len() {
+        return None;
+    }
+    // Ensure cursor_offset lands on a valid UTF-8 char boundary to prevent panic
+    if !sql.is_char_boundary(cursor_offset) {
+        return None;
+    }
+
+    let prefix = &sql[..cursor_offset];
+    let trimmed = prefix.trim_end();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    if let Some(stripped) = trimmed.strip_suffix('.') {
+        let before_dot = stripped.trim_end();
+        return extract_last_identifier(before_dot);
+    }
+
+    if let Some(dot_idx) = trimmed.rfind('.') {
+        let whitespace_idx = trimmed.rfind(|ch: char| ch.is_whitespace());
+        let dot_after_space = whitespace_idx.is_none_or(|space| dot_idx > space);
+        if dot_after_space {
+            let before_dot = trimmed[..dot_idx].trim_end();
+            return extract_last_identifier(before_dot);
+        }
+    }
+
+    None
+}
+
+fn build_columns_from_schema(
+    schema: &SchemaMetadata,
+    registry: &SchemaRegistry,
+) -> Vec<CompletionColumn> {
+    let mut columns = Vec::new();
+    let mut column_counts = std::collections::HashMap::new();
+
+    for table in &schema.tables {
+        for column in &table.columns {
+            let normalized = registry.normalize_identifier(&column.name);
+            *column_counts.entry(normalized).or_insert(0usize) += 1;
+        }
+    }
+
+    for table in &schema.tables {
+        let table_label = table.name.clone();
+        for column in &table.columns {
+            let normalized = registry.normalize_identifier(&column.name);
+            let is_ambiguous = column_counts.get(&normalized).copied().unwrap_or(0) > 1;
+            columns.push(CompletionColumn {
+                name: column.name.clone(),
+                data_type: column.data_type.clone(),
+                table: Some(table_label.clone()),
+                canonical_table: Some(table_label.clone()),
+                is_ambiguous,
+            });
+        }
+    }
+
+    columns
+}
+
+fn build_columns_for_table(
+    schema: &SchemaMetadata,
+    registry: &SchemaRegistry,
+    target_schema: Option<&str>,
+    table_name: &str,
+) -> Vec<CompletionColumn> {
+    let normalized_target = registry.normalize_identifier(table_name);
+    let mut columns = Vec::new();
+
+    for table in &schema.tables {
+        let schema_matches = target_schema.is_none_or(|schema_name| {
+            table
+                .schema
+                .as_ref()
+                .map(|schema| {
+                    registry.normalize_identifier(schema)
+                        == registry.normalize_identifier(schema_name)
+                })
+                .unwrap_or(false)
+        });
+        if !schema_matches {
+            continue;
+        }
+        if registry.normalize_identifier(&table.name) != normalized_target {
+            continue;
+        }
+
+        for column in &table.columns {
+            columns.push(CompletionColumn {
+                name: column.name.clone(),
+                data_type: column.data_type.clone(),
+                table: Some(table.name.clone()),
+                canonical_table: Some(table.name.clone()),
+                is_ambiguous: false,
+            });
+        }
+    }
+
+    columns
+}
+
+fn schema_tables_for_qualifier(
+    schema: &SchemaMetadata,
+    registry: &SchemaRegistry,
+    qualifier: &str,
+) -> Vec<(String, String)> {
+    let normalized = registry.normalize_identifier(qualifier);
+    let mut tables = Vec::new();
+
+    for table in &schema.tables {
+        let schema_matches = table
+            .schema
+            .as_ref()
+            .is_some_and(|table_schema| registry.normalize_identifier(table_schema) == normalized);
+        let catalog_matches = table
+            .catalog
+            .as_ref()
+            .is_some_and(|catalog| registry.normalize_identifier(catalog) == normalized);
+
+        if schema_matches {
+            let label = match table.schema.as_ref() {
+                Some(table_schema) => format!("{table_schema}.{}", table.name),
+                None => table.name.clone(),
+            };
+            tables.push((label, table.name.clone()));
+            continue;
+        }
+
+        if catalog_matches {
+            let label = match table.catalog.as_ref() {
+                Some(catalog) => format!("{catalog}.{}", table.name),
+                None => table.name.clone(),
+            };
+            tables.push((label, table.name.clone()));
+        }
+    }
+
+    tables
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum QualifierTarget {
+    ColumnLabel,
+    SchemaTable,
+    SchemaOnly,
+}
+
+#[derive(Debug)]
+struct QualifierResolution {
+    target: QualifierTarget,
+    label: Option<String>,
+    schema: Option<String>,
+    table: Option<String>,
+}
+
+fn resolve_qualifier(
+    qualifier: &str,
+    tables: &[CompletionTable],
+    schema: Option<&SchemaMetadata>,
+    registry: &SchemaRegistry,
+) -> Option<QualifierResolution> {
+    let normalized = registry.normalize_identifier(qualifier);
+
+    for table in tables {
+        if let Some(alias) = table.alias.as_ref() {
+            if registry.normalize_identifier(alias) == normalized {
+                return Some(QualifierResolution {
+                    target: QualifierTarget::ColumnLabel,
+                    label: Some(alias.clone()),
+                    schema: None,
+                    table: None,
+                });
+            }
+        }
+    }
+
+    let schema = schema?;
+
+    let schema_name = schema.tables.iter().find_map(|table| {
+        table.schema.as_ref().and_then(|table_schema| {
+            if registry.normalize_identifier(table_schema) == normalized {
+                Some(table_schema.clone())
+            } else {
+                None
+            }
+        })
+    });
+    let catalog_name = schema.tables.iter().find_map(|table| {
+        table.catalog.as_ref().and_then(|catalog| {
+            if registry.normalize_identifier(catalog) == normalized {
+                Some(catalog.clone())
+            } else {
+                None
+            }
+        })
+    });
+    let table_name_matches_schema = schema
+        .tables
+        .iter()
+        .any(|table| registry.normalize_identifier(&table.name) == normalized);
+
+    if let Some(schema_name) = schema_name.as_ref() {
+        if !table_name_matches_schema {
+            return Some(QualifierResolution {
+                target: QualifierTarget::SchemaOnly,
+                label: None,
+                schema: Some(schema_name.clone()),
+                table: None,
+            });
+        }
+    }
+
+    if let Some(catalog_name) = catalog_name.as_ref() {
+        if !table_name_matches_schema {
+            return Some(QualifierResolution {
+                target: QualifierTarget::SchemaOnly,
+                label: None,
+                schema: Some(catalog_name.clone()),
+                table: None,
+            });
+        }
+    }
+
+    for table in tables {
+        if registry.normalize_identifier(&table.name) == normalized {
+            let label = table.alias.clone().unwrap_or_else(|| table.name.clone());
+            return Some(QualifierResolution {
+                target: QualifierTarget::ColumnLabel,
+                label: Some(label),
+                schema: None,
+                table: None,
+            });
+        }
+    }
+
+    for table in &schema.tables {
+        if registry.normalize_identifier(&table.name) == normalized {
+            return Some(QualifierResolution {
+                target: QualifierTarget::SchemaTable,
+                label: None,
+                schema: table.schema.clone(),
+                table: Some(table.name.clone()),
+            });
+        }
+    }
+
+    if let Some(schema_name) = schema_name {
+        return Some(QualifierResolution {
+            target: QualifierTarget::SchemaOnly,
+            label: None,
+            schema: Some(schema_name),
+            table: None,
+        });
+    }
+
+    None
+}
+
 fn uppercase_keyword(value: &str) -> String {
     value.to_ascii_uppercase()
+}
+
+/// Determines if completions should be suppressed in SELECT clause.
+///
+/// Suppresses completions when schema metadata suggests columns should exist
+/// but we couldn't derive any for this context. This prevents showing misleading
+/// keyword-only completions when the user expects column suggestions.
+///
+/// Returns `true` (suppress) in these cases:
+/// - Schema is provided but contains no column metadata at all
+/// - Schema has columns but none could be derived for the current scope
+///
+/// Returns `false` (show completions) when:
+/// - Not in SELECT clause
+/// - A qualifier is present (e.g., `users.`)
+/// - Columns were successfully derived
+/// - No schema metadata was provided
+fn should_suppress_select_completions(
+    clause: CompletionClause,
+    has_qualifier: bool,
+    columns_empty: bool,
+    schema_provided: bool,
+    schema_has_columns: bool,
+) -> bool {
+    // Only applies to SELECT clause without qualifier and no columns
+    if clause != CompletionClause::Select || has_qualifier || !columns_empty {
+        return false;
+    }
+
+    // Suppress when schema is provided but has no column metadata
+    if schema_provided && !schema_has_columns {
+        return true;
+    }
+
+    // Suppress when schema has columns but we couldn't derive any for this context
+    if schema_has_columns {
+        return true;
+    }
+
+    false
+}
+
+/// Generate completion items from a keyword set with the given clause_specific flag.
+fn items_from_keyword_set(
+    keyword_set: &CompletionKeywordSet,
+    clause_specific: bool,
+) -> Vec<CompletionItem> {
+    let mut items = Vec::new();
+
+    for keyword in &keyword_set.keywords {
+        let label = uppercase_keyword(keyword);
+        items.push(CompletionItem {
+            label: label.clone(),
+            insert_text: label,
+            kind: CompletionItemKind::Keyword,
+            category: CompletionItemCategory::Keyword,
+            score: 0,
+            clause_specific,
+            detail: None,
+        });
+    }
+
+    for operator in &keyword_set.operators {
+        items.push(CompletionItem {
+            label: operator.clone(),
+            insert_text: operator.clone(),
+            kind: CompletionItemKind::Operator,
+            category: CompletionItemCategory::Operator,
+            score: 0,
+            clause_specific,
+            detail: None,
+        });
+    }
+
+    for aggregate in &keyword_set.aggregates {
+        let label = uppercase_keyword(aggregate);
+        items.push(CompletionItem {
+            label: label.clone(),
+            insert_text: format!("{label}("),
+            kind: CompletionItemKind::Function,
+            category: CompletionItemCategory::Aggregate,
+            score: 0,
+            clause_specific,
+            detail: None,
+        });
+    }
+
+    for snippet in &keyword_set.snippets {
+        items.push(CompletionItem {
+            label: snippet.clone(),
+            insert_text: snippet.clone(),
+            kind: CompletionItemKind::Snippet,
+            category: CompletionItemCategory::Snippet,
+            score: 0,
+            clause_specific,
+            detail: None,
+        });
+    }
+
+    items
 }
 
 #[must_use]
@@ -896,6 +1306,20 @@ pub fn completion_items(request: &CompletionRequest) -> CompletionItemsResult {
         };
     }
 
+    // SchemaRegistry::new returns (registry, issues). Issues are intentionally discarded
+    // because completion should work even with schema validation warnings.
+    let (registry, _schema_issues) = SchemaRegistry::new(request.schema.as_ref(), request.dialect);
+    let qualifier = extract_qualifier(&request.sql, request.cursor_offset);
+    let qualifier_resolution = qualifier.as_ref().and_then(|value| {
+        resolve_qualifier(
+            value,
+            &context.tables_in_scope,
+            request.schema.as_ref(),
+            &registry,
+        )
+    });
+    let restrict_to_columns = qualifier_resolution.is_some();
+
     let mut items = Vec::new();
     let mut seen = std::collections::HashSet::new();
 
@@ -906,186 +1330,225 @@ pub fn completion_items(request: &CompletionRequest) -> CompletionItemsResult {
         }
     };
 
-    for keyword in &context.keyword_hints.clause.keywords {
-        let label = uppercase_keyword(keyword);
-        push_item(CompletionItem {
-            label: label.clone(),
-            insert_text: label,
-            kind: CompletionItemKind::Keyword,
-            category: CompletionItemCategory::Keyword,
-            score: 0,
-            clause_specific: true,
-            detail: None,
-        });
+    if !restrict_to_columns {
+        for item in items_from_keyword_set(&context.keyword_hints.clause, true) {
+            push_item(item);
+        }
+        for item in items_from_keyword_set(&context.keyword_hints.global, false) {
+            push_item(item);
+        }
     }
 
-    for operator in &context.keyword_hints.clause.operators {
-        push_item(CompletionItem {
-            label: operator.clone(),
-            insert_text: operator.clone(),
-            kind: CompletionItemKind::Operator,
-            category: CompletionItemCategory::Operator,
-            score: 0,
-            clause_specific: true,
-            detail: None,
-        });
+    let mut columns = context.columns_in_scope.clone();
+    if columns.is_empty() && context.clause == CompletionClause::Select {
+        if let Some(schema) = request.schema.as_ref() {
+            columns = build_columns_from_schema(schema, &registry);
+        }
     }
 
-    for aggregate in &context.keyword_hints.clause.aggregates {
-        let label = uppercase_keyword(aggregate);
-        push_item(CompletionItem {
-            label: label.clone(),
-            insert_text: format!("{label}("),
-            kind: CompletionItemKind::Function,
-            category: CompletionItemCategory::Aggregate,
-            score: 0,
-            clause_specific: true,
-            detail: None,
-        });
+    if let Some(resolution) = qualifier_resolution.as_ref() {
+        match resolution.target {
+            QualifierTarget::ColumnLabel => {
+                if let Some(label) = resolution.label.as_ref() {
+                    let normalized = registry.normalize_identifier(label);
+                    columns.retain(|column| {
+                        column
+                            .table
+                            .as_ref()
+                            .map(|table| registry.normalize_identifier(table) == normalized)
+                            .unwrap_or(false)
+                    });
+                }
+            }
+            QualifierTarget::SchemaTable => {
+                columns = request
+                    .schema
+                    .as_ref()
+                    .map(|schema| {
+                        build_columns_for_table(
+                            schema,
+                            &registry,
+                            resolution.schema.as_deref(),
+                            resolution.table.as_deref().unwrap_or_default(),
+                        )
+                    })
+                    .unwrap_or_default();
+            }
+            QualifierTarget::SchemaOnly => {
+                columns.clear();
+            }
+        }
     }
 
-    for snippet in &context.keyword_hints.clause.snippets {
-        push_item(CompletionItem {
-            label: snippet.clone(),
-            insert_text: snippet.clone(),
-            kind: CompletionItemKind::Snippet,
-            category: CompletionItemCategory::Snippet,
-            score: 0,
-            clause_specific: true,
-            detail: None,
-        });
+    let schema_has_columns = request
+        .schema
+        .as_ref()
+        .map(|schema| schema.tables.iter().any(|table| !table.columns.is_empty()))
+        .unwrap_or(false);
+    let schema_provided = request.schema.is_some();
+
+    // Cache emptiness check before consuming columns to avoid clone during iteration
+    let has_columns = !columns.is_empty();
+
+    if should_suppress_select_completions(
+        context.clause,
+        qualifier_resolution.is_some(),
+        !has_columns,
+        schema_provided,
+        schema_has_columns,
+    ) {
+        return CompletionItemsResult {
+            clause: context.clause,
+            token: context.token,
+            should_show: false,
+            items: Vec::new(),
+            error: None,
+        };
     }
 
-    for keyword in &context.keyword_hints.global.keywords {
-        let label = uppercase_keyword(keyword);
-        push_item(CompletionItem {
-            label: label.clone(),
-            insert_text: label,
-            kind: CompletionItemKind::Keyword,
-            category: CompletionItemCategory::Keyword,
-            score: 0,
-            clause_specific: false,
-            detail: None,
-        });
-    }
-
-    for operator in &context.keyword_hints.global.operators {
-        push_item(CompletionItem {
-            label: operator.clone(),
-            insert_text: operator.clone(),
-            kind: CompletionItemKind::Operator,
-            category: CompletionItemCategory::Operator,
-            score: 0,
-            clause_specific: false,
-            detail: None,
-        });
-    }
-
-    for aggregate in &context.keyword_hints.global.aggregates {
-        let label = uppercase_keyword(aggregate);
-        push_item(CompletionItem {
-            label: label.clone(),
-            insert_text: format!("{label}("),
-            kind: CompletionItemKind::Function,
-            category: CompletionItemCategory::Aggregate,
-            score: 0,
-            clause_specific: false,
-            detail: None,
-        });
-    }
-
-    for snippet in &context.keyword_hints.global.snippets {
-        push_item(CompletionItem {
-            label: snippet.clone(),
-            insert_text: snippet.clone(),
-            kind: CompletionItemKind::Snippet,
-            category: CompletionItemCategory::Snippet,
-            score: 0,
-            clause_specific: false,
-            detail: None,
-        });
-    }
-
-    for column in &context.columns_in_scope {
-        let label = if column.is_ambiguous {
+    // Use into_iter() to take ownership of columns, avoiding clones where possible
+    for column in columns {
+        let (label, insert_text) = if restrict_to_columns {
+            // Both label and insert_text are the column name
+            let name = column.name;
+            (name.clone(), name)
+        } else if column.is_ambiguous {
             if let Some(table) = &column.table {
-                format!("{table}.{}", column.name)
+                let label = format!("{table}.{}", column.name);
+                let insert_text = label.clone();
+                (label, insert_text)
             } else {
-                column.name.clone()
+                let name = column.name;
+                (name.clone(), name)
             }
         } else {
-            column.name.clone()
+            let name = column.name;
+            (name.clone(), name)
         };
         push_item(CompletionItem {
-            label: label.clone(),
-            insert_text: label,
+            label,
+            insert_text,
             kind: CompletionItemKind::Column,
             category: CompletionItemCategory::Column,
             score: 0,
             clause_specific: true,
-            detail: column.data_type.clone(),
+            detail: column.data_type,
         });
     }
 
-    for table in &context.tables_in_scope {
-        let label = table
-            .alias
+    let schema_tables_only = qualifier_resolution
+        .as_ref()
+        .map(|resolution| resolution.target == QualifierTarget::SchemaOnly)
+        .unwrap_or(false);
+
+    if schema_tables_only {
+        if let Some(schema_name) = qualifier_resolution
             .as_ref()
-            .map(|alias| format!("{alias} ({})", table.name))
-            .unwrap_or_else(|| table.name.clone());
-        let insert_text = table.alias.clone().unwrap_or_else(|| table.name.clone());
-        push_item(CompletionItem {
-            label,
-            insert_text,
-            kind: CompletionItemKind::Table,
-            category: CompletionItemCategory::Table,
-            score: 0,
-            clause_specific: true,
-            detail: if table.canonical.is_empty() {
-                None
-            } else {
-                Some(table.canonical.clone())
-            },
-        });
+            .and_then(|resolution| resolution.schema.as_deref())
+        {
+            if let Some(schema) = request.schema.as_ref() {
+                for (label, insert_text) in schema_tables_for_qualifier(schema, &registry, schema_name)
+                {
+                    push_item(CompletionItem {
+                        label,
+                        insert_text,
+                        kind: CompletionItemKind::SchemaTable,
+                        category: CompletionItemCategory::SchemaTable,
+                        score: 0,
+                        clause_specific: false,
+                        detail: None,
+                    });
+                }
+            }
+        }
     }
 
-    if let Some(schema) = &request.schema {
-        for table in &schema.tables {
-            let label = match &table.schema {
-                Some(schema_name) => format!("{schema_name}.{}", table.name),
-                None => table.name.clone(),
-            };
-            let insert_text = label.clone();
+    let suppress_tables = restrict_to_columns
+        || schema_tables_only
+        || (context.clause == CompletionClause::Select && has_columns);
+
+    if !suppress_tables {
+        for table in &context.tables_in_scope {
+            let label = table
+                .alias
+                .as_ref()
+                .map(|alias| format!("{alias} ({})", table.name))
+                .unwrap_or_else(|| table.name.clone());
+            let insert_text = table.alias.clone().unwrap_or_else(|| table.name.clone());
             push_item(CompletionItem {
                 label,
                 insert_text,
-                kind: CompletionItemKind::SchemaTable,
-                category: CompletionItemCategory::SchemaTable,
+                kind: CompletionItemKind::Table,
+                category: CompletionItemCategory::Table,
                 score: 0,
-                clause_specific: false,
-                detail: None,
+                clause_specific: true,
+                detail: if table.canonical.is_empty() {
+                    None
+                } else {
+                    Some(table.canonical.clone())
+                },
             });
+        }
+
+        if let Some(schema) = &request.schema {
+            for table in &schema.tables {
+                let label = match &table.schema {
+                    Some(schema_name) => format!("{schema_name}.{}", table.name),
+                    None => table.name.clone(),
+                };
+                let insert_text = label.clone();
+                push_item(CompletionItem {
+                    label,
+                    insert_text,
+                    kind: CompletionItemKind::SchemaTable,
+                    category: CompletionItemCategory::SchemaTable,
+                    score: 0,
+                    clause_specific: false,
+                    detail: None,
+                });
+            }
         }
     }
 
     for item in items.iter_mut() {
         let base = category_score(context.clause, item.category);
         let prefix = prefix_score(&item.label, &token_value);
-        let clause_score = if item.clause_specific { 50 } else { 0 };
+        let column_prefix = if item.category == CompletionItemCategory::Column {
+            let column_name = column_name_from_label(&item.label);
+            let column_score = prefix_score(column_name, &token_value);
+            if column_score > 0 {
+                column_score.saturating_add(SCORE_COLUMN_NAME_MATCH_BONUS)
+            } else {
+                0
+            }
+        } else {
+            0
+        };
+        let clause_score = if item.clause_specific {
+            SCORE_CLAUSE_SPECIFIC_BONUS
+        } else {
+            0
+        };
         let mut special = 0;
         if context.clause == CompletionClause::Select && token_value.starts_with('f') {
             let label_lower = item.label.to_lowercase();
             if item.category == CompletionItemCategory::Keyword && label_lower == "from" {
-                special = 800;
+                special = SCORE_FROM_KEYWORD_BOOST;
             } else if item.category == CompletionItemCategory::Keyword {
-                special = -200;
-            } else if item.kind == CompletionItemKind::Function && label_lower.starts_with("from_") {
-                special = -300;
+                special = SCORE_OTHER_KEYWORD_PENALTY;
+            } else if item.kind == CompletionItemKind::Function && label_lower.starts_with("from_")
+            {
+                special = SCORE_FROM_FUNCTION_PENALTY;
             } else if item.kind == CompletionItemKind::Function && label_lower.starts_with('f') {
-                special = -250;
+                special = SCORE_F_FUNCTION_PENALTY;
             }
         }
-        item.score = base + prefix + clause_score + special;
+        let prefix_score = prefix.max(column_prefix);
+        // Use saturating arithmetic to prevent overflow with extreme inputs
+        item.score = base
+            .saturating_add(prefix_score)
+            .saturating_add(clause_score)
+            .saturating_add(special);
     }
 
     items.sort_by(|a, b| {
@@ -1106,7 +1569,10 @@ pub fn completion_items(request: &CompletionRequest) -> CompletionItemsResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{ColumnSchema, CompletionClause, CompletionRequest, Dialect, SchemaMetadata, SchemaTable};
+    use crate::types::{
+        ColumnSchema, CompletionClause, CompletionItemCategory, CompletionRequest, Dialect,
+        SchemaMetadata, SchemaTable,
+    };
 
     #[test]
     fn test_completion_clause_detection() {
@@ -1185,8 +1651,379 @@ mod tests {
 
         let context = completion_context(&request);
         assert_eq!(context.tables_in_scope.len(), 2);
-        assert!(context.columns_in_scope.iter().any(|col| col.name == "name"));
-        assert!(context.columns_in_scope.iter().any(|col| col.name == "user_id"));
-        assert!(context.columns_in_scope.iter().any(|col| col.name == "id" && col.is_ambiguous));
+        assert!(context
+            .columns_in_scope
+            .iter()
+            .any(|col| col.name == "name"));
+        assert!(context
+            .columns_in_scope
+            .iter()
+            .any(|col| col.name == "user_id"));
+        assert!(context
+            .columns_in_scope
+            .iter()
+            .any(|col| col.name == "id" && col.is_ambiguous));
+    }
+
+    #[test]
+    fn test_completion_items_respects_table_qualifier() {
+        let schema = SchemaMetadata {
+            default_catalog: None,
+            default_schema: Some("public".to_string()),
+            search_path: None,
+            case_sensitivity: None,
+            allow_implied: true,
+            tables: vec![
+                SchemaTable {
+                    catalog: None,
+                    schema: Some("public".to_string()),
+                    name: "users".to_string(),
+                    columns: vec![
+                        ColumnSchema {
+                            name: "id".to_string(),
+                            data_type: Some("integer".to_string()),
+                            is_primary_key: None,
+                            foreign_key: None,
+                        },
+                        ColumnSchema {
+                            name: "name".to_string(),
+                            data_type: Some("varchar".to_string()),
+                            is_primary_key: None,
+                            foreign_key: None,
+                        },
+                    ],
+                },
+                SchemaTable {
+                    catalog: None,
+                    schema: Some("public".to_string()),
+                    name: "orders".to_string(),
+                    columns: vec![ColumnSchema {
+                        name: "total".to_string(),
+                        data_type: Some("integer".to_string()),
+                        is_primary_key: None,
+                        foreign_key: None,
+                    }],
+                },
+            ],
+        };
+
+        let sql = "SELECT u. FROM users u";
+        let cursor_offset = sql.find("u.").unwrap() + 2;
+
+        let request = CompletionRequest {
+            sql: sql.to_string(),
+            dialect: Dialect::Duckdb,
+            cursor_offset,
+            schema: Some(schema),
+        };
+
+        let result = completion_items(&request);
+        assert!(result.should_show);
+        assert!(result
+            .items
+            .iter()
+            .all(|item| item.category == CompletionItemCategory::Column));
+        assert!(result.items.iter().any(|item| item.label == "id"));
+        assert!(!result.items.iter().any(|item| item.label == "total"));
+    }
+
+    #[test]
+    fn test_completion_items_select_prefers_columns_over_tables() {
+        let schema = SchemaMetadata {
+            default_catalog: None,
+            default_schema: Some("public".to_string()),
+            search_path: None,
+            case_sensitivity: None,
+            allow_implied: true,
+            tables: vec![SchemaTable {
+                catalog: None,
+                schema: Some("public".to_string()),
+                name: "users".to_string(),
+                columns: vec![ColumnSchema {
+                    name: "email".to_string(),
+                    data_type: Some("varchar".to_string()),
+                    is_primary_key: None,
+                    foreign_key: None,
+                }],
+            }],
+        };
+
+        let sql = "SELECT e";
+        let cursor_offset = sql.len();
+
+        let request = CompletionRequest {
+            sql: sql.to_string(),
+            dialect: Dialect::Duckdb,
+            cursor_offset,
+            schema: Some(schema),
+        };
+
+        let result = completion_items(&request);
+        assert!(result.should_show);
+        assert!(result
+            .items
+            .iter()
+            .any(|item| item.category == CompletionItemCategory::Column));
+        assert!(!result
+            .items
+            .iter()
+            .any(|item| item.category == CompletionItemCategory::Table));
+        assert!(!result
+            .items
+            .iter()
+            .any(|item| item.category == CompletionItemCategory::SchemaTable));
+    }
+
+    // Unit tests for string helper functions
+
+    #[test]
+    fn test_extract_last_identifier_simple() {
+        assert_eq!(extract_last_identifier("users"), Some("users".to_string()));
+        assert_eq!(
+            extract_last_identifier("foo_bar"),
+            Some("foo_bar".to_string())
+        );
+        assert_eq!(
+            extract_last_identifier("table123"),
+            Some("table123".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_last_identifier_with_spaces() {
+        assert_eq!(
+            extract_last_identifier("SELECT users"),
+            Some("users".to_string())
+        );
+        assert_eq!(extract_last_identifier("users "), Some("users".to_string()));
+        assert_eq!(
+            extract_last_identifier("  users  "),
+            Some("users".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_last_identifier_quoted() {
+        assert_eq!(
+            extract_last_identifier("\"MyTable\""),
+            Some("MyTable".to_string())
+        );
+        assert_eq!(
+            extract_last_identifier("SELECT \"My Table\""),
+            Some("My Table".to_string())
+        );
+        assert_eq!(
+            extract_last_identifier("\"schema\".\"table\""),
+            Some("table".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_last_identifier_empty() {
+        assert_eq!(extract_last_identifier(""), None);
+        assert_eq!(extract_last_identifier("   "), None);
+        // Note: "SELECT " extracts "SELECT" because the function doesn't distinguish keywords
+        assert_eq!(
+            extract_last_identifier("SELECT "),
+            Some("SELECT".to_string())
+        );
+        // Only punctuation/operators return None
+        assert_eq!(extract_last_identifier("("), None);
+        assert_eq!(extract_last_identifier(", "), None);
+    }
+
+    #[test]
+    fn test_extract_qualifier_with_trailing_dot() {
+        assert_eq!(extract_qualifier("users.", 6), Some("users".to_string()));
+        assert_eq!(extract_qualifier("SELECT u.", 9), Some("u".to_string()));
+        assert_eq!(
+            extract_qualifier("schema.table.", 13),
+            Some("table".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_qualifier_mid_token() {
+        assert_eq!(
+            extract_qualifier("users.name", 10),
+            Some("users".to_string())
+        );
+        assert_eq!(extract_qualifier("SELECT u.id", 11), Some("u".to_string()));
+    }
+
+    #[test]
+    fn test_extract_qualifier_no_qualifier() {
+        assert_eq!(extract_qualifier("SELECT", 6), None);
+        assert_eq!(extract_qualifier("users", 5), None);
+        assert_eq!(extract_qualifier("", 0), None);
+    }
+
+    #[test]
+    fn test_extract_qualifier_cursor_at_start() {
+        assert_eq!(extract_qualifier("users.name", 0), None);
+    }
+
+    #[test]
+    fn test_extract_qualifier_cursor_out_of_bounds() {
+        assert_eq!(extract_qualifier("users", 100), None);
+    }
+
+    #[test]
+    fn test_extract_qualifier_utf8_boundary() {
+        // Multi-byte UTF-8 character (emoji is 4 bytes)
+        let sql = "SELECT 🎉.";
+        // Cursor in middle of emoji (invalid boundary) should return None
+        assert_eq!(extract_qualifier(sql, 8), None); // Middle of emoji
+                                                     // Cursor after emoji + dot should work
+        assert_eq!(extract_qualifier(sql, sql.len()), None); // 🎉 is not identifier char
+    }
+
+    #[test]
+    fn test_extract_qualifier_quoted_identifier() {
+        assert_eq!(
+            extract_qualifier("\"My Schema\".", 12),
+            Some("My Schema".to_string())
+        );
+    }
+
+    // Unit tests for resolve_qualifier
+
+    #[test]
+    fn test_resolve_qualifier_alias_match() {
+        let tables = vec![CompletionTable {
+            name: "users".to_string(),
+            canonical: "public.users".to_string(),
+            alias: Some("u".to_string()),
+            matched_schema: true,
+        }];
+        let (registry, _) = SchemaRegistry::new(None, Dialect::Duckdb);
+
+        let result = resolve_qualifier("u", &tables, None, &registry);
+        assert!(result.is_some());
+        let resolution = result.unwrap();
+        assert_eq!(resolution.target, QualifierTarget::ColumnLabel);
+        assert_eq!(resolution.label, Some("u".to_string()));
+    }
+
+    #[test]
+    fn test_resolve_qualifier_table_name_match() {
+        // When table is in tables_in_scope (without alias), qualifier matches table name
+        // Note: Schema metadata is required for table name matching (vs just alias matching)
+        let schema = SchemaMetadata {
+            default_catalog: None,
+            default_schema: Some("public".to_string()),
+            search_path: None,
+            case_sensitivity: None,
+            allow_implied: true,
+            tables: vec![SchemaTable {
+                catalog: None,
+                schema: Some("public".to_string()),
+                name: "users".to_string(),
+                columns: vec![],
+            }],
+        };
+        let tables = vec![CompletionTable {
+            name: "users".to_string(),
+            canonical: "public.users".to_string(),
+            alias: None,
+            matched_schema: true,
+        }];
+        let (registry, _) = SchemaRegistry::new(Some(&schema), Dialect::Duckdb);
+
+        let result = resolve_qualifier("users", &tables, Some(&schema), &registry);
+        assert!(
+            result.is_some(),
+            "Should match table name in tables_in_scope"
+        );
+        let resolution = result.unwrap();
+        assert_eq!(resolution.target, QualifierTarget::ColumnLabel);
+        // When no alias, label is the table name itself
+        assert_eq!(resolution.label, Some("users".to_string()));
+    }
+
+    #[test]
+    fn test_resolve_qualifier_schema_only() {
+        let schema = SchemaMetadata {
+            default_catalog: None,
+            default_schema: None,
+            search_path: None,
+            case_sensitivity: None,
+            allow_implied: true,
+            tables: vec![SchemaTable {
+                catalog: None,
+                schema: Some("myschema".to_string()),
+                name: "mytable".to_string(),
+                columns: vec![],
+            }],
+        };
+        let (registry, _) = SchemaRegistry::new(Some(&schema), Dialect::Duckdb);
+
+        let result = resolve_qualifier("myschema", &[], Some(&schema), &registry);
+        assert!(result.is_some());
+        let resolution = result.unwrap();
+        assert_eq!(resolution.target, QualifierTarget::SchemaOnly);
+        assert_eq!(resolution.schema, Some("myschema".to_string()));
+    }
+
+    #[test]
+    fn test_resolve_qualifier_schema_table() {
+        let schema = SchemaMetadata {
+            default_catalog: None,
+            default_schema: None,
+            search_path: None,
+            case_sensitivity: None,
+            allow_implied: true,
+            tables: vec![SchemaTable {
+                catalog: None,
+                schema: Some("public".to_string()),
+                name: "users".to_string(),
+                columns: vec![ColumnSchema {
+                    name: "id".to_string(),
+                    data_type: Some("integer".to_string()),
+                    is_primary_key: None,
+                    foreign_key: None,
+                }],
+            }],
+        };
+        let (registry, _) = SchemaRegistry::new(Some(&schema), Dialect::Duckdb);
+
+        // When qualifier matches a table name in schema (but not in tables_in_scope)
+        let result = resolve_qualifier("users", &[], Some(&schema), &registry);
+        assert!(result.is_some());
+        let resolution = result.unwrap();
+        assert_eq!(resolution.target, QualifierTarget::SchemaTable);
+        assert_eq!(resolution.table, Some("users".to_string()));
+    }
+
+    #[test]
+    fn test_resolve_qualifier_no_match() {
+        let (registry, _) = SchemaRegistry::new(None, Dialect::Duckdb);
+        let result = resolve_qualifier("nonexistent", &[], None, &registry);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_resolve_qualifier_case_insensitive() {
+        let tables = vec![CompletionTable {
+            name: "Users".to_string(),
+            canonical: "public.users".to_string(),
+            alias: Some("U".to_string()),
+            matched_schema: true,
+        }];
+        let (registry, _) = SchemaRegistry::new(None, Dialect::Duckdb);
+
+        // Should match case-insensitively
+        let result = resolve_qualifier("u", &tables, None, &registry);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().target, QualifierTarget::ColumnLabel);
+    }
+
+    // Test for column_name_from_label
+
+    #[test]
+    fn test_column_name_from_label() {
+        assert_eq!(column_name_from_label("name"), "name");
+        assert_eq!(column_name_from_label("users.name"), "name");
+        assert_eq!(column_name_from_label("public.users.name"), "name");
     }
 }

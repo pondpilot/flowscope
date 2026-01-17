@@ -1,7 +1,7 @@
 # FlowScope
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)](https://www.rust-lang.org)
+[![Rust](https://img.shields.io/badge/rust-1.82+-orange.svg)](https://www.rust-lang.org)
 [![TypeScript](https://img.shields.io/badge/typescript-5.0+-blue.svg)](https://www.typescriptlang.org)
 [![WebAssembly](https://img.shields.io/badge/wasm-ready-purple.svg)](https://webassembly.org)
 
@@ -194,7 +194,7 @@ The engine reports unsupported syntax as structured issues while still producing
 
 ## Development Setup
 
-FlowScope uses a monorepo structure with both Rust and TypeScript workspaces. You'll need Rust (1.70+), Node.js (18+), and Yarn.
+FlowScope uses a monorepo structure with both Rust and TypeScript workspaces. You'll need Rust (1.82+), Node.js (18+), and Yarn.
 
 Clone and install dependencies:
 

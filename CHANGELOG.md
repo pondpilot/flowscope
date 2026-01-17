@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+#### WASM Module (flowscope-wasm)
+- **Breaking**: Changed error code from `REQUEST_PARSE_ERROR` to `INVALID_REQUEST` for JSON parse/validation errors in `analyze_sql_json()`. Consumers matching on the old error code should update their error handling.
+
+### Fixed
+
+#### Core Engine (flowscope-core)
+- Fixed potential panic in `extract_qualifier` when cursor offset lands on invalid UTF-8 boundary
+- Fixed early-return bug in completion logic that incorrectly suppressed completions when schema metadata lacked column info but query context (CTEs/subqueries) had valid columns
+- Fixed potential integer overflow in completion item scoring by using saturating arithmetic
+
+### Improved
+
+#### Core Engine (flowscope-core)
+- Added named constants for completion scoring values to improve code maintainability
+- Added `Debug` derive to `QualifierResolution` for easier debugging
+- Added comprehensive unit tests for string helper functions (`extract_last_identifier`, `extract_qualifier`) and qualifier resolution logic
+
 ## [0.1.0] - 2025-11-21
 
 ### Added
