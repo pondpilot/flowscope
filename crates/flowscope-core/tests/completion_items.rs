@@ -705,3 +705,52 @@ fn qualifier_schema_table_shows_columns() {
     assert!(result.should_show);
     assert!(result.items.iter().all(|item| item.category == CompletionItemCategory::Column));
 }
+
+#[test]
+fn qualifier_subquery_alias() {
+    let request = request_at_cursor(
+        "SELECT sq.| FROM (SELECT id FROM users) sq",
+        Some(sample_schema()),
+    );
+    let context = completion_context(&request);
+    // Subquery alias should be recognized
+    assert!(context.tables_in_scope.iter().any(|t| t.alias == Some("sq".to_string())));
+}
+
+#[test]
+fn no_qualifier_shows_all_columns() {
+    let request = request_at_cursor(
+        "SELECT | FROM users u JOIN orders o ON u.id = o.id",
+        Some(sample_schema()),
+    );
+    let result = completion_items(&request);
+    assert!(result.should_show);
+    // Should show columns from both tables
+    let column_items: Vec<_> = result.items.iter()
+        .filter(|item| item.category == CompletionItemCategory::Column)
+        .collect();
+    assert!(column_items.len() >= 4); // id, email from users + id, total from orders
+}
+
+#[test]
+fn ambiguous_column_shows_prefixed() {
+    let request = request_at_cursor(
+        "SELECT id| FROM users JOIN orders ON users.id = orders.id",
+        Some(sample_schema()),
+    );
+    let result = completion_items(&request);
+    // Ambiguous "id" should suggest prefixed versions
+    let id_items: Vec<_> = result.items.iter()
+        .filter(|item| item.label.contains("id"))
+        .collect();
+    assert!(!id_items.is_empty());
+}
+
+// Robustness: cursor inside quoted identifier or string
+#[test]
+fn cursor_inside_string_literal() {
+    let request = request_at_cursor("SELECT 'hello|world' FROM users", Some(sample_schema()));
+    let result = completion_items(&request);
+    // Should not show completions inside string literal
+    assert!(!result.should_show);
+}
