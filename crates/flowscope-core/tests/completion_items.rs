@@ -754,3 +754,69 @@ fn cursor_inside_string_literal() {
     // Should not show completions inside string literal
     assert!(!result.should_show);
 }
+
+// =============================================================================
+// Scoring and Ranking Tests
+// =============================================================================
+
+#[test]
+fn score_select_columns_before_tables() {
+    let request = request_at_cursor("SELECT | FROM users", Some(sample_schema()));
+    let result = completion_items(&request);
+    assert!(result.should_show);
+
+    // Find first column and first table (if any)
+    let first_column = result.items.iter()
+        .position(|item| item.category == CompletionItemCategory::Column);
+    let first_table = result.items.iter()
+        .position(|item| item.category == CompletionItemCategory::Table
+                      || item.category == CompletionItemCategory::SchemaTable);
+
+    // In SELECT clause, columns should come before tables (if tables present)
+    if let (Some(col_pos), Some(tbl_pos)) = (first_column, first_table) {
+        assert!(col_pos < tbl_pos, "columns should rank before tables in SELECT");
+    }
+}
+
+#[test]
+fn score_from_tables_before_columns() {
+    let request = request_at_cursor("SELECT * FROM |", Some(sample_schema()));
+    let result = completion_items(&request);
+    assert!(result.should_show);
+
+    let first_table = result.items.iter()
+        .position(|item| item.category == CompletionItemCategory::Table
+                      || item.category == CompletionItemCategory::SchemaTable);
+    let first_column = result.items.iter()
+        .position(|item| item.category == CompletionItemCategory::Column);
+
+    // In FROM clause, tables should come before columns
+    if let (Some(tbl_pos), Some(col_pos)) = (first_table, first_column) {
+        assert!(tbl_pos < col_pos, "tables should rank before columns in FROM");
+    }
+}
+
+#[test]
+fn score_where_columns_available() {
+    let request = request_at_cursor("SELECT * FROM users WHERE |", Some(sample_schema()));
+    let result = completion_items(&request);
+    assert!(result.should_show);
+
+    // WHERE clause should have columns ranked high
+    let column_items: Vec<_> = result.items.iter()
+        .filter(|item| item.category == CompletionItemCategory::Column)
+        .collect();
+    assert!(!column_items.is_empty());
+}
+
+#[test]
+fn score_order_by_columns_first() {
+    let request = request_at_cursor("SELECT * FROM users ORDER BY |", Some(sample_schema()));
+    let result = completion_items(&request);
+    assert!(result.should_show);
+
+    // First items should be columns
+    if let Some(first) = result.items.first() {
+        assert_eq!(first.category, CompletionItemCategory::Column);
+    }
+}
