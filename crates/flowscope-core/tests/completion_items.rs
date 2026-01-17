@@ -499,3 +499,43 @@ fn clause_detection_after_comment() {
     let context = completion_context(&request);
     assert_eq!(context.clause, CompletionClause::Select);
 }
+
+// =============================================================================
+// Schema Resolution Tests
+// =============================================================================
+
+#[test]
+fn schema_table_in_from() {
+    let request = request_at_cursor("SELECT * FROM users|", Some(sample_schema()));
+    let context = completion_context(&request);
+    assert!(context.tables_in_scope.iter().any(|t| t.name == "users"));
+}
+
+#[test]
+fn schema_table_with_alias() {
+    let request = request_at_cursor("SELECT * FROM users u|", Some(sample_schema()));
+    let context = completion_context(&request);
+    let table = context.tables_in_scope.iter().find(|t| t.name == "users");
+    assert!(table.is_some());
+    assert_eq!(table.unwrap().alias, Some("u".to_string()));
+}
+
+#[test]
+fn schema_multiple_tables() {
+    let request = request_at_cursor("SELECT * FROM users, orders|", Some(sample_schema()));
+    let context = completion_context(&request);
+    assert!(context.tables_in_scope.iter().any(|t| t.name == "users"));
+    assert!(context.tables_in_scope.iter().any(|t| t.name == "orders"));
+}
+
+#[test]
+fn schema_join_tables() {
+    let request = request_at_cursor(
+        "SELECT * FROM users u JOIN orders o ON |",
+        Some(sample_schema()),
+    );
+    let context = completion_context(&request);
+    assert_eq!(context.tables_in_scope.len(), 2);
+    assert!(context.tables_in_scope.iter().any(|t| t.alias == Some("u".to_string())));
+    assert!(context.tables_in_scope.iter().any(|t| t.alias == Some("o".to_string())));
+}
