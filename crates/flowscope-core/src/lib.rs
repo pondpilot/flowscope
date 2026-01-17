@@ -1,4 +1,5 @@
 pub mod analyzer;
+pub mod completion;
 pub mod error;
 pub mod extractors;
 pub mod generated;
@@ -6,7 +7,8 @@ pub mod parser;
 pub mod types;
 
 // Re-export main types and functions
-pub use analyzer::analyze;
+pub use analyzer::{analyze, split_statements};
+pub use completion::{completion_context, completion_items};
 pub use error::ParseError;
 pub use extractors::extract_tables;
 pub use parser::{parse_sql, parse_sql_with_dialect};
@@ -19,8 +21,16 @@ pub use types::{
     AggregationInfo,
     AnalysisOptions,
     AnalyzeRequest,
+    CompletionContext,
+    CompletionItem,
+    CompletionItemCategory,
+    CompletionItemKind,
+    CompletionItemsResult,
+    CompletionRequest,
+    StatementSplitRequest,
     // Response types
     AnalyzeResult,
+    StatementSplitResult,
     CanonicalName,
     CaseSensitivity,
     ColumnSchema,

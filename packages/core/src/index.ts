@@ -1,5 +1,13 @@
 // Main exports
-export { analyzeSql, analyzeSimple, exportToDuckDbSql, validateSchemaName, formatSchemaError } from './analyzer';
+export {
+  analyzeSql,
+  analyzeSimple,
+  completionItems,
+  exportToDuckDbSql,
+  formatSchemaError,
+  splitStatements,
+  validateSchemaName,
+} from './analyzer';
 export { initWasm, isWasmInitialized, resetWasm, getEngineVersion } from './wasm-loader';
 export type { InitWasmOptions } from './wasm-loader';
 
@@ -8,7 +16,22 @@ export type {
   // Request types
   AnalyzeRequest,
   AnalysisOptions,
+  CompletionClause,
+  CompletionColumn,
+  CompletionContext,
+  CompletionItem,
+  CompletionItemCategory,
+  CompletionItemKind,
+  CompletionItemsResult,
+  CompletionKeywordHints,
+  CompletionKeywordSet,
+  CompletionRequest,
+  CompletionTable,
+  CompletionToken,
+  CompletionTokenKind,
   Dialect,
+  StatementSplitRequest,
+  StatementSplitResult,
   SchemaMetadata,
   SchemaNamespaceHint,
   SchemaTable,
@@ -45,4 +68,9 @@ export type {
 } from './types';
 
 // Constants and utilities
-export { IssueCodes, isTableLikeType } from './types';
+export {
+  IssueCodes,
+  isTableLikeType,
+  charOffsetToByteOffset,
+  byteOffsetToCharOffset,
+} from './types';

@@ -1,15 +1,87 @@
 import { initWasm, isWasmInitialized } from './wasm-loader';
-import type { AnalyzeRequest, AnalyzeResult, Dialect } from './types';
+import type {
+  AnalyzeRequest,
+  AnalyzeResult,
+  CompletionItemsResult,
+  CompletionRequest,
+  Dialect,
+  StatementSplitRequest,
+  StatementSplitResult,
+} from './types';
+
 // Shared reserved keywords (single source of truth for Rust and TypeScript)
 import reservedKeywordsJson from './reserved-keywords.json';
 
 // Import WASM functions (will be available after init)
 let analyzeSqlJson: ((request: string) => string) | null = null;
 let exportToDuckDbSqlFn: ((resultJson: string) => string) | null = null;
+let completionItemsJson: ((requestJson: string) => string) | null = null;
+let splitStatementsJson: ((requestJson: string) => string) | null = null;
 let panicHookInstalled = false;
+
+// Initialization guard to prevent race conditions
+let wasmInitPromise: Promise<void> | null = null;
 
 /** Maximum length for schema identifiers (PostgreSQL/DuckDB limit). */
 const MAX_SCHEMA_NAME_LENGTH = 63;
+
+/**
+ * Maximum SQL input size in characters to prevent memory exhaustion.
+ * This is a character count, not byte count - for typical SQL (mostly ASCII),
+ * this roughly corresponds to 10MB. The WASM layer enforces the actual 10MB byte limit.
+ */
+const MAX_SQL_LENGTH = 10 * 1024 * 1024;
+
+/** Valid SQL dialects. */
+const VALID_DIALECTS: readonly Dialect[] = [
+  'generic',
+  'ansi',
+  'bigquery',
+  'clickhouse',
+  'databricks',
+  'duckdb',
+  'hive',
+  'mssql',
+  'mysql',
+  'postgres',
+  'redshift',
+  'snowflake',
+  'sqlite',
+] as const;
+
+/**
+ * Validate that a dialect value is valid.
+ * @param dialect - The dialect to validate
+ * @throws Error if dialect is undefined, null, or not a valid dialect
+ */
+function validateDialect(dialect: Dialect | undefined | null): asserts dialect is Dialect {
+  if (dialect === undefined || dialect === null) {
+    throw new Error('Invalid request: dialect is required');
+  }
+  if (!VALID_DIALECTS.includes(dialect)) {
+    throw new Error(`Invalid dialect: ${dialect}. Must be one of: ${VALID_DIALECTS.join(', ')}`);
+  }
+}
+
+/**
+ * Validate SQL input string.
+ * @param sql - The SQL to validate
+ * @param allowEmpty - Whether empty SQL is allowed (default: false)
+ * @throws Error if sql is not a string or exceeds size limits
+ */
+function validateSqlInput(sql: unknown, allowEmpty = false): asserts sql is string {
+  if (typeof sql !== 'string') {
+    throw new Error('Invalid request: sql must be a string');
+  }
+  if (!allowEmpty && sql.trim().length === 0) {
+    throw new Error('Invalid request: sql must be a non-empty string');
+  }
+  if (sql.length > MAX_SQL_LENGTH) {
+    throw new Error(
+      `SQL exceeds maximum length of ${MAX_SQL_LENGTH} characters (${sql.length} characters provided)`
+    );
+  }
+}
 
 /**
  * SQL reserved keywords that cannot be used as unquoted schema names.
@@ -79,25 +151,42 @@ function validateSchemaNameOrThrow(schema: string): void {
 }
 
 async function ensureWasmReady(): Promise<void> {
-  const wasmModule = await initWasm();
-
-  if (!isWasmInitialized()) {
-    throw new Error('WASM module failed to initialize');
+  // Use initialization guard to prevent race conditions when called concurrently
+  if (wasmInitPromise) {
+    return wasmInitPromise;
   }
 
-  if (!analyzeSqlJson) {
-    analyzeSqlJson = wasmModule.analyze_sql_json;
-  }
+  wasmInitPromise = (async () => {
+    const wasmModule = await initWasm();
 
-  if (!exportToDuckDbSqlFn) {
-    exportToDuckDbSqlFn = wasmModule.export_to_duckdb_sql;
-  }
+    if (!isWasmInitialized()) {
+      throw new Error('WASM module failed to initialize');
+    }
 
-  // Install panic hook for better error messages
-  if (!panicHookInstalled && wasmModule.set_panic_hook) {
-    wasmModule.set_panic_hook();
-    panicHookInstalled = true;
-  }
+    if (!analyzeSqlJson) {
+      analyzeSqlJson = wasmModule.analyze_sql_json;
+    }
+
+    if (!exportToDuckDbSqlFn) {
+      exportToDuckDbSqlFn = wasmModule.export_to_duckdb_sql;
+    }
+
+    if (!completionItemsJson && typeof wasmModule.completion_items_json === 'function') {
+      completionItemsJson = wasmModule.completion_items_json;
+    }
+
+    if (!splitStatementsJson && typeof wasmModule.split_statements_json === 'function') {
+      splitStatementsJson = wasmModule.split_statements_json;
+    }
+
+    // Install panic hook for better error messages
+    if (!panicHookInstalled && wasmModule.set_panic_hook) {
+      wasmModule.set_panic_hook();
+      panicHookInstalled = true;
+    }
+  })();
+
+  return wasmInitPromise;
 }
 
 /**
@@ -126,41 +215,17 @@ export async function analyzeSql(request: AnalyzeRequest): Promise<AnalyzeResult
 
   // Validate request
   const hasFiles = Array.isArray(request.files) && request.files.length > 0;
-  const hasSqlString = typeof request.sql === 'string';
 
   if (!hasFiles) {
-    if (!hasSqlString) {
-      throw new Error('Invalid request: sql must be a string');
-    }
-    if (request.sql.trim().length === 0) {
-      throw new Error('Invalid request: sql must be a non-empty string');
+    validateSqlInput(request.sql);
+  } else if (request.files) {
+    // Validate each file's SQL content
+    for (const file of request.files) {
+      validateSqlInput(file.content, true);
     }
   }
 
-  if (!request.dialect) {
-    throw new Error('Invalid request: dialect is required');
-  }
-
-  const validDialects: Dialect[] = [
-    'generic',
-    'ansi',
-    'bigquery',
-    'clickhouse',
-    'databricks',
-    'duckdb',
-    'hive',
-    'mssql',
-    'mysql',
-    'postgres',
-    'redshift',
-    'snowflake',
-    'sqlite',
-  ];
-  if (!validDialects.includes(request.dialect)) {
-    throw new Error(
-      `Invalid dialect: ${request.dialect}. Must be one of: ${validDialects.join(', ')}`
-    );
-  }
+  validateDialect(request.dialect);
 
   // Serialize request to JSON
   const requestJson = JSON.stringify(request);
@@ -174,6 +239,68 @@ export async function analyzeSql(request: AnalyzeRequest): Promise<AnalyzeResult
   } catch (error) {
     throw new Error(
       `Failed to parse analysis result: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+}
+
+export async function completionItems(request: CompletionRequest): Promise<CompletionItemsResult> {
+  await ensureWasmReady();
+
+  if (!completionItemsJson) {
+    throw new Error('WASM module not properly initialized');
+  }
+
+  // Validate SQL input (allow empty - Rust handles empty SQL gracefully)
+  validateSqlInput(request.sql, true);
+  validateDialect(request.dialect);
+
+  // Validate cursor offset
+  if (typeof request.cursorOffset !== 'number' || !Number.isInteger(request.cursorOffset)) {
+    throw new Error('Invalid request: cursorOffset must be an integer');
+  }
+  if (request.cursorOffset < 0) {
+    throw new Error(`Invalid request: cursorOffset cannot be negative (${request.cursorOffset})`);
+  }
+  // Note: Rust validates that cursorOffset doesn't exceed SQL length and lands on UTF-8 boundary
+
+  const requestJson = JSON.stringify(request);
+  const resultJson = completionItemsJson(requestJson);
+
+  try {
+    return JSON.parse(resultJson) as CompletionItemsResult;
+  } catch (error) {
+    throw new Error(
+      `Failed to parse completion items: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+}
+
+export async function splitStatements(
+  request: StatementSplitRequest
+): Promise<StatementSplitResult> {
+  await ensureWasmReady();
+
+  if (!splitStatementsJson) {
+    throw new Error('WASM module not properly initialized');
+  }
+
+  // Validate SQL input (allow empty - Rust returns empty array for empty SQL)
+  validateSqlInput(request.sql, true);
+
+  // Dialect is optional for splitStatements (defaults to 'generic' in Rust)
+  // but if provided, it must be valid
+  if (request.dialect !== undefined) {
+    validateDialect(request.dialect);
+  }
+
+  const requestJson = JSON.stringify(request);
+  const resultJson = splitStatementsJson(requestJson);
+
+  try {
+    return JSON.parse(resultJson) as StatementSplitResult;
+  } catch (error) {
+    throw new Error(
+      `Failed to parse statement split result: ${error instanceof Error ? error.message : String(error)}`
     );
   }
 }
@@ -213,10 +340,7 @@ export async function analyzeSimple(
  * // Creates: lineage._meta, lineage.statements, etc.
  * ```
  */
-export async function exportToDuckDbSql(
-  result: AnalyzeResult,
-  schema?: string
-): Promise<string> {
+export async function exportToDuckDbSql(result: AnalyzeResult, schema?: string): Promise<string> {
   // Validate schema first (fail fast on user input errors)
   if (schema !== undefined) {
     validateSchemaNameOrThrow(schema);
@@ -233,9 +357,7 @@ export async function exportToDuckDbSql(
     throw new Error('Invalid result: expected an object');
   }
   if (!Array.isArray(result.statements)) {
-    throw new Error(
-      `Invalid result: expected statements array, got ${typeof result.statements}`
-    );
+    throw new Error(`Invalid result: expected statements array, got ${typeof result.statements}`);
   }
 
   // Serialize request to JSON (WASM expects { result, schema? })

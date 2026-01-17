@@ -174,6 +174,27 @@ export function analyze_sql_json(request_json) {
 }
 
 /**
+ * Compute completion context for a cursor position.
+ * Returns JSON-serialized CompletionContext.
+ * @param {string} request_json
+ * @returns {string}
+ */
+export function completion_context_json(request_json) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const ptr0 = passStringToWasm0(request_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.completion_context_json(ptr0, len0);
+        deferred2_0 = ret[0];
+        deferred2_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
  * Enable tracing logs to the browser console (requires `tracing` feature).
  */
 export function enable_tracing() {
@@ -237,6 +258,26 @@ export function get_version() {
  */
 export function set_panic_hook() {
     wasm.set_panic_hook();
+}
+
+/**
+ * Split SQL into statement spans.
+ * @param {string} request_json
+ * @returns {string}
+ */
+export function split_statements_json(request_json) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const ptr0 = passStringToWasm0(request_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.split_statements_json(ptr0, len0);
+        deferred2_0 = ret[0];
+        deferred2_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+    }
 }
 
 const EXPECTED_RESPONSE_TYPES = new Set(['basic', 'cors', 'default']);

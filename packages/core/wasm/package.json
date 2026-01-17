@@ -1,0 +1,24 @@
+{
+  "name": "flowscope-wasm",
+  "type": "module",
+  "collaborators": [
+    "PondPilot Team"
+  ],
+  "description": "WASM bindings for flowscope-core",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pondpilot/flowscope"
+  },
+  "files": [
+    "flowscope_wasm_bg.wasm",
+    "flowscope_wasm.js",
+    "flowscope_wasm.d.ts"
+  ],
+  "main": "flowscope_wasm.js",
+  "types": "flowscope_wasm.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

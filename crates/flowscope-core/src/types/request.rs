@@ -35,6 +35,39 @@ pub struct AnalyzeRequest {
     pub schema: Option<SchemaMetadata>,
 }
 
+/// A request to compute completion context at a cursor position.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CompletionRequest {
+    /// The SQL code to analyze (UTF-8 string, multi-statement supported)
+    pub sql: String,
+
+    /// SQL dialect
+    pub dialect: Dialect,
+
+    /// Byte offset of the cursor in the SQL string
+    pub cursor_offset: usize,
+
+    /// Optional schema metadata for accurate column resolution
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schema: Option<SchemaMetadata>,
+}
+
+/// A request to split SQL into statement spans.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct StatementSplitRequest {
+    /// The SQL code to split (UTF-8 string, multi-statement supported)
+    pub sql: String,
+
+    /// SQL dialect (currently unused; reserved for future dialect-specific splitting).
+    ///
+    /// The current implementation uses a universal tokenizer that handles common SQL
+    /// constructs (strings, comments, dollar-quoting) across all dialects.
+    #[serde(default)]
+    pub dialect: Dialect,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct FileSource {

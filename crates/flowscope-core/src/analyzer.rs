@@ -6,6 +6,10 @@ use std::sync::Arc;
 #[cfg(feature = "tracing")]
 use tracing::info_span;
 
+/// Maximum SQL input size (10MB) to prevent memory exhaustion.
+/// This matches the TypeScript validation limit.
+const MAX_SQL_LENGTH: usize = 10 * 1024 * 1024;
+
 mod complexity;
 mod context;
 pub(crate) mod cross_statement;
@@ -32,6 +36,7 @@ use schema_registry::SchemaRegistry;
 pub(crate) use schema_registry::TableResolution;
 
 /// Main entry point for SQL analysis
+#[must_use]
 pub fn analyze(request: &AnalyzeRequest) -> AnalyzeResult {
     #[cfg(feature = "tracing")]
     let _span =
@@ -39,6 +44,28 @@ pub fn analyze(request: &AnalyzeRequest) -> AnalyzeResult {
             .entered();
     let mut analyzer = Analyzer::new(request);
     analyzer.analyze()
+}
+
+/// Split SQL into statement spans.
+///
+/// Note: The `dialect` field in the request is reserved for future dialect-specific
+/// splitting behavior. The current implementation uses a universal tokenizer that
+/// handles common SQL constructs (strings, comments, dollar-quoting).
+#[must_use]
+pub fn split_statements(request: &StatementSplitRequest) -> StatementSplitResult {
+    // Validate input size to prevent memory exhaustion
+    if request.sql.len() > MAX_SQL_LENGTH {
+        return StatementSplitResult::from_error(format!(
+            "SQL exceeds maximum length of {} bytes ({} bytes provided)",
+            MAX_SQL_LENGTH,
+            request.sql.len()
+        ));
+    }
+
+    StatementSplitResult {
+        statements: input::split_statement_spans(&request.sql),
+        error: None,
+    }
 }
 
 /// Internal analyzer state.

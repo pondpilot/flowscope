@@ -12,9 +12,8 @@ use super::request::ForeignKeyRef;
 ///
 /// Contains per-statement lineage graphs, a global lineage graph spanning all statements,
 /// any issues encountered during analysis, and summary statistics.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-#[derive(Default)]
 pub struct AnalyzeResult {
     /// Per-statement lineage analysis results
     pub statements: Vec<StatementLineage>,
@@ -31,6 +30,26 @@ pub struct AnalyzeResult {
     /// Effective schema used during analysis (imported + implied)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub resolved_schema: Option<ResolvedSchemaMetadata>,
+}
+
+/// The result of splitting SQL into statement spans.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct StatementSplitResult {
+    /// Byte ranges for each statement in the input SQL.
+    pub statements: Vec<Span>,
+    /// Error message if the request could not be processed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+impl StatementSplitResult {
+    pub fn from_error(message: impl Into<String>) -> Self {
+        Self {
+            statements: Vec::new(),
+            error: Some(message.into()),
+        }
+    }
 }
 
 impl AnalyzeResult {

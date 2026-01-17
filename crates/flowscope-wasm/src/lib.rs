@@ -1,7 +1,51 @@
-use flowscope_core::{analyze, AnalyzeRequest, AnalyzeResult};
+use flowscope_core::{
+    analyze, completion_context, completion_items, split_statements, AnalyzeRequest, AnalyzeResult,
+    CompletionContext, CompletionItemsResult, CompletionRequest, StatementSplitRequest,
+    StatementSplitResult,
+};
 use flowscope_export::export_sql;
-use serde::Deserialize;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
+
+/// Helper for WASM JSON request/response handling with consistent error handling.
+///
+/// This reduces boilerplate across WASM entry points by handling:
+/// - JSON deserialization of the request
+/// - Invoking the handler function
+/// - JSON serialization of the result
+/// - Error handling at each step with appropriate error result types
+fn handle_wasm_json_request<Req, Res, ErrRes, F, E>(
+    request_json: &str,
+    handler: F,
+    error_constructor: E,
+) -> String
+where
+    Req: DeserializeOwned,
+    Res: Serialize,
+    ErrRes: Serialize,
+    F: FnOnce(Req) -> Res,
+    E: Fn(String) -> ErrRes,
+{
+    // Parse request
+    let request: Req = match serde_json::from_str(request_json) {
+        Ok(req) => req,
+        Err(e) => {
+            let error_result = error_constructor(format!("Invalid request format: {e}"));
+            return serde_json::to_string(&error_result)
+                .unwrap_or_else(|_| r#"{"error":"Failed to serialize error result"}"#.to_string());
+        }
+    };
+
+    // Call handler
+    let result = handler(request);
+
+    // Serialize result
+    serde_json::to_string(&result).unwrap_or_else(|_| {
+        let error_result = error_constructor("Failed to serialize result".to_string());
+        serde_json::to_string(&error_result)
+            .unwrap_or_else(|_| r#"{"error":"Failed to serialize error result"}"#.to_string())
+    })
+}
 
 /// Request payload for export_to_duckdb_sql.
 #[derive(Deserialize)]
@@ -32,31 +76,42 @@ pub fn set_panic_hook() {
 /// This function never throws - errors are returned in the result's issues array
 #[wasm_bindgen]
 pub fn analyze_sql_json(request_json: &str) -> String {
-    // Parse the request
-    let request: AnalyzeRequest = match serde_json::from_str(request_json) {
-        Ok(req) => req,
-        Err(e) => {
-            let result = AnalyzeResult::from_error(
-                "REQUEST_PARSE_ERROR",
-                format!("Invalid request format: {e}"),
-            );
-            return serde_json::to_string(&result)
-                .unwrap_or_else(|_| r#"{"error":"Failed to serialize error result"}"#.to_string());
-        }
-    };
+    handle_wasm_json_request(
+        request_json,
+        |req: AnalyzeRequest| analyze(&req),
+        |msg| AnalyzeResult::from_error("REQUEST_PARSE_ERROR", msg),
+    )
+}
 
-    // Perform analysis
-    let result = analyze(&request);
+/// Compute completion context for a cursor position.
+/// Returns JSON-serialized CompletionContext.
+#[wasm_bindgen]
+pub fn completion_context_json(request_json: &str) -> String {
+    handle_wasm_json_request(
+        request_json,
+        |req: CompletionRequest| completion_context(&req),
+        CompletionContext::from_error,
+    )
+}
 
-    // Serialize result
-    serde_json::to_string(&result).unwrap_or_else(|_| {
-        let error_result = AnalyzeResult::from_error(
-            "SERIALIZATION_ERROR",
-            "Failed to serialize result".to_string(),
-        );
-        serde_json::to_string(&error_result)
-            .unwrap_or_else(|_| r#"{"error":"Failed to serialize error result"}"#.to_string())
-    })
+/// Compute ranked completion items for a cursor position.
+#[wasm_bindgen]
+pub fn completion_items_json(request_json: &str) -> String {
+    handle_wasm_json_request(
+        request_json,
+        |req: CompletionRequest| completion_items(&req),
+        CompletionItemsResult::from_error,
+    )
+}
+
+/// Split SQL into statement spans.
+#[wasm_bindgen]
+pub fn split_statements_json(request_json: &str) -> String {
+    handle_wasm_json_request(
+        request_json,
+        |req: StatementSplitRequest| split_statements(&req),
+        StatementSplitResult::from_error,
+    )
 }
 
 /// Legacy simple API - accepts SQL string, returns JSON with table names

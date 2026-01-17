@@ -386,6 +386,13 @@ fn parse_statement_ranges_best_effort<'a>(
     (statements, issues)
 }
 
+pub(crate) fn split_statement_spans(sql: &str) -> Vec<Span> {
+    compute_statement_ranges(sql)
+        .into_iter()
+        .map(|range| Span::new(range.start, range.end))
+        .collect()
+}
+
 fn compute_statement_ranges(sql: &str) -> Vec<Range<usize>> {
     let mut ranges = Vec::new();
     if sql.is_empty() {

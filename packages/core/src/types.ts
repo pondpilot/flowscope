@@ -113,6 +113,158 @@ export interface ForeignKeyRef {
   column: string;
 }
 
+export interface CompletionRequest {
+  /** The SQL code to analyze (UTF-8 string, multi-statement supported) */
+  sql: string;
+  /** SQL dialect */
+  dialect: Dialect;
+  /**
+   * Byte offset of the cursor in the SQL string (UTF-8 encoded).
+   *
+   * **Important**: This is a byte offset, not a character index. For strings containing
+   * multi-byte UTF-8 characters (non-ASCII), use `charOffsetToByteOffset()` to convert
+   * a JavaScript string index to the correct byte offset.
+   *
+   * @example
+   * ```typescript
+   * const sql = "SELECT '日本語'";
+   * const charIndex = sql.indexOf("'") + 1; // Character position
+   * const byteOffset = charOffsetToByteOffset(sql, charIndex);
+   * const result = await completionItems({ sql, dialect: 'postgres', cursorOffset: byteOffset });
+   * ```
+   */
+  cursorOffset: number;
+  /** Optional schema metadata for accurate column resolution */
+  schema?: SchemaMetadata;
+}
+
+export interface StatementSplitRequest {
+  /** The SQL code to split (UTF-8 string, multi-statement supported) */
+  sql: string;
+  /**
+   * SQL dialect (optional; reserved for future dialect-specific splitting).
+   *
+   * The current implementation uses a universal tokenizer that handles common SQL
+   * constructs (strings, comments, dollar-quoting) across all dialects. Defaults to 'generic'.
+   */
+  dialect?: Dialect;
+}
+
+export type CompletionClause =
+  | 'select'
+  | 'from'
+  | 'where'
+  | 'join'
+  | 'on'
+  | 'groupBy'
+  | 'having'
+  | 'orderBy'
+  | 'limit'
+  | 'qualify'
+  | 'window'
+  | 'insert'
+  | 'update'
+  | 'delete'
+  | 'with'
+  | 'unknown';
+
+export type CompletionTokenKind =
+  | 'keyword'
+  | 'identifier'
+  | 'literal'
+  | 'operator'
+  | 'symbol'
+  | 'unknown';
+
+export interface CompletionToken {
+  value: string;
+  kind: CompletionTokenKind;
+  span: Span;
+}
+
+export interface CompletionTable {
+  name: string;
+  canonical: string;
+  alias?: string;
+  matchedSchema: boolean;
+}
+
+export interface CompletionColumn {
+  name: string;
+  dataType?: string;
+  table?: string;
+  canonicalTable?: string;
+  isAmbiguous: boolean;
+}
+
+export interface CompletionKeywordSet {
+  keywords: string[];
+  operators: string[];
+  aggregates: string[];
+  snippets: string[];
+}
+
+export interface CompletionKeywordHints {
+  global: CompletionKeywordSet;
+  clause: CompletionKeywordSet;
+}
+
+export interface CompletionContext {
+  statementIndex: number;
+  statementSpan: Span;
+  clause: CompletionClause;
+  token?: CompletionToken;
+  tablesInScope: CompletionTable[];
+  columnsInScope: CompletionColumn[];
+  keywordHints: CompletionKeywordHints;
+  /** Error message if the request could not be processed */
+  error?: string;
+}
+
+export type CompletionItemKind =
+  | 'keyword'
+  | 'operator'
+  | 'function'
+  | 'snippet'
+  | 'table'
+  | 'column'
+  | 'schemaTable';
+
+export type CompletionItemCategory =
+  | 'keyword'
+  | 'operator'
+  | 'aggregate'
+  | 'snippet'
+  | 'table'
+  | 'column'
+  | 'schemaTable'
+  | 'function';
+
+export interface CompletionItem {
+  label: string;
+  insertText: string;
+  kind: CompletionItemKind;
+  category: CompletionItemCategory;
+  score: number;
+  clauseSpecific: boolean;
+  detail?: string;
+}
+
+export interface CompletionItemsResult {
+  clause: CompletionClause;
+  token?: CompletionToken;
+  shouldShow: boolean;
+  items: CompletionItem[];
+  /** Error message if the request could not be processed */
+  error?: string;
+}
+
+export interface StatementSplitResult {
+  statements: Span[];
+  /** Error message if the request could not be processed */
+  error?: string;
+}
+
 // Response Types
 
 /**
@@ -445,3 +597,184 @@ export type SchemaOrigin = 'imported' | 'implied';
 
 /** How a table reference was resolved during analysis. */
 export type ResolutionSource = 'imported' | 'implied' | 'unknown';
+
+// Utility Functions
+
+// Shared TextEncoder instance for performance (avoid creating per-call)
+const utf8Encoder = new TextEncoder();
+
+// UTF-16 surrogate pair constants
+const UTF16_HIGH_SURROGATE_START = 0xd800;
+const UTF16_HIGH_SURROGATE_END = 0xdbff;
+const UTF16_LOW_SURROGATE_START = 0xdc00;
+const UTF16_LOW_SURROGATE_END = 0xdfff;
+
+/**
+ * Calculate the UTF-8 byte length of a UTF-16 code unit.
+ * This avoids re-encoding each character.
+ */
+function utf8ByteLength(charCode: number): number {
+  if (charCode < 0x80) return 1;
+  if (charCode < 0x800) return 2;
+  return 3;
+}
+
+/**
+ * Check if a character code is a high surrogate (first half of a surrogate pair).
+ */
+function isHighSurrogate(charCode: number): boolean {
+  return charCode >= UTF16_HIGH_SURROGATE_START && charCode <= UTF16_HIGH_SURROGATE_END;
+}
+
+/**
+ * Check if a character code is a low surrogate (second half of a surrogate pair).
+ */
+function isLowSurrogate(charCode: number): boolean {
+  return charCode >= UTF16_LOW_SURROGATE_START && charCode <= UTF16_LOW_SURROGATE_END;
+}
+
+/**
+ * Convert a JavaScript string character index (UTF-16 code units) to a UTF-8 byte offset.
+ *
+ * JavaScript strings use UTF-16 internally, but the FlowScope WASM API expects
+ * UTF-8 byte offsets. This function converts a character index (as returned by
+ * methods like `indexOf()` or cursor position in editors) to the corresponding
+ * byte offset in the UTF-8 encoded string.
+ *
+ * **Note**: The charOffset is in UTF-16 code units (what JavaScript uses for string indexing).
+ * For characters outside the Basic Multilingual Plane (like emoji), a single character
+ * takes 2 code units (a surrogate pair).
+ *
+ * @param str - The string to convert within
+ * @param charOffset - The character index in UTF-16 code units (0-based)
+ * @returns The UTF-8 byte offset corresponding to the character index
+ * @throws Error if charOffset is out of bounds
+ *
+ * @example
+ * ```typescript
+ * const sql = "SELECT '日本語'"; // Contains multi-byte characters
+ * const charIndex = 8; // Position of first Japanese character
+ * const byteOffset = charOffsetToByteOffset(sql, charIndex);
+ * // byteOffset will be 8 (ASCII chars) vs charIndex 8
+ * // But for position after '日', byteOffset would be 11 (8 + 3 bytes for '日')
+ * ```
+ */
+export function charOffsetToByteOffset(str: string, charOffset: number): number {
+  if (charOffset < 0) {
+    throw new Error(`Character offset cannot be negative: ${charOffset}`);
+  }
+  if (charOffset > str.length) {
+    throw new Error(`Character offset ${charOffset} exceeds string length ${str.length}`);
+  }
+
+  // Fast path: check if prefix is pure ASCII
+  let hasNonAscii = false;
+  for (let i = 0; i < charOffset; i++) {
+    if (str.charCodeAt(i) > 0x7f) {
+      hasNonAscii = true;
+      break;
+    }
+  }
+  if (!hasNonAscii) {
+    return charOffset;
+  }
+
+  // Slower path: calculate byte offset accounting for multi-byte characters
+  let byteOffset = 0;
+  for (let i = 0; i < charOffset; i++) {
+    const charCode = str.charCodeAt(i);
+
+    // Handle surrogate pairs (characters outside BMP like emoji)
+    if (isHighSurrogate(charCode) && i + 1 < charOffset) {
+      const nextCode = str.charCodeAt(i + 1);
+      if (isLowSurrogate(nextCode)) {
+        // Surrogate pair encodes to 4 UTF-8 bytes
+        byteOffset += 4;
+        i++; // Skip the low surrogate
+        continue;
+      }
+    }
+
+    byteOffset += utf8ByteLength(charCode);
+  }
+
+  return byteOffset;
+}
+
+/**
+ * Convert a UTF-8 byte offset to a JavaScript string character index (UTF-16 code units).
+ *
+ * This is the inverse of `charOffsetToByteOffset()`. Use this when converting
+ * byte offsets from the WASM API back to JavaScript string indices.
+ *
+ * **Note**: The returned index is in UTF-16 code units (what JavaScript uses for string indexing).
+ * For characters outside the Basic Multilingual Plane (like emoji), a single character
+ * takes 2 code units (a surrogate pair).
+ *
+ * @param str - The string to convert within
+ * @param byteOffset - The UTF-8 byte offset
+ * @returns The character index in UTF-16 code units corresponding to the byte offset
+ * @throws Error if byteOffset is out of bounds or doesn't land on a character boundary
+ *
+ * @example
+ * ```typescript
+ * const sql = "SELECT '日本語'";
+ * const span = result.statementSpan; // { start: 0, end: 17 } in bytes
+ * const startChar = byteOffsetToCharOffset(sql, span.start);
+ * const endChar = byteOffsetToCharOffset(sql, span.end);
+ * const statement = sql.slice(startChar, endChar);
+ * ```
+ */
+export function byteOffsetToCharOffset(str: string, byteOffset: number): number {
+  if (byteOffset < 0) {
+    throw new Error(`Byte offset cannot be negative: ${byteOffset}`);
+  }
+
+  // Get total byte length to validate
+  const totalBytes = utf8Encoder.encode(str).length;
+
+  if (byteOffset > totalBytes) {
+    throw new Error(`Byte offset ${byteOffset} exceeds UTF-8 length ${totalBytes}`);
+  }
+
+  // Fast path for zero offset
+  if (byteOffset === 0) {
+    return 0;
+  }
+
+  // O(n) scan: iterate through string tracking byte position
+  let currentByteOffset = 0;
+  let charIndex = 0;
+
+  while (charIndex < str.length) {
+    if (currentByteOffset === byteOffset) {
+      return charIndex;
+    }
+    if (currentByteOffset > byteOffset) {
+      throw new Error(`Byte offset ${byteOffset} does not land on a character boundary`);
+    }
+
+    const charCode = str.charCodeAt(charIndex);
+
+    // Handle surrogate pairs (characters outside BMP like emoji)
+    if (isHighSurrogate(charCode) && charIndex + 1 < str.length) {
+      const nextCode = str.charCodeAt(charIndex + 1);
+      if (isLowSurrogate(nextCode)) {
+        // Surrogate pair encodes to 4 UTF-8 bytes
+        currentByteOffset += 4;
+        charIndex += 2; // Skip both surrogates
+        continue;
+      }
+    }
+
+    currentByteOffset += utf8ByteLength(charCode);
+    charIndex++;
+  }
+
+  // Handle end-of-string case
+  if (currentByteOffset === byteOffset) {
+    return charIndex;
+  }
+
+  throw new Error(`Byte offset ${byteOffset} does not land on a character boundary`);
+}
