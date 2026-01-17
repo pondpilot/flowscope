@@ -1,6 +1,6 @@
 use flowscope_core::{
-    completion_items, ColumnSchema, CompletionItemCategory, CompletionRequest, Dialect,
-    SchemaMetadata, SchemaTable,
+    completion_context, completion_items, ColumnSchema, CompletionClause,
+    CompletionItemCategory, CompletionRequest, Dialect, SchemaMetadata, SchemaTable,
 };
 
 fn sample_schema() -> SchemaMetadata {
@@ -351,4 +351,92 @@ fn completion_items_select_returns_nothing_without_columns() {
     let result = completion_items(&request);
     assert!(!result.should_show);
     assert!(result.items.is_empty());
+}
+
+// =============================================================================
+// Clause Detection Tests
+// =============================================================================
+
+#[test]
+fn clause_detection_select() {
+    let request = request_at_cursor("SELECT | FROM users", None);
+    let context = completion_context(&request);
+    assert_eq!(context.clause, CompletionClause::Select);
+}
+
+#[test]
+fn clause_detection_select_after_column() {
+    let request = request_at_cursor("SELECT id, | FROM users", None);
+    let context = completion_context(&request);
+    assert_eq!(context.clause, CompletionClause::Select);
+}
+
+#[test]
+fn clause_detection_from() {
+    let request = request_at_cursor("SELECT * FROM |", None);
+    let context = completion_context(&request);
+    assert_eq!(context.clause, CompletionClause::From);
+}
+
+#[test]
+fn clause_detection_from_after_table() {
+    let request = request_at_cursor("SELECT * FROM users, |", None);
+    let context = completion_context(&request);
+    assert_eq!(context.clause, CompletionClause::From);
+}
+
+#[test]
+fn clause_detection_where() {
+    let request = request_at_cursor("SELECT * FROM users WHERE |", None);
+    let context = completion_context(&request);
+    assert_eq!(context.clause, CompletionClause::Where);
+}
+
+#[test]
+fn clause_detection_where_mid_expression() {
+    let request = request_at_cursor("SELECT * FROM t WHERE id = |", None);
+    let context = completion_context(&request);
+    assert_eq!(context.clause, CompletionClause::Where);
+}
+
+#[test]
+fn clause_detection_join() {
+    let request = request_at_cursor("SELECT * FROM a JOIN |", None);
+    let context = completion_context(&request);
+    assert_eq!(context.clause, CompletionClause::Join);
+}
+
+#[test]
+fn clause_detection_on() {
+    let request = request_at_cursor("SELECT * FROM a JOIN b ON |", None);
+    let context = completion_context(&request);
+    assert_eq!(context.clause, CompletionClause::On);
+}
+
+#[test]
+fn clause_detection_group_by() {
+    let request = request_at_cursor("SELECT * FROM t GROUP BY |", None);
+    let context = completion_context(&request);
+    assert_eq!(context.clause, CompletionClause::GroupBy);
+}
+
+#[test]
+fn clause_detection_having() {
+    let request = request_at_cursor("SELECT * FROM t GROUP BY x HAVING |", None);
+    let context = completion_context(&request);
+    assert_eq!(context.clause, CompletionClause::Having);
+}
+
+#[test]
+fn clause_detection_order_by() {
+    let request = request_at_cursor("SELECT * FROM t ORDER BY |", None);
+    let context = completion_context(&request);
+    assert_eq!(context.clause, CompletionClause::OrderBy);
+}
+
+#[test]
+fn clause_detection_limit() {
+    let request = request_at_cursor("SELECT * FROM t LIMIT |", None);
+    let context = completion_context(&request);
+    assert_eq!(context.clause, CompletionClause::Limit);
 }

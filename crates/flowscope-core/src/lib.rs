@@ -26,6 +26,7 @@ pub use types::{
     CanonicalName,
     CaseSensitivity,
     ColumnSchema,
+    CompletionClause,
     CompletionContext,
     CompletionItem,
     CompletionItemCategory,
