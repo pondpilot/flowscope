@@ -45,6 +45,142 @@ fn sample_schema() -> SchemaMetadata {
     }
 }
 
+/// Creates a CompletionRequest with cursor at the "|" marker position.
+/// Example: "SELECT | FROM users" places cursor after SELECT.
+fn request_at_cursor(sql: &str, schema: Option<SchemaMetadata>) -> CompletionRequest {
+    let cursor_offset = sql.find('|').expect("sql must contain cursor marker '|'");
+    let clean_sql = sql.replace('|', "");
+    CompletionRequest {
+        sql: clean_sql,
+        dialect: Dialect::Duckdb,
+        cursor_offset,
+        schema,
+    }
+}
+
+/// Schema with catalog: sales.public.customers
+fn schema_with_catalog() -> SchemaMetadata {
+    SchemaMetadata {
+        default_catalog: Some("sales".to_string()),
+        default_schema: Some("public".to_string()),
+        search_path: None,
+        case_sensitivity: None,
+        allow_implied: true,
+        tables: vec![SchemaTable {
+            catalog: Some("sales".to_string()),
+            schema: Some("public".to_string()),
+            name: "customers".to_string(),
+            columns: vec![
+                ColumnSchema {
+                    name: "id".to_string(),
+                    data_type: Some("integer".to_string()),
+                    is_primary_key: None,
+                    foreign_key: None,
+                },
+                ColumnSchema {
+                    name: "name".to_string(),
+                    data_type: Some("varchar".to_string()),
+                    is_primary_key: None,
+                    foreign_key: None,
+                },
+            ],
+        }],
+    }
+}
+
+/// Multi-schema: public.users, analytics.events
+fn schema_multi_schema() -> SchemaMetadata {
+    SchemaMetadata {
+        default_catalog: None,
+        default_schema: Some("public".to_string()),
+        search_path: None,
+        case_sensitivity: None,
+        allow_implied: true,
+        tables: vec![
+            SchemaTable {
+                catalog: None,
+                schema: Some("public".to_string()),
+                name: "users".to_string(),
+                columns: vec![
+                    ColumnSchema {
+                        name: "id".to_string(),
+                        data_type: Some("integer".to_string()),
+                        is_primary_key: None,
+                        foreign_key: None,
+                    },
+                    ColumnSchema {
+                        name: "email".to_string(),
+                        data_type: Some("varchar".to_string()),
+                        is_primary_key: None,
+                        foreign_key: None,
+                    },
+                ],
+            },
+            SchemaTable {
+                catalog: None,
+                schema: Some("analytics".to_string()),
+                name: "events".to_string(),
+                columns: vec![
+                    ColumnSchema {
+                        name: "id".to_string(),
+                        data_type: Some("integer".to_string()),
+                        is_primary_key: None,
+                        foreign_key: None,
+                    },
+                    ColumnSchema {
+                        name: "event_type".to_string(),
+                        data_type: Some("varchar".to_string()),
+                        is_primary_key: None,
+                        foreign_key: None,
+                    },
+                ],
+            },
+        ],
+    }
+}
+
+/// Schema for prefix matching tests: users table with user_id, power_user, email, email_verified
+fn schema_prefix_matching() -> SchemaMetadata {
+    SchemaMetadata {
+        default_catalog: None,
+        default_schema: Some("public".to_string()),
+        search_path: None,
+        case_sensitivity: None,
+        allow_implied: true,
+        tables: vec![SchemaTable {
+            catalog: None,
+            schema: Some("public".to_string()),
+            name: "users".to_string(),
+            columns: vec![
+                ColumnSchema {
+                    name: "user_id".to_string(),
+                    data_type: Some("integer".to_string()),
+                    is_primary_key: None,
+                    foreign_key: None,
+                },
+                ColumnSchema {
+                    name: "power_user".to_string(),
+                    data_type: Some("boolean".to_string()),
+                    is_primary_key: None,
+                    foreign_key: None,
+                },
+                ColumnSchema {
+                    name: "email".to_string(),
+                    data_type: Some("varchar".to_string()),
+                    is_primary_key: None,
+                    foreign_key: None,
+                },
+                ColumnSchema {
+                    name: "email_verified".to_string(),
+                    data_type: Some("boolean".to_string()),
+                    is_primary_key: None,
+                    foreign_key: None,
+                },
+            ],
+        }],
+    }
+}
+
 #[test]
 fn completion_items_filters_by_alias_case_insensitive() {
     let sql = "SELECT U. FROM users U";
