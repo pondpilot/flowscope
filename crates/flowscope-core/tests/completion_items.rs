@@ -619,3 +619,48 @@ fn schema_catalog_default_resolution() {
     assert!(table.is_some());
     assert!(table.unwrap().matched_schema);
 }
+
+// =============================================================================
+// Qualifier Handling Tests
+// =============================================================================
+
+#[test]
+fn qualifier_alias_filters_columns() {
+    let request = request_at_cursor("SELECT u.| FROM users u", Some(sample_schema()));
+    let result = completion_items(&request);
+    assert!(result.should_show);
+    assert!(result.items.iter().all(|item| item.category == CompletionItemCategory::Column));
+    assert!(result.items.iter().any(|item| item.label == "email"));
+}
+
+#[test]
+fn qualifier_alias_case_insensitive() {
+    let request = request_at_cursor("SELECT U.| FROM users U", Some(sample_schema()));
+    let result = completion_items(&request);
+    assert!(result.should_show);
+    assert!(result.items.iter().all(|item| item.category == CompletionItemCategory::Column));
+    assert!(result.items.iter().any(|item| item.label == "email"));
+}
+
+#[test]
+fn qualifier_alias_excludes_other_tables() {
+    let request = request_at_cursor(
+        "SELECT u.| FROM users u JOIN orders o ON u.id = o.id",
+        Some(sample_schema()),
+    );
+    let result = completion_items(&request);
+    assert!(result.should_show);
+    // Should only show users columns, not orders columns
+    assert!(result.items.iter().any(|item| item.label == "email"));
+    assert!(!result.items.iter().any(|item| item.label == "total"));
+}
+
+#[test]
+fn qualifier_alias_partial_prefix() {
+    let request = request_at_cursor("SELECT u.em| FROM users u", Some(sample_schema()));
+    let result = completion_items(&request);
+    assert!(result.should_show);
+    // "email" should match, filtered by prefix
+    let email_item = result.items.iter().find(|item| item.label == "email");
+    assert!(email_item.is_some());
+}
