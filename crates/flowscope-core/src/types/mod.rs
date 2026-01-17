@@ -18,6 +18,11 @@ pub use completion::{
     CompletionItemKind, CompletionItemsResult, CompletionKeywordHints, CompletionKeywordSet,
     CompletionTable, CompletionToken, CompletionTokenKind,
 };
+
+// Re-export internal AST types for crate-internal use only
+pub(crate) use completion::{
+    AstColumnInfo, AstContext, AstTableInfo, CteInfo, ParseStrategy, SubqueryInfo,
+};
 pub use legacy::LineageResult;
 pub use request::{
     AnalysisOptions, AnalyzeRequest, ColumnSchema, CompletionRequest, Dialect, FileSource,

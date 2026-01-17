@@ -78,7 +78,7 @@ pub struct FileSource {
 /// SQL dialect for parsing and analysis.
 ///
 /// Different dialects have different syntax rules and identifier normalization behavior.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum Dialect {
     #[default]

@@ -4,6 +4,786 @@ expression: result
 ---
 {
   "clause": "select",
-  "shouldShow": false,
-  "items": []
+  "shouldShow": true,
+  "items": [
+    {
+      "label": "email",
+      "insertText": "email",
+      "kind": "column",
+      "category": "column",
+      "score": 1050,
+      "clauseSpecific": true,
+      "detail": "varchar"
+    },
+    {
+      "label": "id",
+      "insertText": "id",
+      "kind": "column",
+      "category": "column",
+      "score": 1050,
+      "clauseSpecific": true,
+      "detail": "integer"
+    },
+    {
+      "label": "name",
+      "insertText": "name",
+      "kind": "column",
+      "category": "column",
+      "score": 1050,
+      "clauseSpecific": true,
+      "detail": "varchar"
+    },
+    {
+      "label": "ARRAY_AGG",
+      "insertText": "ARRAY_AGG(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 850,
+      "clauseSpecific": true
+    },
+    {
+      "label": "AVG",
+      "insertText": "AVG(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 850,
+      "clauseSpecific": true
+    },
+    {
+      "label": "BOOL_AND",
+      "insertText": "BOOL_AND(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 850,
+      "clauseSpecific": true
+    },
+    {
+      "label": "BOOL_OR",
+      "insertText": "BOOL_OR(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 850,
+      "clauseSpecific": true
+    },
+    {
+      "label": "COUNT",
+      "insertText": "COUNT(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 850,
+      "clauseSpecific": true
+    },
+    {
+      "label": "MAX",
+      "insertText": "MAX(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 850,
+      "clauseSpecific": true
+    },
+    {
+      "label": "MIN",
+      "insertText": "MIN(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 850,
+      "clauseSpecific": true
+    },
+    {
+      "label": "STDDEV",
+      "insertText": "STDDEV(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 850,
+      "clauseSpecific": true
+    },
+    {
+      "label": "STRING_AGG",
+      "insertText": "STRING_AGG(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 850,
+      "clauseSpecific": true
+    },
+    {
+      "label": "SUM",
+      "insertText": "SUM(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 850,
+      "clauseSpecific": true
+    },
+    {
+      "label": "VARIANCE",
+      "insertText": "VARIANCE(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 850,
+      "clauseSpecific": true
+    },
+    {
+      "label": "ALL",
+      "insertText": "ALL",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 650,
+      "clauseSpecific": true
+    },
+    {
+      "label": "AS",
+      "insertText": "AS",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 650,
+      "clauseSpecific": true
+    },
+    {
+      "label": "CASE",
+      "insertText": "CASE",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 650,
+      "clauseSpecific": true
+    },
+    {
+      "label": "CAST",
+      "insertText": "CAST",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 650,
+      "clauseSpecific": true
+    },
+    {
+      "label": "COALESCE",
+      "insertText": "COALESCE",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 650,
+      "clauseSpecific": true
+    },
+    {
+      "label": "DISTINCT",
+      "insertText": "DISTINCT",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 650,
+      "clauseSpecific": true
+    },
+    {
+      "label": "ELSE",
+      "insertText": "ELSE",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 650,
+      "clauseSpecific": true
+    },
+    {
+      "label": "END",
+      "insertText": "END",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 650,
+      "clauseSpecific": true
+    },
+    {
+      "label": "FILTER",
+      "insertText": "FILTER",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 650,
+      "clauseSpecific": true
+    },
+    {
+      "label": "NULLIF",
+      "insertText": "NULLIF",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 650,
+      "clauseSpecific": true
+    },
+    {
+      "label": "OVER",
+      "insertText": "OVER",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 650,
+      "clauseSpecific": true
+    },
+    {
+      "label": "THEN",
+      "insertText": "THEN",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 650,
+      "clauseSpecific": true
+    },
+    {
+      "label": "WHEN",
+      "insertText": "WHEN",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 650,
+      "clauseSpecific": true
+    },
+    {
+      "label": "ALTER",
+      "insertText": "ALTER",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "ATTACH",
+      "insertText": "ATTACH",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "BY",
+      "insertText": "BY",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "COPY",
+      "insertText": "COPY",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "CREATE",
+      "insertText": "CREATE",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "CROSS",
+      "insertText": "CROSS",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "DELETE",
+      "insertText": "DELETE",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "DESCRIBE",
+      "insertText": "DESCRIBE",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "DETACH",
+      "insertText": "DETACH",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "DROP",
+      "insertText": "DROP",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "EXCEPT",
+      "insertText": "EXCEPT",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "EXPLAIN",
+      "insertText": "EXPLAIN",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "EXPORT",
+      "insertText": "EXPORT",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "FROM",
+      "insertText": "FROM",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "FULL",
+      "insertText": "FULL",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "GROUP",
+      "insertText": "GROUP",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "HAVING",
+      "insertText": "HAVING",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "IMPORT",
+      "insertText": "IMPORT",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "INNER",
+      "insertText": "INNER",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "INSERT",
+      "insertText": "INSERT",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "INTERSECT",
+      "insertText": "INTERSECT",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "JOIN",
+      "insertText": "JOIN",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "LEFT",
+      "insertText": "LEFT",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "LIMIT",
+      "insertText": "LIMIT",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "OFFSET",
+      "insertText": "OFFSET",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "ON",
+      "insertText": "ON",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "ORDER",
+      "insertText": "ORDER",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "OUTER",
+      "insertText": "OUTER",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "PIVOT",
+      "insertText": "PIVOT",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "QUALIFY",
+      "insertText": "QUALIFY",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "RIGHT",
+      "insertText": "RIGHT",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "SELECT",
+      "insertText": "SELECT",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "SHOW",
+      "insertText": "SHOW",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "SUMMARIZE",
+      "insertText": "SUMMARIZE",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "UNION",
+      "insertText": "UNION",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "UNPIVOT",
+      "insertText": "UNPIVOT",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "UPDATE",
+      "insertText": "UPDATE",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "USING",
+      "insertText": "USING",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "VALUES",
+      "insertText": "VALUES",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "WHERE",
+      "insertText": "WHERE",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "WINDOW",
+      "insertText": "WINDOW",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "WITH",
+      "insertText": "WITH",
+      "kind": "keyword",
+      "category": "keyword",
+      "score": 600,
+      "clauseSpecific": false
+    },
+    {
+      "label": "!=",
+      "insertText": "!=",
+      "kind": "operator",
+      "category": "operator",
+      "score": 550,
+      "clauseSpecific": true
+    },
+    {
+      "label": "%",
+      "insertText": "%",
+      "kind": "operator",
+      "category": "operator",
+      "score": 550,
+      "clauseSpecific": true
+    },
+    {
+      "label": "*",
+      "insertText": "*",
+      "kind": "operator",
+      "category": "operator",
+      "score": 550,
+      "clauseSpecific": true
+    },
+    {
+      "label": "+",
+      "insertText": "+",
+      "kind": "operator",
+      "category": "operator",
+      "score": 550,
+      "clauseSpecific": true
+    },
+    {
+      "label": "-",
+      "insertText": "-",
+      "kind": "operator",
+      "category": "operator",
+      "score": 550,
+      "clauseSpecific": true
+    },
+    {
+      "label": "/",
+      "insertText": "/",
+      "kind": "operator",
+      "category": "operator",
+      "score": 550,
+      "clauseSpecific": true
+    },
+    {
+      "label": "<",
+      "insertText": "<",
+      "kind": "operator",
+      "category": "operator",
+      "score": 550,
+      "clauseSpecific": true
+    },
+    {
+      "label": "<=",
+      "insertText": "<=",
+      "kind": "operator",
+      "category": "operator",
+      "score": 550,
+      "clauseSpecific": true
+    },
+    {
+      "label": "<>",
+      "insertText": "<>",
+      "kind": "operator",
+      "category": "operator",
+      "score": 550,
+      "clauseSpecific": true
+    },
+    {
+      "label": "=",
+      "insertText": "=",
+      "kind": "operator",
+      "category": "operator",
+      "score": 550,
+      "clauseSpecific": true
+    },
+    {
+      "label": ">",
+      "insertText": ">",
+      "kind": "operator",
+      "category": "operator",
+      "score": 550,
+      "clauseSpecific": true
+    },
+    {
+      "label": ">=",
+      "insertText": ">=",
+      "kind": "operator",
+      "category": "operator",
+      "score": 550,
+      "clauseSpecific": true
+    },
+    {
+      "label": "AND",
+      "insertText": "AND",
+      "kind": "operator",
+      "category": "operator",
+      "score": 550,
+      "clauseSpecific": true
+    },
+    {
+      "label": "BETWEEN",
+      "insertText": "BETWEEN",
+      "kind": "operator",
+      "category": "operator",
+      "score": 550,
+      "clauseSpecific": true
+    },
+    {
+      "label": "ILIKE",
+      "insertText": "ILIKE",
+      "kind": "operator",
+      "category": "operator",
+      "score": 550,
+      "clauseSpecific": true
+    },
+    {
+      "label": "IN",
+      "insertText": "IN",
+      "kind": "operator",
+      "category": "operator",
+      "score": 550,
+      "clauseSpecific": true
+    },
+    {
+      "label": "IS",
+      "insertText": "IS",
+      "kind": "operator",
+      "category": "operator",
+      "score": 550,
+      "clauseSpecific": true
+    },
+    {
+      "label": "IS NOT",
+      "insertText": "IS NOT",
+      "kind": "operator",
+      "category": "operator",
+      "score": 550,
+      "clauseSpecific": true
+    },
+    {
+      "label": "LIKE",
+      "insertText": "LIKE",
+      "kind": "operator",
+      "category": "operator",
+      "score": 550,
+      "clauseSpecific": true
+    },
+    {
+      "label": "NOT",
+      "insertText": "NOT",
+      "kind": "operator",
+      "category": "operator",
+      "score": 550,
+      "clauseSpecific": true
+    },
+    {
+      "label": "OR",
+      "insertText": "OR",
+      "kind": "operator",
+      "category": "operator",
+      "score": 550,
+      "clauseSpecific": true
+    },
+    {
+      "label": "||",
+      "insertText": "||",
+      "kind": "operator",
+      "category": "operator",
+      "score": 550,
+      "clauseSpecific": true
+    },
+    {
+      "label": "CASE WHEN ... THEN ... END",
+      "insertText": "CASE WHEN ... THEN ... END",
+      "kind": "snippet",
+      "category": "snippet",
+      "score": 450,
+      "clauseSpecific": true
+    },
+    {
+      "label": "CAST(expr AS type)",
+      "insertText": "CAST(expr AS type)",
+      "kind": "snippet",
+      "category": "snippet",
+      "score": 450,
+      "clauseSpecific": true
+    },
+    {
+      "label": "COALESCE(expr, ...)",
+      "insertText": "COALESCE(expr, ...)",
+      "kind": "snippet",
+      "category": "snippet",
+      "score": 450,
+      "clauseSpecific": true
+    },
+    {
+      "label": "COUNT(*)",
+      "insertText": "COUNT(*)",
+      "kind": "snippet",
+      "category": "snippet",
+      "score": 450,
+      "clauseSpecific": true
+    },
+    {
+      "label": "FILTER (WHERE ...)",
+      "insertText": "FILTER (WHERE ...)",
+      "kind": "snippet",
+      "category": "snippet",
+      "score": 450,
+      "clauseSpecific": true
+    },
+    {
+      "label": "OVER (PARTITION BY ...)",
+      "insertText": "OVER (PARTITION BY ...)",
+      "kind": "snippet",
+      "category": "snippet",
+      "score": 450,
+      "clauseSpecific": true
+    }
+  ]
 }

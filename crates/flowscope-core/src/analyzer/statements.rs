@@ -25,6 +25,16 @@ use std::sync::Arc;
 #[cfg(feature = "tracing")]
 use tracing::{info, info_span};
 
+/// Information about a join node for dependency edge construction.
+struct JoinNodeInfo {
+    /// Node ID of the joined table
+    node_id: Arc<str>,
+    /// Type of join (INNER, LEFT, etc.)
+    join_type: Option<JoinType>,
+    /// Join condition expression (e.g., "a.id = b.id")
+    join_condition: Option<Arc<str>>,
+}
+
 impl<'a> Analyzer<'a> {
     #[cfg_attr(feature = "tracing", tracing::instrument(skip(self, statement), fields(index, source = source_name.as_deref())))]
     pub(super) fn analyze_statement(
@@ -168,14 +178,23 @@ impl<'a> Analyzer<'a> {
             }
         }
 
-        let join_nodes: Vec<(Arc<str>, Option<JoinType>, Option<Arc<str>>)> = ctx
+        let join_nodes: Vec<JoinNodeInfo> = ctx
             .nodes
             .iter()
             .filter(|node| node.node_type.is_table_like() && node.join_type.is_some())
-            .map(|node| (node.id.clone(), node.join_type, node.join_condition.clone()))
+            .map(|node| JoinNodeInfo {
+                node_id: node.id.clone(),
+                join_type: node.join_type,
+                join_condition: node.join_condition.clone(),
+            })
             .collect();
 
-        for (node_id, join_type, join_condition) in join_nodes {
+        for join_info in join_nodes {
+            let JoinNodeInfo {
+                node_id,
+                join_type,
+                join_condition,
+            } = join_info;
             let owned_columns = table_columns.get(&node_id).cloned().unwrap_or_default();
 
             let contributes_to_output = !owned_columns.is_empty()

@@ -1,1 +1,3 @@
-# Keep wasm artifacts available for publishing
+# Ignore all wasm build artifacts - they are generated during build
+*
+!.gitignore

@@ -29,9 +29,13 @@ pub enum CompletionClause {
 pub enum CompletionTokenKind {
     Keyword,
     Identifier,
+    /// Double-quoted identifier like "My Table"
+    QuotedIdentifier,
     Literal,
     Operator,
     Symbol,
+    /// SQL comment (line or block)
+    Comment,
     Unknown,
 }
 
@@ -195,5 +199,81 @@ impl CompletionContext {
             keyword_hints: CompletionKeywordHints::default(),
             error: Some(message.into()),
         }
+    }
+}
+
+// =============================================================================
+// AST-based completion types (internal, not exposed in public API)
+// =============================================================================
+
+use std::collections::HashMap;
+
+/// Parse strategy used to obtain AST context
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum ParseStrategy {
+    /// No AST available (token-only fallback)
+    #[default]
+    None,
+    /// Full SQL parsed successfully
+    FullParse,
+    /// SQL truncated at cursor position
+    Truncated,
+    /// Only complete statements before cursor
+    CompleteStatementsOnly,
+    /// Minimal fixes applied to make SQL parseable
+    WithFixes,
+}
+
+/// Column information extracted from AST (internal use)
+#[derive(Debug, Clone, Default)]
+pub(crate) struct AstColumnInfo {
+    pub name: String,
+    pub data_type: Option<String>,
+}
+
+/// Marker for a resolved table reference in the AST.
+/// The table name is stored as the key in the AstContext.table_aliases HashMap.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct AstTableInfo;
+
+/// Information about a CTE definition
+#[derive(Debug, Clone, Default)]
+pub(crate) struct CteInfo {
+    /// CTE name (alias)
+    pub name: String,
+    /// Explicitly declared column names: WITH cte(a, b) AS ...
+    pub declared_columns: Vec<String>,
+    /// Projected columns inferred from CTE body SELECT list
+    pub projected_columns: Vec<AstColumnInfo>,
+}
+
+/// Information about a subquery alias (derived table)
+#[derive(Debug, Clone, Default)]
+pub(crate) struct SubqueryInfo {
+    /// Projected columns from the subquery
+    pub projected_columns: Vec<AstColumnInfo>,
+}
+
+/// AST-extracted context for completion enrichment
+#[derive(Debug, Clone, Default)]
+pub(crate) struct AstContext {
+    /// Table aliases: alias_name → resolved AstTableInfo
+    pub table_aliases: HashMap<String, AstTableInfo>,
+
+    /// CTE definitions: cte_name → CteInfo
+    pub cte_definitions: HashMap<String, CteInfo>,
+
+    /// Subquery aliases: alias_name → SubqueryInfo
+    pub subquery_aliases: HashMap<String, SubqueryInfo>,
+}
+
+impl AstContext {
+    /// Check if this context has any useful information
+    #[cfg(test)]
+    pub fn has_enrichment(&self) -> bool {
+        !self.table_aliases.is_empty()
+            || !self.cte_definitions.is_empty()
+            || !self.subquery_aliases.is_empty()
     }
 }

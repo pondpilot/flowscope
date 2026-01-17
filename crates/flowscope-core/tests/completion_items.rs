@@ -1,6 +1,6 @@
 use flowscope_core::{
-    completion_context, completion_items, ColumnSchema, CompletionClause,
-    CompletionItemCategory, CompletionRequest, Dialect, SchemaMetadata, SchemaTable,
+    completion_context, completion_items, ColumnSchema, CompletionClause, CompletionItemCategory,
+    CompletionRequest, Dialect, SchemaMetadata, SchemaTable,
 };
 
 fn sample_schema() -> SchemaMetadata {
@@ -493,8 +493,14 @@ fn schema_join_tables() {
     );
     let context = completion_context(&request);
     assert_eq!(context.tables_in_scope.len(), 2);
-    assert!(context.tables_in_scope.iter().any(|t| t.alias == Some("u".to_string())));
-    assert!(context.tables_in_scope.iter().any(|t| t.alias == Some("o".to_string())));
+    assert!(context
+        .tables_in_scope
+        .iter()
+        .any(|t| t.alias == Some("u".to_string())));
+    assert!(context
+        .tables_in_scope
+        .iter()
+        .any(|t| t.alias == Some("o".to_string())));
 }
 
 #[test]
@@ -513,7 +519,11 @@ fn schema_columns_joined_marks_ambiguous() {
     );
     let context = completion_context(&request);
     // Both tables have "id" column - should be marked ambiguous
-    let id_columns: Vec<_> = context.columns_in_scope.iter().filter(|c| c.name == "id").collect();
+    let id_columns: Vec<_> = context
+        .columns_in_scope
+        .iter()
+        .filter(|c| c.name == "id")
+        .collect();
     assert_eq!(id_columns.len(), 2);
     assert!(id_columns.iter().all(|c| c.is_ambiguous));
 }
@@ -522,7 +532,10 @@ fn schema_columns_joined_marks_ambiguous() {
 fn schema_qualified_table_canonical() {
     let request = request_at_cursor("SELECT * FROM public.users|", Some(sample_schema()));
     let context = completion_context(&request);
-    let table = context.tables_in_scope.iter().find(|t| t.name == "public.users");
+    let table = context
+        .tables_in_scope
+        .iter()
+        .find(|t| t.name == "public.users");
     assert!(table.is_some());
     assert!(table.unwrap().canonical.contains("users"));
 }
@@ -556,7 +569,10 @@ fn schema_catalog_qualified() {
         Some(schema_with_catalog()),
     );
     let context = completion_context(&request);
-    let table = context.tables_in_scope.iter().find(|t| t.name.contains("customers"));
+    let table = context
+        .tables_in_scope
+        .iter()
+        .find(|t| t.name.contains("customers"));
     assert!(table.is_some());
 }
 
@@ -564,7 +580,10 @@ fn schema_catalog_qualified() {
 fn schema_catalog_default_resolution() {
     let request = request_at_cursor("SELECT * FROM customers|", Some(schema_with_catalog()));
     let context = completion_context(&request);
-    let table = context.tables_in_scope.iter().find(|t| t.name == "customers");
+    let table = context
+        .tables_in_scope
+        .iter()
+        .find(|t| t.name == "customers");
     assert!(table.is_some());
     assert!(table.unwrap().matched_schema);
 }
@@ -578,7 +597,10 @@ fn qualifier_alias_filters_columns() {
     let request = request_at_cursor("SELECT u.| FROM users u", Some(sample_schema()));
     let result = completion_items(&request);
     assert!(result.should_show);
-    assert!(result.items.iter().all(|item| item.category == CompletionItemCategory::Column));
+    assert!(result
+        .items
+        .iter()
+        .all(|item| item.category == CompletionItemCategory::Column));
     assert!(result.items.iter().any(|item| item.label == "email"));
 }
 
@@ -587,7 +609,10 @@ fn qualifier_alias_case_insensitive() {
     let request = request_at_cursor("SELECT U.| FROM users U", Some(sample_schema()));
     let result = completion_items(&request);
     assert!(result.should_show);
-    assert!(result.items.iter().all(|item| item.category == CompletionItemCategory::Column));
+    assert!(result
+        .items
+        .iter()
+        .all(|item| item.category == CompletionItemCategory::Column));
     assert!(result.items.iter().any(|item| item.label == "email"));
 }
 
@@ -619,7 +644,10 @@ fn qualifier_table_name_filters_columns() {
     let request = request_at_cursor("SELECT users.| FROM users", Some(sample_schema()));
     let result = completion_items(&request);
     assert!(result.should_show);
-    assert!(result.items.iter().all(|item| item.category == CompletionItemCategory::Column));
+    assert!(result
+        .items
+        .iter()
+        .all(|item| item.category == CompletionItemCategory::Column));
     assert!(result.items.iter().any(|item| item.label == "email"));
 }
 
@@ -640,7 +668,10 @@ fn qualifier_schema_only_shows_tables() {
     let request = request_at_cursor("SELECT * FROM public.|", Some(sample_schema()));
     let result = completion_items(&request);
     assert!(result.should_show);
-    assert!(result.items.iter().all(|item| item.category == CompletionItemCategory::SchemaTable));
+    assert!(result
+        .items
+        .iter()
+        .all(|item| item.category == CompletionItemCategory::SchemaTable));
     assert!(result.items.iter().any(|item| item.label.contains("users")));
 }
 
@@ -652,7 +683,10 @@ fn qualifier_schema_table_shows_columns() {
     );
     let result = completion_items(&request);
     assert!(result.should_show);
-    assert!(result.items.iter().all(|item| item.category == CompletionItemCategory::Column));
+    assert!(result
+        .items
+        .iter()
+        .all(|item| item.category == CompletionItemCategory::Column));
 }
 
 #[test]
@@ -663,7 +697,10 @@ fn qualifier_subquery_alias() {
     );
     let context = completion_context(&request);
     // Subquery alias should be recognized
-    assert!(context.tables_in_scope.iter().any(|t| t.alias == Some("sq".to_string())));
+    assert!(context
+        .tables_in_scope
+        .iter()
+        .any(|t| t.alias == Some("sq".to_string())));
 }
 
 #[test]
@@ -675,7 +712,9 @@ fn no_qualifier_shows_all_columns() {
     let result = completion_items(&request);
     assert!(result.should_show);
     // Should show columns from both tables
-    let column_items: Vec<_> = result.items.iter()
+    let column_items: Vec<_> = result
+        .items
+        .iter()
         .filter(|item| item.category == CompletionItemCategory::Column)
         .collect();
     assert!(column_items.len() >= 4); // id, email from users + id, total from orders
@@ -689,7 +728,9 @@ fn ambiguous_column_shows_prefixed() {
     );
     let result = completion_items(&request);
     // Ambiguous "id" should suggest prefixed versions
-    let id_items: Vec<_> = result.items.iter()
+    let id_items: Vec<_> = result
+        .items
+        .iter()
         .filter(|item| item.label.contains("id"))
         .collect();
     assert!(!id_items.is_empty());
@@ -715,15 +756,21 @@ fn score_select_columns_before_tables() {
     assert!(result.should_show);
 
     // Find first column and first table (if any)
-    let first_column = result.items.iter()
+    let first_column = result
+        .items
+        .iter()
         .position(|item| item.category == CompletionItemCategory::Column);
-    let first_table = result.items.iter()
-        .position(|item| item.category == CompletionItemCategory::Table
-                      || item.category == CompletionItemCategory::SchemaTable);
+    let first_table = result.items.iter().position(|item| {
+        item.category == CompletionItemCategory::Table
+            || item.category == CompletionItemCategory::SchemaTable
+    });
 
     // In SELECT clause, columns should come before tables (if tables present)
     if let (Some(col_pos), Some(tbl_pos)) = (first_column, first_table) {
-        assert!(col_pos < tbl_pos, "columns should rank before tables in SELECT");
+        assert!(
+            col_pos < tbl_pos,
+            "columns should rank before tables in SELECT"
+        );
     }
 }
 
@@ -733,15 +780,21 @@ fn score_from_tables_before_columns() {
     let result = completion_items(&request);
     assert!(result.should_show);
 
-    let first_table = result.items.iter()
-        .position(|item| item.category == CompletionItemCategory::Table
-                      || item.category == CompletionItemCategory::SchemaTable);
-    let first_column = result.items.iter()
+    let first_table = result.items.iter().position(|item| {
+        item.category == CompletionItemCategory::Table
+            || item.category == CompletionItemCategory::SchemaTable
+    });
+    let first_column = result
+        .items
+        .iter()
         .position(|item| item.category == CompletionItemCategory::Column);
 
     // In FROM clause, tables should come before columns
     if let (Some(tbl_pos), Some(col_pos)) = (first_table, first_column) {
-        assert!(tbl_pos < col_pos, "tables should rank before columns in FROM");
+        assert!(
+            tbl_pos < col_pos,
+            "tables should rank before columns in FROM"
+        );
     }
 }
 
@@ -752,7 +805,9 @@ fn score_where_columns_available() {
     assert!(result.should_show);
 
     // WHERE clause should have columns ranked high
-    let column_items: Vec<_> = result.items.iter()
+    let column_items: Vec<_> = result
+        .items
+        .iter()
         .filter(|item| item.category == CompletionItemCategory::Column)
         .collect();
     assert!(!column_items.is_empty());
@@ -778,10 +833,16 @@ fn score_exact_match_ranks_highest() {
 
     // "email" should rank above "email_verified"
     let email_pos = result.items.iter().position(|item| item.label == "email");
-    let email_verified_pos = result.items.iter().position(|item| item.label == "email_verified");
+    let email_verified_pos = result
+        .items
+        .iter()
+        .position(|item| item.label == "email_verified");
 
     if let (Some(exact), Some(prefix)) = (email_pos, email_verified_pos) {
-        assert!(exact < prefix, "exact match 'email' should rank above 'email_verified'");
+        assert!(
+            exact < prefix,
+            "exact match 'email' should rank above 'email_verified'"
+        );
     }
 }
 
@@ -793,10 +854,16 @@ fn score_prefix_match_above_contains() {
 
     // "user_id" (prefix match) should rank above "power_user" (contains)
     let user_id_pos = result.items.iter().position(|item| item.label == "user_id");
-    let power_user_pos = result.items.iter().position(|item| item.label == "power_user");
+    let power_user_pos = result
+        .items
+        .iter()
+        .position(|item| item.label == "power_user");
 
     if let (Some(prefix), Some(contains)) = (user_id_pos, power_user_pos) {
-        assert!(prefix < contains, "'user_id' should rank above 'power_user'");
+        assert!(
+            prefix < contains,
+            "'user_id' should rank above 'power_user'"
+        );
     }
 }
 
@@ -814,7 +881,10 @@ fn score_from_keyword_boost_on_f() {
     // FROM should be near the top (within first 10 items)
     let from_pos = result.items.iter().position(|item| item.label == "FROM");
     if let Some(pos) = from_pos {
-        assert!(pos < 10, "FROM should be ranked high when typing 'f' in SELECT");
+        assert!(
+            pos < 10,
+            "FROM should be ranked high when typing 'f' in SELECT"
+        );
     }
 }
 
@@ -831,8 +901,399 @@ fn score_alphabetical_tiebreak() {
             assert!(
                 window[0].label.to_lowercase() <= window[1].label.to_lowercase(),
                 "same-score items should be alphabetically ordered: {} vs {}",
-                window[0].label, window[1].label
+                window[0].label,
+                window[1].label
             );
         }
     }
+}
+
+// =============================================================================
+// Edge Case Tests - Completion Suppression in Special Contexts
+// =============================================================================
+
+#[test]
+fn cursor_inside_line_comment() {
+    let request = request_at_cursor(
+        "SELECT -- comment |here\n* FROM users",
+        Some(sample_schema()),
+    );
+    let result = completion_items(&request);
+    // Should not show completions inside line comment
+    assert!(
+        !result.should_show,
+        "should suppress completions inside line comment"
+    );
+}
+
+#[test]
+fn cursor_inside_block_comment() {
+    let request = request_at_cursor(
+        "SELECT /* comment |here */ * FROM users",
+        Some(sample_schema()),
+    );
+    let result = completion_items(&request);
+    // Should not show completions inside block comment
+    assert!(
+        !result.should_show,
+        "should suppress completions inside block comment"
+    );
+}
+
+#[test]
+fn cursor_inside_number_literal() {
+    let request = request_at_cursor("SELECT 123|45 FROM users", Some(sample_schema()));
+    let result = completion_items(&request);
+    // Should not show completions inside number literal
+    assert!(
+        !result.should_show,
+        "should suppress completions inside number literal"
+    );
+}
+
+#[test]
+fn cursor_inside_double_quoted_identifier() {
+    let request = request_at_cursor("SELECT * FROM \"My |Table\"", Some(sample_schema()));
+    let result = completion_items(&request);
+    // Should not show completions inside quoted identifier (it's a literal string)
+    assert!(
+        !result.should_show,
+        "should suppress completions inside double-quoted identifier"
+    );
+}
+
+#[test]
+fn cursor_at_string_open_quote() {
+    let request = request_at_cursor("SELECT '|hello' FROM users", Some(sample_schema()));
+    let result = completion_items(&request);
+    // Cursor right after opening quote - inside the string
+    assert!(
+        !result.should_show,
+        "should suppress completions at string start"
+    );
+}
+
+#[test]
+fn cursor_at_string_close_quote() {
+    let request = request_at_cursor("SELECT 'hello|' FROM users", Some(sample_schema()));
+    let result = completion_items(&request);
+    // Cursor right before closing quote - still inside the string
+    assert!(
+        !result.should_show,
+        "should suppress completions at string end"
+    );
+}
+
+// =============================================================================
+// Error Recovery Tests - Malformed SQL Handling
+// =============================================================================
+
+#[test]
+fn error_recovery_missing_from_keyword() {
+    // SQL missing FROM keyword - should still provide completions
+    let request = request_at_cursor("SELECT | users", Some(sample_schema()));
+    let result = completion_items(&request);
+    assert!(result.should_show);
+}
+
+#[test]
+fn error_recovery_unbalanced_parens_open() {
+    let request = request_at_cursor("SELECT COUNT(| FROM users", Some(sample_schema()));
+    let result = completion_items(&request);
+    assert!(result.should_show);
+}
+
+#[test]
+fn error_recovery_unbalanced_parens_close() {
+    let request = request_at_cursor("SELECT id) | FROM users", Some(sample_schema()));
+    let result = completion_items(&request);
+    assert!(result.should_show);
+}
+
+#[test]
+fn error_recovery_trailing_comma() {
+    let request = request_at_cursor("SELECT id, | FROM users", Some(sample_schema()));
+    let result = completion_items(&request);
+    assert!(result.should_show);
+    // Should suggest columns after trailing comma
+    let has_columns = result
+        .items
+        .iter()
+        .any(|item| item.category == CompletionItemCategory::Column);
+    assert!(has_columns);
+}
+
+#[test]
+fn error_recovery_incomplete_join() {
+    let request = request_at_cursor("SELECT * FROM users JOIN |", Some(sample_schema()));
+    let result = completion_items(&request);
+    assert!(result.should_show);
+}
+
+#[test]
+fn error_recovery_double_keyword() {
+    // Accidental double keyword - should still work
+    let request = request_at_cursor("SELECT SELECT | FROM users", Some(sample_schema()));
+    let result = completion_items(&request);
+    assert!(result.should_show);
+}
+
+// =============================================================================
+// DML Statement Tests - INSERT, UPDATE, DELETE
+// =============================================================================
+
+#[test]
+fn dml_insert_columns() {
+    let request = request_at_cursor("INSERT INTO users (|) VALUES (1)", Some(sample_schema()));
+    let result = completion_items(&request);
+    assert!(result.should_show);
+}
+
+#[test]
+fn dml_insert_into_table() {
+    let request = request_at_cursor("INSERT INTO |", Some(sample_schema()));
+    let result = completion_items(&request);
+    assert!(result.should_show);
+}
+
+#[test]
+fn dml_update_set_column() {
+    let request = request_at_cursor("UPDATE users SET | = 'value'", Some(sample_schema()));
+    let result = completion_items(&request);
+    assert!(result.should_show);
+}
+
+#[test]
+fn dml_update_where_column() {
+    let request = request_at_cursor(
+        "UPDATE users SET email = 'x' WHERE |",
+        Some(sample_schema()),
+    );
+    let result = completion_items(&request);
+    assert!(result.should_show);
+    let has_columns = result
+        .items
+        .iter()
+        .any(|item| item.category == CompletionItemCategory::Column);
+    assert!(has_columns);
+}
+
+#[test]
+fn dml_delete_where_column() {
+    let request = request_at_cursor("DELETE FROM users WHERE |", Some(sample_schema()));
+    let result = completion_items(&request);
+    assert!(result.should_show);
+}
+
+#[test]
+fn dml_delete_from_table() {
+    let request = request_at_cursor("DELETE FROM |", Some(sample_schema()));
+    let result = completion_items(&request);
+    assert!(result.should_show);
+}
+
+// =============================================================================
+// Window Function Tests - OVER, PARTITION BY, ORDER BY
+// =============================================================================
+
+#[test]
+fn window_over_partition_by() {
+    let request = request_at_cursor(
+        "SELECT id, ROW_NUMBER() OVER (PARTITION BY |) FROM users",
+        Some(sample_schema()),
+    );
+    let result = completion_items(&request);
+    assert!(result.should_show);
+}
+
+#[test]
+fn window_over_order_by() {
+    let request = request_at_cursor(
+        "SELECT id, ROW_NUMBER() OVER (ORDER BY |) FROM users",
+        Some(sample_schema()),
+    );
+    let result = completion_items(&request);
+    assert!(result.should_show);
+}
+
+#[test]
+fn window_over_partition_and_order() {
+    let request = request_at_cursor(
+        "SELECT id, ROW_NUMBER() OVER (PARTITION BY id ORDER BY |) FROM users",
+        Some(sample_schema()),
+    );
+    let result = completion_items(&request);
+    assert!(result.should_show);
+}
+
+#[test]
+fn window_aggregate_over() {
+    let request = request_at_cursor("SELECT SUM(id) OVER (|) FROM users", Some(sample_schema()));
+    let result = completion_items(&request);
+    assert!(result.should_show);
+}
+
+// =============================================================================
+// Self-Join Tests - Same Table Aliased Multiple Times
+// =============================================================================
+
+#[test]
+fn self_join_both_aliases_available() {
+    let request = request_at_cursor(
+        "SELECT | FROM users u1 JOIN users u2 ON u1.id = u2.id",
+        Some(sample_schema()),
+    );
+    let context = completion_context(&request);
+    // Should have both aliases
+    assert!(context
+        .tables_in_scope
+        .iter()
+        .any(|t| t.alias == Some("u1".to_string())));
+    assert!(context
+        .tables_in_scope
+        .iter()
+        .any(|t| t.alias == Some("u2".to_string())));
+}
+
+#[test]
+fn self_join_alias_filters_correctly() {
+    let request = request_at_cursor(
+        "SELECT u1.| FROM users u1 JOIN users u2 ON u1.id = u2.id",
+        Some(sample_schema()),
+    );
+    let result = completion_items(&request);
+    assert!(result.should_show);
+    // Should show columns for u1
+    assert!(result.items.iter().any(|item| item.label == "id"));
+    assert!(result.items.iter().any(|item| item.label == "email"));
+}
+
+#[test]
+fn self_join_columns_from_both() {
+    let request = request_at_cursor(
+        "SELECT | FROM users u1 JOIN users u2 ON u1.id = u2.id",
+        Some(sample_schema()),
+    );
+    let result = completion_items(&request);
+    assert!(result.should_show);
+    // Columns should be marked ambiguous since same table twice
+    let id_items: Vec<_> = result
+        .items
+        .iter()
+        .filter(|item| item.label.contains("id"))
+        .collect();
+    assert!(!id_items.is_empty());
+}
+
+// =============================================================================
+// Nested Subquery Tests - Multiple Levels Deep
+// =============================================================================
+
+#[test]
+fn nested_subquery_two_levels() {
+    let request = request_at_cursor(
+        "SELECT * FROM (SELECT * FROM (SELECT id FROM users) inner_sq) outer_sq WHERE |",
+        Some(sample_schema()),
+    );
+    let result = completion_items(&request);
+    assert!(result.should_show);
+}
+
+#[test]
+fn nested_subquery_in_where() {
+    let request = request_at_cursor(
+        "SELECT * FROM users WHERE id IN (SELECT | FROM orders)",
+        Some(sample_schema()),
+    );
+    let result = completion_items(&request);
+    assert!(result.should_show);
+}
+
+#[test]
+fn nested_subquery_exists() {
+    let request = request_at_cursor(
+        "SELECT * FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.| = u.id)",
+        Some(sample_schema()),
+    );
+    let result = completion_items(&request);
+    assert!(result.should_show);
+}
+
+#[test]
+fn nested_subquery_scalar() {
+    let request = request_at_cursor(
+        "SELECT (SELECT | FROM users LIMIT 1) as sub FROM orders",
+        Some(sample_schema()),
+    );
+    let result = completion_items(&request);
+    assert!(result.should_show);
+}
+
+#[test]
+fn nested_subquery_correlated() {
+    let request = request_at_cursor(
+        "SELECT * FROM users u WHERE u.id = (SELECT MAX(|) FROM orders o WHERE o.id = u.id)",
+        Some(sample_schema()),
+    );
+    let result = completion_items(&request);
+    assert!(result.should_show);
+}
+
+// =============================================================================
+// CASE Expression Tests - WHEN/THEN/ELSE Completion
+// =============================================================================
+
+#[test]
+fn case_when_column() {
+    let request = request_at_cursor(
+        "SELECT CASE WHEN | THEN 1 END FROM users",
+        Some(sample_schema()),
+    );
+    let result = completion_items(&request);
+    assert!(result.should_show);
+    let has_columns = result
+        .items
+        .iter()
+        .any(|item| item.category == CompletionItemCategory::Column);
+    assert!(has_columns);
+}
+
+#[test]
+fn case_then_expression() {
+    let request = request_at_cursor(
+        "SELECT CASE WHEN id > 1 THEN | END FROM users",
+        Some(sample_schema()),
+    );
+    let result = completion_items(&request);
+    assert!(result.should_show);
+}
+
+#[test]
+fn case_else_expression() {
+    let request = request_at_cursor(
+        "SELECT CASE WHEN id > 1 THEN 'a' ELSE | END FROM users",
+        Some(sample_schema()),
+    );
+    let result = completion_items(&request);
+    assert!(result.should_show);
+}
+
+#[test]
+fn case_simple_when() {
+    let request = request_at_cursor(
+        "SELECT CASE id WHEN | THEN 'match' END FROM users",
+        Some(sample_schema()),
+    );
+    let result = completion_items(&request);
+    assert!(result.should_show);
+}
+
+#[test]
+fn case_nested() {
+    let request = request_at_cursor(
+        "SELECT CASE WHEN id > 1 THEN CASE WHEN | THEN 'a' END END FROM users",
+        Some(sample_schema()),
+    );
+    let result = completion_items(&request);
+    assert!(result.should_show);
 }
