@@ -1,6 +1,6 @@
 {
   "name": "@pondpilot/flowscope-core",
-  "version": "0.1.0-beta.5",
+  "version": "0.1.0-beta.6",
   "description": "SQL lineage analysis engine for the browser",
   "type": "module",
   "main": "dist/index.js",
