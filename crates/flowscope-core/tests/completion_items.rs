@@ -440,3 +440,62 @@ fn clause_detection_limit() {
     let context = completion_context(&request);
     assert_eq!(context.clause, CompletionClause::Limit);
 }
+
+#[test]
+fn clause_detection_insert() {
+    let request = request_at_cursor("INSERT |", None);
+    let context = completion_context(&request);
+    assert_eq!(context.clause, CompletionClause::Insert);
+}
+
+#[test]
+fn clause_detection_update() {
+    let request = request_at_cursor("UPDATE |", None);
+    let context = completion_context(&request);
+    assert_eq!(context.clause, CompletionClause::Update);
+}
+
+#[test]
+fn clause_detection_delete() {
+    let request = request_at_cursor("DELETE |", None);
+    let context = completion_context(&request);
+    assert_eq!(context.clause, CompletionClause::Delete);
+}
+
+#[test]
+fn clause_detection_with() {
+    let request = request_at_cursor("WITH cte AS (|", None);
+    let context = completion_context(&request);
+    assert_eq!(context.clause, CompletionClause::With);
+}
+
+#[test]
+fn clause_detection_multi_statement_first() {
+    let request = request_at_cursor("SELECT |; SELECT * FROM t", None);
+    let context = completion_context(&request);
+    assert_eq!(context.clause, CompletionClause::Select);
+    assert_eq!(context.statement_index, 0);
+}
+
+#[test]
+fn clause_detection_multi_statement_second() {
+    let request = request_at_cursor("SELECT 1; SELECT * FROM |", None);
+    let context = completion_context(&request);
+    assert_eq!(context.clause, CompletionClause::From);
+    assert_eq!(context.statement_index, 1);
+}
+
+// Robustness: whitespace and comments
+#[test]
+fn clause_detection_cursor_in_whitespace() {
+    let request = request_at_cursor("SELECT  |  FROM users", None);
+    let context = completion_context(&request);
+    assert_eq!(context.clause, CompletionClause::Select);
+}
+
+#[test]
+fn clause_detection_after_comment() {
+    let request = request_at_cursor("SELECT /* comment */ | FROM users", None);
+    let context = completion_context(&request);
+    assert_eq!(context.clause, CompletionClause::Select);
+}
