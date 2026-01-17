@@ -14,7 +14,6 @@ fn request_at_cursor(sql: &str, schema: Option<SchemaMetadata>) -> CompletionReq
     }
 }
 
-#[allow(dead_code)]
 fn request_at_cursor_with_dialect(
     sql: &str,
     schema: Option<SchemaMetadata>,
@@ -201,6 +200,49 @@ fn snap_cte_reference() {
 #[test]
 fn snap_empty_schema() {
     let request = request_at_cursor("SELECT | FROM users", None);
+    let result = completion_items(&request);
+    assert_json_snapshot!(result);
+}
+
+#[test]
+fn snap_duckdb_dialect() {
+    let request = request_at_cursor_with_dialect(
+        "SELECT | FROM users",
+        Some(sample_schema()),
+        Dialect::Duckdb,
+    );
+    let result = completion_items(&request);
+    assert_json_snapshot!(result);
+}
+
+#[test]
+fn snap_postgres_dialect() {
+    let request = request_at_cursor_with_dialect(
+        "SELECT | FROM users",
+        Some(sample_schema()),
+        Dialect::Postgres,
+    );
+    let result = completion_items(&request);
+    assert_json_snapshot!(result);
+}
+
+#[test]
+fn snap_keywords_select_clause() {
+    let request = request_at_cursor("SELECT |", None);
+    let result = completion_items(&request);
+    assert_json_snapshot!(result);
+}
+
+#[test]
+fn snap_keywords_where_clause() {
+    let request = request_at_cursor("SELECT * FROM t WHERE |", None);
+    let result = completion_items(&request);
+    assert_json_snapshot!(result);
+}
+
+#[test]
+fn snap_keywords_order_by_clause() {
+    let request = request_at_cursor("SELECT * FROM t ORDER BY |", None);
     let result = completion_items(&request);
     assert_json_snapshot!(result);
 }
