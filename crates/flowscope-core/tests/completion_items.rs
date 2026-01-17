@@ -34,12 +34,20 @@ fn sample_schema() -> SchemaMetadata {
                 catalog: None,
                 schema: Some("public".to_string()),
                 name: "orders".to_string(),
-                columns: vec![ColumnSchema {
-                    name: "total".to_string(),
-                    data_type: Some("integer".to_string()),
-                    is_primary_key: None,
-                    foreign_key: None,
-                }],
+                columns: vec![
+                    ColumnSchema {
+                        name: "id".to_string(),
+                        data_type: Some("integer".to_string()),
+                        is_primary_key: None,
+                        foreign_key: None,
+                    },
+                    ColumnSchema {
+                        name: "total".to_string(),
+                        data_type: Some("integer".to_string()),
+                        is_primary_key: None,
+                        foreign_key: None,
+                    },
+                ],
             },
         ],
     }
@@ -538,4 +546,52 @@ fn schema_join_tables() {
     assert_eq!(context.tables_in_scope.len(), 2);
     assert!(context.tables_in_scope.iter().any(|t| t.alias == Some("u".to_string())));
     assert!(context.tables_in_scope.iter().any(|t| t.alias == Some("o".to_string())));
+}
+
+#[test]
+fn schema_columns_from_table() {
+    let request = request_at_cursor("SELECT | FROM users", Some(sample_schema()));
+    let context = completion_context(&request);
+    assert!(context.columns_in_scope.iter().any(|c| c.name == "id"));
+    assert!(context.columns_in_scope.iter().any(|c| c.name == "email"));
+}
+
+#[test]
+fn schema_columns_joined_marks_ambiguous() {
+    let request = request_at_cursor(
+        "SELECT | FROM users u JOIN orders o ON u.id = o.id",
+        Some(sample_schema()),
+    );
+    let context = completion_context(&request);
+    // Both tables have "id" column - should be marked ambiguous
+    let id_columns: Vec<_> = context.columns_in_scope.iter().filter(|c| c.name == "id").collect();
+    assert_eq!(id_columns.len(), 2);
+    assert!(id_columns.iter().all(|c| c.is_ambiguous));
+}
+
+#[test]
+fn schema_qualified_table_canonical() {
+    let request = request_at_cursor("SELECT * FROM public.users|", Some(sample_schema()));
+    let context = completion_context(&request);
+    let table = context.tables_in_scope.iter().find(|t| t.name == "public.users");
+    assert!(table.is_some());
+    assert!(table.unwrap().canonical.contains("users"));
+}
+
+#[test]
+fn schema_default_resolution() {
+    let request = request_at_cursor("SELECT * FROM users|", Some(sample_schema()));
+    let context = completion_context(&request);
+    let table = context.tables_in_scope.iter().find(|t| t.name == "users");
+    assert!(table.is_some());
+    assert!(table.unwrap().matched_schema);
+}
+
+#[test]
+fn schema_case_insensitive_match() {
+    let request = request_at_cursor("SELECT * FROM USERS|", Some(sample_schema()));
+    let context = completion_context(&request);
+    let table = context.tables_in_scope.iter().find(|t| t.name == "USERS");
+    assert!(table.is_some());
+    assert!(table.unwrap().matched_schema);
 }
