@@ -157,3 +157,50 @@ fn snap_qualified_schema() {
     let result = completion_items(&request);
     assert_json_snapshot!(result);
 }
+
+#[test]
+fn snap_three_way_join() {
+    let request = request_at_cursor(
+        "SELECT | FROM users u JOIN orders o ON u.id = o.user_id JOIN products p ON o.product_id = p.id",
+        Some(sample_schema()),
+    );
+    let result = completion_items(&request);
+    assert_json_snapshot!(result);
+}
+
+#[test]
+fn snap_ambiguous_columns() {
+    let request = request_at_cursor(
+        "SELECT | FROM users JOIN orders ON users.id = orders.user_id",
+        Some(sample_schema()),
+    );
+    let result = completion_items(&request);
+    assert_json_snapshot!(result);
+}
+
+#[test]
+fn snap_multi_statement() {
+    let request = request_at_cursor(
+        "SELECT * FROM users; SELECT | FROM orders",
+        Some(sample_schema()),
+    );
+    let result = completion_items(&request);
+    assert_json_snapshot!(result);
+}
+
+#[test]
+fn snap_cte_reference() {
+    let request = request_at_cursor(
+        "WITH active_users AS (SELECT id, email FROM users WHERE active = true) SELECT | FROM active_users",
+        Some(sample_schema()),
+    );
+    let result = completion_items(&request);
+    assert_json_snapshot!(result);
+}
+
+#[test]
+fn snap_empty_schema() {
+    let request = request_at_cursor("SELECT | FROM users", None);
+    let result = completion_items(&request);
+    assert_json_snapshot!(result);
+}
