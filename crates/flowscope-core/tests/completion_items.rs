@@ -820,3 +820,70 @@ fn score_order_by_columns_first() {
         assert_eq!(first.category, CompletionItemCategory::Column);
     }
 }
+
+#[test]
+fn score_exact_match_ranks_highest() {
+    let request = request_at_cursor("SELECT email|", Some(schema_prefix_matching()));
+    let result = completion_items(&request);
+    assert!(result.should_show);
+
+    // "email" should rank above "email_verified"
+    let email_pos = result.items.iter().position(|item| item.label == "email");
+    let email_verified_pos = result.items.iter().position(|item| item.label == "email_verified");
+
+    if let (Some(exact), Some(prefix)) = (email_pos, email_verified_pos) {
+        assert!(exact < prefix, "exact match 'email' should rank above 'email_verified'");
+    }
+}
+
+#[test]
+fn score_prefix_match_above_contains() {
+    let request = request_at_cursor("SELECT user|", Some(schema_prefix_matching()));
+    let result = completion_items(&request);
+    assert!(result.should_show);
+
+    // "user_id" (prefix match) should rank above "power_user" (contains)
+    let user_id_pos = result.items.iter().position(|item| item.label == "user_id");
+    let power_user_pos = result.items.iter().position(|item| item.label == "power_user");
+
+    if let (Some(prefix), Some(contains)) = (user_id_pos, power_user_pos) {
+        assert!(prefix < contains, "'user_id' should rank above 'power_user'");
+    }
+}
+
+#[test]
+fn score_from_keyword_boost_on_f() {
+    let schema = schema_prefix_matching();
+    let request = request_at_cursor("SELECT f|", Some(schema));
+    let result = completion_items(&request);
+    assert!(result.should_show);
+
+    // FROM keyword should be boosted when typing "f" in SELECT
+    let from_item = result.items.iter().find(|item| item.label == "FROM");
+    assert!(from_item.is_some(), "FROM keyword should be present");
+
+    // FROM should be near the top (within first 10 items)
+    let from_pos = result.items.iter().position(|item| item.label == "FROM");
+    if let Some(pos) = from_pos {
+        assert!(pos < 10, "FROM should be ranked high when typing 'f' in SELECT");
+    }
+}
+
+#[test]
+fn score_alphabetical_tiebreak() {
+    let request = request_at_cursor("SELECT | FROM users", Some(sample_schema()));
+    let result = completion_items(&request);
+    assert!(result.should_show);
+
+    // Find items with the same score and verify alphabetical ordering
+    let items = &result.items;
+    for window in items.windows(2) {
+        if window[0].score == window[1].score {
+            assert!(
+                window[0].label.to_lowercase() <= window[1].label.to_lowercase(),
+                "same-score items should be alphabetically ordered: {} vs {}",
+                window[0].label, window[1].label
+            );
+        }
+    }
+}
