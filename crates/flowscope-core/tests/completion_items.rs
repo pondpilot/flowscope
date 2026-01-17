@@ -595,3 +595,27 @@ fn schema_case_insensitive_match() {
     assert!(table.is_some());
     assert!(table.unwrap().matched_schema);
 }
+
+// =============================================================================
+// Schema Resolution Tests - Catalog Qualified Names
+// =============================================================================
+
+#[test]
+fn schema_catalog_qualified() {
+    let request = request_at_cursor(
+        "SELECT * FROM sales.public.customers|",
+        Some(schema_with_catalog()),
+    );
+    let context = completion_context(&request);
+    let table = context.tables_in_scope.iter().find(|t| t.name.contains("customers"));
+    assert!(table.is_some());
+}
+
+#[test]
+fn schema_catalog_default_resolution() {
+    let request = request_at_cursor("SELECT * FROM customers|", Some(schema_with_catalog()));
+    let context = completion_context(&request);
+    let table = context.tables_in_scope.iter().find(|t| t.name == "customers");
+    assert!(table.is_some());
+    assert!(table.unwrap().matched_schema);
+}
