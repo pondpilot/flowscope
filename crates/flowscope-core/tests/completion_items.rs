@@ -96,57 +96,6 @@ fn schema_with_catalog() -> SchemaMetadata {
     }
 }
 
-/// Multi-schema: public.users, analytics.events
-fn schema_multi_schema() -> SchemaMetadata {
-    SchemaMetadata {
-        default_catalog: None,
-        default_schema: Some("public".to_string()),
-        search_path: None,
-        case_sensitivity: None,
-        allow_implied: true,
-        tables: vec![
-            SchemaTable {
-                catalog: None,
-                schema: Some("public".to_string()),
-                name: "users".to_string(),
-                columns: vec![
-                    ColumnSchema {
-                        name: "id".to_string(),
-                        data_type: Some("integer".to_string()),
-                        is_primary_key: None,
-                        foreign_key: None,
-                    },
-                    ColumnSchema {
-                        name: "email".to_string(),
-                        data_type: Some("varchar".to_string()),
-                        is_primary_key: None,
-                        foreign_key: None,
-                    },
-                ],
-            },
-            SchemaTable {
-                catalog: None,
-                schema: Some("analytics".to_string()),
-                name: "events".to_string(),
-                columns: vec![
-                    ColumnSchema {
-                        name: "id".to_string(),
-                        data_type: Some("integer".to_string()),
-                        is_primary_key: None,
-                        foreign_key: None,
-                    },
-                    ColumnSchema {
-                        name: "event_type".to_string(),
-                        data_type: Some("varchar".to_string()),
-                        is_primary_key: None,
-                        foreign_key: None,
-                    },
-                ],
-            },
-        ],
-    }
-}
-
 /// Schema for prefix matching tests: users table with user_id, power_user, email, email_verified
 fn schema_prefix_matching() -> SchemaMetadata {
     SchemaMetadata {
