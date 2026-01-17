@@ -59,3 +59,6 @@ crates/flowscope-core/tests/property.proptest-regressions
 crates/flowscope-core/fuzz/target/
 crates/flowscope-core/fuzz/corpus/
 crates/flowscope-core/fuzz/artifacts/
+
+# Git worktrees
+.worktrees/
