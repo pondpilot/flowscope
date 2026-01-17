@@ -664,3 +664,44 @@ fn qualifier_alias_partial_prefix() {
     let email_item = result.items.iter().find(|item| item.label == "email");
     assert!(email_item.is_some());
 }
+
+#[test]
+fn qualifier_table_name_filters_columns() {
+    let request = request_at_cursor("SELECT users.| FROM users", Some(sample_schema()));
+    let result = completion_items(&request);
+    assert!(result.should_show);
+    assert!(result.items.iter().all(|item| item.category == CompletionItemCategory::Column));
+    assert!(result.items.iter().any(|item| item.label == "email"));
+}
+
+#[test]
+fn qualifier_table_name_excludes_other_tables() {
+    let request = request_at_cursor(
+        "SELECT users.| FROM users JOIN orders ON users.id = orders.id",
+        Some(sample_schema()),
+    );
+    let result = completion_items(&request);
+    assert!(result.should_show);
+    assert!(result.items.iter().any(|item| item.label == "email"));
+    assert!(!result.items.iter().any(|item| item.label == "total"));
+}
+
+#[test]
+fn qualifier_schema_only_shows_tables() {
+    let request = request_at_cursor("SELECT * FROM public.|", Some(sample_schema()));
+    let result = completion_items(&request);
+    assert!(result.should_show);
+    assert!(result.items.iter().all(|item| item.category == CompletionItemCategory::SchemaTable));
+    assert!(result.items.iter().any(|item| item.label.contains("users")));
+}
+
+#[test]
+fn qualifier_schema_table_shows_columns() {
+    let request = request_at_cursor(
+        "SELECT public.users.| FROM public.users",
+        Some(sample_schema()),
+    );
+    let result = completion_items(&request);
+    assert!(result.should_show);
+    assert!(result.items.iter().all(|item| item.category == CompletionItemCategory::Column));
+}
