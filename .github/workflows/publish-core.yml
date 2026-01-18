@@ -50,6 +50,12 @@ jobs:
       - name: Build react package
         run: yarn workspace @pondpilot/flowscope-react build
 
+      - name: Resolve crate version
+        id: crate_version
+        run: |
+          VERSION=$(rg '^version = "' Cargo.toml -m 1 | cut -d '"' -f2)
+          echo "workspace_version=$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Dry-run publish crates
         if: ${{ env.DRY_RUN == 'true' }}
         run: |
@@ -60,9 +66,14 @@ jobs:
       - name: Publish crates
         if: ${{ env.DRY_RUN != 'true' }}
         run: |
-          cargo publish -p flowscope-core --locked
-          cargo publish -p flowscope-export --locked
-          cargo publish -p flowscope-cli --locked
+          VERSION="${{ steps.crate_version.outputs.workspace_version }}"
+          for CRATE in flowscope-core flowscope-export flowscope-cli; do
+            if curl -sSf "https://crates.io/api/v1/crates/${CRATE}/${VERSION}" >/dev/null; then
+              echo "${CRATE}@${VERSION} already published; skipping."
+            else
+              cargo publish -p "${CRATE}" --locked
+            fi
+          done
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
