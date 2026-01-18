@@ -42,7 +42,10 @@ fn main() {
 }
 
 fn run() -> Result<(), Box<dyn Error>> {
-    if env::var("CARGO_PUBLISH").is_ok() {
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_default();
+    let in_packaged_dir = manifest_dir.contains("/target/package/");
+
+    if env::var("CARGO_PUBLISH").is_ok() || in_packaged_dir {
         println!("cargo:rerun-if-changed=specs/dialect-semantics/");
         println!("cargo:rerun-if-changed=build.rs");
         return Ok(());
