@@ -16,6 +16,21 @@ pub enum ExportError {
 
     #[error("Invalid schema name: {0}")]
     InvalidSchema(String),
+
+    #[error("Serialization error: {0}")]
+    Serialization(String),
+
+    #[error("CSV export error: {0}")]
+    Csv(String),
+
+    #[error("Archive export error: {0}")]
+    Archive(String),
+
+    #[error("XLSX export error: {0}")]
+    Xlsx(String),
+
+    #[error("HTML export error: {0}")]
+    Html(String),
 }
 
 #[cfg(feature = "duckdb")]

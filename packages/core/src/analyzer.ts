@@ -5,6 +5,8 @@ import type {
   CompletionItemsResult,
   CompletionRequest,
   Dialect,
+  ExportFormat,
+  MermaidView,
   StatementSplitRequest,
   StatementSplitResult,
 } from './types';
@@ -15,6 +17,12 @@ import reservedKeywordsJson from './reserved-keywords.json';
 // Import WASM functions (will be available after init)
 let analyzeSqlJson: ((request: string) => string) | null = null;
 let exportToDuckDbSqlFn: ((resultJson: string) => string) | null = null;
+let exportJsonFn: ((requestJson: string) => string) | null = null;
+let exportMermaidFn: ((requestJson: string) => string) | null = null;
+let exportHtmlFn: ((requestJson: string) => string) | null = null;
+let exportCsvBundleFn: ((requestJson: string) => Uint8Array) | null = null;
+let exportXlsxFn: ((requestJson: string) => Uint8Array) | null = null;
+let exportFilenameFn: ((requestJson: string) => string) | null = null;
 let completionItemsJson: ((requestJson: string) => string) | null = null;
 let splitStatementsJson: ((requestJson: string) => string) | null = null;
 let panicHookInstalled = false;
@@ -169,6 +177,30 @@ async function ensureWasmReady(): Promise<void> {
 
     if (!exportToDuckDbSqlFn) {
       exportToDuckDbSqlFn = wasmModule.export_to_duckdb_sql;
+    }
+
+    if (!exportJsonFn && typeof wasmModule.export_json === 'function') {
+      exportJsonFn = wasmModule.export_json;
+    }
+
+    if (!exportMermaidFn && typeof wasmModule.export_mermaid === 'function') {
+      exportMermaidFn = wasmModule.export_mermaid;
+    }
+
+    if (!exportHtmlFn && typeof wasmModule.export_html === 'function') {
+      exportHtmlFn = wasmModule.export_html;
+    }
+
+    if (!exportCsvBundleFn && typeof wasmModule.export_csv_bundle === 'function') {
+      exportCsvBundleFn = wasmModule.export_csv_bundle;
+    }
+
+    if (!exportXlsxFn && typeof wasmModule.export_xlsx === 'function') {
+      exportXlsxFn = wasmModule.export_xlsx;
+    }
+
+    if (!exportFilenameFn && typeof wasmModule.export_filename === 'function') {
+      exportFilenameFn = wasmModule.export_filename;
     }
 
     if (!completionItemsJson && typeof wasmModule.completion_items_json === 'function') {
@@ -365,4 +397,120 @@ export async function exportToDuckDbSql(result: AnalyzeResult, schema?: string):
 
   // Call WASM function
   return exportToDuckDbSqlFn(requestJson);
+}
+
+export async function exportJson(result: AnalyzeResult, options: { compact?: boolean } = {}): Promise<string> {
+  await ensureWasmReady();
+
+  if (!exportJsonFn) {
+    throw new Error('WASM module not properly initialized');
+  }
+
+  const requestJson = JSON.stringify({ result, compact: options.compact ?? false });
+  return exportJsonFn(requestJson);
+}
+
+export async function exportMermaid(
+  result: AnalyzeResult,
+  view: MermaidView = 'table'
+): Promise<string> {
+  await ensureWasmReady();
+
+  if (!exportMermaidFn) {
+    throw new Error('WASM module not properly initialized');
+  }
+
+  const requestJson = JSON.stringify({ result, view });
+  return exportMermaidFn(requestJson);
+}
+
+export async function exportHtml(
+  result: AnalyzeResult,
+  options: { projectName?: string; exportedAt?: Date } = {}
+): Promise<string> {
+  await ensureWasmReady();
+
+  if (!exportHtmlFn) {
+    throw new Error('WASM module not properly initialized');
+  }
+
+  const requestJson = JSON.stringify({
+    result,
+    projectName: options.projectName,
+    exportedAt: options.exportedAt ? options.exportedAt.toISOString() : undefined,
+  });
+  return exportHtmlFn(requestJson);
+}
+
+export async function exportCsvArchive(result: AnalyzeResult): Promise<Uint8Array> {
+  await ensureWasmReady();
+
+  if (!exportCsvBundleFn) {
+    throw new Error('WASM module not properly initialized');
+  }
+
+  const requestJson = JSON.stringify({ result });
+  return exportCsvBundleFn(requestJson);
+}
+
+export async function exportXlsx(result: AnalyzeResult): Promise<Uint8Array> {
+  await ensureWasmReady();
+
+  if (!exportXlsxFn) {
+    throw new Error('WASM module not properly initialized');
+  }
+
+  const requestJson = JSON.stringify({ result });
+  return exportXlsxFn(requestJson);
+}
+
+export async function exportFilename(
+  options: {
+    projectName?: string;
+    exportedAt?: Date;
+    format: ExportFormat;
+    view?: MermaidView;
+    compact?: boolean;
+  }
+): Promise<string> {
+  await ensureWasmReady();
+
+  if (!exportFilenameFn) {
+    throw new Error('WASM module not properly initialized');
+  }
+
+  const requestJson = JSON.stringify({
+    projectName: options.projectName,
+    exportedAt: options.exportedAt ? options.exportedAt.toISOString() : undefined,
+    format: buildExportFormatPayload(options.format, options.view, options.compact),
+  });
+
+  return exportFilenameFn(requestJson);
+}
+
+function buildExportFormatPayload(
+  format: ExportFormat,
+  view?: MermaidView,
+  compact?: boolean
+): Record<string, unknown> {
+  switch (format) {
+    case 'json':
+      return { type: 'json', compact: compact ?? false };
+    case 'mermaid':
+      return { type: 'mermaid', view: view ?? 'table' };
+    case 'html':
+      return { type: 'html' };
+    case 'sql':
+      return { type: 'sql' };
+    case 'csv':
+      return { type: 'csv' };
+    case 'xlsx':
+      return { type: 'xlsx' };
+    case 'duckdb':
+      return { type: 'duckdb' };
+    case 'png':
+      return { type: 'png' };
+    default:
+      return { type: 'json', compact: compact ?? false };
+  }
 }

@@ -88,27 +88,16 @@ export {
 
 // Export utilities
 export {
-  downloadXlsx,
+  downloadCsvArchive,
+  downloadHtml,
   downloadJson,
   downloadMermaid,
-  downloadHtml,
-  generateXlsxWorkbook,
-  generateStructuredJson,
+  downloadPng,
+  downloadXlsx,
   generateMermaid,
-  generateAllMermaidDiagrams,
-  generateHtmlExport,
-  extractScriptInfo,
-  extractTableInfo,
-  extractColumnMappings,
 } from './utils/exportUtils';
 
-export type {
-  ScriptInfo,
-  TableInfo,
-  ColumnMapping,
-  MermaidGraphType,
-  StructuredLineageJson,
-} from './utils/exportUtils';
+export type { MermaidGraphType } from './utils/exportUtils';
 
 // Graph traversal utilities
 export {

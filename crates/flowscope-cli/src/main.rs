@@ -8,13 +8,16 @@ mod schema;
 use anyhow::{Context, Result};
 use clap::Parser;
 use flowscope_core::{analyze, AnalyzeRequest, FileSource};
-use flowscope_export::export_duckdb;
+use flowscope_export::{
+    export_csv_bundle, export_duckdb, export_html, export_json, export_mermaid, export_sql,
+    export_xlsx, ExportFormat, ExportNaming, MermaidView,
+};
 use std::fs;
 use std::io::{self, Write};
 use std::process::ExitCode;
 
 use cli::{Args, OutputFormat, ViewMode};
-use output::{format_json, format_mermaid, format_table, MermaidViewMode};
+use output::format_table;
 
 fn main() -> ExitCode {
     match run() {
@@ -53,30 +56,60 @@ fn run() -> Result<bool> {
     // Run analysis
     let result = analyze(&request);
 
-    // Format output
+    let naming = ExportNaming::new(args.project_name.clone());
+
     let output_str = match args.format {
-        OutputFormat::Json => format_json(&result, args.compact),
+        OutputFormat::Json => {
+            export_json(&result, args.compact).context("Failed to export JSON")?
+        }
         OutputFormat::Table => format_table(&result, args.quiet, !args.quiet),
         OutputFormat::Mermaid => {
             let view = match args.view {
-                ViewMode::Script => MermaidViewMode::Script,
-                ViewMode::Table => MermaidViewMode::Table,
-                ViewMode::Column => MermaidViewMode::Column,
-                ViewMode::Hybrid => MermaidViewMode::Hybrid,
+                ViewMode::Script => MermaidView::Script,
+                ViewMode::Table => MermaidView::Table,
+                ViewMode::Column => MermaidView::Column,
+                ViewMode::Hybrid => MermaidView::Hybrid,
             };
-            format_mermaid(&result, view)
+            export_mermaid(&result, view).context("Failed to export Mermaid")?
+        }
+        OutputFormat::Html => export_html(&result, &args.project_name, naming.exported_at())
+            .context("Failed to export HTML")?,
+        OutputFormat::Sql => export_sql(&result, args.export_schema.as_deref())
+            .context("Failed to export DuckDB SQL")?,
+        OutputFormat::Csv => {
+            let bytes = export_csv_bundle(&result).context("Failed to export CSV archive")?;
+            return write_binary_output(
+                &args.output,
+                &bytes,
+                &naming,
+                ExportFormat::CsvBundle,
+                result.summary.has_errors,
+            );
+        }
+        OutputFormat::Xlsx => {
+            let bytes = export_xlsx(&result).context("Failed to export XLSX")?;
+            return write_binary_output(
+                &args.output,
+                &bytes,
+                &naming,
+                ExportFormat::Xlsx,
+                result.summary.has_errors,
+            );
         }
         OutputFormat::Duckdb => {
-            // DuckDB outputs bytes, not string
-            let bytes = export_duckdb(&result).context("Failed to export to DuckDB")?;
-            return write_binary_output(&args.output, &bytes, result.summary.has_errors);
+            let bytes = export_duckdb(&result).context("Failed to export DuckDB")?;
+            return write_binary_output(
+                &args.output,
+                &bytes,
+                &naming,
+                ExportFormat::DuckDb,
+                result.summary.has_errors,
+            );
         }
     };
 
-    // Write output
     write_output(&args.output, &output_str)?;
 
-    // Print issues to stderr if not quiet and not JSON
     if !args.quiet && args.format != OutputFormat::Json {
         print_issues_to_stderr(&result);
     }
@@ -129,13 +162,18 @@ fn write_output(path: &Option<std::path::PathBuf>, content: &str) -> Result<()> 
 fn write_binary_output(
     path: &Option<std::path::PathBuf>,
     content: &[u8],
+    naming: &ExportNaming,
+    format: ExportFormat,
     has_errors: bool,
 ) -> Result<bool> {
-    if let Some(path) = path {
-        fs::write(path, content)
+    let resolved_path = path
+        .clone()
+        .or_else(|| Some(std::path::PathBuf::from(naming.filename(format))));
+
+    if let Some(path) = resolved_path {
+        fs::write(&path, content)
             .with_context(|| format!("Failed to write to {}", path.display()))?;
     } else {
-        // Binary to stdout - just write raw bytes
         io::stdout()
             .write_all(content)
             .context("Failed to write to stdout")?;

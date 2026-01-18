@@ -21,6 +21,7 @@ flowscope-export = { workspace = true, default-features = false }
 wasm-bindgen.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+chrono = { version = "0.4", default-features = false, features = ["std"] }
 tracing-wasm = { version = "0.2", optional = true }
 console_error_panic_hook = "0.1"
 

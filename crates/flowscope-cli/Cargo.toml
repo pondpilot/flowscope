@@ -18,7 +18,7 @@ path = "src/main.rs"
 
 [dependencies]
 flowscope-core.workspace = true
-flowscope-export.workspace = true
+flowscope-export = { workspace = true, features = ["duckdb"] }
 clap = { version = "4", features = ["derive"] }
 serde.workspace = true
 serde_json.workspace = true

@@ -11,6 +11,11 @@ Command-line interface for the FlowScope SQL lineage analyzer.
   - `table`: Human-readable text summary (default).
   - `json`: Structured JSON output for programmatic integration.
   - `mermaid`: Generate Mermaid diagrams for visualization.
+  - `sql`: DuckDB SQL export (DDL + INSERT statements).
+  - `csv`: ZIP archive with CSV exports for scripts, tables, mappings, and issues.
+  - `xlsx`: Excel workbook with summary and lineage sheets.
+  - `html`: Self-contained HTML report.
+  - `duckdb`: DuckDB database file (native builds only).
 - **View Modes**:
   - `table`: Table-level lineage (default).
   - `column`: Detailed column-level data flow.
@@ -51,9 +56,13 @@ Options:
   -d, --dialect <DIALECT>  SQL dialect [default: generic]
                            [possible values: generic, ansi, bigquery, clickhouse, databricks, duckdb, hive, mssql, mysql, postgres, redshift, snowflake, sqlite]
   -f, --format <FORMAT>    Output format [default: table]
-                           [possible values: table, json, mermaid]
+                           [possible values: table, json, mermaid, html, sql, csv, xlsx, duckdb]
   -s, --schema <FILE>      Schema DDL file for table/column resolution
   -o, --output <FILE>      Output file (defaults to stdout)
+      --project-name <PROJECT_NAME>
+                           Project name used for default export filenames [default: lineage]
+      --export-schema <SCHEMA>
+                           Schema name to prefix DuckDB SQL export
   -v, --view <VIEW>        Graph detail level for mermaid output [default: table]
                            [possible values: script, table, column, hybrid]
   -q, --quiet              Suppress warnings on stderr
@@ -76,4 +85,10 @@ Load a schema DDL file to resolve wildcards and validate columns, then generate 
 
 ```bash
 flowscope -s schema.sql -f mermaid -v column query.sql
+```
+
+### CSV Archive Export
+
+```bash
+flowscope -f csv -o lineage.csv.zip query.sql
 ```

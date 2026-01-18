@@ -15,6 +15,7 @@ import {
   downloadJson,
   downloadMermaid,
   downloadHtml,
+  downloadPng,
 } from '../utils/exportUtils';
 import {
   GraphTooltip,
@@ -48,46 +49,43 @@ export function ExportMenu({ graphRef }: ExportMenuProps): JSX.Element {
 
     try {
       const dataUrl = await toPng(graphRef.current, { backgroundColor: '#fff' });
-      const link = document.createElement('a');
-      link.download = 'lineage-export.png';
-      link.href = dataUrl;
-      link.click();
+      await downloadPng(dataUrl);
     } catch (err) {
       console.error('Failed to export image:', err);
     }
   }, [graphRef]);
 
-  const handleDownloadXlsx = useCallback(() => {
+  const handleDownloadXlsx = useCallback(async () => {
     if (!result) return;
     try {
-      downloadXlsx(result);
+      await downloadXlsx(result);
     } catch (err) {
       console.error('Failed to export Excel:', err);
     }
   }, [result]);
 
-  const handleDownloadJson = useCallback(() => {
+  const handleDownloadJson = useCallback(async () => {
     if (!result) return;
     try {
-      downloadJson(result);
+      await downloadJson(result);
     } catch (err) {
       console.error('Failed to export JSON:', err);
     }
   }, [result]);
 
-  const handleDownloadMermaid = useCallback(() => {
+  const handleDownloadMermaid = useCallback(async () => {
     if (!result) return;
     try {
-      downloadMermaid(result);
+      await downloadMermaid(result);
     } catch (err) {
       console.error('Failed to export Mermaid:', err);
     }
   }, [result]);
 
-  const handleDownloadHtml = useCallback(() => {
+  const handleDownloadHtml = useCallback(async () => {
     if (!result) return;
     try {
-      downloadHtml(result);
+      await downloadHtml(result);
     } catch (err) {
       console.error('Failed to export HTML:', err);
     }

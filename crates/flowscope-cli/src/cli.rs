@@ -29,6 +29,14 @@ pub struct Args {
     #[arg(short, long, value_name = "FILE")]
     pub output: Option<PathBuf>,
 
+    /// Project name used for default export filenames
+    #[arg(long, default_value = "lineage")]
+    pub project_name: String,
+
+    /// Schema name to prefix DuckDB SQL export
+    #[arg(long, value_name = "SCHEMA")]
+    pub export_schema: Option<String>,
+
     /// Graph detail level for mermaid output
     #[arg(short, long, default_value = "table", value_enum)]
     pub view: ViewMode,
@@ -89,6 +97,14 @@ pub enum OutputFormat {
     Json,
     /// Mermaid diagram
     Mermaid,
+    /// HTML report
+    Html,
+    /// DuckDB SQL export
+    Sql,
+    /// CSV archive (zip)
+    Csv,
+    /// XLSX export
+    Xlsx,
     /// DuckDB database file
     Duckdb,
 }
@@ -122,6 +138,8 @@ mod tests {
         assert_eq!(args.files.len(), 1);
         assert_eq!(args.dialect, DialectArg::Generic);
         assert_eq!(args.format, OutputFormat::Table);
+        assert_eq!(args.project_name, "lineage");
+        assert!(args.export_schema.is_none());
     }
 
     #[test]
@@ -140,6 +158,10 @@ mod tests {
             "column",
             "--quiet",
             "--compact",
+            "--project-name",
+            "demo",
+            "--export-schema",
+            "lineage",
             "file1.sql",
             "file2.sql",
         ]);
@@ -148,6 +170,8 @@ mod tests {
         assert_eq!(args.schema.unwrap().to_str().unwrap(), "schema.sql");
         assert_eq!(args.output.unwrap().to_str().unwrap(), "output.json");
         assert_eq!(args.view, ViewMode::Column);
+        assert_eq!(args.project_name, "demo");
+        assert_eq!(args.export_schema.as_deref(), Some("lineage"));
         assert!(args.quiet);
         assert!(args.compact);
         assert_eq!(args.files.len(), 2);

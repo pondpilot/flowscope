@@ -40,6 +40,16 @@ export function completion_items_json(request_json: string): string;
  */
 export function enable_tracing(): void;
 
+export function export_csv_bundle(request_json: string): Uint8Array;
+
+export function export_filename(request_json: string): string;
+
+export function export_html(request_json: string): string;
+
+export function export_json(request_json: string): string;
+
+export function export_mermaid(request_json: string): string;
+
 /**
  * Export analysis result to SQL statements for DuckDB-WASM.
  *
@@ -53,6 +63,8 @@ export function enable_tracing(): void;
  * duckdb-wasm can execute to create a queryable database in the browser.
  */
 export function export_to_duckdb_sql(request_json: string): string;
+
+export function export_xlsx(request_json: string): Uint8Array;
 
 /**
  * Get version information
@@ -79,7 +91,13 @@ export interface InitOutput {
   readonly completion_context_json: (a: number, b: number) => [number, number];
   readonly completion_items_json: (a: number, b: number) => [number, number];
   readonly enable_tracing: () => void;
+  readonly export_csv_bundle: (a: number, b: number) => [number, number, number, number];
+  readonly export_filename: (a: number, b: number) => [number, number, number, number];
+  readonly export_html: (a: number, b: number) => [number, number, number, number];
+  readonly export_json: (a: number, b: number) => [number, number, number, number];
+  readonly export_mermaid: (a: number, b: number) => [number, number, number, number];
   readonly export_to_duckdb_sql: (a: number, b: number) => [number, number, number, number];
+  readonly export_xlsx: (a: number, b: number) => [number, number, number, number];
   readonly get_version: () => [number, number];
   readonly split_statements_json: (a: number, b: number) => [number, number];
   readonly set_panic_hook: () => void;

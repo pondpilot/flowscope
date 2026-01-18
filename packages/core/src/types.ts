@@ -53,6 +53,20 @@ export interface FileSource {
 /** Graph detail level for visualization. */
 export type GraphDetailLevel = 'script' | 'table' | 'column';
 
+/** Mermaid export view modes. */
+export type MermaidView = 'all' | 'script' | 'table' | 'column' | 'hybrid';
+
+/** Export format identifiers. */
+export type ExportFormat =
+  | 'json'
+  | 'mermaid'
+  | 'html'
+  | 'sql'
+  | 'csv'
+  | 'xlsx'
+  | 'duckdb'
+  | 'png';
+
 /** Options controlling the analysis behavior. */
 export interface AnalysisOptions {
   /** Enable column-level lineage (default: true) */
