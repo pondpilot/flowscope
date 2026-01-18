@@ -118,8 +118,12 @@ jobs:
         if: ${{ env.DRY_RUN != 'true' }}
         working-directory: packages/core
         run: npm publish --workspaces=false
+        env:
+          NODE_AUTH_TOKEN: ''
 
       - name: Publish npm package (react)
         if: ${{ env.DRY_RUN != 'true' }}
         working-directory: packages/react
         run: npm publish --workspaces=false
+        env:
+          NODE_AUTH_TOKEN: ''
