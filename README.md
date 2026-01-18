@@ -7,6 +7,10 @@
 [![Rust](https://img.shields.io/badge/rust-1.82+-orange.svg)](https://www.rust-lang.org)
 [![TypeScript](https://img.shields.io/badge/typescript-5.0+-blue.svg)](https://www.typescriptlang.org)
 [![WebAssembly](https://img.shields.io/badge/wasm-ready-purple.svg)](https://webassembly.org)
+[![Crates.io](https://img.shields.io/crates/v/flowscope-core.svg)](https://crates.io/crates/flowscope-core)
+[![Crates.io](https://img.shields.io/crates/v/flowscope-export.svg)](https://crates.io/crates/flowscope-export)
+[![Crates.io](https://img.shields.io/crates/v/flowscope-cli.svg)](https://crates.io/crates/flowscope-cli)
+[![npm](https://img.shields.io/npm/v/@pondpilot/flowscope-core.svg)](https://www.npmjs.com/package/@pondpilot/flowscope-core)
 
 FlowScope includes a full web application at [flowscope.pondpilot.io](https://flowscope.pondpilot.io) for interactive, multi-file SQL lineage analysis.
 
