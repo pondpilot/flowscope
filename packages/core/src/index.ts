@@ -36,6 +36,7 @@ export type {
   CompletionToken,
   CompletionTokenKind,
   Dialect,
+  Encoding,
   ExportFormat,
   MermaidView,
   StatementSplitRequest,

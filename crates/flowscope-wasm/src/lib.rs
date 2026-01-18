@@ -1,3 +1,6 @@
+mod encoding;
+
+use encoding::{convert_spans_to_utf16, utf16_to_utf8_offset, Encoding};
 use flowscope_core::{
     analyze, completion_context, completion_items, split_statements, AnalyzeRequest, AnalyzeResult,
     CompletionContext, CompletionItemsResult, CompletionRequest, StatementSplitRequest,
@@ -9,48 +12,8 @@ use flowscope_export::{
     export_sql as export_sql_internal, export_xlsx as export_xlsx_internal, ExportFormat,
     ExportNaming, MermaidView,
 };
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::Deserialize;
 use wasm_bindgen::prelude::*;
-
-/// Helper for WASM JSON request/response handling with consistent error handling.
-///
-/// This reduces boilerplate across WASM entry points by handling:
-/// - JSON deserialization of the request
-/// - Invoking the handler function
-/// - JSON serialization of the result
-/// - Error handling at each step with appropriate error result types
-fn handle_wasm_json_request<Req, Res, ErrRes, F, E>(
-    request_json: &str,
-    handler: F,
-    error_constructor: E,
-) -> String
-where
-    Req: DeserializeOwned,
-    Res: Serialize,
-    ErrRes: Serialize,
-    F: FnOnce(Req) -> Res,
-    E: Fn(String) -> ErrRes,
-{
-    // Parse request
-    let request: Req = match serde_json::from_str(request_json) {
-        Ok(req) => req,
-        Err(e) => {
-            let error_result = error_constructor(format!("Invalid request format: {e}"));
-            return serde_json::to_string(&error_result)
-                .unwrap_or_else(|_| r#"{"error":"Failed to serialize error result"}"#.to_string());
-        }
-    };
-
-    // Call handler
-    let result = handler(request);
-
-    // Serialize result
-    serde_json::to_string(&result).unwrap_or_else(|_| {
-        let error_result = error_constructor("Failed to serialize result".to_string());
-        serde_json::to_string(&error_result)
-            .unwrap_or_else(|_| r#"{"error":"Failed to serialize error result"}"#.to_string())
-    })
-}
 
 /// Request payload for export_to_duckdb_sql.
 #[derive(Deserialize)]
@@ -150,6 +113,121 @@ fn default_project_name() -> String {
     "lineage".to_string()
 }
 
+// WASM wrapper types with encoding support
+// These wrap the core request types and add optional encoding field
+
+/// WASM wrapper for AnalyzeRequest with encoding support.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WasmAnalyzeRequest {
+    #[serde(flatten)]
+    inner: AnalyzeRequest,
+    /// Text encoding for span offsets in the response.
+    /// When `utf16`, all span offsets are converted to UTF-16 code units.
+    #[serde(default)]
+    encoding: Encoding,
+}
+
+/// WASM wrapper for CompletionRequest with encoding support.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WasmCompletionRequest {
+    sql: String,
+    dialect: flowscope_core::Dialect,
+    /// Cursor offset - interpreted based on `encoding` field.
+    cursor_offset: usize,
+    #[serde(default)]
+    schema: Option<flowscope_core::SchemaMetadata>,
+    /// Text encoding for cursor offset and response spans.
+    #[serde(default)]
+    encoding: Encoding,
+}
+
+/// WASM wrapper for StatementSplitRequest with encoding support.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WasmStatementSplitRequest {
+    #[serde(flatten)]
+    inner: StatementSplitRequest,
+    /// Text encoding for span offsets in the response.
+    #[serde(default)]
+    encoding: Encoding,
+}
+
+/// Helper for processing completion requests with encoding support.
+///
+/// Handles the common pattern of:
+/// 1. Parsing WasmCompletionRequest
+/// 2. Converting cursor offset if UTF-16
+/// 3. Building core CompletionRequest
+/// 4. Calling the provided handler
+/// 5. Serializing and converting spans if needed
+fn handle_completion_request<T, F>(
+    request_json: &str,
+    handler: F,
+    make_error: impl Fn(String) -> T,
+) -> String
+where
+    T: serde::Serialize,
+    F: FnOnce(&CompletionRequest) -> T,
+{
+    // Parse request
+    let wasm_req: WasmCompletionRequest = match serde_json::from_str(request_json) {
+        Ok(req) => req,
+        Err(e) => {
+            let err = make_error(format!("Invalid request format: {e}"));
+            return serde_json::to_string(&err)
+                .unwrap_or_else(|_| r#"{"error":"Failed to serialize error result"}"#.to_string());
+        }
+    };
+
+    let encoding = wasm_req.encoding;
+    let sql = wasm_req.sql.clone();
+
+    // Convert cursor_offset if UTF-16
+    let cursor_offset = if encoding == Encoding::Utf16 {
+        match utf16_to_utf8_offset(&sql, wasm_req.cursor_offset) {
+            Ok(offset) => offset,
+            Err(e) => {
+                let err = make_error(e);
+                return serde_json::to_string(&err)
+                    .unwrap_or_else(|_| r#"{"error":"Failed to serialize error result"}"#.to_string());
+            }
+        }
+    } else {
+        wasm_req.cursor_offset
+    };
+
+    // Build core request
+    let core_req = CompletionRequest {
+        sql: wasm_req.sql,
+        dialect: wasm_req.dialect,
+        cursor_offset,
+        schema: wasm_req.schema,
+    };
+
+    // Call handler
+    let result = handler(&core_req);
+
+    // Serialize result
+    let mut json_value = match serde_json::to_value(&result) {
+        Ok(v) => v,
+        Err(_) => {
+            let err = make_error("Failed to serialize result".to_string());
+            return serde_json::to_string(&err)
+                .unwrap_or_else(|_| r#"{"error":"Failed to serialize error result"}"#.to_string());
+        }
+    };
+
+    // Convert spans if UTF-16 encoding requested
+    if encoding == Encoding::Utf16 {
+        convert_spans_to_utf16(&sql, &mut json_value);
+    }
+
+    serde_json::to_string(&json_value)
+        .unwrap_or_else(|_| r#"{"error":"Failed to serialize result"}"#.to_string())
+}
+
 /// Enable tracing logs to the browser console (requires `tracing` feature).
 #[wasm_bindgen]
 pub fn enable_tracing() {
@@ -167,44 +245,116 @@ pub fn set_panic_hook() {
 
 /// Main analysis entry point - accepts JSON request, returns JSON result
 /// This function never throws - errors are returned in the result's issues array
+///
+/// Supports optional `encoding` field in request:
+/// - `"utf8"` (default): All span offsets are UTF-8 byte offsets
+/// - `"utf16"`: All span offsets are converted to UTF-16 code units
 #[wasm_bindgen]
 pub fn analyze_sql_json(request_json: &str) -> String {
-    handle_wasm_json_request(
-        request_json,
-        |req: AnalyzeRequest| analyze(&req),
-        |msg| AnalyzeResult::from_error("INVALID_REQUEST", msg),
-    )
+    // Parse request to extract encoding
+    let wasm_req: WasmAnalyzeRequest = match serde_json::from_str(request_json) {
+        Ok(req) => req,
+        Err(e) => {
+            let error_result = AnalyzeResult::from_error("INVALID_REQUEST", format!("Invalid request format: {e}"));
+            return serde_json::to_string(&error_result)
+                .unwrap_or_else(|_| r#"{"error":"Failed to serialize error result"}"#.to_string());
+        }
+    };
+
+    let encoding = wasm_req.encoding;
+    let sql = wasm_req.inner.sql.clone();
+
+    // Call handler
+    let result = analyze(&wasm_req.inner);
+
+    // Serialize result
+    let mut json_value = match serde_json::to_value(&result) {
+        Ok(v) => v,
+        Err(_) => {
+            let error_result = AnalyzeResult::from_error("INVALID_REQUEST", "Failed to serialize result");
+            return serde_json::to_string(&error_result)
+                .unwrap_or_else(|_| r#"{"error":"Failed to serialize error result"}"#.to_string());
+        }
+    };
+
+    // Convert spans if UTF-16 encoding requested
+    if encoding == Encoding::Utf16 {
+        convert_spans_to_utf16(&sql, &mut json_value);
+    }
+
+    serde_json::to_string(&json_value)
+        .unwrap_or_else(|_| r#"{"error":"Failed to serialize result"}"#.to_string())
 }
 
 /// Compute completion context for a cursor position.
 /// Returns JSON-serialized CompletionContext.
+///
+/// Supports optional `encoding` field in request:
+/// - `"utf8"` (default): cursor_offset is UTF-8 bytes, spans are UTF-8 bytes
+/// - `"utf16"`: cursor_offset is UTF-16 code units, spans are UTF-16 code units
 #[wasm_bindgen]
 pub fn completion_context_json(request_json: &str) -> String {
-    handle_wasm_json_request(
+    handle_completion_request(
         request_json,
-        |req: CompletionRequest| completion_context(&req),
+        completion_context,
         CompletionContext::from_error,
     )
 }
 
 /// Compute ranked completion items for a cursor position.
+///
+/// Supports optional `encoding` field in request:
+/// - `"utf8"` (default): cursor_offset is UTF-8 bytes, spans are UTF-8 bytes
+/// - `"utf16"`: cursor_offset is UTF-16 code units, spans are UTF-16 code units
 #[wasm_bindgen]
 pub fn completion_items_json(request_json: &str) -> String {
-    handle_wasm_json_request(
+    handle_completion_request(
         request_json,
-        |req: CompletionRequest| completion_items(&req),
+        completion_items,
         CompletionItemsResult::from_error,
     )
 }
 
 /// Split SQL into statement spans.
+///
+/// Supports optional `encoding` field in request:
+/// - `"utf8"` (default): All span offsets are UTF-8 byte offsets
+/// - `"utf16"`: All span offsets are converted to UTF-16 code units
 #[wasm_bindgen]
 pub fn split_statements_json(request_json: &str) -> String {
-    handle_wasm_json_request(
-        request_json,
-        |req: StatementSplitRequest| split_statements(&req),
-        StatementSplitResult::from_error,
-    )
+    // Parse request to extract encoding
+    let wasm_req: WasmStatementSplitRequest = match serde_json::from_str(request_json) {
+        Ok(req) => req,
+        Err(e) => {
+            return serde_json::to_string(&StatementSplitResult::from_error(format!(
+                "Invalid request format: {e}"
+            )))
+            .unwrap_or_else(|_| r#"{"error":"Failed to serialize error result"}"#.to_string());
+        }
+    };
+
+    let encoding = wasm_req.encoding;
+    let sql = wasm_req.inner.sql.clone();
+
+    // Call handler
+    let result = split_statements(&wasm_req.inner);
+
+    // Serialize result
+    let mut json_value = match serde_json::to_value(&result) {
+        Ok(v) => v,
+        Err(_) => {
+            return serde_json::to_string(&StatementSplitResult::from_error("Failed to serialize result"))
+                .unwrap_or_else(|_| r#"{"error":"Failed to serialize error result"}"#.to_string());
+        }
+    };
+
+    // Convert spans if UTF-16 encoding requested
+    if encoding == Encoding::Utf16 {
+        convert_spans_to_utf16(&sql, &mut json_value);
+    }
+
+    serde_json::to_string(&json_value)
+        .unwrap_or_else(|_| r#"{"error":"Failed to serialize result"}"#.to_string())
 }
 
 /// Legacy simple API - accepts SQL string, returns JSON with table names

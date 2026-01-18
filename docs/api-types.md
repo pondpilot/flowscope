@@ -6,6 +6,17 @@ This document summarizes the public TypeScript API for `@pondpilot/flowscope-cor
 - `packages/core/src/types.ts` (authoritative)
 - `docs/api_schema.json` (generated schema snapshot)
 
+## Encoding
+
+All analysis functions accept an optional `encoding` field to control how text offsets are represented:
+
+```typescript
+export type Encoding = 'utf8' | 'utf16';
+```
+
+- `'utf8'` (default): All span offsets are UTF-8 byte offsets
+- `'utf16'`: All span offsets are UTF-16 code units (for JavaScript/browser compatibility)
+
 ## Requests
 
 ### AnalyzeRequest
@@ -165,6 +176,31 @@ export interface ResolvedSchemaTable {
   constraints?: TableConstraintInfo[];
 }
 ```
+
+## Exports
+
+```typescript
+export type MermaidView = 'all' | 'script' | 'table' | 'column' | 'hybrid';
+
+export type ExportFormat =
+  | 'json'
+  | 'mermaid'
+  | 'html'
+  | 'sql'
+  | 'csv'
+  | 'xlsx'
+  | 'duckdb'
+  | 'png';
+```
+
+Core helpers (via `packages/core/src/index.ts`):
+
+- `exportJson(result, { compact })`
+- `exportMermaid(result, view)`
+- `exportHtml(result, { projectName, exportedAt })`
+- `exportCsvArchive(result)`
+- `exportXlsx(result)`
+- `exportFilename({ projectName, exportedAt, format, view, compact })`
 
 ## Notes
 

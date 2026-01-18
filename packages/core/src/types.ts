@@ -25,6 +25,35 @@ export type Dialect =
 export type CaseSensitivity = 'dialect' | 'lower' | 'upper' | 'exact';
 
 /**
+ * Text encoding for offset interpretation in API requests/responses.
+ *
+ * - `'utf8'` (default): All offsets are UTF-8 byte offsets. This is the native
+ *   encoding used internally. Use this when working directly with byte positions.
+ *
+ * - `'utf16'`: All offsets are UTF-16 code units. This matches JavaScript's native
+ *   string indexing (string.length, indexOf, etc.) and Monaco editor positions.
+ *   When this is set:
+ *   - `cursorOffset` in requests is interpreted as UTF-16 code units
+ *   - All `Span` offsets in responses are converted to UTF-16 code units
+ *
+ * @example
+ * ```typescript
+ * // With UTF-16 encoding, use JavaScript string indices directly
+ * const sql = "SELECT '日本語'";
+ * const cursorPos = sql.indexOf("'") + 1; // JavaScript string index
+ * const result = await completionItems({
+ *   sql,
+ *   dialect: 'postgres',
+ *   cursorOffset: cursorPos,
+ *   encoding: 'utf16'  // No conversion needed!
+ * });
+ * // Response spans are also in UTF-16 code units
+ * const text = sql.slice(result.token.span.start, result.token.span.end);
+ * ```
+ */
+export type Encoding = 'utf8' | 'utf16';
+
+/**
  * A request to analyze SQL for data lineage.
  *
  * This is the main entry point for the analysis API. It accepts SQL code along with
@@ -43,6 +72,12 @@ export interface AnalyzeRequest {
   options?: AnalysisOptions;
   /** Optional schema metadata for accurate column resolution */
   schema?: SchemaMetadata;
+  /**
+   * Text encoding for span offsets in the response.
+   * When `'utf16'`, all Span offsets are converted to UTF-16 code units.
+   * @default 'utf8'
+   */
+  encoding?: Encoding;
 }
 
 export interface FileSource {
@@ -133,23 +168,38 @@ export interface CompletionRequest {
   /** SQL dialect */
   dialect: Dialect;
   /**
-   * Byte offset of the cursor in the SQL string (UTF-8 encoded).
+   * Cursor offset in the SQL string.
    *
-   * **Important**: This is a byte offset, not a character index. For strings containing
-   * multi-byte UTF-8 characters (non-ASCII), use `charOffsetToByteOffset()` to convert
-   * a JavaScript string index to the correct byte offset.
+   * The interpretation depends on the `encoding` field:
+   * - `'utf8'` (default): UTF-8 byte offset. Use `charOffsetToByteOffset()` to convert
+   *   JavaScript string indices.
+   * - `'utf16'`: UTF-16 code units (JavaScript's native string indexing). Use JavaScript
+   *   string indices directly (e.g., from `indexOf()` or Monaco cursor position).
    *
    * @example
    * ```typescript
-   * const sql = "SELECT '日本語'";
-   * const charIndex = sql.indexOf("'") + 1; // Character position
+   * // Option 1: UTF-8 mode (default) - requires conversion
    * const byteOffset = charOffsetToByteOffset(sql, charIndex);
    * const result = await completionItems({ sql, dialect: 'postgres', cursorOffset: byteOffset });
+   *
+   * // Option 2: UTF-16 mode - use JS indices directly
+   * const result = await completionItems({
+   *   sql,
+   *   dialect: 'postgres',
+   *   cursorOffset: charIndex,
+   *   encoding: 'utf16'
+   * });
    * ```
    */
   cursorOffset: number;
   /** Optional schema metadata for accurate column resolution */
   schema?: SchemaMetadata;
+  /**
+   * Text encoding for cursor offset and response spans.
+   * When `'utf16'`, cursorOffset is UTF-16 code units and response spans are converted.
+   * @default 'utf8'
+   */
+  encoding?: Encoding;
 }
 
 export interface StatementSplitRequest {
@@ -162,6 +212,12 @@ export interface StatementSplitRequest {
    * constructs (strings, comments, dollar-quoting) across all dialects. Defaults to 'generic'.
    */
   dialect?: Dialect;
+  /**
+   * Text encoding for span offsets in the response.
+   * When `'utf16'`, all Span offsets are converted to UTF-16 code units.
+   * @default 'utf8'
+   */
+  encoding?: Encoding;
 }
 
 export type CompletionClause =
