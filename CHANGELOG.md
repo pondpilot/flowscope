@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-01-18
+
+### Highlights
+- First public release of the FlowScope Rust + WASM + TypeScript stack
+- CTE and derived table definitions now include spans for editor navigation
+- Export downloads in React normalize byte buffers for reliable Blob creation
+
 ### Changed
 
 #### WASM Module (flowscope-wasm)
@@ -18,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed potential panic in `extract_qualifier` when cursor offset lands on invalid UTF-8 boundary
 - Fixed early-return bug in completion logic that incorrectly suppressed completions when schema metadata lacked column info but query context (CTEs/subqueries) had valid columns
 - Fixed potential integer overflow in completion item scoring by using saturating arithmetic
+- Added spans for CTE and derived table definition nodes to support editor navigation
+
+#### React Package (@pondpilot/flowscope-react)
+- Fixed ZIP/XLSX downloads by normalizing export byte buffers for Blob creation
 
 ### Improved
 

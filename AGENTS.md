@@ -142,6 +142,34 @@ Key areas:
 - The CLI usage details live in `crates/flowscope-cli/README.md`.
 - Core engine overview lives in `crates/flowscope-core/README.md`.
 
+## Releases (Single Tag)
+
+Use a single repo tag for each release (`vX.Y.Z`) and align Rust workspace + npm package versions.
+
+1. Update versions:
+   - `Cargo.toml` workspace version + workspace dependencies
+   - `packages/core/package.json`, `packages/react/package.json`, `packages/core/wasm/package.json`
+   - Update peer dependency on `@pondpilot/flowscope-core` in `packages/react`
+2. Update `CHANGELOG.md`:
+   - Move Unreleased entries to `## [X.Y.Z] - YYYY-MM-DD`
+   - Summarize changes per crate/package
+3. Validate:
+   - `just fmt-rust`
+   - `just test-core`
+   - `yarn workspace @pondpilot/flowscope-react build`
+   - `yarn workspace @pondpilot/flowscope-core build`
+4. Publish crates (order matters):
+   - `cargo publish -p flowscope-core`
+   - `cargo publish -p flowscope-export`
+   - `cargo publish -p flowscope-cli`
+5. Publish npm packages:
+   - `yarn workspace @pondpilot/flowscope-core publish --access public`
+   - `yarn workspace @pondpilot/flowscope-react publish --access public`
+6. Tag + release:
+   - `git tag vX.Y.Z`
+   - `git push origin vX.Y.Z`
+   - `gh release create vX.Y.Z --title "vX.Y.Z" --notes-file <notes>` (use CHANGELOG notes)
+
 ## Notes
 
 - The demo app (`app/`) and VS Code webview (`vscode/webview-ui/`) currently define no tests.
