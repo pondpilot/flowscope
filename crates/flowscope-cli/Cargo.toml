@@ -5,6 +5,11 @@ authors.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage = "https://flowscope.pondpilot.io"
+documentation = "https://docs.rs/flowscope-cli"
+readme = "README.md"
+keywords = ["sql", "lineage", "cli", "analysis", "database"]
+categories = ["command-line-utilities", "database"]
 description = "Command-line interface for FlowScope SQL lineage analyzer"
 
 [[bin]]
@@ -12,8 +17,8 @@ name = "flowscope"
 path = "src/main.rs"
 
 [dependencies]
-flowscope-core = { path = "../flowscope-core" }
-flowscope-export = { path = "../flowscope-export" }
+flowscope-core.workspace = true
+flowscope-export.workspace = true
 clap = { version = "4", features = ["derive"] }
 serde.workspace = true
 serde_json.workspace = true

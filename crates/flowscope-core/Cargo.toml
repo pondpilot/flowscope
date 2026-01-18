@@ -5,6 +5,11 @@ authors.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage = "https://flowscope.pondpilot.io"
+documentation = "https://docs.rs/flowscope-core"
+readme = "README.md"
+keywords = ["sql", "lineage", "analysis", "parser", "metadata"]
+categories = ["database", "parser-implementations"]
 description = "Core SQL lineage analysis engine"
 build = "build.rs"
 

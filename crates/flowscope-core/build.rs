@@ -14,6 +14,7 @@ use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::error::Error;
 use std::fs;
+use std::io;
 use std::path::Path;
 
 /// Known dialect variants that must match the Dialect enum in types/request.rs.
@@ -260,6 +261,22 @@ fn validate_dialect_coverage(
 // Code Generation
 // ============================================================================
 
+fn write_if_changed(path: &Path, content: &str) -> Result<(), Box<dyn Error>> {
+    let write_needed = match fs::read_to_string(path) {
+        Ok(existing) => existing != content,
+        Err(err) if err.kind() == io::ErrorKind::NotFound => true,
+        Err(err) => return Err(format!("Failed to read {path:?}: {err}").into()),
+    };
+
+    if write_needed {
+        if let Err(err) = fs::write(path, content) {
+            return Err(format!("Failed to write {path:?}: {err}").into());
+        }
+    }
+
+    Ok(())
+}
+
 fn generate_mod_rs(dir: &Path) -> Result<(), Box<dyn Error>> {
     let content = r#"//! Generated dialect semantic code.
 //!
@@ -276,8 +293,7 @@ pub use functions::*;
 // scoping_rules adds methods to Dialect via impl, no re-export needed
 "#;
 
-    fs::write(dir.join("mod.rs"), content)
-        .map_err(|e| format!("Failed to write mod.rs: {e}").into())
+    write_if_changed(&dir.join("mod.rs"), content)
 }
 
 fn generate_case_sensitivity(
@@ -499,8 +515,7 @@ impl Dialect {
     code.push_str("            _ => &[\"\\\"\"],\n"); // Default: double quote
     code.push_str("        }\n    }\n}\n");
 
-    fs::write(dir.join("case_sensitivity.rs"), code)
-        .map_err(|e| format!("Failed to write case_sensitivity.rs: {e}").into())
+    write_if_changed(&dir.join("case_sensitivity.rs"), &code)
 }
 
 fn generate_scoping_rules(
@@ -581,8 +596,7 @@ impl Dialect {
     code.push_str("            _ => false,\n");
     code.push_str("        }\n    }\n}\n");
 
-    fs::write(dir.join("scoping_rules.rs"), code)
-        .map_err(|e| format!("Failed to write scoping_rules.rs: {e}").into())
+    write_if_changed(&dir.join("scoping_rules.rs"), &code)
 }
 
 fn generate_function_rules(dir: &Path, behavior: &DialectBehavior) -> Result<(), Box<dyn Error>> {
@@ -787,8 +801,7 @@ impl Dialect {
         ));
     }
 
-    fs::write(dir.join("function_rules.rs"), code)
-        .map_err(|e| format!("Failed to write function_rules.rs: {e}").into())
+    write_if_changed(&dir.join("function_rules.rs"), &code)
 }
 
 /// Converts a PascalCase class name to a SQL function name (lowercase with underscores).
@@ -989,8 +1002,7 @@ pub fn is_udtf_function(name: &str) -> bool {
 "#,
     );
 
-    fs::write(dir.join("functions.rs"), code)
-        .map_err(|e| format!("Failed to write functions.rs: {e}").into())
+    write_if_changed(&dir.join("functions.rs"), &code)
 }
 
 // ============================================================================

@@ -5,6 +5,11 @@ authors.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage = "https://flowscope.pondpilot.io"
+documentation = "https://docs.rs/flowscope-export"
+readme = "README.md"
+keywords = ["sql", "lineage", "export", "duckdb", "database"]
+categories = ["database"]
 description = "Database export for FlowScope analysis results"
 
 [features]
@@ -12,7 +17,7 @@ default = ["duckdb"]
 duckdb = ["dep:duckdb"]
 
 [dependencies]
-flowscope-core = { path = "../flowscope-core" }
+flowscope-core.workspace = true
 thiserror = "2.0"
 duckdb = { version = "1.0", features = ["bundled"], optional = true }
 chrono = "0.4"

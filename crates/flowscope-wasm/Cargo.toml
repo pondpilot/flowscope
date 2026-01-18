@@ -5,6 +5,7 @@ authors.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+publish = false
 description = "WASM bindings for flowscope-core"
 
 [features]
@@ -15,8 +16,8 @@ tracing = ["flowscope-core/tracing", "tracing-wasm"]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-flowscope-core = { path = "../flowscope-core", default-features = false }
-flowscope-export = { path = "../flowscope-export", default-features = false }
+flowscope-core = { workspace = true, default-features = false }
+flowscope-export = { workspace = true, default-features = false }
 wasm-bindgen.workspace = true
 serde.workspace = true
 serde_json.workspace = true

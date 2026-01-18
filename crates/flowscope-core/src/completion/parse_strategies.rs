@@ -266,7 +266,15 @@ fn find_truncation_candidates(sql: &str) -> Vec<usize> {
 
     // SQL keywords that often mark clause boundaries where truncation might work
     let keywords = [
-        "WHERE", "GROUP", "HAVING", "ORDER", "LIMIT", "OFFSET", "UNION", "EXCEPT", "INTERSECT",
+        "WHERE",
+        "GROUP",
+        "HAVING",
+        "ORDER",
+        "LIMIT",
+        "OFFSET",
+        "UNION",
+        "EXCEPT",
+        "INTERSECT",
     ];
 
     // Find positions right before keywords (truncating before the keyword)
