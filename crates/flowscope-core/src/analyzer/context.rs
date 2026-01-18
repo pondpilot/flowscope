@@ -40,6 +40,16 @@ pub(crate) struct StatementContext {
     pub(crate) edge_ids: HashSet<Arc<str>>,
     /// CTE name -> node ID
     pub(crate) cte_definitions: HashMap<String, Arc<str>>,
+    /// Cursor for sequential span searching across identifier definitions.
+    ///
+    /// Used to locate spans for CTEs and derived table aliases by tracking the
+    /// current search position in the SQL text. Updated after each successful
+    /// span match to ensure subsequent searches find distinct occurrences.
+    ///
+    /// # Invariants
+    /// - Reset to 0 when entering a new statement context
+    /// - Assumes AST traversal is roughly left-to-right in lexical order
+    pub(crate) span_search_cursor: usize,
     /// Alias -> canonical table name (global, for backwards compatibility)
     pub(crate) table_aliases: HashMap<String, String>,
     /// Subquery aliases (for reference tracking)
@@ -106,6 +116,7 @@ impl StatementContext {
             node_ids: HashSet::new(),
             edge_ids: HashSet::new(),
             cte_definitions: HashMap::new(),
+            span_search_cursor: 0,
             table_aliases: HashMap::new(),
             subquery_aliases: HashSet::new(),
             last_operation: None,

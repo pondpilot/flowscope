@@ -18,5 +18,8 @@ pub use naming::{
     unquote_identifier,
 };
 pub use query::{classify_query_type, is_simple_column_ref};
-pub use span::{find_identifier_span, line_col_to_offset};
+pub use span::{
+    find_cte_definition_span, find_derived_table_alias_span, find_identifier_span,
+    line_col_to_offset,
+};
 pub use types::{infer_expr_type, SqlType};

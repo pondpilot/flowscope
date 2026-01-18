@@ -6,10 +6,13 @@
 
 use super::context::StatementContext;
 use super::expression::ExpressionAnalyzer;
-use super::helpers::{alias_visibility_warning, generate_node_id};
+use super::helpers::{
+    alias_visibility_warning, find_cte_definition_span, find_derived_table_alias_span,
+    generate_node_id,
+};
 use super::select_analyzer::SelectAnalyzer;
 use super::Analyzer;
-use crate::types::{issue_codes, Issue, Node, NodeType};
+use crate::types::{issue_codes, Issue, Node, NodeType, Span};
 use sqlparser::ast::{
     self, Cte, Expr, Ident, Join, Query, Select, SetExpr, SetOperator, Statement, TableAlias,
     TableFactor, TableWithJoins, Values,
@@ -135,6 +138,50 @@ impl<'a, 'b> LineageVisitor<'a, 'b> {
 
     pub fn set_last_operation(&mut self, op: Option<String>) {
         self.ctx.last_operation = op;
+    }
+
+    /// Locates a span using the provided finder function.
+    ///
+    /// Handles the common logic for span searching:
+    /// - Uses statement-local SQL when available, full request SQL otherwise
+    /// - Adjusts span coordinates from statement-local to request-global
+    /// - Updates the span search cursor after successful matches
+    fn locate_span<F>(&mut self, identifier: &str, finder: F) -> Option<Span>
+    where
+        F: Fn(&str, &str, usize) -> Option<Span>,
+    {
+        let search_start = self.ctx.span_search_cursor;
+
+        let (sql, offset) = if let Some(source) = &self.analyzer.current_statement_source {
+            (
+                &source.sql[source.range.start..source.range.end],
+                source.range.start,
+            )
+        } else {
+            (self.analyzer.request.sql.as_str(), 0)
+        };
+
+        let span = finder(sql, identifier, search_start)?;
+
+        // Invariant: cursor should only move forward (left-to-right traversal)
+        debug_assert!(
+            span.end >= self.ctx.span_search_cursor,
+            "Span cursor moved backward: {} -> {} (identifier: '{}')",
+            self.ctx.span_search_cursor,
+            span.end,
+            identifier
+        );
+
+        self.ctx.span_search_cursor = span.end;
+        Some(Span::new(offset + span.start, offset + span.end))
+    }
+
+    fn locate_cte_definition_span(&mut self, identifier: &str) -> Option<Span> {
+        self.locate_span(identifier, find_cte_definition_span)
+    }
+
+    fn locate_derived_alias_span(&mut self, identifier: &str) -> Option<Span> {
+        self.locate_span(identifier, find_derived_table_alias_span)
     }
 
     /// Extract the expression from a JoinOperator's constraint, if any.
@@ -485,13 +532,14 @@ impl<'a, 'b> Visitor for LineageVisitor<'a, 'b> {
             let mut cte_ids: Vec<(String, Arc<str>)> = Vec::new();
             for cte in &with.cte_tables {
                 let cte_name = cte.alias.name.to_string();
+                let cte_span = self.locate_cte_definition_span(&cte_name);
                 let cte_id = self.ctx.add_node(Node {
                     id: generate_node_id("cte", &cte_name),
                     node_type: NodeType::Cte,
                     label: cte_name.clone().into(),
                     qualified_name: Some(cte_name.clone().into()),
                     expression: None,
-                    span: None,
+                    span: cte_span,
                     metadata: None,
                     resolution_source: None,
                     filters: Vec::new(),
@@ -623,6 +671,9 @@ impl<'a, 'b> Visitor for LineageVisitor<'a, 'b> {
                 // so the outer query can reference it.
                 let alias_name = alias.as_ref().map(|a| a.name.to_string());
                 let projection_checkpoint = self.ctx.projection_checkpoint();
+                let derived_span = alias_name
+                    .as_ref()
+                    .and_then(|name| self.locate_derived_alias_span(name));
 
                 // We model derived tables as CTEs in the graph since they are conceptually
                 // similar: both are ephemeral, named result sets scoped to a single query.
@@ -634,7 +685,7 @@ impl<'a, 'b> Visitor for LineageVisitor<'a, 'b> {
                         label: name.clone().into(),
                         qualified_name: Some(name.clone().into()),
                         expression: None,
-                        span: None,
+                        span: derived_span,
                         metadata: None,
                         resolution_source: None,
                         filters: Vec::new(),

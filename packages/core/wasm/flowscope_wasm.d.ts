@@ -21,17 +21,29 @@ export function analyze_sql(sql_input: string): string;
 /**
  * Main analysis entry point - accepts JSON request, returns JSON result
  * This function never throws - errors are returned in the result's issues array
+ *
+ * Supports optional `encoding` field in request:
+ * - `"utf8"` (default): All span offsets are UTF-8 byte offsets
+ * - `"utf16"`: All span offsets are converted to UTF-16 code units
  */
 export function analyze_sql_json(request_json: string): string;
 
 /**
  * Compute completion context for a cursor position.
  * Returns JSON-serialized CompletionContext.
+ *
+ * Supports optional `encoding` field in request:
+ * - `"utf8"` (default): cursor_offset is UTF-8 bytes, spans are UTF-8 bytes
+ * - `"utf16"`: cursor_offset is UTF-16 code units, spans are UTF-16 code units
  */
 export function completion_context_json(request_json: string): string;
 
 /**
  * Compute ranked completion items for a cursor position.
+ *
+ * Supports optional `encoding` field in request:
+ * - `"utf8"` (default): cursor_offset is UTF-8 bytes, spans are UTF-8 bytes
+ * - `"utf16"`: cursor_offset is UTF-16 code units, spans are UTF-16 code units
  */
 export function completion_items_json(request_json: string): string;
 
@@ -78,6 +90,10 @@ export function set_panic_hook(): void;
 
 /**
  * Split SQL into statement spans.
+ *
+ * Supports optional `encoding` field in request:
+ * - `"utf8"` (default): All span offsets are UTF-8 byte offsets
+ * - `"utf16"`: All span offsets are converted to UTF-16 code units
  */
 export function split_statements_json(request_json: string): string;
 

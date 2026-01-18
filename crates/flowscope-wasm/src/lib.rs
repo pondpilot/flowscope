@@ -190,8 +190,9 @@ where
             Ok(offset) => offset,
             Err(e) => {
                 let err = make_error(e);
-                return serde_json::to_string(&err)
-                    .unwrap_or_else(|_| r#"{"error":"Failed to serialize error result"}"#.to_string());
+                return serde_json::to_string(&err).unwrap_or_else(|_| {
+                    r#"{"error":"Failed to serialize error result"}"#.to_string()
+                });
             }
         }
     } else {
@@ -255,7 +256,10 @@ pub fn analyze_sql_json(request_json: &str) -> String {
     let wasm_req: WasmAnalyzeRequest = match serde_json::from_str(request_json) {
         Ok(req) => req,
         Err(e) => {
-            let error_result = AnalyzeResult::from_error("INVALID_REQUEST", format!("Invalid request format: {e}"));
+            let error_result = AnalyzeResult::from_error(
+                "INVALID_REQUEST",
+                format!("Invalid request format: {e}"),
+            );
             return serde_json::to_string(&error_result)
                 .unwrap_or_else(|_| r#"{"error":"Failed to serialize error result"}"#.to_string());
         }
@@ -271,7 +275,8 @@ pub fn analyze_sql_json(request_json: &str) -> String {
     let mut json_value = match serde_json::to_value(&result) {
         Ok(v) => v,
         Err(_) => {
-            let error_result = AnalyzeResult::from_error("INVALID_REQUEST", "Failed to serialize result");
+            let error_result =
+                AnalyzeResult::from_error("INVALID_REQUEST", "Failed to serialize result");
             return serde_json::to_string(&error_result)
                 .unwrap_or_else(|_| r#"{"error":"Failed to serialize error result"}"#.to_string());
         }
@@ -343,8 +348,10 @@ pub fn split_statements_json(request_json: &str) -> String {
     let mut json_value = match serde_json::to_value(&result) {
         Ok(v) => v,
         Err(_) => {
-            return serde_json::to_string(&StatementSplitResult::from_error("Failed to serialize result"))
-                .unwrap_or_else(|_| r#"{"error":"Failed to serialize error result"}"#.to_string());
+            return serde_json::to_string(&StatementSplitResult::from_error(
+                "Failed to serialize result",
+            ))
+            .unwrap_or_else(|_| r#"{"error":"Failed to serialize error result"}"#.to_string());
         }
     };
 

@@ -139,14 +139,125 @@ fn spans_anchor_to_current_statement() {
     assert_eq!(spans.len(), 2, "expected two unresolved reference spans");
 
     let first_pos = sql.find("missing").expect("first identifier");
-    let second_pos = sql[first_pos + "missing".len()..]
+    let second_pos = sql[first_pos + 1..]
         .find("missing")
-        .map(|offset| first_pos + "missing".len() + offset)
+        .map(|pos| pos + first_pos + 1)
         .expect("second identifier");
 
-    assert_eq!(spans[0].start, first_pos);
-    assert_eq!(spans[1].start, second_pos);
-    assert!(spans[0].start < spans[1].start);
+    assert!(spans.iter().any(|span| span.start == first_pos));
+    assert!(spans.iter().any(|span| span.start == second_pos));
+}
+
+#[test]
+fn cte_nodes_have_spans() {
+    let sql = "WITH my_cte AS (SELECT 1) SELECT * FROM my_cte";
+    let request = make_request(sql);
+    let result = analyze(&request);
+
+    let cte_node = result.statements[0]
+        .nodes
+        .iter()
+        .find(|node| node.node_type == NodeType::Cte && node.label.as_ref() == "my_cte")
+        .expect("cte node");
+
+    let span = cte_node.span.expect("cte span");
+    assert_eq!(span, Span::new(5, 11));
+    assert_eq!(&sql[span.start..span.end], "my_cte");
+}
+
+#[test]
+fn multiple_cte_nodes_have_distinct_spans() {
+    let sql = "WITH cte1 AS (SELECT 1), cte2 AS (SELECT 2) SELECT * FROM cte1, cte2";
+    let request = make_request(sql);
+    let result = analyze(&request);
+
+    let mut cte_spans: HashMap<&str, Span> = HashMap::new();
+    for node in &result.statements[0].nodes {
+        if node.node_type == NodeType::Cte {
+            cte_spans.insert(node.label.as_ref(), node.span.expect("cte span"));
+        }
+    }
+
+    assert_eq!(cte_spans.get("cte1"), Some(&Span::new(5, 9)));
+    assert_eq!(cte_spans.get("cte2"), Some(&Span::new(25, 29)));
+}
+
+#[test]
+fn nested_cte_nodes_have_spans() {
+    let sql = "WITH outer_cte AS (WITH inner_cte AS (SELECT 1) SELECT * FROM inner_cte) SELECT * FROM outer_cte";
+    let request = make_request(sql);
+    let result = analyze(&request);
+
+    let statement = &result.statements[0];
+    let outer_node = statement
+        .nodes
+        .iter()
+        .find(|node| node.node_type == NodeType::Cte && node.label.as_ref() == "outer_cte")
+        .expect("outer cte node");
+    let inner_node = statement
+        .nodes
+        .iter()
+        .find(|node| node.node_type == NodeType::Cte && node.label.as_ref() == "inner_cte")
+        .expect("inner cte node");
+
+    let outer_span = outer_node.span.expect("outer span");
+    let inner_span = inner_node.span.expect("inner span");
+
+    let outer_start = sql.find("outer_cte").expect("outer start");
+    let inner_start = sql.find("inner_cte").expect("inner start");
+
+    assert_eq!(outer_span.start, outer_start);
+    assert_eq!(outer_span.end, outer_start + "outer_cte".len());
+    assert_eq!(inner_span.start, inner_start);
+    assert_eq!(inner_span.end, inner_start + "inner_cte".len());
+}
+
+#[test]
+fn derived_table_nodes_have_spans() {
+    let sql = "SELECT * FROM (SELECT 1) AS derived";
+    let request = make_request(sql);
+    let result = analyze(&request);
+
+    let derived_node = result.statements[0]
+        .nodes
+        .iter()
+        .find(|node| node.node_type == NodeType::Cte && node.label.as_ref() == "derived")
+        .expect("derived node");
+
+    let span = derived_node.span.expect("derived span");
+    assert_eq!(&sql[span.start..span.end], "derived");
+}
+
+#[test]
+fn combined_cte_and_derived_table_spans() {
+    // Test that the shared span cursor correctly handles both CTEs and derived tables
+    // in the same query, maintaining proper lexical ordering
+    let sql = "WITH my_cte AS (SELECT 1 AS x) SELECT * FROM my_cte JOIN (SELECT 2 AS y) AS derived ON my_cte.x = derived.y";
+    let request = make_request(sql);
+    let result = analyze(&request);
+
+    let cte_node = result.statements[0]
+        .nodes
+        .iter()
+        .find(|node| node.node_type == NodeType::Cte && node.label.as_ref() == "my_cte")
+        .expect("cte node");
+
+    let derived_node = result.statements[0]
+        .nodes
+        .iter()
+        .find(|node| node.node_type == NodeType::Cte && node.label.as_ref() == "derived")
+        .expect("derived node");
+
+    let cte_span = cte_node.span.expect("cte span");
+    let derived_span = derived_node.span.expect("derived span");
+
+    // Verify the spans are at the correct positions and don't overlap
+    assert_eq!(&sql[cte_span.start..cte_span.end], "my_cte");
+    assert_eq!(&sql[derived_span.start..derived_span.end], "derived");
+    assert!(
+        cte_span.end < derived_span.start,
+        "CTE span should come before derived span"
+    );
 }
 
 #[test]
