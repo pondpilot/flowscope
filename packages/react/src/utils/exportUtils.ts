@@ -25,6 +25,10 @@ function downloadBlob(content: BlobPart, filename: string, mimeType: string): vo
   URL.revokeObjectURL(url);
 }
 
+function normalizeBlobBytes(bytes: Uint8Array<ArrayBufferLike>): Uint8Array<ArrayBuffer> {
+  return Uint8Array.from(bytes) as Uint8Array<ArrayBuffer>;
+}
+
 function resolveExportedAt(exportedAt?: Date): Date {
   return exportedAt ?? new Date();
 }
@@ -77,7 +81,8 @@ export async function downloadCsvArchive(
   const exportedAt = resolveExportedAt(options.exportedAt);
   const bytes = await exportCsvArchive(result);
   const filename = await resolveFilename('csv', { ...options, exportedAt });
-  downloadBlob(bytes, filename, 'application/zip');
+  const safeBytes = normalizeBlobBytes(bytes);
+  downloadBlob(safeBytes, filename, 'application/zip');
 }
 
 export async function downloadXlsx(
@@ -87,7 +92,12 @@ export async function downloadXlsx(
   const exportedAt = resolveExportedAt(options.exportedAt);
   const bytes = await exportXlsx(result);
   const filename = await resolveFilename('xlsx', { ...options, exportedAt });
-  downloadBlob(bytes, filename, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  const safeBytes = normalizeBlobBytes(bytes);
+  downloadBlob(
+    safeBytes,
+    filename,
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  );
 }
 
 export async function downloadHtml(
