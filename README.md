@@ -8,7 +8,7 @@
 [![TypeScript](https://img.shields.io/badge/typescript-5.0+-blue.svg)](https://www.typescriptlang.org)
 [![WebAssembly](https://img.shields.io/badge/wasm-ready-purple.svg)](https://webassembly.org)
 
-FlowScope includes a full web application at https://flowscope.pondpilot.io for interactive, multi-file SQL lineage analysis.
+FlowScope includes a full web application at [flowscope.pondpilot.io](https://flowscope.pondpilot.io) for interactive, multi-file SQL lineage analysis.
 
 Under the hood, it is a privacy-first SQL lineage engine that runs entirely in the browser. Built with Rust and WebAssembly, it analyzes SQL queries to produce lineage graphs that describe how tables, CTEs, and columns flow through transformations.
 
@@ -16,7 +16,7 @@ The engine is designed for embedding into web apps, browser extensions, and deve
 
 ## Components
 
-- `app/` — the hosted web application at https://flowscope.pondpilot.io
+- `app/` — the hosted web application at [flowscope.pondpilot.io](https://flowscope.pondpilot.io)
 - `crates/` — Rust engine, WASM bindings, and CLI
 - `packages/` — TypeScript API and React visualization components
 
@@ -54,7 +54,7 @@ console.log(result.statements[0]);
 
 ## Completion API
 
-Use the completion API to provide SQL authoring hints at a cursor position. See `docs/guides/schema-metadata.md` for schema setup details.
+Use the completion API to provide SQL authoring hints at a cursor position. See [docs/guides/schema-metadata.md](docs/guides/schema-metadata.md) for schema setup details.
 
 ```typescript
 import {
@@ -83,7 +83,7 @@ console.log(result.items.slice(0, 5));
 
 ## Visualization
 
-For interactive lineage graphs, add the React package and render the `LineageExplorer` component. See `docs/guides/quickstart.md` for a full walkthrough.
+For interactive lineage graphs, add the React package and render the `LineageExplorer` component. See [docs/guides/quickstart.md](docs/guides/quickstart.md) for a full walkthrough.
 
 ```bash
 npm install @pondpilot/flowscope-react
@@ -91,28 +91,28 @@ npm install @pondpilot/flowscope-react
 
 ## Documentation
 
-- `docs/README.md` — documentation map and reference index
-- `docs/guides/quickstart.md` — TypeScript quickstart guide
-- `docs/guides/schema-metadata.md` — schema metadata setup
-- `docs/dialect-coverage.md` — dialect and statement coverage
-- `crates/flowscope-cli/README.md` — CLI usage and examples
-- `docs/workspace-structure.md` — monorepo layout and build entry points
+- [docs/README.md](docs/README.md) — documentation map and reference index
+- [docs/guides/quickstart.md](docs/guides/quickstart.md) — TypeScript quickstart guide
+- [docs/guides/schema-metadata.md](docs/guides/schema-metadata.md) — schema metadata setup
+- [docs/dialect-coverage.md](docs/dialect-coverage.md) — dialect and statement coverage
+- [crates/flowscope-cli/README.md](crates/flowscope-cli/README.md) — CLI usage and examples
+- [docs/workspace-structure.md](docs/workspace-structure.md) — monorepo layout and build entry points
 
 ## Development
 
-FlowScope uses `just` for common tasks. Run `just build`, `just test`, or `just dev`, and see `docs/workspace-structure.md` for the full command list.
+FlowScope uses `just` for common tasks. Run `just build`, `just test`, or `just dev`, and see [docs/workspace-structure.md](docs/workspace-structure.md) for the full command list.
 
 ## Contributing
 
-See `CONTRIBUTING.md` for setup, testing expectations, and contribution guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, testing expectations, and contribution guidelines.
 
 ## Usage
 
-PondPilot uses the `@pondpilot/flowscope-core` package for SQL parsing and autocomplete in the hosted app at https://app.pondpilot.io. Learn more at https://github.com/pondpilot/pondpilot.
+PondPilot uses the `@pondpilot/flowscope-core` package for SQL parsing and autocomplete in the hosted app at [app.pondpilot.io](https://app.pondpilot.io). Learn more at [github.com/pondpilot/pondpilot](https://github.com/pondpilot/pondpilot).
 
 ## License
 
-The core engine and packages are released under Apache-2.0. See `LICENSE` for details. The `app/` directory uses the O'Saasy License; see `app/LICENSE`.
+The core engine and packages are released under Apache-2.0. See [LICENSE](LICENSE) for details. The `app/` directory uses the O'Saasy License; see [app/LICENSE](app/LICENSE).
 
 ---
 
