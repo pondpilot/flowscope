@@ -11,6 +11,10 @@ on:
         required: false
         default: 'true'
 
+permissions:
+  contents: read
+  id-token: write
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -38,6 +42,9 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
           cache: 'yarn'
+
+      - name: Upgrade npm
+        run: npm install -g npm@11.5.1
 
       - name: Install dependencies
         run: yarn install
@@ -111,12 +118,8 @@ jobs:
         if: ${{ env.DRY_RUN != 'true' }}
         working-directory: packages/core
         run: npm publish --workspaces=false
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish npm package (react)
         if: ${{ env.DRY_RUN != 'true' }}
         working-directory: packages/react
         run: npm publish --workspaces=false
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
