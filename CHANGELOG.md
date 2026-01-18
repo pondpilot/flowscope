@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Highlights
 - First public release of the FlowScope Rust + WASM + TypeScript stack
+- Multi-dialect SQL parsing with table/column lineage, schema validation, and editor-friendly spans
+- Export tooling for Mermaid, JSON, HTML, CSV bundles, and XLSX across Rust and WASM
+- React components + CLI for lineage visualization and data export workflows
 - CTE and derived table definitions now include spans for editor navigation
 - Export downloads in React normalize byte buffers for reliable Blob creation
 
@@ -26,6 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed early-return bug in completion logic that incorrectly suppressed completions when schema metadata lacked column info but query context (CTEs/subqueries) had valid columns
 - Fixed potential integer overflow in completion item scoring by using saturating arithmetic
 - Added spans for CTE and derived table definition nodes to support editor navigation
+
+#### Exporter (flowscope-export)
+- Bundle reserved keyword list inside the crate for publish-time builds
 
 #### React Package (@pondpilot/flowscope-react)
 - Fixed ZIP/XLSX downloads by normalizing export byte buffers for Blob creation

@@ -13,8 +13,7 @@ use flowscope_core::AnalyzeResult;
 const MAX_SCHEMA_NAME_LENGTH: usize = 63;
 
 /// Raw JSON containing reserved keywords (shared with TypeScript).
-const RESERVED_KEYWORDS_JSON: &str =
-    include_str!("../../../packages/core/src/reserved-keywords.json");
+const RESERVED_KEYWORDS_JSON: &str = include_str!("reserved-keywords.json");
 
 /// Parsed reserved keywords JSON structure.
 #[derive(serde::Deserialize)]
