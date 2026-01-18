@@ -18,6 +18,7 @@ jobs:
   publish-packages:
     name: Publish crates and npm packages
     runs-on: ubuntu-latest
+    environment: prod
     env:
       DRY_RUN: ${{ inputs.dry_run || 'false' }}
     steps:
