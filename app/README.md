@@ -40,4 +40,4 @@ The application loads the WASM module generated from `@crates/flowscope-wasm`.
 
 ## License
 
-Apache 2.0
+Released under the O'Saasy License. See `LICENSE` for details.

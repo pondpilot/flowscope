@@ -52,6 +52,35 @@ const result = await analyzeSql({
 console.log(result.statements[0]);
 ```
 
+## Completion API
+
+Use the completion API to provide SQL authoring hints at a cursor position. See `docs/guides/schema-metadata.md` for schema setup details.
+
+```typescript
+import {
+  charOffsetToByteOffset,
+  completionItems,
+  initWasm,
+} from '@pondpilot/flowscope-core';
+
+await initWasm();
+
+const sql = 'SELECT * FROM analytics.';
+const cursorOffset = charOffsetToByteOffset(sql, sql.length);
+
+const result = await completionItems({
+  sql,
+  dialect: 'postgres',
+  cursorOffset,
+  schema: {
+    defaultSchema: 'analytics',
+    tables: [{ name: 'orders', columns: [{ name: 'order_id' }, { name: 'total' }] }],
+  },
+});
+
+console.log(result.items.slice(0, 5));
+```
+
 ## Visualization
 
 For interactive lineage graphs, add the React package and render the `LineageExplorer` component. See `docs/guides/quickstart.md` for a full walkthrough.
@@ -77,9 +106,13 @@ FlowScope uses `just` for common tasks. Run `just build`, `just test`, or `just 
 
 See `CONTRIBUTING.md` for setup, testing expectations, and contribution guidelines.
 
+## Usage
+
+PondPilot uses the `@pondpilot/flowscope-core` package for SQL parsing and autocomplete in the hosted app at https://app.pondpilot.io. Learn more at https://github.com/pondpilot/pondpilot.
+
 ## License
 
-Licensed under the Apache License, Version 2.0. See `LICENSE` for details.
+The core engine and packages are released under Apache-2.0. See `LICENSE` for details. The `app/` directory uses the O'Saasy License; see `app/LICENSE`.
 
 ---
 

@@ -4,6 +4,10 @@ This folder contains the canonical documentation for FlowScope. The public API a
 
 ## Document Map
 
+## License
+
+FlowScope code is released under Apache-2.0 unless stated otherwise. The `app/` directory uses the O'Saasy License; see `app/LICENSE`.
+
 ### Core References
 
 - `architecture-overview.md`
