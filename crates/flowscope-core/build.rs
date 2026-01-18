@@ -12,6 +12,7 @@
 
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::env;
 use std::error::Error;
 use std::fs;
 use std::io;
@@ -41,6 +42,12 @@ fn main() {
 }
 
 fn run() -> Result<(), Box<dyn Error>> {
+    if env::var("CARGO_PUBLISH").is_ok() {
+        println!("cargo:rerun-if-changed=specs/dialect-semantics/");
+        println!("cargo:rerun-if-changed=build.rs");
+        return Ok(());
+    }
+
     let spec_dir = Path::new("specs/dialect-semantics");
 
     // Verify spec directory exists
