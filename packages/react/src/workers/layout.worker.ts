@@ -20,6 +20,10 @@ import {
   DAGRE_MARGIN_Y,
 } from '../utils/layoutConstants';
 
+// Debug flag - workers can't import from debug.ts due to bundling,
+// so we replicate the pattern here
+const LAYOUT_WORKER_DEBUG = !!(import.meta as { env?: { DEV?: boolean } }).env?.DEV;
+
 export type LayoutAlgorithm = 'dagre' | 'elk';
 
 /**
@@ -130,6 +134,11 @@ function computeDagreLayout(
   return positions;
 }
 
+// Log worker initialization
+if (LAYOUT_WORKER_DEBUG) {
+  console.log('[Layout Worker] Worker initialized');
+}
+
 // Worker message handler
 self.onmessage = async (event: MessageEvent<LayoutRequest>) => {
   const { type, requestId, nodes, edges, direction, algorithm } = event.data;
@@ -138,6 +147,11 @@ self.onmessage = async (event: MessageEvent<LayoutRequest>) => {
     return;
   }
 
+  if (LAYOUT_WORKER_DEBUG) {
+    console.log(`[Layout Worker] Received request ${requestId}: ${nodes.length} nodes, ${edges.length} edges`);
+  }
+  const startTime = performance.now();
+
   try {
     // ELK is not supported in worker - it tries to spawn nested workers which fail
     if (algorithm === 'elk') {
@@ -145,6 +159,10 @@ self.onmessage = async (event: MessageEvent<LayoutRequest>) => {
     }
 
     const positions = computeDagreLayout(nodes, edges, direction);
+    const duration = performance.now() - startTime;
+    if (LAYOUT_WORKER_DEBUG) {
+      console.log(`[Layout Worker] Dagre layout completed in ${duration.toFixed(2)}ms`);
+    }
 
     const response: LayoutResponse = {
       type: 'layout-result',
@@ -154,6 +172,7 @@ self.onmessage = async (event: MessageEvent<LayoutRequest>) => {
 
     self.postMessage(response);
   } catch (error) {
+    console.error('[Layout Worker] Error:', error);
     const response: LayoutResponse = {
       type: 'layout-result',
       requestId,

@@ -10,6 +10,7 @@ import type {
   LayoutRequest,
   LayoutResponse,
 } from '../workers/layout.worker';
+import { LAYOUT_DEBUG } from './debug';
 
 interface NodeData extends Record<string, unknown> {
   columns?: { id: string }[];
@@ -47,6 +48,11 @@ function getWorker(): Worker {
         if (error) {
           pending.reject(new Error(error));
         } else {
+          // Validate positions structure before accepting
+          if (!positions || typeof positions !== 'object') {
+            pending.reject(new Error('Invalid positions data from worker'));
+            return;
+          }
           pending.resolve(positions as Record<string, { x: number; y: number }>);
         }
       }
@@ -55,10 +61,10 @@ function getWorker(): Worker {
     worker.onerror = (error) => {
       console.error('[LayoutWorker] Worker error:', error);
       // Reject all pending requests
-      for (const [requestId, pending] of pendingRequests) {
+      for (const pending of pendingRequests.values()) {
         pending.reject(new Error('Worker error'));
-        pendingRequests.delete(requestId);
       }
+      pendingRequests.clear();
     };
   }
 
@@ -105,19 +111,26 @@ export async function computeLayoutInWorker<N extends NodeData, E extends Record
   const requestId = `layout-${++requestIdCounter}`;
   const workerInstance = getWorker();
 
+  if (LAYOUT_DEBUG) console.time('[Layout Worker] Serialize nodes/edges');
+  const workerNodes = nodesToWorkerFormat(nodes);
+  const workerEdges = edgesToWorkerFormat(edges);
+  if (LAYOUT_DEBUG) console.timeEnd('[Layout Worker] Serialize nodes/edges');
+
   return new Promise((resolve, reject) => {
     pendingRequests.set(requestId, { resolve, reject });
 
     const request: LayoutRequest = {
       type: 'layout',
       requestId,
-      nodes: nodesToWorkerFormat(nodes),
-      edges: edgesToWorkerFormat(edges),
+      nodes: workerNodes,
+      edges: workerEdges,
       direction,
       algorithm,
     };
 
+    if (LAYOUT_DEBUG) console.time('[Layout Worker] postMessage to worker');
     workerInstance.postMessage(request);
+    if (LAYOUT_DEBUG) console.timeEnd('[Layout Worker] postMessage to worker');
   });
 }
 
@@ -145,10 +158,10 @@ export function applyPositionsToNodes<N extends NodeData>(
  * Call this when the component unmounts or when new layout is requested.
  */
 export function cancelPendingLayouts(): void {
-  for (const [requestId, pending] of pendingRequests) {
+  for (const pending of pendingRequests.values()) {
     pending.reject(new Error('Layout cancelled'));
-    pendingRequests.delete(requestId);
   }
+  pendingRequests.clear();
 }
 
 /**

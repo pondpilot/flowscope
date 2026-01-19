@@ -7,6 +7,7 @@ import {
   isWorkerSupported,
   cancelPendingLayouts,
 } from './layoutWorkerService';
+import { LAYOUT_DEBUG } from './debug';
 import {
   NODE_WIDTH,
   NODE_HEIGHT_BASE,
@@ -326,15 +327,21 @@ export async function getLayoutedElementsInWorker<N extends NodeData, E extends 
 ): Promise<{ nodes: Node<N>[]; edges: Edge<E>[] }> {
   if (nodes.length === 0) return { nodes, edges };
 
+  if (LAYOUT_DEBUG) console.time('[Layout] Build cache key');
   const cacheKey = buildLayoutCacheKey(nodes, edges, direction, algorithm);
+  if (LAYOUT_DEBUG) console.timeEnd('[Layout] Build cache key');
+
   const cachedNodes = readLayoutCache(nodes, cacheKey);
   if (cachedNodes) {
+    if (LAYOUT_DEBUG) console.log('[Layout] Cache HIT');
     return { nodes: cachedNodes, edges };
   }
+  if (LAYOUT_DEBUG) console.log('[Layout] Cache MISS, computing layout...');
 
   // ELK uses its own internal web worker, so run it on main thread directly.
   // Running ELK inside our layout worker would create nested workers which fail.
   if (algorithm === 'elk') {
+    if (LAYOUT_DEBUG) console.log('[Layout] Using ELK (main thread with internal worker)');
     const layouted = await getLayoutedElementsAsync(nodes, edges, direction, algorithm);
     const positions: Record<string, { x: number; y: number }> = {};
     layouted.nodes.forEach((node) => {
@@ -346,6 +353,7 @@ export async function getLayoutedElementsInWorker<N extends NodeData, E extends 
 
   // Fall back to main thread if workers aren't supported
   if (!isWorkerSupported()) {
+    if (LAYOUT_DEBUG) console.warn('[Layout] Workers not supported, using main thread');
     const layouted = await getLayoutedElementsAsync(nodes, edges, direction, algorithm);
     const positions: Record<string, { x: number; y: number }> = {};
     layouted.nodes.forEach((node) => {
@@ -356,14 +364,26 @@ export async function getLayoutedElementsInWorker<N extends NodeData, E extends 
   }
 
   try {
+    if (LAYOUT_DEBUG) console.log('[Layout] Using Web Worker for dagre');
     cancelPendingLayouts();
+    if (LAYOUT_DEBUG) console.time('[Layout] computeLayoutInWorker');
     const positions = await computeLayoutInWorker(nodes, edges, direction, algorithm);
+    if (LAYOUT_DEBUG) console.timeEnd('[Layout] computeLayoutInWorker');
+    if (LAYOUT_DEBUG) console.time('[Layout] Apply positions after worker');
     writeLayoutCache(cacheKey, positions);
     const layoutedNodes = applyPositionsToNodes(nodes, positions);
+    if (LAYOUT_DEBUG) console.timeEnd('[Layout] Apply positions after worker');
     return { nodes: layoutedNodes, edges };
   } catch (error) {
-    // Fall back to main thread on worker error
-    console.warn('[Layout] Worker failed, falling back to main thread:', error);
+    // Don't fall back to sync layout if the request was just cancelled
+    // (e.g., due to React StrictMode double-invoke or component unmount)
+    if (error instanceof Error && error.message === 'Layout cancelled') {
+      if (LAYOUT_DEBUG) console.log('[Layout] Worker cancelled (expected during effect cleanup)');
+      throw error; // Re-throw to let caller handle it
+    }
+
+    // Fall back to main thread on actual worker error
+    if (LAYOUT_DEBUG) console.warn('[Layout] Worker failed, falling back to main thread:', error);
     const layouted = await getLayoutedElementsAsync(nodes, edges, direction, algorithm);
     const positions: Record<string, { x: number; y: number }> = {};
     layouted.nodes.forEach((node) => {

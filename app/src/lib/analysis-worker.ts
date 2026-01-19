@@ -3,6 +3,17 @@ import type { AnalysisWorkerPayload, AnalysisWorkerRequest, AnalysisWorkerRespon
 import { buildFileSyncKey } from './analysis-hash';
 import { AnalysisError, AnalysisErrorCode } from '../types';
 
+// Debug flag for analysis worker logging - only enabled in development
+const ANALYSIS_WORKER_DEBUG = !!(import.meta as { env?: { DEV?: boolean } }).env?.DEV;
+
+// Safe time measurement function with fallback
+function nowMs(): number {
+  if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
+    return performance.now();
+  }
+  return Date.now();
+}
+
 /**
  * Map worker error codes to application error codes.
  * This keeps the error handling consistent across the application.
@@ -99,14 +110,19 @@ async function yieldToMainThread(): Promise<void> {
 }
 
 export async function syncAnalysisFiles(files: SyncFilesPayload['files']): Promise<void> {
+  const syncStart = nowMs();
   const nextKey = buildFileSyncKey({ files });
   if (nextKey === lastSyncedFileKey) {
+    if (ANALYSIS_WORKER_DEBUG) console.log(`[syncAnalysisFiles] Skipped (cache hit), ${files.length} files`);
     return;
   }
+
+  if (ANALYSIS_WORKER_DEBUG) console.log(`[syncAnalysisFiles] Starting sync of ${files.length} files`);
 
   if (files.length === 0) {
     await sendRequest({ type: 'clear-files' });
     lastSyncedFileKey = nextKey;
+    if (ANALYSIS_WORKER_DEBUG) console.log(`[syncAnalysisFiles] Cleared files in ${(nowMs() - syncStart).toFixed(1)}ms`);
     return;
   }
 
@@ -124,6 +140,7 @@ export async function syncAnalysisFiles(files: SyncFilesPayload['files']): Promi
   }
 
   lastSyncedFileKey = nextKey;
+  if (ANALYSIS_WORKER_DEBUG) console.log(`[syncAnalysisFiles] Completed in ${(nowMs() - syncStart).toFixed(1)}ms`);
 }
 
 export async function initializeAnalysisWorker(): Promise<void> {

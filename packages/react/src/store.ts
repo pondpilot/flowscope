@@ -160,6 +160,8 @@ export interface LineageState {
   showScriptTables: boolean;
   navigationRequest: NavigationRequest | null;
   tableFilter: TableFilter;
+  isLayouting: boolean;
+  isBuilding: boolean;
 
   // Actions
   setResult: (result: AnalyzeResult | null) => void;
@@ -190,6 +192,8 @@ export interface LineageState {
   toggleTableFilterSelection: (tableLabel: string) => void;
   setTableFilterDirection: (direction: TableFilterDirection) => void;
   clearTableFilter: () => void;
+  setIsLayouting: (isLayouting: boolean) => void;
+  setIsBuilding: (isBuilding: boolean) => void;
 }
 
 /**
@@ -239,6 +243,8 @@ export function createLineageStore(
     showScriptTables: false,
     navigationRequest: null,
     tableFilter: { selectedTableLabels: new Set(), direction: 'both' },
+    isLayouting: false,
+    isBuilding: false,
     ...initialState,
 
     // Actions
@@ -375,6 +381,10 @@ export function createLineageStore(
       set({
         tableFilter: { selectedTableLabels: new Set(), direction: 'both' },
       }),
+
+    setIsLayouting: (isLayouting) => set({ isLayouting }),
+
+    setIsBuilding: (isBuilding) => set({ isBuilding }),
   }));
 }
 
@@ -431,6 +441,8 @@ export function useLineage() {
       showScriptTables: store.showScriptTables,
       navigationRequest: store.navigationRequest,
       tableFilter: store.tableFilter,
+      isLayouting: store.isLayouting,
+      isBuilding: store.isBuilding,
     },
     actions: {
       setResult: store.setResult,
@@ -455,6 +467,8 @@ export function useLineage() {
       toggleTableFilterSelection: store.toggleTableFilterSelection,
       setTableFilterDirection: store.setTableFilterDirection,
       clearTableFilter: store.clearTableFilter,
+      setIsLayouting: store.setIsLayouting,
+      setIsBuilding: store.setIsBuilding,
     },
   };
 }
@@ -484,6 +498,8 @@ export function useLineageState() {
   const showScriptTables = useLineageStore((state) => state.showScriptTables);
   const navigationRequest = useLineageStore((state) => state.navigationRequest);
   const tableFilter = useLineageStore((state) => state.tableFilter);
+  const isLayouting = useLineageStore((state) => state.isLayouting);
+  const isBuilding = useLineageStore((state) => state.isBuilding);
 
   return {
     result,
@@ -505,6 +521,8 @@ export function useLineageState() {
     showScriptTables,
     navigationRequest,
     tableFilter,
+    isLayouting,
+    isBuilding,
   };
 }
 
@@ -534,6 +552,8 @@ export function useLineageActions() {
   const toggleTableFilterSelection = useLineageStore((state) => state.toggleTableFilterSelection);
   const setTableFilterDirection = useLineageStore((state) => state.setTableFilterDirection);
   const clearTableFilter = useLineageStore((state) => state.clearTableFilter);
+  const setIsLayouting = useLineageStore((state) => state.setIsLayouting);
+  const setIsBuilding = useLineageStore((state) => state.setIsBuilding);
 
   return {
     setResult,
@@ -558,5 +578,7 @@ export function useLineageActions() {
     toggleTableFilterSelection,
     setTableFilterDirection,
     clearTableFilter,
+    setIsLayouting,
+    setIsBuilding,
   };
 }

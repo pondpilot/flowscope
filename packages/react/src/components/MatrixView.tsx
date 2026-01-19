@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback, useRef, useEffect, memo, useId, type JSX } from 'react';
+import React, { useMemo, useState, useCallback, useRef, useEffect, memo, useId, startTransition, type JSX } from 'react';
 import { useDebounce } from '../hooks/useDebounce';
 import {
   Table2,
@@ -18,7 +18,8 @@ import {
   Maximize2,
   Minimize2,
   BarChart2,
-  ScanLine
+  ScanLine,
+  Loader2
 } from 'lucide-react';
 import { useLineage } from '../store';
 import type { MatrixSubMode } from '../types';
@@ -34,15 +35,34 @@ import {
   GraphTooltipPortal,
 } from './ui/graph-tooltip';
 import {
-  extractTableDependenciesWithDetails,
-  extractScriptDependencies,
-  buildTableMatrix,
-  buildScriptMatrix,
-  extractAllColumnNames,
   type TableDependencyWithDetails,
   type ScriptDependency,
   type MatrixCellData,
+  type MatrixData,
 } from '../utils/matrixUtils';
+import { buildMatrixInWorker, cancelPendingMatrixBuilds } from '../utils/matrixWorkerService';
+
+interface MatrixWorkerPayload {
+  tableMatrix: MatrixData;
+  scriptMatrix: MatrixData;
+  allColumnNames: string[];
+  tableMetrics: MatrixMetrics;
+  scriptMetrics: MatrixMetrics;
+  tableItemCount: number;
+  tableItemsRendered: number;
+  scriptItemCount: number;
+  scriptItemsRendered: number;
+}
+
+interface MatrixMetrics {
+  rowCounts: Map<string, number>;
+  colCounts: Map<string, number>;
+  maxRow: number;
+  maxCol: number;
+  maxIntensity: number;
+}
+
+const EMPTY_MATRIX: MatrixData = { items: [], cells: new Map() };
 
 // ============================================================================
 // Utilities
@@ -421,6 +441,8 @@ const CLUSTERING_ITERATIONS = 2;
 const MAX_AUTOCOMPLETE_SUGGESTIONS = 8;
 const MAX_TOOLTIP_COLUMN_MATCHES = 5;
 const SEARCH_DEBOUNCE_DELAY = 200;
+const MATRIX_DEBUG = !!(import.meta as { env?: { DEV?: boolean } }).env?.DEV;
+const MAX_MATRIX_ITEMS = 50;
 
 // ============================================================================
 // Helper Functions
@@ -537,6 +559,8 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const suggestionsListId = useId();
   const activeOptionId = useId();
+  const matrixBuildStartRef = useRef<number | null>(null);
+  const matrixPayloadSetAtRef = useRef<number | null>(null);
   
   const resizeStartPos = useRef(0);
   const resizeStartSize = useRef(0);
@@ -577,62 +601,131 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
     };
   }, [resizingMode]);
 
-  // Data processing
-  const { tableDeps, scriptDepsData, allColumnNames } = useMemo(() => ({
-    tableDeps: result ? extractTableDependenciesWithDetails(result.statements) : [],
-    scriptDepsData: result ? extractScriptDependencies(result.statements) : { dependencies: [], allScripts: [] },
-    allColumnNames: result ? extractAllColumnNames(result.statements) : [],
-  }), [result]);
+  const [matrixPayload, setMatrixPayload] = useState<MatrixWorkerPayload | null>(null);
+  const [isMatrixLoading, setIsMatrixLoading] = useState(false);
+  const [matrixError, setMatrixError] = useState<string | null>(null);
 
-  const fullMatrixData = useMemo(() =>
-    matrixSubMode === 'tables'
-      ? buildTableMatrix(tableDeps)
-      : buildScriptMatrix(scriptDepsData.dependencies, scriptDepsData.allScripts),
-  [matrixSubMode, tableDeps, scriptDepsData]);
-
-  // Complexity Metrics
-  const complexityStats = useMemo(() => {
-    const rowCounts = new Map<string, number>();
-    const colCounts = new Map<string, number>();
-    let maxRow = 0;
-    let maxCol = 0;
-
-    // Initialize
-    for (const item of fullMatrixData.items) {
-      rowCounts.set(item, 0);
-      colCounts.set(item, 0);
+  useEffect(() => {
+    if (!result?.statements) {
+      setMatrixPayload(null);
+      setIsMatrixLoading(false);
+      setMatrixError(null);
+      return;
     }
 
-    // Iterate 'write' relationships
-    for (const [rowId, rowCells] of fullMatrixData.cells) {
-      for (const [colId, cell] of rowCells) {
-        if (cell.type === 'write') {
-           // Row is writing (Fan-Out)
-           const r = (rowCounts.get(rowId) || 0) + 1;
-           rowCounts.set(rowId, r);
-           maxRow = Math.max(maxRow, r);
+    let cancelled = false;
+    setIsMatrixLoading(true);
+    setMatrixError(null);
+    setMatrixPayload(null);
+    matrixBuildStartRef.current = performance.now();
 
-           // Col is being written to (Fan-In)
-           const c = (colCounts.get(colId) || 0) + 1;
-           colCounts.set(colId, c);
-           maxCol = Math.max(maxCol, c);
+    buildMatrixInWorker(result.statements, { maxItems: MAX_MATRIX_ITEMS })
+      .then((payload) => {
+        if (cancelled) return;
+        const receivedAt = performance.now();
+        if (MATRIX_DEBUG && matrixBuildStartRef.current !== null) {
+          console.log(`[MatrixView] Worker payload received in ${(receivedAt - matrixBuildStartRef.current).toFixed(1)}ms`);
         }
-      }
-    }
+        matrixPayloadSetAtRef.current = receivedAt;
+        // Update loading state immediately (urgent) so spinner disappears
+        setIsMatrixLoading(false);
+        // Defer payload update which may trigger expensive re-renders
+        startTransition(() => {
+          setMatrixPayload(payload);
+        });
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        if (error instanceof Error && error.message === 'Build cancelled') {
+          return;
+        }
+        console.error('[MatrixView] Matrix build failed:', error);
+        setMatrixError('Failed to build matrix data.');
+        setIsMatrixLoading(false);
+      });
 
-    return { rowCounts, colCounts, maxRow, maxCol };
-  }, [fullMatrixData]);
+    return () => {
+      cancelled = true;
+      cancelPendingMatrixBuilds();
+    };
+  }, [result]);
+
+  const fullMatrixData = useMemo(() => {
+    if (!matrixPayload) return EMPTY_MATRIX;
+    return matrixSubMode === 'tables' ? matrixPayload.tableMatrix : matrixPayload.scriptMatrix;
+  }, [matrixSubMode, matrixPayload]);
+
+  const allColumnNames = matrixPayload?.allColumnNames ?? [];
+
+  const limitInfo = useMemo(() => {
+    if (!matrixPayload) return null;
+    if (matrixSubMode === 'tables') {
+      return {
+        label: 'tables',
+        total: matrixPayload.tableItemCount,
+        shown: matrixPayload.tableItemsRendered,
+      };
+    }
+    return {
+      label: 'scripts',
+      total: matrixPayload.scriptItemCount,
+      shown: matrixPayload.scriptItemsRendered,
+    };
+  }, [matrixPayload, matrixSubMode]);
+
+  useEffect(() => {
+    if (!MATRIX_DEBUG || !matrixPayload) return;
+    const commitAt = performance.now();
+    const setAt = matrixPayloadSetAtRef.current;
+    if (setAt) {
+      console.log(`[MatrixView] Render commit after payload: ${(commitAt - setAt).toFixed(1)}ms`);
+    }
+    const tableItems = matrixPayload.tableMatrix.items.length;
+    const scriptItems = matrixPayload.scriptMatrix.items.length;
+    console.log(
+      `[MatrixView] Matrix sizes: tables=${tableItems} (${tableItems * tableItems} cells), scripts=${scriptItems} (${scriptItems * scriptItems} cells)`
+    );
+  }, [matrixPayload]);
+
+  const matrixMetrics = useMemo(() => {
+    if (!matrixPayload) {
+      return {
+        rowCounts: new Map<string, number>(),
+        colCounts: new Map<string, number>(),
+        maxRow: 0,
+        maxCol: 0,
+        maxIntensity: 1,
+      };
+    }
+    return matrixSubMode === 'tables' ? matrixPayload.tableMetrics : matrixPayload.scriptMetrics;
+  }, [matrixPayload, matrixSubMode]);
 
   // Clustering Logic
   const sortedItems = useMemo(() => {
     if (!clusterMode) return fullMatrixData.items;
-    return clusterItems(fullMatrixData.items, fullMatrixData.cells);
+    const start = MATRIX_DEBUG ? performance.now() : 0;
+    const result = clusterItems(fullMatrixData.items, fullMatrixData.cells);
+    if (MATRIX_DEBUG) {
+      const duration = performance.now() - start;
+      if (duration > 8) {
+        console.log(`[MatrixView] clusterItems: ${duration.toFixed(1)}ms`);
+      }
+    }
+    return result;
   }, [fullMatrixData, clusterMode]);
 
   // Transitive Flow for X-Ray
   const transitiveFlow = useMemo(() => {
     if (!xRayMode || !focusedNode) return null;
-    return getTransitiveFlow(focusedNode, fullMatrixData.cells, sortedItems);
+    const start = MATRIX_DEBUG ? performance.now() : 0;
+    const result = getTransitiveFlow(focusedNode, fullMatrixData.cells, sortedItems);
+    if (MATRIX_DEBUG) {
+      const duration = performance.now() - start;
+      if (duration > 8) {
+        console.log(`[MatrixView] getTransitiveFlow: ${duration.toFixed(1)}ms`);
+      }
+    }
+    return result;
   }, [xRayMode, focusedNode, fullMatrixData, sortedItems]);
 
   const activeXRaySet = useMemo(() => {
@@ -640,29 +733,13 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
     return new Set([focusedNode, ...transitiveFlow.ancestors, ...transitiveFlow.descendants]);
   }, [xRayMode, focusedNode, transitiveFlow]);
 
-  // Max Dependency Strength for Heatmap
-  const maxIntensity = useMemo(() => {
-    let max = 0;
-    for (const row of fullMatrixData.cells.values()) {
-      for (const cell of row.values()) {
-        if (cell.type !== 'none' && cell.type !== 'self') {
-          let count = 0;
-          if (matrixSubMode === 'tables') {
-             count = (cell.details as TableDependencyWithDetails)?.columnCount || 0;
-          } else {
-             count = (cell.details as ScriptDependency)?.sharedTables.length || 0;
-          }
-          if (count > max) max = count;
-        }
-      }
-    }
-    return max || 1;
-  }, [fullMatrixData, matrixSubMode]);
+  const maxIntensity = matrixMetrics.maxIntensity || 1;
 
 
   // Field Tracing Logic (uses debounced text for expensive computation)
   const matchingFieldNodes = useMemo(() => {
     if (!debouncedFilterText || filterMode !== 'fields') return null;
+    const start = MATRIX_DEBUG ? performance.now() : 0;
     const lower = debouncedFilterText.toLowerCase();
     const matchedNodes = new Set<string>();
 
@@ -688,12 +765,19 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
         }
       }
     }
+    if (MATRIX_DEBUG) {
+      const duration = performance.now() - start;
+      if (duration > 8) {
+        console.log(`[MatrixView] matchingFieldNodes: ${duration.toFixed(1)}ms`);
+      }
+    }
     return matchedNodes;
   }, [fullMatrixData, debouncedFilterText, filterMode, matrixSubMode]);
 
   // Filtering (uses debounced text)
   const filteredRowItems = useMemo(() => {
-    return filterItems({
+    const start = MATRIX_DEBUG ? performance.now() : 0;
+    const result = filterItems({
       items: sortedItems,
       filterMode,
       filterText: debouncedFilterText,
@@ -703,10 +787,18 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
       activeXRaySet,
       targetMode: 'rows',
     });
+    if (MATRIX_DEBUG) {
+      const duration = performance.now() - start;
+      if (duration > 8) {
+        console.log(`[MatrixView] filteredRowItems: ${duration.toFixed(1)}ms`);
+      }
+    }
+    return result;
   }, [sortedItems, debouncedFilterText, filterMode, matchingFieldNodes, xRayMode, xRayFilterMode, activeXRaySet]);
 
   const filteredColumnItems = useMemo(() => {
-    return filterItems({
+    const start = MATRIX_DEBUG ? performance.now() : 0;
+    const result = filterItems({
       items: sortedItems,
       filterMode,
       filterText: debouncedFilterText,
@@ -716,7 +808,24 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
       activeXRaySet,
       targetMode: 'columns',
     });
+    if (MATRIX_DEBUG) {
+      const duration = performance.now() - start;
+      if (duration > 8) {
+        console.log(`[MatrixView] filteredColumnItems: ${duration.toFixed(1)}ms`);
+      }
+    }
+    return result;
   }, [sortedItems, debouncedFilterText, filterMode, matchingFieldNodes, xRayMode, xRayFilterMode, activeXRaySet]);
+
+  useEffect(() => {
+    if (!MATRIX_DEBUG) return;
+    const rows = filteredRowItems.length;
+    const cols = filteredColumnItems.length;
+    const cells = rows * cols;
+    if (cells > 5000) {
+      console.log(`[MatrixView] render grid: rows=${rows}, cols=${cols}, cells=${cells}`);
+    }
+  }, [filteredRowItems.length, filteredColumnItems.length]);
 
   const handleCellHover = useCallback((row: string, col: string) => {
     setHoveredCell({ row, col });
@@ -725,6 +834,7 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
   // Autocomplete Logic
   const suggestions = useMemo(() => {
     if (!filterText) return [];
+    const start = MATRIX_DEBUG ? performance.now() : 0;
     const lower = filterText.toLowerCase();
     let source: string[] = [];
     
@@ -735,6 +845,12 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
     }
     
     const matches = Array.from(new Set(source.filter(s => s.toLowerCase().includes(lower)))).slice(0, MAX_AUTOCOMPLETE_SUGGESTIONS);
+    if (MATRIX_DEBUG) {
+      const duration = performance.now() - start;
+      if (duration > 8) {
+        console.log(`[MatrixView] suggestions: ${duration.toFixed(1)}ms`);
+      }
+    }
     return matches;
   }, [filterText, filterMode, allColumnNames, sortedItems]);
   const suggestionCount = suggestions.length;
@@ -819,6 +935,24 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
       <div className={cn("flex flex-col items-center justify-center h-full text-slate-400 gap-4", className)}>
         <Database className="h-12 w-12 opacity-20" />
         <p>No analysis result available</p>
+      </div>
+    );
+  }
+
+  if (matrixError) {
+    return (
+      <div className={cn("flex flex-col items-center justify-center h-full text-slate-400 gap-4", className)}>
+        <Database className="h-12 w-12 opacity-20" />
+        <p>{matrixError}</p>
+      </div>
+    );
+  }
+
+  if (isMatrixLoading || !matrixPayload) {
+    return (
+      <div className={cn("flex flex-col items-center justify-center h-full text-slate-400 gap-3", className)}>
+        <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+        <p>Building matrix...</p>
       </div>
     );
   }
@@ -1148,6 +1282,12 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
           </div>
         </div>
 
+        {limitInfo && limitInfo.total > limitInfo.shown && (
+          <div className="px-4 py-2 text-xs text-slate-500 border-b border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/30">
+            Showing top {limitInfo.shown} of {limitInfo.total} {limitInfo.label}. Refine filters to narrow results.
+          </div>
+        )}
+
         {/* Content */}
         {isEmpty ? (
           <div className="flex-1 flex flex-col items-center justify-center text-slate-400 gap-3">
@@ -1206,8 +1346,8 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
                 const isDimmed = xRayMode && focusedNode && !isRelated && !isFocused;
 
                 // Complexity
-                const fanIn = complexityStats.colCounts.get(item) || 0;
-                const complexityPct = complexityStats.maxCol ? (fanIn / complexityStats.maxCol) * 100 : 0;
+                const fanIn = matrixMetrics.colCounts.get(item) || 0;
+                const complexityPct = matrixMetrics.maxCol ? (fanIn / matrixMetrics.maxCol) * 100 : 0;
 
                 return (
                   <div
@@ -1265,8 +1405,8 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
                 const isDimmed = xRayMode && focusedNode && !isRelated && !isFocused;
 
                 // Complexity
-                const fanOut = complexityStats.rowCounts.get(rowItem) || 0;
-                const complexityPct = complexityStats.maxRow ? (fanOut / complexityStats.maxRow) * 100 : 0;
+                const fanOut = matrixMetrics.rowCounts.get(rowItem) || 0;
+                const complexityPct = matrixMetrics.maxRow ? (fanOut / matrixMetrics.maxRow) * 100 : 0;
 
                 return (
                   <React.Fragment key={`row-${rowItem}`}>

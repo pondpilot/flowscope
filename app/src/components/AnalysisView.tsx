@@ -90,6 +90,7 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
   const { activeTab, setActiveTab, navigationTarget, clearNavigationTarget } = useNavigation();
   const [lineageFocusNodeId, setLineageFocusNodeId] = useState<string | undefined>(undefined);
   const [fitViewTrigger, setFitViewTrigger] = useState(0);
+  const [mountedTabs, setMountedTabs] = useState<Set<string>>(() => new Set([activeTab]));
 
   // Persisted state hooks for each view
   const matrixState = usePersistedMatrixState(activeProjectId);
@@ -186,17 +187,31 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
     }
   }, [setActiveTab]);
 
+  // Ensure the active tab is always mounted (handles both user clicks and external changes)
+  useEffect(() => {
+    setMountedTabs((prev) => {
+      if (prev.has(activeTab)) return prev;
+      return new Set([...prev, activeTab]);
+    });
+  }, [activeTab]);
+
+  // Ref for shortcuts to use handleTabChange without re-memoization
+  const handleTabChangeRef = useRef(handleTabChange);
+  useEffect(() => {
+    handleTabChangeRef.current = handleTabChange;
+  }, [handleTabChange]);
+
   const summary = result?.summary;
   const hasIssues = summary ? (summary.issueCount.errors > 0 || summary.issueCount.warnings > 0) : false;
 
   // Tab switching and schema editor shortcuts
   // Uses refs for frequently-changing values to avoid re-memoization on every state change
   const tabShortcuts = useMemo<GlobalShortcut[]>(() => [
-    { key: '1', handler: () => setActiveTab('lineage') },
-    { key: '2', handler: () => setActiveTab('hierarchy') },
-    { key: '3', handler: () => setActiveTab('matrix') },
-    { key: '4', handler: () => setActiveTab('schema') },
-    { key: '5', handler: () => { if (hasIssues) setActiveTab('issues'); } },
+    { key: '1', handler: () => handleTabChangeRef.current('lineage') },
+    { key: '2', handler: () => handleTabChangeRef.current('hierarchy') },
+    { key: '3', handler: () => handleTabChangeRef.current('matrix') },
+    { key: '4', handler: () => handleTabChangeRef.current('schema') },
+    { key: '5', handler: () => { if (hasIssues) handleTabChangeRef.current('issues'); } },
     // Schema editor shortcut
     {
       key: 'k',
@@ -291,7 +306,7 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
         }
       },
     },
-  ], [setActiveTab, hasIssues, focusSearchInput]);
+  ], [hasIssues, focusSearchInput]);
 
   useGlobalShortcuts(tabShortcuts);
 
@@ -299,9 +314,9 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
   // This effect must be before any early returns to satisfy Rules of Hooks
   useEffect(() => {
     if (!hasIssues && activeTab === 'issues') {
-      setActiveTab('lineage');
+      handleTabChangeRef.current('lineage');
     }
-  }, [hasIssues, activeTab, setActiveTab]);
+  }, [hasIssues, activeTab]);
 
   if (!result || !summary) {
     return (
@@ -393,30 +408,38 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
           </TabsContent>
 
           <TabsContent value="hierarchy" forceMount className="h-full mt-0 p-0 absolute inset-0 data-[state=inactive]:hidden">
-            <GraphErrorBoundary>
-              <HierarchyView ref={hierarchyViewRef} className="h-full" projectId={activeProjectId} />
-            </GraphErrorBoundary>
+            {mountedTabs.has('hierarchy') && (
+              <GraphErrorBoundary>
+                <HierarchyView ref={hierarchyViewRef} className="h-full" projectId={activeProjectId} />
+              </GraphErrorBoundary>
+            )}
           </TabsContent>
 
           <TabsContent value="matrix" forceMount className="h-full mt-0 p-0 absolute inset-0 data-[state=inactive]:hidden">
-            <MatrixView
-              className="h-full"
-              controlledState={matrixState.controlledState}
-              onStateChange={matrixState.onStateChange}
-            />
+            {mountedTabs.has('matrix') && (
+              <MatrixView
+                className="h-full"
+                controlledState={matrixState.controlledState}
+                onStateChange={matrixState.onStateChange}
+              />
+            )}
           </TabsContent>
 
           <TabsContent value="schema" forceMount className="h-full mt-0 p-0 absolute inset-0 data-[state=inactive]:hidden">
-            <SchemaView
-              schema={schema}
-              selectedTableName={schemaState.selectedTableName}
-              onClearSelection={schemaState.clearSelection}
-            />
+            {mountedTabs.has('schema') && (
+              <SchemaView
+                schema={schema}
+                selectedTableName={schemaState.selectedTableName}
+                onClearSelection={schemaState.clearSelection}
+              />
+            )}
           </TabsContent>
 
           {hasIssues && activeProjectId && (
             <TabsContent value="issues" forceMount className="h-full mt-0 overflow-auto p-0 absolute inset-0 data-[state=inactive]:hidden">
-              <SchemaAwareIssuesPanel projectId={activeProjectId} onOpenSchemaEditor={() => setSchemaEditorOpen(true)} />
+              {mountedTabs.has('issues') && (
+                <SchemaAwareIssuesPanel projectId={activeProjectId} onOpenSchemaEditor={() => setSchemaEditorOpen(true)} />
+              )}
             </TabsContent>
           )}
         </div>

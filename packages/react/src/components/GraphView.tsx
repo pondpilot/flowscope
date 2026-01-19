@@ -1,4 +1,4 @@
-import { useMemo, useCallback, useEffect, useRef, useState, useDeferredValue, type JSX } from 'react';
+import { useMemo, useCallback, useEffect, useRef, useState, type JSX } from 'react';
 import {
   ReactFlow,
   Background,
@@ -12,7 +12,7 @@ import {
 import type { Node as FlowNode, Edge as FlowEdge, Viewport } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { LayoutList, Maximize2, Minimize2, Route, GitBranch } from 'lucide-react';
-import type { AnalyzeResult } from '@pondpilot/flowscope-core';
+import type { AnalyzeResult, Node as LineageNode } from '@pondpilot/flowscope-core';
 
 import { useLineage, useLineageStore } from '../store';
 import { useNodeFocus } from '../hooks/useNodeFocus';
@@ -21,12 +21,12 @@ import type { GraphViewProps, TableNodeData, LayoutAlgorithm } from '../types';
 import { getLayoutedElements, getLayoutedElementsInWorker, getFastLayoutedNodes, cancelLayoutRequests } from '../utils/layout';
 import { LayoutSelector } from './LayoutSelector';
 import { isTableNodeData } from '../utils/graphTraversal';
+import { GRAPH_DEBUG, nowMs } from '../utils/debug';
 import {
-  mergeStatements,
-  buildFlowNodes,
-  buildFlowEdges,
-  buildScriptLevelGraph,
-} from '../utils/graphBuilders';
+  buildTableGraphInWorker,
+  buildScriptGraphInWorker,
+  cancelPendingBuilds,
+} from '../utils/graphBuilderWorkerService';
 import { ScriptNode } from './ScriptNode';
 import { ColumnNode } from './ColumnNode';
 import { SimpleTableNode } from './SimpleTableNode';
@@ -36,6 +36,7 @@ import { ViewModeSelector } from './ViewModeSelector';
 import { GraphSearchControl } from './GraphSearchControl';
 import { TableFilterDropdown } from './TableFilterDropdown';
 import { Legend } from './Legend';
+import { LayoutProgressIndicator } from './LayoutProgressIndicator';
 import type { SearchableType } from '../hooks/useSearchSuggestions';
 import {
   GraphTooltip,
@@ -49,13 +50,6 @@ import { GRAPH_CONFIG, PANEL_STYLES, getMinimapNodeColor } from '../constants';
 
 const MINIMAP_NODE_LIMIT = 2000;
 const ELK_NODE_LIMIT = 2000;
-
-const nowMs = () => {
-  if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
-    return performance.now();
-  }
-  return Date.now();
-};
 
 /**
  * Helper component to handle node focusing.
@@ -307,8 +301,13 @@ export function GraphView({
   const { state, actions } = useLineage();
   const setLayoutMetrics = useLineageStore((store) => store.setLayoutMetrics);
   const setGraphMetrics = useLineageStore((store) => store.setGraphMetrics);
+  const setIsLayouting = useLineageStore((store) => store.setIsLayouting);
+  const setIsBuilding = useLineageStore((store) => store.setIsBuilding);
   const { result, selectedNodeId, searchTerm, viewMode, layoutAlgorithm, collapsedNodeIds, defaultCollapsed, showColumnEdges, showScriptTables, expandedTableIds, tableFilter } = state;
-  const deferredResult = useDeferredValue(result);
+  // Use result directly instead of useDeferredValue. The deferred approach was causing
+  // ~7 second delays during concurrent rendering. Worker-based computation with
+  // isBuilding/isLayouting indicators now provides better UX than deferred rendering.
+  const analysisResult = result;
 
   // Determine if search is controlled externally
   const isSearchControlled = controlledSearchTerm !== undefined;
@@ -333,75 +332,128 @@ export function GraphView({
     setFocusMode(enabled);
   }, []);
 
-  const statement = useMemo(() => {
-    if (!deferredResult || !deferredResult.statements) return null;
-    return mergeStatements(deferredResult.statements);
-  }, [deferredResult]);
+  const lineageNodeMapRef = useRef<Map<string, LineageNode>>(new Map());
+
+  // Cleanup refs on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      lineageNodeMapRef.current.clear();
+    };
+  }, []);
 
   // Determine searchable types based on view mode and column edges setting
   const searchableTypes = useMemo((): SearchableType[] => {
-    switch (viewMode) {
-      case 'script':
-        return ['script', 'table', 'view', 'cte'];
-      case 'table':
-      default:
-        // When showing column edges, include columns in searchable types
-        return showColumnEdges
-          ? ['table', 'view', 'cte', 'column', 'script']
-          : ['table', 'view', 'cte', 'script'];
+    if (viewMode === 'script') {
+      return ['script', 'table', 'view', 'cte'];
     }
+    // Table view: include columns when showing column edges
+    return showColumnEdges
+      ? ['table', 'view', 'cte', 'column', 'script']
+      : ['table', 'view', 'cte', 'script'];
   }, [viewMode, showColumnEdges]);
 
-  // Build the raw graph based on view mode (before filtering)
-  const { builtGraph, direction, buildDurationMs } = useMemo(() => {
-    const buildStart = nowMs();
+  // State for async graph building results
+  const [builtGraph, setBuiltGraph] = useState<{ nodes: FlowNode[]; edges: FlowEdge[] }>({ nodes: [], edges: [] });
+  const [buildDurationMs, setBuildDurationMs] = useState<number | null>(null);
 
-    if (!deferredResult || !deferredResult.statements) {
-      return { builtGraph: { nodes: [], edges: [] }, direction: 'LR' as const, buildDurationMs: null };
+  // Counter for unique build request IDs (avoids StrictMode timing confusion)
+  const buildIdCounterRef = useRef(0);
+
+  // Direction is always LR for now
+  const direction = 'LR' as const;
+
+  // Build the raw graph asynchronously in Web Worker (before filtering)
+  useEffect(() => {
+    if (!analysisResult || !analysisResult.statements) {
+      setBuiltGraph({ nodes: [], edges: [] });
+      setBuildDurationMs(null);
+      lineageNodeMapRef.current = new Map();
+      return;
     }
 
-    try {
-      if (viewMode === 'script') {
-        const graph = buildScriptLevelGraph(
-          deferredResult.statements,
-          selectedNodeId,
-          effectiveSearchTerm,
-          showScriptTables
-        );
-        return {
-          builtGraph: graph,
-          direction: 'LR' as const,
-          buildDurationMs: nowMs() - buildStart,
-        };
+    let cancelled = false;
+    const buildId = ++buildIdCounterRef.current;
+    const buildStartTime = nowMs();
+    setIsBuilding(true);
+    lineageNodeMapRef.current = new Map();
+
+    if (GRAPH_DEBUG) console.log(`[GraphBuilder #${buildId}] Starting async graph build`);
+
+    // Use queueMicrotask to yield to the browser for spinner rendering
+    // before starting worker communication
+    queueMicrotask(() => {
+      if (cancelled) {
+        if (GRAPH_DEBUG) console.log(`[GraphBuilder #${buildId}] Cancelled before worker call`);
+        return;
       }
 
-      // Table view (with optional column-level edges)
-      if (!statement) {
-        return { builtGraph: { nodes: [], edges: [] }, direction: 'LR' as const, buildDurationMs: null };
-      }
-      const graph = {
-        nodes: buildFlowNodes(
-          statement,
-          selectedNodeId,
-          effectiveSearchTerm,
-          collapsedNodeIds,
-          expandedTableIds,
-          deferredResult.resolvedSchema,
-          defaultCollapsed,
-          deferredResult.globalLineage
-        ),
-        edges: buildFlowEdges(statement, showColumnEdges, defaultCollapsed, collapsedNodeIds),
-      };
-      return {
-        builtGraph: graph,
-        direction: 'LR' as const,
-        buildDurationMs: nowMs() - buildStart,
-      };
-    } catch (error) {
-      console.error('Graph building failed:', error);
-      return { builtGraph: { nodes: [], edges: [] }, direction: 'LR' as const, buildDurationMs: null };
-    }
-  }, [deferredResult, statement, selectedNodeId, effectiveSearchTerm, viewMode, collapsedNodeIds, defaultCollapsed, showColumnEdges, showScriptTables, expandedTableIds]);
+      const workerStartTime = nowMs();
+      if (GRAPH_DEBUG) console.log(`[GraphBuilder #${buildId}] Calling worker (${(workerStartTime - buildStartTime).toFixed(1)}ms since effect start)`);
+
+      const buildPromise = viewMode === 'script'
+        ? buildScriptGraphInWorker({
+            statements: analysisResult.statements,
+            selectedNodeId,
+            searchTerm: effectiveSearchTerm,
+            showTables: showScriptTables,
+          })
+        : buildTableGraphInWorker({
+            statements: analysisResult.statements,
+            selectedNodeId,
+            searchTerm: effectiveSearchTerm,
+            collapsedNodeIds,
+            expandedTableIds,
+            resolvedSchema: analysisResult.resolvedSchema,
+            defaultCollapsed,
+            globalLineage: analysisResult.globalLineage,
+            showColumnEdges,
+          });
+
+      buildPromise
+        .then(({ nodes, edges, lineageNodes }) => {
+          const callbackTime = nowMs();
+          const totalDuration = callbackTime - buildStartTime;
+          const workerRoundtrip = callbackTime - workerStartTime;
+
+          if (GRAPH_DEBUG) {
+            console.log(`[GraphBuilder #${buildId}] Worker returned: ${nodes.length} nodes, ${edges.length} edges`);
+            console.log(`[GraphBuilder #${buildId}] Worker roundtrip: ${workerRoundtrip.toFixed(1)}ms, Total: ${totalDuration.toFixed(1)}ms`);
+          }
+
+          if (!cancelled) {
+            setBuiltGraph({ nodes, edges });
+            setBuildDurationMs(totalDuration);
+            setIsBuilding(false);
+            if (lineageNodes) {
+              lineageNodeMapRef.current = new Map(lineageNodes.map((node) => [node.id, node]));
+            }
+          } else {
+            if (GRAPH_DEBUG) console.log(`[GraphBuilder #${buildId}] Cancelled, discarding result`);
+          }
+        })
+        .catch((error) => {
+          // Ignore cancellation errors
+          if (error instanceof Error && error.message === 'Build cancelled') {
+            if (GRAPH_DEBUG) console.log(`[GraphBuilder #${buildId}] Build cancelled (expected)`);
+            return;
+          }
+
+          console.error(`[GraphBuilder #${buildId}] Build failed:`, error);
+          if (!cancelled) {
+            setBuiltGraph({ nodes: [], edges: [] });
+            setBuildDurationMs(null);
+            setIsBuilding(false);
+            lineageNodeMapRef.current = new Map();
+          }
+        });
+    });
+
+    return () => {
+      if (GRAPH_DEBUG) console.log(`[GraphBuilder #${buildId}] Cleanup - cancelling`);
+      cancelled = true;
+      cancelPendingBuilds();
+    };
+  }, [analysisResult, selectedNodeId, effectiveSearchTerm, viewMode, collapsedNodeIds, defaultCollapsed, showColumnEdges, showScriptTables, expandedTableIds, setIsBuilding]);
 
   // Apply filtering (focus mode, table filter, namespace filter) and compute highlights
   const { filteredGraph, highlightIds } = useGraphFiltering({
@@ -415,16 +467,41 @@ export function GraphView({
     namespaceFilter,
   });
 
-  // Enhance graph with highlight styling
-  const { rawNodes, rawEdges } = useMemo(() => {
-    const enhanced = enhanceGraphWithHighlights(filteredGraph, highlightIds);
-    return { rawNodes: enhanced.nodes, rawEdges: enhanced.edges };
-  }, [filteredGraph, highlightIds]);
-
-  const showMiniMap = rawNodes.length > 0 && rawNodes.length <= MINIMAP_NODE_LIMIT;
+  // Enhance graph with highlight styling (render data), but keep layout inputs separate
+  // so highlight-only changes don't trigger full layout recomputation.
+  const renderGraph = useMemo(
+    () => enhanceGraphWithHighlights(filteredGraph, highlightIds),
+    [filteredGraph, highlightIds]
+  );
+  const renderGraphRef = useRef(renderGraph);
 
   useEffect(() => {
-    if (!deferredResult) {
+    renderGraphRef.current = renderGraph;
+  }, [renderGraph]);
+
+  const layoutNodes = filteredGraph.nodes;
+  const layoutEdges = filteredGraph.edges;
+
+  const renderNodeDataById = useMemo(() => {
+    const map = new Map<string, FlowNode['data']>();
+    for (const node of renderGraph.nodes) {
+      map.set(node.id, node.data);
+    }
+    return map;
+  }, [renderGraph.nodes]);
+
+  const renderEdgeById = useMemo(() => {
+    const map = new Map<string, FlowEdge>();
+    for (const edge of renderGraph.edges) {
+      map.set(edge.id, edge);
+    }
+    return map;
+  }, [renderGraph.edges]);
+
+  const showMiniMap = renderGraph.nodes.length > 0 && renderGraph.nodes.length <= MINIMAP_NODE_LIMIT;
+
+  useEffect(() => {
+    if (!analysisResult) {
       return;
     }
 
@@ -434,7 +511,7 @@ export function GraphView({
       edgeCount: builtGraph.edges.length,
       lastUpdatedAt: Date.now(),
     });
-  }, [deferredResult, buildDurationMs, builtGraph.nodes.length, builtGraph.edges.length, setGraphMetrics]);
+  }, [analysisResult, buildDurationMs, builtGraph.nodes.length, builtGraph.edges.length, setGraphMetrics]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<FlowEdge>([]);
@@ -460,7 +537,7 @@ export function GraphView({
   // The "double render" is intentional - it provides immediate visual feedback
   // while the layout computes, preventing a blank → populated transition.
   useEffect(() => {
-    if (rawNodes.length === 0) {
+    if (layoutNodes.length === 0) {
       setLayoutedNodes([]);
       setLayoutedEdges([]);
       setNodes([]);
@@ -469,40 +546,61 @@ export function GraphView({
     }
 
     const effectiveLayoutAlgorithm =
-      layoutAlgorithm === 'elk' && rawNodes.length > ELK_NODE_LIMIT ? 'dagre' : layoutAlgorithm;
+      layoutAlgorithm === 'elk' && layoutNodes.length > ELK_NODE_LIMIT ? 'dagre' : layoutAlgorithm;
 
     let cancelled = false;
     layoutStartRef.current = performance.now();
     layoutSnapshotRef.current = {
-      resultSummary: deferredResult ? deferredResult.summary : null,
+      resultSummary: analysisResult ? analysisResult.summary : null,
       viewMode,
       showScriptTables,
       layoutAlgorithm: effectiveLayoutAlgorithm,
       defaultCollapsed,
     };
 
+    setIsLayouting(true);
+
+    const renderGraphSnapshot = renderGraphRef.current;
+
+    if (GRAPH_DEBUG) console.time('[Layout] Stage 1: preserve positions');
     // Stage 1: Preserve existing node positions for smoother transitions.
     // This prevents nodes from jumping to origin (0,0) while layout computes.
     setNodes((currentNodes) => {
       if (currentNodes.length === 0) {
-        return getFastLayoutedNodes(rawNodes, direction);
+        if (GRAPH_DEBUG) console.time('[Layout] getFastLayoutedNodes');
+        const fastResult = getFastLayoutedNodes(renderGraphSnapshot.nodes, direction);
+        if (GRAPH_DEBUG) console.timeEnd('[Layout] getFastLayoutedNodes');
+        return fastResult;
       }
       const positionMap = new Map(currentNodes.map((node) => [node.id, node.position]));
-      return rawNodes.map((node) => {
+      return renderGraphSnapshot.nodes.map((node) => {
         const position = positionMap.get(node.id);
         return position ? { ...node, position } : node;
       });
     });
-    setEdges(rawEdges);
+    setEdges(renderGraphSnapshot.edges);
+    if (GRAPH_DEBUG) console.timeEnd('[Layout] Stage 1: preserve positions');
 
-    // Use worker-based layout for both algorithms to keep UI responsive
-    getLayoutedElementsInWorker(rawNodes, rawEdges, direction, effectiveLayoutAlgorithm)
+    if (GRAPH_DEBUG) {
+      console.log('[Layout] Starting worker layout for', layoutNodes.length, 'nodes,', layoutEdges.length, 'edges');
+      console.time('[Layout] Worker layout total');
+    }
+
+    // Use queueMicrotask to yield to browser for spinner rendering
+    queueMicrotask(() => {
+      if (cancelled) return;
+
+      // Use worker-based layout for both algorithms to keep UI responsive
+      getLayoutedElementsInWorker(layoutNodes, layoutEdges, direction, effectiveLayoutAlgorithm)
       .then(({ nodes, edges }) => {
+        if (GRAPH_DEBUG) console.timeEnd('[Layout] Worker layout total');
         if (!cancelled) {
+          if (GRAPH_DEBUG) console.time('[Layout] Apply layouted nodes/edges');
           setLayoutedNodes(nodes);
           setLayoutedEdges(edges);
+          if (GRAPH_DEBUG) console.timeEnd('[Layout] Apply layouted nodes/edges');
           const durationMs = layoutStartRef.current !== null
-            ? performance.now() - layoutStartRef.current
+            ? nowMs() - layoutStartRef.current
             : null;
           setLayoutMetrics({
             lastDurationMs: durationMs,
@@ -511,17 +609,27 @@ export function GraphView({
             algorithm: effectiveLayoutAlgorithm,
             lastUpdatedAt: Date.now(),
           });
+          setIsLayouting(false);
         }
       })
       .catch((error) => {
+        // Ignore cancellation errors - these are expected during React StrictMode
+        // double-invoke or when dependencies change rapidly
+        if (error instanceof Error && error.message === 'Layout cancelled') {
+          if (GRAPH_DEBUG) console.log('[Layout] Cancelled (expected)');
+          return;
+        }
+
         console.error('Layout failed:', error);
         // Final fallback to sync dagre on main thread
         if (!cancelled) {
-          const { nodes, edges } = getLayoutedElements(rawNodes, rawEdges, direction, 'dagre');
+          if (GRAPH_DEBUG) console.time('[Layout] Fallback sync layout');
+          const { nodes, edges } = getLayoutedElements(layoutNodes, layoutEdges, direction, 'dagre');
+          if (GRAPH_DEBUG) console.timeEnd('[Layout] Fallback sync layout');
           setLayoutedNodes(nodes);
           setLayoutedEdges(edges);
           const durationMs = layoutStartRef.current !== null
-            ? performance.now() - layoutStartRef.current
+            ? nowMs() - layoutStartRef.current
             : null;
           setLayoutMetrics({
             lastDurationMs: durationMs,
@@ -530,14 +638,16 @@ export function GraphView({
             algorithm: 'dagre',
             lastUpdatedAt: Date.now(),
           });
+          setIsLayouting(false);
         }
       });
+    });
 
     return () => {
       cancelled = true;
       cancelLayoutRequests();
     };
-  }, [rawNodes, rawEdges, direction, layoutAlgorithm, defaultCollapsed, showScriptTables, viewMode, deferredResult, setNodes, setEdges, setLayoutMetrics]);
+  }, [layoutNodes, layoutEdges, direction, layoutAlgorithm, defaultCollapsed, showScriptTables, viewMode, analysisResult, setNodes, setEdges, setLayoutMetrics, setIsLayouting]);
 
   const isInitialized = useRef(false);
   const lastResultId = useRef<string | null>(null);
@@ -556,11 +666,42 @@ export function GraphView({
   // - Incremental update: preserve user-dragged positions, only update node data
   useEffect(() => {
     if (layoutedNodes.length === 0) return;
+    if (GRAPH_DEBUG) {
+      console.time('[Layout] Stage 2: apply layout positions');
+      console.log('[Layout] Stage 2 triggered for', layoutedNodes.length, 'nodes');
+    }
 
     const layoutSnapshot = layoutSnapshotRef.current;
     if (!layoutSnapshot) {
+      if (GRAPH_DEBUG) console.timeEnd('[Layout] Stage 2: apply layout positions');
       return;
     }
+
+    const hasRenderData = layoutedNodes.every((node) => renderNodeDataById.has(node.id));
+    if (!hasRenderData) {
+      if (GRAPH_DEBUG) console.timeEnd('[Layout] Stage 2: apply layout positions');
+      return;
+    }
+
+    const applyRenderDataToNode = (node: FlowNode): FlowNode => {
+      const renderData = renderNodeDataById.get(node.id);
+      if (!renderData || node.data === renderData) return node;
+      return { ...node, data: renderData };
+    };
+
+    const applyRenderDataToEdge = (edge: FlowEdge): FlowEdge => {
+      const renderEdge = renderEdgeById.get(edge.id);
+      if (!renderEdge || edge === renderEdge) return edge;
+      return {
+        ...edge,
+        type: renderEdge.type,
+        label: renderEdge.label,
+        animated: renderEdge.animated,
+        zIndex: renderEdge.zIndex,
+        data: renderEdge.data,
+        style: renderEdge.style,
+      };
+    };
 
     // Note: The layoutIsStale check was removed because it's incompatible with
     // async Web Worker layout. With async layout, layoutedNodes always reflects
@@ -591,8 +732,8 @@ export function GraphView({
       nodeCollapseChanged;
 
     if (needsFullUpdate) {
-      setNodes(layoutedNodes);
-      setEdges(layoutedEdges);
+      setNodes(layoutedNodes.map(applyRenderDataToNode));
+      setEdges(layoutedEdges.map(applyRenderDataToEdge));
       isInitialized.current = true;
       lastResultId.current = currentResultId;
       lastViewMode.current = layoutSnapshot.viewMode;
@@ -605,12 +746,12 @@ export function GraphView({
         return layoutedNodes.map((layoutNode) => {
           const currentNode = currentNodes.find((n) => n.id === layoutNode.id);
           if (currentNode) {
-            return { ...layoutNode, position: currentNode.position };
+            return applyRenderDataToNode({ ...layoutNode, position: currentNode.position });
           }
-          return layoutNode;
+          return applyRenderDataToNode(layoutNode);
         });
       });
-      setEdges(layoutedEdges);
+      setEdges(layoutedEdges.map(applyRenderDataToEdge));
     }
 
     // Update tracked collapse states
@@ -621,7 +762,8 @@ export function GraphView({
       }
     }
     lastAppliedCollapseStates.current = newCollapseStates;
-  }, [layoutedNodes, layoutedEdges, setNodes, setEdges]);
+    if (GRAPH_DEBUG) console.timeEnd('[Layout] Stage 2: apply layout positions');
+  }, [layoutedNodes, layoutedEdges, renderNodeDataById, renderEdgeById, setNodes, setEdges]);
 
   const internalGraphRef = useRef<HTMLDivElement>(null);
   const finalRef = graphContainerRef || internalGraphRef;
@@ -640,24 +782,17 @@ export function GraphView({
         }
       }
 
-      // 2. Try to get from lineage statement (Table View / Column View)
-      if (statement) {
-        const lineageNode = statement.nodes.find((n) => n.id === node.id);
-        if (lineageNode) {
-          if (lineageNode.span) {
-            actions.highlightSpan(lineageNode.span);
-            span = lineageNode.span;
-          }
-          onNodeClick?.(lineageNode);
+      // 2. Try to get lineage info for table/column nodes
+      const lineageNode = lineageNodeMapRef.current.get(node.id);
+      if (lineageNode) {
+        if (lineageNode.span) {
+          actions.highlightSpan(lineageNode.span);
+          span = lineageNode.span;
+        }
+        onNodeClick?.(lineageNode);
 
-          // If node doesn't have sourceName, use statement's sourceName OR metadata
-          if (!sourceName) {
-            if (lineageNode.metadata && typeof lineageNode.metadata.sourceName === 'string') {
-              sourceName = lineageNode.metadata.sourceName;
-            } else if (statement.sourceName) {
-              sourceName = statement.sourceName;
-            }
-          }
+        if (!sourceName && lineageNode.metadata && typeof lineageNode.metadata.sourceName === 'string') {
+          sourceName = lineageNode.metadata.sourceName;
         }
       }
 
@@ -687,7 +822,7 @@ export function GraphView({
         });
       }
     },
-    [actions, statement, onNodeClick]
+    [actions, onNodeClick]
   );
 
   const handleEdgeClick = useCallback(
@@ -701,7 +836,7 @@ export function GraphView({
     actions.selectNode(null);
   }, [actions]);
 
-  if (!result || !statement) {
+  if (!result || !result.statements || result.statements.length === 0) {
     return (
       <div
         className={className}
@@ -781,6 +916,9 @@ export function GraphView({
         <Panel position="top-right" className="flex gap-3 items-start">
           <Legend viewMode={viewMode} />
           <LayoutSelector />
+        </Panel>
+        <Panel position="bottom-left" className="!m-3">
+          <LayoutProgressIndicator />
         </Panel>
         {showMiniMap && (
           <MiniMap
