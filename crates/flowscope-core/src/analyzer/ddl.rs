@@ -70,6 +70,13 @@ impl<'a> Analyzer<'a> {
                 continue;
             }
 
+            // Skip if table was seeded from DDL (CREATE TABLE) during pre-collection.
+            // DDL-seeded tables have complete column definitions and should not be
+            // overwritten by partial column sets discovered during query analysis.
+            if self.schema.is_ddl_seeded(canonical) {
+                continue;
+            }
+
             // Sort columns by name for deterministic output
             let mut column_list: Vec<_> = columns.iter().collect();
             column_list.sort_by(|a, b| a.0.cmp(b.0));

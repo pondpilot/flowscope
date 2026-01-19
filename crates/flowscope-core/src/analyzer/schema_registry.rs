@@ -168,6 +168,13 @@ pub(crate) struct SchemaRegistry {
     /// we suppress `UNRESOLVED_REFERENCE` warnings for external tables since
     /// the user hasn't provided authoritative schema metadata.
     forward_declared_tables: HashSet<String>,
+    /// Tables that were seeded from DDL (CREATE TABLE) during pre-collection.
+    ///
+    /// These tables have complete column definitions from their DDL statements
+    /// and should NOT be overwritten by partial column sets discovered during
+    /// query analysis. This prevents the "schema drift" issue where queries
+    /// would replace complete DDL schemas with incomplete query-derived schemas.
+    ddl_seeded_tables: HashSet<String>,
     /// Tables from imported (user-provided) schema that should not be overwritten.
     ///
     /// These represent authoritative schema from an external source (e.g., database catalog).
@@ -207,6 +214,7 @@ impl SchemaRegistry {
         let mut registry = Self {
             known_tables: HashSet::new(),
             forward_declared_tables: HashSet::new(),
+            ddl_seeded_tables: HashSet::new(),
             imported_tables: HashSet::new(),
             schema_tables: HashMap::new(),
             default_catalog: None,
@@ -302,12 +310,22 @@ impl SchemaRegistry {
         self.imported_tables.contains(canonical)
     }
 
+    /// Checks if a table was seeded from DDL during pre-collection.
+    ///
+    /// DDL-seeded tables have complete column definitions from their
+    /// CREATE TABLE statements and should not be overwritten by partial
+    /// column sets discovered during query analysis.
+    pub(crate) fn is_ddl_seeded(&self, canonical: &str) -> bool {
+        self.ddl_seeded_tables.contains(canonical)
+    }
+
     /// Removes an implied schema entry (for DROP statements).
     pub(crate) fn remove_implied(&mut self, canonical: &str) {
         if !self.imported_tables.contains(canonical) {
             self.schema_tables.remove(canonical);
             self.known_tables.remove(canonical);
             self.forward_declared_tables.remove(canonical);
+            self.ddl_seeded_tables.remove(canonical);
             self.invalidate_resolution_cache();
         }
     }
@@ -477,6 +495,9 @@ impl SchemaRegistry {
         is_temporary: bool,
         statement_index: usize,
     ) {
+        // Track that this table came from DDL seeding (has complete schema)
+        self.ddl_seeded_tables.insert(canonical.to_string());
+
         // Ignore the return value since we don't emit warnings during seeding.
         let _ = self.register_implied_internal(RegisterImpliedParams {
             canonical,

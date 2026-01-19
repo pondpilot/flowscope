@@ -116,6 +116,42 @@ impl<'a> Analyzer<'a> {
                 self.analyze_drop(&mut ctx, object_type, names);
                 "DROP".to_string()
             }
+            // Statements that are recognized but don't produce lineage
+            // (admin, session, and metadata operations)
+            Statement::AlterTable { .. } => "ALTER_TABLE".to_string(),
+            Statement::AlterView { .. } => "ALTER_VIEW".to_string(),
+            Statement::AlterIndex { .. } => "ALTER_INDEX".to_string(),
+            Statement::AlterSchema(_) => "ALTER_SCHEMA".to_string(),
+            Statement::AlterRole { .. } => "ALTER_ROLE".to_string(),
+            Statement::Grant { .. } => "GRANT".to_string(),
+            Statement::Revoke { .. } => "REVOKE".to_string(),
+            Statement::Set(_) => "SET".to_string(),
+            Statement::ShowVariable { .. } | Statement::ShowVariables { .. } => "SHOW".to_string(),
+            Statement::Truncate { .. } => "TRUNCATE".to_string(),
+            Statement::Comment { .. } => "COMMENT".to_string(),
+            Statement::Explain { .. } | Statement::ExplainTable { .. } => "EXPLAIN".to_string(),
+            Statement::Analyze { .. } => "ANALYZE".to_string(),
+            Statement::Call(_) => "CALL".to_string(),
+            Statement::Use(_) => "USE".to_string(),
+            Statement::StartTransaction { .. }
+            | Statement::Commit { .. }
+            | Statement::Rollback { .. }
+            | Statement::Savepoint { .. } => "TRANSACTION".to_string(),
+            Statement::CreateIndex(_) => "CREATE_INDEX".to_string(),
+            Statement::CreateSchema { .. } => "CREATE_SCHEMA".to_string(),
+            Statement::CreateDatabase { .. } => "CREATE_DATABASE".to_string(),
+            Statement::CreateRole { .. } => "CREATE_ROLE".to_string(),
+            Statement::CreateFunction { .. } => "CREATE_FUNCTION".to_string(),
+            Statement::CreateProcedure { .. } => "CREATE_PROCEDURE".to_string(),
+            Statement::CreateTrigger { .. } => "CREATE_TRIGGER".to_string(),
+            Statement::CreateType { .. } => "CREATE_TYPE".to_string(),
+            Statement::CreateSequence { .. } => "CREATE_SEQUENCE".to_string(),
+            Statement::CreateExtension { .. } => "CREATE_EXTENSION".to_string(),
+            Statement::DropFunction { .. } => "DROP_FUNCTION".to_string(),
+            Statement::DropProcedure { .. } => "DROP_PROCEDURE".to_string(),
+            Statement::DropTrigger { .. } => "DROP_TRIGGER".to_string(),
+            Statement::Copy { .. } => "COPY".to_string(),
+            Statement::CopyIntoSnowflake { .. } => "COPY".to_string(),
             _ => {
                 self.issues.push(
                     Issue::warning(
