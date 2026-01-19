@@ -58,10 +58,14 @@ export interface SchemaViewState {
   selectedTableName: string | null;
 }
 
-/** IssuesView state - for future expansion */
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+/** IssuesView state - filter and display options */
 export interface IssuesViewState {
-  // Future: collapsed categories, sort order, etc.
+  /** Severity filter: 'all' shows everything, others filter to that severity */
+  severity: 'all' | 'error' | 'warning' | 'info';
+  /** Selected issue codes to show (empty = show all) */
+  codes: string[];
+  /** Selected source files to show (empty = show all) */
+  sourceFiles: string[];
 }
 
 /**
@@ -126,7 +130,11 @@ const DEFAULT_SCHEMA_STATE: SchemaViewState = {
   selectedTableName: null,
 };
 
-const DEFAULT_ISSUES_STATE: IssuesViewState = {};
+const DEFAULT_ISSUES_STATE: IssuesViewState = {
+  severity: 'all',
+  codes: [],
+  sourceFiles: [],
+};
 
 const DEFAULT_NAMESPACE_FILTER_STATE: NamespaceFilterState = {
   schemas: [],

@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useLineage } from '@pondpilot/flowscope-react';
 import { AlertCircle, Database, ExternalLink, Eye } from 'lucide-react';
 import { Button } from './ui/button';
@@ -8,9 +9,15 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { IssuesFilterBar } from './IssuesFilterBar';
+import {
+  useViewStateStore,
+  getIssuesStateWithDefaults,
+} from '@/lib/view-state-store';
 import type { Issue } from '@pondpilot/flowscope-core';
 
 interface SchemaAwareIssuesPanelProps {
+  projectId: string;
   onOpenSchemaEditor: () => void;
 }
 
@@ -22,17 +29,20 @@ function isSchemaIssue(issue: Issue): boolean {
   return SCHEMA_ISSUE_CODES.includes(issue.code);
 }
 
-export function SchemaAwareIssuesPanel({ onOpenSchemaEditor }: SchemaAwareIssuesPanelProps) {
+export function SchemaAwareIssuesPanel({ projectId, onOpenSchemaEditor }: SchemaAwareIssuesPanelProps) {
   const { state, actions } = useLineage();
   const { result } = state;
   const { navigateTo, navigateToEditor } = useNavigation();
   const statements = result?.statements || [];
 
-  const sortedIssues = result?.issues
-    .slice()
-    .sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]) || [];
-
-  const schemaIssueCount = sortedIssues.filter(isSchemaIssue).length;
+  // Get filter state from store
+  const storedFilterState = useViewStateStore(
+    (state) => state.viewStates[projectId]?.issues
+  );
+  const filterState = useMemo(
+    () => getIssuesStateWithDefaults(storedFilterState),
+    [storedFilterState]
+  );
 
   // Get the source name for an issue based on statement index
   const getIssueSourceName = (issue: Issue): string | undefined => {
@@ -41,6 +51,75 @@ export function SchemaAwareIssuesPanel({ onOpenSchemaEditor }: SchemaAwareIssues
     }
     return undefined;
   };
+
+  // Sort issues by severity
+  const sortedIssues = useMemo(() => {
+    return (
+      result?.issues
+        .slice()
+        .sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]) || []
+    );
+  }, [result?.issues]);
+
+  // Extract available codes and source files for filter dropdowns
+  const { availableCodes, availableSourceFiles } = useMemo(() => {
+    const codes = new Set<string>();
+    const files = new Set<string>();
+
+    for (const issue of sortedIssues) {
+      codes.add(issue.code);
+      const sourceName = getIssueSourceName(issue);
+      if (sourceName) {
+        files.add(sourceName);
+      }
+    }
+
+    return {
+      availableCodes: Array.from(codes).sort(),
+      availableSourceFiles: Array.from(files).sort(),
+    };
+  }, [sortedIssues, statements]);
+
+  // Apply filters to issues
+  const filteredIssues = useMemo(() => {
+    return sortedIssues.filter((issue) => {
+      // Severity filter
+      if (filterState.severity !== 'all' && issue.severity !== filterState.severity) {
+        return false;
+      }
+
+      // Code filter
+      if (filterState.codes.length > 0 && !filterState.codes.includes(issue.code)) {
+        return false;
+      }
+
+      // Source file filter
+      if (filterState.sourceFiles.length > 0) {
+        const sourceName = getIssueSourceName(issue);
+        if (!sourceName || !filterState.sourceFiles.includes(sourceName)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [sortedIssues, filterState, statements]);
+
+  // Calculate counts for the filter bar (total, not filtered)
+  const counts = useMemo(() => {
+    const errors = sortedIssues.filter((i) => i.severity === 'error').length;
+    const warnings = sortedIssues.filter((i) => i.severity === 'warning').length;
+    const infos = sortedIssues.filter((i) => i.severity === 'info').length;
+    return {
+      all: sortedIssues.length,
+      errors,
+      warnings,
+      infos,
+    };
+  }, [sortedIssues]);
+
+  // Count schema issues from total (not filtered) to keep banner stable
+  const schemaIssueCount = sortedIssues.filter(isSchemaIssue).length;
 
   const handleIssueClick = (issue: Issue) => {
     if (issue.span) {
@@ -73,19 +152,35 @@ export function SchemaAwareIssuesPanel({ onOpenSchemaEditor }: SchemaAwareIssues
     );
   }
 
-  const { errors, warnings, infos } = result.summary.issueCount;
+  const hasActiveFilters =
+    filterState.severity !== 'all' ||
+    filterState.codes.length > 0 ||
+    filterState.sourceFiles.length > 0;
 
   return (
     <div className="flex flex-col h-full bg-background">
+      {/* Header with schema issue indicator */}
       <div className="px-4 py-3 border-b bg-muted/10">
         <div className="flex items-center justify-between mb-2">
           <h3 className="font-semibold text-sm">Issues</h3>
           <div className="flex items-center gap-2 text-xs">
-            {errors > 0 && <span className="text-error-light dark:text-error-dark font-medium">{errors} errors</span>}
-            {warnings > 0 && <span className="text-warning-light dark:text-warning-dark font-medium">{warnings} warnings</span>}
-            {infos > 0 && <span className="text-primary font-medium">{infos} info</span>}
+            {counts.errors > 0 && (
+              <span className="text-error-light dark:text-error-dark font-medium">
+                {counts.errors} errors
+              </span>
+            )}
+            {counts.warnings > 0 && (
+              <span className="text-warning-light dark:text-warning-dark font-medium">
+                {counts.warnings} warnings
+              </span>
+            )}
+            {counts.infos > 0 && (
+              <span className="text-primary font-medium">{counts.infos} info</span>
+            )}
             {sortedIssues.length === 0 && (
-              <span className="text-success-light dark:text-success-dark font-medium">No issues</span>
+              <span className="text-success-light dark:text-success-dark font-medium">
+                No issues
+              </span>
             )}
           </div>
         </div>
@@ -108,15 +203,36 @@ export function SchemaAwareIssuesPanel({ onOpenSchemaEditor }: SchemaAwareIssues
         )}
       </div>
 
+      {/* Filter bar - only show if there are issues */}
+      {sortedIssues.length > 0 && (
+        <IssuesFilterBar
+          projectId={projectId}
+          availableCodes={availableCodes}
+          availableSourceFiles={availableSourceFiles}
+          counts={counts}
+        />
+      )}
+
+      {/* Issues list */}
       <div className="flex-1 overflow-auto p-4">
         {sortedIssues.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
             <p className="text-sm">Analysis completed without issues</p>
           </div>
+        ) : filteredIssues.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
+            <p className="text-sm">No issues match the current filters</p>
+          </div>
         ) : (
           <TooltipProvider delayDuration={300}>
             <div className="space-y-2">
-              {sortedIssues.map((issue, idx) => {
+              {/* Filtered count indicator */}
+              {hasActiveFilters && (
+                <p className="text-xs text-muted-foreground mb-3">
+                  Showing {filteredIssues.length} of {sortedIssues.length} issues
+                </p>
+              )}
+              {filteredIssues.map((issue, idx) => {
                 const isSchema = isSchemaIssue(issue);
                 const sourceName = getIssueSourceName(issue);
                 return (
@@ -127,8 +243,8 @@ export function SchemaAwareIssuesPanel({ onOpenSchemaEditor }: SchemaAwareIssues
                       issue.severity === 'error'
                         ? 'border-error-light/30 dark:border-error-dark/30 bg-error-light/10 dark:bg-error-dark/10 hover:bg-error-light/20 dark:hover:bg-error-dark/20'
                         : issue.severity === 'warning'
-                        ? 'border-warning-light/30 dark:border-warning-dark/30 bg-warning-light/10 dark:bg-warning-dark/10 hover:bg-warning-light/20 dark:hover:bg-warning-dark/20'
-                        : 'border-primary/20 bg-highlight hover:bg-highlight/80'
+                          ? 'border-warning-light/30 dark:border-warning-dark/30 bg-warning-light/10 dark:bg-warning-dark/10 hover:bg-warning-light/20 dark:hover:bg-warning-dark/20'
+                          : 'border-primary/20 bg-highlight hover:bg-highlight/80'
                     } ${isSchema ? 'ring-2 ring-primary ring-offset-1 dark:ring-offset-background' : ''}`}
                   >
                     <div className="flex items-start justify-between gap-2 mb-1">
@@ -138,8 +254,8 @@ export function SchemaAwareIssuesPanel({ onOpenSchemaEditor }: SchemaAwareIssues
                             issue.severity === 'error'
                               ? 'text-error-light dark:text-error-dark'
                               : issue.severity === 'warning'
-                              ? 'text-warning-light dark:text-warning-dark'
-                              : 'text-primary'
+                                ? 'text-warning-light dark:text-warning-dark'
+                                : 'text-primary'
                           }`}
                         />
                         <span
@@ -147,8 +263,8 @@ export function SchemaAwareIssuesPanel({ onOpenSchemaEditor }: SchemaAwareIssues
                             issue.severity === 'error'
                               ? 'text-error-light dark:text-error-dark'
                               : issue.severity === 'warning'
-                              ? 'text-warning-light dark:text-warning-dark'
-                              : 'text-primary'
+                                ? 'text-warning-light dark:text-warning-dark'
+                                : 'text-primary'
                           }`}
                         >
                           {issue.severity}
@@ -185,7 +301,9 @@ export function SchemaAwareIssuesPanel({ onOpenSchemaEditor }: SchemaAwareIssues
                                 <Eye className="w-3.5 h-3.5" />
                               </button>
                             </TooltipTrigger>
-                            <TooltipContent side="top" className="text-xs">Show in Lineage</TooltipContent>
+                            <TooltipContent side="top" className="text-xs">
+                              Show in Lineage
+                            </TooltipContent>
                           </Tooltip>
                         )}
                         {sourceName && (
@@ -209,7 +327,9 @@ export function SchemaAwareIssuesPanel({ onOpenSchemaEditor }: SchemaAwareIssues
                                 <ExternalLink className="w-3.5 h-3.5" />
                               </button>
                             </TooltipTrigger>
-                            <TooltipContent side="top" className="text-xs">Open in Editor</TooltipContent>
+                            <TooltipContent side="top" className="text-xs">
+                              Open in Editor
+                            </TooltipContent>
                           </Tooltip>
                         )}
                       </div>

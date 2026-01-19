@@ -421,9 +421,9 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
             />
           </TabsContent>
 
-          {hasIssues && (
+          {hasIssues && activeProjectId && (
             <TabsContent value="issues" forceMount className="h-full mt-0 overflow-auto p-0 absolute inset-0 data-[state=inactive]:hidden">
-              <SchemaAwareIssuesPanel onOpenSchemaEditor={() => setSchemaEditorOpen(true)} />
+              <SchemaAwareIssuesPanel projectId={activeProjectId} onOpenSchemaEditor={() => setSchemaEditorOpen(true)} />
             </TabsContent>
           )}
         </div>
