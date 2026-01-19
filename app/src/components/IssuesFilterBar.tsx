@@ -1,5 +1,5 @@
 import { useMemo, useCallback } from 'react';
-import { X, ChevronDown, FileCode, Tag } from 'lucide-react';
+import { X, ChevronDown, FileCode, Tag, Database } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -9,7 +9,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Button } from '@/components/ui/button';
 import {
   useViewStateStore,
   getIssuesStateWithDefaults,
@@ -31,6 +30,10 @@ interface IssuesFilterBarProps {
     warnings: number;
     infos: number;
   };
+  /** Number of schema-related issues (UNKNOWN_COLUMN, UNKNOWN_TABLE, etc.) */
+  schemaIssueCount?: number;
+  /** Callback to open the schema editor */
+  onOpenSchemaEditor?: () => void;
   className?: string;
 }
 
@@ -43,13 +46,15 @@ const SEVERITY_OPTIONS: { value: Severity; label: string; countKey: keyof Issues
 
 /**
  * Filter bar for the Issues panel.
- * Provides severity tabs, text search, and dropdowns for code/source file filtering.
+ * Styled to match the Lineage tab's filter controls (slate color scheme, rounded-full buttons).
  */
 export function IssuesFilterBar({
   projectId,
   availableCodes,
   availableSourceFiles,
   counts,
+  schemaIssueCount,
+  onOpenSchemaEditor,
   className,
 }: IssuesFilterBarProps) {
   const storedState = useViewStateStore(
@@ -126,9 +131,9 @@ export function IssuesFilterBar({
   return (
     <div className={cn('flex flex-col gap-2 px-4 py-2 border-b bg-muted/5', className)}>
       {/* Top row: Severity tabs + Dropdowns */}
-      <div className="flex items-center gap-3">
-        {/* Severity segmented control */}
-        <div className="inline-flex items-center rounded-full border border-border-primary-light dark:border-border-primary-dark p-0.5 bg-background">
+      <div className="flex items-center gap-2">
+        {/* Severity segmented control - matches ViewModeSelector/LayoutSelector style */}
+        <div className="inline-flex h-8 items-center rounded-full border border-slate-200/60 dark:border-slate-700/60 bg-white/95 dark:bg-slate-900/95 shadow-xs backdrop-blur-xs p-0.5">
           {SEVERITY_OPTIONS.map((option) => {
             const count = counts[option.countKey];
             const isActive = filterState.severity === option.value;
@@ -140,15 +145,15 @@ export function IssuesFilterBar({
                 key={option.value}
                 onClick={() => setSeverity(option.value)}
                 className={cn(
-                  'px-3 py-1 text-xs font-medium rounded-full transition-all duration-200',
+                  'h-7 px-3 text-xs font-medium rounded-full transition-colors',
                   isActive
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                    ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100'
+                    : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
                 )}
               >
                 {option.label}
                 {count > 0 && (
-                  <span className={cn('ml-1.5', isActive ? 'opacity-80' : 'opacity-60')}>
+                  <span className={cn('ml-1.5 tabular-nums', isActive ? 'opacity-80' : 'opacity-60')}>
                     {count}
                   </span>
                 )}
@@ -157,27 +162,28 @@ export function IssuesFilterBar({
           })}
         </div>
 
-        {/* Code filter dropdown */}
+        {/* Code filter dropdown - matches TableFilterDropdown style */}
         {availableCodes.length > 0 && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
+              <button
                 className={cn(
-                  'h-7 px-2 text-xs gap-1',
-                  filterState.codes.length > 0 && 'text-primary'
+                  'flex items-center gap-1.5 h-8 px-3 rounded-full border transition-colors',
+                  'border-slate-200/60 dark:border-slate-700/60 bg-white/95 dark:bg-slate-900/95 shadow-xs backdrop-blur-xs',
+                  filterState.codes.length > 0
+                    ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
                 )}
               >
-                <Tag className="h-3 w-3" />
-                Code
+                <Tag className="h-3.5 w-3.5" />
+                <span className="text-xs font-medium">Code</span>
                 {filterState.codes.length > 0 && (
-                  <span className="ml-1 px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-medium">
+                  <span className="text-[10px] font-medium tabular-nums bg-slate-200 dark:bg-slate-600 px-1.5 py-0.5 rounded-full">
                     {filterState.codes.length}
                   </span>
                 )}
                 <ChevronDown className="h-3 w-3 opacity-50" />
-              </Button>
+              </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-56 max-h-[300px] overflow-auto">
               <DropdownMenuLabel className="text-xs text-muted-foreground">
@@ -202,23 +208,24 @@ export function IssuesFilterBar({
         {availableSourceFiles.length > 1 && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
+              <button
                 className={cn(
-                  'h-7 px-2 text-xs gap-1',
-                  filterState.sourceFiles.length > 0 && 'text-primary'
+                  'flex items-center gap-1.5 h-8 px-3 rounded-full border transition-colors',
+                  'border-slate-200/60 dark:border-slate-700/60 bg-white/95 dark:bg-slate-900/95 shadow-xs backdrop-blur-xs',
+                  filterState.sourceFiles.length > 0
+                    ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
                 )}
               >
-                <FileCode className="h-3 w-3" />
-                File
+                <FileCode className="h-3.5 w-3.5" />
+                <span className="text-xs font-medium">File</span>
                 {filterState.sourceFiles.length > 0 && (
-                  <span className="ml-1 px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-medium">
+                  <span className="text-[10px] font-medium tabular-nums bg-slate-200 dark:bg-slate-600 px-1.5 py-0.5 rounded-full">
                     {filterState.sourceFiles.length}
                   </span>
                 )}
                 <ChevronDown className="h-3 w-3 opacity-50" />
-              </Button>
+              </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-64 max-h-[300px] overflow-auto">
               <DropdownMenuLabel className="text-xs text-muted-foreground">
@@ -239,17 +246,34 @@ export function IssuesFilterBar({
           </DropdownMenu>
         )}
 
-        {/* Clear all button */}
-        {hasActiveFilters && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={clearAll}
-            className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground ml-auto"
-          >
-            Clear all
-          </Button>
-        )}
+        {/* Right-aligned section: schema badge + clear all */}
+        <div className="flex items-center gap-2 ml-auto">
+          {/* Schema issues badge */}
+          {schemaIssueCount !== undefined && schemaIssueCount > 0 && onOpenSchemaEditor && (
+            <button
+              onClick={onOpenSchemaEditor}
+              className={cn(
+                'flex items-center gap-1.5 h-8 px-3 rounded-full border transition-colors',
+                'border-slate-200/60 dark:border-slate-700/60 bg-white/95 dark:bg-slate-900/95 shadow-xs backdrop-blur-xs',
+                'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-slate-100'
+              )}
+            >
+              <Database className="h-3.5 w-3.5" />
+              <span className="text-xs font-medium tabular-nums">{schemaIssueCount}</span>
+              <span className="text-xs font-medium">schema</span>
+            </button>
+          )}
+
+          {/* Clear all button */}
+          {hasActiveFilters && (
+            <button
+              onClick={clearAll}
+              className="h-6 px-2 text-xs text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 transition-colors"
+            >
+              Clear all
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Active filter chips row */}
@@ -291,19 +315,19 @@ function FilterChip({ label, icon, variant, onRemove }: FilterChipProps) {
     <div
       className={cn(
         'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium',
-        'bg-background hover:bg-muted/50 transition-colors',
-        variant === 'code' && 'border-l-[3px] border-l-warning-light dark:border-l-warning-dark',
-        variant === 'file' && 'border-l-[3px] border-l-primary'
+        'border-slate-200/60 dark:border-slate-700/60 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors',
+        variant === 'code' && 'border-l-[3px] border-l-amber-500 dark:border-l-amber-400',
+        variant === 'file' && 'border-l-[3px] border-l-blue-500 dark:border-l-blue-400'
       )}
     >
-      <span className="text-muted-foreground">{icon}</span>
-      <span className="max-w-[150px] truncate font-mono">{label}</span>
+      <span className="text-slate-400">{icon}</span>
+      <span className="max-w-[150px] truncate font-mono text-slate-700 dark:text-slate-300">{label}</span>
       <button
         onClick={onRemove}
-        className="ml-0.5 rounded-full p-0.5 hover:bg-muted transition-colors"
+        className="ml-0.5 rounded-full p-0.5 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
         aria-label={`Remove ${label} filter`}
       >
-        <X className="h-3 w-3 text-muted-foreground" />
+        <X className="h-3 w-3 text-slate-400" />
       </button>
     </div>
   );

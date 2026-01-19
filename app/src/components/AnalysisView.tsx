@@ -32,8 +32,8 @@ import { usePersistedSchemaState } from '@/hooks/usePersistedSchemaState';
 import { isValidTab, useNavigation } from '@/lib/navigation-context';
 import { useViewStateStore, getNamespaceFilterStateWithDefaults } from '@/lib/view-state-store';
 import { useProject } from '@/lib/project-store';
-import { ComplexityDots } from './ComplexityDots';
 import { HierarchyView, type HierarchyViewRef } from './HierarchyView';
+import { StatsPopover } from './StatsPopover';
 import { NamespaceFilterBar } from './NamespaceFilterBar';
 import { SchemaAwareIssuesPanel } from './SchemaAwareIssuesPanel';
 import { SchemaEditor } from './SchemaEditor';
@@ -332,21 +332,14 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
             )}
           </TabsList>
 
-          {/* Summary Stats and Actions Right Aligned */}
-          <div className="flex items-center gap-4 text-xs text-muted-foreground">
-            <div className="flex items-center gap-1">
-              <span className="font-semibold text-foreground">{summary.tableCount}</span>
-              <span>tables</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="font-semibold text-foreground">{summary.columnCount}</span>
-              <span>columns</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="font-semibold text-foreground">{summary.joinCount}</span>
-              <span>joins</span>
-            </div>
-            <ComplexityDots score={summary.complexityScore} />
+          {/* Stats Popover and Actions */}
+          <div className="flex items-center gap-2">
+            <StatsPopover
+              tableCount={summary.tableCount}
+              columnCount={summary.columnCount}
+              joinCount={summary.joinCount}
+              complexityScore={summary.complexityScore}
+            />
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -357,7 +350,7 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
                     className="h-7 text-xs"
                   >
                     <Settings className="h-3 w-3 mr-1" />
-                    Edit Schema
+                    Schema
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>

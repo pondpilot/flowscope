@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { useLineage } from '@pondpilot/flowscope-react';
 import { AlertCircle, Database, ExternalLink, Eye } from 'lucide-react';
-import { Button } from './ui/button';
 import { useNavigation } from '@/lib/navigation-context';
 import {
   Tooltip,
@@ -159,50 +158,6 @@ export function SchemaAwareIssuesPanel({ projectId, onOpenSchemaEditor }: Schema
 
   return (
     <div className="flex flex-col h-full bg-background">
-      {/* Header with schema issue indicator */}
-      <div className="px-4 py-3 border-b bg-muted/10">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="font-semibold text-sm">Issues</h3>
-          <div className="flex items-center gap-2 text-xs">
-            {counts.errors > 0 && (
-              <span className="text-error-light dark:text-error-dark font-medium">
-                {counts.errors} errors
-              </span>
-            )}
-            {counts.warnings > 0 && (
-              <span className="text-warning-light dark:text-warning-dark font-medium">
-                {counts.warnings} warnings
-              </span>
-            )}
-            {counts.infos > 0 && (
-              <span className="text-primary font-medium">{counts.infos} info</span>
-            )}
-            {sortedIssues.length === 0 && (
-              <span className="text-success-light dark:text-success-dark font-medium">
-                No issues
-              </span>
-            )}
-          </div>
-        </div>
-
-        {schemaIssueCount > 0 && (
-          <div className="flex items-center gap-2 p-2 bg-highlight border border-primary/20 rounded text-xs">
-            <Database className="h-4 w-4 text-primary shrink-0" />
-            <span className="text-highlight-foreground flex-1">
-              {schemaIssueCount} schema-related {schemaIssueCount === 1 ? 'issue' : 'issues'} detected
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onOpenSchemaEditor}
-              className="h-6 text-xs"
-            >
-              Edit Schema
-            </Button>
-          </div>
-        )}
-      </div>
-
       {/* Filter bar - only show if there are issues */}
       {sortedIssues.length > 0 && (
         <IssuesFilterBar
@@ -210,6 +165,8 @@ export function SchemaAwareIssuesPanel({ projectId, onOpenSchemaEditor }: Schema
           availableCodes={availableCodes}
           availableSourceFiles={availableSourceFiles}
           counts={counts}
+          schemaIssueCount={schemaIssueCount}
+          onOpenSchemaEditor={onOpenSchemaEditor}
         />
       )}
 
