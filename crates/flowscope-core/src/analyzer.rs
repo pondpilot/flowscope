@@ -212,11 +212,11 @@ impl<'a> Analyzer<'a> {
             .entered();
             self.current_statement_source = Some(StatementSourceSlice {
                 sql: source_sql,
-                range: source_range,
+                range: source_range.clone(),
             });
 
             let source_name_owned = source_name.as_deref().map(String::from);
-            let result = self.analyze_statement(index, &statement, source_name_owned);
+            let result = self.analyze_statement(index, &statement, source_name_owned, source_range);
             self.current_statement_source = None;
 
             match result {

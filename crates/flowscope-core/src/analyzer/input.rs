@@ -179,7 +179,11 @@ fn parse_statements_individually<'a>(
                 let message = format!(
                     "Full SQL parsing failed{source_info}, using best-effort mode: {error}"
                 );
-                issues.insert(0, Issue::warning(issue_codes::PARSE_ERROR, message));
+                let mut issue = Issue::warning(issue_codes::PARSE_ERROR, message);
+                if let Some(name) = ctx.source_name.as_deref() {
+                    issue = issue.with_source_name(name);
+                }
+                issues.insert(0, issue);
             }
 
             (statements, issues)
@@ -375,10 +379,12 @@ fn parse_statement_ranges_best_effort<'a>(
                     None => format!("Parse error: {e}"),
                 };
 
-                issues.push(
-                    Issue::error(issue_codes::PARSE_ERROR, message)
-                        .with_span(Span::new(range.start, range.end)),
-                );
+                let mut issue = Issue::error(issue_codes::PARSE_ERROR, message)
+                    .with_span(Span::new(range.start, range.end));
+                if let Some(name) = ctx.source_name.as_deref() {
+                    issue = issue.with_source_name(name);
+                }
+                issues.push(issue);
             }
         }
     }
@@ -874,6 +880,13 @@ mod tests {
         assert!(
             issues[0].message.contains("test.sql"),
             "Error should mention file name"
+        );
+
+        // Issue should have source_name set
+        assert_eq!(
+            issues[0].source_name.as_deref(),
+            Some("test.sql"),
+            "Issue should have source_name set"
         );
     }
 

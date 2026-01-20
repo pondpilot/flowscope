@@ -553,6 +553,8 @@ export interface Issue {
   span?: Span;
   /** Optional: which statement index this issue relates to */
   statementIndex?: number;
+  /** Optional: source file name where the issue occurred */
+  sourceName?: string;
 }
 
 export type Severity = 'error' | 'warning' | 'info';

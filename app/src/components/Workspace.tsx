@@ -121,7 +121,12 @@ export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspacePr
     }
 
     if (!file) {
-      console.warn(`Cannot navigate to editor: file "${sourceName}" not found. Available files:`, project.files.map(f => ({ name: f.name, path: f.path })));
+      if (import.meta.env.DEV) {
+        console.warn(
+          `[Workspace] Cannot navigate to editor: file "${sourceName}" not found. Available files:`,
+          project.files.map(f => ({ name: f.name, path: f.path }))
+        );
+      }
       toast.error('File not found', {
         description: `Could not locate "${sourceName}" in the project`,
       });

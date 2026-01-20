@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { ChevronDown, Plus, FolderOpen } from 'lucide-react';
+import { ChevronDown, Plus, FolderOpen, Trash } from 'lucide-react';
+import { toast } from 'sonner';
+import { clearAnalysisWorkerCache } from '@/lib/analysis-worker';
 import { useProject } from '@/lib/project-store';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -161,6 +163,36 @@ export function ProjectSelector({ open: controlledOpen, onOpenChange }: ProjectS
               <span className="font-medium">Add project</span>
             </DropdownMenuItem>
           )}
+
+          <DropdownMenuSeparator />
+
+          <DropdownMenuItem
+            onSelect={async (event) => {
+              event.preventDefault();
+              const confirmed = window.confirm(
+                'Clear analysis cache? This will force re-analysis of all files.'
+              );
+              if (!confirmed) {
+                return;
+              }
+              try {
+                await clearAnalysisWorkerCache();
+                toast.success('Analysis cache cleared');
+              } catch (error) {
+                console.error('Failed to clear analysis cache', error);
+                toast.error('Failed to clear analysis cache');
+              } finally {
+                setOpen(false);
+              }
+            }}
+            className="gap-2 p-2 text-muted-foreground"
+            data-testid="clear-cache-btn"
+          >
+            <div className="flex size-6 items-center justify-center rounded-md border bg-transparent">
+              <Trash className="size-3.5" />
+            </div>
+            <span>Clear analysis cache</span>
+          </DropdownMenuItem>
         </TooltipProvider>
       </DropdownMenuContent>
     </DropdownMenu>

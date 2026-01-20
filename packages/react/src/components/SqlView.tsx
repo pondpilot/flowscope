@@ -55,12 +55,32 @@ const baseTheme = EditorView.baseTheme({
   },
 });
 
-export function SqlView({ className, editable = false, onChange, value, isDark }: SqlViewProps): JSX.Element {
+export function SqlView({
+  className,
+  editable = false,
+  onChange,
+  value,
+  isDark,
+  highlightedSpan: highlightedSpanProp,
+}: SqlViewProps): JSX.Element {
   const { state, actions } = useLineage();
   const isControlled = value !== undefined;
 
+  // Warn in dev mode if highlightedSpan is passed without value (it will be ignored)
+  if (
+    process.env.NODE_ENV !== 'production' &&
+    !isControlled &&
+    highlightedSpanProp !== undefined
+  ) {
+    console.warn(
+      'SqlView: `highlightedSpan` prop is ignored in uncontrolled mode. Pass a `value` prop to use controlled mode.'
+    );
+  }
+
   const sqlText = isControlled ? value : state.sql;
-  const highlightedSpan = isControlled ? null : state.highlightedSpan;
+  // In controlled mode, prefer the prop; in uncontrolled mode, use store state
+  // Normalize undefined to null for consistent type handling downstream
+  const highlightedSpan = isControlled ? (highlightedSpanProp ?? null) : state.highlightedSpan;
   const issueHighlights = useMemo<HighlightRange[]>(() => {
     if (isControlled) {
       return [];

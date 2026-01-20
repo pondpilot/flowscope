@@ -54,6 +54,10 @@ pub struct Issue {
     /// Optional: which statement index this issue relates to
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub statement_index: Option<usize>,
+
+    /// Optional: source file name where the issue occurred
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_name: Option<String>,
 }
 
 impl Issue {
@@ -64,6 +68,7 @@ impl Issue {
             message: message.into(),
             span: None,
             statement_index: None,
+            source_name: None,
         }
     }
 
@@ -74,6 +79,7 @@ impl Issue {
             message: message.into(),
             span: None,
             statement_index: None,
+            source_name: None,
         }
     }
 
@@ -84,6 +90,7 @@ impl Issue {
             message: message.into(),
             span: None,
             statement_index: None,
+            source_name: None,
         }
     }
 
@@ -94,6 +101,11 @@ impl Issue {
 
     pub fn with_statement(mut self, index: usize) -> Self {
         self.statement_index = Some(index);
+        self
+    }
+
+    pub fn with_source_name(mut self, name: impl Into<String>) -> Self {
+        self.source_name = Some(name.into());
         self
     }
 }

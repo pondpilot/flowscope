@@ -39,8 +39,7 @@ export function EditorArea({ wasmReady, className, fileSelectorOpen, onFileSelec
   const previousSchema = useRef<string | null>(null);
   const previousHideCTEs = useRef<boolean | null>(null);
 
-  // Get hideCTEs from lineage state for re-analysis trigger
-  const { hideCTEs } = useLineageState();
+  const { hideCTEs, highlightedSpan } = useLineageState();
 
   const { isAnalyzing, error, runAnalysis, setError } = useAnalysis(wasmReady);
 
@@ -172,6 +171,7 @@ export function EditorArea({ wasmReady, className, fileSelectorOpen, onFileSelec
           className="h-full text-sm"
           editable={true}
           isDark={isDark}
+          highlightedSpan={highlightedSpan}
         />
       </div>
     </div>

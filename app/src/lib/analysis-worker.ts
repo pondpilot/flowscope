@@ -147,6 +147,10 @@ export async function initializeAnalysisWorker(): Promise<void> {
   await sendRequest({ type: 'init' });
 }
 
+export async function clearAnalysisWorkerCache(): Promise<void> {
+  await sendRequest({ type: 'clear-cache' });
+}
+
 export interface AnalyzeWorkerOptions {
   cacheMaxBytes?: number;
   knownCacheKey?: string | null;

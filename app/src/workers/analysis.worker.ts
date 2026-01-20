@@ -1,7 +1,7 @@
 import { analyzeSql, initWasm, getEngineVersion, exportToDuckDbSql } from '@pondpilot/flowscope-core';
 import type { AnalyzeResult, Dialect } from '@pondpilot/flowscope-core';
 import { parseSchemaSQL } from '../lib/schema-parser';
-import { readCachedAnalysisResult, writeCachedAnalysisResult } from '../lib/analysis-cache';
+import { readCachedAnalysisResult, writeCachedAnalysisResult, clearAnalysisCache } from '../lib/analysis-cache';
 import { buildAnalysisCacheKey } from '../lib/analysis-hash';
 import { ANALYSIS_CACHE_MAX_BYTES } from '../lib/constants';
 
@@ -26,7 +26,7 @@ export interface ExportPayload {
 }
 
 export interface AnalysisWorkerRequest {
-  type: 'init' | 'analyze' | 'get-cache' | 'get-version' | 'sync-files' | 'clear-files' | 'export';
+  type: 'init' | 'analyze' | 'get-cache' | 'get-version' | 'sync-files' | 'clear-files' | 'clear-cache' | 'export';
   requestId: string;
   payload?: AnalysisWorkerPayload;
   syncPayload?: SyncFilesPayload;
@@ -55,7 +55,7 @@ export const WorkerErrorCode = {
 export type WorkerErrorCode = (typeof WorkerErrorCode)[keyof typeof WorkerErrorCode];
 
 export interface AnalysisWorkerResponse {
-  type: 'init-result' | 'analyze-result' | 'cache-result' | 'version-result' | 'sync-result' | 'export-result';
+  type: 'init-result' | 'analyze-result' | 'cache-result' | 'version-result' | 'sync-result' | 'clear-cache-result' | 'export-result';
   requestId: string;
   result?: AnalyzeResult | null;
   cacheKey?: string;
@@ -337,6 +337,25 @@ self.onmessage = async (event: MessageEvent<AnalysisWorkerRequest>) => {
         requestId,
       };
       self.postMessage(response);
+      return;
+    }
+
+    if (type === 'clear-cache') {
+      try {
+        await clearAnalysisCache();
+        const response: AnalysisWorkerResponse = {
+          type: 'clear-cache-result',
+          requestId,
+        };
+        self.postMessage(response);
+      } catch (error) {
+        const response: AnalysisWorkerResponse = {
+          type: 'clear-cache-result',
+          requestId,
+          error: error instanceof Error ? error.message : 'Failed to clear analysis cache',
+        };
+        self.postMessage(response);
+      }
       return;
     }
 

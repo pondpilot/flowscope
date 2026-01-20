@@ -1098,6 +1098,13 @@
             ],
             "format": "uint",
             "minimum": 0
+          },
+          "sourceName": {
+            "description": "Optional: source file name where the issue occurred",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [

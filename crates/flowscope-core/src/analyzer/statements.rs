@@ -14,13 +14,14 @@ use super::visitor::{LineageVisitor, Visitor};
 use super::Analyzer;
 use crate::error::ParseError;
 use crate::types::{
-    issue_codes, Edge, EdgeType, Issue, JoinType, Node, NodeType, StatementLineage,
+    issue_codes, Edge, EdgeType, Issue, JoinType, Node, NodeType, Span, StatementLineage,
 };
 use sqlparser::ast::{
     self, Assignment, Expr, FromTable, MergeAction, MergeClause, MergeInsertKind, ObjectName,
     Statement, TableFactor, TableWithJoins, UpdateTableFromKind,
 };
 use std::collections::{HashMap, HashSet};
+use std::ops::Range;
 use std::sync::Arc;
 #[cfg(feature = "tracing")]
 use tracing::{info, info_span};
@@ -42,6 +43,7 @@ impl<'a> Analyzer<'a> {
         index: usize,
         statement: &Statement,
         source_name: Option<String>,
+        source_range: Range<usize>,
     ) -> Result<StatementLineage, ParseError> {
         let mut ctx = StatementContext::new(index);
 
@@ -181,7 +183,7 @@ impl<'a> Analyzer<'a> {
             source_name,
             nodes: ctx.nodes,
             edges: ctx.edges,
-            span: None,
+            span: Some(Span::new(source_range.start, source_range.end)),
             join_count,
             complexity_score,
         })

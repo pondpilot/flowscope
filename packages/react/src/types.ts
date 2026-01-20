@@ -253,6 +253,8 @@ export interface SqlViewProps {
   value?: string;
   /** Whether dark mode is active (for editor theming) */
   isDark?: boolean;
+  /** Span to highlight and scroll to in the editor (for controlled mode navigation) */
+  highlightedSpan?: Span | null;
 }
 
 /**
