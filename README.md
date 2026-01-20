@@ -18,22 +18,68 @@ Under the hood, it is a privacy-first SQL lineage engine that runs entirely in t
 
 The engine is designed for embedding into web apps, browser extensions, and developer tools that need instant lineage analysis without sending SQL to a server.
 
+## Getting Started
+
+### Web Application
+
+The easiest way to use FlowScope is through the hosted web app — no installation required:
+
+**[flowscope.pondpilot.io](https://flowscope.pondpilot.io)**
+
+Features:
+- Drag and drop SQL files or paste queries directly
+- Interactive lineage graph with table and column-level views
+- Multi-file project support with schema DDL
+- Export to Mermaid, JSON, CSV, Excel, or HTML reports
+- All processing happens in your browser — your SQL never leaves your machine
+
+### Command-Line Interface
+
+For scripting and CI/CD integration, install the CLI:
+
+```bash
+cargo install flowscope-cli
+```
+
+Basic usage:
+
+```bash
+# Analyze a SQL file
+flowscope query.sql
+
+# Analyze with a specific dialect
+flowscope -d snowflake etl/*.sql
+
+# Generate a Mermaid diagram
+flowscope -f mermaid -v column query.sql > lineage.mmd
+
+# Export to Excel with schema awareness
+flowscope -s schema.sql -f xlsx -o report.xlsx queries/*.sql
+
+# Pipe from stdin
+cat query.sql | flowscope -d postgres
+```
+
+Output formats: `table` (default), `json`, `mermaid`, `html`, `sql`, `csv`, `xlsx`, `duckdb`
+
+See [CLI documentation](crates/flowscope-cli/README.md) for all options.
+
+## Key Features
+
+- Client-side analysis with zero data egress
+- Multi-dialect coverage (PostgreSQL, Snowflake, BigQuery, DuckdDB and more)
+- Table and column lineage with schema-aware wildcard expansion
+- Structured diagnostics with spans for precise highlighting
+- Completion API for SQL authoring workflows
+- TypeScript API and optional React visualization components
+
 ## Components
 
 - `app/` — the hosted web application at [flowscope.pondpilot.io](https://flowscope.pondpilot.io)
 - `crates/` — Rust engine, WASM bindings, and CLI
 - `packages/` — TypeScript API and React visualization components
 
-## Key Features
-
-- Client-side analysis with zero data egress
-- Multi-dialect coverage (PostgreSQL, Snowflake, BigQuery, ANSI SQL)
-- Table and column lineage with schema-aware wildcard expansion
-- Structured diagnostics with spans for precise highlighting
-- Completion API for SQL authoring workflows
-- TypeScript API and optional React visualization components
-
-## Quick Start
+## TypeScript API
 
 Install the core package:
 
@@ -109,10 +155,6 @@ FlowScope uses `just` for common tasks. Run `just build`, `just test`, or `just 
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, testing expectations, and contribution guidelines.
-
-## Usage
-
-PondPilot uses the `@pondpilot/flowscope-core` package for SQL parsing and autocomplete in the hosted app at [app.pondpilot.io](https://app.pondpilot.io). Learn more at [github.com/pondpilot/pondpilot](https://github.com/pondpilot/pondpilot).
 
 ## License
 
