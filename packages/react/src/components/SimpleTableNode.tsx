@@ -42,14 +42,17 @@ function SimpleTableNodeComponent({ data, selected }: NodeProps): JSX.Element {
   return (
     <div
       className={`
-        flex items-center gap-2 px-3 py-2 rounded-lg border shadow-xs min-w-[140px] max-w-[200px]
+        flex items-center gap-2 px-3 py-2 rounded-lg shadow-xs min-w-[140px] max-w-[200px]
         transition-all duration-200
         ${active ? 'ring-2' : ''}
       `}
       style={{
-        borderColor: active ? colors.accent : palette.border,
-        borderLeftWidth: schemaColor ? 3 : undefined,
-        borderLeftColor: schemaColor,
+        borderTop: `1px solid ${active ? colors.accent : palette.border}`,
+        borderRight: `1px solid ${active ? colors.accent : palette.border}`,
+        borderBottom: `1px solid ${active ? colors.accent : palette.border}`,
+        borderLeft: schemaColor
+          ? `3px solid ${schemaColor}`
+          : `1px solid ${active ? colors.accent : palette.border}`,
         backgroundColor: isHighlighted ? colors.interactive.related : palette.bg,
         boxShadow: active ? `0 0 0 2px ${colors.interactive.selectionRing}` : undefined,
       }}
