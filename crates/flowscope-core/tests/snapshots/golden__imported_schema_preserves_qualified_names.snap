@@ -11,7 +11,10 @@ expression: cleaned
         {
           "id": "column_11dd4284c883d245",
           "type": "column",
-          "label": "email"
+          "label": "email",
+          "metadata": {
+            "data_type": "TEXT"
+          }
         },
         {
           "id": "column_146291330e487758",
@@ -22,7 +25,10 @@ expression: cleaned
         {
           "id": "column_d8bba385e09d94a9",
           "type": "column",
-          "label": "id"
+          "label": "id",
+          "metadata": {
+            "data_type": "INTEGER"
+          }
         },
         {
           "id": "column_e40458cf3907cc5e",

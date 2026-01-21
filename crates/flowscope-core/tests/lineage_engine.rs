@@ -7615,3 +7615,231 @@ fn type_inference_cte_types_propagate_to_outer_query() {
         "Output name_with_suffix should propagate TEXT from CTE"
     );
 }
+
+// =============================================================================
+// Schema-aware type lookup tests (Task 3: Schema-Aware Type Lookup)
+// =============================================================================
+
+/// Helper to create a schema table with typed columns
+fn schema_table_typed(name: &str, columns: Vec<ColumnSchema>) -> SchemaTable {
+    SchemaTable {
+        catalog: None,
+        schema: None,
+        name: name.to_string(),
+        columns,
+    }
+}
+
+#[test]
+fn test_column_reference_with_schema_returns_correct_type() {
+    // When schema is provided with column types, SELECT column references should
+    // inherit those types.
+    let schema = SchemaMetadata {
+        default_catalog: None,
+        default_schema: None,
+        search_path: None,
+        case_sensitivity: None,
+        allow_implied: true,
+        tables: vec![schema_table_typed(
+            "users",
+            vec![
+                column_typed("id", "integer"),
+                column_typed("email", "varchar"),
+                column_typed("created_at", "timestamp"),
+                column_typed("is_active", "boolean"),
+            ],
+        )],
+    };
+
+    let sql = r#"
+        SELECT id, email, created_at, is_active
+        FROM users
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, Some(schema));
+    assert!(result.issues.is_empty(), "Should have no issues");
+
+    let stmt = &result.statements[0];
+
+    // Find column nodes and check their types
+    let id_col = find_column_node(stmt, "id").expect("id column should exist");
+    let email_col = find_column_node(stmt, "email").expect("email column should exist");
+    let created_at_col = find_column_node(stmt, "created_at").expect("created_at column should exist");
+    let is_active_col = find_column_node(stmt, "is_active").expect("is_active column should exist");
+
+    assert_eq!(
+        get_column_data_type(id_col),
+        Some("INTEGER".to_string()),
+        "id should be INTEGER from schema"
+    );
+    assert_eq!(
+        get_column_data_type(email_col),
+        Some("TEXT".to_string()),
+        "email (varchar) should normalize to TEXT from schema"
+    );
+    assert_eq!(
+        get_column_data_type(created_at_col),
+        Some("TIMESTAMP".to_string()),
+        "created_at should be TIMESTAMP from schema"
+    );
+    assert_eq!(
+        get_column_data_type(is_active_col),
+        Some("BOOLEAN".to_string()),
+        "is_active should be BOOLEAN from schema"
+    );
+}
+
+#[test]
+fn test_column_reference_without_schema_returns_none() {
+    // When no schema is provided, column references should have None type
+    // (since we can't determine the type of a bare column reference)
+    let sql = r#"
+        SELECT id, email
+        FROM users
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+
+    let stmt = &result.statements[0];
+
+    // Find column nodes and check their types are None
+    let id_col = find_column_node(stmt, "id").expect("id column should exist");
+    let email_col = find_column_node(stmt, "email").expect("email column should exist");
+
+    assert_eq!(
+        get_column_data_type(id_col),
+        None,
+        "id should have no type without schema"
+    );
+    assert_eq!(
+        get_column_data_type(email_col),
+        None,
+        "email should have no type without schema"
+    );
+}
+
+#[test]
+fn test_qualified_column_reference_with_schema() {
+    // When using qualified column references (table.column), types should be resolved
+    // from schema.
+    let schema = SchemaMetadata {
+        default_catalog: None,
+        default_schema: None,
+        search_path: None,
+        case_sensitivity: None,
+        allow_implied: true,
+        tables: vec![
+            schema_table_typed(
+                "users",
+                vec![
+                    column_typed("id", "integer"),
+                    column_typed("name", "text"),
+                ],
+            ),
+            schema_table_typed(
+                "orders",
+                vec![
+                    column_typed("id", "integer"),
+                    column_typed("user_id", "integer"),
+                    column_typed("total", "numeric"),
+                ],
+            ),
+        ],
+    };
+
+    let sql = r#"
+        SELECT users.id, users.name, orders.total
+        FROM users
+        JOIN orders ON users.id = orders.user_id
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, Some(schema));
+    assert!(result.issues.is_empty(), "Should have no issues");
+
+    let stmt = &result.statements[0];
+
+    // Find column nodes and check their types
+    let id_col = find_column_node(stmt, "id").expect("id column should exist");
+    let name_col = find_column_node(stmt, "name").expect("name column should exist");
+    let total_col = find_column_node(stmt, "total").expect("total column should exist");
+
+    assert_eq!(
+        get_column_data_type(id_col),
+        Some("INTEGER".to_string()),
+        "users.id should be INTEGER from schema"
+    );
+    assert_eq!(
+        get_column_data_type(name_col),
+        Some("TEXT".to_string()),
+        "users.name should be TEXT from schema"
+    );
+    assert_eq!(
+        get_column_data_type(total_col),
+        Some("FLOAT".to_string()),
+        "orders.total (numeric) should normalize to FLOAT from schema"
+    );
+}
+
+#[test]
+fn test_schema_type_normalization() {
+    // Test that various dialect-specific type names are normalized to canonical types
+    let schema = SchemaMetadata {
+        default_catalog: None,
+        default_schema: None,
+        search_path: None,
+        case_sensitivity: None,
+        allow_implied: true,
+        tables: vec![schema_table_typed(
+            "test_types",
+            vec![
+                column_typed("int64_col", "int64"),      // BigQuery-style
+                column_typed("varchar_col", "varchar"),  // Standard
+                column_typed("float8_col", "float8"),    // Postgres-style
+                column_typed("datetime_col", "datetime"), // MySQL-style
+                column_typed("bool_col", "bool"),        // Short form
+            ],
+        )],
+    };
+
+    let sql = r#"
+        SELECT int64_col, varchar_col, float8_col, datetime_col, bool_col
+        FROM test_types
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, Some(schema));
+    assert!(result.issues.is_empty(), "Should have no issues");
+
+    let stmt = &result.statements[0];
+
+    let int64_col = find_column_node(stmt, "int64_col").expect("int64_col should exist");
+    let varchar_col = find_column_node(stmt, "varchar_col").expect("varchar_col should exist");
+    let float8_col = find_column_node(stmt, "float8_col").expect("float8_col should exist");
+    let datetime_col = find_column_node(stmt, "datetime_col").expect("datetime_col should exist");
+    let bool_col = find_column_node(stmt, "bool_col").expect("bool_col should exist");
+
+    assert_eq!(
+        get_column_data_type(int64_col),
+        Some("INTEGER".to_string()),
+        "int64 should normalize to INTEGER"
+    );
+    assert_eq!(
+        get_column_data_type(varchar_col),
+        Some("TEXT".to_string()),
+        "varchar should normalize to TEXT"
+    );
+    assert_eq!(
+        get_column_data_type(float8_col),
+        Some("FLOAT".to_string()),
+        "float8 should normalize to FLOAT"
+    );
+    assert_eq!(
+        get_column_data_type(datetime_col),
+        Some("TIMESTAMP".to_string()),
+        "datetime should normalize to TIMESTAMP"
+    );
+    assert_eq!(
+        get_column_data_type(bool_col),
+        Some("BOOLEAN".to_string()),
+        "bool should normalize to BOOLEAN"
+    );
+}

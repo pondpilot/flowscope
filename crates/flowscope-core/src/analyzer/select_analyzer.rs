@@ -381,11 +381,18 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
         }
     }
 
-    /// Look up the data type of a column from CTE/subquery output columns.
+    /// Look up the data type of a column from CTE/subquery output columns or schema.
+    ///
+    /// Resolution priority:
+    /// 1. CTE/derived table output columns (for columns from CTEs or subqueries)
+    /// 2. Schema registry (for columns from base tables with user-provided or DDL-inferred schema)
     ///
     /// When referencing columns from CTEs or derived tables, we can inherit the
     /// type from the CTE's output column definition. This enables type propagation
     /// through CTE chains even when the column is just a simple identifier reference.
+    ///
+    /// For columns from base tables, we look up the type from the schema registry
+    /// if the table and column exist there.
     fn lookup_source_column_type(&self, sources: &[ColumnRef]) -> Option<String> {
         // Only look up type if we have a single source column (simple column reference)
         if sources.len() != 1 {
@@ -400,23 +407,57 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
             // Resolve alias to canonical name for CTE lookup
             let canonical = self.analyzer.resolve_table_alias(self.ctx, Some(table))?;
 
-            // Check aliased_subquery_columns (CTEs and derived tables)
+            // Check aliased_subquery_columns (CTEs and derived tables) first
             if let Some(cte_cols) = self.ctx.aliased_subquery_columns.get(&canonical) {
                 if let Some(col) = cte_cols.iter().find(|c| c.name == normalized_col) {
-                    return col.data_type.clone();
+                    if col.data_type.is_some() {
+                        return col.data_type.clone();
+                    }
                 }
+            }
+
+            // Fall back to schema registry for base table column types
+            if let Some(schema_type) =
+                self.analyzer.schema.lookup_column_type(&canonical, &source.column)
+            {
+                return Some(self.normalize_schema_type(&schema_type));
             }
         } else {
             // No table qualifier - search all CTEs/subqueries in current scope
             for table_canonical in self.ctx.tables_in_current_scope() {
+                // Check CTE/subquery columns first
                 if let Some(cte_cols) = self.ctx.aliased_subquery_columns.get(&table_canonical) {
                     if let Some(col) = cte_cols.iter().find(|c| c.name == normalized_col) {
-                        return col.data_type.clone();
+                        if col.data_type.is_some() {
+                            return col.data_type.clone();
+                        }
                     }
+                }
+
+                // Then check schema registry
+                if let Some(schema_type) = self
+                    .analyzer
+                    .schema
+                    .lookup_column_type(&table_canonical, &source.column)
+                {
+                    return Some(self.normalize_schema_type(&schema_type));
                 }
             }
         }
 
         None
+    }
+
+    /// Normalizes a schema type string to a canonical type display string.
+    ///
+    /// Converts dialect-specific type names (e.g., "varchar", "int4", "TIMESTAMP_NTZ")
+    /// to canonical uppercase type names (e.g., "TEXT", "INTEGER", "TIMESTAMP").
+    /// If the type cannot be normalized, returns the original type string.
+    fn normalize_schema_type(&self, type_name: &str) -> String {
+        use crate::generated::normalize_type_name;
+
+        normalize_type_name(type_name)
+            .map(|canonical| canonical.to_string())
+            .unwrap_or_else(|| type_name.to_string())
     }
 }

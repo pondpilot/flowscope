@@ -36,14 +36,14 @@ The `OutputColumn` struct has a `data_type: Option<String>` field that is often 
 
 Expression type inference cannot determine column types without schema metadata. This task adds schema lookup so that `users.created_at` resolves to `TIMESTAMP` when schema is provided.
 
-- [ ] Add `lookup_column_type()` method that checks `TableSchema` for column types
-- [ ] Extend `infer_expr_type()` to accept schema context (or make it accessible)
-- [ ] When encountering `Expr::Identifier` or `Expr::CompoundIdentifier`, look up type from schema
-- [ ] Use `normalize_type_name()` to convert schema type strings to `CanonicalType`
-- [ ] Fall back to `None` when column not in schema (existing behavior)
-- [ ] Add test: column reference with schema returns correct type
-- [ ] Add test: column reference without schema returns `None`
-- [ ] Add test: qualified column reference (`table.column`) with schema
+- [x] Add `lookup_column_type()` method that checks `TableSchema` for column types
+- [x] Extend `infer_expr_type()` to accept schema context (or make it accessible)
+- [x] When encountering `Expr::Identifier` or `Expr::CompoundIdentifier`, look up type from schema
+- [x] Use `normalize_type_name()` to convert schema type strings to `CanonicalType`
+- [x] Fall back to `None` when column not in schema (existing behavior)
+- [x] Add test: column reference with schema returns correct type
+- [x] Add test: column reference without schema returns `None`
+- [x] Add test: qualified column reference (`table.column`) with schema
 
 ### Task 4: Type Mismatch Warnings
 

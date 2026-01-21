@@ -1,6 +1,5 @@
 ---
 source: crates/flowscope-core/tests/golden.rs
-assertion_line: 142
 expression: cleaned
 ---
 {
@@ -52,7 +51,10 @@ expression: cleaned
         {
           "id": "column_267df5d7036d3aed",
           "type": "column",
-          "label": "order_id"
+          "label": "order_id",
+          "metadata": {
+            "data_type": "INTEGER"
+          }
         },
         {
           "id": "column_294e2368a65dc2b2",
@@ -69,7 +71,10 @@ expression: cleaned
         {
           "id": "column_d30fde42f0c2b80a",
           "type": "column",
-          "label": "amount"
+          "label": "amount",
+          "metadata": {
+            "data_type": "FLOAT"
+          }
         },
         {
           "id": "table_eaa6ebb8f158751f",
@@ -584,10 +589,12 @@ expression: cleaned
         "columns": [
           {
             "name": "order_id",
+            "dataType": "INTEGER",
             "origin": "implied"
           },
           {
             "name": "amount",
+            "dataType": "FLOAT",
             "origin": "implied"
           }
         ],
