@@ -5213,6 +5213,45 @@ fn test_copy_to_with_query() {
     assert!(stmt.nodes.iter().any(|n| n.label.contains("users")));
 }
 
+#[test]
+fn test_copy_with_column_list() {
+    // COPY with explicit column list
+    let sql = "COPY users (id, name, email) FROM '/tmp/users.csv'";
+    let result = run_analysis(sql, Dialect::Postgres, None);
+
+    assert!(result.issues.iter().all(|i| i.severity != Severity::Error));
+    let stmt = &result.statements[0];
+
+    // users should be identified as target (COPY FROM loads data into table)
+    assert!(
+        stmt.nodes.iter().any(|n| n.label.as_ref() == "users"),
+        "Expected 'users' table in lineage"
+    );
+}
+
+#[test]
+fn test_copy_schema_qualified_table() {
+    // COPY with schema-qualified table name
+    let sql = "COPY analytics.events FROM 's3://bucket/events.csv'";
+    let result = run_analysis(sql, Dialect::Postgres, None);
+
+    assert!(result.issues.iter().all(|i| i.severity != Severity::Error));
+    let stmt = &result.statements[0];
+
+    // Check that qualified name is tracked
+    let table_node = stmt
+        .nodes
+        .iter()
+        .find(|n| n.node_type == NodeType::Table)
+        .expect("Expected a table node");
+    assert!(
+        table_node.qualified_name.as_ref().map(|n| n.as_ref()) == Some("analytics.events")
+            || table_node.label.as_ref() == "events",
+        "Expected 'analytics.events' table, got: {:?}",
+        table_node
+    );
+}
+
 // =============================================================================
 // UNLOAD STATEMENT LINEAGE
 // =============================================================================
@@ -5305,6 +5344,31 @@ TO 's3://bucket/out'"#;
         table_labels.iter().any(|l| *l == "customers"),
         "Expected 'customers' table, got: {:?}",
         table_labels
+    );
+}
+
+#[test]
+fn test_unload_statement_malformed_query_string() {
+    // UNLOAD with a malformed query string should produce a warning, not crash
+    let sql = r#"UNLOAD ('SELECT * FROM WHERE invalid syntax')
+TO 's3://bucket/out'"#;
+    let result = run_analysis(sql, Dialect::Redshift, None);
+
+    // Should complete without fatal error
+    assert!(
+        !result.statements.is_empty(),
+        "Should still produce a statement even with malformed query"
+    );
+
+    // Should have a warning about parse failure
+    assert!(
+        result
+            .issues
+            .iter()
+            .any(|i| i.severity == Severity::Warning
+                && i.code == issue_codes::PARSE_ERROR),
+        "Expected PARSE_ERROR warning for malformed query, got: {:?}",
+        result.issues
     );
 }
 
