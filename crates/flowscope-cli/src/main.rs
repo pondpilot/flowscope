@@ -129,8 +129,7 @@ fn load_schema_metadata(
     // Live database connection takes precedence
     #[cfg(feature = "metadata-provider")]
     if let Some(ref url) = args.metadata_url {
-        let schema = metadata::fetch_metadata_from_database(url, args.metadata_schema.clone())
-            .map_err(|e| anyhow::anyhow!("Failed to fetch schema from database: {e}"))?;
+        let schema = metadata::fetch_metadata_from_database(url, args.metadata_schema.clone())?;
         return Ok(Some(schema));
     }
 

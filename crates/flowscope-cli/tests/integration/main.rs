@@ -38,12 +38,29 @@ pub fn run_cli_success(args: &[&str]) -> Output {
     output
 }
 
-/// Assert that the CLI output contains expected JSON lineage data.
+/// Assert that the CLI output is valid JSON with expected lineage structure.
+///
+/// Parses the output as JSON and verifies it contains either a `columns` or `edges`
+/// field, indicating valid lineage data. This is more robust than string matching
+/// which could give false positives on error messages containing these words.
 pub fn assert_json_has_lineage(output: &Output) {
     let stdout = String::from_utf8_lossy(&output.stdout);
+
+    // Parse as JSON to verify it's actually valid JSON, not just text containing keywords
+    let json: serde_json::Value = serde_json::from_str(&stdout).unwrap_or_else(|e| {
+        panic!(
+            "Expected valid JSON output, but parsing failed: {}\nOutput was: {}",
+            e, stdout
+        )
+    });
+
+    // Check for expected lineage structure fields
+    let has_columns = json.get("columns").is_some();
+    let has_edges = json.get("edges").is_some();
+
     assert!(
-        stdout.contains("\"columns\"") || stdout.contains("\"edges\""),
-        "Expected JSON lineage output, got: {}",
+        has_columns || has_edges,
+        "Expected JSON with 'columns' or 'edges' field, got: {}",
         stdout
     );
 }

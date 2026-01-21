@@ -122,6 +122,11 @@ flowscope --metadata-url sqlite:///path/to/database.db query.sql
 
 When both `--metadata-url` and `-s/--schema` are provided, the live database connection takes precedence.
 
+**Security Note:** Passing credentials in command-line arguments may expose them via shell history and process listings (`ps`). For sensitive environments, consider:
+- Using environment variables: `--metadata-url "$DATABASE_URL"`
+- Using a `.pgpass` file for PostgreSQL
+- Using socket-based authentication where available
+
 This feature requires the `metadata-provider` feature flag (enabled by default). To build without it:
 
 ```bash

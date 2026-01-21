@@ -2,9 +2,10 @@
 //!
 //! Supports PostgreSQL, MySQL, and SQLite databases.
 
+use anyhow::{anyhow, Context, Result};
 use flowscope_core::{ColumnSchema, SchemaMetadata, SchemaTable};
 use sqlx::{any::AnyPoolOptions, AnyPool, Row};
-use std::error::Error;
+use std::sync::Once;
 use std::time::Duration;
 
 /// Maximum number of concurrent database connections.
@@ -15,9 +16,41 @@ const MAX_CONNECTIONS: u32 = 2;
 /// Also serves as an implicit connect timeout since acquisition waits for connection.
 const ACQUIRE_TIMEOUT_SECS: u64 = 10;
 
-/// Extract the URL scheme for error messages (redacts credentials).
+/// Safe maximum length for MySQL identifier truncation.
+/// MySQL limits identifiers to 64 chars by default, max 256 with special configuration.
+/// We use 255 as a safe upper bound that works with SQLx Any driver's VARCHAR coercion.
+const MYSQL_IDENTIFIER_SAFE_LENGTH: usize = 255;
+
+/// Guard for one-time SQLx driver installation.
+static INSTALL_DRIVERS: Once = Once::new();
+
+/// Extract the URL scheme for error messages (avoids exposing credentials).
 fn url_scheme(url: &str) -> &str {
     url.split("://").next().unwrap_or("unknown")
+}
+
+/// Redact credentials from a database URL for safe error reporting.
+///
+/// Transforms `postgres://user:password@host/db` into `postgres://<redacted>@host/db`.
+/// If no credentials are present, returns a scheme-only identifier.
+fn redact_url(url: &str) -> String {
+    if let Some((scheme, rest)) = url.split_once("://") {
+        // Find the last '@' to handle passwords containing '@' characters
+        if let Some(at_pos) = rest.rfind('@') {
+            let host_and_path = &rest[at_pos + 1..];
+            return format!("{}://<redacted>@{}", scheme, host_and_path);
+        }
+        // No credentials in URL, but still redact the path for file-based DBs
+        if scheme == "sqlite" {
+            return format!("{}://<path>", scheme);
+        }
+        return format!("{}://{}", scheme, rest);
+    }
+    // Handle sqlite: URLs without :// (e.g., sqlite::memory:, sqlite:path)
+    if url.starts_with("sqlite:") {
+        return "sqlite:<path>".to_string();
+    }
+    url_scheme(url).to_string()
 }
 
 /// Database type inferred from connection URL.
@@ -60,15 +93,12 @@ impl SqlxMetadataProvider {
     ///
     /// # Errors
     /// Returns an error if the connection fails or the URL scheme is not supported.
-    pub async fn connect(
-        url: &str,
-        schema_filter: Option<String>,
-    ) -> Result<Self, Box<dyn Error + Send + Sync>> {
+    pub async fn connect(url: &str, schema_filter: Option<String>) -> Result<Self> {
         let db_type = DatabaseType::from_url(url)
-            .ok_or_else(|| format!("Unsupported database URL scheme: {}", url_scheme(url)))?;
+            .ok_or_else(|| anyhow!("Unsupported database URL scheme: {}", url_scheme(url)))?;
 
-        // Install the SQLx any drivers for all supported database types
-        sqlx::any::install_default_drivers();
+        // Install SQLx drivers exactly once (thread-safe)
+        INSTALL_DRIVERS.call_once(sqlx::any::install_default_drivers);
 
         // Note: SQLx's AnyPoolOptions doesn't support connect_timeout directly.
         // The acquire_timeout covers the waiting time which includes initial connection.
@@ -76,7 +106,8 @@ impl SqlxMetadataProvider {
             .max_connections(MAX_CONNECTIONS)
             .acquire_timeout(Duration::from_secs(ACQUIRE_TIMEOUT_SECS))
             .connect(url)
-            .await?;
+            .await
+            .with_context(|| format!("Failed to connect to database: {}", redact_url(url)))?;
 
         Ok(Self {
             pool,
@@ -86,7 +117,7 @@ impl SqlxMetadataProvider {
     }
 
     /// Fetch schema metadata using the appropriate query for the database type.
-    pub async fn fetch_schema_async(&self) -> Result<SchemaMetadata, Box<dyn Error + Send + Sync>> {
+    pub async fn fetch_schema_async(&self) -> Result<SchemaMetadata> {
         let tables = match self.db_type {
             DatabaseType::Postgres => self.fetch_postgres_schema().await?,
             DatabaseType::Mysql => self.fetch_mysql_schema().await?,
@@ -106,9 +137,7 @@ impl SqlxMetadataProvider {
     }
 
     /// Fetch schema from PostgreSQL using information_schema.
-    async fn fetch_postgres_schema(
-        &self,
-    ) -> Result<Vec<SchemaTable>, Box<dyn Error + Send + Sync>> {
+    async fn fetch_postgres_schema(&self) -> Result<Vec<SchemaTable>> {
         let schema_filter = self.schema_filter.as_deref().unwrap_or("public");
 
         // Cast to text for SQLx Any driver compatibility (Name type not supported)
@@ -143,68 +172,82 @@ impl SqlxMetadataProvider {
     }
 
     /// Fetch schema from MySQL using information_schema.
-    async fn fetch_mysql_schema(&self) -> Result<Vec<SchemaTable>, Box<dyn Error + Send + Sync>> {
+    async fn fetch_mysql_schema(&self) -> Result<Vec<SchemaTable>> {
         // For MySQL, if no schema filter is provided, we query the current database.
-        // Use LEFT(..., 255) to coerce columns to VARCHAR for SQLx Any driver compatibility
+        // Use LEFT(..., N) to coerce columns to VARCHAR for SQLx Any driver compatibility
         // (information_schema uses longtext which Any driver maps to BLOB and can't decode).
-        // 255 chars is safe because MySQL limits identifiers to 64 chars by default,
-        // and the max is 256 chars with special configuration.
+        // See MYSQL_IDENTIFIER_SAFE_LENGTH for the limit rationale.
+        let limit = MYSQL_IDENTIFIER_SAFE_LENGTH;
         let query = if self.schema_filter.is_some() {
-            r#"
+            format!(
+                r#"
                 SELECT
-                    LEFT(TABLE_SCHEMA, 255) as table_schema,
-                    LEFT(TABLE_NAME, 255) as table_name,
-                    LEFT(COLUMN_NAME, 255) as column_name,
-                    LEFT(DATA_TYPE, 255) as data_type,
+                    LEFT(TABLE_SCHEMA, {limit}) as table_schema,
+                    LEFT(TABLE_NAME, {limit}) as table_name,
+                    LEFT(COLUMN_NAME, {limit}) as column_name,
+                    LEFT(DATA_TYPE, {limit}) as data_type,
                     CASE WHEN COLUMN_KEY = 'PRI' THEN 1 ELSE 0 END AS is_primary_key
                 FROM information_schema.COLUMNS
                 WHERE TABLE_SCHEMA = ?
                 ORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION
             "#
+            )
         } else {
-            r#"
+            format!(
+                r#"
                 SELECT
-                    LEFT(TABLE_SCHEMA, 255) as table_schema,
-                    LEFT(TABLE_NAME, 255) as table_name,
-                    LEFT(COLUMN_NAME, 255) as column_name,
-                    LEFT(DATA_TYPE, 255) as data_type,
+                    LEFT(TABLE_SCHEMA, {limit}) as table_schema,
+                    LEFT(TABLE_NAME, {limit}) as table_name,
+                    LEFT(COLUMN_NAME, {limit}) as column_name,
+                    LEFT(DATA_TYPE, {limit}) as data_type,
                     CASE WHEN COLUMN_KEY = 'PRI' THEN 1 ELSE 0 END AS is_primary_key
                 FROM information_schema.COLUMNS
                 WHERE TABLE_SCHEMA = DATABASE()
                 ORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION
             "#
+            )
         };
 
         let rows = if let Some(ref schema) = self.schema_filter {
-            sqlx::query(query)
+            sqlx::query(&query)
                 .bind(schema)
                 .fetch_all(&self.pool)
                 .await?
         } else {
-            sqlx::query(query).fetch_all(&self.pool).await?
+            sqlx::query(&query).fetch_all(&self.pool).await?
         };
 
         self.rows_to_tables(rows)
     }
 
     /// Validate SQLite table name to prevent injection in PRAGMA queries.
-    /// SQLite identifiers can contain most characters but we restrict to safe ones.
-    fn validate_sqlite_table_name(name: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
-        if name.is_empty() || name.len() > 255 {
-            return Err(format!("Invalid table name length: {}", name.len()).into());
+    ///
+    /// This validation is intentionally conservative: it only allows alphanumeric
+    /// characters, underscores, and dots (for attached databases). While SQLite
+    /// supports more exotic identifiers (spaces, quotes, etc.) when properly quoted,
+    /// we restrict to safe characters because:
+    ///
+    /// 1. Table names come from `sqlite_master`, not user input, so exotic names are rare
+    /// 2. Conservative validation is safer than complex quoting logic
+    /// 3. Most real-world schemas use simple identifiers
+    ///
+    /// Tables with exotic names will be skipped with an error message.
+    fn validate_sqlite_table_name(name: &str) -> Result<()> {
+        if name.is_empty() || name.len() > MYSQL_IDENTIFIER_SAFE_LENGTH {
+            return Err(anyhow!("Invalid table name length: {}", name.len()));
         }
         // Allow alphanumeric, underscore, and dot (for attached databases)
         if !name
             .chars()
             .all(|c| c.is_alphanumeric() || c == '_' || c == '.')
         {
-            return Err(format!("Table name contains invalid characters: {}", name).into());
+            return Err(anyhow!("Table name contains invalid characters: {}", name));
         }
         Ok(())
     }
 
     /// Fetch schema from SQLite using sqlite_master and pragma_table_info.
-    async fn fetch_sqlite_schema(&self) -> Result<Vec<SchemaTable>, Box<dyn Error + Send + Sync>> {
+    async fn fetch_sqlite_schema(&self) -> Result<Vec<SchemaTable>> {
         // First, get all table names
         let tables_query = r#"
             SELECT name FROM sqlite_master
@@ -260,7 +303,7 @@ impl SqlxMetadataProvider {
     }
 
     /// Determine the default schema that should be used for canonicalization.
-    async fn resolve_default_schema(&self) -> Result<Option<String>, Box<dyn Error + Send + Sync>> {
+    async fn resolve_default_schema(&self) -> Result<Option<String>> {
         if let Some(schema) = &self.schema_filter {
             return Ok(Some(schema.clone()));
         }
@@ -272,9 +315,7 @@ impl SqlxMetadataProvider {
     }
 
     /// Return the currently selected MySQL database (if any) to use as the default schema.
-    async fn fetch_mysql_default_schema(
-        &self,
-    ) -> Result<Option<String>, Box<dyn Error + Send + Sync>> {
+    async fn fetch_mysql_default_schema(&self) -> Result<Option<String>> {
         let schema: Option<String> = sqlx::query_scalar("SELECT DATABASE()")
             .fetch_one(&self.pool)
             .await?;
@@ -284,10 +325,7 @@ impl SqlxMetadataProvider {
 
     /// Convert database rows to SchemaTable structures.
     /// Works for PostgreSQL and MySQL which have similar information_schema layouts.
-    fn rows_to_tables(
-        &self,
-        rows: Vec<sqlx::any::AnyRow>,
-    ) -> Result<Vec<SchemaTable>, Box<dyn Error + Send + Sync>> {
+    fn rows_to_tables(&self, rows: Vec<sqlx::any::AnyRow>) -> Result<Vec<SchemaTable>> {
         use std::collections::HashMap;
 
         // Group columns by (schema, table)
@@ -368,8 +406,8 @@ impl SqlxMetadataProvider {
 pub fn fetch_metadata_from_database(
     url: &str,
     schema_filter: Option<String>,
-) -> Result<SchemaMetadata, Box<dyn Error + Send + Sync>> {
-    let rt = tokio::runtime::Runtime::new()?;
+) -> Result<SchemaMetadata> {
+    let rt = tokio::runtime::Runtime::new().context("Failed to create async runtime")?;
     rt.block_on(async {
         let provider = SqlxMetadataProvider::connect(url, schema_filter).await?;
         provider.fetch_schema_async().await
@@ -407,5 +445,57 @@ mod tests {
             Some(DatabaseType::Sqlite)
         );
         assert_eq!(DatabaseType::from_url("unknown://localhost/db"), None);
+    }
+
+    #[test]
+    fn test_redact_url_with_credentials() {
+        // Should redact user:password
+        assert_eq!(
+            redact_url("postgres://user:password@localhost:5432/mydb"),
+            "postgres://<redacted>@localhost:5432/mydb"
+        );
+
+        // Should redact even complex passwords
+        assert_eq!(
+            redact_url("mysql://admin:s3cr3t!@#$@db.example.com/prod"),
+            "mysql://<redacted>@db.example.com/prod"
+        );
+    }
+
+    #[test]
+    fn test_redact_url_without_credentials() {
+        // No credentials, keep host info
+        assert_eq!(
+            redact_url("postgres://localhost:5432/mydb"),
+            "postgres://localhost:5432/mydb"
+        );
+    }
+
+    #[test]
+    fn test_redact_url_sqlite() {
+        // SQLite paths with :// should be redacted
+        assert_eq!(
+            redact_url("sqlite:///path/to/secret/database.db"),
+            "sqlite://<path>"
+        );
+
+        // SQLite paths without :// (e.g., sqlite::memory:) should also be redacted
+        assert_eq!(redact_url("sqlite::memory:"), "sqlite:<path>");
+        assert_eq!(redact_url("sqlite:path/to/db"), "sqlite:<path>");
+    }
+
+    #[test]
+    fn test_redact_url_invalid() {
+        // Invalid URLs should return scheme only
+        assert_eq!(redact_url("not-a-url"), "not-a-url");
+        assert_eq!(redact_url("unknown"), "unknown");
+    }
+
+    #[test]
+    fn test_url_scheme() {
+        assert_eq!(url_scheme("postgres://localhost/db"), "postgres");
+        assert_eq!(url_scheme("mysql://localhost/db"), "mysql");
+        assert_eq!(url_scheme("sqlite://path"), "sqlite");
+        assert_eq!(url_scheme("not-a-url"), "not-a-url");
     }
 }
