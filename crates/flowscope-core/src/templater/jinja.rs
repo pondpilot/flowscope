@@ -3,6 +3,7 @@
 use super::dbt::passthrough_arg_to_string;
 use super::error::TemplateError;
 use minijinja::{Environment, Value};
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
@@ -56,21 +57,31 @@ static SNAPSHOT_BLOCK_RE: LazyLock<Regex> = LazyLock::new(|| {
 /// # Returns
 ///
 /// The preprocessed template with dbt-specific tags handled.
+/// Returns `Cow::Borrowed` when no changes are needed (zero allocation).
 /// Templates larger than `MAX_PREPROCESS_SIZE` are returned unchanged to prevent
 /// regex DoS on very large inputs.
-fn preprocess_dbt_tags(template: &str) -> String {
+fn preprocess_dbt_tags(template: &str) -> Cow<'_, str> {
     // Skip preprocessing for very large templates to avoid regex DoS
     if template.len() > MAX_PREPROCESS_SIZE {
-        return template.to_string();
+        return Cow::Borrowed(template);
+    }
+
+    // Quick check: if no template tags present, skip regex processing entirely
+    if !template.contains("{%") {
+        return Cow::Borrowed(template);
     }
 
     // Remove test blocks entirely
-    let result = TEST_BLOCK_RE.replace_all(template, "");
+    let after_test = TEST_BLOCK_RE.replace_all(template, "");
 
     // For snapshot blocks, keep the inner content
-    let result = SNAPSHOT_BLOCK_RE.replace_all(&result, "$1");
+    let after_snapshot = SNAPSHOT_BLOCK_RE.replace_all(&after_test, "$1");
 
-    result.into_owned()
+    // If no changes were made, return borrowed reference to avoid allocation
+    match after_snapshot {
+        Cow::Borrowed(_) if matches!(after_test, Cow::Borrowed(_)) => Cow::Borrowed(template),
+        _ => Cow::Owned(after_snapshot.into_owned()),
+    }
 }
 
 pub(crate) fn render_jinja(
@@ -106,6 +117,13 @@ pub(crate) fn render_jinja(
 /// Unknown macros (custom project macros, dbt_utils, etc.) are handled gracefully
 /// by stubbing them on-the-fly. This allows lineage analysis even when the full
 /// dbt project context isn't available.
+///
+/// # Performance
+///
+/// The function reuses the MiniJinja `Environment` across retry attempts,
+/// registering new passthrough functions incrementally rather than recreating
+/// the entire environment on each retry. This significantly improves performance
+/// for templates with many unknown macros.
 pub(crate) fn render_dbt(
     template: &str,
     context: &HashMap<String, serde_json::Value>,
@@ -116,6 +134,25 @@ pub(crate) fn render_dbt(
     // Track which unknown functions we've already stubbed to avoid infinite loops
     let mut stubbed_functions: HashSet<String> = HashSet::new();
     let start_time = Instant::now();
+
+    // Create environment once and reuse across retries
+    let mut env = Environment::new();
+
+    // Configure environment - use lenient mode for dbt since templates
+    // may reference variables that aren't always defined
+    env.set_undefined_behavior(minijinja::UndefinedBehavior::Lenient);
+
+    // Set recursion limit to prevent DoS via deeply nested templates
+    env.set_recursion_limit(RECURSION_LIMIT);
+
+    // Register dbt builtin macros
+    super::dbt::register_dbt_builtins(&mut env, context);
+
+    // Add the preprocessed template
+    env.add_template("sql", &preprocessed)?;
+
+    // Convert context to MiniJinja values once (immutable across retries)
+    let ctx = json_context_to_minijinja(context);
 
     // Retry loop: keep trying until we succeed or hit a non-function error
     const MAX_RETRIES: usize = 50; // Prevent infinite loops
@@ -129,32 +166,10 @@ pub(crate) fn render_dbt(
                 format_stubbed_list(&stubbed_functions)
             )));
         }
-        let mut env = Environment::new();
-
-        // Configure environment - use lenient mode for dbt since templates
-        // may reference variables that aren't always defined
-        env.set_undefined_behavior(minijinja::UndefinedBehavior::Lenient);
-
-        // Set recursion limit to prevent DoS via deeply nested templates
-        env.set_recursion_limit(RECURSION_LIMIT);
-
-        // Register dbt builtin macros
-        super::dbt::register_dbt_builtins(&mut env, context);
-
-        // Register stubs for any unknown functions we've discovered
-        for func_name in &stubbed_functions {
-            register_passthrough_function(&mut env, func_name);
-        }
-
-        // Add the preprocessed template
-        env.add_template("sql", &preprocessed)?;
-
-        // Convert context to MiniJinja values
-        let ctx = json_context_to_minijinja(context);
 
         // Try to render the template
         let tmpl = env.get_template("sql")?;
-        match tmpl.render(ctx) {
+        match tmpl.render(ctx.clone()) {
             Ok(rendered) => {
                 #[cfg(feature = "tracing")]
                 if !stubbed_functions.is_empty() {
@@ -181,6 +196,8 @@ pub(crate) fn render_dbt(
                         "Stubbing unknown dbt macro"
                     );
 
+                    // Register the new stub incrementally (environment is reused)
+                    register_passthrough_function(&mut env, &func_name);
                     stubbed_functions.insert(func_name);
                     // Retry with the new stub
                     continue;
@@ -219,8 +236,19 @@ fn register_passthrough_function(env: &mut Environment<'_>, name: &str) {
 
 /// Extracts the function name from an "unknown function" error.
 ///
-/// Uses MiniJinja's `ErrorKind::UnknownFunction` for reliable detection
-/// rather than parsing error message strings (which could change between versions).
+/// Uses MiniJinja's `ErrorKind::UnknownFunction` for reliable detection,
+/// but extracts the actual function name from the error message string.
+///
+/// # Fragility Warning
+///
+/// The name extraction relies on MiniJinja's error message format:
+/// `"unknown function: <name> is unknown"`
+///
+/// This is inherently fragile and may break if MiniJinja changes its error
+/// message format in future versions. When upgrading MiniJinja, run the
+/// templating test suite to verify this still works. If MiniJinja ever
+/// exposes the function name directly via `Error::name()` or similar API,
+/// prefer that over string parsing.
 fn extract_unknown_function(err: &minijinja::Error) -> Option<String> {
     use minijinja::ErrorKind;
 

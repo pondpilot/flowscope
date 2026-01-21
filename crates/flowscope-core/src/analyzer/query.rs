@@ -885,6 +885,22 @@ impl<'a> Analyzer<'a> {
     /// When columns are referenced from a CTE that was created via SELECT *,
     /// this traces the chain back to the source table and creates column nodes.
     /// This enables column-level lineage even when schema metadata is unavailable.
+    ///
+    /// # Algorithm Overview
+    ///
+    /// 1. **Group wildcards by target**: Wildcards are grouped by their `target_name`
+    ///    (the CTE or derived table alias that receives the `SELECT *` columns).
+    ///
+    /// 2. **Build node index**: Creates an O(1) lookup map from node ID to node
+    ///    to avoid repeated linear scans when collecting owned columns.
+    ///
+    /// 3. **Propagate columns**: For each target, finds its owned columns and
+    ///    creates corresponding columns on the source tables. The `source_canonical`
+    ///    field in `PendingWildcard` matches the `target_name` of upstream wildcards,
+    ///    enabling recursive chain propagation.
+    ///
+    /// 4. **Cycle detection**: Uses `visited_pairs` to track (target, source) pairs
+    ///    and prevent infinite recursion on cyclic references.
     pub(super) fn propagate_inferred_columns(&mut self, ctx: &mut StatementContext) {
         if ctx.pending_wildcards.is_empty() {
             return;
@@ -899,6 +915,15 @@ impl<'a> Analyzer<'a> {
                 .push(pw);
         }
 
+        // Build node ID -> index lookup for O(1) node access
+        // This avoids O(N) linear scans in collect_owned_columns
+        let node_index: HashMap<Arc<str>, usize> = ctx
+            .nodes
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.id.clone(), i))
+            .collect();
+
         // Track visited target/source pairs to prevent cycles
         let mut visited_pairs: HashSet<(String, String)> = HashSet::new();
 
@@ -907,7 +932,7 @@ impl<'a> Analyzer<'a> {
                 continue;
             };
 
-            let owned_columns = self.collect_owned_columns(ctx, &cte_node_id);
+            let owned_columns = self.collect_owned_columns(ctx, &cte_node_id, &node_index);
             if owned_columns.is_empty() {
                 continue;
             }
@@ -942,19 +967,22 @@ impl<'a> Analyzer<'a> {
     }
 
     /// Collects column information owned by a CTE node.
+    ///
+    /// Uses the provided `node_index` for O(1) node lookups instead of linear scans.
     fn collect_owned_columns(
         &self,
         ctx: &StatementContext,
         cte_node_id: &Arc<str>,
+        node_index: &HashMap<Arc<str>, usize>,
     ) -> Vec<(String, Option<String>, Arc<str>)> {
         ctx.edges
             .iter()
             .filter(|e| e.edge_type == EdgeType::Ownership && e.from == *cte_node_id)
             .filter_map(|e| {
-                ctx.nodes
-                    .iter()
-                    .find(|n| n.id == e.to && n.node_type == NodeType::Column)
-                    .map(|n| {
+                // O(1) lookup via index instead of O(N) linear scan
+                node_index.get(&e.to).and_then(|&idx| {
+                    let n = &ctx.nodes[idx];
+                    (n.node_type == NodeType::Column).then(|| {
                         let data_type = n
                             .metadata
                             .as_ref()
@@ -963,6 +991,7 @@ impl<'a> Analyzer<'a> {
                             .map(|s| s.to_string());
                         (n.label.to_string(), data_type, n.id.clone())
                     })
+                })
             })
             .collect()
     }

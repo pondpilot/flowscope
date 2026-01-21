@@ -29,6 +29,10 @@ export type CaseSensitivity = 'dialect' | 'lower' | 'upper' | 'exact';
  * - 'raw': No templating, SQL passed through unchanged
  * - 'jinja': Standard Jinja2 template rendering
  * - 'dbt': dbt-style templating with builtin macros (ref, source, config, var)
+ *
+ * This is the canonical definition. The app re-exports this type and adds
+ * validation utilities (parseTemplateMode, isValidTemplateMode) and UI
+ * options (TEMPLATE_MODE_OPTIONS).
  */
 export type TemplateMode = 'raw' | 'jinja' | 'dbt';
 

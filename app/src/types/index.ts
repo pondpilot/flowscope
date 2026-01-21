@@ -2,6 +2,11 @@
  * Application-level type definitions
  */
 
+// Re-export TemplateMode from core to maintain single source of truth
+// Application-specific utilities (validation, UI options) are defined below
+export type { TemplateMode } from '@pondpilot/flowscope-core';
+import type { TemplateMode } from '@pondpilot/flowscope-core';
+
 /**
  * Error codes for analysis worker operations.
  * Using structured error codes instead of string matching for reliability.
@@ -73,14 +78,6 @@ export interface AnalysisContext {
   fileCount: number;
   files: Array<{ name: string; content: string }>;
 }
-
-/**
- * Template preprocessing mode for SQL analysis.
- * - 'raw': No templating, SQL passed through unchanged
- * - 'jinja': Standard Jinja2 template rendering
- * - 'dbt': dbt-style templating with builtin macros (ref, source, config, var)
- */
-export type TemplateMode = 'raw' | 'jinja' | 'dbt';
 
 /** Valid template mode values for runtime validation */
 export const VALID_TEMPLATE_MODES: readonly TemplateMode[] = ['raw', 'jinja', 'dbt'] as const;
