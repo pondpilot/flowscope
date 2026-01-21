@@ -91,6 +91,7 @@
       "this": true,
       "expression": true
     },
+    "return_type": { "rule": "boolean" },
     "dialects": ["*"],
     "dialect_specific": false
   },
@@ -101,6 +102,7 @@
     "arg_types": {
       "this": true
     },
+    "return_type": { "rule": "match_first_arg" },
     "dialects": ["*"],
     "dialect_specific": false
   },
@@ -554,6 +556,7 @@
     "arg_types": {
       "this": true
     },
+    "return_type": { "rule": "numeric" },
     "dialects": ["*"],
     "dialect_specific": false
   },
@@ -857,6 +860,7 @@
       "is_nvl": false,
       "is_null": false
     },
+    "return_type": { "rule": "match_first_arg" },
     "variadic": true,
     "dialects": ["*"],
     "dialect_specific": false
@@ -957,6 +961,7 @@
       "safe": false,
       "coalesce": false
     },
+    "return_type": { "rule": "text" },
     "variadic": true,
     "dialects": ["*"],
     "dialect_specific": false
@@ -970,6 +975,7 @@
       "safe": false,
       "coalesce": false
     },
+    "return_type": { "rule": "text" },
     "variadic": true,
     "dialects": ["*"],
     "dialect_specific": false
@@ -1105,6 +1111,7 @@
       "expressions": false,
       "big_int": false
     },
+    "return_type": { "rule": "integer" },
     "variadic": true,
     "dialects": ["*"],
     "dialect_specific": false
@@ -1179,6 +1186,7 @@
     "arg_types": {
       "this": false
     },
+    "return_type": { "rule": "date" },
     "dialects": ["*"],
     "dialect_specific": false
   },
@@ -1220,6 +1228,7 @@
       "this": false,
       "sysdate": false
     },
+    "return_type": { "rule": "timestamp" },
     "dialects": ["*"],
     "dialect_specific": false
   },
@@ -1425,6 +1434,7 @@
       "this": true,
       "zone": false
     },
+    "return_type": { "rule": "match_first_arg" },
     "dialects": ["*"],
     "dialect_specific": false
   },
@@ -1540,6 +1550,7 @@
     "arg_types": {
       "expressions": false
     },
+    "return_type": { "rule": "integer" },
     "variadic": true,
     "dialects": ["*"],
     "dialect_specific": false
@@ -1719,6 +1730,7 @@
     "arg_types": {
       "this": true
     },
+    "return_type": { "rule": "match_first_arg" },
     "dialects": ["*"],
     "dialect_specific": false
   },
@@ -2540,6 +2552,7 @@
       "offset": false,
       "default": false
     },
+    "return_type": { "rule": "match_first_arg" },
     "dialects": ["*"],
     "dialect_specific": false
   },
@@ -2572,6 +2585,7 @@
     "arg_types": {
       "this": true
     },
+    "return_type": { "rule": "match_first_arg" },
     "dialects": ["*"],
     "dialect_specific": false
   },
@@ -2622,6 +2636,7 @@
     "arg_types": {
       "this": true
     },
+    "return_type": { "rule": "text" },
     "dialects": ["*"],
     "dialect_specific": false
   },
@@ -2634,6 +2649,7 @@
       "offset": false,
       "default": false
     },
+    "return_type": { "rule": "match_first_arg" },
     "dialects": ["*"],
     "dialect_specific": false
   },
@@ -2785,6 +2801,7 @@
       "this": true,
       "expressions": false
     },
+    "return_type": { "rule": "match_first_arg" },
     "variadic": true,
     "dialects": ["*"],
     "dialect_specific": false
@@ -2827,6 +2844,7 @@
       "this": true,
       "expressions": false
     },
+    "return_type": { "rule": "match_first_arg" },
     "variadic": true,
     "dialects": ["*"],
     "dialect_specific": false
@@ -2973,6 +2991,15 @@
     "dialects": ["*"],
     "dialect_specific": false
   },
+  "NOW": {
+    "class": "Now",
+    "categories": ["scalar"],
+    "sql_names": ["NOW"],
+    "arg_types": {},
+    "return_type": { "rule": "timestamp" },
+    "dialects": ["postgres", "presto", "redshift", "trino"],
+    "dialect_specific": true
+  },
   "NTH_VALUE": {
     "class": "NthValue",
     "categories": ["window"],
@@ -2991,6 +3018,7 @@
     "arg_types": {
       "this": false
     },
+    "return_type": { "rule": "integer" },
     "dialects": ["*"],
     "dialect_specific": false
   },
@@ -3073,6 +3101,7 @@
       "this": true,
       "expression": true
     },
+    "return_type": { "rule": "boolean" },
     "dialects": ["*"],
     "dialect_specific": false
   },
@@ -3363,6 +3392,7 @@
     "arg_types": {
       "expressions": false
     },
+    "return_type": { "rule": "integer" },
     "variadic": true,
     "dialects": ["*"],
     "dialect_specific": false
@@ -3590,6 +3620,7 @@
       "expression": true,
       "replacement": false
     },
+    "return_type": { "rule": "text" },
     "dialects": ["*"],
     "dialect_specific": false
   },
@@ -3633,6 +3664,7 @@
     "arg_types": {
       "this": false
     },
+    "return_type": { "rule": "integer" },
     "dialects": ["*"],
     "dialect_specific": false
   },
@@ -4094,6 +4126,7 @@
       "start": false,
       "length": false
     },
+    "return_type": { "rule": "text" },
     "dialects": ["*"],
     "dialect_specific": false
   },
@@ -4116,6 +4149,7 @@
     "arg_types": {
       "this": true
     },
+    "return_type": { "rule": "numeric" },
     "dialects": ["*"],
     "dialect_specific": false
   },
@@ -4555,6 +4589,7 @@
       "position": false,
       "collation": false
     },
+    "return_type": { "rule": "text" },
     "dialects": ["*"],
     "dialect_specific": false
   },
@@ -4732,6 +4767,7 @@
     "arg_types": {
       "this": true
     },
+    "return_type": { "rule": "text" },
     "dialects": ["*"],
     "dialect_specific": false
   },

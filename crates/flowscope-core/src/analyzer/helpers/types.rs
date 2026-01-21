@@ -3,6 +3,7 @@
 //! This module provides basic type inference for SQL expressions, attempting to
 //! determine the data type of columns and expressions based on their structure.
 
+use crate::generated::{infer_function_return_type, ReturnTypeRule};
 use sqlparser::ast::{self as ast, Expr, FunctionArg, FunctionArgExpr};
 use std::fmt;
 
@@ -87,29 +88,45 @@ pub fn infer_expr_type(expr: &Expr) -> Option<SqlType> {
             _ => None,
         },
         Expr::Function(func) => {
-            let name = func.name.to_string().to_uppercase();
-            match name.as_str() {
-                "COUNT" | "ROW_NUMBER" | "RANK" | "DENSE_RANK" | "NTILE" => Some(SqlType::Integer),
-                "SUM" | "AVG" => Some(SqlType::Number),
-                "MIN" | "MAX" => infer_first_arg_type(func),
-                "CONCAT" | "CONCAT_WS" | "SUBSTRING" | "LEFT" | "RIGHT" | "LOWER" | "UPPER"
-                | "TRIM" | "LTRIM" | "RTRIM" | "REPLACE" | "CHR" | "INITCAP" => Some(SqlType::Text),
-                "NOW" | "CURRENT_TIMESTAMP" | "GETDATE" | "SYSDATE" | "TIMEOFDAY" => {
-                    Some(SqlType::Timestamp)
-                }
-                "CURRENT_DATE" | "CURDATE" | "TODAY" => Some(SqlType::Date),
-                "COALESCE" | "IFNULL" | "NVL" => {
-                    if let ast::FunctionArguments::List(args) = &func.args {
-                        for arg in &args.args {
-                            if let FunctionArg::Unnamed(FunctionArgExpr::Expr(e)) = arg {
-                                if let Some(t) = infer_expr_type(e) {
-                                    return Some(t);
+            let name = func.name.to_string();
+            // Try data-driven type inference first
+            if let Some(rule) = infer_function_return_type(&name) {
+                return match rule {
+                    ReturnTypeRule::Integer => Some(SqlType::Integer),
+                    ReturnTypeRule::Numeric => Some(SqlType::Number),
+                    ReturnTypeRule::Text => Some(SqlType::Text),
+                    ReturnTypeRule::Timestamp => Some(SqlType::Timestamp),
+                    ReturnTypeRule::Boolean => Some(SqlType::Boolean),
+                    ReturnTypeRule::Date => Some(SqlType::Date),
+                    ReturnTypeRule::MatchFirstArg => {
+                        // Special handling for COALESCE/IFNULL/NVL: iterate through args
+                        // to find first non-null type since first arg might be NULL
+                        let name_upper = name.to_uppercase();
+                        if matches!(name_upper.as_str(), "COALESCE" | "IFNULL" | "NVL") {
+                            if let ast::FunctionArguments::List(args) = &func.args {
+                                for arg in &args.args {
+                                    if let FunctionArg::Unnamed(FunctionArgExpr::Expr(e)) = arg {
+                                        if let Some(t) = infer_expr_type(e) {
+                                            return Some(t);
+                                        }
+                                    }
                                 }
                             }
+                            return None;
                         }
+                        infer_first_arg_type(func)
                     }
-                    None
-                }
+                };
+            }
+            // Fallback for functions not yet in functions.json
+            let name_upper = name.to_uppercase();
+            match name_upper.as_str() {
+                // String functions not yet in functions.json
+                "LEFT" | "RIGHT" | "LTRIM" | "RTRIM" | "CHR" | "INITCAP" => Some(SqlType::Text),
+                // Timestamp functions not yet in functions.json
+                "GETDATE" | "SYSDATE" | "TIMEOFDAY" => Some(SqlType::Timestamp),
+                // Date functions not yet in functions.json
+                "CURDATE" | "TODAY" => Some(SqlType::Date),
                 _ => None,
             }
         }

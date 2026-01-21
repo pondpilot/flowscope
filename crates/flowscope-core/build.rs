@@ -172,6 +172,13 @@ struct FunctionDef {
     dialects: Vec<String>,
     #[serde(default)]
     dialect_specific: bool,
+    #[serde(default)]
+    return_type: Option<ReturnTypeSpec>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ReturnTypeSpec {
+    rule: String,
 }
 
 fn load_functions_json(spec_dir: &Path) -> Result<BTreeMap<String, FunctionDef>, Box<dyn Error>> {
@@ -894,6 +901,8 @@ fn generate_functions(
     let mut aggregates: BTreeSet<String> = BTreeSet::new();
     let mut windows: BTreeSet<String> = BTreeSet::new();
     let mut udtfs: BTreeSet<String> = BTreeSet::new();
+    // Map from sql_name (lowercase) to return_type rule
+    let mut return_types: BTreeMap<String, String> = BTreeMap::new();
 
     for def in functions.values() {
         // Use the class name to derive the SQL function name, as the dictionary keys
@@ -912,6 +921,11 @@ fn generate_functions(
                 }
                 _ => {}
             }
+        }
+
+        // Collect return types
+        if let Some(ref rt) = def.return_type {
+            return_types.insert(sql_name, rt.rule.clone());
         }
     }
 
@@ -1008,6 +1022,88 @@ pub fn is_udtf_function(name: &str) -> bool {
     // SQL function names are ASCII, so we can use the faster ASCII lowercase
     let lower = name.to_ascii_lowercase();
     UDTF_FUNCTIONS.contains(lower.as_str())
+}
+"#,
+    );
+
+    // Generate ReturnTypeRule enum
+    code.push_str(
+        r#"
+/// Return type rule for function type inference.
+///
+/// This enum represents the different strategies for determining a function's
+/// return type during type inference in SQL analysis.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReturnTypeRule {
+    /// Returns Integer (e.g., COUNT, ROW_NUMBER)
+    Integer,
+    /// Returns Number (e.g., SUM, AVG)
+    Numeric,
+    /// Returns Text (e.g., CONCAT, SUBSTRING)
+    Text,
+    /// Returns Timestamp (e.g., NOW, CURRENT_TIMESTAMP)
+    Timestamp,
+    /// Returns Boolean (e.g., AND, OR)
+    Boolean,
+    /// Returns Date (e.g., CURRENT_DATE)
+    Date,
+    /// Returns same type as first argument (e.g., MIN, MAX, COALESCE)
+    MatchFirstArg,
+}
+
+/// Infers the return type rule for a SQL function.
+///
+/// This function returns the return type rule for known SQL functions,
+/// enabling data-driven type inference. The check is case-insensitive.
+///
+/// # Arguments
+///
+/// * `name` - The function name (case-insensitive)
+///
+/// # Returns
+///
+/// `Some(ReturnTypeRule)` if the function has a known return type rule,
+/// `None` otherwise (fallback to existing logic).
+///
+/// # Example
+///
+/// ```ignore
+/// use flowscope_core::generated::infer_function_return_type;
+///
+/// assert_eq!(infer_function_return_type("COUNT"), Some(ReturnTypeRule::Integer));
+/// assert_eq!(infer_function_return_type("MIN"), Some(ReturnTypeRule::MatchFirstArg));
+/// assert_eq!(infer_function_return_type("UNKNOWN_FUNC"), None);
+/// ```
+pub fn infer_function_return_type(name: &str) -> Option<ReturnTypeRule> {
+    // SQL function names are ASCII, so we can use the faster ASCII lowercase
+    let lower = name.to_ascii_lowercase();
+    match lower.as_str() {
+"#,
+    );
+
+    // Generate match arms for each function with a return type
+    for (func_name, rule) in &return_types {
+        let variant = match rule.as_str() {
+            "integer" => "ReturnTypeRule::Integer",
+            "numeric" => "ReturnTypeRule::Numeric",
+            "text" => "ReturnTypeRule::Text",
+            "timestamp" => "ReturnTypeRule::Timestamp",
+            "boolean" => "ReturnTypeRule::Boolean",
+            "date" => "ReturnTypeRule::Date",
+            "match_first_arg" => "ReturnTypeRule::MatchFirstArg",
+            unknown => {
+                println!(
+                    "cargo:warning=Unknown return_type rule '{unknown}' for function '{func_name}'"
+                );
+                continue;
+            }
+        };
+        code.push_str(&format!("        \"{func_name}\" => Some({variant}),\n"));
+    }
+
+    code.push_str(
+        r#"        _ => None,
+    }
 }
 "#,
     );
