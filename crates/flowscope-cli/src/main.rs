@@ -49,7 +49,20 @@ fn run() -> Result<bool> {
     // Schema can come from DDL file or live database connection
     let schema_metadata = load_schema_metadata(&args, dialect)?;
 
+    // Build template config if specified
+    #[cfg(feature = "templating")]
+    let template_config = args.template.map(|mode| {
+        let context = parse_template_vars(&args.template_vars);
+        flowscope_core::TemplateConfig {
+            mode: mode.into(),
+            context,
+        }
+    });
+
     // Build analysis request
+    #[cfg(feature = "templating")]
+    let request = build_request(sources, dialect, schema_metadata, template_config);
+    #[cfg(not(feature = "templating"))]
     let request = build_request(sources, dialect, schema_metadata);
 
     // Run analysis
@@ -149,6 +162,54 @@ fn load_schema_metadata(
         .context("Failed to load schema")
 }
 
+/// Parses template variables from KEY=VALUE format into a JSON context.
+#[cfg(feature = "templating")]
+fn parse_template_vars(vars: &[String]) -> std::collections::HashMap<String, serde_json::Value> {
+    let mut context = std::collections::HashMap::new();
+
+    for var in vars {
+        if let Some((key, value)) = var.split_once('=') {
+            // Try to parse as JSON first, fall back to string
+            let json_value = serde_json::from_str(value)
+                .unwrap_or_else(|_| serde_json::Value::String(value.to_string()));
+            context.insert(key.to_string(), json_value);
+        }
+    }
+
+    context
+}
+
+#[cfg(feature = "templating")]
+fn build_request(
+    sources: Vec<FileSource>,
+    dialect: flowscope_core::Dialect,
+    schema: Option<flowscope_core::SchemaMetadata>,
+    template_config: Option<flowscope_core::TemplateConfig>,
+) -> AnalyzeRequest {
+    if sources.len() == 1 {
+        AnalyzeRequest {
+            sql: sources[0].content.clone(),
+            files: None,
+            dialect,
+            source_name: Some(sources[0].name.clone()),
+            options: None,
+            schema,
+            template_config,
+        }
+    } else {
+        AnalyzeRequest {
+            sql: String::new(),
+            files: Some(sources),
+            dialect,
+            source_name: None,
+            options: None,
+            schema,
+            template_config,
+        }
+    }
+}
+
+#[cfg(not(feature = "templating"))]
 fn build_request(
     sources: Vec<FileSource>,
     dialect: flowscope_core::Dialect,

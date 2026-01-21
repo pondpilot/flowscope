@@ -357,6 +357,7 @@ mod tests {
             source_name: None,
             options: None,
             schema: None,
+            template_config: None,
         };
         let result = analyze(&request);
         let bytes = export(&result).expect("Export should succeed");
@@ -390,6 +391,7 @@ mod tests {
             source_name: None,
             options: None,
             schema: None,
+            template_config: None,
         };
         let result = analyze(&request);
         let bytes = export(&result).expect("Export should succeed");

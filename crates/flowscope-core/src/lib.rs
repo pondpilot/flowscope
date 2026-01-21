@@ -4,6 +4,8 @@ pub mod error;
 pub mod extractors;
 pub mod generated;
 pub mod parser;
+#[cfg(feature = "templating")]
+pub mod templater;
 pub mod types;
 
 // Re-export main types and functions
@@ -68,6 +70,10 @@ pub use types::{
     Summary,
     TableConstraintInfo,
 };
+
+// Re-export template types when the templating feature is enabled
+#[cfg(feature = "templating")]
+pub use templater::{TemplateConfig, TemplateError, TemplateMode};
 
 // Test utilities and helper exposure (must be at end of file)
 #[cfg(test)]

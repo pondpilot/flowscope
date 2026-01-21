@@ -32,6 +32,8 @@ fn parse_schema_ddl(content: &str, dialect: Dialect) -> Result<SchemaMetadata> {
             allow_implied: true,
             ..Default::default()
         }),
+        #[cfg(feature = "templating")]
+        template_config: None,
     };
 
     let result = analyze(&request);

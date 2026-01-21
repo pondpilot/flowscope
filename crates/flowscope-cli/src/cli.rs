@@ -60,6 +60,14 @@ pub struct Args {
     /// Compact JSON output (no pretty-printing)
     #[arg(short, long)]
     pub compact: bool,
+
+    /// Template mode for preprocessing SQL (jinja or dbt)
+    #[arg(long, value_enum)]
+    pub template: Option<TemplateArg>,
+
+    /// Template variable in KEY=VALUE format (can be repeated)
+    #[arg(long = "template-var", value_name = "KEY=VALUE")]
+    pub template_vars: Vec<String>,
 }
 
 /// SQL dialect options
@@ -119,6 +127,25 @@ pub enum OutputFormat {
     Xlsx,
     /// DuckDB database file
     Duckdb,
+}
+
+/// Template mode for SQL preprocessing
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum TemplateArg {
+    /// Plain Jinja2 templating
+    Jinja,
+    /// dbt-style templating with builtin macros
+    Dbt,
+}
+
+#[cfg(feature = "templating")]
+impl From<TemplateArg> for flowscope_core::TemplateMode {
+    fn from(t: TemplateArg) -> Self {
+        match t {
+            TemplateArg::Jinja => flowscope_core::TemplateMode::Jinja,
+            TemplateArg::Dbt => flowscope_core::TemplateMode::Dbt,
+        }
+    }
 }
 
 /// Graph detail level for visualization

@@ -13,6 +13,7 @@ fn analyze_sample() -> flowscope_core::AnalyzeResult {
         source_name: None,
         options: None,
         schema: None,
+        template_config: None,
     })
 }
 

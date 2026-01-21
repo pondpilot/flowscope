@@ -36,6 +36,8 @@ fuzz_target!(|input: FuzzInput| {
         source_name: None,
         options: None,
         schema: None,
+        #[cfg(feature = "templating")]
+        template_config: None,
     };
 
     // The analyze function should never panic, even on invalid SQL.

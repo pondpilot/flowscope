@@ -16,6 +16,8 @@ fn run_analysis(sql: &str, dialect: Dialect, schema: Option<SchemaMetadata>) -> 
         source_name: Some("integration_test".into()),
         options: None,
         schema,
+        #[cfg(feature = "templating")]
+        template_config: None,
     })
 }
 

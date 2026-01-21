@@ -55,6 +55,17 @@
             "type": "null"
           }
         ]
+      },
+      "templateConfig": {
+        "description": "Optional template configuration for preprocessing Jinja/dbt-style SQL",
+        "anyOf": [
+          {
+            "$ref": "#/definitions/TemplateConfig"
+          },
+          {
+            "type": "null"
+          }
+        ]
       }
     },
     "required": [
@@ -324,6 +335,47 @@
         "required": [
           "table",
           "column"
+        ]
+      },
+      "TemplateConfig": {
+        "description": "Configuration for SQL template preprocessing.",
+        "type": "object",
+        "properties": {
+          "mode": {
+            "description": "The templating mode to use.",
+            "default": "raw",
+            "allOf": [
+              {
+                "$ref": "#/definitions/TemplateMode"
+              }
+            ]
+          },
+          "context": {
+            "description": "Context variables available to the template.\n\nFor dbt mode, variables under the \"vars\" key are accessible via `var()`.",
+            "type": "object",
+            "additionalProperties": true,
+            "default": {}
+          }
+        }
+      },
+      "TemplateMode": {
+        "description": "Templating mode for SQL preprocessing.",
+        "oneOf": [
+          {
+            "description": "No templating - SQL is passed through unchanged.",
+            "type": "string",
+            "const": "raw"
+          },
+          {
+            "description": "Standard Jinja2 template rendering.\n\nUses strict mode: undefined variables cause an error.",
+            "type": "string",
+            "const": "jinja"
+          },
+          {
+            "description": "dbt-style templating with builtin macros.\n\nIncludes stub implementations of:\n- `ref('model')` / `ref('project', 'model')` - model references\n- `source('schema', 'table')` - source table references\n- `config(...)` - model configuration (returns empty string)\n- `var('name')` / `var('name', 'default')` - variable access\n- `is_incremental()` - always returns false for lineage analysis\n- `this` - undefined (incremental model self-reference)",
+            "type": "string",
+            "const": "dbt"
+          }
         ]
       }
     }

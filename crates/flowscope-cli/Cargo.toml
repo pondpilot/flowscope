@@ -16,6 +16,10 @@ description = "Command-line interface for FlowScope SQL lineage analyzer"
 name = "flowscope"
 path = "src/main.rs"
 
+[features]
+default = ["templating"]
+templating = ["flowscope-core/templating"]
+
 [dependencies]
 flowscope-core.workspace = true
 flowscope-export = { workspace = true, features = ["duckdb"] }

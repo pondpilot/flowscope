@@ -30,6 +30,8 @@ proptest! {
             source_name: None,
             options: None,
             schema: None,
+            #[cfg(feature = "templating")]
+            template_config: None,
         };
 
         let result = analyze(&request);
@@ -69,6 +71,8 @@ proptest! {
             source_name: None,
             options: None,
             schema: None,
+            #[cfg(feature = "templating")]
+            template_config: None,
         };
 
         let result = analyze(&request);
@@ -129,6 +133,8 @@ proptest! {
             source_name: None,
             options: None,
             schema: Some(schema_metadata),
+            #[cfg(feature = "templating")]
+            template_config: None,
         };
 
         let result = analyze(&request);
@@ -182,6 +188,8 @@ proptest! {
             source_name: None,
             options: None,
             schema: Some(schema_metadata),
+            #[cfg(feature = "templating")]
+            template_config: None,
         };
 
         let result = analyze(&request);
@@ -210,6 +218,8 @@ proptest! {
             source_name: None,
             options: None,
             schema: None,
+            #[cfg(feature = "templating")]
+            template_config: None,
         };
 
         let result = analyze(&request);
@@ -253,6 +263,8 @@ mod function_arg_handling {
             source_name: None,
             options: None,
             schema: None,
+            #[cfg(feature = "templating")]
+            template_config: None,
         };
         let result = analyze(&request);
 
@@ -271,6 +283,8 @@ mod function_arg_handling {
             source_name: None,
             options: None,
             schema: None,
+            #[cfg(feature = "templating")]
+            template_config: None,
         };
         let result = analyze(&request);
 
@@ -301,6 +315,8 @@ mod function_arg_handling {
             source_name: None,
             options: None,
             schema: None,
+            #[cfg(feature = "templating")]
+            template_config: None,
         };
         let result = analyze(&request);
 
@@ -324,6 +340,8 @@ mod function_arg_handling {
             source_name: None,
             options: None,
             schema: None,
+            #[cfg(feature = "templating")]
+            template_config: None,
         };
         let result = analyze(&request);
 
@@ -354,6 +372,8 @@ mod function_arg_handling {
             source_name: None,
             options: None,
             schema: None,
+            #[cfg(feature = "templating")]
+            template_config: None,
         };
         let result = analyze(&request);
 
@@ -390,6 +410,8 @@ mod function_arg_handling {
                 source_name: None,
                 options: None,
                 schema: None,
+                #[cfg(feature = "templating")]
+                template_config: None,
             };
 
             let result = analyze(&request);
@@ -413,6 +435,8 @@ mod function_arg_handling {
                 source_name: None,
                 options: None,
                 schema: None,
+                #[cfg(feature = "templating")]
+                template_config: None,
             };
             let result = analyze(&request);
 
@@ -449,6 +473,8 @@ mod function_arg_handling {
             source_name: None,
             options: None,
             schema: None,
+            #[cfg(feature = "templating")]
+            template_config: None,
         };
         let result = analyze(&request);
 
@@ -479,6 +505,8 @@ mod function_arg_handling {
             source_name: None,
             options: None,
             schema: None,
+            #[cfg(feature = "templating")]
+            template_config: None,
         };
         let result = analyze(&request);
 
@@ -514,6 +542,8 @@ mod function_arg_handling {
             source_name: None,
             options: None,
             schema: None,
+            #[cfg(feature = "templating")]
+            template_config: None,
         };
         let result = analyze(&request);
 
@@ -538,6 +568,8 @@ mod function_arg_handling {
                 source_name: None,
                 options: None,
                 schema: None,
+                #[cfg(feature = "templating")]
+                template_config: None,
             };
             let result = analyze(&request);
 
@@ -563,6 +595,8 @@ mod function_arg_handling {
                 source_name: None,
                 options: None,
                 schema: None,
+                #[cfg(feature = "templating")]
+                template_config: None,
             };
             let result = analyze(&request);
 

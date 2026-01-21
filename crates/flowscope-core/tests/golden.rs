@@ -14,6 +14,8 @@ fn golden_inline_select_tables_only() {
         source_name: None,
         options: None,
         schema: None,
+        #[cfg(feature = "templating")]
+        template_config: None,
     };
 
     let result = analyze(&request);
@@ -39,6 +41,8 @@ fn golden_multi_file_keeps_sources() {
         source_name: None,
         options: None,
         schema: None,
+        #[cfg(feature = "templating")]
+        template_config: None,
     };
 
     let result = analyze(&request);
@@ -55,6 +59,8 @@ fn golden_column_lineage_union_captures_outputs() {
         source_name: None,
         options: None,
         schema: None,
+        #[cfg(feature = "templating")]
+        template_config: None,
     };
 
     let result = analyze(&request);
@@ -71,6 +77,8 @@ fn golden_window_functions_emit_columns() {
         source_name: None,
         options: None,
         schema: None,
+        #[cfg(feature = "templating")]
+        template_config: None,
     };
 
     let result = analyze(&request);
@@ -87,6 +95,8 @@ fn golden_ctas_captures_target_columns() {
         source_name: None,
         options: None,
         schema: None,
+        #[cfg(feature = "templating")]
+        template_config: None,
     };
 
     let result = analyze(&request);
@@ -135,6 +145,8 @@ fn golden_resolved_schema_with_imported_and_implied() {
                 ],
             }],
         }),
+        #[cfg(feature = "templating")]
+        template_config: None,
     };
 
     let result = analyze(&request);
@@ -178,6 +190,8 @@ fn golden_imported_precedence_over_create_table() {
                 ],
             }],
         }),
+        #[cfg(feature = "templating")]
+        template_config: None,
     };
 
     let result = analyze(&request);
@@ -223,6 +237,8 @@ fn imported_schema_preserves_qualified_names() {
                 ],
             }],
         }),
+        #[cfg(feature = "templating")]
+        template_config: None,
     };
 
     let result = analyze(&request);
@@ -266,6 +282,8 @@ fn imported_schema_resolves_via_default_schema() {
                 ],
             }],
         }),
+        #[cfg(feature = "templating")]
+        template_config: None,
     };
 
     let result = analyze(&request);
@@ -306,6 +324,8 @@ fn imported_schema_resolves_via_search_path_with_catalog() {
                 }],
             }],
         }),
+        #[cfg(feature = "templating")]
+        template_config: None,
     };
 
     let result = analyze(&request);

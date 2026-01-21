@@ -538,6 +538,7 @@ mod tests {
             source_name: None,
             options: None,
             schema: None,
+            template_config: None,
         };
         let result = analyze(&request);
         let sql = export_sql(&result, None).expect("Export should succeed");
@@ -560,6 +561,7 @@ mod tests {
             source_name: None,
             options: None,
             schema: None,
+            template_config: None,
         };
         let result = analyze(&request);
         let sql = export_sql(&result, None).expect("Export should succeed");
@@ -604,6 +606,7 @@ mod integration_tests {
             source_name: None,
             options: None,
             schema: None,
+            template_config: None,
         };
         let result = analyze(&request);
 
