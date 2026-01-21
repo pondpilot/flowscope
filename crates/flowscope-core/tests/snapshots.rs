@@ -199,3 +199,59 @@ fn test_postgres_array_slicing() {
 
     run_postgres_snapshot_test("postgres_array_slicing", sql);
 }
+
+// Task 2: Tier 2 PostgreSQL Dialect Depth
+
+#[test]
+fn test_postgres_lateral_join() {
+    let sql = r#"
+        -- LATERAL with explicit JOIN ON
+        SELECT
+            d.department_id,
+            d.name AS department_name,
+            emp.employee_name,
+            emp.salary
+        FROM departments d
+        JOIN LATERAL (
+            SELECT e.name AS employee_name, e.salary
+            FROM employees e
+            WHERE e.department_id = d.department_id
+            ORDER BY e.salary DESC
+            LIMIT 3
+        ) emp ON true;
+    "#;
+
+    run_postgres_snapshot_test("postgres_lateral_join", sql);
+}
+
+#[test]
+fn test_postgres_filter_clause() {
+    let sql = r#"
+        -- FILTER clause with multiple aggregates
+        SELECT
+            department_id,
+            SUM(salary) AS total_salary,
+            SUM(salary) FILTER (WHERE years_employed > 5) AS senior_salary,
+            AVG(salary) FILTER (WHERE performance_rating >= 4) AS high_performer_avg
+        FROM employees
+        GROUP BY department_id;
+    "#;
+
+    run_postgres_snapshot_test("postgres_filter_clause", sql);
+}
+
+#[test]
+fn test_postgres_group_by_cube_rollup() {
+    let sql = r#"
+        -- GROUPING SETS for multiple aggregation levels
+        SELECT
+            region,
+            city,
+            GROUPING(region, city) AS grp_idx,
+            COUNT(DISTINCT id) AS num_total
+        FROM locations
+        GROUP BY GROUPING SETS ((region), (city), (region, city), ());
+    "#;
+
+    run_postgres_snapshot_test("postgres_group_by_cube_rollup", sql);
+}

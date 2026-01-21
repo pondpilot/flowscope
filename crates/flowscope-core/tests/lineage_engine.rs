@@ -6917,3 +6917,211 @@ fn postgres_array_slicing_tracks_source_table() {
         "array_data table node should exist in lineage"
     );
 }
+
+// Task 2: Tier 2 PostgreSQL Dialect Depth - Lineage assertions
+
+#[test]
+fn lateral_join_tracks_outer_and_subquery_tables() {
+    let sql = r#"
+        SELECT
+            d.department_id,
+            d.name AS department_name,
+            emp.employee_name,
+            emp.salary
+        FROM departments d
+        JOIN LATERAL (
+            SELECT e.name AS employee_name, e.salary
+            FROM employees e
+            WHERE e.department_id = d.department_id
+            ORDER BY e.salary DESC
+            LIMIT 3
+        ) emp ON true
+    "#;
+
+    let result = run_analysis(sql, Dialect::Postgres, None);
+    let tables = collect_table_names(&result);
+
+    // Both the outer table and the table inside LATERAL should be tracked
+    assert!(
+        tables.contains("departments"),
+        "LATERAL join should track outer table; saw {tables:?}"
+    );
+    assert!(
+        tables.contains("employees"),
+        "LATERAL join should track table inside LATERAL subquery; saw {tables:?}"
+    );
+
+    let stmt = first_statement(&result);
+
+    // Verify output columns are present
+    let columns = column_labels(stmt);
+    for expected in ["department_id", "department_name", "employee_name", "salary"] {
+        assert!(
+            columns.contains(&expected.to_string()),
+            "expected column {expected} in LATERAL join output; saw {columns:?}"
+        );
+    }
+
+    // Verify no parsing errors
+    assert!(
+        !result.summary.has_errors,
+        "LATERAL join should parse without errors: {:?}",
+        result.issues
+    );
+}
+
+#[test]
+fn filter_clause_tracks_aggregation_sources() {
+    let sql = r#"
+        SELECT
+            department_id,
+            SUM(salary) AS total_salary,
+            SUM(salary) FILTER (WHERE years_employed > 5) AS senior_salary,
+            AVG(salary) FILTER (WHERE performance_rating >= 4) AS high_performer_avg
+        FROM employees
+        GROUP BY department_id
+    "#;
+
+    let result = run_analysis(sql, Dialect::Postgres, None);
+    let tables = collect_table_names(&result);
+
+    assert!(
+        tables.contains("employees"),
+        "FILTER clause query should track source table; saw {tables:?}"
+    );
+
+    let stmt = first_statement(&result);
+
+    // Verify output columns are present
+    let columns = column_labels(stmt);
+    for expected in ["department_id", "total_salary", "senior_salary", "high_performer_avg"] {
+        assert!(
+            columns.contains(&expected.to_string()),
+            "expected column {expected} in FILTER clause output; saw {columns:?}"
+        );
+    }
+
+    // Verify no parsing errors
+    assert!(
+        !result.summary.has_errors,
+        "FILTER clause query should parse without errors: {:?}",
+        result.issues
+    );
+}
+
+#[test]
+fn group_by_cube_rollup_tracks_source_table() {
+    let sql = r#"
+        SELECT
+            region,
+            city,
+            GROUPING(region, city) AS grp_idx,
+            COUNT(DISTINCT id) AS num_total
+        FROM locations
+        GROUP BY GROUPING SETS ((region), (city), (region, city), ())
+    "#;
+
+    let result = run_analysis(sql, Dialect::Postgres, None);
+    let tables = collect_table_names(&result);
+
+    assert!(
+        tables.contains("locations"),
+        "GROUPING SETS query should track source table; saw {tables:?}"
+    );
+
+    let stmt = first_statement(&result);
+
+    // Verify output columns are present
+    let columns = column_labels(stmt);
+    for expected in ["region", "city", "grp_idx", "num_total"] {
+        assert!(
+            columns.contains(&expected.to_string()),
+            "expected column {expected} in GROUPING SETS output; saw {columns:?}"
+        );
+    }
+
+    // Verify no parsing errors
+    assert!(
+        !result.summary.has_errors,
+        "GROUPING SETS query should parse without errors: {:?}",
+        result.issues
+    );
+}
+
+#[test]
+fn rollup_tracks_hierarchical_columns() {
+    let sql = r#"
+        SELECT
+            year,
+            quarter,
+            month,
+            SUM(revenue) AS total_revenue
+        FROM sales
+        GROUP BY ROLLUP (year, quarter, month)
+    "#;
+
+    let result = run_analysis(sql, Dialect::Postgres, None);
+    let tables = collect_table_names(&result);
+
+    assert!(
+        tables.contains("sales"),
+        "ROLLUP query should track source table; saw {tables:?}"
+    );
+
+    let stmt = first_statement(&result);
+
+    // Verify hierarchical columns are present
+    let columns = column_labels(stmt);
+    for expected in ["year", "quarter", "month", "total_revenue"] {
+        assert!(
+            columns.contains(&expected.to_string()),
+            "expected column {expected} in ROLLUP output; saw {columns:?}"
+        );
+    }
+
+    // Verify no parsing errors
+    assert!(
+        !result.summary.has_errors,
+        "ROLLUP query should parse without errors: {:?}",
+        result.issues
+    );
+}
+
+#[test]
+fn cube_tracks_all_dimensions() {
+    let sql = r#"
+        SELECT
+            product_category,
+            sales_region,
+            SUM(quantity) AS total_quantity,
+            SUM(amount) AS total_amount
+        FROM transactions
+        GROUP BY CUBE (product_category, sales_region)
+    "#;
+
+    let result = run_analysis(sql, Dialect::Postgres, None);
+    let tables = collect_table_names(&result);
+
+    assert!(
+        tables.contains("transactions"),
+        "CUBE query should track source table; saw {tables:?}"
+    );
+
+    let stmt = first_statement(&result);
+
+    // Verify dimension columns are present
+    let columns = column_labels(stmt);
+    for expected in ["product_category", "sales_region", "total_quantity", "total_amount"] {
+        assert!(
+            columns.contains(&expected.to_string()),
+            "expected column {expected} in CUBE output; saw {columns:?}"
+        );
+    }
+
+    // Verify no parsing errors
+    assert!(
+        !result.summary.has_errors,
+        "CUBE query should parse without errors: {:?}",
+        result.issues
+    );
+}

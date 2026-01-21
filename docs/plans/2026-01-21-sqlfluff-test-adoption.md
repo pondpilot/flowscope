@@ -26,12 +26,12 @@ Add 5 high-value edge case fixtures that catch parser bugs and improve robustnes
 
 Add PostgreSQL-specific features that extend lineage coverage for LATERAL joins, aggregate FILTER clauses, and advanced GROUP BY variants (CUBE, ROLLUP, GROUPING SETS).
 
-- [ ] Add `fixtures/postgres/lateral_join.sql` - LATERAL subquery joins
-- [ ] Add `fixtures/postgres/filter_clause.sql` - `COUNT(*) FILTER (WHERE ...)` syntax
-- [ ] Add `fixtures/postgres/group_by_cube_rollup.sql` - CUBE, ROLLUP, GROUPING SETS
-- [ ] Add parsing snapshot tests for all 3 fixtures
-- [ ] Add lineage assertions tracking columns through LATERAL and aggregations
-- [ ] Run `just test-rust` and verify all tests pass
+- [x] Add `fixtures/postgres/lateral_join.sql` - LATERAL subquery joins
+- [x] Add `fixtures/postgres/filter_clause.sql` - `COUNT(*) FILTER (WHERE ...)` syntax
+- [x] Add `fixtures/postgres/group_by_cube_rollup.sql` - CUBE, ROLLUP, GROUPING SETS
+- [x] Add parsing snapshot tests for all 3 fixtures
+- [x] Add lineage assertions tracking columns through LATERAL and aggregations
+- [x] Run `just test-rust` and verify all tests pass
 
 ### Task 3: Tier 3 Snowflake Features
 

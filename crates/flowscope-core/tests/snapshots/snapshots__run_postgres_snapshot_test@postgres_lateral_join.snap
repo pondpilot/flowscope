@@ -1,0 +1,636 @@
+---
+source: crates/flowscope-core/tests/snapshots.rs
+expression: clean_result
+---
+{
+  "statements": [
+    {
+      "statementIndex": 0,
+      "statementType": "SELECT",
+      "nodes": [
+        {
+          "id": "column_0c5608fbdc3927e5",
+          "type": "column",
+          "label": "employee_name"
+        },
+        {
+          "id": "column_1f727b33e31ee9ef",
+          "type": "column",
+          "label": "salary",
+          "qualifiedName": "employees.salary"
+        },
+        {
+          "id": "column_3253ea2876285b48",
+          "type": "column",
+          "label": "salary"
+        },
+        {
+          "id": "column_39d45884eeb4b716",
+          "type": "column",
+          "label": "department_id",
+          "qualifiedName": "departments.department_id"
+        },
+        {
+          "id": "column_3dbe5d7f79d39de9",
+          "type": "column",
+          "label": "department_id"
+        },
+        {
+          "id": "column_5aefcec4597f6680",
+          "type": "column",
+          "label": "name",
+          "qualifiedName": "departments.name"
+        },
+        {
+          "id": "column_9a274df9ea201cac",
+          "type": "column",
+          "label": "salary"
+        },
+        {
+          "id": "column_9cee539008461d80",
+          "type": "column",
+          "label": "department_name"
+        },
+        {
+          "id": "column_e2744ee33fe5dacd",
+          "type": "column",
+          "label": "employee_name"
+        },
+        {
+          "id": "column_e651a7d1449a8c25",
+          "type": "column",
+          "label": "name",
+          "qualifiedName": "employees.name"
+        },
+        {
+          "id": "derived_49bacb22e9b00414",
+          "type": "cte",
+          "label": "emp",
+          "qualifiedName": "emp"
+        },
+        {
+          "id": "output_b558dd754c71cfa6",
+          "type": "output",
+          "label": "Output"
+        },
+        {
+          "id": "table_1d63721b3610a67f",
+          "type": "table",
+          "label": "employees",
+          "qualifiedName": "employees",
+          "filters": [
+            {
+              "expression": "e.department_id = d.department_id",
+              "clauseType": "WHERE"
+            }
+          ],
+          "joinType": "INNER",
+          "joinCondition": "true"
+        },
+        {
+          "id": "table_e3d59f407f4557b4",
+          "type": "table",
+          "label": "departments",
+          "qualifiedName": "departments",
+          "filters": [
+            {
+              "expression": "e.department_id = d.department_id",
+              "clauseType": "WHERE"
+            }
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "id": "edge_04bfa8e855ae4065",
+          "from": "output_b558dd754c71cfa6",
+          "to": "column_3253ea2876285b48",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_3d7f94e1cb11e28c",
+          "from": "table_1d63721b3610a67f",
+          "to": "column_e651a7d1449a8c25",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_423203f0790cb56c",
+          "from": "derived_49bacb22e9b00414",
+          "to": "column_9a274df9ea201cac",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_45ffec703ea285d3",
+          "from": "column_9a274df9ea201cac",
+          "to": "column_3253ea2876285b48",
+          "type": "data_flow"
+        },
+        {
+          "id": "edge_4942f2cbce2e9856",
+          "from": "table_1d63721b3610a67f",
+          "to": "column_1f727b33e31ee9ef",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_4a83fe3ce01efc8d",
+          "from": "table_1d63721b3610a67f",
+          "to": "output_b558dd754c71cfa6",
+          "type": "join_dependency",
+          "joinType": "INNER",
+          "joinCondition": "true"
+        },
+        {
+          "id": "edge_5febe5bb9dcfd884",
+          "from": "column_e2744ee33fe5dacd",
+          "to": "column_0c5608fbdc3927e5",
+          "type": "data_flow"
+        },
+        {
+          "id": "edge_62815a73840a6b76",
+          "from": "output_b558dd754c71cfa6",
+          "to": "column_9cee539008461d80",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_703626513036dd1f",
+          "from": "column_39d45884eeb4b716",
+          "to": "column_3dbe5d7f79d39de9",
+          "type": "data_flow"
+        },
+        {
+          "id": "edge_942f2cc6beeb7f2e",
+          "from": "table_1d63721b3610a67f",
+          "to": "derived_49bacb22e9b00414",
+          "type": "data_flow",
+          "operation": "INNER_JOIN",
+          "joinType": "INNER",
+          "joinCondition": "true"
+        },
+        {
+          "id": "edge_a2dad43ee9d070f5",
+          "from": "column_5aefcec4597f6680",
+          "to": "column_9cee539008461d80",
+          "type": "data_flow"
+        },
+        {
+          "id": "edge_c03b7c9043990c7c",
+          "from": "output_b558dd754c71cfa6",
+          "to": "column_0c5608fbdc3927e5",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_e82ac228185a9139",
+          "from": "derived_49bacb22e9b00414",
+          "to": "column_e2744ee33fe5dacd",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_ee4cf9f317d403e4",
+          "from": "output_b558dd754c71cfa6",
+          "to": "column_3dbe5d7f79d39de9",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_ee5e952c11ad87c2",
+          "from": "table_e3d59f407f4557b4",
+          "to": "column_5aefcec4597f6680",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_f22ee78cb7dba437",
+          "from": "column_1f727b33e31ee9ef",
+          "to": "column_9a274df9ea201cac",
+          "type": "data_flow"
+        },
+        {
+          "id": "edge_f52d941fe785b2ae",
+          "from": "column_e651a7d1449a8c25",
+          "to": "column_e2744ee33fe5dacd",
+          "type": "data_flow"
+        },
+        {
+          "id": "edge_fd47ea96a810fba1",
+          "from": "table_e3d59f407f4557b4",
+          "to": "column_39d45884eeb4b716",
+          "type": "ownership"
+        }
+      ],
+      "joinCount": 1,
+      "complexityScore": 32
+    }
+  ],
+  "globalLineage": {
+    "nodes": [
+      {
+        "id": "column_0c5608fbdc3927e5",
+        "type": "column",
+        "label": "employee_name",
+        "canonicalName": {
+          "name": "employee_name"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_0c5608fbdc3927e5"
+          }
+        ]
+      },
+      {
+        "id": "column_1f727b33e31ee9ef",
+        "type": "column",
+        "label": "salary",
+        "canonicalName": {
+          "schema": "employees",
+          "name": "salary"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_1f727b33e31ee9ef"
+          }
+        ]
+      },
+      {
+        "id": "column_3253ea2876285b48",
+        "type": "column",
+        "label": "salary",
+        "canonicalName": {
+          "name": "salary"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_3253ea2876285b48"
+          }
+        ]
+      },
+      {
+        "id": "column_39d45884eeb4b716",
+        "type": "column",
+        "label": "department_id",
+        "canonicalName": {
+          "schema": "departments",
+          "name": "department_id"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_39d45884eeb4b716"
+          }
+        ]
+      },
+      {
+        "id": "column_3dbe5d7f79d39de9",
+        "type": "column",
+        "label": "department_id",
+        "canonicalName": {
+          "name": "department_id"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_3dbe5d7f79d39de9"
+          }
+        ]
+      },
+      {
+        "id": "column_5aefcec4597f6680",
+        "type": "column",
+        "label": "name",
+        "canonicalName": {
+          "schema": "departments",
+          "name": "name"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_5aefcec4597f6680"
+          }
+        ]
+      },
+      {
+        "id": "column_9a274df9ea201cac",
+        "type": "column",
+        "label": "salary",
+        "canonicalName": {
+          "name": "salary"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_9a274df9ea201cac"
+          }
+        ]
+      },
+      {
+        "id": "column_9cee539008461d80",
+        "type": "column",
+        "label": "department_name",
+        "canonicalName": {
+          "name": "department_name"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_9cee539008461d80"
+          }
+        ]
+      },
+      {
+        "id": "column_e2744ee33fe5dacd",
+        "type": "column",
+        "label": "employee_name",
+        "canonicalName": {
+          "name": "employee_name"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_e2744ee33fe5dacd"
+          }
+        ]
+      },
+      {
+        "id": "column_e651a7d1449a8c25",
+        "type": "column",
+        "label": "name",
+        "canonicalName": {
+          "schema": "employees",
+          "name": "name"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_e651a7d1449a8c25"
+          }
+        ]
+      },
+      {
+        "id": "derived_49bacb22e9b00414",
+        "type": "cte",
+        "label": "emp",
+        "canonicalName": {
+          "name": "emp"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "derived_49bacb22e9b00414"
+          }
+        ]
+      },
+      {
+        "id": "output_b558dd754c71cfa6",
+        "type": "output",
+        "label": "Output",
+        "canonicalName": {
+          "name": "Output"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "output_b558dd754c71cfa6"
+          }
+        ]
+      },
+      {
+        "id": "table_1d63721b3610a67f",
+        "type": "table",
+        "label": "employees",
+        "canonicalName": {
+          "name": "employees"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "table_1d63721b3610a67f"
+          }
+        ]
+      },
+      {
+        "id": "table_e3d59f407f4557b4",
+        "type": "table",
+        "label": "departments",
+        "canonicalName": {
+          "name": "departments"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "table_e3d59f407f4557b4"
+          }
+        ]
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge_04bfa8e855ae4065",
+        "from": "output_b558dd754c71cfa6",
+        "to": "column_3253ea2876285b48",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_3d7f94e1cb11e28c",
+        "from": "table_1d63721b3610a67f",
+        "to": "column_e651a7d1449a8c25",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_423203f0790cb56c",
+        "from": "derived_49bacb22e9b00414",
+        "to": "column_9a274df9ea201cac",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_45ffec703ea285d3",
+        "from": "column_9a274df9ea201cac",
+        "to": "column_3253ea2876285b48",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_4942f2cbce2e9856",
+        "from": "table_1d63721b3610a67f",
+        "to": "column_1f727b33e31ee9ef",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_4a83fe3ce01efc8d",
+        "from": "table_1d63721b3610a67f",
+        "to": "output_b558dd754c71cfa6",
+        "type": "join_dependency",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_5febe5bb9dcfd884",
+        "from": "column_e2744ee33fe5dacd",
+        "to": "column_0c5608fbdc3927e5",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_62815a73840a6b76",
+        "from": "output_b558dd754c71cfa6",
+        "to": "column_9cee539008461d80",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_703626513036dd1f",
+        "from": "column_39d45884eeb4b716",
+        "to": "column_3dbe5d7f79d39de9",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_942f2cc6beeb7f2e",
+        "from": "table_1d63721b3610a67f",
+        "to": "derived_49bacb22e9b00414",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_a2dad43ee9d070f5",
+        "from": "column_5aefcec4597f6680",
+        "to": "column_9cee539008461d80",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_c03b7c9043990c7c",
+        "from": "output_b558dd754c71cfa6",
+        "to": "column_0c5608fbdc3927e5",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_e82ac228185a9139",
+        "from": "derived_49bacb22e9b00414",
+        "to": "column_e2744ee33fe5dacd",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_ee4cf9f317d403e4",
+        "from": "output_b558dd754c71cfa6",
+        "to": "column_3dbe5d7f79d39de9",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_ee5e952c11ad87c2",
+        "from": "table_e3d59f407f4557b4",
+        "to": "column_5aefcec4597f6680",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_f22ee78cb7dba437",
+        "from": "column_1f727b33e31ee9ef",
+        "to": "column_9a274df9ea201cac",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_f52d941fe785b2ae",
+        "from": "column_e651a7d1449a8c25",
+        "to": "column_e2744ee33fe5dacd",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_fd47ea96a810fba1",
+        "from": "table_e3d59f407f4557b4",
+        "to": "column_39d45884eeb4b716",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      }
+    ]
+  },
+  "issues": [],
+  "summary": {
+    "statementCount": 1,
+    "tableCount": 3,
+    "columnCount": 10,
+    "joinCount": 1,
+    "complexityScore": 32,
+    "issueCount": {
+      "errors": 0,
+      "warnings": 0,
+      "infos": 0
+    },
+    "hasErrors": false
+  },
+  "resolvedSchema": {
+    "tables": [
+      {
+        "name": "departments",
+        "columns": [
+          {
+            "name": "department_id",
+            "origin": "implied"
+          }
+        ],
+        "origin": "implied",
+        "sourceStatementIndex": 0,
+        "updatedAt": "2024-01-01T00:00:00Z"
+      },
+      {
+        "name": "employees",
+        "columns": [
+          {
+            "name": "department_id",
+            "origin": "implied"
+          },
+          {
+            "name": "salary",
+            "origin": "implied"
+          }
+        ],
+        "origin": "implied",
+        "sourceStatementIndex": 0,
+        "updatedAt": "2024-01-01T00:00:00Z"
+      }
+    ]
+  }
+}
