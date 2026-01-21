@@ -110,7 +110,7 @@ const loadProjectsFromStorage = (): Project[] => {
         runMode: p.runMode || 'all',
         selectedFileIds: p.selectedFileIds || [],
         schemaSQL: p.schemaSQL || '', // Default to empty string for older projects
-        templateMode: p.templateMode || 'raw', // Default to no templating for older projects
+        templateMode: parseTemplateMode(p.templateMode), // Validate and default to 'raw' for older/corrupted projects
         // Migrate files to include path if missing
         files: (p.files || []).map((f: Partial<ProjectFile>) => ({
           ...f,

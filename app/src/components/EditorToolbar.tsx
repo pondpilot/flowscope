@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/select';
 import { FileSelector } from './FileSelector';
 import type { Dialect, RunMode, TemplateMode } from '@/lib/project-store';
+import { isValidTemplateMode, TEMPLATE_MODE_OPTIONS } from '@/types';
 
 interface EditorToolbarProps {
   dialect: Dialect;
@@ -93,7 +94,11 @@ export function EditorToolbar({
 
         <Select
           value={templateMode}
-          onValueChange={v => onTemplateModeChange(v as TemplateMode)}
+          onValueChange={v => {
+            if (isValidTemplateMode(v)) {
+              onTemplateModeChange(v);
+            }
+          }}
           open={templateSelectorOpen}
           onOpenChange={onTemplateSelectorOpenChange}
         >
@@ -101,9 +106,11 @@ export function EditorToolbar({
             <SelectValue placeholder="Template" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="raw">No Template</SelectItem>
-            <SelectItem value="jinja">Jinja</SelectItem>
-            <SelectItem value="dbt">dbt</SelectItem>
+            {TEMPLATE_MODE_OPTIONS.map(option => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>

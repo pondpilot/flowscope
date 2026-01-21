@@ -163,12 +163,23 @@ fn load_schema_metadata(
 }
 
 /// Parses template variables from KEY=VALUE format into a JSON context.
+///
+/// Whitespace is trimmed from keys and values for ergonomic CLI usage.
+/// Values are parsed as JSON if valid, otherwise treated as strings.
 #[cfg(feature = "templating")]
 fn parse_template_vars(vars: &[String]) -> std::collections::HashMap<String, serde_json::Value> {
     let mut context = std::collections::HashMap::new();
 
     for var in vars {
         if let Some((key, value)) = var.split_once('=') {
+            let key = key.trim();
+            let value = value.trim();
+
+            // Skip empty keys
+            if key.is_empty() {
+                continue;
+            }
+
             // Try to parse as JSON first, fall back to string
             let json_value = serde_json::from_str(value)
                 .unwrap_or_else(|_| serde_json::Value::String(value.to_string()));

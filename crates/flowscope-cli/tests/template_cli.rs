@@ -50,8 +50,8 @@ fn template_dbt_source_macro() {
     assert!(output.status.success(), "CLI should succeed");
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("raw_events"),
-        "Should detect 'raw_events' table from source(): {stdout}"
+        stdout.contains("raw.events"),
+        "Should detect 'raw.events' table from source(): {stdout}"
     );
 }
 

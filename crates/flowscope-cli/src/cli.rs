@@ -62,10 +62,12 @@ pub struct Args {
     pub compact: bool,
 
     /// Template mode for preprocessing SQL (jinja or dbt)
+    #[cfg(feature = "templating")]
     #[arg(long, value_enum)]
     pub template: Option<TemplateArg>,
 
     /// Template variable in KEY=VALUE format (can be repeated)
+    #[cfg(feature = "templating")]
     #[arg(long = "template-var", value_name = "KEY=VALUE")]
     pub template_vars: Vec<String>,
 }
@@ -130,6 +132,7 @@ pub enum OutputFormat {
 }
 
 /// Template mode for SQL preprocessing
+#[cfg(feature = "templating")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum TemplateArg {
     /// Plain Jinja2 templating

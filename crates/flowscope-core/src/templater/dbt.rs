@@ -3,9 +3,37 @@
 //! This module provides stub implementations of common dbt macros for use in
 //! template rendering. These stubs return placeholder values that allow the
 //! SQL to be parsed for lineage analysis without requiring a full dbt runtime.
+//!
+//! # Limitations
+//!
+//! These are simplified stubs for static analysis, not full dbt macro implementations:
+//!
+//! - **`ref()`**: Returns the model name directly, doesn't resolve package.yml dependencies
+//!   or handle versioned models (`v=N` parameter is ignored)
+//! - **`source()`**: Returns `schema.table` format, doesn't validate source definitions
+//! - **`var()`**: Falls back to the variable name if undefined (1-arg form) rather than
+//!   erroring like real dbt would
+//! - **`is_incremental()`**: Always returns `false`
+//! - **Package namespaces** (dbt_utils, etc.): Return first string argument or placeholder
+//!
+//! For accurate lineage of complex dbt projects, consider using dbt's native `compile`
+//! command and analyzing the rendered SQL.
 
 use minijinja::{Environment, Value};
 use std::collections::HashMap;
+
+/// Default dbt package namespaces that are automatically registered as passthrough objects.
+/// These allow templates with calls like `{{ dbt_utils.star(...) }}` to render successfully.
+const DEFAULT_DBT_PACKAGES: &[&str] = &[
+    "dbt_utils",
+    "dbt_expectations",
+    "dbt_date",
+    "audit_helper",
+    "codegen",
+    "metrics",
+    "elementary",
+    "fivetran_utils",
+];
 
 /// Registers all dbt builtin macros with the MiniJinja environment.
 pub(crate) fn register_dbt_builtins(
@@ -34,13 +62,13 @@ pub(crate) fn register_dbt_builtins(
         }
     });
 
-    // source('schema', 'table') -> returns "schema_table"
+    // source('schema', 'table') -> returns "schema.table"
     env.add_function(
         "source",
         |schema: Value, table: Value| -> Result<Value, minijinja::Error> {
             let schema_str = schema.as_str().unwrap_or("schema");
             let table_str = table.as_str().unwrap_or("table");
-            Ok(Value::from(format!("{schema_str}_{table_str}")))
+            Ok(Value::from(format!("{schema_str}.{table_str}")))
         },
     );
 
@@ -82,40 +110,27 @@ pub(crate) fn register_dbt_builtins(
     // this -> represents the current model (returns Value::UNDEFINED for lineage)
     env.add_global("this", Value::UNDEFINED);
 
-    // Register common dbt package namespaces as passthrough objects
-    // These allow calls like {{ dbt_utils.star(...) }} to succeed
-    env.add_global(
-        "dbt_utils",
-        Value::from_object(PassthroughNamespace::new("dbt_utils")),
-    );
-    env.add_global(
-        "dbt_expectations",
-        Value::from_object(PassthroughNamespace::new("dbt_expectations")),
-    );
-    env.add_global(
-        "dbt_date",
-        Value::from_object(PassthroughNamespace::new("dbt_date")),
-    );
-    env.add_global(
-        "audit_helper",
-        Value::from_object(PassthroughNamespace::new("audit_helper")),
-    );
-    env.add_global(
-        "codegen",
-        Value::from_object(PassthroughNamespace::new("codegen")),
-    );
-    env.add_global(
-        "metrics",
-        Value::from_object(PassthroughNamespace::new("metrics")),
-    );
-    env.add_global(
-        "elementary",
-        Value::from_object(PassthroughNamespace::new("elementary")),
-    );
-    env.add_global(
-        "fivetran_utils",
-        Value::from_object(PassthroughNamespace::new("fivetran_utils")),
-    );
+    // Register default dbt package namespaces as passthrough objects
+    for package in DEFAULT_DBT_PACKAGES {
+        env.add_global(*package, Value::from_object(PassthroughNamespace::new(package)));
+    }
+
+    // Register custom packages from context["dbt_packages"] if provided
+    // Example: {"dbt_packages": ["my_package", "custom_utils"]}
+    if let Some(serde_json::Value::Array(packages)) = context.get("dbt_packages") {
+        for pkg in packages {
+            if let Some(name) = pkg.as_str() {
+                // Skip if already registered as a default package
+                if !DEFAULT_DBT_PACKAGES.contains(&name) {
+                    let name_owned = name.to_string();
+                    env.add_global(
+                        name_owned.clone(),
+                        Value::from_object(PassthroughNamespace::new(&name_owned)),
+                    );
+                }
+            }
+        }
+    }
 }
 
 /// A passthrough namespace object that accepts any method call.
@@ -195,7 +210,7 @@ mod tests {
     fn source_macro() {
         let ctx = HashMap::new();
         let result = render_dbt("SELECT * FROM {{ source('raw', 'events') }}", &ctx).unwrap();
-        assert_eq!(result, "SELECT * FROM raw_events");
+        assert_eq!(result, "SELECT * FROM raw.events");
     }
 
     #[test]
@@ -253,5 +268,28 @@ WHERE created_at > (SELECT MAX(created_at) FROM {{ this }})
         let result = render_dbt(template, &ctx).unwrap();
         assert!(result.contains("FROM stg_users"));
         assert!(!result.contains("is_incremental"));
+    }
+
+    #[test]
+    fn custom_dbt_package_from_context() {
+        let mut ctx = HashMap::new();
+        ctx.insert(
+            "dbt_packages".to_string(),
+            serde_json::json!(["my_custom_pkg"]),
+        );
+
+        // Custom package method should return first arg or placeholder
+        let template = "SELECT {{ my_custom_pkg.generate_column('user_id') }} FROM users";
+        let result = render_dbt(template, &ctx).unwrap();
+        assert_eq!(result, "SELECT user_id FROM users");
+    }
+
+    #[test]
+    fn default_dbt_utils_package() {
+        let ctx = HashMap::new();
+        // dbt_utils is a default package, should work without explicit registration
+        let template = "SELECT {{ dbt_utils.star('users') }} FROM users";
+        let result = render_dbt(template, &ctx).unwrap();
+        assert_eq!(result, "SELECT users FROM users");
     }
 }

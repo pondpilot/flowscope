@@ -4,11 +4,20 @@ use super::error::TemplateError;
 use minijinja::{Environment, Value};
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::time::{Duration, Instant};
 
 /// Renders a Jinja2 template with the given context.
 ///
 /// This is the core rendering function for plain Jinja templates
 /// without dbt-specific macros.
+/// Recursion limit for template rendering to prevent DoS via deeply nested templates.
+/// Set lower than MiniJinja's default (500) for extra safety in WASM environments.
+const RECURSION_LIMIT: usize = 100;
+
+/// Maximum time allowed for the dbt render retry loop to prevent DoS via templates
+/// with many distinct unknown macros.
+const RENDER_TIMEOUT: Duration = Duration::from_secs(5);
+
 pub(crate) fn render_jinja(
     template: &str,
     context: &HashMap<String, serde_json::Value>,
@@ -17,6 +26,9 @@ pub(crate) fn render_jinja(
 
     // Configure environment for SQL templating
     env.set_undefined_behavior(minijinja::UndefinedBehavior::Strict);
+
+    // Set recursion limit to prevent DoS via deeply nested templates
+    env.set_recursion_limit(RECURSION_LIMIT);
 
     // Add the template
     env.add_template("sql", template)?;
@@ -45,15 +57,33 @@ pub(crate) fn render_dbt(
 ) -> Result<String, TemplateError> {
     // Track which unknown functions we've already stubbed to avoid infinite loops
     let mut stubbed_functions: HashSet<String> = HashSet::new();
+    let start_time = Instant::now();
 
     // Retry loop: keep trying until we succeed or hit a non-function error
     const MAX_RETRIES: usize = 50; // Prevent infinite loops
     for _ in 0..MAX_RETRIES {
+        // Check timeout to prevent DoS via templates with many unknown macros
+        if start_time.elapsed() > RENDER_TIMEOUT {
+            let stubbed_list: Vec<_> = stubbed_functions.iter().cloned().collect();
+            return Err(TemplateError::RenderError(format!(
+                "Template rendering timed out after {:?}. Stubbed {} unknown functions: {}",
+                RENDER_TIMEOUT,
+                stubbed_list.len(),
+                if stubbed_list.is_empty() {
+                    "(none)".to_string()
+                } else {
+                    stubbed_list.join(", ")
+                }
+            )));
+        }
         let mut env = Environment::new();
 
         // Configure environment - use lenient mode for dbt since templates
         // may reference variables that aren't always defined
         env.set_undefined_behavior(minijinja::UndefinedBehavior::Lenient);
+
+        // Set recursion limit to prevent DoS via deeply nested templates
+        env.set_recursion_limit(RECURSION_LIMIT);
 
         // Register dbt builtin macros
         super::dbt::register_dbt_builtins(&mut env, context);
@@ -72,7 +102,17 @@ pub(crate) fn render_dbt(
         // Try to render the template
         let tmpl = env.get_template("sql")?;
         match tmpl.render(ctx) {
-            Ok(rendered) => return Ok(rendered),
+            Ok(rendered) => {
+                #[cfg(feature = "tracing")]
+                if !stubbed_functions.is_empty() {
+                    let stubbed_list: Vec<_> = stubbed_functions.iter().cloned().collect();
+                    tracing::debug!(
+                        stubbed_functions = ?stubbed_list,
+                        "Template rendered with stubbed unknown macros"
+                    );
+                }
+                return Ok(rendered);
+            }
             Err(e) => {
                 // Check if this is an "unknown function" error
                 if let Some(func_name) = extract_unknown_function(&e) {
@@ -80,6 +120,14 @@ pub(crate) fn render_dbt(
                         // Already stubbed this one, something else is wrong
                         return Err(TemplateError::RenderError(e.to_string()));
                     }
+
+                    #[cfg(feature = "tracing")]
+                    tracing::debug!(
+                        function = %func_name,
+                        stubbed_count = stubbed_functions.len() + 1,
+                        "Stubbing unknown dbt macro"
+                    );
+
                     stubbed_functions.insert(func_name);
                     // Retry with the new stub
                     continue;
@@ -90,9 +138,15 @@ pub(crate) fn render_dbt(
         }
     }
 
-    Err(TemplateError::RenderError(
-        "Too many unknown functions in template".to_string(),
-    ))
+    let stubbed_list: Vec<_> = stubbed_functions.iter().cloned().collect();
+    Err(TemplateError::RenderError(format!(
+        "Too many unknown functions in template (limit: {MAX_RETRIES}). Stubbed: {}",
+        if stubbed_list.is_empty() {
+            "(none)".to_string()
+        } else {
+            stubbed_list.join(", ")
+        }
+    )))
 }
 
 /// Registers a passthrough function that returns its first argument or empty string.
@@ -116,20 +170,41 @@ fn register_passthrough_function(env: &mut Environment<'_>, name: &str) {
     });
 }
 
-/// Extracts the function name from an "unknown function" error message.
+/// Extracts the function name from an "unknown function" error.
+///
+/// Uses MiniJinja's `ErrorKind::UnknownFunction` for reliable detection
+/// rather than parsing error message strings (which could change between versions).
 fn extract_unknown_function(err: &minijinja::Error) -> Option<String> {
-    let msg = err.to_string();
-    // MiniJinja error format: "unknown function: <name> is unknown"
-    if msg.contains("unknown function:") {
-        // Extract the function name between "unknown function: " and " is unknown"
-        if let Some(start) = msg.find("unknown function: ") {
-            let after_prefix = &msg[start + 18..];
-            if let Some(end) = after_prefix.find(" is unknown") {
-                return Some(after_prefix[..end].to_string());
-            }
-        }
+    use minijinja::ErrorKind;
+
+    // Only handle unknown function errors
+    if err.kind() != ErrorKind::UnknownFunction {
+        return None;
     }
-    None
+
+    // Extract the function name from the error message
+    // MiniJinja error format: "unknown function: <name> is unknown"
+    const PREFIX: &str = "unknown function: ";
+    const SUFFIX: &str = " is unknown";
+
+    let msg = err.to_string();
+    let start = msg.find(PREFIX)? + PREFIX.len();
+    let remaining = &msg[start..];
+    let end = remaining.find(SUFFIX)?;
+    let func_name = &remaining[..end];
+
+    // Validate: must be non-empty, reasonable length, valid identifier chars
+    if func_name.is_empty() || func_name.len() > 100 {
+        return None;
+    }
+    if !func_name
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '_' || c == '.')
+    {
+        return None;
+    }
+
+    Some(func_name.to_string())
 }
 
 /// Converts a JSON context map to MiniJinja Value format.

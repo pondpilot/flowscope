@@ -13,10 +13,6 @@ pub enum TemplateError {
     #[error("undefined variable: {0}")]
     UndefinedVariable(String),
 
-    /// A macro or function call failed during rendering.
-    #[error("macro error: {0}")]
-    MacroError(String),
-
     /// Template rendering failed for an unexpected reason.
     #[error("render error: {0}")]
     RenderError(String),

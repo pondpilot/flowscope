@@ -83,7 +83,14 @@ export interface AnalysisContext {
 export type TemplateMode = 'raw' | 'jinja' | 'dbt';
 
 /** Valid template mode values for runtime validation */
-const VALID_TEMPLATE_MODES: readonly TemplateMode[] = ['raw', 'jinja', 'dbt'] as const;
+export const VALID_TEMPLATE_MODES: readonly TemplateMode[] = ['raw', 'jinja', 'dbt'] as const;
+
+/** Template mode options for UI dropdowns with display labels */
+export const TEMPLATE_MODE_OPTIONS: readonly { value: TemplateMode; label: string }[] = [
+  { value: 'raw', label: 'No Template' },
+  { value: 'jinja', label: 'Jinja' },
+  { value: 'dbt', label: 'dbt' },
+] as const;
 
 /**
  * Validates and parses a template mode value.

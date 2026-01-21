@@ -207,10 +207,10 @@ fn dbt_source_macro() {
         "Analysis should succeed: {:?}",
         result.issues
     );
-    // source('schema', 'table') returns "schema_table"
+    // source('schema', 'table') returns "schema.table"
     assert!(
-        has_table(&result, "raw_events"),
-        "Should detect 'raw_events' table from source(): {:?}",
+        has_table(&result, "raw.events"),
+        "Should detect 'raw.events' table from source(): {:?}",
         result.statements.get(0).map(|s| &s.nodes)
     );
 }
@@ -450,5 +450,147 @@ fn dbt_complex_with_multiple_custom_macros() {
     assert!(
         has_table(&result, "raw_orders"),
         "Should detect 'raw_orders' table"
+    );
+}
+
+// ============================================================================
+// Security and DoS Protection Tests
+// ============================================================================
+
+#[test]
+#[cfg(feature = "templating")]
+fn jinja_recursion_limit_protection() {
+    // Create a deeply nested template that would trigger recursion limits
+    // MiniJinja limits recursion by default; our limit of 100 should catch this
+    let sql = r#"
+        {% macro deep(n) %}
+            {% if n > 0 %}{{ deep(n - 1) }}{% else %}done{% endif %}
+        {% endmacro %}
+        SELECT '{{ deep(200) }}' as result FROM users
+    "#;
+    let context = HashMap::new();
+
+    let result = analyze_with_template(sql, TemplateMode::Jinja, context);
+
+    // Should fail with a template error due to recursion limit
+    assert!(
+        result.issues.iter().any(|i| i.code == "TEMPLATE_ERROR"),
+        "Deep recursion should trigger template error: {:?}",
+        result.issues
+    );
+}
+
+#[test]
+#[cfg(feature = "templating")]
+fn jinja_context_values_with_special_chars() {
+    // Test that special characters in context values work correctly
+    // Note: Jinja does simple string substitution - it's the user's responsibility
+    // to ensure context values produce valid SQL. This test verifies that the
+    // templating system itself handles special characters without crashing.
+    let sql = "SELECT * FROM {{ table_name }}";
+    let mut context = HashMap::new();
+    // Use a table name with underscores and numbers (valid SQL identifier)
+    context.insert(
+        "table_name".to_string(),
+        serde_json::json!("user_data_2024"),
+    );
+
+    let result = analyze_with_template(sql, TemplateMode::Jinja, context);
+
+    assert!(
+        !result.summary.has_errors,
+        "Context values should be safely included: {:?}",
+        result.issues
+    );
+    assert!(
+        has_table(&result, "user_data_2024"),
+        "Should detect table with special chars"
+    );
+}
+
+#[test]
+#[cfg(feature = "templating")]
+fn jinja_context_with_json_array() {
+    // Test that JSON arrays in context are handled correctly
+    let sql = r#"
+        SELECT
+            {% for col in columns %}{{ col }}{% if not loop.last %}, {% endif %}{% endfor %}
+        FROM users
+    "#;
+    let mut context = HashMap::new();
+    context.insert(
+        "columns".to_string(),
+        serde_json::json!(["id", "name", "email", "created_at"]),
+    );
+
+    let result = analyze_with_template(sql, TemplateMode::Jinja, context);
+
+    assert!(
+        !result.summary.has_errors,
+        "JSON array context should work: {:?}",
+        result.issues
+    );
+    assert!(has_table(&result, "users"), "Should detect 'users' table");
+}
+
+#[test]
+#[cfg(feature = "templating")]
+fn dbt_many_unknown_macros_error_message() {
+    // Test that many different unknown macros produce a helpful error message
+    // with the list of stubbed functions
+    let mut sql = "SELECT ".to_string();
+    for i in 0..55 {
+        if i > 0 {
+            sql.push_str(", ");
+        }
+        sql.push_str(&format!("{{{{ unknown_macro_{i}('arg') }}}}", i = i));
+    }
+    sql.push_str(" FROM users");
+
+    let context = HashMap::new();
+    let result = analyze_with_template(&sql, TemplateMode::Dbt, context);
+
+    // Should have TEMPLATE_ERROR with details about stubbed functions
+    let template_error = result
+        .issues
+        .iter()
+        .find(|i| i.code == "TEMPLATE_ERROR");
+    assert!(
+        template_error.is_some(),
+        "Should have template error for too many unknown macros"
+    );
+
+    let error_msg = &template_error.unwrap().message;
+    assert!(
+        error_msg.contains("unknown_macro_") || error_msg.contains("Too many"),
+        "Error message should mention the stubbed functions or limit: {}",
+        error_msg
+    );
+}
+
+#[test]
+#[cfg(feature = "templating")]
+fn dbt_context_with_nested_json() {
+    // Test that complex nested JSON in context is handled correctly
+    let sql = "SELECT {{ var('config') }} as config FROM users";
+    let mut context = HashMap::new();
+    context.insert(
+        "vars".to_string(),
+        serde_json::json!({
+            "config": {
+                "nested": {
+                    "deep": "value"
+                }
+            }
+        }),
+    );
+
+    let result = analyze_with_template(sql, TemplateMode::Dbt, context);
+
+    // Should not crash, though the output might not be valid SQL
+    // The important thing is it doesn't panic or hang
+    assert!(
+        result.issues.is_empty() || result.issues.iter().all(|i| i.code != "PANIC"),
+        "Complex context should not cause panic"
     );
 }

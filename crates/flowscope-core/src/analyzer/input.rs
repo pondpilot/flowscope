@@ -204,8 +204,10 @@ pub(crate) fn collect_statements<'a>(
             match apply_template(&request.sql, request.template_config.as_ref()) {
                 Ok(sql) => sql,
                 Err(e) => {
+                    // Record error and return collected statements (same as file error handling).
+                    // Inline SQL is processed last, so returning here is equivalent to continuing.
                     issues.push(template_error_issue(&e, request.source_name.as_deref()));
-                    return (statements, issues); // Return what we have so far
+                    return (statements, issues);
                 }
             }
         };
