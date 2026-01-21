@@ -7664,7 +7664,8 @@ fn test_column_reference_with_schema_returns_correct_type() {
     // Find column nodes and check their types
     let id_col = find_column_node(stmt, "id").expect("id column should exist");
     let email_col = find_column_node(stmt, "email").expect("email column should exist");
-    let created_at_col = find_column_node(stmt, "created_at").expect("created_at column should exist");
+    let created_at_col =
+        find_column_node(stmt, "created_at").expect("created_at column should exist");
     let is_active_col = find_column_node(stmt, "is_active").expect("is_active column should exist");
 
     assert_eq!(
@@ -7731,10 +7732,7 @@ fn test_qualified_column_reference_with_schema() {
         tables: vec![
             schema_table_typed(
                 "users",
-                vec![
-                    column_typed("id", "integer"),
-                    column_typed("name", "text"),
-                ],
+                vec![column_typed("id", "integer"), column_typed("name", "text")],
             ),
             schema_table_typed(
                 "orders",
@@ -7792,11 +7790,11 @@ fn test_schema_type_normalization() {
         tables: vec![schema_table_typed(
             "test_types",
             vec![
-                column_typed("int64_col", "int64"),      // BigQuery-style
-                column_typed("varchar_col", "varchar"),  // Standard
-                column_typed("float8_col", "float8"),    // Postgres-style
+                column_typed("int64_col", "int64"),       // BigQuery-style
+                column_typed("varchar_col", "varchar"),   // Standard
+                column_typed("float8_col", "float8"),     // Postgres-style
                 column_typed("datetime_col", "datetime"), // MySQL-style
-                column_typed("bool_col", "bool"),        // Short form
+                column_typed("bool_col", "bool"),         // Short form
             ],
         )],
     };

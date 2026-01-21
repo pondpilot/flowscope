@@ -1647,10 +1647,16 @@ mod tests {
         let (registry, _) = SchemaRegistry::new(Some(&schema), Dialect::Postgres);
 
         // Unknown column should return None
-        assert_eq!(registry.lookup_column_type("public.users", "nonexistent"), None);
+        assert_eq!(
+            registry.lookup_column_type("public.users", "nonexistent"),
+            None
+        );
 
         // Unknown table should return None
-        assert_eq!(registry.lookup_column_type("public.unknown_table", "id"), None);
+        assert_eq!(
+            registry.lookup_column_type("public.unknown_table", "id"),
+            None
+        );
     }
 
     #[test]

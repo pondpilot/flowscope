@@ -430,8 +430,10 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
             }
 
             // Fall back to schema registry for base table column types
-            if let Some(schema_type) =
-                self.analyzer.schema.lookup_column_type(&canonical, &source.column)
+            if let Some(schema_type) = self
+                .analyzer
+                .schema
+                .lookup_column_type(&canonical, &source.column)
             {
                 return Some(self.normalize_schema_type(&schema_type));
             }

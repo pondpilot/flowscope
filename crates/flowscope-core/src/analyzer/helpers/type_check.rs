@@ -137,10 +137,7 @@ fn check_binary_op_types(
         | ast::BinaryOperator::Gt
         | ast::BinaryOperator::GtEq => {
             if !are_types_comparable(l_type, r_type) {
-                let message = format!(
-                    "Type mismatch in comparison: {} {} {}",
-                    l_type, op, r_type
-                );
+                let message = format!("Type mismatch in comparison: {} {} {}", l_type, op, r_type);
                 issues.push(
                     Issue::warning(issue_codes::TYPE_MISMATCH, message)
                         .with_statement(statement_index),
@@ -195,8 +192,7 @@ fn check_binary_op_types(
                 l_type, op, r_type
             );
             issues.push(
-                Issue::warning(issue_codes::TYPE_MISMATCH, message)
-                    .with_statement(statement_index),
+                Issue::warning(issue_codes::TYPE_MISMATCH, message).with_statement(statement_index),
             );
         }
         // Logical operators: both operands should be boolean

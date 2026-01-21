@@ -3,7 +3,9 @@
 //! This module provides basic type inference for SQL expressions, attempting to
 //! determine the data type of columns and expressions based on their structure.
 
-use crate::generated::{infer_function_return_type, normalize_type_name, CanonicalType, ReturnTypeRule};
+use crate::generated::{
+    infer_function_return_type, normalize_type_name, CanonicalType, ReturnTypeRule,
+};
 use sqlparser::ast::{self as ast, Expr, FunctionArg, FunctionArgExpr};
 
 /// Basic type inference for expressions
@@ -197,8 +199,14 @@ mod tests {
 
     #[test]
     fn test_infer_literals() {
-        assert_eq!(infer_expr_type(&parse_expr("123")), Some(CanonicalType::Float));
-        assert_eq!(infer_expr_type(&parse_expr("'abc'")), Some(CanonicalType::Text));
+        assert_eq!(
+            infer_expr_type(&parse_expr("123")),
+            Some(CanonicalType::Float)
+        );
+        assert_eq!(
+            infer_expr_type(&parse_expr("'abc'")),
+            Some(CanonicalType::Text)
+        );
         assert_eq!(
             infer_expr_type(&parse_expr("true")),
             Some(CanonicalType::Boolean)
@@ -208,7 +216,10 @@ mod tests {
 
     #[test]
     fn test_infer_binary_ops() {
-        assert_eq!(infer_expr_type(&parse_expr("1 + 2")), Some(CanonicalType::Float));
+        assert_eq!(
+            infer_expr_type(&parse_expr("1 + 2")),
+            Some(CanonicalType::Float)
+        );
         assert_eq!(
             infer_expr_type(&parse_expr("a > b")),
             Some(CanonicalType::Boolean)
@@ -230,7 +241,10 @@ mod tests {
 
     #[test]
     fn test_infer_unary_ops() {
-        assert_eq!(infer_expr_type(&parse_expr("-10")), Some(CanonicalType::Float));
+        assert_eq!(
+            infer_expr_type(&parse_expr("-10")),
+            Some(CanonicalType::Float)
+        );
         assert_eq!(
             infer_expr_type(&parse_expr("NOT (a > b)")),
             Some(CanonicalType::Boolean)
