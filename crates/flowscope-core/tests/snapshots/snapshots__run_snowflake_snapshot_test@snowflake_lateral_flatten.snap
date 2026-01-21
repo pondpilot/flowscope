@@ -171,13 +171,13 @@ expression: clean_result
     {
       "severity": "warning",
       "code": "UNRESOLVED_REFERENCE",
-      "message": "Column 'name' is ambiguous across tables in scope: B, A",
+      "message": "Column 'name' is ambiguous across tables in scope: A, B",
       "statementIndex": 0
     },
     {
       "severity": "warning",
       "code": "UNRESOLVED_REFERENCE",
-      "message": "Column 'value' is ambiguous across tables in scope: B, A",
+      "message": "Column 'value' is ambiguous across tables in scope: A, B",
       "statementIndex": 0
     }
   ],

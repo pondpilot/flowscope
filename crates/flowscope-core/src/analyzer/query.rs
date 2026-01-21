@@ -564,12 +564,14 @@ impl<'a> Analyzer<'a> {
                     return Some(tables_in_scope[0].clone());
                 }
                 // Multiple tables but column not found in any - ambiguous
+                let mut sorted_tables = tables_in_scope.clone();
+                sorted_tables.sort();
                 let mut issue = Issue::warning(
                     issue_codes::UNRESOLVED_REFERENCE,
                     format!(
                         "Column '{}' is ambiguous across tables in scope: {}",
                         column,
-                        tables_in_scope.join(", ")
+                        sorted_tables.join(", ")
                     ),
                 )
                 .with_statement(ctx.statement_index);
@@ -581,12 +583,14 @@ impl<'a> Analyzer<'a> {
             }
             _ => {
                 // Column exists in multiple tables in scope — require explicit qualifier.
+                let mut sorted_candidates = candidate_tables.clone();
+                sorted_candidates.sort();
                 let mut issue = Issue::warning(
                     issue_codes::UNRESOLVED_REFERENCE,
                     format!(
                         "Column '{}' exists in multiple tables in scope: {}. Qualify the column to disambiguate.",
                         column,
-                        candidate_tables.join(", ")
+                        sorted_candidates.join(", ")
                     ),
                 )
                 .with_statement(ctx.statement_index);
