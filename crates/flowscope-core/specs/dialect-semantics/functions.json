@@ -1,229 +1,145 @@
 {
   "ABS": {
     "class": "Abs",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ABS"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ABS"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ACOS": {
     "class": "Acos",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ACOS"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ACOS"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ACOSH": {
     "class": "Acosh",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ACOSH"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ACOSH"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ADD_MONTHS": {
     "class": "AddMonths",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ADD_MONTHS"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ADD_MONTHS"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "AGG_FUNC": {
     "class": "AggFunc",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "AGG_FUNC"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["AGG_FUNC"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "unknown"
-    ],
+    "dialects": ["unknown"],
     "dialect_specific": true
   },
   "AI_AGG": {
     "class": "AIAgg",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "AI_AGG"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["AI_AGG"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "AI_CLASSIFY": {
     "class": "AIClassify",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "AI_CLASSIFY"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["AI_CLASSIFY"],
     "arg_types": {
       "this": true,
       "categories": true,
       "config": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "AI_SUMMARIZE_AGG": {
     "class": "AISummarizeAgg",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "AI_SUMMARIZE_AGG"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["AI_SUMMARIZE_AGG"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "AND": {
     "class": "And",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "AND"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["AND"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ANY_VALUE": {
     "class": "AnyValue",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "ANY_VALUE"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["ANY_VALUE"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "APPLY": {
     "class": "Apply",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "APPLY"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["APPLY"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "APPROXIMATE_JACCARD_INDEX": {
     "class": "ApproximateSimilarity",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "APPROXIMATE_JACCARD_INDEX",
-      "APPROXIMATE_SIMILARITY"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["APPROXIMATE_JACCARD_INDEX", "APPROXIMATE_SIMILARITY"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "APPROX_COUNT_DISTINCT": {
     "class": "ApproxDistinct",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "APPROX_COUNT_DISTINCT",
-      "APPROX_DISTINCT"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["APPROX_COUNT_DISTINCT", "APPROX_DISTINCT"],
     "arg_types": {
       "this": true,
       "accuracy": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "APPROX_QUANTILE": {
     "class": "ApproxQuantile",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "APPROX_QUANTILE"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["APPROX_QUANTILE"],
     "arg_types": {
       "this": true,
       "quantile": true,
@@ -231,1007 +147,638 @@
       "weight": false,
       "error_tolerance": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "APPROX_QUANTILES": {
     "class": "ApproxQuantiles",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "APPROX_QUANTILES"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["APPROX_QUANTILES"],
     "arg_types": {
       "this": true,
       "expression": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "APPROX_TOP_K": {
     "class": "ApproxTopK",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "APPROX_TOP_K"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["APPROX_TOP_K"],
     "arg_types": {
       "this": true,
       "expression": false,
       "counters": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "APPROX_TOP_K_ACCUMULATE": {
     "class": "ApproxTopKAccumulate",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "APPROX_TOP_K_ACCUMULATE"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["APPROX_TOP_K_ACCUMULATE"],
     "arg_types": {
       "this": true,
       "expression": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "APPROX_TOP_K_COMBINE": {
     "class": "ApproxTopKCombine",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "APPROX_TOP_K_COMBINE"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["APPROX_TOP_K_COMBINE"],
     "arg_types": {
       "this": true,
       "expression": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "APPROX_TOP_SUM": {
     "class": "ApproxTopSum",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "APPROX_TOP_SUM"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["APPROX_TOP_SUM"],
     "arg_types": {
       "this": true,
       "expression": true,
       "count": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ARGMAX": {
     "class": "ArgMax",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "ARGMAX",
-      "ARG_MAX",
-      "MAX_BY"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["ARGMAX", "ARG_MAX", "MAX_BY"],
     "arg_types": {
       "this": true,
       "expression": true,
       "count": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ARGMIN": {
     "class": "ArgMin",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "ARGMIN",
-      "ARG_MIN",
-      "MIN_BY"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["ARGMIN", "ARG_MIN", "MIN_BY"],
     "arg_types": {
       "this": true,
       "expression": true,
       "count": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ARRAY": {
     "class": "Array",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ARRAY"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ARRAY"],
     "arg_types": {
       "expressions": false,
       "bracket_notation": false,
       "struct_name_inheritance": false
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ARRAY_AGG": {
     "class": "ArrayAgg",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "ARRAY_AGG"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["ARRAY_AGG"],
     "arg_types": {
       "this": true,
       "nulls_excluded": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ARRAY_ALL": {
     "class": "ArrayAll",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ARRAY_ALL"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ARRAY_ALL"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ARRAY_ANY": {
     "class": "ArrayAny",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ARRAY_ANY"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ARRAY_ANY"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ARRAY_CAT": {
     "class": "ArrayConcat",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ARRAY_CAT",
-      "ARRAY_CONCAT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ARRAY_CAT", "ARRAY_CONCAT"],
     "arg_types": {
       "this": true,
       "expressions": false
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ARRAY_CONCAT_AGG": {
     "class": "ArrayConcatAgg",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "ARRAY_CONCAT_AGG"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["ARRAY_CONCAT_AGG"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ARRAY_CONSTRUCT_COMPACT": {
     "class": "ArrayConstructCompact",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ARRAY_CONSTRUCT_COMPACT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ARRAY_CONSTRUCT_COMPACT"],
     "arg_types": {
       "expressions": true
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ARRAY_CONTAINS": {
     "class": "ArrayContains",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ARRAY_CONTAINS",
-      "ARRAY_HAS"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ARRAY_CONTAINS", "ARRAY_HAS"],
     "arg_types": {
       "this": true,
       "expression": true,
       "ensure_variant": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ARRAY_CONTAINS_ALL": {
     "class": "ArrayContainsAll",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ARRAY_CONTAINS_ALL",
-      "ARRAY_HAS_ALL"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ARRAY_CONTAINS_ALL", "ARRAY_HAS_ALL"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ARRAY_FILTER": {
     "class": "ArrayFilter",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ARRAY_FILTER",
-      "FILTER"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ARRAY_FILTER", "FILTER"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ARRAY_FIRST": {
     "class": "ArrayFirst",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ARRAY_FIRST"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ARRAY_FIRST"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ARRAY_INTERSECT": {
     "class": "ArrayIntersect",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ARRAY_INTERSECT",
-      "ARRAY_INTERSECTION"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ARRAY_INTERSECT", "ARRAY_INTERSECTION"],
     "arg_types": {
       "expressions": true
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ARRAY_JOIN": {
     "class": "ArrayToString",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ARRAY_JOIN",
-      "ARRAY_TO_STRING"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ARRAY_JOIN", "ARRAY_TO_STRING"],
     "arg_types": {
       "this": true,
       "expression": true,
       "null": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ARRAY_LAST": {
     "class": "ArrayLast",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ARRAY_LAST"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ARRAY_LAST"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ARRAY_LENGTH": {
     "class": "ArraySize",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ARRAY_LENGTH",
-      "ARRAY_SIZE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ARRAY_LENGTH", "ARRAY_SIZE"],
     "arg_types": {
       "this": true,
       "expression": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ARRAY_OVERLAPS": {
     "class": "ArrayOverlaps",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ARRAY_OVERLAPS"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ARRAY_OVERLAPS"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ARRAY_REMOVE": {
     "class": "ArrayRemove",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ARRAY_REMOVE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ARRAY_REMOVE"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ARRAY_REVERSE": {
     "class": "ArrayReverse",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ARRAY_REVERSE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ARRAY_REVERSE"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ARRAY_SLICE": {
     "class": "ArraySlice",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ARRAY_SLICE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ARRAY_SLICE"],
     "arg_types": {
       "this": true,
       "start": true,
       "end": false,
       "step": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ARRAY_SORT": {
     "class": "ArraySort",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ARRAY_SORT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ARRAY_SORT"],
     "arg_types": {
       "this": true,
       "expression": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ARRAY_SUM": {
     "class": "ArraySum",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ARRAY_SUM"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ARRAY_SUM"],
     "arg_types": {
       "this": true,
       "expression": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ARRAY_UNION_AGG": {
     "class": "ArrayUnionAgg",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "ARRAY_UNION_AGG"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["ARRAY_UNION_AGG"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ARRAY_UNIQUE_AGG": {
     "class": "ArrayUniqueAgg",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "ARRAY_UNIQUE_AGG"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["ARRAY_UNIQUE_AGG"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ASCII": {
     "class": "Ascii",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ASCII"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ASCII"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ASIN": {
     "class": "Asin",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ASIN"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ASIN"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ASINH": {
     "class": "Asinh",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ASINH"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ASINH"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ATAN": {
     "class": "Atan",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ATAN"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ATAN"],
     "arg_types": {
       "this": true,
       "expression": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ATAN2": {
     "class": "Atan2",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ATAN2"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ATAN2"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ATANH": {
     "class": "Atanh",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ATANH"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ATANH"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "AVG": {
     "class": "Avg",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "AVG"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["AVG"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "BASE64_DECODE_BINARY": {
     "class": "Base64DecodeBinary",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "BASE64_DECODE_BINARY"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["BASE64_DECODE_BINARY"],
     "arg_types": {
       "this": true,
       "alphabet": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "BASE64_DECODE_STRING": {
     "class": "Base64DecodeString",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "BASE64_DECODE_STRING"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["BASE64_DECODE_STRING"],
     "arg_types": {
       "this": true,
       "alphabet": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "BASE64_ENCODE": {
     "class": "Base64Encode",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "BASE64_ENCODE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["BASE64_ENCODE"],
     "arg_types": {
       "this": true,
       "max_line_length": false,
       "alphabet": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "BITMAP_BIT_POSITION": {
     "class": "BitmapBitPosition",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "BITMAP_BIT_POSITION"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["BITMAP_BIT_POSITION"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "BITMAP_BUCKET_NUMBER": {
     "class": "BitmapBucketNumber",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "BITMAP_BUCKET_NUMBER"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["BITMAP_BUCKET_NUMBER"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "BITMAP_CONSTRUCT_AGG": {
     "class": "BitmapConstructAgg",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "BITMAP_CONSTRUCT_AGG"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["BITMAP_CONSTRUCT_AGG"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "BITMAP_COUNT": {
     "class": "BitmapCount",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "BITMAP_COUNT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["BITMAP_COUNT"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "BITMAP_OR_AGG": {
     "class": "BitmapOrAgg",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "BITMAP_OR_AGG"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["BITMAP_OR_AGG"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "BITWISE_AND_AGG": {
     "class": "BitwiseAndAgg",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "BITWISE_AND_AGG"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["BITWISE_AND_AGG"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "BITWISE_COUNT": {
     "class": "BitwiseCount",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "BITWISE_COUNT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["BITWISE_COUNT"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "BITWISE_OR_AGG": {
     "class": "BitwiseOrAgg",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "BITWISE_OR_AGG"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["BITWISE_OR_AGG"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "BITWISE_XOR_AGG": {
     "class": "BitwiseXorAgg",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "BITWISE_XOR_AGG"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["BITWISE_XOR_AGG"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "BIT_LENGTH": {
     "class": "BitLength",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "BIT_LENGTH"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["BIT_LENGTH"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "BOOLAND": {
     "class": "Booland",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "BOOLAND"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["BOOLAND"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "BOOLAND_AGG": {
     "class": "LogicalAnd",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "BOOLAND_AGG",
-      "BOOL_AND",
-      "LOGICAL_AND"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["BOOLAND_AGG", "BOOL_AND", "LOGICAL_AND"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "BOOLNOT": {
     "class": "Boolnot",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "BOOLNOT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["BOOLNOT"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "BOOLOR": {
     "class": "Boolor",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "BOOLOR"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["BOOLOR"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "BOOLOR_AGG": {
     "class": "LogicalOr",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "BOOLOR_AGG",
-      "BOOL_OR",
-      "LOGICAL_OR"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["BOOLOR_AGG", "BOOL_OR", "LOGICAL_OR"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "BOOLXOR_AGG": {
     "class": "BoolxorAgg",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "BOOLXOR_AGG"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["BOOLXOR_AGG"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "BYTE_LENGTH": {
     "class": "ByteLength",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "BYTE_LENGTH"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["BYTE_LENGTH"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "CASE": {
     "class": "Case",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "CASE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["CASE"],
     "arg_types": {
       "this": false,
       "ifs": true,
       "default": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "CAST": {
     "class": "Cast",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "CAST"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["CAST"],
     "arg_types": {
       "this": true,
       "to": true,
@@ -1240,113 +787,70 @@
       "action": false,
       "default": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "CAST_TO_STR_TYPE": {
     "class": "CastToStrType",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "CAST_TO_STR_TYPE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["CAST_TO_STR_TYPE"],
     "arg_types": {
       "this": true,
       "to": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "CBRT": {
     "class": "Cbrt",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "CBRT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["CBRT"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "CEIL": {
     "class": "Ceil",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "CEIL",
-      "CEILING"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["CEIL", "CEILING"],
     "arg_types": {
       "this": true,
       "decimals": false,
       "to": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "CHAR": {
     "class": "Chr",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "CHAR",
-      "CHR"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["CHAR", "CHR"],
     "arg_types": {
       "expressions": true,
       "charset": false
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "CHARACTER_LENGTH": {
     "class": "Length",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "CHARACTER_LENGTH",
-      "CHAR_LENGTH",
-      "LEN",
-      "LENGTH"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["CHARACTER_LENGTH", "CHAR_LENGTH", "LEN", "LENGTH"],
     "arg_types": {
       "this": true,
       "binary": false,
       "encoding": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "COALESCE": {
     "class": "Coalesce",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "COALESCE",
-      "IFNULL",
-      "NVL"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["COALESCE", "IFNULL", "NVL"],
     "arg_types": {
       "this": true,
       "expressions": false,
@@ -1354,629 +858,405 @@
       "is_null": false
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "CODE_POINTS_TO_BYTES": {
     "class": "CodePointsToBytes",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "CODE_POINTS_TO_BYTES"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["CODE_POINTS_TO_BYTES"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "CODE_POINTS_TO_STRING": {
     "class": "CodePointsToString",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "CODE_POINTS_TO_STRING"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["CODE_POINTS_TO_STRING"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "COLLATE": {
     "class": "Collate",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "COLLATE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["COLLATE"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "COLLATION": {
     "class": "Collation",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "COLLATION"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["COLLATION"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "COLUMNS": {
     "class": "Columns",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "COLUMNS"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["COLUMNS"],
     "arg_types": {
       "this": true,
       "unpack": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "COMBINED_AGG_FUNC": {
     "class": "CombinedAggFunc",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "COMBINED_AGG_FUNC"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["COMBINED_AGG_FUNC"],
     "arg_types": {
       "this": true,
       "expressions": false
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "COMBINED_PARAMETERIZED_AGG": {
     "class": "CombinedParameterizedAgg",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "COMBINED_PARAMETERIZED_AGG"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["COMBINED_PARAMETERIZED_AGG"],
     "arg_types": {
       "this": true,
       "expressions": true,
       "params": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "COMPRESS": {
     "class": "Compress",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "COMPRESS"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["COMPRESS"],
     "arg_types": {
       "this": true,
       "method": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "CONCAT": {
     "class": "Concat",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "CONCAT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["CONCAT"],
     "arg_types": {
       "expressions": true,
       "safe": false,
       "coalesce": false
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "CONCAT_WS": {
     "class": "ConcatWs",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "CONCAT_WS"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["CONCAT_WS"],
     "arg_types": {
       "expressions": true,
       "safe": false,
       "coalesce": false
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "CONNECT_BY_ROOT": {
     "class": "ConnectByRoot",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "CONNECT_BY_ROOT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["CONNECT_BY_ROOT"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "CONTAINS": {
     "class": "Contains",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "CONTAINS"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["CONTAINS"],
     "arg_types": {
       "this": true,
       "expression": true,
       "json_scope": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "CONVERT": {
     "class": "Convert",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "CONVERT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["CONVERT"],
     "arg_types": {
       "this": true,
       "expression": true,
       "style": false,
       "safe": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "CONVERT_TIMEZONE": {
     "class": "ConvertTimezone",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "CONVERT_TIMEZONE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["CONVERT_TIMEZONE"],
     "arg_types": {
       "source_tz": false,
       "target_tz": true,
       "timestamp": true,
       "options": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "CONVERT_TO_CHARSET": {
     "class": "ConvertToCharset",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "CONVERT_TO_CHARSET"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["CONVERT_TO_CHARSET"],
     "arg_types": {
       "this": true,
       "dest": true,
       "source": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "CORR": {
     "class": "Corr",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "CORR"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["CORR"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "COS": {
     "class": "Cos",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "COS"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["COS"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "COSH": {
     "class": "Cosh",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "COSH"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["COSH"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "COSINE_DISTANCE": {
     "class": "CosineDistance",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "COSINE_DISTANCE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["COSINE_DISTANCE"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "COT": {
     "class": "Cot",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "COT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["COT"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "COTH": {
     "class": "Coth",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "COTH"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["COTH"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "COUNT": {
     "class": "Count",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "COUNT"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["COUNT"],
     "arg_types": {
       "this": false,
       "expressions": false,
       "big_int": false
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "COUNTIF": {
     "class": "CountIf",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "COUNTIF",
-      "COUNT_IF"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["COUNTIF", "COUNT_IF"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "COVAR_POP": {
     "class": "CovarPop",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "COVAR_POP"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["COVAR_POP"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "COVAR_SAMP": {
     "class": "CovarSamp",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "COVAR_SAMP"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["COVAR_SAMP"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "CSC": {
     "class": "Csc",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "CSC"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["CSC"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "CSCH": {
     "class": "Csch",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "CSCH"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["CSCH"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "CUME_DIST": {
     "class": "CumeDist",
-    "categories": [
-      "window"
-    ],
-    "sql_names": [
-      "CUME_DIST"
-    ],
+    "categories": ["window"],
+    "sql_names": ["CUME_DIST"],
     "arg_types": {
       "expressions": false
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "CURRENT_DATE": {
     "class": "CurrentDate",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "CURRENT_DATE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["CURRENT_DATE"],
     "arg_types": {
       "this": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "CURRENT_DATETIME": {
     "class": "CurrentDatetime",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "CURRENT_DATETIME"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["CURRENT_DATETIME"],
     "arg_types": {
       "this": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "CURRENT_SCHEMA": {
     "class": "CurrentSchema",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "CURRENT_SCHEMA"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["CURRENT_SCHEMA"],
     "arg_types": {
       "this": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "CURRENT_TIME": {
     "class": "CurrentTime",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "CURRENT_TIME"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["CURRENT_TIME"],
     "arg_types": {
       "this": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "CURRENT_TIMESTAMP": {
     "class": "CurrentTimestamp",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "CURRENT_TIMESTAMP"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["CURRENT_TIMESTAMP"],
     "arg_types": {
       "this": false,
       "sysdate": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "CURRENT_TIMESTAMP_L_T_Z": {
     "class": "CurrentTimestampLTZ",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "CURRENT_TIMESTAMP_L_T_Z"
-    ],
-    "dialects": [
-      "*"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["CURRENT_TIMESTAMP_L_T_Z"],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "CURRENT_USER": {
     "class": "CurrentUser",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "CURRENT_USER"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["CURRENT_USER"],
     "arg_types": {
       "this": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "DATE": {
     "class": "Date",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "DATE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["DATE"],
     "arg_types": {
       "this": false,
       "zone": false,
       "expressions": false
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "DATEDIFF": {
     "class": "DateDiff",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "DATEDIFF",
-      "DATE_DIFF"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["DATEDIFF", "DATE_DIFF"],
     "arg_types": {
       "this": true,
       "expression": true,
@@ -1984,145 +1264,96 @@
       "zone": false,
       "big_int": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "DATEFROMPARTS": {
     "class": "DateFromParts",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "DATEFROMPARTS",
-      "DATE_FROM_PARTS"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["DATEFROMPARTS", "DATE_FROM_PARTS"],
     "arg_types": {
       "year": true,
       "month": false,
       "day": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "DATETIME": {
     "class": "Datetime",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "DATETIME"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["DATETIME"],
     "arg_types": {
       "this": true,
       "expression": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "DATETIME_ADD": {
     "class": "DatetimeAdd",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "DATETIME_ADD"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["DATETIME_ADD"],
     "arg_types": {
       "this": true,
       "expression": true,
       "unit": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "DATETIME_DIFF": {
     "class": "DatetimeDiff",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "DATETIME_DIFF"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["DATETIME_DIFF"],
     "arg_types": {
       "this": true,
       "expression": true,
       "unit": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "DATETIME_SUB": {
     "class": "DatetimeSub",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "DATETIME_SUB"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["DATETIME_SUB"],
     "arg_types": {
       "this": true,
       "expression": true,
       "unit": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "DATETIME_TRUNC": {
     "class": "DatetimeTrunc",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "DATETIME_TRUNC"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["DATETIME_TRUNC"],
     "arg_types": {
       "this": true,
       "unit": true,
       "zone": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "DATE_ADD": {
     "class": "DateAdd",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "DATE_ADD"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["DATE_ADD"],
     "arg_types": {
       "this": true,
       "expression": true,
       "unit": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "DATE_BIN": {
     "class": "DateBin",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "DATE_BIN"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["DATE_BIN"],
     "arg_types": {
       "this": true,
       "expression": true,
@@ -2130,715 +1361,457 @@
       "zone": false,
       "origin": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "DATE_FROM_UNIX_DATE": {
     "class": "DateFromUnixDate",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "DATE_FROM_UNIX_DATE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["DATE_FROM_UNIX_DATE"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "DATE_STR_TO_DATE": {
     "class": "DateStrToDate",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "DATE_STR_TO_DATE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["DATE_STR_TO_DATE"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "DATE_SUB": {
     "class": "DateSub",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "DATE_SUB"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["DATE_SUB"],
     "arg_types": {
       "this": true,
       "expression": true,
       "unit": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "DATE_TO_DATE_STR": {
     "class": "DateToDateStr",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "DATE_TO_DATE_STR"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["DATE_TO_DATE_STR"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "DATE_TO_DI": {
     "class": "DateToDi",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "DATE_TO_DI"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["DATE_TO_DI"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "DATE_TRUNC": {
     "class": "DateTrunc",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "DATE_TRUNC"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["DATE_TRUNC"],
     "arg_types": {
       "unit": true,
       "this": true,
       "zone": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "DAY": {
     "class": "Day",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "DAY"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["DAY"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "DAYOFMONTH": {
     "class": "DayOfMonth",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "DAYOFMONTH",
-      "DAY_OF_MONTH"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["DAYOFMONTH", "DAY_OF_MONTH"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "DAYOFWEEK": {
     "class": "DayOfWeek",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "DAYOFWEEK",
-      "DAY_OF_WEEK"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["DAYOFWEEK", "DAY_OF_WEEK"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "DAYOFWEEK_ISO": {
     "class": "DayOfWeekIso",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "DAYOFWEEK_ISO",
-      "ISODOW"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["DAYOFWEEK_ISO", "ISODOW"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "DAYOFYEAR": {
     "class": "DayOfYear",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "DAYOFYEAR",
-      "DAY_OF_YEAR"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["DAYOFYEAR", "DAY_OF_YEAR"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "DECODE": {
     "class": "Decode",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "DECODE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["DECODE"],
     "arg_types": {
       "this": true,
       "charset": true,
       "replace": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "DECODE_CASE": {
     "class": "DecodeCase",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "DECODE_CASE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["DECODE_CASE"],
     "arg_types": {
       "expressions": true
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "DECOMPRESS_BINARY": {
     "class": "DecompressBinary",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "DECOMPRESS_BINARY"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["DECOMPRESS_BINARY"],
     "arg_types": {
       "this": true,
       "method": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "DECOMPRESS_STRING": {
     "class": "DecompressString",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "DECOMPRESS_STRING"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["DECOMPRESS_STRING"],
     "arg_types": {
       "this": true,
       "method": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "DEGREES": {
     "class": "Degrees",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "DEGREES"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["DEGREES"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "DENSE_RANK": {
     "class": "DenseRank",
-    "categories": [
-      "window"
-    ],
-    "sql_names": [
-      "DENSE_RANK"
-    ],
+    "categories": ["window"],
+    "sql_names": ["DENSE_RANK"],
     "arg_types": {
       "expressions": false
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "DI_TO_DATE": {
     "class": "DiToDate",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "DI_TO_DATE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["DI_TO_DATE"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ENCODE": {
     "class": "Encode",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ENCODE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ENCODE"],
     "arg_types": {
       "this": true,
       "charset": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ENDSWITH": {
     "class": "EndsWith",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ENDSWITH",
-      "ENDS_WITH"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ENDSWITH", "ENDS_WITH"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "EQUAL_NULL": {
     "class": "EqualNull",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "EQUAL_NULL"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["EQUAL_NULL"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "EUCLIDEAN_DISTANCE": {
     "class": "EuclideanDistance",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "EUCLIDEAN_DISTANCE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["EUCLIDEAN_DISTANCE"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "EXISTS": {
     "class": "Exists",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "EXISTS"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["EXISTS"],
     "arg_types": {
       "this": true,
       "expression": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "EXP": {
     "class": "Exp",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "EXP"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["EXP"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "EXPLODE": {
     "class": "Explode",
-    "categories": [
-      "udtf"
-    ],
-    "sql_names": [
-      "EXPLODE"
-    ],
+    "categories": ["udtf"],
+    "sql_names": ["EXPLODE"],
     "arg_types": {
       "this": true,
       "expressions": false
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "EXPLODE_OUTER": {
     "class": "ExplodeOuter",
-    "categories": [
-      "udtf"
-    ],
-    "sql_names": [
-      "EXPLODE_OUTER"
-    ],
+    "categories": ["udtf"],
+    "sql_names": ["EXPLODE_OUTER"],
     "arg_types": {
       "this": true,
       "expressions": false
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "EXPLODING_GENERATE_SERIES": {
     "class": "ExplodingGenerateSeries",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "EXPLODING_GENERATE_SERIES"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["EXPLODING_GENERATE_SERIES"],
     "arg_types": {
       "start": true,
       "end": true,
       "step": false,
       "is_end_exclusive": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "EXTRACT": {
     "class": "Extract",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "EXTRACT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["EXTRACT"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "FACTORIAL": {
     "class": "Factorial",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "FACTORIAL"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["FACTORIAL"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "FARMFINGERPRINT64": {
     "class": "FarmFingerprint",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "FARMFINGERPRINT64",
-      "FARM_FINGERPRINT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["FARMFINGERPRINT64", "FARM_FINGERPRINT"],
     "arg_types": {
       "expressions": true
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "FEATURES_AT_TIME": {
     "class": "FeaturesAtTime",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "FEATURES_AT_TIME"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["FEATURES_AT_TIME"],
     "arg_types": {
       "this": true,
       "time": false,
       "num_rows": false,
       "ignore_feature_nulls": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "FIRST": {
     "class": "First",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "FIRST"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["FIRST"],
     "arg_types": {
       "this": true,
       "expression": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "FIRST_VALUE": {
     "class": "FirstValue",
-    "categories": [
-      "window"
-    ],
-    "sql_names": [
-      "FIRST_VALUE"
-    ],
+    "categories": ["window"],
+    "sql_names": ["FIRST_VALUE"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "FLATTEN": {
     "class": "Flatten",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "FLATTEN"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["FLATTEN"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "FLOAT64": {
     "class": "Float64",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "FLOAT64"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["FLOAT64"],
     "arg_types": {
       "this": true,
       "expression": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "FLOOR": {
     "class": "Floor",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "FLOOR"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["FLOOR"],
     "arg_types": {
       "this": true,
       "decimals": false,
       "to": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "FORMAT": {
     "class": "Format",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "FORMAT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["FORMAT"],
     "arg_types": {
       "this": true,
       "expressions": false
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "FROM_BASE": {
     "class": "FromBase",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "FROM_BASE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["FROM_BASE"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "FROM_BASE32": {
     "class": "FromBase32",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "FROM_BASE32"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["FROM_BASE32"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "FROM_BASE64": {
     "class": "FromBase64",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "FROM_BASE64"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["FROM_BASE64"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "FROM_ISO8601_TIMESTAMP": {
     "class": "FromISO8601Timestamp",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "FROM_ISO8601_TIMESTAMP"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["FROM_ISO8601_TIMESTAMP"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "GAP_FILL": {
     "class": "GapFill",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "GAP_FILL"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["GAP_FILL"],
     "arg_types": {
       "this": true,
       "ts_column": true,
@@ -2848,613 +1821,396 @@
       "origin": false,
       "ignore_nulls": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "GENERATE_DATE_ARRAY": {
     "class": "GenerateDateArray",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "GENERATE_DATE_ARRAY"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["GENERATE_DATE_ARRAY"],
     "arg_types": {
       "start": true,
       "end": true,
       "step": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "GENERATE_EMBEDDING": {
     "class": "GenerateEmbedding",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "GENERATE_EMBEDDING"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["GENERATE_EMBEDDING"],
     "arg_types": {
       "this": true,
       "expression": true,
       "params_struct": false,
       "is_text": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "GENERATE_SERIES": {
     "class": "GenerateSeries",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "GENERATE_SERIES"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["GENERATE_SERIES"],
     "arg_types": {
       "start": true,
       "end": true,
       "step": false,
       "is_end_exclusive": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "GENERATE_TIMESTAMP_ARRAY": {
     "class": "GenerateTimestampArray",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "GENERATE_TIMESTAMP_ARRAY"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["GENERATE_TIMESTAMP_ARRAY"],
     "arg_types": {
       "start": true,
       "end": true,
       "step": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "GENERATE_UUID": {
     "class": "Uuid",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "GENERATE_UUID",
-      "GEN_RANDOM_UUID",
-      "UUID",
-      "UUID_STRING"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["GENERATE_UUID", "GEN_RANDOM_UUID", "UUID", "UUID_STRING"],
     "arg_types": {
       "this": false,
       "name": false,
       "is_string": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "GETBIT": {
     "class": "Getbit",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "GETBIT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["GETBIT"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "GET_EXTRACT": {
     "class": "GetExtract",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "GET_EXTRACT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["GET_EXTRACT"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "GREATEST": {
     "class": "Greatest",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "GREATEST"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["GREATEST"],
     "arg_types": {
       "this": true,
       "expressions": false,
       "null_if_any_null": false
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "GREATEST_IGNORE_NULLS": {
     "class": "GreatestIgnoreNulls",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "GREATEST_IGNORE_NULLS"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["GREATEST_IGNORE_NULLS"],
     "arg_types": {
       "expressions": true
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "GROUPING": {
     "class": "Grouping",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "GROUPING"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["GROUPING"],
     "arg_types": {
       "expressions": true
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "GROUPING_ID": {
     "class": "GroupingId",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "GROUPING_ID"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["GROUPING_ID"],
     "arg_types": {
       "expressions": true
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "GROUP_CONCAT": {
     "class": "GroupConcat",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "GROUP_CONCAT"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["GROUP_CONCAT"],
     "arg_types": {
       "this": true,
       "separator": false,
       "on_overflow": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "HEX": {
     "class": "Hex",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "HEX"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["HEX"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "HEX_DECODE_STRING": {
     "class": "HexDecodeString",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "HEX_DECODE_STRING"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["HEX_DECODE_STRING"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "HEX_ENCODE": {
     "class": "HexEncode",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "HEX_ENCODE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["HEX_ENCODE"],
     "arg_types": {
       "this": true,
       "case": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "HLL": {
     "class": "Hll",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "HLL"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["HLL"],
     "arg_types": {
       "this": true,
       "expressions": false
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "HOUR": {
     "class": "Hour",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "HOUR"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["HOUR"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "IF": {
     "class": "If",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "IF",
-      "IIF"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["IF", "IIF"],
     "arg_types": {
       "this": true,
       "true": true,
       "false": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "INITCAP": {
     "class": "Initcap",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "INITCAP"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["INITCAP"],
     "arg_types": {
       "this": true,
       "expression": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "INLINE": {
     "class": "Inline",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "INLINE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["INLINE"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "INSERT": {
     "class": "Stuff",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "INSERT",
-      "STUFF"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["INSERT", "STUFF"],
     "arg_types": {
       "this": true,
       "start": true,
       "length": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "INT64": {
     "class": "Int64",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "INT64"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["INT64"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ISINF": {
     "class": "IsInf",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ISINF",
-      "IS_INF"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ISINF", "IS_INF"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ISNAN": {
     "class": "IsNan",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ISNAN",
-      "IS_NAN"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ISNAN", "IS_NAN"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "IS_ASCII": {
     "class": "IsAscii",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "IS_ASCII"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["IS_ASCII"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "IS_NULL_VALUE": {
     "class": "IsNullValue",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "IS_NULL_VALUE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["IS_NULL_VALUE"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "JAROWINKLER_SIMILARITY": {
     "class": "JarowinklerSimilarity",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "JAROWINKLER_SIMILARITY"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["JAROWINKLER_SIMILARITY"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "JSONB_CONTAINS": {
     "class": "JSONBContains",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "JSONB_CONTAINS"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["JSONB_CONTAINS"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "JSONB_EXISTS": {
     "class": "JSONBExists",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "JSONB_EXISTS"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["JSONB_EXISTS"],
     "arg_types": {
       "this": true,
       "path": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "JSONB_EXTRACT": {
     "class": "JSONBExtract",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "JSONB_EXTRACT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["JSONB_EXTRACT"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "JSONB_EXTRACT_SCALAR": {
     "class": "JSONBExtractScalar",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "JSONB_EXTRACT_SCALAR"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["JSONB_EXTRACT_SCALAR"],
     "arg_types": {
       "this": true,
       "expression": true,
       "json_type": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "JSON_ARRAY_APPEND": {
     "class": "JSONArrayAppend",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "JSON_ARRAY_APPEND"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["JSON_ARRAY_APPEND"],
     "arg_types": {
       "this": true,
       "expressions": true
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "JSON_ARRAY_CONTAINS": {
     "class": "JSONArrayContains",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "JSON_ARRAY_CONTAINS"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["JSON_ARRAY_CONTAINS"],
     "arg_types": {
       "this": true,
       "expression": true,
       "json_type": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "JSON_ARRAY_INSERT": {
     "class": "JSONArrayInsert",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "JSON_ARRAY_INSERT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["JSON_ARRAY_INSERT"],
     "arg_types": {
       "this": true,
       "expressions": true
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "JSON_EXTRACT": {
     "class": "JSONExtract",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "JSON_EXTRACT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["JSON_EXTRACT"],
     "arg_types": {
       "this": true,
       "expression": true,
@@ -3468,36 +2224,24 @@
       "requires_json": false
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "JSON_EXTRACT_ARRAY": {
     "class": "JSONExtractArray",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "JSON_EXTRACT_ARRAY"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["JSON_EXTRACT_ARRAY"],
     "arg_types": {
       "this": true,
       "expression": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "JSON_EXTRACT_SCALAR": {
     "class": "JSONExtractScalar",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "JSON_EXTRACT_SCALAR"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["JSON_EXTRACT_SCALAR"],
     "arg_types": {
       "this": true,
       "expression": true,
@@ -3507,196 +2251,129 @@
       "scalar_only": false
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "JSON_FORMAT": {
     "class": "JSONFormat",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "JSON_FORMAT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["JSON_FORMAT"],
     "arg_types": {
       "this": false,
       "options": false,
       "is_json": false,
       "to_json": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "JSON_PARSE": {
     "class": "ParseJSON",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "JSON_PARSE",
-      "PARSE_JSON"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["JSON_PARSE", "PARSE_JSON"],
     "arg_types": {
       "this": true,
       "expression": false,
       "safe": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "JSON_REMOVE": {
     "class": "JSONRemove",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "JSON_REMOVE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["JSON_REMOVE"],
     "arg_types": {
       "this": true,
       "expressions": true
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "JSON_SET": {
     "class": "JSONSet",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "JSON_SET"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["JSON_SET"],
     "arg_types": {
       "this": true,
       "expressions": true
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "JSON_STRIP_NULLS": {
     "class": "JSONStripNulls",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "JSON_STRIP_NULLS"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["JSON_STRIP_NULLS"],
     "arg_types": {
       "this": true,
       "expression": false,
       "include_arrays": false,
       "remove_empty": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "JSON_TYPE": {
     "class": "JSONType",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "JSON_TYPE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["JSON_TYPE"],
     "arg_types": {
       "this": true,
       "expression": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "JUSTIFY_DAYS": {
     "class": "JustifyDays",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "JUSTIFY_DAYS"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["JUSTIFY_DAYS"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "JUSTIFY_HOURS": {
     "class": "JustifyHours",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "JUSTIFY_HOURS"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["JUSTIFY_HOURS"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "JUSTIFY_INTERVAL": {
     "class": "JustifyInterval",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "JUSTIFY_INTERVAL"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["JUSTIFY_INTERVAL"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "J_S_O_N_ARRAY": {
     "class": "JSONArray",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "J_S_O_N_ARRAY"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["J_S_O_N_ARRAY"],
     "arg_types": {
       "expressions": false,
       "null_handling": false,
       "return_type": false,
       "strict": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "J_S_O_N_ARRAY_AGG": {
     "class": "JSONArrayAgg",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "J_S_O_N_ARRAY_AGG"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["J_S_O_N_ARRAY_AGG"],
     "arg_types": {
       "this": true,
       "order": false,
@@ -3704,103 +2381,67 @@
       "return_type": false,
       "strict": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "J_S_O_N_BOOL": {
     "class": "JSONBool",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "J_S_O_N_BOOL"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["J_S_O_N_BOOL"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "J_S_O_N_B_CONTAINS_ALL_TOP_KEYS": {
     "class": "JSONBContainsAllTopKeys",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "J_S_O_N_B_CONTAINS_ALL_TOP_KEYS"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["J_S_O_N_B_CONTAINS_ALL_TOP_KEYS"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "J_S_O_N_B_CONTAINS_ANY_TOP_KEYS": {
     "class": "JSONBContainsAnyTopKeys",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "J_S_O_N_B_CONTAINS_ANY_TOP_KEYS"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["J_S_O_N_B_CONTAINS_ANY_TOP_KEYS"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "J_S_O_N_B_DELETE_AT_PATH": {
     "class": "JSONBDeleteAtPath",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "J_S_O_N_B_DELETE_AT_PATH"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["J_S_O_N_B_DELETE_AT_PATH"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "J_S_O_N_B_OBJECT_AGG": {
     "class": "JSONBObjectAgg",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "J_S_O_N_B_OBJECT_AGG"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["J_S_O_N_B_OBJECT_AGG"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "J_S_O_N_CAST": {
     "class": "JSONCast",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "J_S_O_N_CAST"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["J_S_O_N_CAST"],
     "arg_types": {
       "this": true,
       "to": true,
@@ -3809,56 +2450,38 @@
       "action": false,
       "default": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "J_S_O_N_EXISTS": {
     "class": "JSONExists",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "J_S_O_N_EXISTS"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["J_S_O_N_EXISTS"],
     "arg_types": {
       "this": true,
       "path": true,
       "passing": false,
       "on_condition": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "J_S_O_N_KEYS_AT_DEPTH": {
     "class": "JSONKeysAtDepth",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "J_S_O_N_KEYS_AT_DEPTH"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["J_S_O_N_KEYS_AT_DEPTH"],
     "arg_types": {
       "this": true,
       "expression": false,
       "mode": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "J_S_O_N_OBJECT": {
     "class": "JSONObject",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "J_S_O_N_OBJECT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["J_S_O_N_OBJECT"],
     "arg_types": {
       "expressions": false,
       "null_handling": false,
@@ -3866,19 +2489,13 @@
       "return_type": false,
       "encoding": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "J_S_O_N_OBJECT_AGG": {
     "class": "JSONObjectAgg",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "J_S_O_N_OBJECT_AGG"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["J_S_O_N_OBJECT_AGG"],
     "arg_types": {
       "expressions": false,
       "null_handling": false,
@@ -3886,19 +2503,13 @@
       "return_type": false,
       "encoding": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "J_S_O_N_TABLE": {
     "class": "JSONTable",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "J_S_O_N_TABLE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["J_S_O_N_TABLE"],
     "arg_types": {
       "this": true,
       "schema": true,
@@ -3906,257 +2517,165 @@
       "error_handling": false,
       "empty_handling": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "J_S_O_N_VALUE_ARRAY": {
     "class": "JSONValueArray",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "J_S_O_N_VALUE_ARRAY"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["J_S_O_N_VALUE_ARRAY"],
     "arg_types": {
       "this": true,
       "expression": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "LAG": {
     "class": "Lag",
-    "categories": [
-      "window"
-    ],
-    "sql_names": [
-      "LAG"
-    ],
+    "categories": ["window"],
+    "sql_names": ["LAG"],
     "arg_types": {
       "this": true,
       "offset": false,
       "default": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "LAST": {
     "class": "Last",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "LAST"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["LAST"],
     "arg_types": {
       "this": true,
       "expression": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "LAST_DAY": {
     "class": "LastDay",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "LAST_DAY",
-      "LAST_DAY_OF_MONTH"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["LAST_DAY", "LAST_DAY_OF_MONTH"],
     "arg_types": {
       "this": true,
       "unit": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "LAST_VALUE": {
     "class": "LastValue",
-    "categories": [
-      "window"
-    ],
-    "sql_names": [
-      "LAST_VALUE"
-    ],
+    "categories": ["window"],
+    "sql_names": ["LAST_VALUE"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "LAX_BOOL": {
     "class": "LaxBool",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "LAX_BOOL"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["LAX_BOOL"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "LAX_FLOAT64": {
     "class": "LaxFloat64",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "LAX_FLOAT64"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["LAX_FLOAT64"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "LAX_INT64": {
     "class": "LaxInt64",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "LAX_INT64"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["LAX_INT64"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "LAX_STRING": {
     "class": "LaxString",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "LAX_STRING"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["LAX_STRING"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "LCASE": {
     "class": "Lower",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "LCASE",
-      "LOWER"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["LCASE", "LOWER"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "LEAD": {
     "class": "Lead",
-    "categories": [
-      "window"
-    ],
-    "sql_names": [
-      "LEAD"
-    ],
+    "categories": ["window"],
+    "sql_names": ["LEAD"],
     "arg_types": {
       "this": true,
       "offset": false,
       "default": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "LEAST": {
     "class": "Least",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "LEAST"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["LEAST"],
     "arg_types": {
       "this": true,
       "expressions": false,
       "null_if_any_null": false
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "LEAST_IGNORE_NULLS": {
     "class": "LeastIgnoreNulls",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "LEAST_IGNORE_NULLS"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["LEAST_IGNORE_NULLS"],
     "arg_types": {
       "expressions": true
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "LEFT": {
     "class": "Left",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "LEFT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["LEFT"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "LEVENSHTEIN": {
     "class": "Levenshtein",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "LEVENSHTEIN"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["LEVENSHTEIN"],
     "arg_types": {
       "this": true,
       "expression": false,
@@ -4165,85 +2684,55 @@
       "sub_cost": false,
       "max_dist": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "LIST": {
     "class": "List",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "LIST"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["LIST"],
     "arg_types": {
       "expressions": false
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "LN": {
     "class": "Ln",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "LN"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["LN"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "LOG": {
     "class": "Log",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "LOG"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["LOG"],
     "arg_types": {
       "this": true,
       "expression": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "LOWER_HEX": {
     "class": "LowerHex",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "LOWER_HEX"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["LOWER_HEX"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "MAKE_INTERVAL": {
     "class": "MakeInterval",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "MAKE_INTERVAL"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["MAKE_INTERVAL"],
     "arg_types": {
       "year": false,
       "month": false,
@@ -4252,1053 +2741,685 @@
       "minute": false,
       "second": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "MAP": {
     "class": "Map",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "MAP"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["MAP"],
     "arg_types": {
       "keys": false,
       "values": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "MAP_FROM_ENTRIES": {
     "class": "MapFromEntries",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "MAP_FROM_ENTRIES"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["MAP_FROM_ENTRIES"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "MATCH_AGAINST": {
     "class": "MatchAgainst",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "MATCH_AGAINST"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["MATCH_AGAINST"],
     "arg_types": {
       "this": true,
       "expressions": true,
       "modifier": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "MAX": {
     "class": "Max",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "MAX"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["MAX"],
     "arg_types": {
       "this": true,
       "expressions": false
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "MD5": {
     "class": "MD5",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "MD5"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["MD5"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "MD5_DIGEST": {
     "class": "MD5Digest",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "MD5_DIGEST"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["MD5_DIGEST"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "MEDIAN": {
     "class": "Median",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "MEDIAN"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["MEDIAN"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "MIN": {
     "class": "Min",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "MIN"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["MIN"],
     "arg_types": {
       "this": true,
       "expressions": false
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "MINHASH": {
     "class": "Minhash",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "MINHASH"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["MINHASH"],
     "arg_types": {
       "this": true,
       "expressions": true
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "MINHASH_COMBINE": {
     "class": "MinhashCombine",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "MINHASH_COMBINE"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["MINHASH_COMBINE"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "MINUTE": {
     "class": "Minute",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "MINUTE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["MINUTE"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "MONTH": {
     "class": "Month",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "MONTH"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["MONTH"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "MONTHNAME": {
     "class": "Monthname",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "MONTHNAME"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["MONTHNAME"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "MONTHS_BETWEEN": {
     "class": "MonthsBetween",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "MONTHS_BETWEEN"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["MONTHS_BETWEEN"],
     "arg_types": {
       "this": true,
       "expression": true,
       "roundoff": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "M_D5_NUMBER_LOWER64": {
     "class": "MD5NumberLower64",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "M_D5_NUMBER_LOWER64"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["M_D5_NUMBER_LOWER64"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "M_D5_NUMBER_UPPER64": {
     "class": "MD5NumberUpper64",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "M_D5_NUMBER_UPPER64"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["M_D5_NUMBER_UPPER64"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "M_L_FORECAST": {
     "class": "MLForecast",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "M_L_FORECAST"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["M_L_FORECAST"],
     "arg_types": {
       "this": true,
       "expression": false,
       "params_struct": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "M_L_TRANSLATE": {
     "class": "MLTranslate",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "M_L_TRANSLATE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["M_L_TRANSLATE"],
     "arg_types": {
       "this": true,
       "expression": true,
       "params_struct": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "NEXT_DAY": {
     "class": "NextDay",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "NEXT_DAY"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["NEXT_DAY"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "NEXT_VALUE_FOR": {
     "class": "NextValueFor",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "NEXT_VALUE_FOR"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["NEXT_VALUE_FOR"],
     "arg_types": {
       "this": true,
       "order": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "NORMALIZE": {
     "class": "Normalize",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "NORMALIZE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["NORMALIZE"],
     "arg_types": {
       "this": true,
       "form": false,
       "is_casefold": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "NTH_VALUE": {
     "class": "NthValue",
-    "categories": [
-      "window"
-    ],
-    "sql_names": [
-      "NTH_VALUE"
-    ],
+    "categories": ["window"],
+    "sql_names": ["NTH_VALUE"],
     "arg_types": {
       "this": true,
       "offset": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "NTILE": {
     "class": "Ntile",
-    "categories": [
-      "window"
-    ],
-    "sql_names": [
-      "NTILE"
-    ],
+    "categories": ["window"],
+    "sql_names": ["NTILE"],
     "arg_types": {
       "this": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "NULLIF": {
     "class": "Nullif",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "NULLIF"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["NULLIF"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "NUMBER_TO_STR": {
     "class": "NumberToStr",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "NUMBER_TO_STR"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["NUMBER_TO_STR"],
     "arg_types": {
       "this": true,
       "format": true,
       "culture": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "NVL2": {
     "class": "Nvl2",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "NVL2"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["NVL2"],
     "arg_types": {
       "this": true,
       "true": true,
       "false": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "OBJECT_AGG": {
     "class": "ObjectAgg",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "OBJECT_AGG"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["OBJECT_AGG"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "OBJECT_INSERT": {
     "class": "ObjectInsert",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "OBJECT_INSERT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["OBJECT_INSERT"],
     "arg_types": {
       "this": true,
       "key": true,
       "value": true,
       "update_flag": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "OPEN_J_S_O_N": {
     "class": "OpenJSON",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "OPEN_J_S_O_N"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["OPEN_J_S_O_N"],
     "arg_types": {
       "this": true,
       "path": false,
       "expressions": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "OR": {
     "class": "Or",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "OR"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["OR"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "OVERLAY": {
     "class": "Overlay",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "OVERLAY"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["OVERLAY"],
     "arg_types": {
       "this": true,
       "expression": true,
       "from_": true,
       "for_": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "PAD": {
     "class": "Pad",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "PAD"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["PAD"],
     "arg_types": {
       "this": true,
       "expression": true,
       "fill_pattern": false,
       "is_left": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "PARAMETERIZED_AGG": {
     "class": "ParameterizedAgg",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "PARAMETERIZED_AGG"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["PARAMETERIZED_AGG"],
     "arg_types": {
       "this": true,
       "expressions": true,
       "params": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "PARSE_BIGNUMERIC": {
     "class": "ParseBignumeric",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "PARSE_BIGNUMERIC"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["PARSE_BIGNUMERIC"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "PARSE_DATETIME": {
     "class": "ParseDatetime",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "PARSE_DATETIME"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["PARSE_DATETIME"],
     "arg_types": {
       "this": true,
       "format": false,
       "zone": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "PARSE_IP": {
     "class": "ParseIp",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "PARSE_IP"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["PARSE_IP"],
     "arg_types": {
       "this": true,
       "type": true,
       "permissive": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "PARSE_NUMERIC": {
     "class": "ParseNumeric",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "PARSE_NUMERIC"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["PARSE_NUMERIC"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "PARSE_TIME": {
     "class": "ParseTime",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "PARSE_TIME"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["PARSE_TIME"],
     "arg_types": {
       "this": true,
       "format": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "PARSE_URL": {
     "class": "ParseUrl",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "PARSE_URL"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["PARSE_URL"],
     "arg_types": {
       "this": true,
       "part_to_extract": false,
       "key": false,
       "permissive": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "PERCENTILE_CONT": {
     "class": "PercentileCont",
-    "categories": [
-      "window"
-    ],
-    "sql_names": [
-      "PERCENTILE_CONT"
-    ],
+    "categories": ["window"],
+    "sql_names": ["PERCENTILE_CONT"],
     "arg_types": {
       "this": true,
       "expression": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "PERCENTILE_DISC": {
     "class": "PercentileDisc",
-    "categories": [
-      "window"
-    ],
-    "sql_names": [
-      "PERCENTILE_DISC"
-    ],
+    "categories": ["window"],
+    "sql_names": ["PERCENTILE_DISC"],
     "arg_types": {
       "this": true,
       "expression": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "PERCENT_RANK": {
     "class": "PercentRank",
-    "categories": [
-      "window"
-    ],
-    "sql_names": [
-      "PERCENT_RANK"
-    ],
+    "categories": ["window"],
+    "sql_names": ["PERCENT_RANK"],
     "arg_types": {
       "expressions": false
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "PI": {
     "class": "Pi",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "PI"
-    ],
-    "dialects": [
-      "*"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["PI"],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "POSEXPLODE": {
     "class": "Posexplode",
-    "categories": [
-      "udtf"
-    ],
-    "sql_names": [
-      "POSEXPLODE"
-    ],
+    "categories": ["udtf"],
+    "sql_names": ["POSEXPLODE"],
     "arg_types": {
       "this": true,
       "expressions": false
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "POSEXPLODE_OUTER": {
     "class": "PosexplodeOuter",
-    "categories": [
-      "udtf"
-    ],
-    "sql_names": [
-      "POSEXPLODE_OUTER"
-    ],
+    "categories": ["udtf"],
+    "sql_names": ["POSEXPLODE_OUTER"],
     "arg_types": {
       "this": true,
       "expressions": false
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "POW": {
     "class": "Pow",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "POW",
-      "POWER"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["POW", "POWER"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "PREDICT": {
     "class": "Predict",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "PREDICT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["PREDICT"],
     "arg_types": {
       "this": true,
       "expression": true,
       "params_struct": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "PREVIOUS_DAY": {
     "class": "PreviousDay",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "PREVIOUS_DAY"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["PREVIOUS_DAY"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "QUANTILE": {
     "class": "Quantile",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "QUANTILE"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["QUANTILE"],
     "arg_types": {
       "this": true,
       "quantile": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "QUARTER": {
     "class": "Quarter",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "QUARTER"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["QUARTER"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "RADIANS": {
     "class": "Radians",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "RADIANS"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["RADIANS"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "RAND": {
     "class": "Rand",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "RAND",
-      "RANDOM"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["RAND", "RANDOM"],
     "arg_types": {
       "this": false,
       "lower": false,
       "upper": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "RANDN": {
     "class": "Randn",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "RANDN"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["RANDN"],
     "arg_types": {
       "this": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "RANGE_BUCKET": {
     "class": "RangeBucket",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "RANGE_BUCKET"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["RANGE_BUCKET"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "RANGE_N": {
     "class": "RangeN",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "RANGE_N"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["RANGE_N"],
     "arg_types": {
       "this": true,
       "expressions": true,
       "each": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "RANK": {
     "class": "Rank",
-    "categories": [
-      "window"
-    ],
-    "sql_names": [
-      "RANK"
-    ],
+    "categories": ["window"],
+    "sql_names": ["RANK"],
     "arg_types": {
       "expressions": false
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "READ_CSV": {
     "class": "ReadCSV",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "READ_CSV"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["READ_CSV"],
     "arg_types": {
       "this": true,
       "expressions": false
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "READ_PARQUET": {
     "class": "ReadParquet",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "READ_PARQUET"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["READ_PARQUET"],
     "arg_types": {
       "expressions": true
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "REDUCE": {
     "class": "Reduce",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "REDUCE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["REDUCE"],
     "arg_types": {
       "this": true,
       "initial": true,
       "merge": true,
       "finish": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "REGEXP_COUNT": {
     "class": "RegexpCount",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "REGEXP_COUNT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["REGEXP_COUNT"],
     "arg_types": {
       "this": true,
       "expression": true,
       "position": false,
       "parameters": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "REGEXP_EXTRACT": {
     "class": "RegexpExtract",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "REGEXP_EXTRACT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["REGEXP_EXTRACT"],
     "arg_types": {
       "this": true,
       "expression": true,
@@ -5307,19 +3428,13 @@
       "parameters": false,
       "group": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "REGEXP_EXTRACT_ALL": {
     "class": "RegexpExtractAll",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "REGEXP_EXTRACT_ALL"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["REGEXP_EXTRACT_ALL"],
     "arg_types": {
       "this": true,
       "expression": true,
@@ -5328,37 +3443,25 @@
       "position": false,
       "occurrence": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "REGEXP_FULL_MATCH": {
     "class": "RegexpFullMatch",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "REGEXP_FULL_MATCH"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["REGEXP_FULL_MATCH"],
     "arg_types": {
       "this": true,
       "expression": true,
       "options": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "REGEXP_INSTR": {
     "class": "RegexpInstr",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "REGEXP_INSTR"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["REGEXP_INSTR"],
     "arg_types": {
       "this": true,
       "expression": true,
@@ -5368,55 +3471,37 @@
       "parameters": false,
       "group": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "REGEXP_I_LIKE": {
     "class": "RegexpILike",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "REGEXP_I_LIKE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["REGEXP_I_LIKE"],
     "arg_types": {
       "this": true,
       "expression": true,
       "flag": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "REGEXP_LIKE": {
     "class": "RegexpLike",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "REGEXP_LIKE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["REGEXP_LIKE"],
     "arg_types": {
       "this": true,
       "expression": true,
       "flag": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "REGEXP_REPLACE": {
     "class": "RegexpReplace",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "REGEXP_REPLACE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["REGEXP_REPLACE"],
     "arg_types": {
       "this": true,
       "expression": true,
@@ -5426,323 +3511,209 @@
       "modifiers": false,
       "single_replace": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "REGEXP_SPLIT": {
     "class": "RegexpSplit",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "REGEXP_SPLIT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["REGEXP_SPLIT"],
     "arg_types": {
       "this": true,
       "expression": true,
       "limit": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "REGR_AVGX": {
     "class": "RegrAvgx",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "REGR_AVGX"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["REGR_AVGX"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "REGR_AVGY": {
     "class": "RegrAvgy",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "REGR_AVGY"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["REGR_AVGY"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "REGR_VALX": {
     "class": "RegrValx",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "REGR_VALX"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["REGR_VALX"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "REGR_VALY": {
     "class": "RegrValy",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "REGR_VALY"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["REGR_VALY"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "REPEAT": {
     "class": "Repeat",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "REPEAT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["REPEAT"],
     "arg_types": {
       "this": true,
       "times": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "REPLACE": {
     "class": "Replace",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "REPLACE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["REPLACE"],
     "arg_types": {
       "this": true,
       "expression": true,
       "replacement": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "REVERSE": {
     "class": "Reverse",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "REVERSE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["REVERSE"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "RIGHT": {
     "class": "Right",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "RIGHT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["RIGHT"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ROUND": {
     "class": "Round",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ROUND"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ROUND"],
     "arg_types": {
       "this": true,
       "decimals": false,
       "truncate": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ROW_NUMBER": {
     "class": "RowNumber",
-    "categories": [
-      "window"
-    ],
-    "sql_names": [
-      "ROW_NUMBER"
-    ],
+    "categories": ["window"],
+    "sql_names": ["ROW_NUMBER"],
     "arg_types": {
       "this": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "RTRIMMED_LENGTH": {
     "class": "RtrimmedLength",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "RTRIMMED_LENGTH"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["RTRIMMED_LENGTH"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "SAFE_ADD": {
     "class": "SafeAdd",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "SAFE_ADD"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["SAFE_ADD"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "SAFE_CONVERT_BYTES_TO_STRING": {
     "class": "SafeConvertBytesToString",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "SAFE_CONVERT_BYTES_TO_STRING"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["SAFE_CONVERT_BYTES_TO_STRING"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "SAFE_DIVIDE": {
     "class": "SafeDivide",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "SAFE_DIVIDE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["SAFE_DIVIDE"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "SAFE_MULTIPLY": {
     "class": "SafeMultiply",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "SAFE_MULTIPLY"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["SAFE_MULTIPLY"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "SAFE_NEGATE": {
     "class": "SafeNegate",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "SAFE_NEGATE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["SAFE_NEGATE"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "SAFE_SUBTRACT": {
     "class": "SafeSubtract",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "SAFE_SUBTRACT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["SAFE_SUBTRACT"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "SEARCH": {
     "class": "Search",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "SEARCH"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["SEARCH"],
     "arg_types": {
       "this": true,
       "expression": true,
@@ -5751,720 +3722,459 @@
       "analyzer_options": false,
       "search_mode": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "SEC": {
     "class": "Sec",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "SEC"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["SEC"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "SECH": {
     "class": "Sech",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "SECH"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["SECH"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "SECOND": {
     "class": "Second",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "SECOND"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["SECOND"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "SHA": {
     "class": "SHA",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "SHA",
-      "SHA1"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["SHA", "SHA1"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "SHA2": {
     "class": "SHA2",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "SHA2"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["SHA2"],
     "arg_types": {
       "this": true,
       "length": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "SIGN": {
     "class": "Sign",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "SIGN",
-      "SIGNUM"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["SIGN", "SIGNUM"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "SIN": {
     "class": "Sin",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "SIN"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["SIN"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "SINH": {
     "class": "Sinh",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "SINH"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["SINH"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "SKEWNESS": {
     "class": "Skewness",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "SKEWNESS"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["SKEWNESS"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "SORT_ARRAY": {
     "class": "SortArray",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "SORT_ARRAY"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["SORT_ARRAY"],
     "arg_types": {
       "this": true,
       "asc": false,
       "nulls_first": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "SOUNDEX": {
     "class": "Soundex",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "SOUNDEX"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["SOUNDEX"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "SOUNDEX_P123": {
     "class": "SoundexP123",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "SOUNDEX_P123"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["SOUNDEX_P123"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "SPACE": {
     "class": "Space",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "SPACE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["SPACE"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "SPLIT": {
     "class": "Split",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "SPLIT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["SPLIT"],
     "arg_types": {
       "this": true,
       "expression": true,
       "limit": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "SPLIT_BY_STRING": {
     "class": "StringToArray",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "SPLIT_BY_STRING",
-      "STRING_TO_ARRAY",
-      "STRTOK_TO_ARRAY"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["SPLIT_BY_STRING", "STRING_TO_ARRAY", "STRTOK_TO_ARRAY"],
     "arg_types": {
       "this": true,
       "expression": false,
       "null": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "SPLIT_PART": {
     "class": "SplitPart",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "SPLIT_PART"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["SPLIT_PART"],
     "arg_types": {
       "this": true,
       "delimiter": false,
       "part_index": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "SQRT": {
     "class": "Sqrt",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "SQRT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["SQRT"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "STANDARD_HASH": {
     "class": "StandardHash",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "STANDARD_HASH"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["STANDARD_HASH"],
     "arg_types": {
       "this": true,
       "expression": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "STARTSWITH": {
     "class": "StartsWith",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "STARTSWITH",
-      "STARTS_WITH"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["STARTSWITH", "STARTS_WITH"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "STAR_MAP": {
     "class": "StarMap",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "STAR_MAP"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["STAR_MAP"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "STDDEV": {
     "class": "Stddev",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "STDDEV",
-      "STDEV"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["STDDEV", "STDEV"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "STDDEV_POP": {
     "class": "StddevPop",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "STDDEV_POP"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["STDDEV_POP"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "STDDEV_SAMP": {
     "class": "StddevSamp",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "STDDEV_SAMP"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["STDDEV_SAMP"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "STRING": {
     "class": "String",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "STRING"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["STRING"],
     "arg_types": {
       "this": true,
       "zone": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "STRUCT": {
     "class": "Struct",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "STRUCT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["STRUCT"],
     "arg_types": {
       "expressions": false
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "STRUCT_EXTRACT": {
     "class": "StructExtract",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "STRUCT_EXTRACT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["STRUCT_EXTRACT"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "STR_POSITION": {
     "class": "StrPosition",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "STR_POSITION"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["STR_POSITION"],
     "arg_types": {
       "this": true,
       "substr": true,
       "position": false,
       "occurrence": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "STR_TO_DATE": {
     "class": "StrToDate",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "STR_TO_DATE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["STR_TO_DATE"],
     "arg_types": {
       "this": true,
       "format": false,
       "safe": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "STR_TO_MAP": {
     "class": "StrToMap",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "STR_TO_MAP"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["STR_TO_MAP"],
     "arg_types": {
       "this": true,
       "pair_delim": false,
       "key_value_delim": false,
       "duplicate_resolution_callback": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "STR_TO_TIME": {
     "class": "StrToTime",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "STR_TO_TIME"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["STR_TO_TIME"],
     "arg_types": {
       "this": true,
       "format": true,
       "zone": false,
       "safe": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "STR_TO_UNIX": {
     "class": "StrToUnix",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "STR_TO_UNIX"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["STR_TO_UNIX"],
     "arg_types": {
       "this": false,
       "format": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ST_DISTANCE": {
     "class": "StDistance",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ST_DISTANCE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ST_DISTANCE"],
     "arg_types": {
       "this": true,
       "expression": true,
       "use_spheroid": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "ST_MAKEPOINT": {
     "class": "StPoint",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "ST_MAKEPOINT",
-      "ST_POINT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["ST_MAKEPOINT", "ST_POINT"],
     "arg_types": {
       "this": true,
       "expression": true,
       "null": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "SUBSTR": {
     "class": "Substring",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "SUBSTR",
-      "SUBSTRING"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["SUBSTR", "SUBSTRING"],
     "arg_types": {
       "this": true,
       "start": false,
       "length": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "SUBSTRING_INDEX": {
     "class": "SubstringIndex",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "SUBSTRING_INDEX"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["SUBSTRING_INDEX"],
     "arg_types": {
       "this": true,
       "delimiter": true,
       "count": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "SUM": {
     "class": "Sum",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "SUM"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["SUM"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "S_H_A1_DIGEST": {
     "class": "SHA1Digest",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "S_H_A1_DIGEST"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["S_H_A1_DIGEST"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "S_H_A2_DIGEST": {
     "class": "SHA2Digest",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "S_H_A2_DIGEST"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["S_H_A2_DIGEST"],
     "arg_types": {
       "this": true,
       "length": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TAN": {
     "class": "Tan",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TAN"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TAN"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TANH": {
     "class": "Tanh",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TANH"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TANH"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TIME": {
     "class": "Time",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TIME"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TIME"],
     "arg_types": {
       "this": false,
       "zone": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TIMEFROMPARTS": {
     "class": "TimeFromParts",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TIMEFROMPARTS",
-      "TIME_FROM_PARTS"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TIMEFROMPARTS", "TIME_FROM_PARTS"],
     "arg_types": {
       "hour": true,
       "min": true,
@@ -6473,57 +4183,37 @@
       "fractions": false,
       "precision": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TIMESTAMP": {
     "class": "Timestamp",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TIMESTAMP"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TIMESTAMP"],
     "arg_types": {
       "this": false,
       "zone": false,
       "with_tz": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TIMESTAMPDIFF": {
     "class": "TimestampDiff",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TIMESTAMPDIFF",
-      "TIMESTAMP_DIFF"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TIMESTAMPDIFF", "TIMESTAMP_DIFF"],
     "arg_types": {
       "this": true,
       "expression": true,
       "unit": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TIMESTAMPFROMPARTS": {
     "class": "TimestampFromParts",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TIMESTAMPFROMPARTS",
-      "TIMESTAMP_FROM_PARTS"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TIMESTAMPFROMPARTS", "TIMESTAMP_FROM_PARTS"],
     "arg_types": {
       "year": false,
       "month": false,
@@ -6537,20 +4227,13 @@
       "this": false,
       "expression": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TIMESTAMPLTZFROMPARTS": {
     "class": "TimestampLtzFromParts",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TIMESTAMPLTZFROMPARTS",
-      "TIMESTAMP_LTZ_FROM_PARTS"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TIMESTAMPLTZFROMPARTS", "TIMESTAMP_LTZ_FROM_PARTS"],
     "arg_types": {
       "year": false,
       "month": false,
@@ -6560,20 +4243,13 @@
       "sec": false,
       "nano": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TIMESTAMPTZFROMPARTS": {
     "class": "TimestampTzFromParts",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TIMESTAMPTZFROMPARTS",
-      "TIMESTAMP_TZ_FROM_PARTS"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TIMESTAMPTZFROMPARTS", "TIMESTAMP_TZ_FROM_PARTS"],
     "arg_types": {
       "year": false,
       "month": false,
@@ -6584,396 +4260,258 @@
       "nano": false,
       "zone": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TIMESTAMP_ADD": {
     "class": "TimestampAdd",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TIMESTAMP_ADD"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TIMESTAMP_ADD"],
     "arg_types": {
       "this": true,
       "expression": true,
       "unit": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TIMESTAMP_SUB": {
     "class": "TimestampSub",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TIMESTAMP_SUB"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TIMESTAMP_SUB"],
     "arg_types": {
       "this": true,
       "expression": true,
       "unit": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TIMESTAMP_TRUNC": {
     "class": "TimestampTrunc",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TIMESTAMP_TRUNC"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TIMESTAMP_TRUNC"],
     "arg_types": {
       "this": true,
       "unit": true,
       "zone": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TIME_ADD": {
     "class": "TimeAdd",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TIME_ADD"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TIME_ADD"],
     "arg_types": {
       "this": true,
       "expression": true,
       "unit": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TIME_DIFF": {
     "class": "TimeDiff",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TIME_DIFF"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TIME_DIFF"],
     "arg_types": {
       "this": true,
       "expression": true,
       "unit": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TIME_SLICE": {
     "class": "TimeSlice",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TIME_SLICE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TIME_SLICE"],
     "arg_types": {
       "this": true,
       "expression": true,
       "unit": true,
       "kind": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TIME_STR_TO_DATE": {
     "class": "TimeStrToDate",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TIME_STR_TO_DATE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TIME_STR_TO_DATE"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TIME_STR_TO_TIME": {
     "class": "TimeStrToTime",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TIME_STR_TO_TIME"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TIME_STR_TO_TIME"],
     "arg_types": {
       "this": true,
       "zone": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TIME_STR_TO_UNIX": {
     "class": "TimeStrToUnix",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TIME_STR_TO_UNIX"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TIME_STR_TO_UNIX"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TIME_SUB": {
     "class": "TimeSub",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TIME_SUB"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TIME_SUB"],
     "arg_types": {
       "this": true,
       "expression": true,
       "unit": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TIME_TO_STR": {
     "class": "TimeToStr",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TIME_TO_STR"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TIME_TO_STR"],
     "arg_types": {
       "this": true,
       "format": true,
       "culture": false,
       "zone": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TIME_TO_TIME_STR": {
     "class": "TimeToTimeStr",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TIME_TO_TIME_STR"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TIME_TO_TIME_STR"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TIME_TO_UNIX": {
     "class": "TimeToUnix",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TIME_TO_UNIX"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TIME_TO_UNIX"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TIME_TRUNC": {
     "class": "TimeTrunc",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TIME_TRUNC"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TIME_TRUNC"],
     "arg_types": {
       "this": true,
       "unit": true,
       "zone": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TO_ARRAY": {
     "class": "ToArray",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TO_ARRAY"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TO_ARRAY"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TO_BASE32": {
     "class": "ToBase32",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TO_BASE32"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TO_BASE32"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TO_BASE64": {
     "class": "ToBase64",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TO_BASE64"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TO_BASE64"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TO_CHAR": {
     "class": "ToChar",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TO_CHAR"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TO_CHAR"],
     "arg_types": {
       "this": true,
       "format": false,
       "nlsparam": false,
       "is_numeric": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TO_CODE_POINTS": {
     "class": "ToCodePoints",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TO_CODE_POINTS"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TO_CODE_POINTS"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TO_DAYS": {
     "class": "ToDays",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TO_DAYS"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TO_DAYS"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TO_DOUBLE": {
     "class": "ToDouble",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TO_DOUBLE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TO_DOUBLE"],
     "arg_types": {
       "this": true,
       "format": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TO_MAP": {
     "class": "ToMap",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TO_MAP"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TO_MAP"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TO_NUMBER": {
     "class": "ToNumber",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TO_NUMBER"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TO_NUMBER"],
     "arg_types": {
       "this": true,
       "format": false,
@@ -6981,123 +4519,81 @@
       "precision": false,
       "scale": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TRANSFORM": {
     "class": "Transform",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TRANSFORM"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TRANSFORM"],
     "arg_types": {
       "this": true,
       "expression": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TRANSLATE": {
     "class": "Translate",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TRANSLATE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TRANSLATE"],
     "arg_types": {
       "this": true,
       "from_": true,
       "to": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TRIM": {
     "class": "Trim",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TRIM"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TRIM"],
     "arg_types": {
       "this": true,
       "expression": false,
       "position": false,
       "collation": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TRY": {
     "class": "Try",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TRY"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TRY"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TRY_BASE64_DECODE_BINARY": {
     "class": "TryBase64DecodeBinary",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TRY_BASE64_DECODE_BINARY"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TRY_BASE64_DECODE_BINARY"],
     "arg_types": {
       "this": true,
       "alphabet": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TRY_BASE64_DECODE_STRING": {
     "class": "TryBase64DecodeString",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TRY_BASE64_DECODE_STRING"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TRY_BASE64_DECODE_STRING"],
     "arg_types": {
       "this": true,
       "alphabet": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TRY_CAST": {
     "class": "TryCast",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TRY_CAST"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TRY_CAST"],
     "arg_types": {
       "this": true,
       "to": true,
@@ -7107,335 +4603,214 @@
       "default": false,
       "requires_string": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TRY_HEX_DECODE_BINARY": {
     "class": "TryHexDecodeBinary",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TRY_HEX_DECODE_BINARY"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TRY_HEX_DECODE_BINARY"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TRY_HEX_DECODE_STRING": {
     "class": "TryHexDecodeString",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TRY_HEX_DECODE_STRING"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TRY_HEX_DECODE_STRING"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TS_OR_DI_TO_DI": {
     "class": "TsOrDiToDi",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TS_OR_DI_TO_DI"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TS_OR_DI_TO_DI"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TS_OR_DS_ADD": {
     "class": "TsOrDsAdd",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TS_OR_DS_ADD"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TS_OR_DS_ADD"],
     "arg_types": {
       "this": true,
       "expression": true,
       "unit": false,
       "return_type": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TS_OR_DS_DIFF": {
     "class": "TsOrDsDiff",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TS_OR_DS_DIFF"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TS_OR_DS_DIFF"],
     "arg_types": {
       "this": true,
       "expression": true,
       "unit": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TS_OR_DS_TO_DATE": {
     "class": "TsOrDsToDate",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TS_OR_DS_TO_DATE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TS_OR_DS_TO_DATE"],
     "arg_types": {
       "this": true,
       "format": false,
       "safe": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TS_OR_DS_TO_DATETIME": {
     "class": "TsOrDsToDatetime",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TS_OR_DS_TO_DATETIME"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TS_OR_DS_TO_DATETIME"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TS_OR_DS_TO_DATE_STR": {
     "class": "TsOrDsToDateStr",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TS_OR_DS_TO_DATE_STR"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TS_OR_DS_TO_DATE_STR"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TS_OR_DS_TO_TIME": {
     "class": "TsOrDsToTime",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TS_OR_DS_TO_TIME"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TS_OR_DS_TO_TIME"],
     "arg_types": {
       "this": true,
       "format": false,
       "safe": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TS_OR_DS_TO_TIMESTAMP": {
     "class": "TsOrDsToTimestamp",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TS_OR_DS_TO_TIMESTAMP"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TS_OR_DS_TO_TIMESTAMP"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "TYPEOF": {
     "class": "Typeof",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "TYPEOF"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["TYPEOF"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "UCASE": {
     "class": "Upper",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "UCASE",
-      "UPPER"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["UCASE", "UPPER"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "UNHEX": {
     "class": "Unhex",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "UNHEX"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["UNHEX"],
     "arg_types": {
       "this": true,
       "expression": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "UNICODE": {
     "class": "Unicode",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "UNICODE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["UNICODE"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "UNIX_DATE": {
     "class": "UnixDate",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "UNIX_DATE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["UNIX_DATE"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "UNIX_MICROS": {
     "class": "UnixMicros",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "UNIX_MICROS"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["UNIX_MICROS"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "UNIX_MILLIS": {
     "class": "UnixMillis",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "UNIX_MILLIS"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["UNIX_MILLIS"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "UNIX_SECONDS": {
     "class": "UnixSeconds",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "UNIX_SECONDS"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["UNIX_SECONDS"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "UNIX_TO_STR": {
     "class": "UnixToStr",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "UNIX_TO_STR"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["UNIX_TO_STR"],
     "arg_types": {
       "this": true,
       "format": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "UNIX_TO_TIME": {
     "class": "UnixToTime",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "UNIX_TO_TIME"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["UNIX_TO_TIME"],
     "arg_types": {
       "this": true,
       "scale": false,
@@ -7444,152 +4819,95 @@
       "minutes": false,
       "format": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "UNIX_TO_TIME_STR": {
     "class": "UnixToTimeStr",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "UNIX_TO_TIME_STR"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["UNIX_TO_TIME_STR"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "UNNEST": {
     "class": "Unnest",
-    "categories": [
-      "udtf"
-    ],
-    "sql_names": [
-      "UNNEST"
-    ],
+    "categories": ["udtf"],
+    "sql_names": ["UNNEST"],
     "arg_types": {
       "expressions": true,
       "alias": false,
       "offset": false,
       "explode_array": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "UTC_DATE": {
     "class": "UtcDate",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "UTC_DATE"
-    ],
-    "dialects": [
-      "*"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["UTC_DATE"],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "UTC_TIME": {
     "class": "UtcTime",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "UTC_TIME"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["UTC_TIME"],
     "arg_types": {
       "this": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "UTC_TIMESTAMP": {
     "class": "UtcTimestamp",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "UTC_TIMESTAMP"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["UTC_TIMESTAMP"],
     "arg_types": {
       "this": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "VARIANCE": {
     "class": "Variance",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "VARIANCE",
-      "VARIANCE_SAMP",
-      "VAR_SAMP"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["VARIANCE", "VARIANCE_SAMP", "VAR_SAMP"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "VARIANCE_POP": {
     "class": "VariancePop",
-    "categories": [
-      "aggregate"
-    ],
-    "sql_names": [
-      "VARIANCE_POP",
-      "VAR_POP"
-    ],
+    "categories": ["aggregate"],
+    "sql_names": ["VARIANCE_POP", "VAR_POP"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "VAR_MAP": {
     "class": "VarMap",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "VAR_MAP"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["VAR_MAP"],
     "arg_types": {
       "keys": true,
       "values": true
     },
     "variadic": true,
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "VECTOR_SEARCH": {
     "class": "VectorSearch",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "VECTOR_SEARCH"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["VECTOR_SEARCH"],
     "arg_types": {
       "this": true,
       "column_to_search": true,
@@ -7599,107 +4917,70 @@
       "distance_type": false,
       "options": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "WEEK": {
     "class": "Week",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "WEEK"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["WEEK"],
     "arg_types": {
       "this": true,
       "mode": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "WEEKOFYEAR": {
     "class": "WeekOfYear",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "WEEKOFYEAR",
-      "WEEK_OF_YEAR"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["WEEKOFYEAR", "WEEK_OF_YEAR"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "WIDTH_BUCKET": {
     "class": "WidthBucket",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "WIDTH_BUCKET"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["WIDTH_BUCKET"],
     "arg_types": {
       "this": true,
       "min_value": true,
       "max_value": true,
       "num_buckets": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "XMLELEMENT": {
     "class": "XMLElement",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "XMLELEMENT"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["XMLELEMENT"],
     "arg_types": {
       "this": true,
       "expressions": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "XOR": {
     "class": "Xor",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "XOR"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["XOR"],
     "arg_types": {
       "this": false,
       "expression": false,
       "expressions": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "X_M_L_TABLE": {
     "class": "XMLTable",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "X_M_L_TABLE"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["X_M_L_TABLE"],
     "arg_types": {
       "this": true,
       "namespaces": false,
@@ -7707,59 +4988,37 @@
       "columns": false,
       "by_ref": false
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "YEAR": {
     "class": "Year",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "YEAR"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["YEAR"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "YEAROFWEEK": {
     "class": "YearOfWeek",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "YEAROFWEEK",
-      "YEAR_OF_WEEK"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["YEAROFWEEK", "YEAR_OF_WEEK"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   },
   "YEAROFWEEKISO": {
     "class": "YearOfWeekIso",
-    "categories": [
-      "scalar"
-    ],
-    "sql_names": [
-      "YEAROFWEEKISO",
-      "YEAR_OF_WEEK_ISO"
-    ],
+    "categories": ["scalar"],
+    "sql_names": ["YEAROFWEEKISO", "YEAR_OF_WEEK_ISO"],
     "arg_types": {
       "this": true
     },
-    "dialects": [
-      "*"
-    ],
+    "dialects": ["*"],
     "dialect_specific": false
   }
 }

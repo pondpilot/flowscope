@@ -1,15 +1,8 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { Search } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import {
-  SHORTCUTS,
-  formatShortcut,
-  type ShortcutCategory,
-} from '@/lib/shortcuts';
+import { SHORTCUTS, formatShortcut, type ShortcutCategory } from '@/lib/shortcuts';
 
 interface CommandPaletteProps {
   open: boolean;
@@ -78,7 +71,7 @@ export function CommandPalette({ open, onOpenChange, onExecuteCommand }: Command
 
   // Convert shortcuts to command items
   const allCommands: CommandItem[] = useMemo(() => {
-    return SHORTCUTS.map(shortcut => ({
+    return SHORTCUTS.map((shortcut) => ({
       id: shortcut.id,
       label: shortcut.label,
       description: shortcut.description,
@@ -94,9 +87,9 @@ export function CommandPalette({ open, onOpenChange, onExecuteCommand }: Command
     }
 
     return allCommands
-      .filter(cmd =>
-        fuzzyMatch(query, cmd.label) ||
-        (cmd.description && fuzzyMatch(query, cmd.description))
+      .filter(
+        (cmd) =>
+          fuzzyMatch(query, cmd.label) || (cmd.description && fuzzyMatch(query, cmd.description))
       )
       .sort((a, b) => {
         const scoreA = Math.max(
@@ -159,34 +152,40 @@ export function CommandPalette({ open, onOpenChange, onExecuteCommand }: Command
     }
   }, [selectedIndex, flatList.length]);
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        setSelectedIndex(prev => Math.min(prev + 1, flatList.length - 1));
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        setSelectedIndex(prev => Math.max(prev - 1, 0));
-        break;
-      case 'Enter':
-        e.preventDefault();
-        if (flatList[selectedIndex]) {
-          onExecuteCommand(flatList[selectedIndex].id);
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          setSelectedIndex((prev) => Math.min(prev + 1, flatList.length - 1));
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          setSelectedIndex((prev) => Math.max(prev - 1, 0));
+          break;
+        case 'Enter':
+          e.preventDefault();
+          if (flatList[selectedIndex]) {
+            onExecuteCommand(flatList[selectedIndex].id);
+            onOpenChange(false);
+          }
+          break;
+        case 'Escape':
+          e.preventDefault();
           onOpenChange(false);
-        }
-        break;
-      case 'Escape':
-        e.preventDefault();
-        onOpenChange(false);
-        break;
-    }
-  }, [flatList, selectedIndex, onExecuteCommand, onOpenChange]);
+          break;
+      }
+    },
+    [flatList, selectedIndex, onExecuteCommand, onOpenChange]
+  );
 
-  const handleItemClick = useCallback((commandId: string) => {
-    onExecuteCommand(commandId);
-    onOpenChange(false);
-  }, [onExecuteCommand, onOpenChange]);
+  const handleItemClick = useCallback(
+    (commandId: string) => {
+      onExecuteCommand(commandId);
+      onOpenChange(false);
+    },
+    [onExecuteCommand, onOpenChange]
+  );
 
   // Calculate flat index for an item
   const getFlatIndex = (category: ShortcutCategory, indexInCategory: number): number => {
@@ -202,17 +201,14 @@ export function CommandPalette({ open, onOpenChange, onExecuteCommand }: Command
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="sm:max-w-lg p-0 gap-0 overflow-hidden"
-        onKeyDown={handleKeyDown}
-      >
+      <DialogContent className="sm:max-w-lg p-0 gap-0 overflow-hidden" onKeyDown={handleKeyDown}>
         {/* Search Input */}
         <div className="flex items-center border-b px-3">
           <Search className="h-4 w-4 text-muted-foreground shrink-0" />
           <Input
             ref={inputRef}
             value={query}
-            onChange={e => setQuery(e.target.value)}
+            onChange={(e) => setQuery(e.target.value)}
             placeholder="Type a command..."
             className="border-0 focus-visible:ring-0 shadow-none h-12 text-base"
           />
@@ -225,7 +221,7 @@ export function CommandPalette({ open, onOpenChange, onExecuteCommand }: Command
               No commands found
             </div>
           ) : (
-            CATEGORY_ORDER.map(category => {
+            CATEGORY_ORDER.map((category) => {
               const commands = groupedCommands[category];
               if (commands.length === 0) return null;
 
@@ -243,9 +239,7 @@ export function CommandPalette({ open, onOpenChange, onExecuteCommand }: Command
                         key={cmd.id}
                         data-index={flatIndex}
                         className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors ${
-                          isSelected
-                            ? 'bg-accent text-accent-foreground'
-                            : 'hover:bg-muted'
+                          isSelected ? 'bg-accent text-accent-foreground' : 'hover:bg-muted'
                         }`}
                         onClick={() => handleItemClick(cmd.id)}
                         onMouseEnter={() => setSelectedIndex(flatIndex)}
@@ -268,16 +262,16 @@ export function CommandPalette({ open, onOpenChange, onExecuteCommand }: Command
         {/* Footer hint */}
         <div className="border-t px-3 py-2 text-xs text-muted-foreground flex items-center justify-between">
           <span>
-            <kbd className="px-1 py-0.5 rounded border bg-muted font-mono text-[10px]">↑↓</kbd>
-            {' '}to navigate
+            <kbd className="px-1 py-0.5 rounded border bg-muted font-mono text-[10px]">↑↓</kbd> to
+            navigate
           </span>
           <span>
-            <kbd className="px-1 py-0.5 rounded border bg-muted font-mono text-[10px]">Enter</kbd>
-            {' '}to select
+            <kbd className="px-1 py-0.5 rounded border bg-muted font-mono text-[10px]">Enter</kbd>{' '}
+            to select
           </span>
           <span>
-            <kbd className="px-1 py-0.5 rounded border bg-muted font-mono text-[10px]">Esc</kbd>
-            {' '}to close
+            <kbd className="px-1 py-0.5 rounded border bg-muted font-mono text-[10px]">Esc</kbd> to
+            close
           </span>
         </div>
       </DialogContent>

@@ -1,4 +1,14 @@
-import React, { useMemo, useState, useCallback, useRef, useEffect, memo, useId, startTransition, type JSX } from 'react';
+import React, {
+  useMemo,
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+  memo,
+  useId,
+  startTransition,
+  type JSX,
+} from 'react';
 import { useDebounce } from '../hooks/useDebounce';
 import {
   Table2,
@@ -19,7 +29,7 @@ import {
   Minimize2,
   BarChart2,
   ScanLine,
-  Loader2
+  Loader2,
 } from 'lucide-react';
 import { useLineage } from '../store';
 import type { MatrixSubMode } from '../types';
@@ -92,12 +102,9 @@ function getShortName(name: string): string {
 // ============================================================================
 
 // Barycenter Heuristic for Clustering
-function clusterItems(
-  items: string[],
-  cells: Map<string, Map<string, MatrixCellData>>
-): string[] {
+function clusterItems(items: string[], cells: Map<string, Map<string, MatrixCellData>>): string[] {
   let currentOrder = [...items];
-  
+
   // Simple heuristic: few iterations of barycenter is sufficient for good clustering
   for (let iter = 0; iter < CLUSTERING_ITERATIONS; iter++) {
     const positions = new Map(currentOrder.map((id, i) => [id, i]));
@@ -109,8 +116,8 @@ function clusterItems(
         if (row) {
           for (const [target, cell] of row.entries()) {
             if (cell.type !== 'none' && cell.type !== 'self') {
-               sum += positions.get(target) || 0;
-               count++;
+              sum += positions.get(target) || 0;
+              count++;
             }
           }
         }
@@ -120,7 +127,7 @@ function clusterItems(
     });
     currentOrder = newOrder;
   }
-  
+
   return currentOrder;
 }
 
@@ -137,7 +144,7 @@ function getTransitiveFlow(
 ): TransitiveSet {
   const ancestors = new Set<string>();
   const descendants = new Set<string>();
-  
+
   // Find Descendants (Downstream): BFS forward writes
   // Matrix logic: row writes to col
   const dQueue = [startNode];
@@ -171,7 +178,6 @@ function getTransitiveFlow(
   return { ancestors, descendants };
 }
 
-
 // ============================================================================
 // Sub-components
 // ============================================================================
@@ -194,207 +200,237 @@ interface MatrixCellProps {
   style: React.CSSProperties;
 }
 
-const MatrixCell = memo(function MatrixCell({
-  cellData,
-  rowName,
-  colName,
-  isRowHovered,
-  isColHovered,
-  isDimmed,
-  intensity,
-  heatmapMode,
-  filterMode,
-  filterText,
-  onHover,
-  onLeave,
-  onClick,
-  subMode,
-  style,
-}: MatrixCellProps) {
-  const isSelf = cellData.type === 'self';
-  const isNone = cellData.type === 'none';
-  const hasDependency = !isSelf && !isNone;
+const MatrixCell = memo(
+  function MatrixCell({
+    cellData,
+    rowName,
+    colName,
+    isRowHovered,
+    isColHovered,
+    isDimmed,
+    intensity,
+    heatmapMode,
+    filterMode,
+    filterText,
+    onHover,
+    onLeave,
+    onClick,
+    subMode,
+    style,
+  }: MatrixCellProps) {
+    const isSelf = cellData.type === 'self';
+    const isNone = cellData.type === 'none';
+    const hasDependency = !isSelf && !isNone;
 
-  const baseClass = "flex items-center justify-center transition-all duration-200 border-r border-b border-slate-100 dark:border-slate-700";
-  
-  const bgClass = useMemo(() => {
-    if (isRowHovered && isColHovered) return "bg-indigo-100 dark:bg-indigo-900/30 ring-1 ring-inset ring-indigo-500 z-10";
-    if (isRowHovered) return "bg-slate-50 dark:bg-slate-800/50";
-    if (isColHovered) return "bg-slate-50 dark:bg-slate-800/50";
-    
-    // Heatmap Logic
-    if (heatmapMode && hasDependency) {
-      return "bg-background"; // Base fallback
-    }
+    const baseClass =
+      'flex items-center justify-center transition-all duration-200 border-r border-b border-slate-100 dark:border-slate-700';
 
-    return "bg-background";
-  }, [isRowHovered, isColHovered, heatmapMode, hasDependency]);
+    const bgClass = useMemo(() => {
+      if (isRowHovered && isColHovered)
+        return 'bg-indigo-100 dark:bg-indigo-900/30 ring-1 ring-inset ring-indigo-500 z-10';
+      if (isRowHovered) return 'bg-slate-50 dark:bg-slate-800/50';
+      if (isColHovered) return 'bg-slate-50 dark:bg-slate-800/50';
 
-  // Dynamic style for heatmap
-  const heatmapStyle = useMemo(() => {
-    if (!heatmapMode || !hasDependency) return {};
-    const alpha = HEATMAP_MIN_ALPHA + (intensity * HEATMAP_ALPHA_RANGE);
-    const color = cellData.type === 'write' ? `rgba(16, 185, 129, ${alpha})` : `rgba(37, 99, 235, ${alpha})`;
-    return { backgroundColor: color };
-  }, [heatmapMode, hasDependency, intensity, cellData.type]);
+      // Heatmap Logic
+      if (heatmapMode && hasDependency) {
+        return 'bg-background'; // Base fallback
+      }
 
-  const content = useMemo(() => {
-    switch (cellData.type) {
-      case 'self':
-        return <Minus className="h-3 w-3 text-slate-300 dark:text-slate-700" />;
-      case 'write':
-        return <ArrowRight className="h-4 w-4 text-emerald-600 dark:text-emerald-400" strokeWidth={2.5} />;
-      case 'read':
-        return <ArrowLeft className="h-4 w-4 text-blue-600 dark:text-blue-400" strokeWidth={2.5} />;
-      case 'none':
-      default:
-        return null;
-    }
-  }, [cellData.type]);
+      return 'bg-background';
+    }, [isRowHovered, isColHovered, heatmapMode, hasDependency]);
 
-  const tooltipContent = useMemo(() => {
-    const displayRowName = getShortName(rowName);
-    const displayColName = getShortName(colName);
+    // Dynamic style for heatmap
+    const heatmapStyle = useMemo(() => {
+      if (!heatmapMode || !hasDependency) return {};
+      const alpha = HEATMAP_MIN_ALPHA + intensity * HEATMAP_ALPHA_RANGE;
+      const color =
+        cellData.type === 'write' ? `rgba(16, 185, 129, ${alpha})` : `rgba(37, 99, 235, ${alpha})`;
+      return { backgroundColor: color };
+    }, [heatmapMode, hasDependency, intensity, cellData.type]);
 
-    if (isSelf) return <div className="text-slate-300 whitespace-nowrap">{displayRowName} (self)</div>;
-    if (isNone) return <div className="text-slate-400 whitespace-nowrap">No dependency</div>;
-
-    const isWrite = cellData.type === 'write';
-
-    // Field Tracing Specific Tooltip
-    if (filterMode === 'fields' && filterText && subMode === 'tables') {
-      const details = cellData.details as TableDependencyWithDetails | undefined;
-      const lowerSearch = filterText.toLowerCase();
-      
-      if (details && details.columns) {
-        // Find matching columns
-        const matchedCols = details.columns.filter(c => 
-          c.source.toLowerCase().includes(lowerSearch) || 
-          c.target.toLowerCase().includes(lowerSearch)
-        );
-
-        if (matchedCols.length > 0) {
+    const content = useMemo(() => {
+      switch (cellData.type) {
+        case 'self':
+          return <Minus className="h-3 w-3 text-slate-300 dark:text-slate-700" />;
+        case 'write':
           return (
-            <div className="space-y-3 min-w-[200px]">
-              <div className="flex items-center justify-between border-b border-white/10 pb-2">
-                <div className="flex items-center gap-2 font-medium text-sm">
-                  <span className="text-slate-400">{isWrite ? displayRowName : displayColName}</span>
-                  <ArrowRight className="h-3.5 w-3.5 text-slate-500" />
-                  <span className="text-white">{isWrite ? displayColName : displayRowName}</span>
+            <ArrowRight
+              className="h-4 w-4 text-emerald-600 dark:text-emerald-400"
+              strokeWidth={2.5}
+            />
+          );
+        case 'read':
+          return (
+            <ArrowLeft className="h-4 w-4 text-blue-600 dark:text-blue-400" strokeWidth={2.5} />
+          );
+        case 'none':
+        default:
+          return null;
+      }
+    }, [cellData.type]);
+
+    const tooltipContent = useMemo(() => {
+      const displayRowName = getShortName(rowName);
+      const displayColName = getShortName(colName);
+
+      if (isSelf)
+        return <div className="text-slate-300 whitespace-nowrap">{displayRowName} (self)</div>;
+      if (isNone) return <div className="text-slate-400 whitespace-nowrap">No dependency</div>;
+
+      const isWrite = cellData.type === 'write';
+
+      // Field Tracing Specific Tooltip
+      if (filterMode === 'fields' && filterText && subMode === 'tables') {
+        const details = cellData.details as TableDependencyWithDetails | undefined;
+        const lowerSearch = filterText.toLowerCase();
+
+        if (details && details.columns) {
+          // Find matching columns
+          const matchedCols = details.columns.filter(
+            (c) =>
+              c.source.toLowerCase().includes(lowerSearch) ||
+              c.target.toLowerCase().includes(lowerSearch)
+          );
+
+          if (matchedCols.length > 0) {
+            return (
+              <div className="space-y-3 min-w-[200px]">
+                <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                  <div className="flex items-center gap-2 font-medium text-sm">
+                    <span className="text-slate-400">
+                      {isWrite ? displayRowName : displayColName}
+                    </span>
+                    <ArrowRight className="h-3.5 w-3.5 text-slate-500" />
+                    <span className="text-white">{isWrite ? displayColName : displayRowName}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  {matchedCols.slice(0, MAX_TOOLTIP_COLUMN_MATCHES).map((col, i) => (
+                    <div key={i} className="text-xs bg-white/5 p-2 rounded border border-white/5">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span
+                          className={cn(
+                            'font-mono text-slate-300',
+                            col.source.toLowerCase().includes(lowerSearch) &&
+                              'text-amber-400 font-bold'
+                          )}
+                        >
+                          {col.source}
+                        </span>
+                        <ArrowRight className="h-3 w-3 text-slate-600" />
+                        <span
+                          className={cn(
+                            'font-mono text-slate-300',
+                            col.target.toLowerCase().includes(lowerSearch) &&
+                              'text-amber-400 font-bold'
+                          )}
+                        >
+                          {col.target}
+                        </span>
+                      </div>
+                      {col.expression && col.expression !== col.target && (
+                        <div className="text-[10px] text-slate-500 font-mono border-t border-white/5 pt-1 mt-1 truncate max-w-[250px]">
+                          = {col.expression}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {matchedCols.length > MAX_TOOLTIP_COLUMN_MATCHES && (
+                    <div className="text-[10px] text-slate-500 italic pl-1">
+                      + {matchedCols.length - MAX_TOOLTIP_COLUMN_MATCHES} more matched columns...
+                    </div>
+                  )}
                 </div>
               </div>
-              
-              <div className="space-y-2">
-                {matchedCols.slice(0, MAX_TOOLTIP_COLUMN_MATCHES).map((col, i) => (
-                  <div key={i} className="text-xs bg-white/5 p-2 rounded border border-white/5">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={cn("font-mono text-slate-300", col.source.toLowerCase().includes(lowerSearch) && "text-amber-400 font-bold")}>
-                        {col.source}
-                      </span>
-                      <ArrowRight className="h-3 w-3 text-slate-600" />
-                      <span className={cn("font-mono text-slate-300", col.target.toLowerCase().includes(lowerSearch) && "text-amber-400 font-bold")}>
-                        {col.target}
-                      </span>
-                    </div>
-                    {col.expression && col.expression !== col.target && (
-                      <div className="text-[10px] text-slate-500 font-mono border-t border-white/5 pt-1 mt-1 truncate max-w-[250px]">
-                        = {col.expression}
-                      </div>
-                    )}
-                  </div>
-                ))}
-                {matchedCols.length > MAX_TOOLTIP_COLUMN_MATCHES && (
-                  <div className="text-[10px] text-slate-500 italic pl-1">
-                    + {matchedCols.length - MAX_TOOLTIP_COLUMN_MATCHES} more matched columns...
-                  </div>
-                )}
-              </div>
-            </div>
-          );
+            );
+          }
         }
       }
-    }
 
-    // Standard Tooltip
-    if (subMode === 'tables') {
-      const details = cellData.details as TableDependencyWithDetails | undefined;
-      return (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 font-medium text-sm whitespace-nowrap">
-            <span className="text-slate-400">{isWrite ? displayRowName : displayColName}</span>
-            <ArrowRight className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-            <span className="text-white">{isWrite ? displayColName : displayRowName}</span>
-          </div>
-          {details && details.columnCount > 0 && (
-            <div className="text-xs text-slate-300 bg-white/10 px-2 py-1.5 rounded border border-white/10 whitespace-nowrap">
-              <span className="font-semibold text-white">{details.columnCount}</span> column{details.columnCount > 1 ? 's' : ''} mapped
+      // Standard Tooltip
+      if (subMode === 'tables') {
+        const details = cellData.details as TableDependencyWithDetails | undefined;
+        return (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 font-medium text-sm whitespace-nowrap">
+              <span className="text-slate-400">{isWrite ? displayRowName : displayColName}</span>
+              <ArrowRight className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+              <span className="text-white">{isWrite ? displayColName : displayRowName}</span>
             </div>
-          )}
-        </div>
-      );
-    } else {
-      const details = cellData.details as ScriptDependency | undefined;
-      return (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 font-medium text-sm whitespace-nowrap">
-            <span className="text-slate-400">{isWrite ? displayRowName : displayColName}</span>
-            <ArrowRight className="h-3.5 w-3.5 text-slate-500 shrink-0" />
-            <span className="text-white">{isWrite ? displayColName : displayRowName}</span>
+            {details && details.columnCount > 0 && (
+              <div className="text-xs text-slate-300 bg-white/10 px-2 py-1.5 rounded border border-white/10 whitespace-nowrap">
+                <span className="font-semibold text-white">{details.columnCount}</span> column
+                {details.columnCount > 1 ? 's' : ''} mapped
+              </div>
+            )}
           </div>
-          {details && (
-            <div className="text-xs text-slate-300 bg-white/10 px-2 py-1.5 rounded border border-white/10 whitespace-nowrap">
-              <span className="font-semibold text-white">Via:</span>{' '}
-              {details.sharedTables.slice(0, 3).join(', ')}
-              {details.sharedTables.length > 3 && '...'}
+        );
+      } else {
+        const details = cellData.details as ScriptDependency | undefined;
+        return (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 font-medium text-sm whitespace-nowrap">
+              <span className="text-slate-400">{isWrite ? displayRowName : displayColName}</span>
+              <ArrowRight className="h-3.5 w-3.5 text-slate-500 shrink-0" />
+              <span className="text-white">{isWrite ? displayColName : displayRowName}</span>
             </div>
-          )}
-        </div>
-      );
-    }
-  }, [cellData, rowName, colName, subMode, isSelf, isNone, filterMode, filterText]);
+            {details && (
+              <div className="text-xs text-slate-300 bg-white/10 px-2 py-1.5 rounded border border-white/10 whitespace-nowrap">
+                <span className="font-semibold text-white">Via:</span>{' '}
+                {details.sharedTables.slice(0, 3).join(', ')}
+                {details.sharedTables.length > 3 && '...'}
+              </div>
+            )}
+          </div>
+        );
+      }
+    }, [cellData, rowName, colName, subMode, isSelf, isNone, filterMode, filterText]);
 
-  return (
-    <GraphTooltip delayDuration={300}>
-      <GraphTooltipTrigger asChild>
-        <div
-          className={cn(
-            baseClass, 
-            bgClass, 
-            hasDependency && "cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800",
-            isDimmed && "opacity-20 grayscale"
-          )}
-          style={{ ...style, ...heatmapStyle }}
-          onMouseEnter={() => onHover(rowName, colName)}
-          onMouseLeave={onLeave}
-          onClick={() => onClick(rowName, colName)}
-          role="gridcell"
-        >
-          {content}
-        </div>
-      </GraphTooltipTrigger>
-      <GraphTooltipPortal>
-        <GraphTooltipContent side="top" className="max-w-none!">
-          {tooltipContent}
-          <GraphTooltipArrow />
-        </GraphTooltipContent>
-      </GraphTooltipPortal>
-    </GraphTooltip>
-  );
-}, (prev, next) => {
-  return (
-    prev.cellData === next.cellData &&
-    prev.isRowHovered === next.isRowHovered &&
-    prev.isColHovered === next.isColHovered &&
-    prev.subMode === next.subMode &&
-    prev.rowName === next.rowName &&
-    prev.colName === next.colName &&
-    prev.isDimmed === next.isDimmed &&
-    prev.intensity === next.intensity &&
-    prev.heatmapMode === next.heatmapMode &&
-    prev.filterMode === next.filterMode && // Added
-    prev.filterText === next.filterText // Added
-  );
-});
+    return (
+      <GraphTooltip delayDuration={300}>
+        <GraphTooltipTrigger asChild>
+          <div
+            className={cn(
+              baseClass,
+              bgClass,
+              hasDependency && 'cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800',
+              isDimmed && 'opacity-20 grayscale'
+            )}
+            style={{ ...style, ...heatmapStyle }}
+            onMouseEnter={() => onHover(rowName, colName)}
+            onMouseLeave={onLeave}
+            onClick={() => onClick(rowName, colName)}
+            role="gridcell"
+          >
+            {content}
+          </div>
+        </GraphTooltipTrigger>
+        <GraphTooltipPortal>
+          <GraphTooltipContent side="top" className="max-w-none!">
+            {tooltipContent}
+            <GraphTooltipArrow />
+          </GraphTooltipContent>
+        </GraphTooltipPortal>
+      </GraphTooltip>
+    );
+  },
+  (prev, next) => {
+    return (
+      prev.cellData === next.cellData &&
+      prev.isRowHovered === next.isRowHovered &&
+      prev.isColHovered === next.isColHovered &&
+      prev.subMode === next.subMode &&
+      prev.rowName === next.rowName &&
+      prev.colName === next.colName &&
+      prev.isDimmed === next.isDimmed &&
+      prev.intensity === next.intensity &&
+      prev.heatmapMode === next.heatmapMode &&
+      prev.filterMode === next.filterMode && // Added
+      prev.filterText === next.filterText // Added
+    );
+  }
+);
 
 // ============================================================================
 // Main Component
@@ -474,16 +510,16 @@ function filterItems({
 }: FilterItemsParams): string[] {
   // 1. Field Trace Filtering
   if (filterMode === 'fields' && matchingFieldNodes) {
-    return items.filter(item => matchingFieldNodes.has(item));
+    return items.filter((item) => matchingFieldNodes.has(item));
   }
   // 2. X-Ray Filtering
   if (xRayMode && xRayFilterMode === 'hide' && activeXRaySet) {
-    return items.filter(item => activeXRaySet.has(item));
+    return items.filter((item) => activeXRaySet.has(item));
   }
   // 3. Text Search (only for matching target mode)
   if (filterMode === targetMode && filterText) {
     const lower = filterText.toLowerCase();
-    return items.filter(item => item.toLowerCase().includes(lower));
+    return items.filter((item) => item.toLowerCase().includes(lower));
   }
 
   return items;
@@ -494,7 +530,10 @@ function useImmediateControlledMatrixState<K extends keyof MatrixViewControlledS
   controlledState: Partial<MatrixViewControlledState> | undefined,
   onStateChange: ((state: Partial<MatrixViewControlledState>) => void) | undefined,
   defaultValue: MatrixViewControlledState[K]
-): [MatrixViewControlledState[K], (value: React.SetStateAction<MatrixViewControlledState[K]>) => void] {
+): [
+  MatrixViewControlledState[K],
+  (value: React.SetStateAction<MatrixViewControlledState[K]>) => void,
+] {
   const controlledValue = controlledState?.[key] as MatrixViewControlledState[K] | undefined;
   const [value, setValue] = useState<MatrixViewControlledState[K]>(() =>
     controlledValue !== undefined ? controlledValue : defaultValue
@@ -515,44 +554,109 @@ function useImmediateControlledMatrixState<K extends keyof MatrixViewControlledS
     }
   }, [controlledValue]);
 
-  const setValueImmediate = useCallback((
-    valueOrUpdater: React.SetStateAction<MatrixViewControlledState[K]>
-  ) => {
-    setValue((prev) => {
-      const nextValue = typeof valueOrUpdater === 'function'
-        ? (valueOrUpdater as (prevState: MatrixViewControlledState[K]) => MatrixViewControlledState[K])(prev)
-        : valueOrUpdater;
+  const setValueImmediate = useCallback(
+    (valueOrUpdater: React.SetStateAction<MatrixViewControlledState[K]>) => {
+      setValue((prev) => {
+        const nextValue =
+          typeof valueOrUpdater === 'function'
+            ? (
+                valueOrUpdater as (
+                  prevState: MatrixViewControlledState[K]
+                ) => MatrixViewControlledState[K]
+              )(prev)
+            : valueOrUpdater;
 
-      onStateChange?.({ [key]: nextValue });
-      return nextValue;
-    });
-  }, [key, onStateChange]);
+        onStateChange?.({ [key]: nextValue });
+        return nextValue;
+      });
+    },
+    [key, onStateChange]
+  );
 
   return [value, setValueImmediate];
 }
 
-export function MatrixView({ className = '', controlledState, onStateChange }: MatrixViewProps): JSX.Element {
+export function MatrixView({
+  className = '',
+  controlledState,
+  onStateChange,
+}: MatrixViewProps): JSX.Element {
   const { state, actions } = useLineage();
   const { result, matrixSubMode } = state;
   const { setMatrixSubMode, highlightSpan, requestNavigation } = actions;
 
   // Immediate local state (mirrors controlled values when provided)
-  const [filterText, setFilterText] = useImmediateControlledMatrixState('filterText', controlledState, onStateChange, '');
-  const [filterMode, setFilterMode] = useImmediateControlledMatrixState('filterMode', controlledState, onStateChange, 'rows');
-  const [heatmapMode, setHeatmapMode] = useImmediateControlledMatrixState('heatmapMode', controlledState, onStateChange, false);
-  const [xRayMode, setXRayMode] = useImmediateControlledMatrixState('xRayMode', controlledState, onStateChange, false);
-  const [xRayFilterMode, setXRayFilterMode] = useImmediateControlledMatrixState('xRayFilterMode', controlledState, onStateChange, 'dim');
-  const [clusterMode, setClusterMode] = useImmediateControlledMatrixState('clusterMode', controlledState, onStateChange, false);
-  const [complexityMode, setComplexityMode] = useImmediateControlledMatrixState('complexityMode', controlledState, onStateChange, false);
-  const [showLegend, setShowLegend] = useImmediateControlledMatrixState('showLegend', controlledState, onStateChange, true);
-  const [focusedNode, setFocusedNode] = useImmediateControlledMatrixState('focusedNode', controlledState, onStateChange, null);
-  const [firstColumnWidth, setFirstColumnWidth] = useImmediateControlledMatrixState('firstColumnWidth', controlledState, onStateChange, DEFAULT_FIRST_COLUMN_WIDTH);
-  const [headerHeight, setHeaderHeight] = useImmediateControlledMatrixState('headerHeight', controlledState, onStateChange, DEFAULT_HEADER_HEIGHT);
+  const [filterText, setFilterText] = useImmediateControlledMatrixState(
+    'filterText',
+    controlledState,
+    onStateChange,
+    ''
+  );
+  const [filterMode, setFilterMode] = useImmediateControlledMatrixState(
+    'filterMode',
+    controlledState,
+    onStateChange,
+    'rows'
+  );
+  const [heatmapMode, setHeatmapMode] = useImmediateControlledMatrixState(
+    'heatmapMode',
+    controlledState,
+    onStateChange,
+    false
+  );
+  const [xRayMode, setXRayMode] = useImmediateControlledMatrixState(
+    'xRayMode',
+    controlledState,
+    onStateChange,
+    false
+  );
+  const [xRayFilterMode, setXRayFilterMode] = useImmediateControlledMatrixState(
+    'xRayFilterMode',
+    controlledState,
+    onStateChange,
+    'dim'
+  );
+  const [clusterMode, setClusterMode] = useImmediateControlledMatrixState(
+    'clusterMode',
+    controlledState,
+    onStateChange,
+    false
+  );
+  const [complexityMode, setComplexityMode] = useImmediateControlledMatrixState(
+    'complexityMode',
+    controlledState,
+    onStateChange,
+    false
+  );
+  const [showLegend, setShowLegend] = useImmediateControlledMatrixState(
+    'showLegend',
+    controlledState,
+    onStateChange,
+    true
+  );
+  const [focusedNode, setFocusedNode] = useImmediateControlledMatrixState(
+    'focusedNode',
+    controlledState,
+    onStateChange,
+    null
+  );
+  const [firstColumnWidth, setFirstColumnWidth] = useImmediateControlledMatrixState(
+    'firstColumnWidth',
+    controlledState,
+    onStateChange,
+    DEFAULT_FIRST_COLUMN_WIDTH
+  );
+  const [headerHeight, setHeaderHeight] = useImmediateControlledMatrixState(
+    'headerHeight',
+    controlledState,
+    onStateChange,
+    DEFAULT_HEADER_HEIGHT
+  );
 
   const debouncedFilterText = useDebounce(filterText, SEARCH_DEBOUNCE_DELAY);
   const [hoveredCell, setHoveredCell] = useState<{ row: string; col: string } | null>(null);
   const [resizingMode, setResizingMode] = useState<'none' | 'column' | 'header'>('none');
-  
+
   // Autocomplete
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
@@ -561,35 +665,48 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
   const activeOptionId = useId();
   const matrixBuildStartRef = useRef<number | null>(null);
   const matrixPayloadSetAtRef = useRef<number | null>(null);
-  
+
   const resizeStartPos = useRef(0);
   const resizeStartSize = useRef(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Resize logic
-  const handleColumnResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    setResizingMode('column');
-    resizeStartPos.current = e.clientX;
-    resizeStartSize.current = firstColumnWidth;
-  }, [firstColumnWidth]);
+  const handleColumnResizeStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      setResizingMode('column');
+      resizeStartPos.current = e.clientX;
+      resizeStartSize.current = firstColumnWidth;
+    },
+    [firstColumnWidth]
+  );
 
-  const handleHeaderResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    setResizingMode('header');
-    resizeStartPos.current = e.clientY;
-    resizeStartSize.current = headerHeight;
-  }, [headerHeight]);
+  const handleHeaderResizeStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      setResizingMode('header');
+      resizeStartPos.current = e.clientY;
+      resizeStartSize.current = headerHeight;
+    },
+    [headerHeight]
+  );
 
   useEffect(() => {
     if (resizingMode === 'none') return;
     const handleMouseMove = (e: MouseEvent) => {
       if (resizingMode === 'column') {
         const delta = e.clientX - resizeStartPos.current;
-        setFirstColumnWidth(Math.min(MAX_FIRST_COLUMN_WIDTH, Math.max(MIN_FIRST_COLUMN_WIDTH, resizeStartSize.current + delta)));
+        setFirstColumnWidth(
+          Math.min(
+            MAX_FIRST_COLUMN_WIDTH,
+            Math.max(MIN_FIRST_COLUMN_WIDTH, resizeStartSize.current + delta)
+          )
+        );
       } else if (resizingMode === 'header') {
         const delta = e.clientY - resizeStartPos.current;
-        setHeaderHeight(Math.min(MAX_HEADER_HEIGHT, Math.max(MIN_HEADER_HEIGHT, resizeStartSize.current + delta)));
+        setHeaderHeight(
+          Math.min(MAX_HEADER_HEIGHT, Math.max(MIN_HEADER_HEIGHT, resizeStartSize.current + delta))
+        );
       }
     };
     const handleMouseUp = () => setResizingMode('none');
@@ -624,7 +741,9 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
         if (cancelled) return;
         const receivedAt = performance.now();
         if (MATRIX_DEBUG && matrixBuildStartRef.current !== null) {
-          console.log(`[MatrixView] Worker payload received in ${(receivedAt - matrixBuildStartRef.current).toFixed(1)}ms`);
+          console.log(
+            `[MatrixView] Worker payload received in ${(receivedAt - matrixBuildStartRef.current).toFixed(1)}ms`
+          );
         }
         matrixPayloadSetAtRef.current = receivedAt;
         // Update loading state immediately (urgent) so spinner disappears
@@ -735,7 +854,6 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
 
   const maxIntensity = matrixMetrics.maxIntensity || 1;
 
-
   // Field Tracing Logic (uses debounced text for expensive computation)
   const matchingFieldNodes = useMemo(() => {
     if (!debouncedFilterText || filterMode !== 'fields') return null;
@@ -746,22 +864,22 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
     for (const [rowId, rowCells] of fullMatrixData.cells) {
       for (const [colId, cell] of rowCells) {
         if (cell.type === 'write' || cell.type === 'read') {
-           // Check Table Dependencies
-           if (matrixSubMode === 'tables') {
-             const details = cell.details as TableDependencyWithDetails;
-             if (details && details.columns) {
-               const hasMatch = details.columns.some(c =>
-                 c.source.toLowerCase().includes(lower) ||
-                 c.target.toLowerCase().includes(lower)
-               );
-               if (hasMatch) {
-                 matchedNodes.add(rowId);
-                 matchedNodes.add(colId);
-               }
-             }
-           }
-           // Check Script Dependencies (if we had column data, which we don't usually, but scripts touch tables)
-           // For now, field search is primary for Table mode.
+          // Check Table Dependencies
+          if (matrixSubMode === 'tables') {
+            const details = cell.details as TableDependencyWithDetails;
+            if (details && details.columns) {
+              const hasMatch = details.columns.some(
+                (c) =>
+                  c.source.toLowerCase().includes(lower) || c.target.toLowerCase().includes(lower)
+              );
+              if (hasMatch) {
+                matchedNodes.add(rowId);
+                matchedNodes.add(colId);
+              }
+            }
+          }
+          // Check Script Dependencies (if we had column data, which we don't usually, but scripts touch tables)
+          // For now, field search is primary for Table mode.
         }
       }
     }
@@ -794,7 +912,15 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
       }
     }
     return result;
-  }, [sortedItems, debouncedFilterText, filterMode, matchingFieldNodes, xRayMode, xRayFilterMode, activeXRaySet]);
+  }, [
+    sortedItems,
+    debouncedFilterText,
+    filterMode,
+    matchingFieldNodes,
+    xRayMode,
+    xRayFilterMode,
+    activeXRaySet,
+  ]);
 
   const filteredColumnItems = useMemo(() => {
     const start = MATRIX_DEBUG ? performance.now() : 0;
@@ -815,7 +941,15 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
       }
     }
     return result;
-  }, [sortedItems, debouncedFilterText, filterMode, matchingFieldNodes, xRayMode, xRayFilterMode, activeXRaySet]);
+  }, [
+    sortedItems,
+    debouncedFilterText,
+    filterMode,
+    matchingFieldNodes,
+    xRayMode,
+    xRayFilterMode,
+    activeXRaySet,
+  ]);
 
   useEffect(() => {
     if (!MATRIX_DEBUG) return;
@@ -837,14 +971,16 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
     const start = MATRIX_DEBUG ? performance.now() : 0;
     const lower = filterText.toLowerCase();
     let source: string[] = [];
-    
+
     if (filterMode === 'fields') {
-       source = allColumnNames;
+      source = allColumnNames;
     } else {
-       source = sortedItems.map(getShortName);
+      source = sortedItems.map(getShortName);
     }
-    
-    const matches = Array.from(new Set(source.filter(s => s.toLowerCase().includes(lower)))).slice(0, MAX_AUTOCOMPLETE_SUGGESTIONS);
+
+    const matches = Array.from(
+      new Set(source.filter((s) => s.toLowerCase().includes(lower)))
+    ).slice(0, MAX_AUTOCOMPLETE_SUGGESTIONS);
     if (MATRIX_DEBUG) {
       const duration = performance.now() - start;
       if (duration > 8) {
@@ -858,10 +994,10 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
   const handleSearchKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setActiveSuggestionIndex(prev => Math.min(prev + 1, suggestions.length - 1));
+      setActiveSuggestionIndex((prev) => Math.min(prev + 1, suggestions.length - 1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setActiveSuggestionIndex(prev => Math.max(prev - 1, 0));
+      setActiveSuggestionIndex((prev) => Math.max(prev - 1, 0));
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (suggestions.length > 0) {
@@ -881,7 +1017,7 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
   };
 
   useEffect(() => {
-    setActiveSuggestionIndex(prev => {
+    setActiveSuggestionIndex((prev) => {
       if (suggestionCount === 0) {
         return 0;
       }
@@ -897,7 +1033,10 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
   // Close suggestions when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+      if (
+        searchContainerRef.current &&
+        !searchContainerRef.current.contains(event.target as Node)
+      ) {
         setShowSuggestions(false);
       }
     };
@@ -905,34 +1044,42 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleCellClick = useCallback((rowName: string, colName: string) => {
-    const cellData = fullMatrixData.cells.get(rowName)?.get(colName);
-    if (!cellData || cellData.type === 'self' || cellData.type === 'none') return;
+  const handleCellClick = useCallback(
+    (rowName: string, colName: string) => {
+      const cellData = fullMatrixData.cells.get(rowName)?.get(colName);
+      if (!cellData || cellData.type === 'self' || cellData.type === 'none') return;
 
-    if (matrixSubMode === 'tables') {
-      const details = cellData.details as TableDependencyWithDetails | undefined;
-      if (details?.spans.length) highlightSpan(details.spans[0]);
-    } else {
-      const details = cellData.details as ScriptDependency | undefined;
-      if (details) {
-        requestNavigation({
-          sourceName: details.sourceScript,
-          targetName: details.sharedTables[0],
-          targetType: 'table',
-        });
+      if (matrixSubMode === 'tables') {
+        const details = cellData.details as TableDependencyWithDetails | undefined;
+        if (details?.spans.length) highlightSpan(details.spans[0]);
+      } else {
+        const details = cellData.details as ScriptDependency | undefined;
+        if (details) {
+          requestNavigation({
+            sourceName: details.sourceScript,
+            targetName: details.sharedTables[0],
+            targetType: 'table',
+          });
+        }
       }
-    }
-  }, [fullMatrixData, matrixSubMode, highlightSpan, requestNavigation]);
-  
+    },
+    [fullMatrixData, matrixSubMode, highlightSpan, requestNavigation]
+  );
+
   // Toggle Focus
   const toggleFocus = (node: string) => {
     if (!xRayMode) return;
-    setFocusedNode(prev => prev === node ? null : node);
+    setFocusedNode((prev) => (prev === node ? null : node));
   };
 
   if (!result) {
     return (
-      <div className={cn("flex flex-col items-center justify-center h-full text-slate-400 gap-4", className)}>
+      <div
+        className={cn(
+          'flex flex-col items-center justify-center h-full text-slate-400 gap-4',
+          className
+        )}
+      >
         <Database className="h-12 w-12 opacity-20" />
         <p>No analysis result available</p>
       </div>
@@ -941,7 +1088,12 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
 
   if (matrixError) {
     return (
-      <div className={cn("flex flex-col items-center justify-center h-full text-slate-400 gap-4", className)}>
+      <div
+        className={cn(
+          'flex flex-col items-center justify-center h-full text-slate-400 gap-4',
+          className
+        )}
+      >
         <Database className="h-12 w-12 opacity-20" />
         <p>{matrixError}</p>
       </div>
@@ -950,7 +1102,12 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
 
   if (isMatrixLoading || !matrixPayload) {
     return (
-      <div className={cn("flex flex-col items-center justify-center h-full text-slate-400 gap-3", className)}>
+      <div
+        className={cn(
+          'flex flex-col items-center justify-center h-full text-slate-400 gap-3',
+          className
+        )}
+      >
         <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
         <p>Building matrix...</p>
       </div>
@@ -961,52 +1118,58 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
 
   return (
     <GraphTooltipProvider>
-      <div className={cn("flex flex-col h-full bg-background", className)}>
+      <div className={cn('flex flex-col h-full bg-background', className)}>
         {/* Toolbar */}
         <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800 bg-background z-40 gap-4">
           <div className={`${PANEL_STYLES.selector} shrink-0`}>
             <button
-              onClick={() => { setMatrixSubMode('scripts'); setFocusedNode(null); }}
+              onClick={() => {
+                setMatrixSubMode('scripts');
+                setFocusedNode(null);
+              }}
               className={cn(
-                "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full px-3 h-7 text-sm font-medium transition-all duration-200",
+                'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full px-3 h-7 text-sm font-medium transition-all duration-200',
                 matrixSubMode === 'scripts'
-                  ? "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100"
-                  : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                  ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100'
+                  : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
               )}
             >
               <FileCode className="size-4" />
               <span>Scripts</span>
             </button>
             <button
-              onClick={() => { setMatrixSubMode('tables'); setFocusedNode(null); }}
+              onClick={() => {
+                setMatrixSubMode('tables');
+                setFocusedNode(null);
+              }}
               className={cn(
-                "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full px-3 h-7 text-sm font-medium transition-all duration-200",
+                'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full px-3 h-7 text-sm font-medium transition-all duration-200',
                 matrixSubMode === 'tables'
-                  ? "bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100"
-                  : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                  ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100'
+                  : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
               )}
             >
               <Table2 className="size-4" />
               <span>Tables</span>
             </button>
           </div>
-          
+
           <div className="flex items-center gap-2 border-l border-slate-200 dark:border-slate-800 pl-4">
-             {/* X-Ray Toggle */}
-             <GraphTooltip delayDuration={300}>
+            {/* X-Ray Toggle */}
+            <GraphTooltip delayDuration={300}>
               <GraphTooltipTrigger asChild>
                 <button
                   onClick={() => {
-                     setXRayMode(!xRayMode);
-                     setFocusedNode(null);
+                    setXRayMode(!xRayMode);
+                    setFocusedNode(null);
                   }}
                   aria-label="Toggle X-Ray Mode"
                   aria-pressed={xRayMode}
                   className={cn(
-                    "p-1.5 rounded-md transition-all flex items-center gap-1",
+                    'p-1.5 rounded-md transition-all flex items-center gap-1',
                     xRayMode
-                      ? "bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 ring-1 ring-purple-500"
-                      : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                      ? 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 ring-1 ring-purple-500'
+                      : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                   )}
                 >
                   <Zap className="h-4 w-4" />
@@ -1015,10 +1178,18 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
               <GraphTooltipPortal>
                 <GraphTooltipContent side="bottom" className="text-xs">
                   <div className="font-semibold text-slate-100">Impact X-Ray Mode</div>
-                  <div className="text-slate-400">Click a row/col header to highlight lineage flow.</div>
+                  <div className="text-slate-400">
+                    Click a row/col header to highlight lineage flow.
+                  </div>
                   <div className="mt-1 flex flex-col gap-1 text-[10px]">
-                    <div className="flex items-center gap-1.5"><div className="w-2 h-2 bg-blue-500 rounded-full"/>Ancestors (Upstream)</div>
-                    <div className="flex items-center gap-1.5"><div className="w-2 h-2 bg-emerald-500 rounded-full"/>Descendants (Downstream)</div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full" />
+                      Ancestors (Upstream)
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-2 h-2 bg-emerald-500 rounded-full" />
+                      Descendants (Downstream)
+                    </div>
                   </div>
                 </GraphTooltipContent>
               </GraphTooltipPortal>
@@ -1029,24 +1200,30 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
               <GraphTooltip delayDuration={300}>
                 <GraphTooltipTrigger asChild>
                   <button
-                    onClick={() => setXRayFilterMode(prev => prev === 'dim' ? 'hide' : 'dim')}
-                    aria-label={xRayFilterMode === 'hide' ? 'Switch to dim mode' : 'Switch to hide mode'}
+                    onClick={() => setXRayFilterMode((prev) => (prev === 'dim' ? 'hide' : 'dim'))}
+                    aria-label={
+                      xRayFilterMode === 'hide' ? 'Switch to dim mode' : 'Switch to hide mode'
+                    }
                     className={cn(
-                      "p-1.5 rounded-md transition-all",
+                      'p-1.5 rounded-md transition-all',
                       xRayFilterMode === 'hide'
-                        ? "bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400"
-                        : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                        ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400'
+                        : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                     )}
                   >
-                    {xRayFilterMode === 'hide' ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                    {xRayFilterMode === 'hide' ? (
+                      <Minimize2 className="h-4 w-4" />
+                    ) : (
+                      <Maximize2 className="h-4 w-4" />
+                    )}
                   </button>
                 </GraphTooltipTrigger>
                 <GraphTooltipPortal>
-                   <GraphTooltipContent side="bottom" className="text-xs">
+                  <GraphTooltipContent side="bottom" className="text-xs">
                     <div className="font-semibold text-slate-100">X-Ray Visibility</div>
                     <div className="text-slate-400">
-                      {xRayFilterMode === 'hide' 
-                        ? 'Focus View: Hiding unrelated rows/cols' 
+                      {xRayFilterMode === 'hide'
+                        ? 'Focus View: Hiding unrelated rows/cols'
                         : 'Context View: Dimming unrelated rows/cols'}
                     </div>
                   </GraphTooltipContent>
@@ -1055,17 +1232,17 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
             )}
 
             {/* Heatmap Toggle */}
-             <GraphTooltip delayDuration={300}>
+            <GraphTooltip delayDuration={300}>
               <GraphTooltipTrigger asChild>
                 <button
                   onClick={() => setHeatmapMode(!heatmapMode)}
                   aria-label="Toggle Heatmap Mode"
                   aria-pressed={heatmapMode}
                   className={cn(
-                    "p-1.5 rounded-md transition-all",
+                    'p-1.5 rounded-md transition-all',
                     heatmapMode
-                      ? "bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400 ring-1 ring-orange-500"
-                      : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                      ? 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400 ring-1 ring-orange-500'
+                      : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                   )}
                 >
                   <Activity className="h-4 w-4" />
@@ -1075,23 +1252,25 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
                 <GraphTooltipContent side="bottom" className="text-xs">
                   <div className="font-semibold text-slate-100">Dependency Heatmap</div>
                   <div className="text-slate-400">Color intensity shows connection strength.</div>
-                  <div className="text-slate-500 text-[10px] mt-1">Based on column mapping count.</div>
+                  <div className="text-slate-500 text-[10px] mt-1">
+                    Based on column mapping count.
+                  </div>
                 </GraphTooltipContent>
               </GraphTooltipPortal>
             </GraphTooltip>
 
-             {/* Clustering Toggle */}
-             <GraphTooltip delayDuration={300}>
+            {/* Clustering Toggle */}
+            <GraphTooltip delayDuration={300}>
               <GraphTooltipTrigger asChild>
                 <button
                   onClick={() => setClusterMode(!clusterMode)}
                   aria-label="Toggle Clustering Mode"
                   aria-pressed={clusterMode}
                   className={cn(
-                    "p-1.5 rounded-md transition-all",
-                    clusterMode 
-                      ? "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 ring-1 ring-blue-500" 
-                      : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                    'p-1.5 rounded-md transition-all',
+                    clusterMode
+                      ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 ring-1 ring-blue-500'
+                      : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                   )}
                 >
                   <Shuffle className="h-4 w-4" />
@@ -1113,10 +1292,10 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
                   aria-label="Toggle Complexity Margins"
                   aria-pressed={complexityMode}
                   className={cn(
-                    "p-1.5 rounded-md transition-all",
+                    'p-1.5 rounded-md transition-all',
                     complexityMode
-                      ? "bg-teal-100 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400 ring-1 ring-teal-500"
-                      : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                      ? 'bg-teal-100 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400 ring-1 ring-teal-500'
+                      : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                   )}
                 >
                   <BarChart2 className="h-4 w-4" />
@@ -1156,7 +1335,10 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
             className="relative group ml-auto flex items-center rounded-full border border-slate-200/60 dark:border-slate-700/60 bg-white/95 dark:bg-slate-900/95 h-9 shadow-xs backdrop-blur-xs"
             ref={searchContainerRef}
           >
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none z-10" strokeWidth={1.5} />
+            <Search
+              className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none z-10"
+              strokeWidth={1.5}
+            />
             <input
               type="text"
               placeholder={`Filter ${filterMode}...`}
@@ -1171,7 +1353,11 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
               aria-expanded={showSuggestions && (suggestions.length > 0 || filterText.length > 0)}
               aria-haspopup="listbox"
               aria-controls={suggestionsListId}
-              aria-activedescendant={showSuggestions && suggestions.length > 0 ? `${activeOptionId}-${activeSuggestionIndex}` : undefined}
+              aria-activedescendant={
+                showSuggestions && suggestions.length > 0
+                  ? `${activeOptionId}-${activeSuggestionIndex}`
+                  : undefined
+              }
               aria-autocomplete="list"
               data-matrix-search-input
               className="h-7 pl-8 pr-24 text-sm bg-transparent border-0 rounded-full focus:outline-hidden focus:ring-0 w-64 placeholder:text-slate-400"
@@ -1193,10 +1379,10 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
                       role="option"
                       aria-selected={index === activeSuggestionIndex}
                       className={cn(
-                        "w-full text-left px-3 py-2 text-sm transition-colors flex items-center gap-2",
+                        'w-full text-left px-3 py-2 text-sm transition-colors flex items-center gap-2',
                         index === activeSuggestionIndex
-                          ? "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300"
-                          : "text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                          ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300'
+                          : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
                       )}
                       onClick={() => {
                         setFilterText(suggestion);
@@ -1206,8 +1392,10 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
                     >
                       {filterMode === 'fields' ? (
                         <ScanLine className="h-3 w-3 opacity-50" />
+                      ) : matrixSubMode === 'scripts' ? (
+                        <FileCode className="h-3 w-3 opacity-50" />
                       ) : (
-                        matrixSubMode === 'scripts' ? <FileCode className="h-3 w-3 opacity-50" /> : <Table2 className="h-3 w-3 opacity-50" />
+                        <Table2 className="h-3 w-3 opacity-50" />
                       )}
                       <span className="truncate">{suggestion}</span>
                     </button>
@@ -1232,10 +1420,10 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
                 aria-label="Filter rows"
                 aria-pressed={filterMode === 'rows'}
                 className={cn(
-                  "p-1 rounded-full transition-all",
+                  'p-1 rounded-full transition-all',
                   filterMode === 'rows'
-                    ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-xs"
-                    : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-xs'
+                    : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
                 )}
               >
                 <Rows3 className="h-3.5 w-3.5" />
@@ -1251,10 +1439,10 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
                 aria-label="Filter columns"
                 aria-pressed={filterMode === 'columns'}
                 className={cn(
-                  "p-1 rounded-full transition-all",
+                  'p-1 rounded-full transition-all',
                   filterMode === 'columns'
-                    ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-xs"
-                    : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-xs'
+                    : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
                 )}
               >
                 <Columns3 className="h-3.5 w-3.5" />
@@ -1270,10 +1458,10 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
                 aria-label="Trace column fields"
                 aria-pressed={filterMode === 'fields'}
                 className={cn(
-                  "p-1 rounded-full transition-all",
+                  'p-1 rounded-full transition-all',
                   filterMode === 'fields'
-                    ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-xs"
-                    : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-xs'
+                    : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
                 )}
               >
                 <ScanLine className="h-3.5 w-3.5" />
@@ -1284,7 +1472,8 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
 
         {limitInfo && limitInfo.total > limitInfo.shown && (
           <div className="px-4 py-2 text-xs text-slate-500 border-b border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/30">
-            Showing top {limitInfo.shown} of {limitInfo.total} {limitInfo.label}. Refine filters to narrow results.
+            Showing top {limitInfo.shown} of {limitInfo.total} {limitInfo.label}. Refine filters to
+            narrow results.
           </div>
         )}
 
@@ -1293,7 +1482,7 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
           <div className="flex-1 flex flex-col items-center justify-center text-slate-400 gap-3">
             <Filter className="h-10 w-10 opacity-20" />
             <p>No items match your filter</p>
-            <button 
+            <button
               onClick={() => setFilterText('')}
               className="text-indigo-600 hover:text-indigo-700 text-sm font-medium"
             >
@@ -1301,35 +1490,41 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
             </button>
           </div>
         ) : (
-          <div 
-            className={cn("flex-1 overflow-auto relative custom-scrollbar", resizingMode !== 'none' && (resizingMode === 'column' ? "select-none cursor-col-resize" : "select-none cursor-row-resize"))}
+          <div
+            className={cn(
+              'flex-1 overflow-auto relative custom-scrollbar',
+              resizingMode !== 'none' &&
+                (resizingMode === 'column'
+                  ? 'select-none cursor-col-resize'
+                  : 'select-none cursor-row-resize')
+            )}
             ref={scrollContainerRef}
           >
             <div
               className="grid"
               style={{
                 gridTemplateColumns: `${firstColumnWidth}px repeat(${filteredColumnItems.length}, ${CELL_WIDTH}px)`,
-                minWidth: 'min-content'
+                minWidth: 'min-content',
               }}
               role="grid"
             >
               {/* Top Left Corner */}
-              <div 
+              <div
                 className="sticky top-0 left-0 z-30 bg-background border-b border-r border-slate-200 dark:border-slate-600 shadow-[2px_2px_10px_rgba(0,0,0,0.05)]"
                 style={{ height: headerHeight }}
               >
-                 <div
+                <div
                   onMouseDown={handleColumnResizeStart}
                   className={cn(
-                    "absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 transition-colors z-40",
-                    resizingMode === 'column' ? "bg-indigo-500" : "bg-transparent"
+                    'absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 transition-colors z-40',
+                    resizingMode === 'column' ? 'bg-indigo-500' : 'bg-transparent'
                   )}
                 />
-                 <div
+                <div
                   onMouseDown={handleHeaderResizeStart}
                   className={cn(
-                    "absolute bottom-0 left-0 right-0 h-1 cursor-row-resize hover:bg-indigo-400 transition-colors z-40",
-                    resizingMode === 'header' ? "bg-indigo-500" : "bg-transparent"
+                    'absolute bottom-0 left-0 right-0 h-1 cursor-row-resize hover:bg-indigo-400 transition-colors z-40',
+                    resizingMode === 'header' ? 'bg-indigo-500' : 'bg-transparent'
                   )}
                 />
               </div>
@@ -1337,56 +1532,58 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
               {/* Column Headers */}
               {filteredColumnItems.map((item) => {
                 const isFocused = focusedNode === item;
-                
+
                 const isAncestor = transitiveFlow?.ancestors.has(item);
                 const isDescendant = transitiveFlow?.descendants.has(item);
                 const isRelated = isAncestor || isDescendant;
-                
+
                 // Dim if X-Ray on, node selected, and this is NOT involved
                 const isDimmed = xRayMode && focusedNode && !isRelated && !isFocused;
 
                 // Complexity
                 const fanIn = matrixMetrics.colCounts.get(item) || 0;
-                const complexityPct = matrixMetrics.maxCol ? (fanIn / matrixMetrics.maxCol) * 100 : 0;
+                const complexityPct = matrixMetrics.maxCol
+                  ? (fanIn / matrixMetrics.maxCol) * 100
+                  : 0;
 
                 return (
                   <div
                     key={`col-${item}`}
                     className={cn(
-                      "sticky top-0 z-20 bg-background border-b border-r border-slate-200 dark:border-slate-600 shadow-xs group cursor-pointer transition-colors duration-200 relative",
-                      hoveredCell?.col === item && "bg-slate-50 dark:bg-slate-900",
-                      
+                      'sticky top-0 z-20 bg-background border-b border-r border-slate-200 dark:border-slate-600 shadow-xs group cursor-pointer transition-colors duration-200 relative',
+                      hoveredCell?.col === item && 'bg-slate-50 dark:bg-slate-900',
+
                       // Highlight logic
-                      isFocused && "bg-purple-100 dark:bg-purple-900/40",
-                      isAncestor && "bg-blue-50 dark:bg-blue-900/20",
-                      isDescendant && "bg-emerald-50 dark:bg-emerald-900/20",
-                      
-                      isDimmed && "opacity-20 grayscale"
+                      isFocused && 'bg-purple-100 dark:bg-purple-900/40',
+                      isAncestor && 'bg-blue-50 dark:bg-blue-900/20',
+                      isDescendant && 'bg-emerald-50 dark:bg-emerald-900/20',
+
+                      isDimmed && 'opacity-20 grayscale'
                     )}
                     style={{ height: headerHeight }}
                     onClick={() => toggleFocus(item)}
-                    title={xRayMode ? "Click to focus X-Ray" : item}
+                    title={xRayMode ? 'Click to focus X-Ray' : item}
                   >
                     {/* Complexity Bar (Vertical, growing from bottom) */}
                     {complexityMode && complexityPct > 0 && (
-                      <div 
+                      <div
                         className="absolute bottom-0 left-0 right-0 bg-emerald-500/10 dark:bg-emerald-400/10 transition-all z-0"
                         style={{ height: `${complexityPct}%` }}
                       />
                     )}
 
                     <div className="w-full h-full flex items-end justify-center pb-2 relative z-10">
-                      <span 
+                      <span
                         className={cn(
-                          "block text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors whitespace-nowrap overflow-hidden text-ellipsis",
-                          isFocused && "text-purple-700 dark:text-purple-300 font-bold",
-                          isAncestor && "text-blue-600 dark:text-blue-400 font-semibold",
-                          isDescendant && "text-emerald-600 dark:text-emerald-400 font-semibold"
+                          'block text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors whitespace-nowrap overflow-hidden text-ellipsis',
+                          isFocused && 'text-purple-700 dark:text-purple-300 font-bold',
+                          isAncestor && 'text-blue-600 dark:text-blue-400 font-semibold',
+                          isDescendant && 'text-emerald-600 dark:text-emerald-400 font-semibold'
                         )}
                         style={{
-                            writingMode: 'vertical-rl',
-                            transform: 'rotate(180deg)',
-                            maxHeight: '100%',
+                          writingMode: 'vertical-rl',
+                          transform: 'rotate(180deg)',
+                          maxHeight: '100%',
                         }}
                       >
                         {getShortName(item)}
@@ -1406,40 +1603,42 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
 
                 // Complexity
                 const fanOut = matrixMetrics.rowCounts.get(rowItem) || 0;
-                const complexityPct = matrixMetrics.maxRow ? (fanOut / matrixMetrics.maxRow) * 100 : 0;
+                const complexityPct = matrixMetrics.maxRow
+                  ? (fanOut / matrixMetrics.maxRow) * 100
+                  : 0;
 
                 return (
                   <React.Fragment key={`row-${rowItem}`}>
                     {/* Row Header */}
                     <div
                       className={cn(
-                        "sticky left-0 z-20 bg-background border-b border-r border-slate-200 dark:border-slate-600 px-3 flex items-center shadow-[2px_0_5px_rgba(0,0,0,0.02)] cursor-pointer transition-colors duration-200 relative",
-                        hoveredCell?.row === rowItem && "bg-slate-50 dark:bg-slate-900",
-                        
-                        isFocused && "bg-purple-100 dark:bg-purple-900/40",
-                        isAncestor && "bg-blue-50 dark:bg-blue-900/20",
-                        isDescendant && "bg-emerald-50 dark:bg-emerald-900/20",
-                        
-                        isDimmed && "opacity-20 grayscale"
+                        'sticky left-0 z-20 bg-background border-b border-r border-slate-200 dark:border-slate-600 px-3 flex items-center shadow-[2px_0_5px_rgba(0,0,0,0.02)] cursor-pointer transition-colors duration-200 relative',
+                        hoveredCell?.row === rowItem && 'bg-slate-50 dark:bg-slate-900',
+
+                        isFocused && 'bg-purple-100 dark:bg-purple-900/40',
+                        isAncestor && 'bg-blue-50 dark:bg-blue-900/20',
+                        isDescendant && 'bg-emerald-50 dark:bg-emerald-900/20',
+
+                        isDimmed && 'opacity-20 grayscale'
                       )}
                       style={{ height: CELL_HEIGHT }}
                       onClick={() => toggleFocus(rowItem)}
-                      title={xRayMode ? "Click to focus X-Ray" : rowItem}
+                      title={xRayMode ? 'Click to focus X-Ray' : rowItem}
                     >
                       {/* Complexity Bar (Horizontal, growing from left) */}
                       {complexityMode && complexityPct > 0 && (
-                        <div 
+                        <div
                           className="absolute top-0 bottom-0 left-0 bg-blue-500/10 dark:bg-blue-400/10 transition-all z-0"
                           style={{ width: `${complexityPct}%` }}
                         />
                       )}
 
-                      <span 
+                      <span
                         className={cn(
-                          "text-xs font-medium text-slate-700 dark:text-slate-300 truncate w-full relative z-10",
-                          isFocused && "text-purple-700 dark:text-purple-300 font-bold",
-                          isAncestor && "text-blue-600 dark:text-blue-400 font-semibold",
-                          isDescendant && "text-emerald-600 dark:text-emerald-400 font-semibold"
+                          'text-xs font-medium text-slate-700 dark:text-slate-300 truncate w-full relative z-10',
+                          isFocused && 'text-purple-700 dark:text-purple-300 font-bold',
+                          isAncestor && 'text-blue-600 dark:text-blue-400 font-semibold',
+                          isDescendant && 'text-emerald-600 dark:text-emerald-400 font-semibold'
                         )}
                       >
                         {getShortName(rowItem)}
@@ -1447,8 +1646,8 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
                       <div
                         onMouseDown={handleColumnResizeStart}
                         className={cn(
-                          "absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 transition-colors z-40",
-                          resizingMode === 'column' ? "bg-indigo-500" : "bg-transparent"
+                          'absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 transition-colors z-40',
+                          resizingMode === 'column' ? 'bg-indigo-500' : 'bg-transparent'
                         )}
                       />
                     </div>
@@ -1457,12 +1656,13 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
                     {filteredColumnItems.map((colItem) => {
                       const cellData = fullMatrixData.cells.get(rowItem)?.get(colItem);
                       if (!cellData) return <div key={`${rowItem}-${colItem}`} />;
-                      
+
                       let cellIntensity = 0;
                       if (heatmapMode) {
                         let count = 0;
                         if (matrixSubMode === 'tables') {
-                          count = (cellData.details as TableDependencyWithDetails)?.columnCount || 0;
+                          count =
+                            (cellData.details as TableDependencyWithDetails)?.columnCount || 0;
                         } else {
                           count = (cellData.details as ScriptDependency)?.sharedTables.length || 0;
                         }
@@ -1472,11 +1672,17 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
                       // Dimming logic
                       let isCellDimmed = false;
                       if (xRayMode && focusedNode) {
-                        const isRowActive = focusedNode === rowItem || transitiveFlow?.ancestors.has(rowItem) || transitiveFlow?.descendants.has(rowItem);
-                        const isColActive = focusedNode === colItem || transitiveFlow?.ancestors.has(colItem) || transitiveFlow?.descendants.has(colItem);
-                        
+                        const isRowActive =
+                          focusedNode === rowItem ||
+                          transitiveFlow?.ancestors.has(rowItem) ||
+                          transitiveFlow?.descendants.has(rowItem);
+                        const isColActive =
+                          focusedNode === colItem ||
+                          transitiveFlow?.ancestors.has(colItem) ||
+                          transitiveFlow?.descendants.has(colItem);
+
                         if (!isRowActive || !isColActive) {
-                           isCellDimmed = true;
+                          isCellDimmed = true;
                         }
                       }
 
@@ -1510,43 +1716,46 @@ export function MatrixView({ className = '', controlledState, onStateChange }: M
 
         {/* Legend */}
         {showLegend && (
-            <div className="p-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex items-center justify-between gap-6 text-xs text-slate-500">
+          <div className="p-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex items-center justify-between gap-6 text-xs text-slate-500">
             <div className="flex items-center gap-6">
-                <div className="flex items-center gap-2">
-                    <div className="p-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded shadow-xs">
-                    <ArrowRight className="h-3 w-3 text-emerald-600 dark:text-emerald-400" strokeWidth={3} />
-                    </div>
-                    <span>Writes to</span>
+              <div className="flex items-center gap-2">
+                <div className="p-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded shadow-xs">
+                  <ArrowRight
+                    className="h-3 w-3 text-emerald-600 dark:text-emerald-400"
+                    strokeWidth={3}
+                  />
                 </div>
-                <div className="flex items-center gap-2">
-                    <div className="p-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded shadow-xs">
-                    <ArrowLeft className="h-3 w-3 text-blue-600 dark:text-blue-400" strokeWidth={3} />
-                    </div>
-                    <span>Reads from</span>
+                <span>Writes to</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="p-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded shadow-xs">
+                  <ArrowLeft className="h-3 w-3 text-blue-600 dark:text-blue-400" strokeWidth={3} />
                 </div>
-                <div className="flex items-center gap-2">
-                    <div className="p-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded shadow-xs">
-                    <Minus className="h-3 w-3 text-slate-300" />
-                    </div>
-                    <span>Self</span>
+                <span>Reads from</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="p-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded shadow-xs">
+                  <Minus className="h-3 w-3 text-slate-300" />
                 </div>
+                <span>Self</span>
+              </div>
             </div>
-            
+
             <div className="flex items-center gap-4 text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
-             {xRayMode && <span className="text-purple-500 animate-pulse">X-Ray Active</span>}
-             {heatmapMode && <span className="text-orange-500">Heatmap Active</span>}
-             {clusterMode && <span className="text-blue-500">Sorted by Clusters</span>}
-             {complexityMode && <span className="text-teal-500">Complexity Margins</span>}
+              {xRayMode && <span className="text-purple-500 animate-pulse">X-Ray Active</span>}
+              {heatmapMode && <span className="text-orange-500">Heatmap Active</span>}
+              {clusterMode && <span className="text-blue-500">Sorted by Clusters</span>}
+              {complexityMode && <span className="text-teal-500">Complexity Margins</span>}
             </div>
 
             <button
-                onClick={() => setShowLegend(false)}
-                aria-label="Hide Legend"
-                className="text-slate-400 hover:text-slate-600"
+              onClick={() => setShowLegend(false)}
+              aria-label="Hide Legend"
+              className="text-slate-400 hover:text-slate-600"
             >
-                <Info className="h-4 w-4" />
+              <Info className="h-4 w-4" />
             </button>
-            </div>
+          </div>
         )}
       </div>
     </GraphTooltipProvider>

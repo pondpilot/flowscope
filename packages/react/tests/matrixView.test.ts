@@ -39,9 +39,7 @@ const createMockStatements = (): StatementLineage[] => [
       { id: 'table3', type: 'table', label: 'summary', qualifiedName: 'public.summary' },
       { id: 'table2_ref', type: 'table', label: 'orders', qualifiedName: 'public.orders' },
     ],
-    edges: [
-      { id: 'e5', from: 'table2_ref', to: 'table3', type: 'data_flow' },
-    ],
+    edges: [{ id: 'e5', from: 'table2_ref', to: 'table3', type: 'data_flow' }],
   },
 ];
 
@@ -91,12 +89,8 @@ describe('extractTableDependenciesWithDetails', () => {
         statementType: 'SELECT',
         joinCount: 0,
         complexityScore: 5,
-        nodes: [
-          { id: 't1', type: 'table', label: 'users', qualifiedName: 'public.users' },
-        ],
-        edges: [
-          { id: 'e1', from: 't1', to: 't1', type: 'data_flow' },
-        ],
+        nodes: [{ id: 't1', type: 'table', label: 'users', qualifiedName: 'public.users' }],
+        edges: [{ id: 'e1', from: 't1', to: 't1', type: 'data_flow' }],
       },
     ];
 
@@ -115,9 +109,7 @@ describe('extractTableDependenciesWithDetails', () => {
           { id: 't1', type: 'table', label: 'a', qualifiedName: 'a', span: { start: 10, end: 20 } },
           { id: 't2', type: 'table', label: 'b', qualifiedName: 'b' },
         ],
-        edges: [
-          { id: 'e1', from: 't1', to: 't2', type: 'data_flow' },
-        ],
+        edges: [{ id: 'e1', from: 't1', to: 't2', type: 'data_flow' }],
       },
     ];
 
@@ -141,14 +133,14 @@ describe('extractTableDependenciesWithDetails', () => {
           { id: 't1', type: 'table', label: 'table1', qualifiedName: 'table1' },
           { id: 'out1', type: outputNodeType, label: 'Output' },
         ],
-        edges: [
-          { id: 'e1', from: 't1', to: 'out1', type: joinDependencyType },
-        ],
+        edges: [{ id: 'e1', from: 't1', to: 'out1', type: joinDependencyType }],
       },
     ];
 
     const deps = extractTableDependenciesWithDetails(statements);
-    const joinDep = deps.find((dep) => dep.sourceTable === 'table1' && dep.targetTable === 'Output');
+    const joinDep = deps.find(
+      (dep) => dep.sourceTable === 'table1' && dep.targetTable === 'Output'
+    );
     expect(joinDep).toBeDefined();
     expect(joinDep!.columns).toHaveLength(0);
   });
@@ -197,9 +189,7 @@ describe('extractScriptDependencies', () => {
           { id: 't1', type: 'table', label: 'source', qualifiedName: 'db.source' },
           { id: 't2', type: 'table', label: 'target', qualifiedName: 'db.target' },
         ],
-        edges: [
-          { id: 'e1', from: 't1', to: 't2', type: 'data_flow' },
-        ],
+        edges: [{ id: 'e1', from: 't1', to: 't2', type: 'data_flow' }],
       },
       {
         statementIndex: 1,
@@ -211,9 +201,7 @@ describe('extractScriptDependencies', () => {
           { id: 't3', type: 'table', label: 'target', qualifiedName: 'db.target' },
           { id: 't4', type: 'table', label: 'output', qualifiedName: 'db.output' },
         ],
-        edges: [
-          { id: 'e2', from: 't3', to: 't4', type: 'data_flow' },
-        ],
+        edges: [{ id: 'e2', from: 't3', to: 't4', type: 'data_flow' }],
       },
     ];
 
@@ -273,9 +261,7 @@ describe('extractScriptDependencies', () => {
             qualifiedName: 'public.orders_view',
           },
         ],
-        edges: [
-          { id: 'cv_edge', from: 'orders_source', to: 'orders_view', type: 'data_flow' },
-        ],
+        edges: [{ id: 'cv_edge', from: 'orders_source', to: 'orders_view', type: 'data_flow' }],
       },
       {
         statementIndex: 1,
@@ -287,9 +273,7 @@ describe('extractScriptDependencies', () => {
           { id: 'orders_table', type: 'table', label: 'orders', qualifiedName: 'public.orders' },
           { id: 'sink', type: 'table', label: 'sink', qualifiedName: 'public.sink' },
         ],
-        edges: [
-          { id: 'select_edge', from: 'orders_table', to: 'sink', type: 'data_flow' },
-        ],
+        edges: [{ id: 'select_edge', from: 'orders_table', to: 'sink', type: 'data_flow' }],
       },
       {
         statementIndex: 2,
@@ -394,9 +378,7 @@ describe('buildTableMatrix', () => {
 
 describe('buildScriptMatrix', () => {
   it('builds correct matrix for script dependencies', () => {
-    const deps = [
-      { sourceScript: 'a.sql', targetScript: 'b.sql', sharedTables: ['table1'] },
-    ];
+    const deps = [{ sourceScript: 'a.sql', targetScript: 'b.sql', sharedTables: ['table1'] }];
     const allScripts = ['a.sql', 'b.sql', 'c.sql'];
 
     const matrix = buildScriptMatrix(deps, allScripts);

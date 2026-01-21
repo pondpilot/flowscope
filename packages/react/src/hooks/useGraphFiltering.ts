@@ -50,7 +50,16 @@ export interface UseGraphFilteringResult {
  * @returns The filtered graph and highlight IDs
  */
 export function useGraphFiltering(options: UseGraphFilteringOptions): UseGraphFilteringResult {
-  const { graph, selectedNodeId, searchTerm, viewMode, showColumnEdges = false, focusMode, tableFilter, namespaceFilter } = options;
+  const {
+    graph,
+    selectedNodeId,
+    searchTerm,
+    viewMode,
+    showColumnEdges = false,
+    focusMode,
+    tableFilter,
+    namespaceFilter,
+  } = options;
 
   return useMemo(() => {
     // Warn once per session about potentially expensive operations on large graphs
@@ -58,7 +67,7 @@ export function useGraphFiltering(options: UseGraphFilteringOptions): UseGraphFi
       hasWarnedLargeGraph = true;
       console.warn(
         `[useGraphFiltering] Large graph detected: ${graph.nodes.length} nodes. ` +
-        'Consider implementing virtualization for better performance.'
+          'Consider implementing virtualization for better performance.'
       );
     }
 
@@ -113,5 +122,14 @@ export function useGraphFiltering(options: UseGraphFilteringOptions): UseGraphFi
         highlightIds: new Set<string>(),
       };
     }
-  }, [graph, selectedNodeId, searchTerm, viewMode, showColumnEdges, focusMode, tableFilter, namespaceFilter]);
+  }, [
+    graph,
+    selectedNodeId,
+    searchTerm,
+    viewMode,
+    showColumnEdges,
+    focusMode,
+    tableFilter,
+    namespaceFilter,
+  ]);
 }

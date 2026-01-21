@@ -5,10 +5,7 @@ import { useNavigation } from '@/lib/navigation-context';
 import { useProject } from '@/lib/project-store';
 import { useIssueLocations } from '@/hooks';
 import { IssuesFilterBar } from './IssuesFilterBar';
-import {
-  useViewStateStore,
-  getIssuesStateWithDefaults,
-} from '@/lib/view-state-store';
+import { useViewStateStore, getIssuesStateWithDefaults } from '@/lib/view-state-store';
 import type { Issue } from '@pondpilot/flowscope-core';
 
 interface SchemaAwareIssuesPanelProps {
@@ -24,7 +21,10 @@ function isSchemaIssue(issue: Issue): boolean {
   return SCHEMA_ISSUE_CODES.includes(issue.code);
 }
 
-export function SchemaAwareIssuesPanel({ projectId, onOpenSchemaEditor }: SchemaAwareIssuesPanelProps) {
+export function SchemaAwareIssuesPanel({
+  projectId,
+  onOpenSchemaEditor,
+}: SchemaAwareIssuesPanelProps) {
   const { state } = useLineage();
   const { result } = state;
   const { navigateToEditor } = useNavigation();
@@ -33,9 +33,7 @@ export function SchemaAwareIssuesPanel({ projectId, onOpenSchemaEditor }: Schema
   const statements = result?.statements || [];
 
   // Get filter state from store
-  const storedFilterState = useViewStateStore(
-    (state) => state.viewStates[projectId]?.issues
-  );
+  const storedFilterState = useViewStateStore((state) => state.viewStates[projectId]?.issues);
   const filterState = useMemo(
     () => getIssuesStateWithDefaults(storedFilterState),
     [storedFilterState]
@@ -236,7 +234,8 @@ export function SchemaAwareIssuesPanel({ projectId, onOpenSchemaEditor }: Schema
                       <>
                         {issue.statementIndex !== undefined && <span>•</span>}
                         <span className="font-mono truncate max-w-[200px]">
-                          {sourceName}{location && `:${location}`}
+                          {sourceName}
+                          {location && `:${location}`}
                         </span>
                       </>
                     )}

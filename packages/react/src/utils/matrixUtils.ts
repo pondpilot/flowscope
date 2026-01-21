@@ -154,13 +154,8 @@ export interface ScriptDependencyResult {
  * A dependency exists when one script writes to a table that another script reads.
  * Returns both dependencies and all script names (for showing scripts with no dependencies).
  */
-export function extractScriptDependencies(
-  statements: StatementLineage[]
-): ScriptDependencyResult {
-  const scriptMap = new Map<
-    string,
-    { tablesRead: Set<string>; tablesWritten: Set<string> }
-  >();
+export function extractScriptDependencies(statements: StatementLineage[]): ScriptDependencyResult {
+  const scriptMap = new Map<string, { tablesRead: Set<string>; tablesWritten: Set<string> }>();
 
   for (const stmt of statements) {
     const sourceName = stmt.sourceName || 'default';
@@ -177,9 +172,7 @@ export function extractScriptDependencies(
       const isWritten =
         stmt.edges.some((e) => e.to === node.id && e.type === 'data_flow') ||
         createdRelationIds.has(node.id);
-      const isRead = stmt.edges.some(
-        (e) => e.from === node.id && e.type === 'data_flow'
-      );
+      const isRead = stmt.edges.some((e) => e.from === node.id && e.type === 'data_flow');
 
       if (isWritten) {
         scriptData.tablesWritten.add(tableName);

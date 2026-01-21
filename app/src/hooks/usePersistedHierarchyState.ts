@@ -49,20 +49,12 @@ export function usePersistedHierarchyState(
     () => new Set(initialState.expandedNodes)
   );
   const [filter, setFilter] = useState(initialState.filter);
-  const [detailsPanelHeight, setDetailsPanelHeight] = useState(
-    initialState.detailsPanelHeight
-  );
-  const [focusedNodeKey, setFocusedNodeKey] = useState<string | null>(
-    initialState.focusedNodeKey
-  );
-  const [unusedExpanded, setUnusedExpanded] = useState(
-    initialState.unusedExpanded
-  );
+  const [detailsPanelHeight, setDetailsPanelHeight] = useState(initialState.detailsPanelHeight);
+  const [focusedNodeKey, setFocusedNodeKey] = useState<string | null>(initialState.focusedNodeKey);
+  const [unusedExpanded, setUnusedExpanded] = useState(initialState.unusedExpanded);
 
   // Track last persisted values to avoid unnecessary writes
-  const lastPersistedRef = useRef<HierarchyViewState | null>(
-    cloneHierarchyState(initialState)
-  );
+  const lastPersistedRef = useRef<HierarchyViewState | null>(cloneHierarchyState(initialState));
 
   // Debounced persist to store
   useEffect(() => {

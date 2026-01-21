@@ -11,29 +11,14 @@ import {
   Position,
   getStraightPath,
 } from '@xyflow/react';
-import type {
-  Node as FlowNode,
-  Edge as FlowEdge,
-  NodeProps,
-  EdgeProps,
-} from '@xyflow/react';
+import type { Node as FlowNode, Edge as FlowEdge, NodeProps, EdgeProps } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import dagre from 'dagre';
-import {
-  KeyRound,
-  Link2,
-  Table2,
-  Eye,
-  ArrowDownUp,
-  ArrowLeftRight,
-} from 'lucide-react';
+import { KeyRound, Link2, Table2, Eye, ArrowDownUp, ArrowLeftRight } from 'lucide-react';
 
 import { useNodeFocus } from '../hooks/useNodeFocus';
 import { useIsDarkMode } from '../hooks/useColors';
-import {
-  collectTableLookupKeys,
-  resolveForeignKeyTarget,
-} from '../utils/schemaUtils';
+import { collectTableLookupKeys, resolveForeignKeyTarget } from '../utils/schemaUtils';
 import { COLORS, SCHEMA_CONFIG, SCHEMA_COLORS, SCHEMA_NODE_PALETTES } from '../constants';
 import type {
   SchemaTable,
@@ -138,7 +123,14 @@ function getDataTypeIcon(dataType?: string): string {
   if (!dataType) return '';
   const type = dataType.toUpperCase();
 
-  if (type.includes('INT') || type.includes('NUMERIC') || type.includes('DECIMAL') || type.includes('FLOAT') || type.includes('DOUBLE') || type.includes('NUMBER')) {
+  if (
+    type.includes('INT') ||
+    type.includes('NUMERIC') ||
+    type.includes('DECIMAL') ||
+    type.includes('FLOAT') ||
+    type.includes('DOUBLE') ||
+    type.includes('NUMBER')
+  ) {
     return '#'; // Number
   }
   if (type.includes('CHAR') || type.includes('TEXT') || type.includes('STRING')) {
@@ -150,7 +142,12 @@ function getDataTypeIcon(dataType?: string): string {
   if (type.includes('BOOL')) {
     return '◉'; // Boolean
   }
-  if (type.includes('JSON') || type.includes('ARRAY') || type.includes('STRUCT') || type.includes('MAP')) {
+  if (
+    type.includes('JSON') ||
+    type.includes('ARRAY') ||
+    type.includes('STRUCT') ||
+    type.includes('MAP')
+  ) {
     return '{}'; // Complex type
   }
   if (type.includes('BLOB') || type.includes('BINARY') || type.includes('BYTES')) {
@@ -185,7 +182,8 @@ function getSchemaLayoutedElements(
 
   nodes.forEach((node) => {
     const columnCount = node.data.columns?.length || 0;
-    const height = SCHEMA_CONFIG.NODE_HEADER_HEIGHT + columnCount * SCHEMA_CONFIG.NODE_HEIGHT_PER_COLUMN;
+    const height =
+      SCHEMA_CONFIG.NODE_HEADER_HEIGHT + columnCount * SCHEMA_CONFIG.NODE_HEIGHT_PER_COLUMN;
     dagreGraph.setNode(node.id, { width: SCHEMA_CONFIG.NODE_MIN_WIDTH, height });
   });
 
@@ -200,7 +198,8 @@ function getSchemaLayoutedElements(
     if (!nodeWithPosition) return node;
 
     const columnCount = node.data.columns?.length || 0;
-    const height = SCHEMA_CONFIG.NODE_HEADER_HEIGHT + columnCount * SCHEMA_CONFIG.NODE_HEIGHT_PER_COLUMN;
+    const height =
+      SCHEMA_CONFIG.NODE_HEADER_HEIGHT + columnCount * SCHEMA_CONFIG.NODE_HEIGHT_PER_COLUMN;
 
     return {
       ...node,
@@ -225,10 +224,14 @@ function getSchemaLayoutedElements(
 // Schema Table Node Component
 // ============================================================================
 
-const SchemaTableNodeComponent = ({ data }: NodeProps<FlowNode<SchemaTableNodeData>>): JSX.Element => {
+const SchemaTableNodeComponent = ({
+  data,
+}: NodeProps<FlowNode<SchemaTableNodeData>>): JSX.Element => {
   const isDark = useIsDarkMode();
   const paletteKey = data.origin === 'imported' ? 'imported' : 'cte';
-  const colors = isDark ? SCHEMA_NODE_PALETTES.dark[paletteKey] : SCHEMA_NODE_PALETTES.light[paletteKey];
+  const colors = isDark
+    ? SCHEMA_NODE_PALETTES.dark[paletteKey]
+    : SCHEMA_NODE_PALETTES.light[paletteKey];
   const isSelected = data.isSelected === true;
   const isHighlighted = data.isHighlighted === true;
   const highlightedColumns = data.highlightedColumns || [];
@@ -242,12 +245,14 @@ const SchemaTableNodeComponent = ({ data }: NodeProps<FlowNode<SchemaTableNodeDa
       style={{
         minWidth: SCHEMA_CONFIG.NODE_MIN_WIDTH,
         borderRadius: 8,
-        border: isSelected || isHighlighted
-          ? `2px solid ${SCHEMA_COLORS.selection.border}`
-          : `1px solid ${colors.border}`,
-        boxShadow: isSelected || isHighlighted
-          ? `0 0 0 3px ${SCHEMA_COLORS.selection.ring}`
-          : '0 1px 3px rgba(0,0,0,0.1)',
+        border:
+          isSelected || isHighlighted
+            ? `2px solid ${SCHEMA_COLORS.selection.border}`
+            : `1px solid ${colors.border}`,
+        boxShadow:
+          isSelected || isHighlighted
+            ? `0 0 0 3px ${SCHEMA_COLORS.selection.ring}`
+            : '0 1px 3px rgba(0,0,0,0.1)',
         overflow: 'hidden',
         backgroundColor: colors.bg,
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
@@ -273,17 +278,21 @@ const SchemaTableNodeComponent = ({ data }: NodeProps<FlowNode<SchemaTableNodeDa
         className="schema-node-header"
       >
         <NodeIcon size={14} style={{ opacity: 0.7, flexShrink: 0 }} />
-        <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span
+          style={{
+            fontWeight: 600,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
           {data.label}
         </span>
       </div>
 
       {/* Columns */}
       {(data.columns || []).length > 0 && (
-        <div
-          style={{ maxHeight: 400, overflowY: 'auto', overflowX: 'hidden' }}
-          className="nodrag"
-        >
+        <div style={{ maxHeight: 400, overflowY: 'auto', overflowX: 'hidden' }} className="nodrag">
           {(data.columns || []).map((col: ColumnWithConstraints) => {
             const isPK = col.isPrimaryKey === true;
             const hasFK = col.foreignKey != null;
@@ -301,7 +310,9 @@ const SchemaTableNodeComponent = ({ data }: NodeProps<FlowNode<SchemaTableNodeDa
                   alignItems: 'center',
                   gap: 6,
                   borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`,
-                  backgroundColor: isColumnHighlighted ? SCHEMA_COLORS.highlight.background : 'transparent',
+                  backgroundColor: isColumnHighlighted
+                    ? SCHEMA_COLORS.highlight.background
+                    : 'transparent',
                   transition: `background-color ${SCHEMA_CONFIG.TRANSITION_DURATION}`,
                   position: 'relative',
                 }}
@@ -310,33 +321,42 @@ const SchemaTableNodeComponent = ({ data }: NodeProps<FlowNode<SchemaTableNodeDa
                 <div style={{ display: 'flex', alignItems: 'center', minWidth: 32, gap: 2 }}>
                   {isPK && (
                     <span title="Primary Key">
-                      <KeyRound
-                        size={14}
-                        style={{ color: SCHEMA_COLORS.primaryKey }}
-                      />
+                      <KeyRound size={14} style={{ color: SCHEMA_COLORS.primaryKey }} />
                     </span>
                   )}
                   {hasFK && (
-                    <span title={`Foreign Key → ${col.foreignKey?.table}.${col.foreignKey?.column}`}>
-                      <Link2
-                        size={14}
-                        style={{ color: SCHEMA_COLORS.foreignKey }}
-                      />
+                    <span
+                      title={`Foreign Key → ${col.foreignKey?.table}.${col.foreignKey?.column}`}
+                    >
+                      <Link2 size={14} style={{ color: SCHEMA_COLORS.foreignKey }} />
                     </span>
                   )}
                 </div>
 
                 {/* Column name */}
-                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span
+                  style={{
+                    flex: 1,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
                   {col.name}
                 </span>
 
                 {/* Data type with icon */}
                 {col.dataType && (
-                  <span style={{ opacity: 0.6, display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                    {typeIcon && (
-                      <span style={{ fontSize: 10, opacity: 0.7 }}>{typeIcon}</span>
-                    )}
+                  <span
+                    style={{
+                      opacity: 0.6,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {typeIcon && <span style={{ fontSize: 10, opacity: 0.7 }}>{typeIcon}</span>}
                     <span style={{ fontSize: 11 }}>({col.dataType})</span>
                   </span>
                 )}
@@ -515,7 +535,10 @@ const AngledEdgeComponent = ({
       const midX = sourceX + (targetX - sourceX) / 2;
       path = `M ${sourceX},${sourceY} L ${midX},${sourceY} L ${midX},${targetY} L ${targetX},${targetY}`;
     } else {
-      const midX = Math.max(sourceX + gap, Math.min(targetX - gap, sourceX + (targetX - sourceX) / 2));
+      const midX = Math.max(
+        sourceX + gap,
+        Math.min(targetX - gap, sourceX + (targetX - sourceX) / 2)
+      );
       path = `M ${sourceX},${sourceY} L ${midX},${sourceY} L ${midX},${targetY} L ${targetX},${targetY}`;
     }
   } else if (srcPos === Position.Bottom && tgtPos === Position.Top) {
@@ -534,7 +557,10 @@ const AngledEdgeComponent = ({
   let labelY = (sourceY + targetY) / 2;
 
   if (srcPos === Position.Right && tgtPos === Position.Left) {
-    const midX = Math.max(sourceX + gap, Math.min(targetX - gap, sourceX + (targetX - sourceX) / 2));
+    const midX = Math.max(
+      sourceX + gap,
+      Math.min(targetX - gap, sourceX + (targetX - sourceX) / 2)
+    );
     labelX = sourceX + (midX - sourceX) / 2 + gap / 2;
     labelY = sourceY;
   } else if (srcPos === Position.Bottom && tgtPos === Position.Top) {
@@ -682,12 +708,13 @@ function SchemaControls({ direction, onDirectionChange }: SchemaControlsProps): 
           border: 'none',
           borderRadius: 6,
           cursor: 'pointer',
-          backgroundColor: direction === 'TB'
-            ? (isDark ? 'rgba(59, 130, 246, 0.3)' : 'rgba(59, 130, 246, 0.15)')
-            : 'transparent',
-          color: direction === 'TB'
-            ? '#3b82f6'
-            : (isDark ? '#94a3b8' : '#64748b'),
+          backgroundColor:
+            direction === 'TB'
+              ? isDark
+                ? 'rgba(59, 130, 246, 0.3)'
+                : 'rgba(59, 130, 246, 0.15)'
+              : 'transparent',
+          color: direction === 'TB' ? '#3b82f6' : isDark ? '#94a3b8' : '#64748b',
           transition: 'all 0.15s',
         }}
       >
@@ -705,12 +732,13 @@ function SchemaControls({ direction, onDirectionChange }: SchemaControlsProps): 
           border: 'none',
           borderRadius: 6,
           cursor: 'pointer',
-          backgroundColor: direction === 'LR'
-            ? (isDark ? 'rgba(59, 130, 246, 0.3)' : 'rgba(59, 130, 246, 0.15)')
-            : 'transparent',
-          color: direction === 'LR'
-            ? '#3b82f6'
-            : (isDark ? '#94a3b8' : '#64748b'),
+          backgroundColor:
+            direction === 'LR'
+              ? isDark
+                ? 'rgba(59, 130, 246, 0.3)'
+                : 'rgba(59, 130, 246, 0.15)'
+              : 'transparent',
+          color: direction === 'LR' ? '#3b82f6' : isDark ? '#94a3b8' : '#64748b',
           transition: 'all 0.15s',
         }}
       >
@@ -793,7 +821,9 @@ export function buildSchemaFlowEdges(schema: (SchemaTable | ResolvedSchemaTable)
   return edges;
 }
 
-export function buildSchemaFlowNodes(schema: (SchemaTable | ResolvedSchemaTable)[]): FlowNode<SchemaTableNodeData>[] {
+export function buildSchemaFlowNodes(
+  schema: (SchemaTable | ResolvedSchemaTable)[]
+): FlowNode<SchemaTableNodeData>[] {
   return schema.map((table) => {
     return {
       id: table.name,
@@ -820,10 +850,7 @@ interface HighlightState {
   highlightedColumnsMap: Map<string, string[]>;
 }
 
-function useConnectedHighlighting(
-  edges: FlowEdge[],
-  selectedTableName?: string
-): HighlightState {
+function useConnectedHighlighting(edges: FlowEdge[], selectedTableName?: string): HighlightState {
   return useMemo(() => {
     if (!selectedTableName) {
       return {
@@ -887,7 +914,11 @@ function useConnectedHighlighting(
 // Main SchemaView Component
 // ============================================================================
 
-function SchemaViewInner({ schema, selectedTableName, onClearSelection }: SchemaViewProps): JSX.Element {
+function SchemaViewInner({
+  schema,
+  selectedTableName,
+  onClearSelection,
+}: SchemaViewProps): JSX.Element {
   const isDark = useIsDarkMode();
   const [direction, setDirection] = useState<LayoutDirection>('TB');
 
@@ -908,7 +939,8 @@ function SchemaViewInner({ schema, selectedTableName, onClearSelection }: Schema
 
   // Apply layout
   const { nodes: layoutedNodes, edges: layoutedEdges } = useMemo(() => {
-    if (rawNodes.length === 0) return { nodes: [] as FlowNode<SchemaTableNodeData>[], edges: [] as FlowEdge[] };
+    if (rawNodes.length === 0)
+      return { nodes: [] as FlowNode<SchemaTableNodeData>[], edges: [] as FlowEdge[] };
     return getSchemaLayoutedElements(rawNodes, rawEdges, direction);
   }, [rawNodes, rawEdges, direction]);
 
@@ -958,11 +990,7 @@ function SchemaViewInner({ schema, selectedTableName, onClearSelection }: Schema
         minZoom={0.05}
         maxZoom={2}
       >
-        <Background
-          color={isDark ? '#334155' : '#e2e8f0'}
-          gap={20}
-          size={1}
-        />
+        <Background color={isDark ? '#334155' : '#e2e8f0'} gap={20} size={1} />
         <Controls />
         <MiniMap
           nodeColor={(node) => {

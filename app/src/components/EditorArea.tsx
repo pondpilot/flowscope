@@ -9,7 +9,7 @@ import { useAnalysis, useDebounce, useFileNavigation, useGlobalShortcuts } from 
 import type { GlobalShortcut } from '@/hooks';
 import { EditorToolbar } from './EditorToolbar';
 import { DEFAULT_FILE_NAMES } from '@/lib/constants';
-import type { Dialect, RunMode } from '@/lib/project-store';
+import type { Dialect, RunMode, TemplateMode } from '@/lib/project-store';
 
 interface EditorAreaProps {
   wasmReady: boolean;
@@ -18,21 +18,27 @@ interface EditorAreaProps {
   onFileSelectorOpenChange: (open: boolean) => void;
   dialectSelectorOpen: boolean;
   onDialectSelectorOpenChange: (open: boolean) => void;
+  templateSelectorOpen: boolean;
+  onTemplateSelectorOpenChange: (open: boolean) => void;
 }
 
-export function EditorArea({ wasmReady, className, fileSelectorOpen, onFileSelectorOpenChange, dialectSelectorOpen, onDialectSelectorOpenChange }: EditorAreaProps) {
-  const {
-    currentProject,
-    updateFile,
-    createFile,
-    setProjectDialect,
-    setRunMode,
-  } = useProject();
+export function EditorArea({
+  wasmReady,
+  className,
+  fileSelectorOpen,
+  onFileSelectorOpenChange,
+  dialectSelectorOpen,
+  onDialectSelectorOpenChange,
+  templateSelectorOpen,
+  onTemplateSelectorOpenChange,
+}: EditorAreaProps) {
+  const { currentProject, updateFile, createFile, setProjectDialect, setRunMode, setTemplateMode } =
+    useProject();
 
   const theme = useThemeStore((state) => state.theme);
   const isDark = resolveTheme(theme) === 'dark';
 
-  const activeFile = currentProject?.files.find(f => f.id === currentProject.activeFileId);
+  const activeFile = currentProject?.files.find((f) => f.id === currentProject.activeFileId);
   const editorContainerRef = useRef<HTMLDivElement>(null);
 
   // Track previous values to detect changes (null means initial mount)
@@ -83,8 +89,10 @@ export function EditorArea({ wasmReady, className, fileSelectorOpen, onFileSelec
       return;
     }
 
-    const schemaChanged = previousSchema.current !== null && previousSchema.current !== debouncedSchemaSQL;
-    const hideCTEsChanged = previousHideCTEs.current !== null && previousHideCTEs.current !== hideCTEs;
+    const schemaChanged =
+      previousSchema.current !== null && previousSchema.current !== debouncedSchemaSQL;
+    const hideCTEsChanged =
+      previousHideCTEs.current !== null && previousHideCTEs.current !== hideCTEs;
 
     previousSchema.current = debouncedSchemaSQL;
     previousHideCTEs.current = hideCTEs;
@@ -96,9 +104,17 @@ export function EditorArea({ wasmReady, className, fileSelectorOpen, onFileSelec
         setError(err instanceof Error ? err.message : `Failed to re-run analysis after ${reason}`);
       });
     }
-  // Note: currentProject is used in the guard but excluded from deps because activeFile
-  // (derived from currentProject) already captures project changes via activeFile.id
-  }, [wasmReady, debouncedSchemaSQL, hideCTEs, activeFile?.id, activeFile?.name, runAnalysis, setError]);
+    // Note: currentProject is used in the guard but excluded from deps because activeFile
+    // (derived from currentProject) already captures project changes via activeFile.id
+  }, [
+    wasmReady,
+    debouncedSchemaSQL,
+    hideCTEs,
+    activeFile?.id,
+    activeFile?.name,
+    runAnalysis,
+    setError,
+  ]);
 
   const handleAnalyze = useCallback(() => {
     if (activeFile) {
@@ -119,19 +135,22 @@ export function EditorArea({ wasmReady, className, fileSelectorOpen, onFileSelec
   }, [activeFile, currentProject, runAnalysis, setRunMode]);
 
   // Keyboard shortcuts for running analysis
-  const analysisShortcuts = useMemo<GlobalShortcut[]>(() => [
-    {
-      key: 'Enter',
-      cmdOrCtrl: true,
-      handler: handleAnalyze,
-    },
-    {
-      key: 'Enter',
-      cmdOrCtrl: true,
-      shift: true,
-      handler: handleAnalyzeActiveOnly,
-    },
-  ], [handleAnalyze, handleAnalyzeActiveOnly]);
+  const analysisShortcuts = useMemo<GlobalShortcut[]>(
+    () => [
+      {
+        key: 'Enter',
+        cmdOrCtrl: true,
+        handler: handleAnalyze,
+      },
+      {
+        key: 'Enter',
+        cmdOrCtrl: true,
+        shift: true,
+        handler: handleAnalyzeActiveOnly,
+      },
+    ],
+    [handleAnalyze, handleAnalyzeActiveOnly]
+  );
 
   useGlobalShortcuts(analysisShortcuts);
 
@@ -143,7 +162,7 @@ export function EditorArea({ wasmReady, className, fileSelectorOpen, onFileSelec
     );
   }
 
-  const allFileCount = currentProject.files.filter(f => f.name.endsWith('.sql')).length;
+  const allFileCount = currentProject.files.filter((f) => f.name.endsWith('.sql')).length;
   const selectedCount = currentProject.selectedFileIds?.length || 0;
 
   return (
@@ -151,6 +170,8 @@ export function EditorArea({ wasmReady, className, fileSelectorOpen, onFileSelec
       <EditorToolbar
         dialect={currentProject.dialect}
         onDialectChange={(dialect: Dialect) => setProjectDialect(currentProject.id, dialect)}
+        templateMode={currentProject.templateMode}
+        onTemplateModeChange={(mode: TemplateMode) => setTemplateMode(currentProject.id, mode)}
         runMode={currentProject.runMode}
         onRunModeChange={(mode: RunMode) => setRunMode(currentProject.id, mode)}
         isAnalyzing={isAnalyzing}
@@ -162,12 +183,18 @@ export function EditorArea({ wasmReady, className, fileSelectorOpen, onFileSelec
         onFileSelectorOpenChange={onFileSelectorOpenChange}
         dialectSelectorOpen={dialectSelectorOpen}
         onDialectSelectorOpenChange={onDialectSelectorOpenChange}
+        templateSelectorOpen={templateSelectorOpen}
+        onTemplateSelectorOpenChange={onTemplateSelectorOpenChange}
       />
 
-      <div ref={editorContainerRef} className="flex-1 overflow-hidden relative" data-testid="sql-editor">
+      <div
+        ref={editorContainerRef}
+        className="flex-1 overflow-hidden relative"
+        data-testid="sql-editor"
+      >
         <SqlView
           value={activeFile.content}
-          onChange={val => updateFile(activeFile.id, val)}
+          onChange={(val) => updateFile(activeFile.id, val)}
           className="h-full text-sm"
           editable={true}
           isDark={isDark}

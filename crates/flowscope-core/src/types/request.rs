@@ -5,6 +5,10 @@ use serde::{Deserialize, Serialize};
 
 use super::common::CaseSensitivity;
 
+// Re-export template types when the templating feature is enabled
+#[cfg(feature = "templating")]
+pub use crate::templater::{TemplateConfig, TemplateError, TemplateMode};
+
 /// A request to analyze SQL for data lineage.
 ///
 /// This is the main entry point for the analysis API. It accepts SQL code along with
@@ -33,6 +37,11 @@ pub struct AnalyzeRequest {
     /// Optional schema metadata for accurate column resolution
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub schema: Option<SchemaMetadata>,
+
+    /// Optional template configuration for preprocessing Jinja/dbt-style SQL
+    #[cfg(feature = "templating")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub template_config: Option<TemplateConfig>,
 }
 
 /// A request to compute completion context at a cursor position.
@@ -266,6 +275,8 @@ mod tests {
             source_name: None,
             options: None,
             schema: None,
+            #[cfg(feature = "templating")]
+            template_config: None,
         };
         let json = serde_json::to_string(&request).unwrap();
         assert!(json.contains("\"dialect\":\"postgres\""));

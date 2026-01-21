@@ -12,7 +12,7 @@ export function useFileNavigation() {
   useEffect(() => {
     const request = lineageState.navigationRequest;
     if (request && currentProject) {
-      const targetFile = currentProject.files.find(f => f.name === request.sourceName);
+      const targetFile = currentProject.files.find((f) => f.name === request.sourceName);
       if (targetFile && targetFile.id !== currentProject.activeFileId) {
         selectFile(targetFile.id);
       }

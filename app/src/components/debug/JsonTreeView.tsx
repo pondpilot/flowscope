@@ -68,9 +68,7 @@ export function JsonTreeView({ data, name, depth = 0 }: JsonTreeViewProps) {
                 <ChevronRight className="w-4 h-4 text-muted-foreground" />
               )}
               {key && <span className="font-semibold text-foreground">{key}:</span>}
-              <span className="text-muted-foreground">
-                {isEmpty ? '{}' : `{${keys.length}}`}
-              </span>
+              <span className="text-muted-foreground">{isEmpty ? '{}' : `{${keys.length}}`}</span>
             </button>
             <button
               onClick={() => handleCopy(value)}
@@ -112,9 +110,7 @@ export function JsonTreeView({ data, name, depth = 0 }: JsonTreeViewProps) {
                 <ChevronRight className="w-4 h-4 text-muted-foreground" />
               )}
               {key && <span className="font-semibold text-foreground">{key}:</span>}
-              <span className="text-muted-foreground">
-                {isEmpty ? '[]' : `[${arr.length}]`}
-              </span>
+              <span className="text-muted-foreground">{isEmpty ? '[]' : `[${arr.length}]`}</span>
             </button>
             <button
               onClick={() => handleCopy(value)}
@@ -131,12 +127,7 @@ export function JsonTreeView({ data, name, depth = 0 }: JsonTreeViewProps) {
           {isExpanded && !isEmpty && (
             <div className="ml-4 border-l border-border pl-2">
               {arr.map((item, idx) => (
-                <JsonTreeView
-                  key={idx}
-                  data={item}
-                  name={`[${idx}]`}
-                  depth={depth + 1}
-                />
+                <JsonTreeView key={idx} data={item} name={`[${idx}]`} depth={depth + 1} />
               ))}
             </div>
           )}
@@ -147,9 +138,7 @@ export function JsonTreeView({ data, name, depth = 0 }: JsonTreeViewProps) {
     return (
       <div className="ml-4 flex items-center gap-2">
         {key && <span className="font-semibold text-foreground">{key}:</span>}
-        <span className={colorClass}>
-          {type === 'string' ? `"${value}"` : String(value)}
-        </span>
+        <span className={colorClass}>{type === 'string' ? `"${value}"` : String(value)}</span>
       </div>
     );
   };

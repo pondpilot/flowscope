@@ -24,12 +24,7 @@ import {
   DropdownMenuLabel,
 } from './ui/dropdown-menu';
 import { Button } from './ui/button';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from './ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import {
   Dialog,
   DialogClose,
@@ -54,7 +49,12 @@ import {
 } from '@pondpilot/flowscope-core';
 import { useIsDarkMode } from '@pondpilot/flowscope-react';
 import { getShortcutDisplay } from '@/lib/shortcuts';
-import { base64UrlEncode, formatBytes, SHARE_URL_SOFT_LIMIT, SHARE_URL_HARD_LIMIT } from '@/lib/share';
+import {
+  base64UrlEncode,
+  formatBytes,
+  SHARE_URL_SOFT_LIMIT,
+  SHARE_URL_HARD_LIMIT,
+} from '@/lib/share';
 
 // ============================================================================
 // Types
@@ -65,7 +65,6 @@ export interface ExportDialogProps {
   projectName: string;
   graphRef?: React.RefObject<HTMLDivElement | null>;
 }
-
 
 // ============================================================================
 // Helpers
@@ -102,9 +101,11 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
 }
 
 function sanitizeProjectName(name: string): string {
-  return name.trim().replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase();
+  return name
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]/g, '-')
+    .toLowerCase();
 }
-
 
 // ============================================================================
 // PondPilot Integration
@@ -116,7 +117,10 @@ const PONDPILOT_URL = 'https://app.pondpilot.io';
  * Create a PondPilot shareable URL for the given SQL content.
  * Uses gzip compression for efficient URL encoding.
  */
-function createPondPilotUrl(name: string, sqlContent: string): { url: string; compressedSize: number } {
+function createPondPilotUrl(
+  name: string,
+  sqlContent: string
+): { url: string; compressedSize: number } {
   const payload = JSON.stringify({ name, content: sqlContent });
   const compressed = gzipSync(strToU8(payload), { level: 9 });
   const encoded = base64UrlEncode(compressed);
@@ -126,7 +130,6 @@ function createPondPilotUrl(name: string, sqlContent: string): { url: string; co
   };
 }
 
-
 // ============================================================================
 // Component
 // ============================================================================
@@ -135,7 +138,11 @@ function createPondPilotUrl(name: string, sqlContent: string): { url: string; co
 // Component
 // ============================================================================
 
-export function ExportDialog({ result, projectName, graphRef }: ExportDialogProps): JSX.Element | null {
+export function ExportDialog({
+  result,
+  projectName,
+  graphRef,
+}: ExportDialogProps): JSX.Element | null {
   const isDarkMode = useIsDarkMode();
 
   // DuckDB export dialog state
@@ -260,9 +267,7 @@ export function ExportDialog({ result, projectName, graphRef }: ExportDialogProp
       const { filename } = await buildExportFilename(projectName, 'sql');
       downloadBlob(sql, filename, 'text/sql');
       toast.success(
-        schema
-          ? `DuckDB SQL export downloaded (schema: ${schema})`
-          : 'DuckDB SQL export downloaded'
+        schema ? `DuckDB SQL export downloaded (schema: ${schema})` : 'DuckDB SQL export downloaded'
       );
       setDuckDbDialogOpen(false);
     } catch (err) {
@@ -285,7 +290,9 @@ export function ExportDialog({ result, projectName, graphRef }: ExportDialogProp
       const { url, compressedSize } = createPondPilotUrl(fileName, sql);
 
       if (compressedSize > SHARE_URL_HARD_LIMIT) {
-        setExportError('File is too large for URL sharing. Please download the SQL file and open it in PondPilot manually.');
+        setExportError(
+          'File is too large for URL sharing. Please download the SQL file and open it in PondPilot manually.'
+        );
         return;
       }
 
@@ -325,7 +332,9 @@ export function ExportDialog({ result, projectName, graphRef }: ExportDialogProp
             <TooltipContent>
               <p className="flex items-center gap-2">
                 Export lineage data
-                <kbd className="px-1.5 py-0.5 text-xs bg-muted rounded border font-mono">{getShortcutDisplay('export')}</kbd>
+                <kbd className="px-1.5 py-0.5 text-xs bg-muted rounded border font-mono">
+                  {getShortcutDisplay('export')}
+                </kbd>
               </p>
             </TooltipContent>
           </Tooltip>
@@ -400,14 +409,9 @@ export function ExportDialog({ result, projectName, graphRef }: ExportDialogProp
               </p>
             </div>
           </div>
-          {exportError && (
-            <p className="text-sm text-destructive">{exportError}</p>
-          )}
+          {exportError && <p className="text-sm text-destructive">{exportError}</p>}
           <DialogFooter className="sm:justify-center">
-            <Button
-              onClick={handleDuckDbExport}
-              disabled={!!schemaError || isExporting}
-            >
+            <Button onClick={handleDuckDbExport} disabled={!!schemaError || isExporting}>
               <Download className="size-4 mr-2" />
               {isExporting ? 'Exporting...' : 'Download'}
             </Button>

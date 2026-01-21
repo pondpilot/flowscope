@@ -55,13 +55,13 @@ function SimpleTableNodeComponent({ data, selected }: NodeProps): JSX.Element {
       }}
     >
       {/* Left Handle (Target) */}
-      <Handle 
-        type="target" 
-        position={Position.Left} 
+      <Handle
+        type="target"
+        position={Position.Left}
         className="w-2! h-2! bg-slate-300! border-none! hover:bg-slate-400!"
       />
 
-      <div 
+      <div
         className="flex h-6 w-6 shrink-0 items-center justify-center rounded"
         style={{ backgroundColor: palette.headerBg, color: palette.text }}
       >
@@ -89,9 +89,9 @@ function SimpleTableNodeComponent({ data, selected }: NodeProps): JSX.Element {
       </div>
 
       {/* Right Handle (Source) */}
-      <Handle 
-        type="source" 
-        position={Position.Right} 
+      <Handle
+        type="source"
+        position={Position.Right}
         className="w-2! h-2! bg-slate-300! border-none! hover:bg-slate-400!"
       />
     </div>

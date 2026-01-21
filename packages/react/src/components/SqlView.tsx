@@ -67,11 +67,7 @@ export function SqlView({
   const isControlled = value !== undefined;
 
   // Warn in dev mode if highlightedSpan is passed without value (it will be ignored)
-  if (
-    process.env.NODE_ENV !== 'production' &&
-    !isControlled &&
-    highlightedSpanProp !== undefined
-  ) {
+  if (process.env.NODE_ENV !== 'production' && !isControlled && highlightedSpanProp !== undefined) {
     console.warn(
       'SqlView: `highlightedSpan` prop is ignored in uncontrolled mode. Pass a `value` prop to use controlled mode.'
     );
@@ -102,11 +98,17 @@ export function SqlView({
         };
       });
   }, [state.result, isControlled]);
-  
+
   const editorRef = useRef<ReactCodeMirrorRef>(null);
 
   const extensions = useMemo(
-    () => [sql(), highlightField, baseTheme, EditorView.lineWrapping, EditorView.editable.of(editable)],
+    () => [
+      sql(),
+      highlightField,
+      baseTheme,
+      EditorView.lineWrapping,
+      EditorView.editable.of(editable),
+    ],
     [editable]
   );
 

@@ -36,10 +36,6 @@ export const GraphTooltipArrow = React.forwardRef<
   React.ElementRef<typeof TooltipPrimitive.Arrow>,
   React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Arrow>
 >(({ style, ...props }, ref) => (
-  <TooltipPrimitive.Arrow
-    ref={ref}
-    style={{ fill: '#333', ...style }}
-    {...props}
-  />
+  <TooltipPrimitive.Arrow ref={ref} style={{ fill: '#333', ...style }} {...props} />
 ));
 GraphTooltipArrow.displayName = TooltipPrimitive.Arrow.displayName;

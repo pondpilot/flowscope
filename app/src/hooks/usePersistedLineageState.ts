@@ -26,9 +26,7 @@ interface UsePersistedLineageStateResult {
   onViewportChange: (viewport: ViewportState) => void;
 }
 
-export function usePersistedLineageState(
-  projectId: string | null
-): UsePersistedLineageStateResult {
+export function usePersistedLineageState(projectId: string | null): UsePersistedLineageStateResult {
   const storedState = useViewStateStore((s) =>
     projectId ? s.getViewState(projectId, 'lineage') : undefined
   );

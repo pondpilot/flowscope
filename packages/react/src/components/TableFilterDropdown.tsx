@@ -1,6 +1,18 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import type { ElementType, JSX } from 'react';
-import { Filter, X, Table2, Eye, Layers, ChevronDown, ChevronUp, ArrowUp, ArrowDown, ArrowLeftRight, Check } from 'lucide-react';
+import {
+  Filter,
+  X,
+  Table2,
+  Eye,
+  Layers,
+  ChevronDown,
+  ChevronUp,
+  ArrowUp,
+  ArrowDown,
+  ArrowLeftRight,
+  Check,
+} from 'lucide-react';
 import { cn } from './ui/button';
 import { useLineageStore } from '../store';
 import { PANEL_STYLES } from '../constants';
@@ -176,11 +188,7 @@ export function TableFilterDropdown(): JSX.Element | null {
         >
           <Filter className="size-4" strokeWidth={hasActiveFilter ? 2.5 : 1.5} />
           <span>Tables</span>
-          {isOpen ? (
-            <ChevronUp className="size-4" />
-          ) : (
-            <ChevronDown className="size-4" />
-          )}
+          {isOpen ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
         </button>
       </div>
 
@@ -289,9 +297,10 @@ export function TableFilterDropdown(): JSX.Element | null {
                     : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50';
 
                 // Checkbox styles based on state
-                const checkboxStyles = !isDimmed && isSelected
-                  ? 'bg-blue-500 border-blue-500'
-                  : 'border-slate-300 dark:border-slate-600';
+                const checkboxStyles =
+                  !isDimmed && isSelected
+                    ? 'bg-blue-500 border-blue-500'
+                    : 'border-slate-300 dark:border-slate-600';
 
                 return (
                   <button

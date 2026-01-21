@@ -89,7 +89,9 @@ export class FlowScopeCodeLensProvider implements vscode.CodeLensProvider {
       const range = new vscode.Range(startPos, startPos);
 
       // Count tables/views/CTEs (excluding columns)
-      const tableCount = stmt.nodes.filter((n) => n.type === 'table' || n.type === 'view' || n.type === 'cte').length;
+      const tableCount = stmt.nodes.filter(
+        (n) => n.type === 'table' || n.type === 'view' || n.type === 'cte'
+      ).length;
 
       // Build the annotation text
       const parts: string[] = [];

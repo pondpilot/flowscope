@@ -25,6 +25,34 @@ export type Dialect =
 export type CaseSensitivity = 'dialect' | 'lower' | 'upper' | 'exact';
 
 /**
+ * Template preprocessing mode for SQL analysis.
+ * - 'raw': No templating, SQL passed through unchanged
+ * - 'jinja': Standard Jinja2 template rendering
+ * - 'dbt': dbt-style templating with builtin macros (ref, source, config, var)
+ *
+ * This is the canonical definition. The app re-exports this type and adds
+ * validation utilities (parseTemplateMode, isValidTemplateMode) and UI
+ * options (TEMPLATE_MODE_OPTIONS).
+ */
+export type TemplateMode = 'raw' | 'jinja' | 'dbt';
+
+/**
+ * Configuration for template preprocessing.
+ *
+ * When provided, the SQL is preprocessed through a template engine before parsing.
+ * This enables analysis of dbt models and Jinja-templated SQL files.
+ */
+export interface TemplateConfig {
+  /** The template mode to use */
+  mode: TemplateMode;
+  /**
+   * Context variables available to the template.
+   * For dbt mode, include a 'vars' key with dbt project variables.
+   */
+  context?: Record<string, unknown>;
+}
+
+/**
  * Text encoding for offset interpretation in API requests/responses.
  *
  * - `'utf8'` (default): All offsets are UTF-8 byte offsets. This is the native
@@ -78,6 +106,12 @@ export interface AnalyzeRequest {
    * @default 'utf8'
    */
   encoding?: Encoding;
+  /**
+   * Optional template configuration for preprocessing SQL.
+   * When provided, SQL is rendered through the template engine before parsing.
+   * Enables analysis of dbt models and Jinja-templated SQL files.
+   */
+  templateConfig?: TemplateConfig;
 }
 
 export interface FileSource {
@@ -92,15 +126,7 @@ export type GraphDetailLevel = 'script' | 'table' | 'column';
 export type MermaidView = 'all' | 'script' | 'table' | 'column' | 'hybrid';
 
 /** Export format identifiers. */
-export type ExportFormat =
-  | 'json'
-  | 'mermaid'
-  | 'html'
-  | 'sql'
-  | 'csv'
-  | 'xlsx'
-  | 'duckdb'
-  | 'png';
+export type ExportFormat = 'json' | 'mermaid' | 'html' | 'sql' | 'csv' | 'xlsx' | 'duckdb' | 'png';
 
 /** Options controlling the analysis behavior. */
 export interface AnalysisOptions {

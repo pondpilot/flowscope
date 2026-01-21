@@ -3,11 +3,7 @@ import { FolderOpen, Pencil, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Project } from '@/lib/project-store';
 
 const KEYBOARD_SHORTCUTS = {
@@ -85,25 +81,32 @@ export function ProjectMenuItem({
     if (isConfirmingDelete) {
       e.preventDefault();
       e.stopPropagation();
-      if (KEYBOARD_SHORTCUTS.CONFIRM_DELETE.includes(e.key as typeof KEYBOARD_SHORTCUTS.CONFIRM_DELETE[number])) {
+      if (
+        KEYBOARD_SHORTCUTS.CONFIRM_DELETE.includes(
+          e.key as (typeof KEYBOARD_SHORTCUTS.CONFIRM_DELETE)[number]
+        )
+      ) {
         onDelete();
         setIsConfirmingDelete(false);
         return;
       }
-      if (KEYBOARD_SHORTCUTS.CANCEL.includes(e.key as typeof KEYBOARD_SHORTCUTS.CANCEL[number])) {
+      if (KEYBOARD_SHORTCUTS.CANCEL.includes(e.key as (typeof KEYBOARD_SHORTCUTS.CANCEL)[number])) {
         handleCancelDelete();
         return;
       }
       return;
     }
 
-    if (KEYBOARD_SHORTCUTS.RENAME.includes(e.key as typeof KEYBOARD_SHORTCUTS.RENAME[number])) {
+    if (KEYBOARD_SHORTCUTS.RENAME.includes(e.key as (typeof KEYBOARD_SHORTCUTS.RENAME)[number])) {
       e.preventDefault();
       e.stopPropagation();
       setIsRenaming(true);
       setRenameValue(project.name);
     }
-    if (KEYBOARD_SHORTCUTS.DELETE.includes(e.key as typeof KEYBOARD_SHORTCUTS.DELETE[number]) && canDelete) {
+    if (
+      KEYBOARD_SHORTCUTS.DELETE.includes(e.key as (typeof KEYBOARD_SHORTCUTS.DELETE)[number]) &&
+      canDelete
+    ) {
       e.preventDefault();
       e.stopPropagation();
       setIsConfirmingDelete(true);
@@ -170,9 +173,7 @@ export function ProjectMenuItem({
         </div>
       ) : (
         <>
-          {isActive && (
-            <span className="text-xs text-muted-foreground">Active</span>
-          )}
+          {isActive && <span className="text-xs text-muted-foreground">Active</span>}
           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-data-highlighted:opacity-100">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -188,7 +189,9 @@ export function ProjectMenuItem({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">
-                <p>Rename <kbd className="ml-1 rounded bg-muted px-1 font-mono text-xs">R</kbd></p>
+                <p>
+                  Rename <kbd className="ml-1 rounded bg-muted px-1 font-mono text-xs">R</kbd>
+                </p>
               </TooltipContent>
             </Tooltip>
             {canDelete && (
@@ -206,7 +209,9 @@ export function ProjectMenuItem({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
-                  <p>Delete <kbd className="ml-1 rounded bg-muted px-1 font-mono text-xs">D</kbd></p>
+                  <p>
+                    Delete <kbd className="ml-1 rounded bg-muted px-1 font-mono text-xs">D</kbd>
+                  </p>
                 </TooltipContent>
               </Tooltip>
             )}

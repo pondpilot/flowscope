@@ -102,8 +102,10 @@ export async function cleanupWasm(): Promise<void> {
         moduleWithCleanup.__wbindgen_free?.();
       } catch (error) {
         // Cleanup errors are non-critical but log in development for debugging
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const isDev = typeof globalThis !== 'undefined' && (globalThis as any).process?.env?.NODE_ENV === 'development';
+        const isDev =
+          typeof globalThis !== 'undefined' &&
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (globalThis as any).process?.env?.NODE_ENV === 'development';
         if (isDev) {
           console.warn('WASM cleanup error (non-critical):', error);
         }

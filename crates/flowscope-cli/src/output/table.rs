@@ -222,6 +222,7 @@ mod tests {
             source_name: None,
             options: None,
             schema: None,
+            template_config: None,
         });
 
         let output = format_table(&result, false, false);
@@ -238,6 +239,7 @@ mod tests {
             source_name: None,
             options: None,
             schema: None,
+            template_config: None,
         });
 
         let output_quiet = format_table(&result, true, false);

@@ -369,21 +369,21 @@ export const SHORTCUTS: ShortcutDefinition[] = [
  * Get shortcuts filtered by category.
  */
 export function getShortcutsByCategory(category: ShortcutCategory): ShortcutDefinition[] {
-  return SHORTCUTS.filter(s => s.category === category);
+  return SHORTCUTS.filter((s) => s.category === category);
 }
 
 /**
  * Get shortcuts filtered by context.
  */
 export function getShortcutsByContext(context: ShortcutContext): ShortcutDefinition[] {
-  return SHORTCUTS.filter(s => s.context === context || s.context === 'global');
+  return SHORTCUTS.filter((s) => s.context === context || s.context === 'global');
 }
 
 /**
  * Find a shortcut by its ID.
  */
 export function getShortcutById(id: string): ShortcutDefinition | undefined {
-  return SHORTCUTS.find(s => s.id === id);
+  return SHORTCUTS.find((s) => s.id === id);
 }
 
 /**

@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { findConnectedElements, pruneDanglingEdges, filterByNamespace } from '../src/utils/graphTraversal';
+import {
+  findConnectedElements,
+  pruneDanglingEdges,
+  filterByNamespace,
+} from '../src/utils/graphTraversal';
 import type { Edge as FlowEdge, Node as FlowNode } from '@xyflow/react';
 import type { TableNodeData, NamespaceFilter } from '../src/types';
 
@@ -435,7 +439,11 @@ describe('pruneDanglingEdges', () => {
 
 const makeTableNodeWithNamespace = (
   id: string,
-  options: { schema?: string; database?: string; columns?: Array<{ id: string; name: string }> } = {}
+  options: {
+    schema?: string;
+    database?: string;
+    columns?: Array<{ id: string; name: string }>;
+  } = {}
 ): FlowNode => ({
   id,
   type: 'tableNode',
@@ -657,8 +665,20 @@ describe('filterByNamespace', () => {
         }),
       ];
       const edges: FlowEdge[] = [
-        { id: 'edge1', source: 'table1', target: 'table2', sourceHandle: 'col1', targetHandle: 'col2' },
-        { id: 'edge2', source: 'table2', target: 'table3', sourceHandle: 'col2', targetHandle: 'col3' },
+        {
+          id: 'edge1',
+          source: 'table1',
+          target: 'table2',
+          sourceHandle: 'col1',
+          targetHandle: 'col2',
+        },
+        {
+          id: 'edge2',
+          source: 'table2',
+          target: 'table3',
+          sourceHandle: 'col2',
+          targetHandle: 'col3',
+        },
       ];
       const filter: NamespaceFilter = { schemas: ['public'], databases: [] };
 

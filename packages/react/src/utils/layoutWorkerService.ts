@@ -33,10 +33,9 @@ const pendingRequests = new Map<string, PendingRequest>();
 function getWorker(): Worker {
   if (!worker) {
     // Vite handles worker bundling with this syntax
-    worker = new Worker(
-      new URL('../workers/layout.worker.ts', import.meta.url),
-      { type: 'module' }
-    );
+    worker = new Worker(new URL('../workers/layout.worker.ts', import.meta.url), {
+      type: 'module',
+    });
 
     worker.onmessage = (event: MessageEvent<LayoutResponse>) => {
       const { requestId, positions, error } = event.data;
@@ -86,7 +85,9 @@ function nodesToWorkerFormat<N extends NodeData>(nodes: Node<N>[]): WorkerNodeDa
 /**
  * Convert React Flow edges to serializable worker format.
  */
-function edgesToWorkerFormat<E extends Record<string, unknown>>(edges: Edge<E>[]): WorkerEdgeData[] {
+function edgesToWorkerFormat<E extends Record<string, unknown>>(
+  edges: Edge<E>[]
+): WorkerEdgeData[] {
   return edges.map((edge) => ({
     id: edge.id,
     source: edge.source,

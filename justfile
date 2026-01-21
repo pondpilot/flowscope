@@ -285,7 +285,11 @@ fmt-check-rust:
 
 # Format TypeScript code
 fmt-ts:
-    yarn workspaces run prettier:write || yarn prettier --write "**/*.{ts,tsx,js,jsx,json,md}"
+    yarn prettier:write
+
+# Check TypeScript formatting
+fmt-check-ts:
+    yarn prettier
 
 # Clean build artifacts
 clean:
@@ -334,7 +338,7 @@ test-rust-release:
 run: build dev
 
 # Check everything is working (quick validation)
-check: fmt-check-rust lint typecheck test-rust check-schema
+check: fmt-check-rust fmt-check-ts lint typecheck test-rust check-schema
 
 # All checks (Rust + TS + schema compatibility)
 check-all:

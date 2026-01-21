@@ -168,11 +168,7 @@ export function DebugPanel() {
             className="p-1 hover:bg-blue-grey-700 rounded"
             title={isMinimized ? 'Maximize' : 'Minimize'}
           >
-            {isMinimized ? (
-              <Maximize2 className="w-4 h-4" />
-            ) : (
-              <Minimize2 className="w-4 h-4" />
-            )}
+            {isMinimized ? <Maximize2 className="w-4 h-4" /> : <Minimize2 className="w-4 h-4" />}
           </button>
           <button
             onClick={() => setIsVisible(false)}
@@ -294,9 +290,7 @@ export function DebugPanel() {
                     </div>
                     <div>
                       <span className="text-muted-foreground">Resolved Tables:</span>{' '}
-                      <span className="font-semibold">
-                        {debugData.schema.resolvedTableCount}
-                      </span>
+                      <span className="font-semibold">{debugData.schema.resolvedTableCount}</span>
                     </div>
                     <div>
                       <span className="text-muted-foreground">Imported:</span>{' '}
@@ -315,12 +309,8 @@ export function DebugPanel() {
                 <JsonTreeView data={debugData.schema} />
               </div>
             )}
-            {activeTab === 'uiState' && (
-              <JsonTreeView data={debugData.uiState} />
-            )}
-            {activeTab === 'raw' && (
-              <JsonTreeView data={debugData} />
-            )}
+            {activeTab === 'uiState' && <JsonTreeView data={debugData.uiState} />}
+            {activeTab === 'raw' && <JsonTreeView data={debugData} />}
           </div>
         </>
       )}

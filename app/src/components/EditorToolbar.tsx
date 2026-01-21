@@ -17,11 +17,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { FileSelector } from './FileSelector';
-import type { Dialect, RunMode } from '@/lib/project-store';
+import type { Dialect, RunMode, TemplateMode } from '@/lib/project-store';
+import { isValidTemplateMode, TEMPLATE_MODE_OPTIONS } from '@/types';
 
 interface EditorToolbarProps {
   dialect: Dialect;
   onDialectChange: (dialect: Dialect) => void;
+  templateMode: TemplateMode;
+  onTemplateModeChange: (mode: TemplateMode) => void;
   runMode: RunMode;
   onRunModeChange: (mode: RunMode) => void;
   isAnalyzing: boolean;
@@ -33,11 +36,15 @@ interface EditorToolbarProps {
   onFileSelectorOpenChange: (open: boolean) => void;
   dialectSelectorOpen: boolean;
   onDialectSelectorOpenChange: (open: boolean) => void;
+  templateSelectorOpen: boolean;
+  onTemplateSelectorOpenChange: (open: boolean) => void;
 }
 
 export function EditorToolbar({
   dialect,
   onDialectChange,
+  templateMode,
+  onTemplateModeChange,
   runMode,
   onRunModeChange,
   isAnalyzing,
@@ -49,18 +56,17 @@ export function EditorToolbar({
   onFileSelectorOpenChange,
   dialectSelectorOpen,
   onDialectSelectorOpenChange,
+  templateSelectorOpen,
+  onTemplateSelectorOpenChange,
 }: EditorToolbarProps) {
   return (
     <div className="flex items-center justify-between px-3 py-2 border-b h-[44px] shrink-0 bg-muted/30 overflow-hidden gap-2">
       <div className="flex items-center gap-2 min-w-0 flex-1">
-        <FileSelector
-          open={fileSelectorOpen}
-          onOpenChange={onFileSelectorOpenChange}
-        />
+        <FileSelector open={fileSelectorOpen} onOpenChange={onFileSelectorOpenChange} />
 
         <Select
           value={dialect}
-          onValueChange={v => onDialectChange(v as Dialect)}
+          onValueChange={(v) => onDialectChange(v as Dialect)}
           open={dialectSelectorOpen}
           onOpenChange={onDialectSelectorOpenChange}
         >
@@ -80,6 +86,28 @@ export function EditorToolbar({
             <SelectItem value="redshift">Redshift</SelectItem>
             <SelectItem value="snowflake">Snowflake</SelectItem>
             <SelectItem value="sqlite">SQLite</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={templateMode}
+          onValueChange={(v) => {
+            if (isValidTemplateMode(v)) {
+              onTemplateModeChange(v);
+            }
+          }}
+          open={templateSelectorOpen}
+          onOpenChange={onTemplateSelectorOpenChange}
+        >
+          <SelectTrigger className="h-8 w-[100px] min-w-0 text-xs">
+            <SelectValue placeholder="Template" />
+          </SelectTrigger>
+          <SelectContent>
+            {TEMPLATE_MODE_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
@@ -112,7 +140,10 @@ export function EditorToolbar({
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Run Configuration</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuRadioGroup value={runMode} onValueChange={v => onRunModeChange(v as RunMode)}>
+              <DropdownMenuRadioGroup
+                value={runMode}
+                onValueChange={(v) => onRunModeChange(v as RunMode)}
+              >
                 <DropdownMenuRadioItem value="current" className="text-xs justify-between">
                   <span>Run Active File Only</span>
                   <kbd className="ml-4 inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">

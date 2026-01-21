@@ -195,6 +195,10 @@ impl<'a> Analyzer<'a> {
 
         // Apply pending filter predicates to table nodes before finalizing
         self.apply_pending_filters(&mut ctx);
+
+        // Propagate inferred columns backward through SELECT * chains
+        self.propagate_inferred_columns(&mut ctx);
+
         self.add_join_dependency_edges(&mut ctx);
 
         // Register implied schema for source tables referenced in the query

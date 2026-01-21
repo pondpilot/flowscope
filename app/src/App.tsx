@@ -38,7 +38,12 @@ function App() {
         <ShareImportHandler />
         <LineageProvider defaultLayoutAlgorithm="dagre">
           <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
-            <Workspace wasmReady={wasmReady} error={error} onRetry={retry} isRetrying={isRetrying} />
+            <Workspace
+              wasmReady={wasmReady}
+              error={error}
+              onRetry={retry}
+              isRetrying={isRetrying}
+            />
           </div>
           <Toaster position="bottom-right" />
           <WelcomeModal />

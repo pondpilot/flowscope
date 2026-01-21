@@ -1,5 +1,11 @@
 import type { Edge as FlowEdge, Node as FlowNode } from '@xyflow/react';
-import type { TableNodeData, ScriptNodeData, TableFilterDirection, TableFilter, NamespaceFilter } from '../types';
+import type {
+  TableNodeData,
+  ScriptNodeData,
+  TableFilterDirection,
+  TableFilter,
+  NamespaceFilter,
+} from '../types';
 
 /**
  * Pre-computed graph index for efficient traversal operations.
@@ -162,9 +168,10 @@ export function filterGraphToHighlights(
  * Remove edges that reference missing nodes or handles.
  * This guards against dangling connections when nodes are filtered or rebuilt.
  */
-export function pruneDanglingEdges(
-  graph: { nodes: FlowNode[]; edges: FlowEdge[] }
-): { nodes: FlowNode[]; edges: FlowEdge[] } {
+export function pruneDanglingEdges(graph: { nodes: FlowNode[]; edges: FlowEdge[] }): {
+  nodes: FlowNode[];
+  edges: FlowEdge[];
+} {
   // Defensive check: graph may be undefined during initial render or state transitions
   if (!graph || !Array.isArray(graph.nodes) || !Array.isArray(graph.edges)) {
     return { nodes: [], edges: [] };
@@ -176,10 +183,7 @@ export function pruneDanglingEdges(
   for (const node of graph.nodes) {
     nodeById.set(node.id, node);
     if (isTableNodeData(node.data)) {
-      handleIdsByNodeId.set(
-        node.id,
-        new Set(node.data.columns.map((col) => col.id))
-      );
+      handleIdsByNodeId.set(node.id, new Set(node.data.columns.map((col) => col.id)));
     }
   }
 
@@ -389,10 +393,7 @@ export function findConnectedElementsMultiple(
  * @param index Pre-built graph index from buildGraphIndex()
  * @returns Set of all connected element IDs (nodes, columns, and edges)
  */
-export function findConnectedElementsIndexed(
-  startId: string,
-  index: GraphIndex
-): Set<string> {
+export function findConnectedElementsIndexed(startId: string, index: GraphIndex): Set<string> {
   const { downstreamMap, upstreamMap, edgeMap } = index;
 
   // Forward traversal: Find all downstream consumers
@@ -431,10 +432,7 @@ export function findConnectedElementsIndexed(
  * @param edges All edges in the graph
  * @returns Set of all connected element IDs (nodes, columns, and edges)
  */
-export function findConnectedElements(
-  startId: string,
-  edges: FlowEdge[]
-): Set<string> {
+export function findConnectedElements(startId: string, edges: FlowEdge[]): Set<string> {
   const index = buildGraphIndex(edges);
   return findConnectedElementsIndexed(startId, index);
 }
@@ -668,7 +666,11 @@ export function applyTableFilter(
 
   // Use pre-built index if provided, otherwise build on-the-fly
   const tableFilterConnected = graphIndex
-    ? findConnectedElementsMultipleDirectionalIndexed(allStartIds, graphIndex, tableFilter.direction)
+    ? findConnectedElementsMultipleDirectionalIndexed(
+        allStartIds,
+        graphIndex,
+        tableFilter.direction
+      )
     : findConnectedElementsMultipleDirectional(allStartIds, graph.edges, tableFilter.direction);
 
   // Also include the original table node IDs (they may not be in traversal results

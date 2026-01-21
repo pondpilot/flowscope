@@ -1,13 +1,6 @@
 import { useCallback, type JSX } from 'react';
 import { toPng } from 'html-to-image';
-import {
-  Download,
-  Image,
-  FileJson,
-  FileSpreadsheet,
-  FileCode,
-  FileText,
-} from 'lucide-react';
+import { Download, Image, FileJson, FileSpreadsheet, FileCode, FileText } from 'lucide-react';
 import { useLineage } from '../store';
 import { UI_CONSTANTS } from '../constants';
 import {

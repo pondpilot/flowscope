@@ -46,11 +46,11 @@ export function useAnalysis(wasmReady: boolean) {
   }, [actions]);
 
   const setAnalyzing = useCallback((isAnalyzing: boolean) => {
-    setState(prev => ({ ...prev, isAnalyzing }));
+    setState((prev) => ({ ...prev, isAnalyzing }));
   }, []);
 
   const setError = useCallback((error: string | null) => {
-    setState(prev => ({ ...prev, error }));
+    setState((prev) => ({ ...prev, error }));
   }, []);
 
   const validateFiles = useCallback(
@@ -81,7 +81,11 @@ export function useAnalysis(wasmReady: boolean) {
   );
 
   const buildAnalysisContext = useCallback(
-    (project: Project | null, activeFileContent?: string, activeFileName?: string): AnalysisContext | null => {
+    (
+      project: Project | null,
+      activeFileContent?: string,
+      activeFileName?: string
+    ): AnalysisContext | null => {
       if (!project) return null;
 
       let contextDescription = '';
@@ -94,13 +98,13 @@ export function useAnalysis(wasmReady: boolean) {
       } else if (runMode === 'custom') {
         const selectedIds = project.selectedFileIds || [];
         const selectedFiles = project.files.filter(
-          f => selectedIds.includes(f.id) && f.name.endsWith('.sql')
+          (f) => selectedIds.includes(f.id) && f.name.endsWith('.sql')
         );
-        filesToAnalyze = selectedFiles.map(f => ({ name: f.name, content: f.content }));
+        filesToAnalyze = selectedFiles.map((f) => ({ name: f.name, content: f.content }));
         contextDescription = `Analyzing selected: ${filesToAnalyze.length} files`;
       } else {
-        const sqlFiles = project.files.filter(f => f.name.endsWith('.sql'));
-        filesToAnalyze = sqlFiles.map(f => ({ name: f.name, content: f.content }));
+        const sqlFiles = project.files.filter((f) => f.name.endsWith('.sql'));
+        filesToAnalyze = sqlFiles.map((f) => ({ name: f.name, content: f.content }));
         contextDescription = `Analyzing project: ${sqlFiles.length} files`;
       }
 
@@ -119,15 +123,18 @@ export function useAnalysis(wasmReady: boolean) {
     }
 
     let cancelled = false;
-    const sqlFiles = currentProject.files.filter(file => file.name.endsWith('.sql'));
+    const sqlFiles = currentProject.files.filter((file) => file.name.endsWith('.sql'));
 
-    if (ANALYSIS_DEBUG) console.log(`[useAnalysis] File sync effect triggered (${sqlFiles.length} SQL files)`);
+    if (ANALYSIS_DEBUG)
+      console.log(`[useAnalysis] File sync effect triggered (${sqlFiles.length} SQL files)`);
     const syncEffectStart = nowMs();
 
     syncAnalysisFiles(sqlFiles)
       .then(() => {
         if (!cancelled && ANALYSIS_DEBUG) {
-          console.log(`[useAnalysis] File sync effect completed in ${(nowMs() - syncEffectStart).toFixed(1)}ms`);
+          console.log(
+            `[useAnalysis] File sync effect completed in ${(nowMs() - syncEffectStart).toFixed(1)}ms`
+          );
         }
       })
       .catch((error: unknown) => {
@@ -145,7 +152,10 @@ export function useAnalysis(wasmReady: boolean) {
   // Cache validation is built into getResult - it returns null if the cached
   // result was computed with a different hideCTEs setting.
   useEffect(() => {
-    if (ANALYSIS_DEBUG) console.log(`[useAnalysis] Memory cache effect triggered (projectId: ${activeProjectId?.slice(0, 8) ?? 'null'})`);
+    if (ANALYSIS_DEBUG)
+      console.log(
+        `[useAnalysis] Memory cache effect triggered (projectId: ${activeProjectId?.slice(0, 8) ?? 'null'})`
+      );
     const memoryCacheStart = nowMs();
 
     if (!activeProjectId) {
@@ -154,7 +164,10 @@ export function useAnalysis(wasmReady: boolean) {
     }
 
     const cachedResult = getResult(activeProjectId, hideCTEs);
-    if (ANALYSIS_DEBUG) console.log(`[useAnalysis] Memory cache ${cachedResult ? 'HIT' : 'MISS'} (${(nowMs() - memoryCacheStart).toFixed(1)}ms)`);
+    if (ANALYSIS_DEBUG)
+      console.log(
+        `[useAnalysis] Memory cache ${cachedResult ? 'HIT' : 'MISS'} (${(nowMs() - memoryCacheStart).toFixed(1)}ms)`
+      );
     // Use startTransition to make the result update low-priority,
     // allowing UI interactions and worker callbacks to proceed without blocking
     startTransition(() => {
@@ -170,7 +183,10 @@ export function useAnalysis(wasmReady: boolean) {
   // This runs after the memory cache effect and may update the result
   // if a cached result is found in the worker's persistent storage.
   useEffect(() => {
-    if (ANALYSIS_DEBUG) console.log(`[useAnalysis] IndexedDB cache effect triggered (projectId: ${activeProjectId?.slice(0, 8) ?? 'null'})`);
+    if (ANALYSIS_DEBUG)
+      console.log(
+        `[useAnalysis] IndexedDB cache effect triggered (projectId: ${activeProjectId?.slice(0, 8) ?? 'null'})`
+      );
 
     if (!wasmReady || !activeProjectId) {
       return;
@@ -187,7 +203,7 @@ export function useAnalysis(wasmReady: boolean) {
       return;
     }
 
-    const activeFile = project.files.find(file => file.id === project.activeFileId);
+    const activeFile = project.files.find((file) => file.id === project.activeFileId);
     const context = buildAnalysisContext(project, activeFile?.content, activeFile?.name);
     if (!context || context.files.length === 0) {
       return;
@@ -195,7 +211,8 @@ export function useAnalysis(wasmReady: boolean) {
 
     let cancelled = false;
     const cacheStart = nowMs();
-    if (ANALYSIS_DEBUG) console.log(`[useAnalysis] Checking IndexedDB cache for ${context.files.length} files`);
+    if (ANALYSIS_DEBUG)
+      console.log(`[useAnalysis] Checking IndexedDB cache for ${context.files.length} files`);
 
     syncAnalysisFiles(context.files)
       .then(() => {
@@ -206,19 +223,25 @@ export function useAnalysis(wasmReady: boolean) {
           schemaSQL: project.schemaSQL ?? '',
           hideCTEs,
           enableColumnLineage: true,
+          templateMode: project.templateMode,
         });
       })
       .then((cached) => {
         const durationMs = nowMs() - cacheStart;
         if (cancelled) {
-          if (ANALYSIS_DEBUG) console.log(`[useAnalysis] IndexedDB cache cancelled after ${durationMs.toFixed(1)}ms`);
+          if (ANALYSIS_DEBUG)
+            console.log(`[useAnalysis] IndexedDB cache cancelled after ${durationMs.toFixed(1)}ms`);
           return;
         }
         if (!cached?.result) {
-          if (ANALYSIS_DEBUG) console.log(`[useAnalysis] IndexedDB cache MISS after ${durationMs.toFixed(1)}ms`);
+          if (ANALYSIS_DEBUG)
+            console.log(`[useAnalysis] IndexedDB cache MISS after ${durationMs.toFixed(1)}ms`);
           return;
         }
-        if (ANALYSIS_DEBUG) console.log(`[useAnalysis] IndexedDB cache HIT after ${durationMs.toFixed(1)}ms - calling setResult`);
+        if (ANALYSIS_DEBUG)
+          console.log(
+            `[useAnalysis] IndexedDB cache HIT after ${durationMs.toFixed(1)}ms - calling setResult`
+          );
         // Use startTransition to make the result update low-priority,
         // allowing UI interactions and worker callbacks to proceed without blocking
         startTransition(() => {
@@ -242,7 +265,15 @@ export function useAnalysis(wasmReady: boolean) {
     return () => {
       cancelled = true;
     };
-  }, [activeProjectId, hideCTEs, getResult, storeResult, setMetrics, wasmReady, buildAnalysisContext]);
+  }, [
+    activeProjectId,
+    hideCTEs,
+    getResult,
+    storeResult,
+    setMetrics,
+    wasmReady,
+    buildAnalysisContext,
+  ]);
 
   const runAnalysis = useCallback(
     async (activeFileContent?: string, activeFileName?: string) => {
@@ -295,7 +326,7 @@ export function useAnalysis(wasmReady: boolean) {
 
         if (shouldBuildPreview) {
           const representativeSql = context.files
-            .map(f => `-- File: ${f.name}\n${f.content}`)
+            .map((f) => `-- File: ${f.name}\n${f.content}`)
             .join('\n\n');
           actionsRef.current.setSql(representativeSql);
         } else if (activeFileContent) {
@@ -308,12 +339,14 @@ export function useAnalysis(wasmReady: boolean) {
           schemaSQL: currentProject.schemaSQL ?? '',
           hideCTEs,
           enableColumnLineage: true,
+          templateMode: currentProject.templateMode,
         };
 
         const cachedResult = activeProjectId ? getResult(activeProjectId, hideCTEs) : null;
-        const knownCacheKey = cachedResult && activeProjectId
-          ? getMetrics(activeProjectId)?.lastCacheKey ?? null
-          : null;
+        const knownCacheKey =
+          cachedResult && activeProjectId
+            ? (getMetrics(activeProjectId)?.lastCacheKey ?? null)
+            : null;
 
         let analysisResponse: Awaited<ReturnType<typeof analyzeWithWorker>>;
         let fileSyncRetries = 0;
@@ -364,7 +397,7 @@ export function useAnalysis(wasmReady: boolean) {
             workerTimings: analysisResponse.timings ?? null,
           });
         }
-        setState(prev => ({ ...prev, lastAnalyzedAt: Date.now() }));
+        setState((prev) => ({ ...prev, lastAnalyzedAt: Date.now() }));
       } catch (error) {
         if (analysisRequestRef.current !== requestId) {
           return;

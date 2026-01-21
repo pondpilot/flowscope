@@ -33,9 +33,7 @@ async function readFileEntry(entry: FileSystemEntry): Promise<File | null> {
   });
 }
 
-async function readDirectoryEntries(
-  reader: FileSystemDirectoryReader
-): Promise<FileSystemEntry[]> {
+async function readDirectoryEntries(reader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> {
   return new Promise((resolve, reject) => {
     reader.readEntries(
       (entries) => resolve(entries),
@@ -70,10 +68,7 @@ interface ProcessResult {
   rejected: RejectedFile[];
 }
 
-async function processEntry(
-  entry: FileSystemEntry,
-  basePath: string = ''
-): Promise<ProcessResult> {
+async function processEntry(entry: FileSystemEntry, basePath: string = ''): Promise<ProcessResult> {
   const accepted: File[] = [];
   const rejected: RejectedFile[] = [];
 
@@ -281,9 +276,7 @@ export function GlobalDropZone() {
                 </li>
               ))}
               {rejectedFiles.length > 5 && (
-                <li className="text-muted-foreground/70">
-                  ...and {rejectedFiles.length - 5} more
-                </li>
+                <li className="text-muted-foreground/70">...and {rejectedFiles.length - 5} more</li>
               )}
             </ul>
           </div>

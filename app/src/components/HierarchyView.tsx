@@ -1,4 +1,14 @@
-import { useMemo, useCallback, useRef, useEffect, useState, createContext, useContext, forwardRef, useImperativeHandle } from 'react';
+import {
+  useMemo,
+  useCallback,
+  useRef,
+  useEffect,
+  useState,
+  createContext,
+  useContext,
+  forwardRef,
+  useImperativeHandle,
+} from 'react';
 import {
   ChevronRight,
   ChevronDown,
@@ -14,14 +24,14 @@ import {
   Grid3X3,
   ExternalLink,
 } from 'lucide-react';
-import { useLineage, SearchAutocomplete, type SearchSuggestion, type SearchAutocompleteRef } from '@pondpilot/flowscope-react';
-import { cn } from '@/lib/utils';
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+  useLineage,
+  SearchAutocomplete,
+  type SearchSuggestion,
+  type SearchAutocompleteRef,
+} from '@pondpilot/flowscope-react';
+import { cn } from '@/lib/utils';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useNavigation } from '@/lib/navigation-context';
 import { usePersistedHierarchyState } from '@/hooks/usePersistedHierarchyState';
 
@@ -81,668 +91,692 @@ export interface HierarchyViewRef {
   focusSearch: () => void;
 }
 
-export const HierarchyView = forwardRef<HierarchyViewRef, HierarchyViewProps>(function HierarchyView({ className, projectId }, ref) {
-  const { state, actions } = useLineage();
-  const { result } = state;
-  const { navigateTo, navigateToEditor } = useNavigation();
-  const nodes = result?.globalLineage?.nodes || [];
-  const edges = result?.globalLineage?.edges || [];
-  const statements = result?.statements || [];
+export const HierarchyView = forwardRef<HierarchyViewRef, HierarchyViewProps>(
+  function HierarchyView({ className, projectId }, ref) {
+    const { state, actions } = useLineage();
+    const { result } = state;
+    const { navigateTo, navigateToEditor } = useNavigation();
+    const nodes = result?.globalLineage?.nodes || [];
+    const edges = result?.globalLineage?.edges || [];
+    const statements = result?.statements || [];
 
-  // Build a lookup map for O(1) node access instead of O(n) find() calls
-  const nodesById = useMemo(() => {
-    const map = new Map<string, (typeof nodes)[number]>();
-    for (const node of nodes) {
-      map.set(node.id, node);
-    }
-    return map;
-  }, [nodes]);
-
-  const getNode = useCallback((id: string) => nodesById.get(id), [nodesById]);
-
-  // Use persisted state hook for all view state
-  const {
-    expandedNodes,
-    filter,
-    detailsPanelHeight,
-    focusedNodeKey,
-    unusedExpanded,
-    setExpandedNodes,
-    setFilter,
-    setDetailsPanelHeight,
-    setFocusedNodeKey,
-    setUnusedExpanded,
-    toggleNode,
-  } = usePersistedHierarchyState(projectId);
-
-  // State for resize tracking (visual feedback) and ref (drag logic)
-  const [isResizing, setIsResizing] = useState(false);
-  const isResizingRef = useRef(false);
-
-  const treeContainerRef = useRef<HTMLDivElement>(null);
-  const searchRef = useRef<SearchAutocompleteRef>(null);
-
-  // Focus tree when ArrowDown pressed in search with no suggestions
-  const handleSearchArrowDownExit = useCallback(() => {
-    treeContainerRef.current?.focus();
-  }, []);
-
-  /** Focus the search input - exposed for keyboard shortcuts */
-  const focusSearch = useCallback(() => {
-    searchRef.current?.focus();
-  }, []);
-
-  // Expose focus methods via ref
-  useImperativeHandle(ref, () => ({
-    focusSearch,
-  }), [focusSearch]);
-
-  // Navigation handlers
-  const handleNavigateToLineage = useCallback((nodeId: string) => {
-    navigateTo('lineage', { tableId: nodeId });
-  }, [navigateTo]);
-
-  const handleNavigateToSchema = useCallback((tableName: string) => {
-    navigateTo('schema', { tableName });
-  }, [navigateTo]);
-
-  const handleNavigateToEditor = useCallback((scripts: string[]) => {
-    if (scripts.length > 0) {
-      // Navigate to the first script
-      navigateToEditor(scripts[0]);
-    }
-  }, [navigateToEditor]);
-
-  // Build lookup maps for details
-  const { columnsByTable, scriptsByTable } = useMemo(() => {
-    const colMap = new Map<string, string[]>();
-    const scriptMap = new Map<string, string[]>();
-
-    edges.forEach((e) => {
-      if (e.type === 'ownership') {
-        const parentNode = getNode(e.from);
-        const childNode = getNode(e.to);
-        if (parentNode && childNode && childNode.type === 'column') {
-          const cols = colMap.get(e.from) || [];
-          const colName = childNode.label.includes('.')
-            ? childNode.label.split('.').pop() || childNode.label
-            : childNode.label;
-          if (!cols.includes(colName)) {
-            cols.push(colName);
-          }
-          colMap.set(e.from, cols);
-        }
+    // Build a lookup map for O(1) node access instead of O(n) find() calls
+    const nodesById = useMemo(() => {
+      const map = new Map<string, (typeof nodes)[number]>();
+      for (const node of nodes) {
+        map.set(node.id, node);
       }
-    });
+      return map;
+    }, [nodes]);
 
-    nodes.forEach((node) => {
-      if (['table', 'view', 'cte'].includes(node.type) && node.statementRefs) {
-        const scripts: string[] = [];
-        node.statementRefs.forEach((ref) => {
-          const stmt = statements[ref.statementIndex];
-          if (stmt?.sourceName && !scripts.includes(stmt.sourceName)) {
-            scripts.push(stmt.sourceName);
-          }
-        });
+    const getNode = useCallback((id: string) => nodesById.get(id), [nodesById]);
+
+    // Use persisted state hook for all view state
+    const {
+      expandedNodes,
+      filter,
+      detailsPanelHeight,
+      focusedNodeKey,
+      unusedExpanded,
+      setExpandedNodes,
+      setFilter,
+      setDetailsPanelHeight,
+      setFocusedNodeKey,
+      setUnusedExpanded,
+      toggleNode,
+    } = usePersistedHierarchyState(projectId);
+
+    // State for resize tracking (visual feedback) and ref (drag logic)
+    const [isResizing, setIsResizing] = useState(false);
+    const isResizingRef = useRef(false);
+
+    const treeContainerRef = useRef<HTMLDivElement>(null);
+    const searchRef = useRef<SearchAutocompleteRef>(null);
+
+    // Focus tree when ArrowDown pressed in search with no suggestions
+    const handleSearchArrowDownExit = useCallback(() => {
+      treeContainerRef.current?.focus();
+    }, []);
+
+    /** Focus the search input - exposed for keyboard shortcuts */
+    const focusSearch = useCallback(() => {
+      searchRef.current?.focus();
+    }, []);
+
+    // Expose focus methods via ref
+    useImperativeHandle(
+      ref,
+      () => ({
+        focusSearch,
+      }),
+      [focusSearch]
+    );
+
+    // Navigation handlers
+    const handleNavigateToLineage = useCallback(
+      (nodeId: string) => {
+        navigateTo('lineage', { tableId: nodeId });
+      },
+      [navigateTo]
+    );
+
+    const handleNavigateToSchema = useCallback(
+      (tableName: string) => {
+        navigateTo('schema', { tableName });
+      },
+      [navigateTo]
+    );
+
+    const handleNavigateToEditor = useCallback(
+      (scripts: string[]) => {
         if (scripts.length > 0) {
-          scriptMap.set(node.id, scripts);
+          // Navigate to the first script
+          navigateToEditor(scripts[0]);
         }
-      }
-    });
+      },
+      [navigateToEditor]
+    );
 
-    return { columnsByTable: colMap, scriptsByTable: scriptMap };
-  }, [getNode, nodes, edges, statements]);
+    // Build lookup maps for details
+    const { columnsByTable, scriptsByTable } = useMemo(() => {
+      const colMap = new Map<string, string[]>();
+      const scriptMap = new Map<string, string[]>();
 
-  // Pre-compute all table mappings for efficient lookup
-  const mappingsByTable = useMemo(() => {
-    const upstreamMap = new Map<string, Array<{ fromTable: string; fromCol: string; toCol: string }>>();
-    const downstreamMap = new Map<string, Array<{ toTable: string; fromCol: string; toCol: string }>>();
-
-    // Build ownership lookup: column ID -> table ID
-    const columnToTable = new Map<string, string>();
-    edges.forEach((e) => {
-      if (e.type === 'ownership') {
-        const childNode = getNode(e.to);
-        if (childNode?.type === 'column') {
-          columnToTable.set(e.to, e.from);
+      edges.forEach((e) => {
+        if (e.type === 'ownership') {
+          const parentNode = getNode(e.from);
+          const childNode = getNode(e.to);
+          if (parentNode && childNode && childNode.type === 'column') {
+            const cols = colMap.get(e.from) || [];
+            const colName = childNode.label.includes('.')
+              ? childNode.label.split('.').pop() || childNode.label
+              : childNode.label;
+            if (!cols.includes(colName)) {
+              cols.push(colName);
+            }
+            colMap.set(e.from, cols);
+          }
         }
-      }
-    });
+      });
 
-    // Process data flow edges to build mappings
-    edges.forEach((e) => {
-      if (e.type === 'data_flow') {
+      nodes.forEach((node) => {
+        if (['table', 'view', 'cte'].includes(node.type) && node.statementRefs) {
+          const scripts: string[] = [];
+          node.statementRefs.forEach((ref) => {
+            const stmt = statements[ref.statementIndex];
+            if (stmt?.sourceName && !scripts.includes(stmt.sourceName)) {
+              scripts.push(stmt.sourceName);
+            }
+          });
+          if (scripts.length > 0) {
+            scriptMap.set(node.id, scripts);
+          }
+        }
+      });
+
+      return { columnsByTable: colMap, scriptsByTable: scriptMap };
+    }, [getNode, nodes, edges, statements]);
+
+    // Pre-compute all table mappings for efficient lookup
+    const mappingsByTable = useMemo(() => {
+      const upstreamMap = new Map<
+        string,
+        Array<{ fromTable: string; fromCol: string; toCol: string }>
+      >();
+      const downstreamMap = new Map<
+        string,
+        Array<{ toTable: string; fromCol: string; toCol: string }>
+      >();
+
+      // Build ownership lookup: column ID -> table ID
+      const columnToTable = new Map<string, string>();
+      edges.forEach((e) => {
+        if (e.type === 'ownership') {
+          const childNode = getNode(e.to);
+          if (childNode?.type === 'column') {
+            columnToTable.set(e.to, e.from);
+          }
+        }
+      });
+
+      // Process data flow edges to build mappings
+      edges.forEach((e) => {
+        if (e.type === 'data_flow') {
+          const fromNode = getNode(e.from);
+          const toNode = getNode(e.to);
+
+          if (fromNode?.type === 'column' && toNode?.type === 'column') {
+            const fromTableId = columnToTable.get(e.from);
+            const toTableId = columnToTable.get(e.to);
+
+            if (fromTableId && toTableId) {
+              const fromTableNode = getNode(fromTableId);
+              const toTableNode = getNode(toTableId);
+
+              if (fromTableNode && toTableNode) {
+                const fromColName = fromNode.label.includes('.')
+                  ? fromNode.label.split('.').pop()!
+                  : fromNode.label;
+                const toColName = toNode.label.includes('.')
+                  ? toNode.label.split('.').pop()!
+                  : toNode.label;
+
+                // Add upstream mapping for the target table
+                const upstream = upstreamMap.get(toTableId) || [];
+                upstream.push({
+                  fromTable: fromTableNode.label,
+                  fromCol: fromColName,
+                  toCol: toColName,
+                });
+                upstreamMap.set(toTableId, upstream);
+
+                // Add downstream mapping for the source table
+                const downstream = downstreamMap.get(fromTableId) || [];
+                downstream.push({
+                  toTable: toTableNode.label,
+                  fromCol: fromColName,
+                  toCol: toColName,
+                });
+                downstreamMap.set(fromTableId, downstream);
+              }
+            }
+          }
+        }
+      });
+
+      return { upstreamMap, downstreamMap };
+    }, [getNode, edges]);
+
+    const getNodeDetails = useCallback(
+      (nodeId: string): NodeDetails | null => {
+        const node = getNode(nodeId);
+        if (!node) return null;
+
+        const columns = columnsByTable.get(nodeId) || [];
+        const scripts = scriptsByTable.get(nodeId) || [];
+        const upstreamMappings = mappingsByTable.upstreamMap.get(nodeId) || [];
+        const downstreamMappings = mappingsByTable.downstreamMap.get(nodeId) || [];
+
+        return {
+          id: nodeId,
+          label: node.label,
+          type: node.type,
+          columns: columns.sort(),
+          scripts,
+          upstreamMappings,
+          downstreamMappings,
+        };
+      },
+      [getNode, columnsByTable, scriptsByTable, mappingsByTable]
+    );
+
+    const { sinks, unusedSources } = useMemo(() => {
+      const tableNodes = nodes.filter((n) => ['table', 'view', 'cte'].includes(n.type));
+
+      const hasDownstream = new Set<string>();
+      const hasUpstream = new Set<string>();
+
+      edges.forEach((e) => {
         const fromNode = getNode(e.from);
         const toNode = getNode(e.to);
-
-        if (fromNode?.type === 'column' && toNode?.type === 'column') {
-          const fromTableId = columnToTable.get(e.from);
-          const toTableId = columnToTable.get(e.to);
-
-          if (fromTableId && toTableId) {
-            const fromTableNode = getNode(fromTableId);
-            const toTableNode = getNode(toTableId);
-
-            if (fromTableNode && toTableNode) {
-              const fromColName = fromNode.label.includes('.')
-                ? fromNode.label.split('.').pop()!
-                : fromNode.label;
-              const toColName = toNode.label.includes('.')
-                ? toNode.label.split('.').pop()!
-                : toNode.label;
-
-              // Add upstream mapping for the target table
-              const upstream = upstreamMap.get(toTableId) || [];
-              upstream.push({
-                fromTable: fromTableNode.label,
-                fromCol: fromColName,
-                toCol: toColName,
-              });
-              upstreamMap.set(toTableId, upstream);
-
-              // Add downstream mapping for the source table
-              const downstream = downstreamMap.get(fromTableId) || [];
-              downstream.push({
-                toTable: toTableNode.label,
-                fromCol: fromColName,
-                toCol: toColName,
-              });
-              downstreamMap.set(fromTableId, downstream);
-            }
-          }
+        if (
+          fromNode &&
+          toNode &&
+          ['table', 'view', 'cte'].includes(fromNode.type) &&
+          ['table', 'view', 'cte'].includes(toNode.type)
+        ) {
+          hasDownstream.add(e.from);
+          hasUpstream.add(e.to);
         }
-      }
-    });
-
-    return { upstreamMap, downstreamMap };
-  }, [getNode, edges]);
-
-  const getNodeDetails = useCallback((nodeId: string): NodeDetails | null => {
-    const node = getNode(nodeId);
-    if (!node) return null;
-
-    const columns = columnsByTable.get(nodeId) || [];
-    const scripts = scriptsByTable.get(nodeId) || [];
-    const upstreamMappings = mappingsByTable.upstreamMap.get(nodeId) || [];
-    const downstreamMappings = mappingsByTable.downstreamMap.get(nodeId) || [];
-
-    return {
-      id: nodeId,
-      label: node.label,
-      type: node.type,
-      columns: columns.sort(),
-      scripts,
-      upstreamMappings,
-      downstreamMappings,
-    };
-  }, [getNode, columnsByTable, scriptsByTable, mappingsByTable]);
-
-  const { sinks, unusedSources } = useMemo(() => {
-    const tableNodes = nodes.filter((n) => ['table', 'view', 'cte'].includes(n.type));
-
-    const hasDownstream = new Set<string>();
-    const hasUpstream = new Set<string>();
-
-    edges.forEach((e) => {
-      const fromNode = getNode(e.from);
-      const toNode = getNode(e.to);
-      if (
-        fromNode &&
-        toNode &&
-        ['table', 'view', 'cte'].includes(fromNode.type) &&
-        ['table', 'view', 'cte'].includes(toNode.type)
-      ) {
-        hasDownstream.add(e.from);
-        hasUpstream.add(e.to);
-      }
-    });
-
-    const sinkNodes = tableNodes.filter((n) => !hasDownstream.has(n.id));
-    const orphanNodes = tableNodes.filter(
-      (n) => !hasDownstream.has(n.id) && !hasUpstream.has(n.id)
-    );
-    const orphanIds = new Set(orphanNodes.map((n) => n.id));
-    const realSinks = sinkNodes.filter((n) => !orphanIds.has(n.id));
-
-    return {
-      sinks: realSinks,
-      unusedSources: orphanNodes,
-    };
-  }, [getNode, nodes, edges]);
-
-  const buildUpstreamTree = (
-    nodeId: string,
-    visited: Set<string> = new Set(),
-    filterLower: string
-  ): LineageNode | null => {
-    const nodeData = getNode(nodeId);
-    if (!nodeData) return null;
-    if (!['table', 'view', 'cte'].includes(nodeData.type)) return null;
-
-    if (visited.has(nodeId)) {
-      return null;
-    }
-    visited.add(nodeId);
-
-    const upstreamEdges = edges.filter((e) => {
-      if (e.to !== nodeId) return false;
-      const fromNode = getNode(e.from);
-      return fromNode && ['table', 'view', 'cte'].includes(fromNode.type);
-    });
-
-    const upstream = upstreamEdges
-      .map((edge) => buildUpstreamTree(edge.from, new Set(visited), filterLower))
-      .filter((n): n is LineageNode => n !== null)
-      .sort((a, b) => a.label.localeCompare(b.label));
-
-    const label = nodeData.label || nodeData.id;
-    // Check if the table name matches
-    const nameMatches = label.toLowerCase().includes(filterLower);
-    // Check if any column name matches
-    const columns = columnsByTable.get(nodeId) || [];
-    const columnMatches = columns.some((col) => col.toLowerCase().includes(filterLower));
-    const matchesFilter = filterLower
-      ? nameMatches || columnMatches
-      : true;
-    const hasMatchingDescendant = upstream.some(
-      (u) => u.matchesFilter || u.hasMatchingDescendant
-    );
-
-    return {
-      id: nodeId,
-      label,
-      type: nodeData.type,
-      upstream,
-      matchesFilter,
-      hasMatchingDescendant,
-    };
-  };
-
-  const sinkTrees = useMemo(() => {
-    const filterLower = filter.toLowerCase().trim();
-
-    const trees = sinks
-      .map((sink) => buildUpstreamTree(sink.id, new Set(), filterLower))
-      .filter((tree): tree is LineageNode => tree !== null)
-      .sort((a, b) => a.label.localeCompare(b.label));
-
-    if (filterLower) {
-      return trees.filter(
-        (tree) => tree.matchesFilter || tree.hasMatchingDescendant
-      );
-    }
-
-    return trees;
-  }, [sinks, edges, nodes, filter, columnsByTable]);
-
-  const filteredUnused = useMemo(() => {
-    const filterLower = filter.toLowerCase().trim();
-    if (!filterLower) return unusedSources;
-
-    return unusedSources.filter((n) => {
-      const nameMatches = (n.label || n.id).toLowerCase().includes(filterLower);
-      const columns = columnsByTable.get(n.id) || [];
-      const columnMatches = columns.some((col) => col.toLowerCase().includes(filterLower));
-      return nameMatches || columnMatches;
-    });
-  }, [unusedSources, filter, columnsByTable]);
-
-  // Build flat list of visible nodes for keyboard navigation
-  const flatNodeList = useMemo(() => {
-    const list: FlatNode[] = [];
-
-    function traverse(node: LineageNode, depth: number, path: string) {
-      const nodeKey = `${path}/${node.id}`;
-      list.push({ id: node.id, nodeKey, node, depth });
-      if (expandedNodes.has(node.id)) {
-        node.upstream.forEach((child, idx) => traverse(child, depth + 1, `${nodeKey}:${idx}`));
-      }
-    }
-
-    sinkTrees.forEach((tree, idx) => traverse(tree, 0, `root:${idx}`));
-
-    if (unusedExpanded && filteredUnused.length > 0) {
-      filteredUnused.forEach((n, idx) => {
-        list.push({
-          id: n.id,
-          nodeKey: `unused:${idx}/${n.id}`,
-          node: {
-            id: n.id,
-            label: n.label || n.id,
-            type: n.type,
-            upstream: [],
-            matchesFilter: true,
-            hasMatchingDescendant: false,
-          },
-          depth: 1,
-          isUnused: true,
-        });
       });
-    }
 
-    return list;
-  }, [sinkTrees, expandedNodes, unusedExpanded, filteredUnused]);
+      const sinkNodes = tableNodes.filter((n) => !hasDownstream.has(n.id));
+      const orphanNodes = tableNodes.filter(
+        (n) => !hasDownstream.has(n.id) && !hasUpstream.has(n.id)
+      );
+      const orphanIds = new Set(orphanNodes.map((n) => n.id));
+      const realSinks = sinkNodes.filter((n) => !orphanIds.has(n.id));
 
-  // Auto-expand on filter
-  useMemo(() => {
-    if (!filter.trim()) {
-      setExpandedNodes(new Set());
-      return;
-    }
+      return {
+        sinks: realSinks,
+        unusedSources: orphanNodes,
+      };
+    }, [getNode, nodes, edges]);
 
-    const toExpand = new Set<string>();
+    const buildUpstreamTree = (
+      nodeId: string,
+      visited: Set<string> = new Set(),
+      filterLower: string
+    ): LineageNode | null => {
+      const nodeData = getNode(nodeId);
+      if (!nodeData) return null;
+      if (!['table', 'view', 'cte'].includes(nodeData.type)) return null;
 
-    function collectExpandable(node: LineageNode) {
-      if (node.hasMatchingDescendant) {
-        toExpand.add(node.id);
+      if (visited.has(nodeId)) {
+        return null;
       }
-      node.upstream.forEach(collectExpandable);
-    }
+      visited.add(nodeId);
 
-    sinkTrees.forEach(collectExpandable);
-    setExpandedNodes(toExpand);
-  }, [filter, sinkTrees]);
+      const upstreamEdges = edges.filter((e) => {
+        if (e.to !== nodeId) return false;
+        const fromNode = getNode(e.from);
+        return fromNode && ['table', 'view', 'cte'].includes(fromNode.type);
+      });
 
-  // Handle suggestion selection from autocomplete
-  const handleSuggestionSelect = useCallback(
-    (suggestion: SearchSuggestion) => {
-      setFilter(suggestion.label);
-    },
-    [setFilter]
-  );
+      const upstream = upstreamEdges
+        .map((edge) => buildUpstreamTree(edge.from, new Set(visited), filterLower))
+        .filter((n): n is LineageNode => n !== null)
+        .sort((a, b) => a.label.localeCompare(b.label));
 
-  // Get the focused node from the flat list
-  const focusedNode = useMemo(() => {
-    if (!focusedNodeKey) return null;
-    return flatNodeList.find((n) => n.nodeKey === focusedNodeKey) || null;
-  }, [focusedNodeKey, flatNodeList]);
+      const label = nodeData.label || nodeData.id;
+      // Check if the table name matches
+      const nameMatches = label.toLowerCase().includes(filterLower);
+      // Check if any column name matches
+      const columns = columnsByTable.get(nodeId) || [];
+      const columnMatches = columns.some((col) => col.toLowerCase().includes(filterLower));
+      const matchesFilter = filterLower ? nameMatches || columnMatches : true;
+      const hasMatchingDescendant = upstream.some(
+        (u) => u.matchesFilter || u.hasMatchingDescendant
+      );
 
-  // Keyboard navigation
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (flatNodeList.length === 0) return;
+      return {
+        id: nodeId,
+        label,
+        type: nodeData.type,
+        upstream,
+        matchesFilter,
+        hasMatchingDescendant,
+      };
+    };
 
-      const currentIndex = focusedNodeKey
-        ? flatNodeList.findIndex((n) => n.nodeKey === focusedNodeKey)
-        : -1;
+    const sinkTrees = useMemo(() => {
+      const filterLower = filter.toLowerCase().trim();
 
-      switch (e.key) {
-        case 'ArrowDown': {
-          e.preventDefault();
-          const nextIndex = currentIndex < flatNodeList.length - 1 ? currentIndex + 1 : 0;
-          setFocusedNodeKey(flatNodeList[nextIndex].nodeKey);
-          break;
+      const trees = sinks
+        .map((sink) => buildUpstreamTree(sink.id, new Set(), filterLower))
+        .filter((tree): tree is LineageNode => tree !== null)
+        .sort((a, b) => a.label.localeCompare(b.label));
+
+      if (filterLower) {
+        return trees.filter((tree) => tree.matchesFilter || tree.hasMatchingDescendant);
+      }
+
+      return trees;
+    }, [sinks, edges, nodes, filter, columnsByTable]);
+
+    const filteredUnused = useMemo(() => {
+      const filterLower = filter.toLowerCase().trim();
+      if (!filterLower) return unusedSources;
+
+      return unusedSources.filter((n) => {
+        const nameMatches = (n.label || n.id).toLowerCase().includes(filterLower);
+        const columns = columnsByTable.get(n.id) || [];
+        const columnMatches = columns.some((col) => col.toLowerCase().includes(filterLower));
+        return nameMatches || columnMatches;
+      });
+    }, [unusedSources, filter, columnsByTable]);
+
+    // Build flat list of visible nodes for keyboard navigation
+    const flatNodeList = useMemo(() => {
+      const list: FlatNode[] = [];
+
+      function traverse(node: LineageNode, depth: number, path: string) {
+        const nodeKey = `${path}/${node.id}`;
+        list.push({ id: node.id, nodeKey, node, depth });
+        if (expandedNodes.has(node.id)) {
+          node.upstream.forEach((child, idx) => traverse(child, depth + 1, `${nodeKey}:${idx}`));
         }
-        case 'ArrowUp': {
-          e.preventDefault();
-          const prevIndex = currentIndex > 0 ? currentIndex - 1 : flatNodeList.length - 1;
-          setFocusedNodeKey(flatNodeList[prevIndex].nodeKey);
-          break;
+      }
+
+      sinkTrees.forEach((tree, idx) => traverse(tree, 0, `root:${idx}`));
+
+      if (unusedExpanded && filteredUnused.length > 0) {
+        filteredUnused.forEach((n, idx) => {
+          list.push({
+            id: n.id,
+            nodeKey: `unused:${idx}/${n.id}`,
+            node: {
+              id: n.id,
+              label: n.label || n.id,
+              type: n.type,
+              upstream: [],
+              matchesFilter: true,
+              hasMatchingDescendant: false,
+            },
+            depth: 1,
+            isUnused: true,
+          });
+        });
+      }
+
+      return list;
+    }, [sinkTrees, expandedNodes, unusedExpanded, filteredUnused]);
+
+    // Auto-expand on filter
+    useMemo(() => {
+      if (!filter.trim()) {
+        setExpandedNodes(new Set());
+        return;
+      }
+
+      const toExpand = new Set<string>();
+
+      function collectExpandable(node: LineageNode) {
+        if (node.hasMatchingDescendant) {
+          toExpand.add(node.id);
         }
-        case 'ArrowRight': {
-          e.preventDefault();
-          if (focusedNode) {
-            if (focusedNode.node.upstream.length > 0 && !expandedNodes.has(focusedNode.id)) {
-              toggleNode(focusedNode.id);
-            }
+        node.upstream.forEach(collectExpandable);
+      }
+
+      sinkTrees.forEach(collectExpandable);
+      setExpandedNodes(toExpand);
+    }, [filter, sinkTrees]);
+
+    // Handle suggestion selection from autocomplete
+    const handleSuggestionSelect = useCallback(
+      (suggestion: SearchSuggestion) => {
+        setFilter(suggestion.label);
+      },
+      [setFilter]
+    );
+
+    // Get the focused node from the flat list
+    const focusedNode = useMemo(() => {
+      if (!focusedNodeKey) return null;
+      return flatNodeList.find((n) => n.nodeKey === focusedNodeKey) || null;
+    }, [focusedNodeKey, flatNodeList]);
+
+    // Keyboard navigation
+    const handleKeyDown = useCallback(
+      (e: React.KeyboardEvent) => {
+        if (flatNodeList.length === 0) return;
+
+        const currentIndex = focusedNodeKey
+          ? flatNodeList.findIndex((n) => n.nodeKey === focusedNodeKey)
+          : -1;
+
+        switch (e.key) {
+          case 'ArrowDown': {
+            e.preventDefault();
+            const nextIndex = currentIndex < flatNodeList.length - 1 ? currentIndex + 1 : 0;
+            setFocusedNodeKey(flatNodeList[nextIndex].nodeKey);
+            break;
           }
-          break;
-        }
-        case 'ArrowLeft': {
-          e.preventDefault();
-          if (focusedNode) {
-            if (expandedNodes.has(focusedNode.id)) {
-              toggleNode(focusedNode.id);
-            } else {
-              // Find parent and focus it
-              if (currentIndex > 0) {
-                const currentDepth = focusedNode.depth;
-                for (let i = currentIndex - 1; i >= 0; i--) {
-                  if (flatNodeList[i].depth < currentDepth) {
-                    setFocusedNodeKey(flatNodeList[i].nodeKey);
-                    break;
+          case 'ArrowUp': {
+            e.preventDefault();
+            const prevIndex = currentIndex > 0 ? currentIndex - 1 : flatNodeList.length - 1;
+            setFocusedNodeKey(flatNodeList[prevIndex].nodeKey);
+            break;
+          }
+          case 'ArrowRight': {
+            e.preventDefault();
+            if (focusedNode) {
+              if (focusedNode.node.upstream.length > 0 && !expandedNodes.has(focusedNode.id)) {
+                toggleNode(focusedNode.id);
+              }
+            }
+            break;
+          }
+          case 'ArrowLeft': {
+            e.preventDefault();
+            if (focusedNode) {
+              if (expandedNodes.has(focusedNode.id)) {
+                toggleNode(focusedNode.id);
+              } else {
+                // Find parent and focus it
+                if (currentIndex > 0) {
+                  const currentDepth = focusedNode.depth;
+                  for (let i = currentIndex - 1; i >= 0; i--) {
+                    if (flatNodeList[i].depth < currentDepth) {
+                      setFocusedNodeKey(flatNodeList[i].nodeKey);
+                      break;
+                    }
                   }
                 }
               }
             }
+            break;
           }
-          break;
+          case 'Enter':
+          case ' ': {
+            e.preventDefault();
+            if (focusedNode) {
+              actions.selectNode(focusedNode.id);
+            }
+            break;
+          }
+          case 'Home': {
+            e.preventDefault();
+            if (flatNodeList.length > 0) {
+              setFocusedNodeKey(flatNodeList[0].nodeKey);
+            }
+            break;
+          }
+          case 'End': {
+            e.preventDefault();
+            if (flatNodeList.length > 0) {
+              setFocusedNodeKey(flatNodeList[flatNodeList.length - 1].nodeKey);
+            }
+            break;
+          }
         }
-        case 'Enter':
-        case ' ': {
-          e.preventDefault();
-          if (focusedNode) {
-            actions.selectNode(focusedNode.id);
-          }
-          break;
-        }
-        case 'Home': {
-          e.preventDefault();
-          if (flatNodeList.length > 0) {
-            setFocusedNodeKey(flatNodeList[0].nodeKey);
-          }
-          break;
-        }
-        case 'End': {
-          e.preventDefault();
-          if (flatNodeList.length > 0) {
-            setFocusedNodeKey(flatNodeList[flatNodeList.length - 1].nodeKey);
-          }
-          break;
+      },
+      [flatNodeList, focusedNodeKey, focusedNode, expandedNodes, toggleNode, actions]
+    );
+
+    // Scroll focused node into view
+    useEffect(() => {
+      if (focusedNodeKey && treeContainerRef.current) {
+        const element = treeContainerRef.current.querySelector(
+          `[data-node-key="${CSS.escape(focusedNodeKey)}"]`
+        );
+        if (element) {
+          element.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         }
       }
-    },
-    [flatNodeList, focusedNodeKey, focusedNode, expandedNodes, toggleNode, actions]
-  );
+    }, [focusedNodeKey]);
 
-  // Scroll focused node into view
-  useEffect(() => {
-    if (focusedNodeKey && treeContainerRef.current) {
-      const element = treeContainerRef.current.querySelector(
-        `[data-node-key="${CSS.escape(focusedNodeKey)}"]`
-      );
-      if (element) {
-        element.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      }
-    }
-  }, [focusedNodeKey]);
+    // Resize handler
+    const handleResizeStart = useCallback(
+      (e: React.MouseEvent) => {
+        e.preventDefault();
+        setIsResizing(true);
+        isResizingRef.current = true;
 
-  // Resize handler
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsResizing(true);
-    isResizingRef.current = true;
+        const startY = e.clientY;
+        const startHeight = detailsPanelHeight;
 
-    const startY = e.clientY;
-    const startHeight = detailsPanelHeight;
+        const handleMouseMove = (e: MouseEvent) => {
+          const deltaY = startY - e.clientY;
+          const newHeight = Math.max(80, Math.min(400, startHeight + deltaY));
+          setDetailsPanelHeight(newHeight);
+        };
 
-    const handleMouseMove = (e: MouseEvent) => {
-      const deltaY = startY - e.clientY;
-      const newHeight = Math.max(80, Math.min(400, startHeight + deltaY));
-      setDetailsPanelHeight(newHeight);
-    };
+        const handleMouseUp = () => {
+          isResizingRef.current = false;
+          setIsResizing(false);
+          document.removeEventListener('mousemove', handleMouseMove);
+          document.removeEventListener('mouseup', handleMouseUp);
+        };
 
-    const handleMouseUp = () => {
-      isResizingRef.current = false;
-      setIsResizing(false);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+      },
+      [detailsPanelHeight, setDetailsPanelHeight]
+    );
 
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  }, [detailsPanelHeight, setDetailsPanelHeight]);
+    const hasContent = sinkTrees.length > 0 || filteredUnused.length > 0;
 
-  const hasContent = sinkTrees.length > 0 || filteredUnused.length > 0;
+    const selectedDetails = state.selectedNodeId ? getNodeDetails(state.selectedNodeId) : null;
 
-  const selectedDetails = state.selectedNodeId
-    ? getNodeDetails(state.selectedNodeId)
-    : null;
+    // Memoize context value to prevent unnecessary re-renders
+    const hierarchyActionsValue = useMemo(
+      () => ({
+        getNodeDetails,
+        onNavigateToLineage: handleNavigateToLineage,
+        onNavigateToSchema: handleNavigateToSchema,
+        onNavigateToEditor: handleNavigateToEditor,
+      }),
+      [getNodeDetails, handleNavigateToLineage, handleNavigateToSchema, handleNavigateToEditor]
+    );
 
-  // Memoize context value to prevent unnecessary re-renders
-  const hierarchyActionsValue = useMemo(() => ({
-    getNodeDetails,
-    onNavigateToLineage: handleNavigateToLineage,
-    onNavigateToSchema: handleNavigateToSchema,
-    onNavigateToEditor: handleNavigateToEditor,
-  }), [getNodeDetails, handleNavigateToLineage, handleNavigateToSchema, handleNavigateToEditor]);
-
-  return (
-    <HierarchyActionsContext.Provider value={hierarchyActionsValue}>
-      <TooltipProvider delayDuration={400}>
-        <div className={cn('flex flex-col h-full bg-background', className)}>
-        {/* Filter Input with Autocomplete */}
-        <div className="p-2 border-b">
-          <SearchAutocomplete
-            ref={searchRef}
-            initialValue={filter}
-            onSearch={setFilter}
-            searchableTypes={['table', 'view', 'cte', 'column']}
-            placeholder="Filter tables and columns..."
-            onSuggestionSelect={handleSuggestionSelect}
-            searchInputId="hierarchy"
-            onArrowDownExit={handleSearchArrowDownExit}
-            className="w-full"
-          />
-        </div>
-
-        {/* Tree Content */}
-        <div
-          ref={treeContainerRef}
-          className="flex-1 min-h-0 overflow-auto focus:outline-hidden"
-          tabIndex={0}
-          onKeyDown={handleKeyDown}
-          role="tree"
-          aria-label="Lineage tree"
-        >
-          {!hasContent ? (
-            <div className="text-sm text-muted-foreground text-center py-10">
-              {filter ? 'No matches found' : 'No lineage data available'}
+    return (
+      <HierarchyActionsContext.Provider value={hierarchyActionsValue}>
+        <TooltipProvider delayDuration={400}>
+          <div className={cn('flex flex-col h-full bg-background', className)}>
+            {/* Filter Input with Autocomplete */}
+            <div className="p-2 border-b">
+              <SearchAutocomplete
+                ref={searchRef}
+                initialValue={filter}
+                onSearch={setFilter}
+                searchableTypes={['table', 'view', 'cte', 'column']}
+                placeholder="Filter tables and columns..."
+                onSuggestionSelect={handleSuggestionSelect}
+                searchInputId="hierarchy"
+                onArrowDownExit={handleSearchArrowDownExit}
+                className="w-full"
+              />
             </div>
-          ) : (
-            <div className="py-1 text-xs">
-              {sinkTrees.map((tree, idx) => (
-                <LineageNodeItem
-                  key={`root:${idx}/${tree.id}`}
-                  node={tree}
-                  nodeKey={`root:${idx}/${tree.id}`}
-                  depth={0}
-                  expandedNodes={expandedNodes}
-                  onToggle={toggleNode}
-                  onSelect={(id) => actions.selectNode(id)}
-                  activeId={state.selectedNodeId}
-                  focusedKey={focusedNodeKey}
-                  onFocus={setFocusedNodeKey}
-                  filter={filter.toLowerCase().trim()}
-                />
-              ))}
 
-              {filteredUnused.length > 0 && (
-                <div className="mt-2 border-t">
-                  <button
-                    className={cn(
-                      'w-full flex items-center gap-1.5 px-2 py-1.5 text-[11px]',
-                      'text-muted-foreground hover:bg-muted/50 transition-colors',
-                      'focus:outline-hidden focus-visible:ring-1 focus-visible:ring-ring'
-                    )}
-                    onClick={() => setUnusedExpanded(!unusedExpanded)}
-                  >
-                    {unusedExpanded ? (
-                      <ChevronDown className="w-3 h-3" />
-                    ) : (
-                      <ChevronRight className="w-3 h-3" />
-                    )}
-                    <PackageOpen className="w-3.5 h-3.5" />
-                    <span>Unused Sources</span>
-                    <span className="ml-auto tabular-nums text-muted-foreground/70">
-                      {filteredUnused.length}
-                    </span>
-                  </button>
+            {/* Tree Content */}
+            <div
+              ref={treeContainerRef}
+              className="flex-1 min-h-0 overflow-auto focus:outline-hidden"
+              tabIndex={0}
+              onKeyDown={handleKeyDown}
+              role="tree"
+              aria-label="Lineage tree"
+            >
+              {!hasContent ? (
+                <div className="text-sm text-muted-foreground text-center py-10">
+                  {filter ? 'No matches found' : 'No lineage data available'}
+                </div>
+              ) : (
+                <div className="py-1 text-xs">
+                  {sinkTrees.map((tree, idx) => (
+                    <LineageNodeItem
+                      key={`root:${idx}/${tree.id}`}
+                      node={tree}
+                      nodeKey={`root:${idx}/${tree.id}`}
+                      depth={0}
+                      expandedNodes={expandedNodes}
+                      onToggle={toggleNode}
+                      onSelect={(id) => actions.selectNode(id)}
+                      activeId={state.selectedNodeId}
+                      focusedKey={focusedNodeKey}
+                      onFocus={setFocusedNodeKey}
+                      filter={filter.toLowerCase().trim()}
+                    />
+                  ))}
 
-                  {unusedExpanded && (
-                    <div className="py-1">
-                      {filteredUnused.map((node, idx) => {
-                        const unusedNodeKey = `unused:${idx}/${node.id}`;
-                        const details = getNodeDetails(node.id);
-                        return (
-                          <Tooltip key={unusedNodeKey}>
-                            <TooltipTrigger asChild>
-                              <div
-                                data-node-key={unusedNodeKey}
-                                className={cn(
-                                  'group relative flex items-center gap-1.5 py-1 px-2 cursor-pointer transition-colors',
-                                  'hover:bg-muted/50',
-                                  state.selectedNodeId === node.id && 'bg-muted',
-                                  focusedNodeKey === unusedNodeKey && 'ring-1 ring-inset ring-primary/50'
-                                )}
-                                style={{ paddingLeft: '24px' }}
-                                onClick={() => actions.selectNode(node.id)}
-                                onMouseEnter={() => setFocusedNodeKey(unusedNodeKey)}
-                              >
-                                <NodeIcon type={node.type} className="w-3.5 h-3.5 shrink-0" />
-                                <span
-                                  className={cn(
-                                    'truncate flex-1',
-                                    filter &&
-                                      (node.label || node.id).toLowerCase().includes(filter.toLowerCase()) &&
-                                      'bg-yellow-200/50 dark:bg-yellow-500/30'
-                                  )}
-                                >
-                                  {node.label || node.id}
-                                </span>
-                                {/* Hover action icons */}
-                                <div className="flex items-center gap-0.5 ml-auto shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <NodeActionButtons
-                                    nodeId={node.id}
-                                    nodeName={node.label || node.id}
-                                    scripts={details?.scripts}
-                                  />
-                                </div>
-                              </div>
-                            </TooltipTrigger>
-                            <TooltipContent side="right" className="max-w-xs">
-                              <NodeTooltipContent details={details} />
-                            </TooltipContent>
-                          </Tooltip>
-                        );
-                      })}
+                  {filteredUnused.length > 0 && (
+                    <div className="mt-2 border-t">
+                      <button
+                        className={cn(
+                          'w-full flex items-center gap-1.5 px-2 py-1.5 text-[11px]',
+                          'text-muted-foreground hover:bg-muted/50 transition-colors',
+                          'focus:outline-hidden focus-visible:ring-1 focus-visible:ring-ring'
+                        )}
+                        onClick={() => setUnusedExpanded(!unusedExpanded)}
+                      >
+                        {unusedExpanded ? (
+                          <ChevronDown className="w-3 h-3" />
+                        ) : (
+                          <ChevronRight className="w-3 h-3" />
+                        )}
+                        <PackageOpen className="w-3.5 h-3.5" />
+                        <span>Unused Sources</span>
+                        <span className="ml-auto tabular-nums text-muted-foreground/70">
+                          {filteredUnused.length}
+                        </span>
+                      </button>
+
+                      {unusedExpanded && (
+                        <div className="py-1">
+                          {filteredUnused.map((node, idx) => {
+                            const unusedNodeKey = `unused:${idx}/${node.id}`;
+                            const details = getNodeDetails(node.id);
+                            return (
+                              <Tooltip key={unusedNodeKey}>
+                                <TooltipTrigger asChild>
+                                  <div
+                                    data-node-key={unusedNodeKey}
+                                    className={cn(
+                                      'group relative flex items-center gap-1.5 py-1 px-2 cursor-pointer transition-colors',
+                                      'hover:bg-muted/50',
+                                      state.selectedNodeId === node.id && 'bg-muted',
+                                      focusedNodeKey === unusedNodeKey &&
+                                        'ring-1 ring-inset ring-primary/50'
+                                    )}
+                                    style={{ paddingLeft: '24px' }}
+                                    onClick={() => actions.selectNode(node.id)}
+                                    onMouseEnter={() => setFocusedNodeKey(unusedNodeKey)}
+                                  >
+                                    <NodeIcon type={node.type} className="w-3.5 h-3.5 shrink-0" />
+                                    <span
+                                      className={cn(
+                                        'truncate flex-1',
+                                        filter &&
+                                          (node.label || node.id)
+                                            .toLowerCase()
+                                            .includes(filter.toLowerCase()) &&
+                                          'bg-yellow-200/50 dark:bg-yellow-500/30'
+                                      )}
+                                    >
+                                      {node.label || node.id}
+                                    </span>
+                                    {/* Hover action icons */}
+                                    <div className="flex items-center gap-0.5 ml-auto shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <NodeActionButtons
+                                        nodeId={node.id}
+                                        nodeName={node.label || node.id}
+                                        scripts={details?.scripts}
+                                      />
+                                    </div>
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent side="right" className="max-w-xs">
+                                  <NodeTooltipContent details={details} />
+                                </TooltipContent>
+                              </Tooltip>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
               )}
             </div>
-          )}
-        </div>
 
-        {/* Resizable Details Panel */}
-        {selectedDetails && (
-          <>
-            {/* Resize Handle */}
-            <div
-              className={cn(
-                'h-2 border-t bg-muted/30 cursor-ns-resize flex items-center justify-center',
-                'hover:bg-muted/50 transition-colors',
-                isResizing && 'bg-muted/50'
-              )}
-              onMouseDown={handleResizeStart}
-            >
-              <GripHorizontal className="w-4 h-4 text-muted-foreground/50" />
-            </div>
+            {/* Resizable Details Panel */}
+            {selectedDetails && (
+              <>
+                {/* Resize Handle */}
+                <div
+                  className={cn(
+                    'h-2 border-t bg-muted/30 cursor-ns-resize flex items-center justify-center',
+                    'hover:bg-muted/50 transition-colors',
+                    isResizing && 'bg-muted/50'
+                  )}
+                  onMouseDown={handleResizeStart}
+                >
+                  <GripHorizontal className="w-4 h-4 text-muted-foreground/50" />
+                </div>
 
-            {/* Details Panel */}
-            <div
-              className="bg-muted/30 overflow-auto"
-              style={{ height: detailsPanelHeight }}
-            >
-              <DetailsPanel details={selectedDetails} />
-            </div>
-          </>
-        )}
-        </div>
-      </TooltipProvider>
-    </HierarchyActionsContext.Provider>
-  );
-});
+                {/* Details Panel */}
+                <div className="bg-muted/30 overflow-auto" style={{ height: detailsPanelHeight }}>
+                  <DetailsPanel details={selectedDetails} />
+                </div>
+              </>
+            )}
+          </div>
+        </TooltipProvider>
+      </HierarchyActionsContext.Provider>
+    );
+  }
+);
 
 function NodeIcon({ type, className }: { type: string; className?: string }) {
   switch (type) {
@@ -768,16 +802,12 @@ interface NodeActionButtonsProps {
  * Uses HierarchyActionsContext for navigation handlers.
  * Supports keyboard navigation with Enter/Space.
  */
-function NodeActionButtons({
-  nodeId,
-  nodeName,
-  scripts,
-  size = 'sm',
-}: NodeActionButtonsProps) {
+function NodeActionButtons({ nodeId, nodeName, scripts, size = 'sm' }: NodeActionButtonsProps) {
   const { onNavigateToLineage, onNavigateToSchema, onNavigateToEditor } = useHierarchyActions();
-  const buttonClass = size === 'sm'
-    ? 'w-5 h-5 flex items-center justify-center rounded hover:bg-muted-foreground/20 text-muted-foreground/70 hover:text-foreground'
-    : 'w-6 h-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground';
+  const buttonClass =
+    size === 'sm'
+      ? 'w-5 h-5 flex items-center justify-center rounded hover:bg-muted-foreground/20 text-muted-foreground/70 hover:text-foreground'
+      : 'w-6 h-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground';
   const iconClass = size === 'sm' ? 'w-3 h-3' : 'w-3.5 h-3.5';
 
   const handleKeyDown = (e: React.KeyboardEvent, action: () => void) => {
@@ -804,7 +834,9 @@ function NodeActionButtons({
             <Eye className={iconClass} />
           </button>
         </TooltipTrigger>
-        <TooltipContent side="top" className="text-xs">Show in Lineage</TooltipContent>
+        <TooltipContent side="top" className="text-xs">
+          Show in Lineage
+        </TooltipContent>
       </Tooltip>
       <Tooltip>
         <TooltipTrigger asChild>
@@ -820,7 +852,9 @@ function NodeActionButtons({
             <Grid3X3 className={iconClass} />
           </button>
         </TooltipTrigger>
-        <TooltipContent side="top" className="text-xs">Show in Schema</TooltipContent>
+        <TooltipContent side="top" className="text-xs">
+          Show in Schema
+        </TooltipContent>
       </Tooltip>
       {scripts && scripts.length > 0 && (
         <Tooltip>
@@ -837,7 +871,9 @@ function NodeActionButtons({
               <ExternalLink className={iconClass} />
             </button>
           </TooltipTrigger>
-          <TooltipContent side="top" className="text-xs">Open in Editor</TooltipContent>
+          <TooltipContent side="top" className="text-xs">
+            Open in Editor
+          </TooltipContent>
         </Tooltip>
       )}
     </>
@@ -876,7 +912,9 @@ function NodeTooltipContent({ details }: { details: NodeDetails | null }) {
           </div>
           <div className="text-[11px] text-muted-foreground/80">
             {details.scripts.map((s, i) => (
-              <div key={i} className="truncate max-w-[200px]">{s}</div>
+              <div key={i} className="truncate max-w-[200px]">
+                {s}
+              </div>
             ))}
           </div>
         </div>
@@ -894,11 +932,7 @@ function NodeTooltipContent({ details }: { details: NodeDetails | null }) {
   );
 }
 
-function DetailsPanel({
-  details,
-}: {
-  details: NodeDetails;
-}) {
+function DetailsPanel({ details }: { details: NodeDetails }) {
   const { onNavigateToEditor } = useHierarchyActions();
   return (
     <div className="p-3 text-xs space-y-3">
@@ -928,10 +962,7 @@ function DetailsPanel({
           </div>
           <div className="flex flex-wrap gap-1">
             {details.columns.map((col) => (
-              <span
-                key={col}
-                className="px-1.5 py-0.5 bg-muted rounded text-[11px] font-mono"
-              >
+              <span key={col} className="px-1.5 py-0.5 bg-muted rounded text-[11px] font-mono">
                 {col}
               </span>
             ))}
@@ -971,7 +1002,9 @@ function DetailsPanel({
           <div className="space-y-0.5 font-mono text-[11px]">
             {details.upstreamMappings.slice(0, 10).map((m, i) => (
               <div key={i} className="flex items-center gap-1 text-muted-foreground">
-                <span className="truncate max-w-[120px]">{m.fromTable}.{m.fromCol}</span>
+                <span className="truncate max-w-[120px]">
+                  {m.fromTable}.{m.fromCol}
+                </span>
                 <ArrowRight className="w-3 h-3 shrink-0" />
                 <span>{m.toCol}</span>
               </div>
@@ -997,7 +1030,9 @@ function DetailsPanel({
               <div key={i} className="flex items-center gap-1 text-muted-foreground">
                 <span>{m.fromCol}</span>
                 <ArrowRight className="w-3 h-3 shrink-0" />
-                <span className="truncate max-w-[120px]">{m.toTable}.{m.toCol}</span>
+                <span className="truncate max-w-[120px]">
+                  {m.toTable}.{m.toCol}
+                </span>
               </div>
             ))}
             {details.downstreamMappings.length > 10 && (

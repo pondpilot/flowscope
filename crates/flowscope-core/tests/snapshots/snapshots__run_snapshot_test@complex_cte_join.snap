@@ -1,6 +1,5 @@
 ---
 source: crates/flowscope-core/tests/snapshots.rs
-assertion_line: 25
 expression: clean_result
 ---
 {
@@ -23,11 +22,6 @@ expression: clean_result
           "label": "email"
         },
         {
-          "id": "column_11dd4284c883d245",
-          "type": "column",
-          "label": "email"
-        },
-        {
           "id": "column_17365cc1224ceac1",
           "type": "column",
           "label": "name",
@@ -45,11 +39,6 @@ expression: clean_result
             "isGroupingKey": false,
             "function": "COUNT"
           }
-        },
-        {
-          "id": "column_629d7cf5d2e3562d",
-          "type": "column",
-          "label": "name"
         },
         {
           "id": "column_754b72f44edb529b",
@@ -104,11 +93,6 @@ expression: clean_result
           "type": "column",
           "label": "total",
           "qualifiedName": "orders.total"
-        },
-        {
-          "id": "column_d8bba385e09d94a9",
-          "type": "column",
-          "label": "id"
         },
         {
           "id": "column_f6b363282306de23",
@@ -189,25 +173,6 @@ expression: clean_result
           "expression": "SUM(o.total)"
         },
         {
-          "id": "edge_1e7a41549892cad0",
-          "from": "column_a364e172f29a758b",
-          "to": "column_d8bba385e09d94a9",
-          "type": "data_flow"
-        },
-        {
-          "id": "edge_2003b160b35b3a3b",
-          "from": "column_754b72f44edb529b",
-          "to": "column_629d7cf5d2e3562d",
-          "type": "data_flow"
-        },
-        {
-          "id": "edge_2e4c92bad2f737ba",
-          "from": "table_eaa6ebb8f158751f",
-          "to": "output_b558dd754c71cfa6",
-          "type": "data_flow",
-          "approximate": true
-        },
-        {
           "id": "edge_322548822d4b9438",
           "from": "column_c9a06119b0a87873",
           "to": "column_0dd3279d9b05299d",
@@ -223,18 +188,6 @@ expression: clean_result
           "id": "edge_5247487575dfc1b5",
           "from": "column_a364e172f29a758b",
           "to": "column_f9835ae7e58312a3",
-          "type": "data_flow"
-        },
-        {
-          "id": "edge_52c9c774e1c2efa0",
-          "from": "output_b558dd754c71cfa6",
-          "to": "column_11dd4284c883d245",
-          "type": "ownership"
-        },
-        {
-          "id": "edge_5c9c60f90ac580cf",
-          "from": "column_0dd3279d9b05299d",
-          "to": "column_11dd4284c883d245",
           "type": "data_flow"
         },
         {
@@ -310,12 +263,6 @@ expression: clean_result
           "type": "ownership"
         },
         {
-          "id": "edge_b1adfd2ed7cda1e5",
-          "from": "output_b558dd754c71cfa6",
-          "to": "column_d8bba385e09d94a9",
-          "type": "ownership"
-        },
-        {
           "id": "edge_b2ffad382166c4ff",
           "from": "column_91ec561dfe172758",
           "to": "column_09f5c3728ce72a5d",
@@ -328,23 +275,10 @@ expression: clean_result
           "type": "ownership"
         },
         {
-          "id": "edge_bb5bebb5a946099c",
-          "from": "output_b558dd754c71cfa6",
-          "to": "column_629d7cf5d2e3562d",
-          "type": "ownership"
-        },
-        {
           "id": "edge_bc85044d80d56009",
           "from": "cte_96884c4a7cec8bbc",
           "to": "column_3f39e80c6a14bd6c",
           "type": "ownership"
-        },
-        {
-          "id": "edge_c7d0c05c0bcaaf9d",
-          "from": "table_10a0682dff76cdbc",
-          "to": "output_b558dd754c71cfa6",
-          "type": "data_flow",
-          "approximate": true
         },
         {
           "id": "edge_c9ff3fb142c5814b",
@@ -424,20 +358,6 @@ expression: clean_result
         ]
       },
       {
-        "id": "column_11dd4284c883d245",
-        "type": "column",
-        "label": "email",
-        "canonicalName": {
-          "name": "email"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "column_11dd4284c883d245"
-          }
-        ]
-      },
-      {
         "id": "column_17365cc1224ceac1",
         "type": "column",
         "label": "name",
@@ -463,20 +383,6 @@ expression: clean_result
           {
             "statementIndex": 0,
             "nodeId": "column_3f39e80c6a14bd6c"
-          }
-        ]
-      },
-      {
-        "id": "column_629d7cf5d2e3562d",
-        "type": "column",
-        "label": "name",
-        "canonicalName": {
-          "name": "name"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "column_629d7cf5d2e3562d"
           }
         ]
       },
@@ -592,20 +498,6 @@ expression: clean_result
           {
             "statementIndex": 0,
             "nodeId": "column_d780b69ea9480267"
-          }
-        ]
-      },
-      {
-        "id": "column_d8bba385e09d94a9",
-        "type": "column",
-        "label": "id",
-        "canonicalName": {
-          "name": "id"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "column_d8bba385e09d94a9"
           }
         ]
       },
@@ -738,33 +630,6 @@ expression: clean_result
         }
       },
       {
-        "id": "edge_1e7a41549892cad0",
-        "from": "column_a364e172f29a758b",
-        "to": "column_d8bba385e09d94a9",
-        "type": "data_flow",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      },
-      {
-        "id": "edge_2003b160b35b3a3b",
-        "from": "column_754b72f44edb529b",
-        "to": "column_629d7cf5d2e3562d",
-        "type": "data_flow",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      },
-      {
-        "id": "edge_2e4c92bad2f737ba",
-        "from": "table_eaa6ebb8f158751f",
-        "to": "output_b558dd754c71cfa6",
-        "type": "data_flow",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      },
-      {
         "id": "edge_322548822d4b9438",
         "from": "column_c9a06119b0a87873",
         "to": "column_0dd3279d9b05299d",
@@ -786,24 +651,6 @@ expression: clean_result
         "id": "edge_5247487575dfc1b5",
         "from": "column_a364e172f29a758b",
         "to": "column_f9835ae7e58312a3",
-        "type": "data_flow",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      },
-      {
-        "id": "edge_52c9c774e1c2efa0",
-        "from": "output_b558dd754c71cfa6",
-        "to": "column_11dd4284c883d245",
-        "type": "ownership",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      },
-      {
-        "id": "edge_5c9c60f90ac580cf",
-        "from": "column_0dd3279d9b05299d",
-        "to": "column_11dd4284c883d245",
         "type": "data_flow",
         "producerStatement": {
           "statementIndex": 0
@@ -909,15 +756,6 @@ expression: clean_result
         }
       },
       {
-        "id": "edge_b1adfd2ed7cda1e5",
-        "from": "output_b558dd754c71cfa6",
-        "to": "column_d8bba385e09d94a9",
-        "type": "ownership",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      },
-      {
         "id": "edge_b2ffad382166c4ff",
         "from": "column_91ec561dfe172758",
         "to": "column_09f5c3728ce72a5d",
@@ -936,28 +774,10 @@ expression: clean_result
         }
       },
       {
-        "id": "edge_bb5bebb5a946099c",
-        "from": "output_b558dd754c71cfa6",
-        "to": "column_629d7cf5d2e3562d",
-        "type": "ownership",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      },
-      {
         "id": "edge_bc85044d80d56009",
         "from": "cte_96884c4a7cec8bbc",
         "to": "column_3f39e80c6a14bd6c",
         "type": "ownership",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      },
-      {
-        "id": "edge_c7d0c05c0bcaaf9d",
-        "from": "table_10a0682dff76cdbc",
-        "to": "output_b558dd754c71cfa6",
-        "type": "data_flow",
         "producerStatement": {
           "statementIndex": 0
         }
@@ -1027,30 +847,17 @@ expression: clean_result
       }
     ]
   },
-  "issues": [
-    {
-      "severity": "info",
-      "code": "APPROXIMATE_LINEAGE",
-      "message": "SELECT * from 'orders' - column list unknown without schema metadata",
-      "statementIndex": 0
-    },
-    {
-      "severity": "info",
-      "code": "APPROXIMATE_LINEAGE",
-      "message": "SELECT * from 'users' - column list unknown without schema metadata",
-      "statementIndex": 0
-    }
-  ],
+  "issues": [],
   "summary": {
     "statementCount": 1,
     "tableCount": 4,
-    "columnCount": 17,
+    "columnCount": 14,
     "joinCount": 1,
     "complexityScore": 40,
     "issueCount": {
       "errors": 0,
       "warnings": 0,
-      "infos": 2
+      "infos": 0
     },
     "hasErrors": false
   },

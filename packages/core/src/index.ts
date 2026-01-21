@@ -47,6 +47,8 @@ export type {
   ColumnSchema,
   ForeignKeyRef,
   FileSource,
+  TemplateMode,
+  TemplateConfig,
   // Response types
   AnalyzeResult,
   StatementLineage,

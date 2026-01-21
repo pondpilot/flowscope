@@ -72,17 +72,11 @@ export function ProjectSelector({ open: controlledOpen, onOpenChange }: ProjectS
           <div className="flex size-6 items-center justify-center rounded-md border bg-background">
             <FolderOpen className="size-3.5" />
           </div>
-          <span className="font-medium">
-            {currentProject?.name || 'Select Project'}
-          </span>
+          <span className="font-medium">{currentProject?.name || 'Select Project'}</span>
           <ChevronDown className="size-4 opacity-50" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent
-        className="min-w-64 rounded-lg"
-        align="start"
-        sideOffset={8}
-      >
+      <DropdownMenuContent className="min-w-64 rounded-lg" align="start" sideOffset={8}>
         <TooltipProvider delayDuration={300}>
           <DropdownMenuLabel className="text-xs text-muted-foreground flex items-center justify-between">
             <span>Projects</span>

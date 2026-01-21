@@ -13,16 +13,14 @@ export type { MatrixViewControlledState } from './components/MatrixView';
 export { type EdgeType } from './components/AnimatedEdge';
 export { ErrorBoundary, GraphErrorBoundary } from './components/ErrorBoundary';
 export { SearchAutocomplete } from './components/SearchAutocomplete';
-export type { SearchAutocompleteProps, SearchAutocompleteRef } from './components/SearchAutocomplete';
+export type {
+  SearchAutocompleteProps,
+  SearchAutocompleteRef,
+} from './components/SearchAutocomplete';
 export { TableFilterDropdown } from './components/TableFilterDropdown';
 
 // Store and hooks (new Zustand-based)
-export {
-  useLineageStore,
-  useLineage,
-  useLineageState,
-  useLineageActions,
-} from './store';
+export { useLineageStore, useLineage, useLineageState, useLineageActions } from './store';
 
 export { useGraphSearch } from './hooks/useGraphSearch';
 export { useSearchSuggestions } from './hooks/useSearchSuggestions';
@@ -63,14 +61,7 @@ export type {
 } from './types';
 
 // Re-export core types for convenience
-export type {
-  AnalyzeResult,
-  Node,
-  Edge,
-  Issue,
-  Span,
-  StatementLineage,
-} from './types';
+export type { AnalyzeResult, Node, Edge, Issue, Span, StatementLineage } from './types';
 
 // Utilities
 export {
@@ -81,10 +72,7 @@ export {
 } from './utils/sanitize';
 
 // Namespace/schema utilities
-export {
-  NAMESPACE_COLORS,
-  getNamespaceColor,
-} from './constants';
+export { NAMESPACE_COLORS, getNamespaceColor } from './constants';
 
 // Export utilities
 export {

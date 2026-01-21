@@ -3,7 +3,12 @@
  * Builds table/script matrices and autocomplete data off the main thread.
  */
 import type { StatementLineage } from '@pondpilot/flowscope-core';
-import type { MatrixData, TableDependencyWithDetails, ScriptDependency, MatrixCellData } from '../utils/matrixUtils';
+import type {
+  MatrixData,
+  TableDependencyWithDetails,
+  ScriptDependency,
+  MatrixCellData,
+} from '../utils/matrixUtils';
 import {
   extractTableDependenciesWithDetails,
   extractScriptDependencies,
@@ -69,7 +74,8 @@ function computeMatrixMetrics(matrix: MatrixData, mode: 'tables' | 'scripts'): M
         if (mode === 'tables') {
           intensity = (cell.details as { columnCount?: number } | undefined)?.columnCount || 0;
         } else {
-          intensity = (cell.details as { sharedTables?: string[] } | undefined)?.sharedTables?.length || 0;
+          intensity =
+            (cell.details as { sharedTables?: string[] } | undefined)?.sharedTables?.length || 0;
         }
         if (intensity > maxIntensity) {
           maxIntensity = intensity;
@@ -115,10 +121,7 @@ function buildTableMatrixWithItems(
   return { items, cells };
 }
 
-function buildScriptMatrixWithItems(
-  dependencies: ScriptDependency[],
-  items: string[]
-): MatrixData {
+function buildScriptMatrixWithItems(dependencies: ScriptDependency[], items: string[]): MatrixData {
   const depLookup = new Map<string, ScriptDependency>();
   for (const dep of dependencies) {
     depLookup.set(`${dep.sourceScript}->${dep.targetScript}`, dep);
@@ -203,7 +206,8 @@ self.onmessage = (event: MessageEvent<MatrixBuildRequest>) => {
     );
     const tableItemsSetSelected = new Set(tableItems);
     const limitedTableDeps = tableDeps.filter(
-      (dep) => tableItemsSetSelected.has(dep.sourceTable) && tableItemsSetSelected.has(dep.targetTable)
+      (dep) =>
+        tableItemsSetSelected.has(dep.sourceTable) && tableItemsSetSelected.has(dep.targetTable)
     );
 
     const tableMatrixStart = performance.now();
@@ -233,7 +237,8 @@ self.onmessage = (event: MessageEvent<MatrixBuildRequest>) => {
     );
     const scriptItemsSetSelected = new Set(scriptItems);
     const limitedScriptDeps = scriptDeps.dependencies.filter(
-      (dep) => scriptItemsSetSelected.has(dep.sourceScript) && scriptItemsSetSelected.has(dep.targetScript)
+      (dep) =>
+        scriptItemsSetSelected.has(dep.sourceScript) && scriptItemsSetSelected.has(dep.targetScript)
     );
 
     const scriptMatrixStart = performance.now();
@@ -262,9 +267,7 @@ self.onmessage = (event: MessageEvent<MatrixBuildRequest>) => {
       console.log(
         `[Matrix Worker] steps: scriptDeps ${scriptDepsMs.toFixed(1)}ms, scriptMatrix ${scriptMatrixMs.toFixed(1)}ms, scriptMetrics ${scriptMetricsMs.toFixed(1)}ms`
       );
-      console.log(
-        `[Matrix Worker] steps: columnNames ${columnNamesMs.toFixed(1)}ms`
-      );
+      console.log(`[Matrix Worker] steps: columnNames ${columnNamesMs.toFixed(1)}ms`);
     }
 
     console.log(`[Matrix Worker] Build completed in ${duration.toFixed(2)}ms`);
@@ -292,8 +295,20 @@ self.onmessage = (event: MessageEvent<MatrixBuildRequest>) => {
       tableMatrix: { items: [], cells: new Map() },
       scriptMatrix: { items: [], cells: new Map() },
       allColumnNames: [],
-      tableMetrics: { rowCounts: new Map(), colCounts: new Map(), maxRow: 0, maxCol: 0, maxIntensity: 1 },
-      scriptMetrics: { rowCounts: new Map(), colCounts: new Map(), maxRow: 0, maxCol: 0, maxIntensity: 1 },
+      tableMetrics: {
+        rowCounts: new Map(),
+        colCounts: new Map(),
+        maxRow: 0,
+        maxCol: 0,
+        maxIntensity: 1,
+      },
+      scriptMetrics: {
+        rowCounts: new Map(),
+        colCounts: new Map(),
+        maxRow: 0,
+        maxCol: 0,
+        maxIntensity: 1,
+      },
       tableItemCount: 0,
       tableItemsRendered: 0,
       scriptItemCount: 0,

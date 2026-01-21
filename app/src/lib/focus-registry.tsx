@@ -49,11 +49,14 @@ export function FocusRegistryProvider({ children }: { children: ReactNode }) {
     return false;
   }, []);
 
-  const getRefCallback = useCallback((key: string) => {
-    return (element: FocusableElement) => {
-      register(key, element);
-    };
-  }, [register]);
+  const getRefCallback = useCallback(
+    (key: string) => {
+      return (element: FocusableElement) => {
+        register(key, element);
+      };
+    },
+    [register]
+  );
 
   const value: FocusRegistry = {
     register,
@@ -62,11 +65,7 @@ export function FocusRegistryProvider({ children }: { children: ReactNode }) {
     getRefCallback,
   };
 
-  return (
-    <FocusRegistryContext.Provider value={value}>
-      {children}
-    </FocusRegistryContext.Provider>
-  );
+  return <FocusRegistryContext.Provider value={value}>{children}</FocusRegistryContext.Provider>;
 }
 
 /**
@@ -96,4 +95,4 @@ export const FOCUS_KEYS = {
   MATRIX_SEARCH: 'matrix-search',
 } as const;
 
-export type FocusKey = typeof FOCUS_KEYS[keyof typeof FOCUS_KEYS];
+export type FocusKey = (typeof FOCUS_KEYS)[keyof typeof FOCUS_KEYS];

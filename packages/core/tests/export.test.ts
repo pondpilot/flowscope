@@ -6,14 +6,16 @@ CREATE TABLE _meta (key TEXT PRIMARY KEY, value TEXT);
 INSERT INTO _meta (key, value) VALUES ('version', '0.1.0');`;
 
 const baseResult: AnalyzeResult = {
-  statements: [{
-    statementIndex: 0,
-    statementType: 'SELECT',
-    nodes: [],
-    edges: [],
-    joinCount: 0,
-    complexityScore: 1,
-  }],
+  statements: [
+    {
+      statementIndex: 0,
+      statementType: 'SELECT',
+      nodes: [],
+      edges: [],
+      joinCount: 0,
+      complexityScore: 1,
+    },
+  ],
   globalLineage: { nodes: [], edges: [] },
   issues: [],
   summary: {
@@ -29,6 +31,12 @@ const wasmModuleMock = vi.hoisted(() => ({
   default: vi.fn(async () => undefined),
   analyze_sql_json: vi.fn(() => JSON.stringify(baseResult)),
   export_to_duckdb_sql: vi.fn(() => sampleSql),
+  export_json: vi.fn(() => JSON.stringify(baseResult)),
+  export_mermaid: vi.fn(() => 'graph TD'),
+  export_html: vi.fn(() => '<html></html>'),
+  export_csv_bundle: vi.fn(() => new Uint8Array()),
+  export_xlsx: vi.fn(() => new Uint8Array()),
+  export_filename: vi.fn(() => 'flowscope_export'),
   completion_items_json: vi.fn(() => JSON.stringify({ clause: 'unknown', items: [] })),
   split_statements_json: vi.fn(() => JSON.stringify({ statements: [] })),
   set_panic_hook: vi.fn(() => undefined),

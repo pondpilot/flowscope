@@ -1,10 +1,5 @@
 import { cn } from '@/lib/utils';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface ComplexityDotsProps {
   /** Complexity score from 1-100 */
@@ -50,7 +45,8 @@ export function ComplexityDots({ score, className }: ComplexityDotsProps) {
                   className={cn(
                     'w-1.5 h-1.5 rounded-full',
                     isFull && 'bg-foreground',
-                    isHalf && 'bg-linear-to-r from-foreground from-50% to-muted-foreground/30 to-50%',
+                    isHalf &&
+                      'bg-linear-to-r from-foreground from-50% to-muted-foreground/30 to-50%',
                     !isFull && !isHalf && 'bg-muted-foreground/30'
                   )}
                 />

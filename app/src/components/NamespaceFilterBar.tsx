@@ -40,9 +40,7 @@ export function NamespaceFilterBar({
   const theme = useThemeStore((state) => state.theme);
   const isDark = resolveTheme(theme) === 'dark';
 
-  const storedState = useViewStateStore(
-    (state) => state.viewStates[projectId]?.namespaceFilter
-  );
+  const storedState = useViewStateStore((state) => state.viewStates[projectId]?.namespaceFilter);
   const updateViewState = useViewStateStore((state) => state.updateViewState);
 
   const filterState = useMemo(
@@ -96,12 +94,8 @@ export function NamespaceFilterBar({
   const hasFilters = filterState.schemas.length > 0 || filterState.databases.length > 0;
 
   // Filter out already-selected items from available options
-  const unselectedSchemas = availableSchemas.filter(
-    (s) => !filterState.schemas.includes(s)
-  );
-  const unselectedDatabases = availableDatabases.filter(
-    (d) => !filterState.databases.includes(d)
-  );
+  const unselectedSchemas = availableSchemas.filter((s) => !filterState.schemas.includes(s));
+  const unselectedDatabases = availableDatabases.filter((d) => !filterState.databases.includes(d));
 
   const hasAvailableOptions = unselectedSchemas.length > 0 || unselectedDatabases.length > 0;
 

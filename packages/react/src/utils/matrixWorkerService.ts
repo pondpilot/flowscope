@@ -35,10 +35,9 @@ const pendingRequests = new Map<string, PendingRequest>();
 
 function getWorker(): Worker {
   if (!worker) {
-    worker = new Worker(
-      new URL('../workers/matrix.worker.ts', import.meta.url),
-      { type: 'module' }
-    );
+    worker = new Worker(new URL('../workers/matrix.worker.ts', import.meta.url), {
+      type: 'module',
+    });
 
     worker.onmessage = (event: MessageEvent<MatrixBuildResponse>) => {
       const handlerStart = MATRIX_DEBUG ? performance.now() : 0;

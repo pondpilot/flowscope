@@ -3,6 +3,21 @@ use crate::types::{Edge, FilterClauseType, FilterPredicate, JoinType, Node, Node
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+/// Tracks a SELECT * that couldn't be expanded due to missing schema.
+///
+/// When a wildcard is encountered without schema metadata to resolve it,
+/// we record the source and target so that downstream column references
+/// can be used to infer what columns must have flowed through.
+#[derive(Debug, Clone)]
+pub(crate) struct PendingWildcard {
+    /// The source canonical name (table or CTE) with unknown columns
+    pub(crate) source_canonical: String,
+    /// The target entity (CTE name or derived table alias) receiving the wildcard
+    pub(crate) target_name: String,
+    /// Node ID of the source
+    pub(crate) source_node_id: Arc<str>,
+}
+
 /// Represents a single scope level for column resolution.
 /// Each SELECT/subquery/CTE body gets its own scope.
 #[derive(Debug, Clone, Default)]
@@ -40,6 +55,8 @@ pub(crate) struct StatementContext {
     pub(crate) edge_ids: HashSet<Arc<str>>,
     /// CTE name -> node ID
     pub(crate) cte_definitions: HashMap<String, Arc<str>>,
+    /// Node ID -> CTE/derived alias name for reverse lookups
+    pub(crate) cte_node_to_name: HashMap<Arc<str>, String>,
     /// Cursor for sequential span searching across identifier definitions.
     ///
     /// Used to locate spans for CTEs and derived table aliases by tracking the
@@ -85,6 +102,9 @@ pub(crate) struct StatementContext {
     /// Implied foreign key relationships from JOIN conditions.
     /// Key: (from_table, from_column), Value: (to_table, to_column)
     pub(crate) implied_foreign_keys: HashMap<(String, String), (String, String)>,
+    /// Pending wildcards that couldn't be expanded due to missing schema.
+    /// Used for backward column inference from downstream references.
+    pub(crate) pending_wildcards: Vec<PendingWildcard>,
 }
 
 /// Represents an output column in the SELECT list
@@ -116,6 +136,7 @@ impl StatementContext {
             node_ids: HashSet::new(),
             edge_ids: HashSet::new(),
             cte_definitions: HashMap::new(),
+            cte_node_to_name: HashMap::new(),
             span_search_cursor: 0,
             table_aliases: HashMap::new(),
             subquery_aliases: HashSet::new(),
@@ -131,6 +152,7 @@ impl StatementContext {
             has_group_by: false,
             source_table_columns: HashMap::new(),
             implied_foreign_keys: HashMap::new(),
+            pending_wildcards: Vec::new(),
         }
     }
 

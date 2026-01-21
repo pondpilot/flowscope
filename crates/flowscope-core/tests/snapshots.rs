@@ -12,6 +12,8 @@ fn run_snapshot_test(name: &str, sql: &str) {
         source_name: None,
         options: None,
         schema: None,
+        #[cfg(feature = "templating")]
+        template_config: None,
     };
 
     let result = analyze(&request);

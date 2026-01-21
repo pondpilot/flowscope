@@ -22,9 +22,7 @@ interface UsePersistedMatrixStateResult {
   onStateChange: (state: Partial<MatrixViewControlledState>) => void;
 }
 
-export function usePersistedMatrixState(
-  projectId: string | null
-): UsePersistedMatrixStateResult {
+export function usePersistedMatrixState(projectId: string | null): UsePersistedMatrixStateResult {
   const storedState = useViewStateStore((s) =>
     projectId ? s.getViewState(projectId, 'matrix') : undefined
   );

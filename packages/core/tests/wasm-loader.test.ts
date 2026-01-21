@@ -19,8 +19,9 @@ describe('wasm-loader', () => {
     if (typeof wasmModuleMock.analyze_sql_json === 'function') {
       wasmModuleMock.analyze_sql_json.mockClear();
     } else {
-      (wasmModuleMock as unknown as { analyze_sql_json: ReturnType<typeof vi.fn> }).analyze_sql_json =
-        vi.fn();
+      (
+        wasmModuleMock as unknown as { analyze_sql_json: ReturnType<typeof vi.fn> }
+      ).analyze_sql_json = vi.fn();
     }
     wasmModuleMock.analyze_sql_json.mockImplementation(() => JSON.stringify({}));
     wasmModuleMock.__wbindgen_free.mockClear();

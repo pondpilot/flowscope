@@ -1,9 +1,19 @@
-import { analyzeSql, initWasm, getEngineVersion, exportToDuckDbSql } from '@pondpilot/flowscope-core';
+import {
+  analyzeSql,
+  initWasm,
+  getEngineVersion,
+  exportToDuckDbSql,
+} from '@pondpilot/flowscope-core';
 import type { AnalyzeResult, Dialect } from '@pondpilot/flowscope-core';
 import { parseSchemaSQL } from '../lib/schema-parser';
-import { readCachedAnalysisResult, writeCachedAnalysisResult, clearAnalysisCache } from '../lib/analysis-cache';
+import {
+  readCachedAnalysisResult,
+  writeCachedAnalysisResult,
+  clearAnalysisCache,
+} from '../lib/analysis-cache';
 import { buildAnalysisCacheKey } from '../lib/analysis-hash';
 import { ANALYSIS_CACHE_MAX_BYTES } from '../lib/constants';
+import type { TemplateMode } from '../types';
 
 export interface AnalysisWorkerPayload {
   files?: Array<{ name: string; content: string }>;
@@ -12,6 +22,7 @@ export interface AnalysisWorkerPayload {
   schemaSQL: string;
   hideCTEs: boolean;
   enableColumnLineage: boolean;
+  templateMode?: TemplateMode;
 }
 
 export interface SyncFilesPayload {
@@ -26,7 +37,15 @@ export interface ExportPayload {
 }
 
 export interface AnalysisWorkerRequest {
-  type: 'init' | 'analyze' | 'get-cache' | 'get-version' | 'sync-files' | 'clear-files' | 'clear-cache' | 'export';
+  type:
+    | 'init'
+    | 'analyze'
+    | 'get-cache'
+    | 'get-version'
+    | 'sync-files'
+    | 'clear-files'
+    | 'clear-cache'
+    | 'export';
   requestId: string;
   payload?: AnalysisWorkerPayload;
   syncPayload?: SyncFilesPayload;
@@ -34,7 +53,6 @@ export interface AnalysisWorkerRequest {
   cacheMaxBytes?: number;
   knownCacheKey?: string | null;
 }
-
 
 export interface AnalysisWorkerTimings {
   totalMs: number;
@@ -55,7 +73,14 @@ export const WorkerErrorCode = {
 export type WorkerErrorCode = (typeof WorkerErrorCode)[keyof typeof WorkerErrorCode];
 
 export interface AnalysisWorkerResponse {
-  type: 'init-result' | 'analyze-result' | 'cache-result' | 'version-result' | 'sync-result' | 'clear-cache-result' | 'export-result';
+  type:
+    | 'init-result'
+    | 'analyze-result'
+    | 'cache-result'
+    | 'version-result'
+    | 'sync-result'
+    | 'clear-cache-result'
+    | 'export-result';
   requestId: string;
   result?: AnalyzeResult | null;
   cacheKey?: string;
@@ -69,7 +94,6 @@ export interface AnalysisWorkerResponse {
   /** Structured error code for programmatic handling */
   errorCode?: WorkerErrorCode;
 }
-
 
 let wasmReady = false;
 const fileCache = new Map<string, string>();
@@ -124,13 +148,12 @@ function resolveFiles(payload: AnalysisWorkerPayload): Array<{ name: string; con
   });
 }
 
-function resolvePayload(payload: AnalysisWorkerPayload): AnalysisWorkerPayload & { files: Array<{ name: string; content: string }> } {
+function resolvePayload(
+  payload: AnalysisWorkerPayload
+): AnalysisWorkerPayload & { files: Array<{ name: string; content: string }> } {
   const files = resolveFiles(payload);
   if (files.length === 0) {
-    throw new WorkerError(
-      WorkerErrorCode.NO_FILES_AVAILABLE,
-      'No files available for analysis'
-    );
+    throw new WorkerError(WorkerErrorCode.NO_FILES_AVAILABLE, 'No files available for analysis');
   }
   return {
     ...payload,
@@ -138,8 +161,20 @@ function resolvePayload(payload: AnalysisWorkerPayload): AnalysisWorkerPayload &
   };
 }
 
-async function buildImportedSchema(payload: AnalysisWorkerPayload & { files: Array<{ name: string; content: string }> }): Promise<{
-  schema: { allowImplied: boolean; tables: Array<{ name: string; schema?: string; catalog?: string; columns?: Array<{ name: string; dataType?: string }> }> } | undefined;
+async function buildImportedSchema(
+  payload: AnalysisWorkerPayload & { files: Array<{ name: string; content: string }> }
+): Promise<{
+  schema:
+    | {
+        allowImplied: boolean;
+        tables: Array<{
+          name: string;
+          schema?: string;
+          catalog?: string;
+          columns?: Array<{ name: string; dataType?: string }>;
+        }>;
+      }
+    | undefined;
   schemaErrors: string[];
 }> {
   if (!payload.schemaSQL.trim()) {
@@ -147,12 +182,13 @@ async function buildImportedSchema(payload: AnalysisWorkerPayload & { files: Arr
   }
 
   const { tables, errors } = await parseSchemaSQL(payload.schemaSQL, payload.dialect, analyzeSql);
-  const schema = tables.length > 0
-    ? {
-        allowImplied: true,
-        tables,
-      }
-    : undefined;
+  const schema =
+    tables.length > 0
+      ? {
+          allowImplied: true,
+          tables,
+        }
+      : undefined;
 
   return { schema, schemaErrors: errors };
 }
@@ -171,6 +207,7 @@ async function runAnalysis(
     schemaSQL: resolvedPayload.schemaSQL,
     hideCTEs: resolvedPayload.hideCTEs,
     enableColumnLineage: resolvedPayload.enableColumnLineage,
+    templateMode: resolvedPayload.templateMode,
   });
 
   if (knownCacheKey && knownCacheKey === cacheKey) {
@@ -219,7 +256,17 @@ async function runAnalysis(
   const schemaParseMs = nowMs() - schemaStart;
 
   const analyzeStart = nowMs();
-  const result = await analyzeSql({
+  // Build templateConfig if a non-raw template mode is specified
+  // The WASM layer handles template rendering before SQL parsing
+  const templateConfig =
+    resolvedPayload.templateMode && resolvedPayload.templateMode !== 'raw'
+      ? { mode: resolvedPayload.templateMode, context: {} }
+      : undefined;
+  // Note: templateConfig is supported by the WASM API but not yet typed in @pondpilot/flowscope-core.
+  // The request is serialized to JSON, and the Rust side deserializes it with templateConfig support.
+  const analysisRequest: Parameters<typeof analyzeSql>[0] & {
+    templateConfig?: { mode: TemplateMode; context: Record<string, unknown> };
+  } = {
     sql: '',
     files: resolvedPayload.files,
     dialect: resolvedPayload.dialect,
@@ -228,7 +275,11 @@ async function runAnalysis(
       enableColumnLineage: resolvedPayload.enableColumnLineage,
       hideCtes: resolvedPayload.hideCTEs,
     },
-  });
+  };
+  if (templateConfig) {
+    analysisRequest.templateConfig = templateConfig;
+  }
+  const result = await analyzeSql(analysisRequest);
   const analyzeMs = nowMs() - analyzeStart;
 
   if (schemaErrors.length > 0) {
@@ -273,6 +324,7 @@ async function getCachedAnalysis(payload: AnalysisWorkerPayload): Promise<Analys
     schemaSQL: resolvedPayload.schemaSQL,
     hideCTEs: resolvedPayload.hideCTEs,
     enableColumnLineage: resolvedPayload.enableColumnLineage,
+    templateMode: resolvedPayload.templateMode,
   });
 
   const cacheReadStart = nowMs();
@@ -300,7 +352,8 @@ async function getCachedAnalysis(payload: AnalysisWorkerPayload): Promise<Analys
 }
 
 self.onmessage = async (event: MessageEvent<AnalysisWorkerRequest>) => {
-  const { type, requestId, payload, syncPayload, exportPayload, cacheMaxBytes, knownCacheKey } = event.data;
+  const { type, requestId, payload, syncPayload, exportPayload, cacheMaxBytes, knownCacheKey } =
+    event.data;
 
   try {
     if (type === 'sync-files') {

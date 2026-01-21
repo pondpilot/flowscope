@@ -1,5 +1,6 @@
 use crate::types::*;
 use sqlparser::ast::Statement;
+use std::borrow::Cow;
 use std::collections::HashSet;
 use std::ops::Range;
 use std::sync::Arc;
@@ -236,7 +237,7 @@ impl<'a> Analyzer<'a> {
 }
 
 struct StatementSourceSlice<'a> {
-    sql: &'a str,
+    sql: Cow<'a, str>,
     range: Range<usize>,
 }
 

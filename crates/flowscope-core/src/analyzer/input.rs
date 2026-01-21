@@ -6,13 +6,51 @@
 use crate::parser::parse_sql_with_dialect;
 use crate::types::{issue_codes, AnalyzeRequest, Dialect, Issue, Span};
 use sqlparser::ast::Statement;
+use std::borrow::Cow;
 use std::ops::Range;
 use std::rc::Rc;
 use thiserror::Error;
 
+#[cfg(feature = "templating")]
+use crate::templater::{template_sql, TemplateMode};
+
 /// Maximum iterations allowed when merging statement ranges to prevent infinite loops
 /// on malformed SQL input.
 const MAX_MERGE_ITERATIONS: usize = 10_000;
+
+/// Creates an issue for a template rendering error.
+#[cfg(feature = "templating")]
+fn template_error_issue(
+    error: &crate::templater::TemplateError,
+    source_name: Option<&str>,
+) -> Issue {
+    let message = match source_name {
+        Some(name) => format!("Template error in {name}: {error}"),
+        None => format!("Template error: {error}"),
+    };
+    let mut issue = Issue::error(issue_codes::TEMPLATE_ERROR, message);
+    if let Some(name) = source_name {
+        issue = issue.with_source_name(name);
+    }
+    issue
+}
+
+/// Applies template preprocessing to SQL if configured.
+///
+/// Returns the (possibly transformed) SQL and whether templating was applied.
+#[cfg(feature = "templating")]
+fn apply_template<'a>(
+    sql: &'a str,
+    config: Option<&crate::templater::TemplateConfig>,
+) -> Result<Cow<'a, str>, crate::templater::TemplateError> {
+    match config {
+        Some(cfg) if cfg.mode != TemplateMode::Raw => {
+            let rendered = template_sql(sql, cfg)?;
+            Ok(Cow::Owned(rendered))
+        }
+        _ => Ok(Cow::Borrowed(sql)),
+    }
+}
 
 /// Errors that can occur when aligning statement ranges.
 #[derive(Debug, Error)]
@@ -40,7 +78,10 @@ enum RangeAlignmentError {
 /// Context for parsing SQL from a single source.
 struct ParseContext<'a> {
     /// The full SQL buffer to parse.
-    source_sql: &'a str,
+    ///
+    /// Uses `Cow` to support both borrowed SQL (from request) and owned SQL
+    /// (from template rendering).
+    source_sql: Cow<'a, str>,
     /// Optional source file name for error reporting.
     ///
     /// Wrapped in `Rc` so multiple `StatementInput` instances can share
@@ -61,7 +102,12 @@ pub(crate) struct StatementInput<'a> {
     /// the same `Rc`, so cloning is just a reference count increment.
     pub(crate) source_name: Option<Rc<String>>,
     /// The full SQL buffer this statement came from.
-    pub(crate) source_sql: &'a str,
+    ///
+    /// Uses `Cow` to support both borrowed SQL (from request) and owned SQL
+    /// (from template rendering). When templated, each statement owns its
+    /// copy of the rendered SQL; when not templated, all statements from the
+    /// same source share a borrowed reference.
+    pub(crate) source_sql: Cow<'a, str>,
     /// Byte range of the statement within `source_sql`.
     pub(crate) source_range: Range<usize>,
 }
@@ -125,8 +171,22 @@ pub(crate) fn collect_statements<'a>(
     // Parse files first (if present)
     if let Some(files) = &request.files {
         for file in files {
+            // Apply templating if configured
+            #[cfg(feature = "templating")]
+            let source_sql: Cow<'_, str> = {
+                match apply_template(&file.content, request.template_config.as_ref()) {
+                    Ok(sql) => sql,
+                    Err(e) => {
+                        issues.push(template_error_issue(&e, Some(&file.name)));
+                        continue; // Skip this file but continue with others
+                    }
+                }
+            };
+            #[cfg(not(feature = "templating"))]
+            let source_sql: Cow<'_, str> = Cow::Borrowed(file.content.as_str());
+
             let ctx = ParseContext {
-                source_sql: file.content.as_str(),
+                source_sql,
                 source_name: Some(Rc::new(file.name.clone())),
                 dialect: request.dialect,
             };
@@ -138,8 +198,24 @@ pub(crate) fn collect_statements<'a>(
 
     // Parse inline SQL if present (appended after file statements)
     if has_sql {
+        // Apply templating if configured
+        #[cfg(feature = "templating")]
+        let source_sql: Cow<'_, str> = {
+            match apply_template(&request.sql, request.template_config.as_ref()) {
+                Ok(sql) => sql,
+                Err(e) => {
+                    // Record error and return collected statements (same as file error handling).
+                    // Inline SQL is processed last, so returning here is equivalent to continuing.
+                    issues.push(template_error_issue(&e, request.source_name.as_deref()));
+                    return (statements, issues);
+                }
+            }
+        };
+        #[cfg(not(feature = "templating"))]
+        let source_sql: Cow<'_, str> = Cow::Borrowed(request.sql.as_str());
+
         let ctx = ParseContext {
-            source_sql: request.sql.as_str(),
+            source_sql,
             source_name: request.source_name.clone().map(Rc::new),
             dialect: request.dialect,
         };
@@ -160,7 +236,7 @@ pub(crate) fn collect_statements<'a>(
 fn parse_statements_individually<'a>(
     ctx: &ParseContext<'a>,
 ) -> (Vec<StatementInput<'a>>, Vec<Issue>) {
-    let statement_ranges = compute_statement_ranges(ctx.source_sql);
+    let statement_ranges = compute_statement_ranges(&ctx.source_sql);
 
     match parse_full_sql_buffer(ctx, &statement_ranges) {
         Ok(statements) => (statements, Vec::new()),
@@ -201,32 +277,36 @@ fn parse_full_sql_buffer<'a>(
     ctx: &ParseContext<'a>,
     statement_ranges: &[Range<usize>],
 ) -> Result<Vec<StatementInput<'a>>, Option<RangeAlignmentError>> {
-    let parsed = parse_sql_with_dialect(ctx.source_sql, ctx.dialect).map_err(|_| None)?;
+    let parsed = parse_sql_with_dialect(&ctx.source_sql, ctx.dialect).map_err(|_| None)?;
 
     if parsed.is_empty() {
         return Ok(Vec::new());
     }
 
-    let aligned_ranges =
-        match align_statement_ranges(ctx.source_sql, statement_ranges, ctx.dialect, parsed.len()) {
-            Ok(ranges) => ranges,
-            Err(e) => {
-                #[cfg(feature = "tracing")]
-                tracing::debug!(
-                    source = ?ctx.source_name.as_deref(),
-                    error = %e,
-                    "Failed to align statement ranges, falling back to best-effort parsing"
-                );
-                return Err(Some(e));
-            }
-        };
+    let aligned_ranges = match align_statement_ranges(
+        &ctx.source_sql,
+        statement_ranges,
+        ctx.dialect,
+        parsed.len(),
+    ) {
+        Ok(ranges) => ranges,
+        Err(e) => {
+            #[cfg(feature = "tracing")]
+            tracing::debug!(
+                source = ?ctx.source_name.as_deref(),
+                error = %e,
+                "Failed to align statement ranges, falling back to best-effort parsing"
+            );
+            return Err(Some(e));
+        }
+    };
 
     let mut statements = Vec::with_capacity(parsed.len());
     for (stmt, range) in parsed.into_iter().zip(aligned_ranges.into_iter()) {
         statements.push(StatementInput {
             statement: stmt,
             source_name: ctx.source_name.clone(),
-            source_sql: ctx.source_sql,
+            source_sql: ctx.source_sql.clone(),
             source_range: range,
         });
     }
@@ -352,13 +432,15 @@ fn parse_statement_ranges_best_effort<'a>(
     let mut statements = Vec::new();
     let mut issues = Vec::new();
 
+    let source_sql_ref: &str = &ctx.source_sql;
+
     for range in statement_ranges {
         // Skip invalid ranges
-        if range.start > range.end || range.end > ctx.source_sql.len() {
+        if range.start > range.end || range.end > source_sql_ref.len() {
             continue;
         }
 
-        let statement_sql = &ctx.source_sql[range.clone()];
+        let statement_sql = &source_sql_ref[range.clone()];
 
         match parse_sql_with_dialect(statement_sql, ctx.dialect) {
             Ok(parsed) => {
@@ -367,7 +449,7 @@ fn parse_statement_ranges_best_effort<'a>(
                     statements.push(StatementInput {
                         statement: stmt,
                         source_name: ctx.source_name.clone(),
-                        source_sql: ctx.source_sql,
+                        source_sql: ctx.source_sql.clone(),
                         source_range: range.clone(),
                     });
                 }
@@ -725,6 +807,8 @@ mod tests {
             source_name: None,
             options: None,
             schema: None,
+            #[cfg(feature = "templating")]
+            template_config: None,
         }
     }
 

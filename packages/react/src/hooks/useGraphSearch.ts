@@ -63,7 +63,7 @@ export function useGraphSearch(searchTerm: string) {
           type,
           title: node.label,
           subtitle,
-          nodeId: node.id
+          nodeId: node.id,
         });
       });
     }
@@ -76,7 +76,7 @@ export function useGraphSearch(searchTerm: string) {
     if (!searchTerm.trim()) return [];
 
     const lowerTerm = searchTerm.toLowerCase();
-    
+
     // Simple operator support
     const typeFilter = lowerTerm.match(/type:(\w+)/);
     let filterType: string | null = null;
@@ -88,7 +88,7 @@ export function useGraphSearch(searchTerm: string) {
     }
 
     return items
-      .filter(item => {
+      .filter((item) => {
         // Type filter
         if (filterType && !item.type.includes(filterType)) {
           return false;
@@ -107,7 +107,7 @@ export function useGraphSearch(searchTerm: string) {
         // Prioritize exact matches
         const aTitle = a.title.toLowerCase();
         const bTitle = b.title.toLowerCase();
-        
+
         if (aTitle === textTerm && bTitle !== textTerm) return -1;
         if (bTitle === textTerm && aTitle !== textTerm) return 1;
 
@@ -116,7 +116,8 @@ export function useGraphSearch(searchTerm: string) {
         if (bTitle.startsWith(textTerm) && !aTitle.startsWith(textTerm)) return 1;
 
         // Prioritize Tables/Views/Scripts over Columns
-        const score = (type: string) => (type === 'table' || type === 'view' || type === 'cte' || type === 'script' ? 1 : 0);
+        const score = (type: string) =>
+          type === 'table' || type === 'view' || type === 'cte' || type === 'script' ? 1 : 0;
         return score(b.type) - score(a.type);
       });
   }, [items, searchTerm]);

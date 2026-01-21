@@ -11,6 +11,8 @@ fn make_request(sql: &str) -> AnalyzeRequest {
         source_name: None,
         options: None,
         schema: None,
+        #[cfg(feature = "templating")]
+        template_config: None,
     }
 }
 

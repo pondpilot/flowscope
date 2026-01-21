@@ -23,9 +23,7 @@ interface UsePersistedSchemaStateResult {
   clearSelection: () => void;
 }
 
-export function usePersistedSchemaState(
-  projectId: string | null
-): UsePersistedSchemaStateResult {
+export function usePersistedSchemaState(projectId: string | null): UsePersistedSchemaStateResult {
   const storedState = useViewStateStore((s) =>
     projectId ? s.getViewState(projectId, 'schema') : undefined
   );

@@ -17,11 +17,7 @@
     },
     {
       "name": "project.dataset.orders",
-      "columns": [
-        { "name": "order_id" },
-        { "name": "user_id" },
-        { "name": "total" }
-      ]
+      "columns": [{ "name": "order_id" }, { "name": "user_id" }, { "name": "total" }]
     },
     {
       "name": "project.dataset.events",

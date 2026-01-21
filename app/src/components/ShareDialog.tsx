@@ -1,13 +1,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { Copy, Check, AlertTriangle, FileText } from 'lucide-react';
 import { toast } from 'sonner';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from './ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Checkbox } from './ui/checkbox';
@@ -30,14 +24,14 @@ export function ShareDialog({ open, onOpenChange, project }: ShareDialogProps) {
   // Initialize all files as selected when dialog opens
   useEffect(() => {
     if (open) {
-      setSelectedFileIds(new Set(project.files.map(f => f.id)));
+      setSelectedFileIds(new Set(project.files.map((f) => f.id)));
       setIncludeSchema(true);
       setCopied(false);
     }
   }, [open, project.files]);
 
   const toggleFile = useCallback((fileId: string) => {
-    setSelectedFileIds(prev => {
+    setSelectedFileIds((prev) => {
       const next = new Set(prev);
       if (next.has(fileId)) {
         next.delete(fileId);
@@ -52,7 +46,7 @@ export function ShareDialog({ open, onOpenChange, project }: ShareDialogProps) {
     if (selectedFileIds.size === project.files.length) {
       setSelectedFileIds(new Set());
     } else {
-      setSelectedFileIds(new Set(project.files.map(f => f.id)));
+      setSelectedFileIds(new Set(project.files.map((f) => f.id)));
     }
   }, [selectedFileIds.size, project.files]);
 
@@ -96,9 +90,7 @@ export function ShareDialog({ open, onOpenChange, project }: ShareDialogProps) {
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Share Project</DialogTitle>
-          <DialogDescription>
-            Select which files to include. No data is uploaded.
-          </DialogDescription>
+          <DialogDescription>Select which files to include. No data is uploaded.</DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
@@ -106,18 +98,13 @@ export function ShareDialog({ open, onOpenChange, project }: ShareDialogProps) {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label className="text-sm font-medium">Files to share</Label>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 text-xs px-2"
-                onClick={toggleAll}
-              >
+              <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={toggleAll}>
                 {allSelected ? 'Deselect all' : 'Select all'}
               </Button>
             </div>
             <ScrollArea className="h-[140px] rounded-md border p-2">
               <div className="space-y-1">
-                {project.files.map(file => (
+                {project.files.map((file) => (
                   <label
                     key={file.id}
                     className="flex items-center gap-2 py-1 px-1 rounded hover:bg-muted cursor-pointer"
@@ -158,30 +145,24 @@ export function ShareDialog({ open, onOpenChange, project }: ShareDialogProps) {
                   readOnly
                   value={shareUrl}
                   className="flex-1 text-xs font-mono"
-                  onClick={e => (e.target as HTMLInputElement).select()}
+                  onClick={(e) => (e.target as HTMLInputElement).select()}
                 />
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={handleCopy}
-                  className="shrink-0"
-                >
-                  {copied ? (
-                    <Check className="h-4 w-4" />
-                  ) : (
-                    <Copy className="h-4 w-4" />
-                  )}
+                <Button type="button" size="sm" onClick={handleCopy} className="shrink-0">
+                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                 </Button>
               </div>
 
               <div className="text-xs text-muted-foreground">
-                {selectedFileIds.size} file{selectedFileIds.size !== 1 ? 's' : ''} · {dialectDisplay} · {formatBytes(encodeResult.compressedSize)}
+                {selectedFileIds.size} file{selectedFileIds.size !== 1 ? 's' : ''} ·{' '}
+                {dialectDisplay} · {formatBytes(encodeResult.compressedSize)}
               </div>
 
               {encodeResult.status === 'warning' && (
                 <div className="flex items-start gap-2 rounded-md border border-amber-500/50 bg-amber-500/10 p-3">
                   <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                  <p className="text-xs text-amber-700 dark:text-amber-400">{encodeResult.message}</p>
+                  <p className="text-xs text-amber-700 dark:text-amber-400">
+                    {encodeResult.message}
+                  </p>
                 </div>
               )}
             </>

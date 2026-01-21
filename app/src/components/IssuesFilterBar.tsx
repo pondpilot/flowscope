@@ -37,7 +37,11 @@ interface IssuesFilterBarProps {
   className?: string;
 }
 
-const SEVERITY_OPTIONS: { value: Severity; label: string; countKey: keyof IssuesFilterBarProps['counts'] }[] = [
+const SEVERITY_OPTIONS: {
+  value: Severity;
+  label: string;
+  countKey: keyof IssuesFilterBarProps['counts'];
+}[] = [
   { value: 'all', label: 'All', countKey: 'all' },
   { value: 'error', label: 'Errors', countKey: 'errors' },
   { value: 'warning', label: 'Warnings', countKey: 'warnings' },
@@ -57,15 +61,10 @@ export function IssuesFilterBar({
   onOpenSchemaEditor,
   className,
 }: IssuesFilterBarProps) {
-  const storedState = useViewStateStore(
-    (state) => state.viewStates[projectId]?.issues
-  );
+  const storedState = useViewStateStore((state) => state.viewStates[projectId]?.issues);
   const updateViewState = useViewStateStore((state) => state.updateViewState);
 
-  const filterState = useMemo(
-    () => getIssuesStateWithDefaults(storedState),
-    [storedState]
-  );
+  const filterState = useMemo(() => getIssuesStateWithDefaults(storedState), [storedState]);
 
   const updateFilter = useCallback(
     (updates: Partial<IssuesViewState>) => {
@@ -153,7 +152,9 @@ export function IssuesFilterBar({
               >
                 {option.label}
                 {count > 0 && (
-                  <span className={cn('ml-1.5 tabular-nums', isActive ? 'opacity-80' : 'opacity-60')}>
+                  <span
+                    className={cn('ml-1.5 tabular-nums', isActive ? 'opacity-80' : 'opacity-60')}
+                  >
                     {count}
                   </span>
                 )}
@@ -321,7 +322,9 @@ function FilterChip({ label, icon, variant, onRemove }: FilterChipProps) {
       )}
     >
       <span className="text-slate-400">{icon}</span>
-      <span className="max-w-[150px] truncate font-mono text-slate-700 dark:text-slate-300">{label}</span>
+      <span className="max-w-[150px] truncate font-mono text-slate-700 dark:text-slate-300">
+        {label}
+      </span>
       <button
         onClick={onRemove}
         className="ml-0.5 rounded-full p-0.5 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"

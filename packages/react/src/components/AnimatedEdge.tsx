@@ -112,12 +112,16 @@ export function AnimatedEdge({
   const edgeType = data?.type as EdgeType | string | undefined;
   const joinType = data?.joinType as string | undefined;
   const joinCondition = data?.joinCondition as string | undefined;
-  const labelZIndex = isHighlighted ? GRAPH_CONFIG.HIGHLIGHTED_EDGE_Z_INDEX : GRAPH_CONFIG.EDGE_LABEL_BASE_Z_INDEX;
+  const labelZIndex = isHighlighted
+    ? GRAPH_CONFIG.HIGHLIGHTED_EDGE_Z_INDEX
+    : GRAPH_CONFIG.EDGE_LABEL_BASE_Z_INDEX;
 
   const tooltipContent = useMemo(() => {
     let content = customTooltip || '';
     if (sourceColumn && targetColumn) {
-      content += content ? `\n${sourceColumn} → ${targetColumn}` : `${sourceColumn} → ${targetColumn}`;
+      content += content
+        ? `\n${sourceColumn} → ${targetColumn}`
+        : `${sourceColumn} → ${targetColumn}`;
     }
     if (joinType) {
       content += content ? '\n\n' : '';
@@ -141,12 +145,7 @@ export function AnimatedEdge({
 
   return (
     <>
-      <BaseEdge
-        id={id}
-        path={edgePath}
-        markerEnd={markerEnd}
-        style={edgeStyle}
-      />
+      <BaseEdge id={id} path={edgePath} markerEnd={markerEnd} style={edgeStyle} />
       {expression && (
         <EdgeLabelRenderer>
           <div

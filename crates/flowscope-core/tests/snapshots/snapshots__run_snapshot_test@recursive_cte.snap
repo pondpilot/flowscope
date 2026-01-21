@@ -1,6 +1,5 @@
 ---
 source: crates/flowscope-core/tests/snapshots.rs
-assertion_line: 25
 expression: clean_result
 ---
 {
@@ -89,13 +88,6 @@ expression: clean_result
           "from": "column_0f95136bd6024017",
           "to": "column_3bb15f110141f382",
           "type": "data_flow"
-        },
-        {
-          "id": "edge_0c452d1923739eb4",
-          "from": "table_1d63721b3610a67f",
-          "to": "output_b558dd754c71cfa6",
-          "type": "data_flow",
-          "approximate": true
         },
         {
           "id": "edge_0d75264916e1dd26",
@@ -386,15 +378,6 @@ expression: clean_result
         }
       },
       {
-        "id": "edge_0c452d1923739eb4",
-        "from": "table_1d63721b3610a67f",
-        "to": "output_b558dd754c71cfa6",
-        "type": "data_flow",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      },
-      {
         "id": "edge_0d75264916e1dd26",
         "from": "column_3bb15f110141f382",
         "to": "column_7e820398ccfaecd9",
@@ -540,14 +523,7 @@ expression: clean_result
       }
     ]
   },
-  "issues": [
-    {
-      "severity": "info",
-      "code": "APPROXIMATE_LINEAGE",
-      "message": "SELECT * from 'employees' - column list unknown without schema metadata",
-      "statementIndex": 0
-    }
-  ],
+  "issues": [],
   "summary": {
     "statementCount": 1,
     "tableCount": 2,
@@ -557,7 +533,7 @@ expression: clean_result
     "issueCount": {
       "errors": 0,
       "warnings": 0,
-      "infos": 1
+      "infos": 0
     },
     "hasErrors": false
   },

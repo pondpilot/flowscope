@@ -14,12 +14,15 @@
     "test:ts": "yarn workspaces run test",
     "check:schema": "cargo test -p flowscope-core --test schema_guard --locked && yarn workspace @pondpilot/flowscope-core test schema-compat.test.ts --silent",
     "check:ts": "yarn workspace @pondpilot/flowscope-core test --silent",
-    "check:rust": "cargo test --workspace --locked"
+    "check:rust": "cargo test --workspace --locked",
+    "prettier": "prettier --check \"**/*.{ts,tsx,js,jsx,json}\" --ignore-path .gitignore",
+    "prettier:write": "prettier --write \"**/*.{ts,tsx,js,jsx,json}\" --ignore-path .gitignore"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "eslint": "^9.39.1",
     "globals": "^16.5.0",
+    "prettier": "^3.8.1",
     "typescript-eslint": "^8.48.0"
   }
 }

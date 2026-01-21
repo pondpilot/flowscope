@@ -16,6 +16,13 @@ description = "Command-line interface for FlowScope SQL lineage analyzer"
 name = "flowscope"
 path = "src/main.rs"
 
+[features]
+default = ["templating", "metadata-provider"]
+templating = ["flowscope-core/templating"]
+metadata-provider = ["sqlx", "tokio"]
+# Integration tests require database connectivity
+integration-tests = ["metadata-provider"]
+
 [dependencies]
 flowscope-core.workspace = true
 flowscope-export = { workspace = true, features = ["duckdb"] }
@@ -34,9 +41,3 @@ tokio = { version = "1", features = ["rt-multi-thread"], optional = true }
 tempfile = "3"
 rusqlite = "0.32"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-
-[features]
-default = ["metadata-provider"]
-metadata-provider = ["sqlx", "tokio"]
-# Integration tests require database connectivity
-integration-tests = ["metadata-provider"]

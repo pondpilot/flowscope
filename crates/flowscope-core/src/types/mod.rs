@@ -28,6 +28,8 @@ pub use request::{
     AnalysisOptions, AnalyzeRequest, ColumnSchema, CompletionRequest, Dialect, FileSource,
     ForeignKeyRef, SchemaMetadata, SchemaNamespaceHint, SchemaTable, StatementSplitRequest,
 };
+#[cfg(feature = "templating")]
+pub use request::{TemplateConfig, TemplateError, TemplateMode};
 pub use response::{
     AggregationInfo, AnalyzeResult, CanonicalName, ConstraintType, Edge, EdgeType,
     FilterClauseType, FilterPredicate, GlobalEdge, GlobalLineage, GlobalNode, JoinType, Node,
