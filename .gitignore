@@ -62,3 +62,6 @@ crates/flowscope-core/fuzz/artifacts/
 
 # Git worktrees
 .worktrees/
+
+# ralphex progress logs
+progress-*.txt
