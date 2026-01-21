@@ -684,6 +684,7 @@ fn test_lateral_column_alias_lineage_bigquery() {
             ..Default::default()
         }),
         schema: None,
+        template_config: None,
     };
 
     let result = analyze(&request);
@@ -754,6 +755,7 @@ fn test_lateral_column_alias_lineage_snowflake() {
             ..Default::default()
         }),
         schema: None,
+        template_config: None,
     };
 
     let result = analyze(&request);
@@ -822,6 +824,7 @@ fn test_lateral_column_alias_no_lineage_postgres() {
             ..Default::default()
         }),
         schema: None,
+        template_config: None,
     };
 
     let result = analyze(&request);
@@ -886,6 +889,7 @@ fn test_lateral_column_alias_chain_lineage() {
             ..Default::default()
         }),
         schema: None,
+        template_config: None,
     };
 
     let result = analyze(&request);
