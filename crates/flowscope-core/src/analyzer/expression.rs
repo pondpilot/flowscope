@@ -67,7 +67,8 @@ impl<'a, 'b> ExpressionAnalyzer<'a, 'b> {
     /// Checks for type mismatches in binary operations and emits warnings.
     fn check_type_mismatches(&mut self, expr: &Expr) {
         let statement_index = self.ctx.statement_index;
-        let issues = check_expr_types(expr, statement_index);
+        let dialect = self.analyzer.request.dialect;
+        let issues = check_expr_types(expr, statement_index, dialect);
         self.analyzer.issues.extend(issues);
     }
 

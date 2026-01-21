@@ -2,6 +2,7 @@ use super::context::{ColumnRef, StatementContext};
 use super::expression::ExpressionAnalyzer;
 use super::helpers::{
     alias_visibility_warning, infer_expr_type, is_simple_column_ref, lateral_alias_warning,
+    normalize_schema_type,
 };
 use super::query::OutputColumnParams;
 use super::Analyzer;
@@ -435,7 +436,7 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
                 .schema
                 .lookup_column_type(&canonical, &source.column)
             {
-                return Some(self.normalize_schema_type(&schema_type));
+                return Some(normalize_schema_type(&schema_type));
             }
         } else {
             // No table qualifier - search all CTEs/subqueries in current scope
@@ -455,24 +456,11 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
                     .schema
                     .lookup_column_type(&table_canonical, &source.column)
                 {
-                    return Some(self.normalize_schema_type(&schema_type));
+                    return Some(normalize_schema_type(&schema_type));
                 }
             }
         }
 
         None
-    }
-
-    /// Normalizes a schema type string to a canonical type display string.
-    ///
-    /// Converts dialect-specific type names (e.g., "varchar", "int4", "TIMESTAMP_NTZ")
-    /// to canonical uppercase type names (e.g., "TEXT", "INTEGER", "TIMESTAMP").
-    /// If the type cannot be normalized, returns the original type string.
-    fn normalize_schema_type(&self, type_name: &str) -> String {
-        use crate::generated::normalize_type_name;
-
-        normalize_type_name(type_name)
-            .map(|canonical| canonical.to_string())
-            .unwrap_or_else(|| type_name.to_string())
     }
 }

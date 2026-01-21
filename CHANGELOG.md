@@ -14,12 +14,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New `TYPE_MISMATCH` warning code for detecting incompatible type comparisons and operations
 - Schema-aware column type lookup - column references now resolve types from provided schema metadata
 - CTE column type propagation to outer queries
+- Dialect-aware type compatibility rules (e.g., Boolean/Integer comparison allowed in MySQL but not PostgreSQL)
+- NULL comparison anti-pattern detection (`= NULL` warns to use `IS NULL` instead)
 
 ### Changed
 
 #### Core Engine (flowscope-core)
 - Unified type system: `CanonicalType` replaces internal `SqlType` enum with broader coverage (Time, Binary, Json, Array)
 - `OutputColumn.data_type` now populated with inferred types for SELECT expressions
+- Type checking now accepts dialect parameter for dialect-specific rules
+
+### Known Limitations
+
+#### Type Inference
+- **Schema-unaware type checking**: TYPE_MISMATCH warnings only detect mismatches between literals, CASTs, and known function return types. Column type mismatches (e.g., `WHERE users.id = users.email` where `id` is INTEGER and `email` is TEXT) are not detected because expression type inference does not yet resolve column types from schema metadata.
+- **No expression spans**: TYPE_MISMATCH warnings include the statement index but not precise source spans for editor integration. This is because sqlparser's expression AST nodes don't include span information by default.
 
 ## [0.2.0] - 2026-01-18
 

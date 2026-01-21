@@ -1298,6 +1298,25 @@ impl CanonicalType {
             CanonicalType::Array => "array",
         }
     }
+
+    /// Returns the canonical type name as an uppercase SQL-standard string.
+    ///
+    /// This is more efficient than `to_string()` when you only need a static string,
+    /// as it avoids heap allocation.
+    pub const fn as_uppercase_str(&self) -> &'static str {
+        match self {
+            CanonicalType::Integer => "INTEGER",
+            CanonicalType::Float => "FLOAT",
+            CanonicalType::Text => "TEXT",
+            CanonicalType::Boolean => "BOOLEAN",
+            CanonicalType::Timestamp => "TIMESTAMP",
+            CanonicalType::Date => "DATE",
+            CanonicalType::Time => "TIME",
+            CanonicalType::Binary => "BINARY",
+            CanonicalType::Json => "JSON",
+            CanonicalType::Array => "ARRAY",
+        }
+    }
 }
 
 impl fmt::Display for CanonicalType {

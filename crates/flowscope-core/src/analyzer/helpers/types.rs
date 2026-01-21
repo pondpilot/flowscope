@@ -8,6 +8,20 @@ use crate::generated::{
 };
 use sqlparser::ast::{self as ast, Expr, FunctionArg, FunctionArgExpr};
 
+/// Normalizes a schema type string to a canonical type display string.
+///
+/// Converts dialect-specific type names (e.g., "varchar", "int4", "TIMESTAMP_NTZ")
+/// to canonical uppercase type names (e.g., "TEXT", "INTEGER", "TIMESTAMP").
+/// If the type cannot be normalized, returns the original type string.
+///
+/// This is used consistently across the analyzer to normalize types from schema
+/// metadata and CTE output columns.
+pub fn normalize_schema_type(type_name: &str) -> String {
+    normalize_type_name(type_name)
+        .map(|canonical| canonical.as_uppercase_str().to_string())
+        .unwrap_or_else(|| type_name.to_string())
+}
+
 /// Basic type inference for expressions
 pub fn infer_expr_type(expr: &Expr) -> Option<CanonicalType> {
     match expr {

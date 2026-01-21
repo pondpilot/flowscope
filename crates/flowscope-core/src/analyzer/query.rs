@@ -5,7 +5,7 @@
 //! column-level lineage graph by tracking data flow from source columns to output columns.
 
 use super::context::{ColumnRef, OutputColumn, PendingWildcard, StatementContext};
-use super::helpers::{generate_column_node_id, generate_edge_id};
+use super::helpers::{generate_column_node_id, generate_edge_id, normalize_schema_type};
 use super::visitor::{LineageVisitor, Visitor};
 use super::Analyzer;
 use crate::types::{
@@ -18,19 +18,6 @@ use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
-
-use crate::generated::normalize_type_name;
-
-/// Normalizes a schema type string to a canonical type display string.
-///
-/// Converts dialect-specific type names (e.g., "varchar", "int4", "TIMESTAMP_NTZ")
-/// to canonical uppercase type names (e.g., "TEXT", "INTEGER", "TIMESTAMP").
-/// If the type cannot be normalized, returns the original type string.
-fn normalize_schema_type(type_name: &str) -> String {
-    normalize_type_name(type_name)
-        .map(|canonical| canonical.to_string())
-        .unwrap_or_else(|| type_name.to_string())
-}
 
 /// Represents the information needed to add an expanded column during wildcard expansion.
 struct ExpandedColumnInfo {

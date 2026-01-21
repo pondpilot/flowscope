@@ -24,4 +24,4 @@ pub use span::{
     line_col_to_offset,
 };
 pub use type_check::check_expr_types;
-pub use types::{canonical_type_from_data_type, infer_expr_type};
+pub use types::{canonical_type_from_data_type, infer_expr_type, normalize_schema_type};
