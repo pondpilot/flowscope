@@ -7,7 +7,18 @@ use sqlx::{any::AnyPoolOptions, AnyPool, Row};
 use std::error::Error;
 use std::time::Duration;
 
-use super::MetadataProvider;
+/// Maximum number of concurrent database connections.
+/// CLI tools run sequential queries; 2 connections handles metadata + query execution.
+const MAX_CONNECTIONS: u32 = 2;
+
+/// Timeout for acquiring a connection from the pool (seconds).
+/// Also serves as an implicit connect timeout since acquisition waits for connection.
+const ACQUIRE_TIMEOUT_SECS: u64 = 10;
+
+/// Extract the URL scheme for error messages (redacts credentials).
+fn url_scheme(url: &str) -> &str {
+    url.split("://").next().unwrap_or("unknown")
+}
 
 /// Database type inferred from connection URL.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -54,19 +65,16 @@ impl SqlxMetadataProvider {
         schema_filter: Option<String>,
     ) -> Result<Self, Box<dyn Error + Send + Sync>> {
         let db_type = DatabaseType::from_url(url)
-            .ok_or_else(|| format!("Unsupported database URL scheme: {url}"))?;
+            .ok_or_else(|| format!("Unsupported database URL scheme: {}", url_scheme(url)))?;
 
         // Install the SQLx any drivers for all supported database types
         sqlx::any::install_default_drivers();
 
-        // Connection pool settings optimized for CLI usage:
-        // - max_connections(2): CLI tools run sequential queries; 2 connections
-        //   handles metadata + query execution without resource waste
-        // - acquire_timeout(10s): Prevents indefinite hangs on unreachable hosts
-        //   while allowing time for slow network connections
+        // Note: SQLx's AnyPoolOptions doesn't support connect_timeout directly.
+        // The acquire_timeout covers the waiting time which includes initial connection.
         let pool = AnyPoolOptions::new()
-            .max_connections(2)
-            .acquire_timeout(Duration::from_secs(10))
+            .max_connections(MAX_CONNECTIONS)
+            .acquire_timeout(Duration::from_secs(ACQUIRE_TIMEOUT_SECS))
             .connect(url)
             .await?;
 
@@ -136,9 +144,11 @@ impl SqlxMetadataProvider {
 
     /// Fetch schema from MySQL using information_schema.
     async fn fetch_mysql_schema(&self) -> Result<Vec<SchemaTable>, Box<dyn Error + Send + Sync>> {
-        // For MySQL, if no schema filter is provided, we query the current database
-        // Use LEFT to coerce columns to VARCHAR for SQLx Any driver compatibility
-        // (information_schema uses longtext which Any driver maps to BLOB and can't decode)
+        // For MySQL, if no schema filter is provided, we query the current database.
+        // Use LEFT(..., 255) to coerce columns to VARCHAR for SQLx Any driver compatibility
+        // (information_schema uses longtext which Any driver maps to BLOB and can't decode).
+        // 255 chars is safe because MySQL limits identifiers to 64 chars by default,
+        // and the max is 256 chars with special configuration.
         let query = if self.schema_filter.is_some() {
             r#"
                 SELECT
@@ -177,6 +187,22 @@ impl SqlxMetadataProvider {
         self.rows_to_tables(rows)
     }
 
+    /// Validate SQLite table name to prevent injection in PRAGMA queries.
+    /// SQLite identifiers can contain most characters but we restrict to safe ones.
+    fn validate_sqlite_table_name(name: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
+        if name.is_empty() || name.len() > 255 {
+            return Err(format!("Invalid table name length: {}", name.len()).into());
+        }
+        // Allow alphanumeric, underscore, and dot (for attached databases)
+        if !name
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '_' || c == '.')
+        {
+            return Err(format!("Table name contains invalid characters: {}", name).into());
+        }
+        Ok(())
+    }
+
     /// Fetch schema from SQLite using sqlite_master and pragma_table_info.
     async fn fetch_sqlite_schema(&self) -> Result<Vec<SchemaTable>, Box<dyn Error + Send + Sync>> {
         // First, get all table names
@@ -192,6 +218,9 @@ impl SqlxMetadataProvider {
 
         for table_row in table_rows {
             let table_name: String = table_row.get("name");
+
+            // Validate table name before using in dynamic SQL
+            Self::validate_sqlite_table_name(&table_name)?;
 
             // Get column info for each table using pragma_table_info
             // Note: We need to use dynamic SQL here since pragma_table_info is a table-valued function
@@ -323,14 +352,6 @@ impl SqlxMetadataProvider {
             return val != 0;
         }
         false
-    }
-}
-
-impl MetadataProvider for SqlxMetadataProvider {
-    fn fetch_schema(&self) -> Result<SchemaMetadata, Box<dyn Error + Send + Sync>> {
-        // Create a runtime to run the async code synchronously
-        let rt = tokio::runtime::Runtime::new()?;
-        rt.block_on(self.fetch_schema_async())
     }
 }
 

@@ -266,6 +266,11 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
         }
 
         sources.extend(additional_sources);
+
+        // Deduplicate sources by (table, column) to avoid duplicate edges in lineage
+        let mut seen: HashSet<(Option<String>, String)> = HashSet::new();
+        sources.retain(|s| seen.insert((s.table.clone(), s.column.clone())));
+
         sources
     }
 

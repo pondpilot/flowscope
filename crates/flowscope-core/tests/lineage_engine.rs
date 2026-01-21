@@ -5493,3 +5493,56 @@ fn test_alter_table_rename_with_schema() {
         "Operation should be RENAME"
     );
 }
+
+#[test]
+fn test_alter_table_rename_inherits_schema_when_unqualified() {
+    let sql = "ALTER TABLE analytics.legacy_orders RENAME TO orders_v2";
+    let result = run_analysis(sql, Dialect::Generic, None);
+
+    assert!(
+        result.issues.iter().all(|i| i.severity != Severity::Error),
+        "Should not produce errors: {:?}",
+        result.issues
+    );
+    let stmt = &result.statements[0];
+
+    let old_node = stmt
+        .nodes
+        .iter()
+        .find(|n| {
+            n.qualified_name
+                .as_ref()
+                .map(|qn| qn.as_ref() == "analytics.legacy_orders")
+                .unwrap_or(false)
+        })
+        .expect("analytics.legacy_orders node should exist");
+    let new_node = stmt
+        .nodes
+        .iter()
+        .find(|n| n.label.as_ref() == "orders_v2")
+        .expect("orders_v2 node should exist");
+
+    assert_eq!(
+        new_node.qualified_name.as_deref(),
+        Some("analytics.orders_v2"),
+        "New node should inherit schema qualification"
+    );
+
+    assert_eq!(stmt.edges.len(), 1, "Should have exactly one edge");
+    let edge = &stmt.edges[0];
+    assert_eq!(
+        edge.from.as_ref(),
+        old_node.id.as_ref(),
+        "Edge should originate from old table"
+    );
+    assert_eq!(
+        edge.to.as_ref(),
+        new_node.id.as_ref(),
+        "Edge should point to renamed table"
+    );
+    assert_eq!(
+        edge.operation.as_ref().map(|o| o.as_ref()),
+        Some("RENAME"),
+        "Edge should be marked as RENAME operation"
+    );
+}

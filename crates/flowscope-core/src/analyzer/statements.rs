@@ -9,6 +9,7 @@ use super::context::StatementContext;
 use super::expression::ExpressionAnalyzer;
 use super::helpers::{
     classify_query_type, extract_simple_name, generate_edge_id, generate_node_id,
+    split_qualified_identifiers,
 };
 use super::visitor::{LineageVisitor, Visitor};
 use super::Analyzer;
@@ -720,7 +721,16 @@ impl<'a> Analyzer<'a> {
         let old_node_id = generate_node_id("table", &old_canonical);
 
         let new_name_str = new_table_name.to_string();
-        let new_canonical = self.normalize_table_name(&new_name_str);
+        let mut inherited_parts = split_qualified_identifiers(&old_name_str);
+        let new_parts = split_qualified_identifiers(&new_name_str);
+        let new_name_with_schema = if new_parts.len() == 1 && inherited_parts.len() > 1 {
+            inherited_parts.pop();
+            inherited_parts.push(new_name_str.clone());
+            inherited_parts.join(".")
+        } else {
+            new_name_str.clone()
+        };
+        let new_canonical = self.normalize_table_name(&new_name_with_schema);
         let new_node_id = generate_node_id("table", &new_canonical);
 
         // Create node for old table (source of rename)

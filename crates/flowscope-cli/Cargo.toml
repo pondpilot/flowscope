@@ -37,4 +37,5 @@ rusqlite = "0.32"
 [features]
 default = ["metadata-provider"]
 metadata-provider = ["sqlx", "tokio"]
-integration-tests = []
+# Integration tests require database connectivity
+integration-tests = ["metadata-provider"]
