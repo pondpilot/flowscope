@@ -27,6 +27,12 @@ thiserror = "2.0"
 tabled = "0.20"
 owo-colors = "4"
 is-terminal = "0.4"
+sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "mysql", "sqlite"], optional = true }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"], optional = true }
 
 [dev-dependencies]
 tempfile = "3"
+
+[features]
+default = ["metadata-provider"]
+metadata-provider = ["sqlx", "tokio"]
