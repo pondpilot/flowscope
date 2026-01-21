@@ -6,8 +6,10 @@ pub mod case_sensitivity;
 pub mod function_rules;
 pub mod functions;
 mod scoping_rules;
+pub mod type_system;
 
 pub use case_sensitivity::*;
 pub use function_rules::*;
 pub use functions::*;
+pub use type_system::*;
 // scoping_rules adds methods to Dialect via impl, no re-export needed
