@@ -36,6 +36,170 @@ cli-release *ARGS:
 test-cli:
     cargo test -p flowscope-cli
 
+# Run CLI integration tests (SQLite + PostgreSQL + MySQL)
+test-integration: test-integration-sqlite test-integration-postgres test-integration-mysql
+
+# Run SQLite integration tests (no external dependencies)
+test-integration-sqlite:
+    cargo test -p flowscope-cli --features integration-tests --test integration sqlite -- --test-threads=1
+
+# Run PostgreSQL integration tests (starts Docker container)
+test-integration-postgres: _postgres-start
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Wait for PostgreSQL to be ready
+    echo "Waiting for PostgreSQL to be ready..."
+    for i in {1..30}; do
+        if docker exec flowscope-test-postgres pg_isready -U flowscope > /dev/null 2>&1; then
+            echo "PostgreSQL is ready"
+            break
+        fi
+        if [ $i -eq 30 ]; then
+            echo "PostgreSQL failed to start"
+            just _postgres-stop
+            exit 1
+        fi
+        sleep 1
+    done
+
+    # Create test tables
+    docker exec flowscope-test-postgres psql -U flowscope -d flowscope -c "
+        DROP TABLE IF EXISTS order_items CASCADE;
+        DROP TABLE IF EXISTS orders CASCADE;
+        DROP TABLE IF EXISTS users CASCADE;
+
+        CREATE TABLE users (
+            id SERIAL PRIMARY KEY,
+            name TEXT NOT NULL,
+            email TEXT UNIQUE
+        );
+
+        CREATE TABLE orders (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            total NUMERIC(10,2) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE order_items (
+            id SERIAL PRIMARY KEY,
+            order_id INTEGER NOT NULL REFERENCES orders(id),
+            product_name TEXT NOT NULL,
+            quantity INTEGER NOT NULL,
+            price NUMERIC(10,2) NOT NULL
+        );
+    "
+
+    # Run tests
+    cargo test -p flowscope-cli --features integration-tests --test integration postgres -- --test-threads=1
+
+    # Stop PostgreSQL
+    just _postgres-stop
+
+# Start PostgreSQL container for integration tests
+_postgres-start:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Stop existing container if running
+    docker rm -f flowscope-test-postgres 2>/dev/null || true
+
+    # Start PostgreSQL on port 5433 to avoid conflicts
+    docker run -d \
+        --name flowscope-test-postgres \
+        -e POSTGRES_USER=flowscope \
+        -e POSTGRES_PASSWORD=flowscope \
+        -e POSTGRES_DB=flowscope \
+        -p 5433:5432 \
+        postgres:16-alpine
+
+    echo "PostgreSQL container started on port 5433"
+
+# Stop PostgreSQL container
+_postgres-stop:
+    docker rm -f flowscope-test-postgres 2>/dev/null || true
+
+# Run MySQL integration tests (starts Docker container)
+test-integration-mysql: _mysql-start
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Wait for MySQL to be ready (check with actual user connection, not just ping)
+    echo "Waiting for MySQL to be ready..."
+    for i in {1..60}; do
+        if docker exec flowscope-test-mysql mysql -uflowscope -pflowscope -e "SELECT 1" > /dev/null 2>&1; then
+            echo "MySQL is ready"
+            break
+        fi
+        if [ $i -eq 60 ]; then
+            echo "MySQL failed to start"
+            just _mysql-stop
+            exit 1
+        fi
+        sleep 1
+    done
+
+    # Create test tables
+    docker exec flowscope-test-mysql mysql -uflowscope -pflowscope flowscope -e "
+        DROP TABLE IF EXISTS order_items;
+        DROP TABLE IF EXISTS orders;
+        DROP TABLE IF EXISTS users;
+
+        CREATE TABLE users (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            email VARCHAR(255) UNIQUE
+        );
+
+        CREATE TABLE orders (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            total DECIMAL(10,2) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        );
+
+        CREATE TABLE order_items (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            order_id INT NOT NULL,
+            product_name VARCHAR(255) NOT NULL,
+            quantity INT NOT NULL,
+            price DECIMAL(10,2) NOT NULL,
+            FOREIGN KEY (order_id) REFERENCES orders(id)
+        );
+    "
+
+    # Run tests
+    cargo test -p flowscope-cli --features integration-tests --test integration mysql -- --test-threads=1
+
+    # Stop MySQL
+    just _mysql-stop
+
+# Start MySQL container for integration tests
+_mysql-start:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Stop existing container if running
+    docker rm -f flowscope-test-mysql 2>/dev/null || true
+
+    # Start MySQL on port 3307 to avoid conflicts
+    docker run -d \
+        --name flowscope-test-mysql \
+        -e MYSQL_ROOT_PASSWORD=root \
+        -e MYSQL_USER=flowscope \
+        -e MYSQL_PASSWORD=flowscope \
+        -e MYSQL_DATABASE=flowscope \
+        -p 3307:3306 \
+        mysql:8.0
+
+    echo "MySQL container started on port 3307"
+
+# Stop MySQL container
+_mysql-stop:
+    docker rm -f flowscope-test-mysql 2>/dev/null || true
+
 # Build WASM module and TypeScript packages
 build-wasm:
     ./scripts/build-rust.sh

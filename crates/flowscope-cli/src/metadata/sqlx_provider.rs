@@ -85,9 +85,11 @@ impl SqlxMetadataProvider {
             DatabaseType::Sqlite => self.fetch_sqlite_schema().await?,
         };
 
+        let default_schema = self.resolve_default_schema().await?;
+
         Ok(SchemaMetadata {
             default_catalog: None,
-            default_schema: self.schema_filter.clone(),
+            default_schema,
             search_path: None,
             case_sensitivity: None,
             tables,
@@ -101,12 +103,13 @@ impl SqlxMetadataProvider {
     ) -> Result<Vec<SchemaTable>, Box<dyn Error + Send + Sync>> {
         let schema_filter = self.schema_filter.as_deref().unwrap_or("public");
 
+        // Cast to text for SQLx Any driver compatibility (Name type not supported)
         let query = r#"
             SELECT
-                table_schema,
-                table_name,
-                column_name,
-                data_type,
+                c.table_schema::text AS table_schema,
+                c.table_name::text AS table_name,
+                c.column_name::text AS column_name,
+                c.data_type::text AS data_type,
                 CASE WHEN pk.column_name IS NOT NULL THEN true ELSE false END AS is_primary_key
             FROM information_schema.columns c
             LEFT JOIN (
@@ -134,13 +137,15 @@ impl SqlxMetadataProvider {
     /// Fetch schema from MySQL using information_schema.
     async fn fetch_mysql_schema(&self) -> Result<Vec<SchemaTable>, Box<dyn Error + Send + Sync>> {
         // For MySQL, if no schema filter is provided, we query the current database
+        // Use LEFT to coerce columns to VARCHAR for SQLx Any driver compatibility
+        // (information_schema uses longtext which Any driver maps to BLOB and can't decode)
         let query = if self.schema_filter.is_some() {
             r#"
                 SELECT
-                    TABLE_SCHEMA as table_schema,
-                    TABLE_NAME as table_name,
-                    COLUMN_NAME as column_name,
-                    DATA_TYPE as data_type,
+                    LEFT(TABLE_SCHEMA, 255) as table_schema,
+                    LEFT(TABLE_NAME, 255) as table_name,
+                    LEFT(COLUMN_NAME, 255) as column_name,
+                    LEFT(DATA_TYPE, 255) as data_type,
                     CASE WHEN COLUMN_KEY = 'PRI' THEN 1 ELSE 0 END AS is_primary_key
                 FROM information_schema.COLUMNS
                 WHERE TABLE_SCHEMA = ?
@@ -149,10 +154,10 @@ impl SqlxMetadataProvider {
         } else {
             r#"
                 SELECT
-                    TABLE_SCHEMA as table_schema,
-                    TABLE_NAME as table_name,
-                    COLUMN_NAME as column_name,
-                    DATA_TYPE as data_type,
+                    LEFT(TABLE_SCHEMA, 255) as table_schema,
+                    LEFT(TABLE_NAME, 255) as table_name,
+                    LEFT(COLUMN_NAME, 255) as column_name,
+                    LEFT(DATA_TYPE, 255) as data_type,
                     CASE WHEN COLUMN_KEY = 'PRI' THEN 1 ELSE 0 END AS is_primary_key
                 FROM information_schema.COLUMNS
                 WHERE TABLE_SCHEMA = DATABASE()
@@ -223,6 +228,29 @@ impl SqlxMetadataProvider {
         }
 
         Ok(tables)
+    }
+
+    /// Determine the default schema that should be used for canonicalization.
+    async fn resolve_default_schema(&self) -> Result<Option<String>, Box<dyn Error + Send + Sync>> {
+        if let Some(schema) = &self.schema_filter {
+            return Ok(Some(schema.clone()));
+        }
+
+        match self.db_type {
+            DatabaseType::Mysql => self.fetch_mysql_default_schema().await,
+            _ => Ok(None),
+        }
+    }
+
+    /// Return the currently selected MySQL database (if any) to use as the default schema.
+    async fn fetch_mysql_default_schema(
+        &self,
+    ) -> Result<Option<String>, Box<dyn Error + Send + Sync>> {
+        let schema: Option<String> = sqlx::query_scalar("SELECT DATABASE()")
+            .fetch_one(&self.pool)
+            .await?;
+
+        Ok(schema)
     }
 
     /// Convert database rows to SchemaTable structures.

@@ -32,7 +32,9 @@ tokio = { version = "1", features = ["rt-multi-thread"], optional = true }
 
 [dev-dependencies]
 tempfile = "3"
+rusqlite = "0.32"
 
 [features]
 default = ["metadata-provider"]
 metadata-provider = ["sqlx", "tokio"]
+integration-tests = []
