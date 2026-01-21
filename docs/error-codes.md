@@ -21,6 +21,7 @@ This document lists the issue codes emitted by FlowScope. Codes are defined in:
 | `UNKNOWN_COLUMN` | Warning | Column reference not resolved from schema. |
 | `UNRESOLVED_REFERENCE` | Warning | Cross-statement reference not produced earlier. |
 | `SCHEMA_CONFLICT` | Warning | Imported schema conflicts with implied schema. |
+| `TYPE_MISMATCH` | Warning | Type incompatibility detected in expression (e.g., comparing INTEGER to TEXT). |
 | `PAYLOAD_SIZE_WARNING` | Warning | Reserved for large payload warnings. |
 
 ## Info Codes

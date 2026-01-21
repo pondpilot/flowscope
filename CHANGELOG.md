@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+#### Core Engine (flowscope-core)
+- Type inference for SQL expressions with comprehensive type checking
+- New `TYPE_MISMATCH` warning code for detecting incompatible type comparisons and operations
+- Schema-aware column type lookup - column references now resolve types from provided schema metadata
+- CTE column type propagation to outer queries
+
+### Changed
+
+#### Core Engine (flowscope-core)
+- Unified type system: `CanonicalType` replaces internal `SqlType` enum with broader coverage (Time, Binary, Json, Array)
+- `OutputColumn.data_type` now populated with inferred types for SELECT expressions
+
 ## [0.2.0] - 2026-01-18
 
 ### Highlights

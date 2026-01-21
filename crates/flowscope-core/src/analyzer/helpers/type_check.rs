@@ -4,7 +4,7 @@
 //! generating warnings when operand types are incompatible.
 
 use crate::generated::{can_implicitly_cast, CanonicalType};
-use crate::types::{issue_codes, Issue, Span};
+use crate::types::{issue_codes, Issue};
 use sqlparser::ast::{self as ast, Expr, FunctionArg, FunctionArgExpr};
 
 use super::types::infer_expr_type;
@@ -249,239 +249,6 @@ fn is_numeric_type(t: CanonicalType) -> bool {
     matches!(t, CanonicalType::Integer | CanonicalType::Float)
 }
 
-/// Checks an expression for type mismatches and returns issues with spans.
-///
-/// This is an enhanced version of `check_expr_types` that attempts to include
-/// source location spans in the warnings for better editor integration.
-///
-/// # Arguments
-///
-/// * `expr` - The expression to check
-/// * `statement_index` - The statement index for warning attribution
-/// * `find_span` - A function to find the span of an expression in the source
-///
-/// # Returns
-///
-/// A vector of `Issue` warnings for any type mismatches found.
-pub fn check_expr_types_with_span<F>(
-    expr: &Expr,
-    statement_index: usize,
-    find_span: F,
-) -> Vec<Issue>
-where
-    F: Fn(&str) -> Option<Span>,
-{
-    let mut issues = Vec::new();
-    check_expr_types_with_span_inner(expr, statement_index, &find_span, &mut issues, 0);
-    issues
-}
-
-fn check_expr_types_with_span_inner<F>(
-    expr: &Expr,
-    statement_index: usize,
-    find_span: &F,
-    issues: &mut Vec<Issue>,
-    depth: usize,
-) where
-    F: Fn(&str) -> Option<Span>,
-{
-    if depth > MAX_RECURSION_DEPTH {
-        return;
-    }
-    let next_depth = depth + 1;
-
-    match expr {
-        Expr::BinaryOp { left, op, right } => {
-            // First, recursively check children
-            check_expr_types_with_span_inner(left, statement_index, find_span, issues, next_depth);
-            check_expr_types_with_span_inner(right, statement_index, find_span, issues, next_depth);
-
-            // Then check this binary operation
-            check_binary_op_types_with_span(left, op, right, statement_index, find_span, issues);
-        }
-        Expr::UnaryOp { expr: inner, .. } => {
-            check_expr_types_with_span_inner(inner, statement_index, find_span, issues, next_depth);
-        }
-        Expr::Nested(inner) => {
-            check_expr_types_with_span_inner(inner, statement_index, find_span, issues, next_depth);
-        }
-        Expr::Cast { expr: inner, .. } => {
-            check_expr_types_with_span_inner(inner, statement_index, find_span, issues, next_depth);
-        }
-        Expr::Case {
-            operand,
-            conditions,
-            else_result,
-            ..
-        } => {
-            if let Some(op) = operand {
-                check_expr_types_with_span_inner(op, statement_index, find_span, issues, next_depth);
-            }
-            for case_when in conditions {
-                check_expr_types_with_span_inner(
-                    &case_when.condition,
-                    statement_index,
-                    find_span,
-                    issues,
-                    next_depth,
-                );
-                check_expr_types_with_span_inner(
-                    &case_when.result,
-                    statement_index,
-                    find_span,
-                    issues,
-                    next_depth,
-                );
-            }
-            if let Some(el) = else_result {
-                check_expr_types_with_span_inner(el, statement_index, find_span, issues, next_depth);
-            }
-        }
-        Expr::Function(func) => {
-            if let ast::FunctionArguments::List(args) = &func.args {
-                for arg in &args.args {
-                    match arg {
-                        FunctionArg::Unnamed(FunctionArgExpr::Expr(e))
-                        | FunctionArg::Named {
-                            arg: FunctionArgExpr::Expr(e),
-                            ..
-                        } => {
-                            check_expr_types_with_span_inner(
-                                e,
-                                statement_index,
-                                find_span,
-                                issues,
-                                next_depth,
-                            );
-                        }
-                        _ => {}
-                    }
-                }
-            }
-        }
-        Expr::InList { expr, list, .. } => {
-            check_expr_types_with_span_inner(expr, statement_index, find_span, issues, next_depth);
-            for item in list {
-                check_expr_types_with_span_inner(item, statement_index, find_span, issues, next_depth);
-            }
-        }
-        Expr::Between {
-            expr, low, high, ..
-        } => {
-            check_expr_types_with_span_inner(expr, statement_index, find_span, issues, next_depth);
-            check_expr_types_with_span_inner(low, statement_index, find_span, issues, next_depth);
-            check_expr_types_with_span_inner(high, statement_index, find_span, issues, next_depth);
-        }
-        _ => {}
-    }
-}
-
-/// Checks a binary operation for type compatibility with span support.
-fn check_binary_op_types_with_span<F>(
-    left: &Expr,
-    op: &ast::BinaryOperator,
-    right: &Expr,
-    statement_index: usize,
-    find_span: &F,
-    issues: &mut Vec<Issue>,
-) where
-    F: Fn(&str) -> Option<Span>,
-{
-    let left_type = infer_expr_type(left);
-    let right_type = infer_expr_type(right);
-
-    // If we can't infer both types, we can't check compatibility
-    let (Some(l_type), Some(r_type)) = (left_type, right_type) else {
-        return;
-    };
-
-    let mismatch = match op {
-        // Comparison operators: types must be compatible
-        ast::BinaryOperator::Eq
-        | ast::BinaryOperator::NotEq
-        | ast::BinaryOperator::Lt
-        | ast::BinaryOperator::LtEq
-        | ast::BinaryOperator::Gt
-        | ast::BinaryOperator::GtEq => {
-            if !are_types_comparable(l_type, r_type) {
-                Some(format!(
-                    "Type mismatch in comparison: {} {} {}",
-                    l_type, op, r_type
-                ))
-            } else {
-                None
-            }
-        }
-        // Arithmetic operators: both operands must be numeric
-        ast::BinaryOperator::Plus
-        | ast::BinaryOperator::Minus
-        | ast::BinaryOperator::Multiply
-        | ast::BinaryOperator::Divide
-        | ast::BinaryOperator::Modulo => {
-            check_arithmetic_mismatch(l_type, op, r_type)
-        }
-        _ => None,
-    };
-
-    if let Some(message) = mismatch {
-        // Try to find the span for this expression
-        let expr_str = format!("{} {} {}", left, op, right);
-        let span = find_span(&expr_str);
-
-        let mut issue = Issue::warning(issue_codes::TYPE_MISMATCH, message)
-            .with_statement(statement_index);
-        if let Some(s) = span {
-            issue = issue.with_span(s);
-        }
-        issues.push(issue);
-    }
-}
-
-/// Checks for arithmetic type mismatch and returns an error message if found.
-fn check_arithmetic_mismatch(
-    l_type: CanonicalType,
-    op: &ast::BinaryOperator,
-    r_type: CanonicalType,
-) -> Option<String> {
-    // Plus is special: it can also be string concatenation
-    if *op == ast::BinaryOperator::Plus {
-        // Allow numeric + numeric, or text + text (concatenation)
-        let l_numeric = is_numeric_type(l_type);
-        let r_numeric = is_numeric_type(r_type);
-        let l_text = l_type == CanonicalType::Text;
-        let r_text = r_type == CanonicalType::Text;
-
-        if (l_numeric && r_numeric) || (l_text && r_text) {
-            return None;
-        }
-        // Allow implicit casts between numeric types
-        if (l_numeric || r_numeric)
-            && (can_implicitly_cast(l_type, r_type) || can_implicitly_cast(r_type, l_type))
-        {
-            return None;
-        }
-    } else {
-        // For other arithmetic ops, both must be numeric
-        let l_numeric = is_numeric_type(l_type);
-        let r_numeric = is_numeric_type(r_type);
-
-        if l_numeric && r_numeric {
-            return None;
-        }
-        // Allow implicit casts to numeric
-        if (l_numeric || can_implicitly_cast(l_type, CanonicalType::Float))
-            && (r_numeric || can_implicitly_cast(r_type, CanonicalType::Float))
-        {
-            return None;
-        }
-    }
-
-    Some(format!(
-        "Type mismatch in arithmetic operation: {} {} {}",
-        l_type, op, r_type
-    ))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -547,12 +314,12 @@ mod tests {
     #[test]
     fn test_arithmetic_type_mismatch() {
         // true + 1 should warn (boolean + numeric)
+        // Boolean cannot implicitly cast to Float, so this is a type mismatch
         let expr = parse_expr("true + 1");
         let issues = check_expr_types(&expr, 0);
-        // Note: Integer can implicitly cast to Boolean in some systems
-        // but this depends on can_implicitly_cast implementation
-        // The test verifies the logic is working
-        assert!(issues.is_empty() || issues[0].code == issue_codes::TYPE_MISMATCH);
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::TYPE_MISMATCH);
+        assert!(issues[0].message.contains("BOOLEAN"));
     }
 
     #[test]
@@ -574,12 +341,12 @@ mod tests {
 
     #[test]
     fn test_boolean_in_arithmetic() {
-        // Booleans can implicitly cast to Integer in our type system
-        // true + false might not warn depending on the implicit cast rules
+        // Boolean + Boolean should warn since neither is numeric and
+        // Boolean cannot implicitly cast to Float
         let expr = parse_expr("true + false");
         let issues = check_expr_types(&expr, 0);
-        // Boolean can cast to Integer, so this might be allowed
-        // We're testing that the code runs without panic
-        assert!(issues.is_empty() || issues[0].code == issue_codes::TYPE_MISMATCH);
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::TYPE_MISMATCH);
+        assert!(issues[0].message.contains("BOOLEAN"));
     }
 }

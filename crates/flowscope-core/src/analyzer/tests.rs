@@ -810,9 +810,10 @@ fn test_type_mismatch_numeric_types_compatible() {
 
 #[test]
 fn test_type_mismatch_arithmetic_date_plus_bool_warning() {
-    // Date + Boolean should warn (incompatible arithmetic)
-    // Note: Since we're using literals, we use CAST to create the types
-    let sql = "SELECT CAST('2024-01-01' AS DATE) + true FROM users";
+    // Date + Boolean in WHERE clause should warn (incompatible arithmetic)
+    // Neither Date nor Boolean can implicitly cast to Float (numeric)
+    // Note: Type checking only happens in WHERE/HAVING clauses, not SELECT
+    let sql = "SELECT 1 FROM users WHERE CAST('2024-01-01' AS DATE) + true";
     let request = make_request(sql);
     let result = analyze(&request);
 
@@ -822,13 +823,14 @@ fn test_type_mismatch_arithmetic_date_plus_bool_warning() {
         .filter(|i| i.code == issue_codes::TYPE_MISMATCH)
         .collect();
 
-    // Boolean can implicitly cast to Integer, so this might be allowed
-    // The important thing is that the type checking runs without panic
-    // and we verify the behavior is consistent
-    assert!(
-        type_mismatch_issues.is_empty() || type_mismatch_issues[0].code == issue_codes::TYPE_MISMATCH,
-        "type mismatch check ran successfully"
+    assert_eq!(
+        type_mismatch_issues.len(),
+        1,
+        "expected one type mismatch warning for DATE + BOOLEAN, got {:?}",
+        type_mismatch_issues
     );
+    assert!(type_mismatch_issues[0].message.contains("DATE"));
+    assert!(type_mismatch_issues[0].message.contains("BOOLEAN"));
 }
 
 #[test]
