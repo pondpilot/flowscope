@@ -7415,3 +7415,203 @@ fn snowflake_grouping_sets_tracks_source() {
         result.issues
     );
 }
+
+// =============================================================================
+// Type inference tests (Task 2: Populate Column Types in Output)
+// =============================================================================
+
+/// Extract the data_type from a column node's metadata
+fn get_column_data_type(node: &Node) -> Option<String> {
+    node.metadata
+        .as_ref()
+        .and_then(|m| m.get("data_type"))
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+}
+
+#[test]
+fn type_inference_select_literals_have_correct_types() {
+    // Test that SELECT with literal values correctly infers types
+    let sql = r#"
+        SELECT
+            1 AS int_val,
+            'text' AS text_val,
+            true AS bool_val
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let stmt = first_statement(&result);
+
+    // Find the columns and check their types
+    let int_col = find_column_node(stmt, "int_val").expect("int_val column should exist");
+    let text_col = find_column_node(stmt, "text_val").expect("text_val column should exist");
+    let bool_col = find_column_node(stmt, "bool_val").expect("bool_val column should exist");
+
+    // Numbers infer as FLOAT (since we can't distinguish int from float without context)
+    assert_eq!(
+        get_column_data_type(int_col),
+        Some("FLOAT".to_string()),
+        "Integer literal should infer as FLOAT"
+    );
+    assert_eq!(
+        get_column_data_type(text_col),
+        Some("TEXT".to_string()),
+        "String literal should infer as TEXT"
+    );
+    assert_eq!(
+        get_column_data_type(bool_col),
+        Some("BOOLEAN".to_string()),
+        "Boolean literal should infer as BOOLEAN"
+    );
+}
+
+#[test]
+fn type_inference_select_functions_have_correct_types() {
+    // Test that SELECT with function calls correctly infers types
+    let sql = r#"
+        SELECT
+            COUNT(*) AS count_val,
+            SUM(amount) AS sum_val,
+            CONCAT(first_name, last_name) AS concat_val,
+            NOW() AS timestamp_val
+        FROM users
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let stmt = first_statement(&result);
+
+    // Find the columns and check their types
+    let count_col = find_column_node(stmt, "count_val").expect("count_val column should exist");
+    let sum_col = find_column_node(stmt, "sum_val").expect("sum_val column should exist");
+    let concat_col = find_column_node(stmt, "concat_val").expect("concat_val column should exist");
+    let timestamp_col =
+        find_column_node(stmt, "timestamp_val").expect("timestamp_val column should exist");
+
+    assert_eq!(
+        get_column_data_type(count_col),
+        Some("INTEGER".to_string()),
+        "COUNT(*) should infer as INTEGER"
+    );
+    assert_eq!(
+        get_column_data_type(sum_col),
+        Some("FLOAT".to_string()),
+        "SUM() should infer as FLOAT"
+    );
+    assert_eq!(
+        get_column_data_type(concat_col),
+        Some("TEXT".to_string()),
+        "CONCAT() should infer as TEXT"
+    );
+    assert_eq!(
+        get_column_data_type(timestamp_col),
+        Some("TIMESTAMP".to_string()),
+        "NOW() should infer as TIMESTAMP"
+    );
+}
+
+#[test]
+fn type_inference_cte_types_propagate_to_outer_query() {
+    // Test that CTE column types propagate to the outer query
+    let sql = r#"
+        WITH metrics AS (
+            SELECT
+                COUNT(*) AS row_count,
+                SUM(amount) AS total_amount,
+                CONCAT(name, '_suffix') AS name_with_suffix
+            FROM orders
+        )
+        SELECT
+            row_count,
+            total_amount,
+            name_with_suffix
+        FROM metrics
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let stmt = first_statement(&result);
+
+    // Find the CTE's output columns (they should have types)
+    let cte_node = find_cte_node(stmt, "metrics").expect("metrics CTE should exist");
+
+    // Find columns owned by the CTE
+    let cte_columns: Vec<_> = stmt
+        .edges
+        .iter()
+        .filter(|e| e.edge_type == EdgeType::Ownership && e.from == cte_node.id)
+        .filter_map(|e| stmt.nodes.iter().find(|n| n.id == e.to))
+        .collect();
+
+    // CTE columns should have types
+    let cte_row_count = cte_columns
+        .iter()
+        .find(|n| &*n.label == "row_count")
+        .expect("row_count should be in CTE");
+    let cte_total_amount = cte_columns
+        .iter()
+        .find(|n| &*n.label == "total_amount")
+        .expect("total_amount should be in CTE");
+    let cte_name_with_suffix = cte_columns
+        .iter()
+        .find(|n| &*n.label == "name_with_suffix")
+        .expect("name_with_suffix should be in CTE");
+
+    assert_eq!(
+        get_column_data_type(cte_row_count),
+        Some("INTEGER".to_string()),
+        "CTE row_count should be INTEGER"
+    );
+    assert_eq!(
+        get_column_data_type(cte_total_amount),
+        Some("FLOAT".to_string()),
+        "CTE total_amount should be FLOAT"
+    );
+    assert_eq!(
+        get_column_data_type(cte_name_with_suffix),
+        Some("TEXT".to_string()),
+        "CTE name_with_suffix should be TEXT"
+    );
+
+    // Find the Output node's columns (the outer query)
+    let output_node = stmt
+        .nodes
+        .iter()
+        .find(|n| n.node_type == NodeType::Output)
+        .expect("Output node should exist");
+
+    let output_columns: Vec<_> = stmt
+        .edges
+        .iter()
+        .filter(|e| e.edge_type == EdgeType::Ownership && e.from == output_node.id)
+        .filter_map(|e| stmt.nodes.iter().find(|n| n.id == e.to))
+        .collect();
+
+    // Output columns should also have types (propagated from CTE)
+    let out_row_count = output_columns
+        .iter()
+        .find(|n| &*n.label == "row_count")
+        .expect("row_count should be in output");
+    let out_total_amount = output_columns
+        .iter()
+        .find(|n| &*n.label == "total_amount")
+        .expect("total_amount should be in output");
+    let out_name_with_suffix = output_columns
+        .iter()
+        .find(|n| &*n.label == "name_with_suffix")
+        .expect("name_with_suffix should be in output");
+
+    assert_eq!(
+        get_column_data_type(out_row_count),
+        Some("INTEGER".to_string()),
+        "Output row_count should propagate INTEGER from CTE"
+    );
+    assert_eq!(
+        get_column_data_type(out_total_amount),
+        Some("FLOAT".to_string()),
+        "Output total_amount should propagate FLOAT from CTE"
+    );
+    assert_eq!(
+        get_column_data_type(out_name_with_suffix),
+        Some("TEXT".to_string()),
+        "Output name_with_suffix should propagate TEXT from CTE"
+    );
+}

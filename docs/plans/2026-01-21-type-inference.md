@@ -24,13 +24,13 @@ Currently there are two type enums: `SqlType` in `types.rs` (7 types) and `Canon
 
 The `OutputColumn` struct has a `data_type: Option<String>` field that is often `None`. This task ensures SELECT columns have inferred types populated, making type information available in the API response for downstream tooling.
 
-- [ ] In `SelectAnalyzer`, call `infer_expr_type()` for each SELECT item expression
-- [ ] Store the inferred type as string in `OutputColumn.data_type`
-- [ ] When resolving wildcard (`*`), propagate types from source columns if known
-- [ ] When resolving CTE/subquery references, use the stored output column types
-- [ ] Add test: SELECT with literals has correct types (e.g., `SELECT 1, 'text', true`)
-- [ ] Add test: SELECT with functions has correct types (e.g., `SELECT COUNT(*), SUM(x)`)
-- [ ] Add test: CTE column types propagate to outer query
+- [x] In `SelectAnalyzer`, call `infer_expr_type()` for each SELECT item expression
+- [x] Store the inferred type as string in `OutputColumn.data_type`
+- [x] When resolving wildcard (`*`), propagate types from source columns if known
+- [x] When resolving CTE/subquery references, use the stored output column types
+- [x] Add test: SELECT with literals has correct types (e.g., `SELECT 1, 'text', true`)
+- [x] Add test: SELECT with functions has correct types (e.g., `SELECT COUNT(*), SUM(x)`)
+- [x] Add test: CTE column types propagate to outer query
 
 ### Task 3: Schema-Aware Type Lookup
 
