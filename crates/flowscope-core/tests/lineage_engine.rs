@@ -220,6 +220,7 @@ fn has_edge(
 #[case("postgres", Dialect::Postgres)]
 #[case("snowflake", Dialect::Snowflake)]
 #[case("bigquery", Dialect::Bigquery)]
+#[case("redshift", Dialect::Redshift)]
 fn multi_dialect_fixtures_cover_core_constructs(#[case] dir_name: &str, #[case] dialect: Dialect) {
     let dir = dialect_fixture_dir(dir_name);
     let fixtures = list_fixture_files(&dir);
@@ -5213,6 +5214,101 @@ fn test_copy_to_with_query() {
 }
 
 // =============================================================================
+// UNLOAD STATEMENT LINEAGE
+// =============================================================================
+
+#[test]
+fn test_unload_statement_string_query() {
+    // Redshift UNLOAD with query as string literal
+    let sql = r#"UNLOAD ('SELECT * FROM orders') TO 's3://bucket/out'"#;
+    let result = run_analysis(sql, Dialect::Redshift, None);
+
+    assert!(result.issues.iter().all(|i| i.severity != Severity::Error));
+    let stmt = &result.statements[0];
+    assert_eq!(stmt.statement_type, "UNLOAD");
+
+    // orders should be identified as source
+    assert!(
+        stmt.nodes.iter().any(|n| n.label.contains("orders")),
+        "Expected 'orders' table in lineage, got: {:?}",
+        stmt.nodes.iter().map(|n| &n.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_unload_statement_parsed_query() {
+    // UNLOAD with query as parsed expression (without string literal)
+    let sql = r#"UNLOAD (SELECT id, name FROM users WHERE active = true) TO 's3://bucket/out'"#;
+    let result = run_analysis(sql, Dialect::Redshift, None);
+
+    assert!(result.issues.iter().all(|i| i.severity != Severity::Error));
+    let stmt = &result.statements[0];
+    assert_eq!(stmt.statement_type, "UNLOAD");
+
+    // users should be identified as source
+    assert!(
+        stmt.nodes.iter().any(|n| n.label.contains("users")),
+        "Expected 'users' table in lineage, got: {:?}",
+        stmt.nodes.iter().map(|n| &n.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_unload_statement_qualified_table() {
+    // UNLOAD with fully qualified table name
+    let sql = r#"UNLOAD ('SELECT * FROM analytics.orders WHERE order_date > ''2024-01-01''')
+TO 's3://bucket/exports/orders_'
+IAM_ROLE 'arn:aws:iam::123456789:role/RedshiftCopyRole'"#;
+    let result = run_analysis(sql, Dialect::Redshift, None);
+
+    assert!(result.issues.iter().all(|i| i.severity != Severity::Error));
+    let stmt = &result.statements[0];
+    assert_eq!(stmt.statement_type, "UNLOAD");
+
+    // Should have analytics.orders in lineage
+    let table_node = stmt
+        .nodes
+        .iter()
+        .find(|n| n.node_type == NodeType::Table)
+        .expect("Should have a table node");
+    assert!(
+        table_node.qualified_name.as_ref().map(|n| n.as_ref()) == Some("analytics.orders")
+            || table_node.label.as_ref() == "orders",
+        "Expected 'analytics.orders' table in lineage, got: {:?}",
+        table_node
+    );
+}
+
+#[test]
+fn test_unload_statement_with_join() {
+    // UNLOAD with a JOIN query
+    let sql = r#"UNLOAD ('SELECT o.id, c.name FROM orders o JOIN customers c ON o.customer_id = c.id')
+TO 's3://bucket/out'"#;
+    let result = run_analysis(sql, Dialect::Redshift, None);
+
+    assert!(result.issues.iter().all(|i| i.severity != Severity::Error));
+    let stmt = &result.statements[0];
+
+    // Both orders and customers should be identified as sources
+    let table_labels: Vec<_> = stmt
+        .nodes
+        .iter()
+        .filter(|n| n.node_type == NodeType::Table)
+        .map(|n| n.label.as_ref())
+        .collect();
+    assert!(
+        table_labels.iter().any(|l| *l == "orders"),
+        "Expected 'orders' table, got: {:?}",
+        table_labels
+    );
+    assert!(
+        table_labels.iter().any(|l| *l == "customers"),
+        "Expected 'customers' table, got: {:?}",
+        table_labels
+    );
+}
+
+// =============================================================================
 // ALTER TABLE LINEAGE
 // =============================================================================
 
@@ -5244,7 +5340,11 @@ fn test_alter_table_rename() {
     // Should have exactly one DataFlow edge from old_users to new_users with RENAME operation
     assert_eq!(stmt.edges.len(), 1, "Should have exactly one edge");
     let edge = &stmt.edges[0];
-    assert_eq!(edge.edge_type, EdgeType::DataFlow, "Edge should be DataFlow");
+    assert_eq!(
+        edge.edge_type,
+        EdgeType::DataFlow,
+        "Edge should be DataFlow"
+    );
     assert_eq!(
         edge.from.as_ref(),
         old_node.id.as_ref(),
@@ -5309,7 +5409,11 @@ fn test_alter_table_rename_with_schema() {
     // Should have exactly one DataFlow edge from old table to new table with RENAME operation
     assert_eq!(stmt.edges.len(), 1, "Should have exactly one edge");
     let edge = &stmt.edges[0];
-    assert_eq!(edge.edge_type, EdgeType::DataFlow, "Edge should be DataFlow");
+    assert_eq!(
+        edge.edge_type,
+        EdgeType::DataFlow,
+        "Edge should be DataFlow"
+    );
     assert_eq!(
         edge.from.as_ref(),
         old_node.id.as_ref(),

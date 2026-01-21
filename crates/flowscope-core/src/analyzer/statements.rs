@@ -174,6 +174,12 @@ impl<'a> Analyzer<'a> {
                 self.analyze_copy_into_snowflake(&mut ctx, kind, into, from_obj, from_query);
                 "COPY".to_string()
             }
+            Statement::Unload {
+                query, query_text, ..
+            } => {
+                self.analyze_unload(&mut ctx, query, query_text);
+                "UNLOAD".to_string()
+            }
             _ => {
                 self.issues.push(
                     Issue::warning(
@@ -769,5 +775,51 @@ impl<'a> Analyzer<'a> {
             .record_consumed(&old_canonical, ctx.statement_index);
         self.tracker
             .record_produced(&new_canonical, ctx.statement_index);
+    }
+
+    /// Analyzes a Redshift-style UNLOAD statement for lineage.
+    ///
+    /// UNLOAD exports query results to external storage (e.g., S3).
+    /// All tables referenced in the query are tracked as sources (consumed).
+    ///
+    /// Supports two forms:
+    /// - `UNLOAD ('SELECT ...') TO 's3://...'` - query as string literal
+    /// - `UNLOAD (SELECT ...) TO 's3://...'` - query as parsed expression
+    pub(super) fn analyze_unload(
+        &mut self,
+        ctx: &mut StatementContext,
+        query: &Option<Box<ast::Query>>,
+        query_text: &Option<String>,
+    ) {
+        // If we have a parsed query, analyze it directly
+        if let Some(ref parsed_query) = query {
+            self.analyze_query(ctx, parsed_query, None);
+            return;
+        }
+
+        // If we have query text (string literal form), parse and analyze it
+        if let Some(ref text) = query_text {
+            // Parse the query string using the same dialect
+            let dialect = self.request.dialect.to_sqlparser_dialect();
+            match sqlparser::parser::Parser::parse_sql(dialect.as_ref(), text) {
+                Ok(statements) => {
+                    for stmt in statements {
+                        if let Statement::Query(parsed_query) = stmt {
+                            self.analyze_query(ctx, &parsed_query, None);
+                        }
+                    }
+                }
+                Err(_) => {
+                    // If parsing fails, emit a warning but don't fail the analysis
+                    self.issues.push(
+                        Issue::warning(
+                            issue_codes::PARSE_ERROR,
+                            "Could not parse UNLOAD query string for lineage analysis",
+                        )
+                        .with_statement(ctx.statement_index),
+                    );
+                }
+            }
+        }
     }
 }
