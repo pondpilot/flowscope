@@ -968,6 +968,7 @@ impl<'a> Analyzer<'a> {
     }
 
     /// Propagates columns through a single wildcard, creating source columns and edges.
+    #[allow(clippy::too_many_arguments)]
     fn propagate_wildcard_columns(
         &mut self,
         ctx: &mut StatementContext,
