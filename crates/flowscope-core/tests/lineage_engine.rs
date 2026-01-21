@@ -5212,6 +5212,10 @@ fn test_copy_to_with_query() {
     assert!(stmt.nodes.iter().any(|n| n.label.contains("users")));
 }
 
+// =============================================================================
+// ALTER TABLE LINEAGE
+// =============================================================================
+
 #[test]
 fn test_alter_table_rename() {
     let sql = "ALTER TABLE old_users RENAME TO new_users";
@@ -5222,11 +5226,40 @@ fn test_alter_table_rename() {
 
     // Both old and new table should appear in lineage
     let labels: Vec<_> = stmt.nodes.iter().map(|n| n.label.as_ref()).collect();
-    assert!(labels.iter().any(|l| l.contains("old_users")));
-    assert!(labels.iter().any(|l| l.contains("new_users")));
+    assert!(labels.iter().any(|l| *l == "old_users"));
+    assert!(labels.iter().any(|l| *l == "new_users"));
 
-    // Should have a rename edge or dataflow edge
-    assert!(!stmt.edges.is_empty());
+    // Find the old_users and new_users node IDs
+    let old_node = stmt
+        .nodes
+        .iter()
+        .find(|n| n.label.as_ref() == "old_users")
+        .expect("old_users node should exist");
+    let new_node = stmt
+        .nodes
+        .iter()
+        .find(|n| n.label.as_ref() == "new_users")
+        .expect("new_users node should exist");
+
+    // Should have exactly one DataFlow edge from old_users to new_users with RENAME operation
+    assert_eq!(stmt.edges.len(), 1, "Should have exactly one edge");
+    let edge = &stmt.edges[0];
+    assert_eq!(edge.edge_type, EdgeType::DataFlow, "Edge should be DataFlow");
+    assert_eq!(
+        edge.from.as_ref(),
+        old_node.id.as_ref(),
+        "Edge should be from old_users"
+    );
+    assert_eq!(
+        edge.to.as_ref(),
+        new_node.id.as_ref(),
+        "Edge should be to new_users"
+    );
+    assert_eq!(
+        edge.operation.as_ref().map(|o| o.as_ref()),
+        Some("RENAME"),
+        "Operation should be RENAME"
+    );
 }
 
 #[test]
@@ -5246,9 +5279,50 @@ fn test_alter_table_rename_with_schema() {
         .collect();
     assert!(qualified_names
         .iter()
-        .any(|qn| qn.contains("legacy_orders")));
-    assert!(qualified_names.iter().any(|qn| qn.contains("orders_v2")));
+        .any(|qn| *qn == "analytics.legacy_orders"));
+    assert!(qualified_names
+        .iter()
+        .any(|qn| *qn == "analytics.orders_v2"));
 
-    // Should have a dataflow edge between them
-    assert!(!stmt.edges.is_empty());
+    // Find the old and new table node IDs
+    let old_node = stmt
+        .nodes
+        .iter()
+        .find(|n| {
+            n.qualified_name
+                .as_ref()
+                .map(|qn| qn.as_ref() == "analytics.legacy_orders")
+                .unwrap_or(false)
+        })
+        .expect("analytics.legacy_orders node should exist");
+    let new_node = stmt
+        .nodes
+        .iter()
+        .find(|n| {
+            n.qualified_name
+                .as_ref()
+                .map(|qn| qn.as_ref() == "analytics.orders_v2")
+                .unwrap_or(false)
+        })
+        .expect("analytics.orders_v2 node should exist");
+
+    // Should have exactly one DataFlow edge from old table to new table with RENAME operation
+    assert_eq!(stmt.edges.len(), 1, "Should have exactly one edge");
+    let edge = &stmt.edges[0];
+    assert_eq!(edge.edge_type, EdgeType::DataFlow, "Edge should be DataFlow");
+    assert_eq!(
+        edge.from.as_ref(),
+        old_node.id.as_ref(),
+        "Edge should be from legacy_orders"
+    );
+    assert_eq!(
+        edge.to.as_ref(),
+        new_node.id.as_ref(),
+        "Edge should be to orders_v2"
+    );
+    assert_eq!(
+        edge.operation.as_ref().map(|o| o.as_ref()),
+        Some("RENAME"),
+        "Operation should be RENAME"
+    );
 }
