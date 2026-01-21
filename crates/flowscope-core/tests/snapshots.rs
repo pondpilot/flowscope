@@ -368,3 +368,110 @@ fn test_snowflake_grouping_sets() {
 
     run_snowflake_snapshot_test("snowflake_grouping_sets", sql);
 }
+
+fn run_bigquery_snapshot_test(name: &str, sql: &str) {
+    let request = AnalyzeRequest {
+        sql: sql.to_string(),
+        files: None,
+        dialect: Dialect::Bigquery,
+        source_name: None,
+        options: None,
+        schema: None,
+        #[cfg(feature = "templating")]
+        template_config: None,
+    };
+
+    let result = analyze(&request);
+    let clean_result = prepare_for_snapshot(result);
+
+    let mut settings = Settings::clone_current();
+    settings.set_snapshot_suffix(name);
+
+    settings.bind(|| {
+        assert_json_snapshot!(clean_result);
+    });
+}
+
+// Task 4: Tier 4 BigQuery Features
+
+#[test]
+fn test_bigquery_hyphenated_refs() {
+    let sql = r#"
+        -- BigQuery hyphenated project/dataset identifiers
+        SELECT id, name
+        FROM `project-a.dataset-b.users`;
+    "#;
+
+    run_bigquery_snapshot_test("bigquery_hyphenated_refs", sql);
+}
+
+#[test]
+fn test_bigquery_hyphenated_refs_join() {
+    let sql = r#"
+        -- Three-part hyphenated identifiers in join
+        SELECT
+            u.user_id,
+            o.order_total
+        FROM `my-company.core.users` u
+        JOIN `my-company.sales.orders` o ON u.user_id = o.user_id;
+    "#;
+
+    run_bigquery_snapshot_test("bigquery_hyphenated_refs_join", sql);
+}
+
+#[test]
+fn test_bigquery_unnest_basic() {
+    let sql = r#"
+        -- Basic UNNEST with alias
+        SELECT user_id, tag
+        FROM users,
+        UNNEST(tags) AS tag;
+    "#;
+
+    run_bigquery_snapshot_test("bigquery_unnest_basic", sql);
+}
+
+#[test]
+fn test_bigquery_unnest_with_offset() {
+    let sql = r#"
+        -- UNNEST with OFFSET for position tracking
+        SELECT item, offset_pos
+        FROM UNNEST([10, 20, 30]) AS item WITH OFFSET AS offset_pos;
+    "#;
+
+    run_bigquery_snapshot_test("bigquery_unnest_with_offset", sql);
+}
+
+#[test]
+fn test_bigquery_select_except() {
+    let sql = r#"
+        -- SELECT * EXCEPT to exclude columns
+        SELECT * EXCEPT (password, ssn)
+        FROM users;
+    "#;
+
+    run_bigquery_snapshot_test("bigquery_select_except", sql);
+}
+
+#[test]
+fn test_bigquery_select_replace() {
+    let sql = r#"
+        -- SELECT * REPLACE to transform columns
+        SELECT * REPLACE (UPPER(email) AS email)
+        FROM customers;
+    "#;
+
+    run_bigquery_snapshot_test("bigquery_select_replace", sql);
+}
+
+#[test]
+fn test_bigquery_select_except_replace_combined() {
+    let sql = r#"
+        -- Combined EXCEPT and REPLACE
+        SELECT * EXCEPT (internal_id)
+        REPLACE (ROUND(price, 2) AS price, LOWER(sku) AS sku)
+        FROM products;
+    "#;
+
+    run_bigquery_snapshot_test("bigquery_select_except_replace_combined", sql);
+}

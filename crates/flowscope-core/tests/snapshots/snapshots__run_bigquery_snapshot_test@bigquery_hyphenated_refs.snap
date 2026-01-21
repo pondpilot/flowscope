@@ -1,0 +1,247 @@
+---
+source: crates/flowscope-core/tests/snapshots.rs
+expression: clean_result
+---
+{
+  "statements": [
+    {
+      "statementIndex": 0,
+      "statementType": "SELECT",
+      "nodes": [
+        {
+          "id": "column_003234a3331f8fc8",
+          "type": "column",
+          "label": "name",
+          "qualifiedName": "project-a.dataset-b.users.name"
+        },
+        {
+          "id": "column_629d7cf5d2e3562d",
+          "type": "column",
+          "label": "name"
+        },
+        {
+          "id": "column_a9c819f775685d7c",
+          "type": "column",
+          "label": "id",
+          "qualifiedName": "project-a.dataset-b.users.id"
+        },
+        {
+          "id": "column_d8bba385e09d94a9",
+          "type": "column",
+          "label": "id"
+        },
+        {
+          "id": "output_b558dd754c71cfa6",
+          "type": "output",
+          "label": "Output"
+        },
+        {
+          "id": "table_2887bb8b48a3cf0e",
+          "type": "table",
+          "label": "users",
+          "qualifiedName": "project-a.dataset-b.users"
+        }
+      ],
+      "edges": [
+        {
+          "id": "edge_03f3c8d02729d078",
+          "from": "table_2887bb8b48a3cf0e",
+          "to": "column_003234a3331f8fc8",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_2a0be04f1568814e",
+          "from": "table_2887bb8b48a3cf0e",
+          "to": "column_a9c819f775685d7c",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_2acf7dab7e2a4477",
+          "from": "column_003234a3331f8fc8",
+          "to": "column_629d7cf5d2e3562d",
+          "type": "data_flow"
+        },
+        {
+          "id": "edge_414e1768e4a0ba81",
+          "from": "column_a9c819f775685d7c",
+          "to": "column_d8bba385e09d94a9",
+          "type": "data_flow"
+        },
+        {
+          "id": "edge_b1adfd2ed7cda1e5",
+          "from": "output_b558dd754c71cfa6",
+          "to": "column_d8bba385e09d94a9",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_bb5bebb5a946099c",
+          "from": "output_b558dd754c71cfa6",
+          "to": "column_629d7cf5d2e3562d",
+          "type": "ownership"
+        }
+      ],
+      "joinCount": 0,
+      "complexityScore": 5
+    }
+  ],
+  "globalLineage": {
+    "nodes": [
+      {
+        "id": "column_003234a3331f8fc8",
+        "type": "column",
+        "label": "name",
+        "canonicalName": {
+          "name": "project-a.dataset-b.users.name"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_003234a3331f8fc8"
+          }
+        ]
+      },
+      {
+        "id": "column_629d7cf5d2e3562d",
+        "type": "column",
+        "label": "name",
+        "canonicalName": {
+          "name": "name"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_629d7cf5d2e3562d"
+          }
+        ]
+      },
+      {
+        "id": "column_a9c819f775685d7c",
+        "type": "column",
+        "label": "id",
+        "canonicalName": {
+          "name": "project-a.dataset-b.users.id"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_a9c819f775685d7c"
+          }
+        ]
+      },
+      {
+        "id": "column_d8bba385e09d94a9",
+        "type": "column",
+        "label": "id",
+        "canonicalName": {
+          "name": "id"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_d8bba385e09d94a9"
+          }
+        ]
+      },
+      {
+        "id": "output_b558dd754c71cfa6",
+        "type": "output",
+        "label": "Output",
+        "canonicalName": {
+          "name": "Output"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "output_b558dd754c71cfa6"
+          }
+        ]
+      },
+      {
+        "id": "table_2887bb8b48a3cf0e",
+        "type": "table",
+        "label": "users",
+        "canonicalName": {
+          "catalog": "project-a",
+          "schema": "dataset-b",
+          "name": "users"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "table_2887bb8b48a3cf0e"
+          }
+        ]
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge_03f3c8d02729d078",
+        "from": "table_2887bb8b48a3cf0e",
+        "to": "column_003234a3331f8fc8",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_2a0be04f1568814e",
+        "from": "table_2887bb8b48a3cf0e",
+        "to": "column_a9c819f775685d7c",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_2acf7dab7e2a4477",
+        "from": "column_003234a3331f8fc8",
+        "to": "column_629d7cf5d2e3562d",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_414e1768e4a0ba81",
+        "from": "column_a9c819f775685d7c",
+        "to": "column_d8bba385e09d94a9",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_b1adfd2ed7cda1e5",
+        "from": "output_b558dd754c71cfa6",
+        "to": "column_d8bba385e09d94a9",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_bb5bebb5a946099c",
+        "from": "output_b558dd754c71cfa6",
+        "to": "column_629d7cf5d2e3562d",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      }
+    ]
+  },
+  "issues": [],
+  "summary": {
+    "statementCount": 1,
+    "tableCount": 1,
+    "columnCount": 4,
+    "joinCount": 0,
+    "complexityScore": 5,
+    "issueCount": {
+      "errors": 0,
+      "warnings": 0,
+      "infos": 0
+    },
+    "hasErrors": false
+  }
+}

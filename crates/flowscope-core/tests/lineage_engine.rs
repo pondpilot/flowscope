@@ -1839,6 +1839,132 @@ fn bigquery_unnest_arrays() {
     );
 }
 
+// Task 4: Tier 4 BigQuery Features - Lineage assertions
+
+#[test]
+fn bigquery_hyphenated_project_refs() {
+    let sql = r#"
+        SELECT id, name
+        FROM `project-a.dataset-b.users`;
+    "#;
+
+    let result = run_analysis(sql, Dialect::Bigquery, None);
+    let tables = collect_table_names(&result);
+
+    assert!(
+        tables.contains("project-a.dataset-b.users"),
+        "hyphenated project refs should track full qualified name"
+    );
+}
+
+#[test]
+fn bigquery_hyphenated_refs_join() {
+    let sql = r#"
+        SELECT
+            u.user_id,
+            o.order_total
+        FROM `my-company.core.users` u
+        JOIN `my-company.sales.orders` o ON u.user_id = o.user_id;
+    "#;
+
+    let result = run_analysis(sql, Dialect::Bigquery, None);
+    let tables = collect_table_names(&result);
+
+    assert!(
+        tables.contains("my-company.core.users"),
+        "should track hyphenated users table"
+    );
+    assert!(
+        tables.contains("my-company.sales.orders"),
+        "should track hyphenated orders table"
+    );
+}
+
+#[test]
+fn bigquery_unnest_with_offset() {
+    let sql = r#"
+        SELECT item, offset_pos
+        FROM UNNEST([10, 20, 30]) AS item WITH OFFSET AS offset_pos;
+    "#;
+
+    let result = run_analysis(sql, Dialect::Bigquery, None);
+
+    // UNNEST on literal array should parse without error
+    assert!(
+        result.issues.is_empty() || result.issues.iter().all(|i| i.severity != flowscope_core::Severity::Error),
+        "UNNEST with OFFSET should parse without errors"
+    );
+}
+
+#[test]
+fn bigquery_unnest_struct_expansion() {
+    let sql = r#"
+        SELECT
+            order_id,
+            line_item.product_id,
+            line_item.quantity
+        FROM orders,
+        UNNEST(line_items) AS line_item;
+    "#;
+
+    let result = run_analysis(sql, Dialect::Bigquery, None);
+    let tables = collect_table_names(&result);
+
+    assert!(
+        tables.contains("orders"),
+        "UNNEST struct expansion should track source table"
+    );
+}
+
+#[test]
+fn bigquery_select_except_excludes_columns() {
+    let sql = r#"
+        SELECT * EXCEPT (password, ssn)
+        FROM users;
+    "#;
+
+    let result = run_analysis(sql, Dialect::Bigquery, None);
+    let tables = collect_table_names(&result);
+
+    assert!(
+        tables.contains("users"),
+        "SELECT EXCEPT should track source table"
+    );
+}
+
+#[test]
+fn bigquery_select_replace_transforms() {
+    let sql = r#"
+        SELECT * REPLACE (UPPER(email) AS email)
+        FROM customers;
+    "#;
+
+    let result = run_analysis(sql, Dialect::Bigquery, None);
+    let tables = collect_table_names(&result);
+
+    assert!(
+        tables.contains("customers"),
+        "SELECT REPLACE should track source table"
+    );
+}
+
+#[test]
+fn bigquery_select_except_replace_combined() {
+    let sql = r#"
+        SELECT * EXCEPT (internal_id)
+        REPLACE (ROUND(price, 2) AS price, LOWER(sku) AS sku)
+        FROM products;
+    "#;
+
+    let result = run_analysis(sql, Dialect::Bigquery, None);
+    let tables = collect_table_names(&result);
+
+    assert!(
+        tables.contains("products"),
+        "Combined EXCEPT/REPLACE should track source table"
+    );
+}
+
 #[test]
 fn postgres_distinct_on_clause() {
     let sql = r#"

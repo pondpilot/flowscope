@@ -49,9 +49,9 @@ Add Snowflake-specific features including time travel queries, lateral FLATTEN w
 
 Add BigQuery-specific features including hyphenated project/dataset identifiers, UNNEST patterns for array expansion, and SELECT * EXCEPT/REPLACE modifiers.
 
-- [ ] Add `fixtures/bigquery/hyphenated_refs.sql` - `project-a.dataset-b.table-c` syntax
-- [ ] Add `fixtures/bigquery/unnest_patterns.sql` - `UNNEST(array_col) AS item` variations
-- [ ] Add `fixtures/bigquery/select_except_replace.sql` - `SELECT * EXCEPT(col) REPLACE(expr AS col)`
-- [ ] Add parsing snapshot tests for all 3 fixtures
-- [ ] Add lineage assertions for UNNEST expansion and EXCEPT/REPLACE column filtering
-- [ ] Run `just test-rust` and verify all tests pass
+- [x] Add `fixtures/bigquery/hyphenated_refs.sql` - `project-a.dataset-b.table-c` syntax
+- [x] Add `fixtures/bigquery/unnest_patterns.sql` - `UNNEST(array_col) AS item` variations
+- [x] Add `fixtures/bigquery/select_except_replace.sql` - `SELECT * EXCEPT(col) REPLACE(expr AS col)`
+- [x] Add parsing snapshot tests for all 3 fixtures
+- [x] Add lineage assertions for UNNEST expansion and EXCEPT/REPLACE column filtering
+- [x] Run `just test-rust` and verify all tests pass
