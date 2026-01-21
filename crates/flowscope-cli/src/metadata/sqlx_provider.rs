@@ -231,7 +231,7 @@ impl SqlxMetadataProvider {
     /// 2. Conservative validation is safer than complex quoting logic
     /// 3. Most real-world schemas use simple identifiers
     ///
-    /// Tables with exotic names will be skipped with an error message.
+    /// Tables with exotic names will be skipped with a warning on stderr.
     fn validate_sqlite_table_name(name: &str) -> Result<()> {
         if name.is_empty() || name.len() > MYSQL_IDENTIFIER_SAFE_LENGTH {
             return Err(anyhow!("Invalid table name length: {}", name.len()));
@@ -263,7 +263,12 @@ impl SqlxMetadataProvider {
             let table_name: String = table_row.get("name");
 
             // Validate table name before using in dynamic SQL
-            Self::validate_sqlite_table_name(&table_name)?;
+            if let Err(err) = Self::validate_sqlite_table_name(&table_name) {
+                eprintln!(
+                    "flowscope: warning: Skipping SQLite table '{table_name}' due to unsupported identifier characters: {err}"
+                );
+                continue;
+            }
 
             // Get column info for each table using pragma_table_info
             // Note: We need to use dynamic SQL here since pragma_table_info is a table-valued function
@@ -497,5 +502,254 @@ mod tests {
         assert_eq!(url_scheme("mysql://localhost/db"), "mysql");
         assert_eq!(url_scheme("sqlite://path"), "sqlite");
         assert_eq!(url_scheme("not-a-url"), "not-a-url");
+    }
+
+    // =========================================================================
+    // SQLite Table Name Validation Tests
+    // =========================================================================
+
+    #[test]
+    fn test_validate_sqlite_table_name_valid_simple() {
+        // Simple alphanumeric names should pass
+        assert!(SqlxMetadataProvider::validate_sqlite_table_name("users").is_ok());
+        assert!(SqlxMetadataProvider::validate_sqlite_table_name("Users").is_ok());
+        assert!(SqlxMetadataProvider::validate_sqlite_table_name("USERS").is_ok());
+        assert!(SqlxMetadataProvider::validate_sqlite_table_name("users123").is_ok());
+        assert!(SqlxMetadataProvider::validate_sqlite_table_name("123users").is_ok());
+    }
+
+    #[test]
+    fn test_validate_sqlite_table_name_valid_with_underscore() {
+        // Underscores are allowed
+        assert!(SqlxMetadataProvider::validate_sqlite_table_name("user_accounts").is_ok());
+        assert!(SqlxMetadataProvider::validate_sqlite_table_name("_private").is_ok());
+        assert!(SqlxMetadataProvider::validate_sqlite_table_name("table_").is_ok());
+        assert!(SqlxMetadataProvider::validate_sqlite_table_name("__double__").is_ok());
+    }
+
+    #[test]
+    fn test_validate_sqlite_table_name_valid_with_dot() {
+        // Dots are allowed for attached database syntax (e.g., "main.users")
+        assert!(SqlxMetadataProvider::validate_sqlite_table_name("main.users").is_ok());
+        assert!(SqlxMetadataProvider::validate_sqlite_table_name("schema.table").is_ok());
+        assert!(SqlxMetadataProvider::validate_sqlite_table_name("db.schema.table").is_ok());
+    }
+
+    #[test]
+    fn test_validate_sqlite_table_name_rejects_empty() {
+        let result = SqlxMetadataProvider::validate_sqlite_table_name("");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("length"));
+    }
+
+    #[test]
+    fn test_validate_sqlite_table_name_rejects_too_long() {
+        // Names over 255 chars should be rejected
+        let long_name = "a".repeat(256);
+        let result = SqlxMetadataProvider::validate_sqlite_table_name(&long_name);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("length"));
+
+        // 255 chars should be OK
+        let max_name = "a".repeat(255);
+        assert!(SqlxMetadataProvider::validate_sqlite_table_name(&max_name).is_ok());
+    }
+
+    #[test]
+    fn test_validate_sqlite_table_name_rejects_spaces() {
+        let result = SqlxMetadataProvider::validate_sqlite_table_name("user accounts");
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("invalid characters"));
+    }
+
+    #[test]
+    fn test_validate_sqlite_table_name_rejects_quotes() {
+        // Single quotes - potential SQL injection
+        let result = SqlxMetadataProvider::validate_sqlite_table_name("users'--");
+        assert!(result.is_err());
+
+        // Double quotes
+        let result = SqlxMetadataProvider::validate_sqlite_table_name("users\"table");
+        assert!(result.is_err());
+
+        // Backticks
+        let result = SqlxMetadataProvider::validate_sqlite_table_name("users`table");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_sqlite_table_name_rejects_semicolon() {
+        // Semicolon could enable statement injection
+        let result = SqlxMetadataProvider::validate_sqlite_table_name("users;DROP TABLE");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_sqlite_table_name_rejects_special_chars() {
+        // Various special characters that should be rejected
+        let invalid_names = [
+            "users@domain",
+            "users#tag",
+            "users$var",
+            "users%percent",
+            "users&amp",
+            "users*star",
+            "users(paren",
+            "users)paren",
+            "users+plus",
+            "users=equals",
+            "users[bracket",
+            "users]bracket",
+            "users{brace",
+            "users}brace",
+            "users|pipe",
+            "users\\backslash",
+            "users/slash",
+            "users?question",
+            "users<less",
+            "users>greater",
+            "users,comma",
+            "users:colon",
+            "users!bang",
+            "users~tilde",
+            "users\ttab",
+            "users\nnewline",
+        ];
+
+        for name in invalid_names {
+            let result = SqlxMetadataProvider::validate_sqlite_table_name(name);
+            assert!(
+                result.is_err(),
+                "Expected '{}' to be rejected but it was accepted",
+                name
+            );
+        }
+    }
+
+    // =========================================================================
+    // MySQL Identifier Length Constant Tests
+    // =========================================================================
+
+    #[test]
+    fn test_mysql_identifier_safe_length_constant() {
+        // Verify the constant is set correctly
+        assert_eq!(MYSQL_IDENTIFIER_SAFE_LENGTH, 255);
+
+        // Verify it's within MySQL's documented limits (64 default, 256 max)
+        // Using const block to satisfy clippy assertions_on_constants
+        const _: () = {
+            assert!(MYSQL_IDENTIFIER_SAFE_LENGTH <= 256);
+            assert!(MYSQL_IDENTIFIER_SAFE_LENGTH >= 64);
+        };
+    }
+
+    // =========================================================================
+    // Error Message Quality Tests
+    // =========================================================================
+    // These tests verify that error messages are safe (no credentials) but informative.
+
+    #[test]
+    fn test_error_context_uses_redacted_url() {
+        // Verify that the redact_url function produces appropriate context
+        // for common connection failure scenarios.
+
+        // PostgreSQL with credentials - should show host but not password
+        let pg_url = "postgres://admin:super_secret_password@db.example.com:5432/production";
+        let redacted = redact_url(pg_url);
+        assert!(
+            redacted.contains("db.example.com"),
+            "Redacted URL should preserve host for debugging"
+        );
+        assert!(
+            !redacted.contains("super_secret_password"),
+            "Redacted URL must not contain password"
+        );
+        assert!(
+            !redacted.contains("admin"),
+            "Redacted URL should not contain username"
+        );
+
+        // MySQL with credentials
+        let mysql_url = "mysql://root:mysql_root_pw@mysql.internal:3306/app_db";
+        let redacted = redact_url(mysql_url);
+        assert!(redacted.contains("mysql.internal"));
+        assert!(!redacted.contains("mysql_root_pw"));
+        assert!(!redacted.contains("root"));
+
+        // SQLite file path - should not expose filesystem structure
+        let sqlite_url = "sqlite:///home/user/secrets/private.db";
+        let redacted = redact_url(sqlite_url);
+        assert!(!redacted.contains("/home/user/secrets"));
+        assert!(redacted.contains("sqlite"));
+    }
+
+    #[test]
+    fn test_redact_url_with_at_sign_in_password() {
+        // Passwords may contain '@' characters, ensure we handle this correctly
+        // by using rfind to find the last '@' (the separator)
+        let url = "postgres://user:p@ss@word@localhost/db";
+        let redacted = redact_url(url);
+        assert_eq!(redacted, "postgres://<redacted>@localhost/db");
+        assert!(!redacted.contains("p@ss@word"));
+    }
+
+    #[test]
+    fn test_redact_url_preserves_port_and_database() {
+        // Error messages should include port and database for debugging
+        let url = "postgres://user:pass@host:5433/mydb?sslmode=require";
+        let redacted = redact_url(url);
+        assert!(
+            redacted.contains("5433"),
+            "Port should be preserved for debugging"
+        );
+        assert!(
+            redacted.contains("mydb"),
+            "Database name should be preserved for debugging"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_connection_error_includes_redacted_url() {
+        // Attempt to connect to a non-existent database and verify
+        // the error message includes redacted URL, not credentials.
+        let url = "postgres://secret_user:secret_password@nonexistent.invalid:5432/testdb";
+
+        let result = SqlxMetadataProvider::connect(url, None).await;
+
+        let error_message = match result {
+            Ok(_) => panic!("Connection to nonexistent host should fail"),
+            Err(e) => e.to_string(),
+        };
+
+        // The error should mention the host for debugging
+        assert!(
+            error_message.contains("nonexistent.invalid"),
+            "Error should include host for debugging: {}",
+            error_message
+        );
+
+        // The error should NOT contain credentials
+        assert!(
+            !error_message.contains("secret_user"),
+            "Error must not expose username: {}",
+            error_message
+        );
+        assert!(
+            !error_message.contains("secret_password"),
+            "Error must not expose password: {}",
+            error_message
+        );
+
+        // The error should indicate it's a connection failure
+        assert!(
+            error_message.contains("Failed to connect")
+                || error_message.contains("connect")
+                || error_message.contains("database"),
+            "Error should indicate connection failure: {}",
+            error_message
+        );
     }
 }

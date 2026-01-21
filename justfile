@@ -1,6 +1,8 @@
 # FlowScope Justfile
 # Common commands for building, testing, and development
 
+set shell := ["bash", "-c"]
+
 # Default recipe - show available commands
 default:
     @just --list
