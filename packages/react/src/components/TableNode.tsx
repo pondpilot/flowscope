@@ -25,7 +25,10 @@ interface AggregationIndicatorProps {
  * Render aggregation indicator for a column.
  * Shows a badge for GROUP BY keys or aggregate functions.
  */
-function AggregationIndicator({ aggregation, colors }: AggregationIndicatorProps): JSX.Element | null {
+function AggregationIndicator({
+  aggregation,
+  colors,
+}: AggregationIndicatorProps): JSX.Element | null {
   if (!aggregation) return null;
 
   if (aggregation.isGroupingKey) {
@@ -92,13 +95,24 @@ interface ColumnRowProps {
 /**
  * Single column row component, extracted for virtualization support.
  */
-function ColumnRow({ col, style, ariaAttributes, showColumnEdges, onSelectColumn, colors, textSecondary }: ColumnRowProps): JSX.Element {
-  const handleClick = useCallback((e: React.MouseEvent) => {
-    if (showColumnEdges) {
-      e.stopPropagation();
-      onSelectColumn(col.id);
-    }
-  }, [showColumnEdges, onSelectColumn, col.id]);
+function ColumnRow({
+  col,
+  style,
+  ariaAttributes,
+  showColumnEdges,
+  onSelectColumn,
+  colors,
+  textSecondary,
+}: ColumnRowProps): JSX.Element {
+  const handleClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (showColumnEdges) {
+        e.stopPropagation();
+        onSelectColumn(col.id);
+      }
+    },
+    [showColumnEdges, onSelectColumn, col.id]
+  );
 
   return (
     <div
@@ -313,14 +327,14 @@ function TableNodeComponent({ id, data, selected }: NodeProps): JSX.Element {
         <Handle
           type="target"
           position={Position.Left}
-          style={{ 
-            opacity: 0, 
-            border: 'none', 
+          style={{
+            opacity: 0,
+            border: 'none',
             background: 'transparent',
             top: '50%',
             left: 0,
             transform: 'translate(-50%, -50%)',
-            zIndex: 10 
+            zIndex: 10,
           }}
         />
         {isRecursive && (
@@ -342,17 +356,16 @@ function TableNodeComponent({ id, data, selected }: NodeProps): JSX.Element {
         <Handle
           type="source"
           position={Position.Right}
-          style={{ 
-            opacity: 0, 
-            border: 'none', 
+          style={{
+            opacity: 0,
+            border: 'none',
             background: 'transparent',
             top: '50%',
             right: 0,
             transform: 'translate(50%, -50%)',
-            zIndex: 10
+            zIndex: 10,
           }}
         />
-
 
         <button
           onClick={(e) => {
@@ -373,11 +386,25 @@ function TableNodeComponent({ id, data, selected }: NodeProps): JSX.Element {
           }}
         >
           {isCollapsed ? (
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
               <path d="M9 18l6-6-6-6" />
             </svg>
           ) : (
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
               <path d="M6 9l6 6 6-6" />
             </svg>
           )}
@@ -401,7 +428,12 @@ function TableNodeComponent({ id, data, selected }: NodeProps): JSX.Element {
             {getNodeHeaderLabel(nodeData, isVirtualOutput)}
           </div>
           <div
-            style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+            style={{
+              fontWeight: 600,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
             title={nodeData.qualifiedName || nodeData.label}
           >
             {sanitizeIdentifier(nodeData.label)}

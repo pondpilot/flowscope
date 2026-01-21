@@ -47,11 +47,7 @@ export class LineagePanel {
     }
   }
 
-  private constructor(
-    panel: vscode.WebviewPanel,
-    extensionUri: vscode.Uri,
-    extensionPath: string
-  ) {
+  private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, extensionPath: string) {
     this._panel = panel;
     this._extensionUri = extensionUri;
     this._extensionPath = extensionPath;
@@ -157,8 +153,7 @@ export class LineagePanel {
       (edge) => relevantNodeIds.has(edge.from) && relevantNodeIds.has(edge.to)
     );
     const filteredIssues = result.issues.filter(
-      (issue) =>
-        issue.statementIndex === undefined || issue.statementIndex === targetStatementIndex
+      (issue) => issue.statementIndex === undefined || issue.statementIndex === targetStatementIndex
     );
     const issueCount = filteredIssues.reduce<IssueCount>(
       (acc, issue) => {
@@ -213,9 +208,7 @@ export class LineagePanel {
 
     // Check if CSS file exists (Vite might inline it)
     const cssPath = path.join(webviewDistPath, 'style.css');
-    const cssUri = fs.existsSync(cssPath)
-      ? webview.asWebviewUri(vscode.Uri.file(cssPath))
-      : null;
+    const cssUri = fs.existsSync(cssPath) ? webview.asWebviewUri(vscode.Uri.file(cssPath)) : null;
 
     // Use a nonce for security
     const nonce = getNonce();

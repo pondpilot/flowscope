@@ -1,4 +1,13 @@
-import { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useMemo,
+  useRef,
+  useEffect,
+  type ReactNode,
+} from 'react';
 import { useViewStateStore } from './view-state-store';
 
 export type AnalysisTab = 'lineage' | 'hierarchy' | 'matrix' | 'schema' | 'issues';
@@ -49,7 +58,11 @@ interface NavigationProviderProps {
   onNavigateToEditor?: (sourceName: string, span?: { start: number; end: number }) => void;
 }
 
-export function NavigationProvider({ children, projectId, onNavigateToEditor }: NavigationProviderProps) {
+export function NavigationProvider({
+  children,
+  projectId,
+  onNavigateToEditor,
+}: NavigationProviderProps) {
   // Get persisted active tab from view state store
   const persistedActiveTab = useViewStateStore((s) =>
     projectId ? s.getActiveTab(projectId) : 'lineage'
@@ -68,12 +81,15 @@ export function NavigationProvider({ children, projectId, onNavigateToEditor }: 
   }, [projectId]);
 
   // Wrapper to persist tab changes
-  const setActiveTab = useCallback((tab: AnalysisTab) => {
-    setActiveTabLocal(tab);
-    if (projectId) {
-      setPersistedActiveTab(projectId, tab);
-    }
-  }, [projectId, setPersistedActiveTab]);
+  const setActiveTab = useCallback(
+    (tab: AnalysisTab) => {
+      setActiveTabLocal(tab);
+      if (projectId) {
+        setPersistedActiveTab(projectId, tab);
+      }
+    },
+    [projectId, setPersistedActiveTab]
+  );
 
   // Use ref for the callback to avoid recreating navigateToEditor on prop changes
   const onNavigateToEditorRef = useRef(onNavigateToEditor);
@@ -81,43 +97,48 @@ export function NavigationProvider({ children, projectId, onNavigateToEditor }: 
     onNavigateToEditorRef.current = onNavigateToEditor;
   }, [onNavigateToEditor]);
 
-  const navigateTo = useCallback((tab: AnalysisTab, target?: NavigationTarget) => {
-    if (!isValidTab(tab)) {
-      console.warn(`Invalid navigation tab: "${tab}". Valid tabs are: ${VALID_TABS.join(', ')}`);
-      return;
-    }
+  const navigateTo = useCallback(
+    (tab: AnalysisTab, target?: NavigationTarget) => {
+      if (!isValidTab(tab)) {
+        console.warn(`Invalid navigation tab: "${tab}". Valid tabs are: ${VALID_TABS.join(', ')}`);
+        return;
+      }
 
-    if (target?.tableId && typeof target.tableId !== 'string') {
-      console.warn('Invalid navigation target: tableId must be a string');
-      return;
-    }
+      if (target?.tableId && typeof target.tableId !== 'string') {
+        console.warn('Invalid navigation target: tableId must be a string');
+        return;
+      }
 
-    setActiveTab(tab);
-    setNavigationTarget(target || null);
-  }, [setActiveTab]);
+      setActiveTab(tab);
+      setNavigationTarget(target || null);
+    },
+    [setActiveTab]
+  );
 
-  const navigateToEditor = useCallback((sourceName: string, span?: { start: number; end: number }) => {
-    onNavigateToEditorRef.current?.(sourceName, span);
-  }, []);
+  const navigateToEditor = useCallback(
+    (sourceName: string, span?: { start: number; end: number }) => {
+      onNavigateToEditorRef.current?.(sourceName, span);
+    },
+    []
+  );
 
   const clearNavigationTarget = useCallback(() => {
     setNavigationTarget(null);
   }, []);
 
-  const value = useMemo(() => ({
-    activeTab,
-    setActiveTab,
-    navigationTarget,
-    navigateTo,
-    navigateToEditor,
-    clearNavigationTarget,
-  }), [activeTab, navigationTarget, navigateTo, navigateToEditor, clearNavigationTarget]);
-
-  return (
-    <NavigationContext.Provider value={value}>
-      {children}
-    </NavigationContext.Provider>
+  const value = useMemo(
+    () => ({
+      activeTab,
+      setActiveTab,
+      navigationTarget,
+      navigateTo,
+      navigateToEditor,
+      clearNavigationTarget,
+    }),
+    [activeTab, navigationTarget, navigateTo, navigateToEditor, clearNavigationTarget]
   );
+
+  return <NavigationContext.Provider value={value}>{children}</NavigationContext.Provider>;
 }
 
 export function useNavigation() {

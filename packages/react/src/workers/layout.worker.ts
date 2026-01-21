@@ -148,7 +148,9 @@ self.onmessage = async (event: MessageEvent<LayoutRequest>) => {
   }
 
   if (LAYOUT_WORKER_DEBUG) {
-    console.log(`[Layout Worker] Received request ${requestId}: ${nodes.length} nodes, ${edges.length} edges`);
+    console.log(
+      `[Layout Worker] Received request ${requestId}: ${nodes.length} nodes, ${edges.length} edges`
+    );
   }
   const startTime = performance.now();
 

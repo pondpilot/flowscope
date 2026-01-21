@@ -32,11 +32,7 @@
     },
     {
       "name": "public.user_archive",
-      "columns": [
-        { "name": "id" },
-        { "name": "name" },
-        { "name": "archived_at" }
-      ]
+      "columns": [{ "name": "id" }, { "name": "name" }, { "name": "archived_at" }]
     }
   ]
 }

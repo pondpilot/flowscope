@@ -1,12 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type {
-  AnalyzeRequest,
-  AnalyzeResult,
-  Dialect,
-  Node,
-  Edge,
-  Issue,
-} from '../src/types';
+import type { AnalyzeRequest, AnalyzeResult, Dialect, Node, Edge, Issue } from '../src/types';
 import { IssueCodes } from '../src/types';
 
 describe('Types', () => {

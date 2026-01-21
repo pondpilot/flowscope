@@ -1,5 +1,12 @@
 import type { AnalyzeResult } from '@pondpilot/flowscope-core';
-import type { AnalysisWorkerPayload, AnalysisWorkerRequest, AnalysisWorkerResponse, AnalysisWorkerTimings, SyncFilesPayload, WorkerErrorCode } from '../workers/analysis.worker';
+import type {
+  AnalysisWorkerPayload,
+  AnalysisWorkerRequest,
+  AnalysisWorkerResponse,
+  AnalysisWorkerTimings,
+  SyncFilesPayload,
+  WorkerErrorCode,
+} from '../workers/analysis.worker';
 import { buildFileSyncKey } from './analysis-hash';
 import { AnalysisError, AnalysisErrorCode } from '../types';
 
@@ -85,12 +92,14 @@ function getWorker(): Worker {
   return workerInstance;
 }
 
-function sendRequest(message: Omit<AnalysisWorkerRequest, 'requestId'>): Promise<AnalysisWorkerResponse> {
+function sendRequest(
+  message: Omit<AnalysisWorkerRequest, 'requestId'>
+): Promise<AnalysisWorkerResponse> {
   if (!isWorkerSupported()) {
     return Promise.reject(new Error('Web Workers are not supported in this environment'));
   }
 
-  const requestId = `analysis-${requestCounter += 1}`;
+  const requestId = `analysis-${(requestCounter += 1)}`;
   const worker = getWorker();
 
   return new Promise((resolve, reject) => {
@@ -113,16 +122,19 @@ export async function syncAnalysisFiles(files: SyncFilesPayload['files']): Promi
   const syncStart = nowMs();
   const nextKey = buildFileSyncKey({ files });
   if (nextKey === lastSyncedFileKey) {
-    if (ANALYSIS_WORKER_DEBUG) console.log(`[syncAnalysisFiles] Skipped (cache hit), ${files.length} files`);
+    if (ANALYSIS_WORKER_DEBUG)
+      console.log(`[syncAnalysisFiles] Skipped (cache hit), ${files.length} files`);
     return;
   }
 
-  if (ANALYSIS_WORKER_DEBUG) console.log(`[syncAnalysisFiles] Starting sync of ${files.length} files`);
+  if (ANALYSIS_WORKER_DEBUG)
+    console.log(`[syncAnalysisFiles] Starting sync of ${files.length} files`);
 
   if (files.length === 0) {
     await sendRequest({ type: 'clear-files' });
     lastSyncedFileKey = nextKey;
-    if (ANALYSIS_WORKER_DEBUG) console.log(`[syncAnalysisFiles] Cleared files in ${(nowMs() - syncStart).toFixed(1)}ms`);
+    if (ANALYSIS_WORKER_DEBUG)
+      console.log(`[syncAnalysisFiles] Cleared files in ${(nowMs() - syncStart).toFixed(1)}ms`);
     return;
   }
 
@@ -140,7 +152,8 @@ export async function syncAnalysisFiles(files: SyncFilesPayload['files']): Promi
   }
 
   lastSyncedFileKey = nextKey;
-  if (ANALYSIS_WORKER_DEBUG) console.log(`[syncAnalysisFiles] Completed in ${(nowMs() - syncStart).toFixed(1)}ms`);
+  if (ANALYSIS_WORKER_DEBUG)
+    console.log(`[syncAnalysisFiles] Completed in ${(nowMs() - syncStart).toFixed(1)}ms`);
 }
 
 export async function initializeAnalysisWorker(): Promise<void> {
@@ -227,10 +240,7 @@ export function terminateAnalysisWorker(): void {
  * @param schema - Optional schema name to prefix all tables/views (e.g., "lineage")
  * @returns SQL statements (DDL + INSERT) for DuckDB
  */
-export async function exportToDuckDbSql(
-  result: AnalyzeResult,
-  schema?: string
-): Promise<string> {
+export async function exportToDuckDbSql(result: AnalyzeResult, schema?: string): Promise<string> {
   const response = await sendRequest({
     type: 'export',
     exportPayload: { result, schema },

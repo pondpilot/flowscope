@@ -48,7 +48,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           : vscode.window.activeTextEditor?.document;
 
         if (document && document.languageId === 'sql') {
-          LineagePanel.createOrShow(context.extensionUri, context.extensionPath, document, statementIndex);
+          LineagePanel.createOrShow(
+            context.extensionUri,
+            context.extensionPath,
+            document,
+            statementIndex
+          );
         } else {
           vscode.window.showWarningMessage('FlowScope: Please open a SQL file first.');
         }

@@ -15,7 +15,10 @@ export function Legend({ viewMode = 'table' }: LegendProps): JSX.Element {
 
   return (
     <div className="relative">
-      <div className={`${PANEL_STYLES.container} px-1.5 transition-all duration-200`} data-graph-panel>
+      <div
+        className={`${PANEL_STYLES.container} px-1.5 transition-all duration-200`}
+        data-graph-panel
+      >
         <button
           onClick={() => setIsExpanded(!isExpanded)}
           className={`
@@ -24,11 +27,7 @@ export function Legend({ viewMode = 'table' }: LegendProps): JSX.Element {
           `}
         >
           <span>Legend</span>
-          {isExpanded ? (
-            <ChevronUp className="size-4" />
-          ) : (
-            <ChevronDown className="size-4" />
-          )}
+          {isExpanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
         </button>
       </div>
 
@@ -116,21 +115,13 @@ export function Legend({ viewMode = 'table' }: LegendProps): JSX.Element {
               States
             </div>
             <div className="space-y-1.5">
-              <LegendStateItem
-                color={COLORS.interactive.selection}
-                label="Selected"
-                filled
-              />
+              <LegendStateItem color={COLORS.interactive.selection} label="Selected" filled />
               <LegendStateItem
                 color={COLORS.interactive.selection}
                 label="Related"
                 filled={false}
               />
-              <LegendStateItem
-                color={COLORS.recursive}
-                label="Recursive"
-                filled={false}
-              />
+              <LegendStateItem color={COLORS.recursive} label="Recursive" filled={false} />
             </div>
           </div>
         </div>
@@ -147,7 +138,13 @@ interface LegendNodeItemProps {
   bgColor: string;
 }
 
-function LegendNodeItem({ icon, label, sublabel, color, bgColor }: LegendNodeItemProps): JSX.Element {
+function LegendNodeItem({
+  icon,
+  label,
+  sublabel,
+  color,
+  bgColor,
+}: LegendNodeItemProps): JSX.Element {
   return (
     <div className="flex items-center gap-2">
       <div
@@ -157,13 +154,9 @@ function LegendNodeItem({ icon, label, sublabel, color, bgColor }: LegendNodeIte
         {icon}
       </div>
       <div className="flex flex-col">
-        <span className="text-xs font-medium text-slate-900 dark:text-white">
-          {label}
-        </span>
+        <span className="text-xs font-medium text-slate-900 dark:text-white">{label}</span>
         {sublabel && (
-          <span className="text-[10px] text-slate-500 dark:text-slate-300">
-            {sublabel}
-          </span>
+          <span className="text-[10px] text-slate-500 dark:text-slate-300">{sublabel}</span>
         )}
       </div>
     </div>
@@ -193,19 +186,12 @@ function LegendEdgeItem({ style, color, label, sublabel }: LegendEdgeItemProps):
           strokeDasharray={dashArray}
         />
         {/* Arrow marker */}
-        <polygon
-          points="24,6 18,3 18,9"
-          fill={color}
-        />
+        <polygon points="24,6 18,3 18,9" fill={color} />
       </svg>
       <div className="flex flex-col">
-        <span className="text-xs font-medium text-slate-900 dark:text-white">
-          {label}
-        </span>
+        <span className="text-xs font-medium text-slate-900 dark:text-white">{label}</span>
         {sublabel && (
-          <span className="text-[10px] text-slate-500 dark:text-slate-300">
-            {sublabel}
-          </span>
+          <span className="text-[10px] text-slate-500 dark:text-slate-300">{sublabel}</span>
         )}
       </div>
     </div>
@@ -228,9 +214,7 @@ function LegendStateItem({ color, label, filled }: LegendStateItemProps): JSX.El
           backgroundColor: filled ? color : 'transparent',
         }}
       />
-      <span className="text-xs text-slate-900 dark:text-white">
-        {label}
-      </span>
+      <span className="text-xs text-slate-900 dark:text-white">{label}</span>
     </div>
   );
 }

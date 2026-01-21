@@ -4,7 +4,15 @@
  */
 
 import type { Dialect } from './project-store';
-import type { SchemaTable, AnalyzeRequest, AnalyzeResult, ColumnSchema, StatementLineage, Issue, StatementRef } from '@pondpilot/flowscope-core';
+import type {
+  SchemaTable,
+  AnalyzeRequest,
+  AnalyzeResult,
+  ColumnSchema,
+  StatementLineage,
+  Issue,
+  StatementRef,
+} from '@pondpilot/flowscope-core';
 import { SCHEMA_LIMITS } from './constants';
 
 export interface ParsedSchema {
@@ -92,9 +100,7 @@ export async function parseSchemaSQL(
         if (!isFromSchemaDDL) continue;
 
         const canonical = node.canonicalName;
-        const key = [canonical.catalog, canonical.schema, canonical.name]
-          .filter(Boolean)
-          .join('.');
+        const key = [canonical.catalog, canonical.schema, canonical.name].filter(Boolean).join('.');
 
         if (node.type === 'table') {
           if (!tableMap.has(key)) {
@@ -125,7 +131,7 @@ export async function parseSchemaSQL(
           table.columns = table.columns || [];
 
           // Avoid duplicate columns when the same column appears multiple times
-          if (!table.columns.some(col => col.name === columnName)) {
+          if (!table.columns.some((col) => col.name === columnName)) {
             table.columns.push({
               name: columnName,
               dataType: undefined, // Type info not available in lineage nodes
@@ -147,7 +153,9 @@ export async function parseSchemaSQL(
       errors.push('No CREATE TABLE statements found in schema SQL');
     }
   } catch (error) {
-    errors.push(`Failed to parse schema SQL: ${error instanceof Error ? error.message : String(error)}`);
+    errors.push(
+      `Failed to parse schema SQL: ${error instanceof Error ? error.message : String(error)}`
+    );
   }
 
   return { tables, errors };

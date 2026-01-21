@@ -399,7 +399,10 @@ export async function exportToDuckDbSql(result: AnalyzeResult, schema?: string):
   return exportToDuckDbSqlFn(requestJson);
 }
 
-export async function exportJson(result: AnalyzeResult, options: { compact?: boolean } = {}): Promise<string> {
+export async function exportJson(
+  result: AnalyzeResult,
+  options: { compact?: boolean } = {}
+): Promise<string> {
   await ensureWasmReady();
 
   if (!exportJsonFn) {
@@ -464,15 +467,13 @@ export async function exportXlsx(result: AnalyzeResult): Promise<Uint8Array> {
   return exportXlsxFn(requestJson);
 }
 
-export async function exportFilename(
-  options: {
-    projectName?: string;
-    exportedAt?: Date;
-    format: ExportFormat;
-    view?: MermaidView;
-    compact?: boolean;
-  }
-): Promise<string> {
+export async function exportFilename(options: {
+  projectName?: string;
+  exportedAt?: Date;
+  format: ExportFormat;
+  view?: MermaidView;
+  compact?: boolean;
+}): Promise<string> {
   await ensureWasmReady();
 
   if (!exportFilenameFn) {

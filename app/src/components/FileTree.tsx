@@ -11,12 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import type { ProjectFile } from '@/lib/project-store';
 
@@ -161,14 +156,9 @@ function FolderNode({ node, depth, props, expandedFolders, onToggleFolder }: Fol
       </div>
       {isExpanded && (
         <div role="group">
-          {sortedChildren.map(child =>
+          {sortedChildren.map((child) =>
             child.file ? (
-              <FileNode
-                key={child.file.id}
-                node={child}
-                depth={depth + 1}
-                props={props}
-              />
+              <FileNode key={child.file.id} node={child} depth={depth + 1} props={props} />
             ) : (
               <FolderNode
                 key={child.path}
@@ -297,17 +287,9 @@ function FileNode({ node, depth, props }: FileNodeProps) {
         />
       )}
       <FileCode
-        className={cn(
-          'size-4 shrink-0',
-          isIncluded ? 'text-primary' : 'text-muted-foreground'
-        )}
+        className={cn('size-4 shrink-0', isIncluded ? 'text-primary' : 'text-muted-foreground')}
       />
-      <span
-        className={cn(
-          'flex-1 truncate text-sm',
-          isActive && 'font-semibold italic'
-        )}
-      >
+      <span className={cn('flex-1 truncate text-sm', isActive && 'font-semibold italic')}>
         {file.name}
       </span>
       {isDeleting ? (
@@ -343,7 +325,9 @@ function FileNode({ node, depth, props }: FileNodeProps) {
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">
-                <p>Rename <kbd className="ml-1 rounded bg-muted px-1 font-mono text-xs">R</kbd></p>
+                <p>
+                  Rename <kbd className="ml-1 rounded bg-muted px-1 font-mono text-xs">R</kbd>
+                </p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -362,7 +346,9 @@ function FileNode({ node, depth, props }: FileNodeProps) {
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
-                  <p>Delete <kbd className="ml-1 rounded bg-muted px-1 font-mono text-xs">D</kbd></p>
+                  <p>
+                    Delete <kbd className="ml-1 rounded bg-muted px-1 font-mono text-xs">D</kbd>
+                  </p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -381,7 +367,7 @@ export function FileTree(props: FileTreeProps) {
 
   // Check if we have any nested structure
   const hasNestedStructure = useMemo(() => {
-    return files.some(f => f.path.includes('/'));
+    return files.some((f) => f.path.includes('/'));
   }, [files]);
 
   // Auto-expand all folders on initial render if there's nested structure
@@ -403,7 +389,7 @@ export function FileTree(props: FileTreeProps) {
   }, [files, hasNestedStructure, expandedFolders.size]);
 
   const toggleFolder = (path: string) => {
-    setExpandedFolders(prev => {
+    setExpandedFolders((prev) => {
       const next = new Set(prev);
       if (next.has(path)) {
         next.delete(path);
@@ -420,7 +406,7 @@ export function FileTree(props: FileTreeProps) {
   if (!hasNestedStructure) {
     return (
       <div className="p-1" role="tree" aria-label="File list">
-        {sortedChildren.map(node => (
+        {sortedChildren.map((node) => (
           <FileNode key={node.file?.id} node={node} depth={0} props={props} />
         ))}
       </div>
@@ -429,7 +415,7 @@ export function FileTree(props: FileTreeProps) {
 
   return (
     <div className="p-1" role="tree" aria-label="File tree">
-      {sortedChildren.map(node =>
+      {sortedChildren.map((node) =>
         node.file ? (
           <FileNode key={node.file.id} node={node} depth={0} props={props} />
         ) : (

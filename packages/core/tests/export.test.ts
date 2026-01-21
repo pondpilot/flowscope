@@ -6,14 +6,16 @@ CREATE TABLE _meta (key TEXT PRIMARY KEY, value TEXT);
 INSERT INTO _meta (key, value) VALUES ('version', '0.1.0');`;
 
 const baseResult: AnalyzeResult = {
-  statements: [{
-    statementIndex: 0,
-    statementType: 'SELECT',
-    nodes: [],
-    edges: [],
-    joinCount: 0,
-    complexityScore: 1,
-  }],
+  statements: [
+    {
+      statementIndex: 0,
+      statementType: 'SELECT',
+      nodes: [],
+      edges: [],
+      joinCount: 0,
+      complexityScore: 1,
+    },
+  ],
   globalLineage: { nodes: [], edges: [] },
   issues: [],
   summary: {

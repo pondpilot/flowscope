@@ -5,7 +5,16 @@
  * This worker handles the CPU-intensive task of transforming lineage data into
  * React Flow nodes and edges, which can take several seconds for large SQL files.
  */
-import type { Node, Edge, StatementLineage, ResolvedSchemaMetadata, GlobalLineage, GlobalNode, FilterPredicate, AggregationInfo } from '@pondpilot/flowscope-core';
+import type {
+  Node,
+  Edge,
+  StatementLineage,
+  ResolvedSchemaMetadata,
+  GlobalLineage,
+  GlobalNode,
+  FilterPredicate,
+  AggregationInfo,
+} from '@pondpilot/flowscope-core';
 import { isTableLikeType } from '@pondpilot/flowscope-core';
 import { GRAPH_CONFIG, JOIN_TYPE_LABELS } from '../constants';
 
@@ -410,9 +419,7 @@ function buildFlowNodes(
   }
 
   const recursiveNodeIds = new Set(
-    statement.edges
-      .filter((e) => e.type === 'data_flow' && e.from === e.to)
-      .map((e) => e.from)
+    statement.edges.filter((e) => e.type === 'data_flow' && e.from === e.to).map((e) => e.from)
   );
 
   const tableColumnMap = new Map<string, SerializedColumnInfo[]>();
@@ -653,7 +660,9 @@ function buildFlowEdges(
     statement.edges
       .filter(
         (edge) =>
-          edge.type === 'data_flow' || edge.type === 'derivation' || edge.type === JOIN_DEPENDENCY_EDGE_TYPE
+          edge.type === 'data_flow' ||
+          edge.type === 'derivation' ||
+          edge.type === JOIN_DEPENDENCY_EDGE_TYPE
       )
       .forEach((edge) => {
         if (!relationNodeIds.has(edge.from) || !relationNodeIds.has(edge.to)) {
@@ -832,9 +841,10 @@ const UI_CONSTANTS = {
 
 function withSourceName(node: Node, sourceName?: string): Node {
   if (!sourceName) return node;
-  const metadata = node.metadata && typeof node.metadata === 'object'
-    ? { ...node.metadata, sourceName }
-    : { sourceName };
+  const metadata =
+    node.metadata && typeof node.metadata === 'object'
+      ? { ...node.metadata, sourceName }
+      : { sourceName };
   if (node.metadata?.sourceName === sourceName) {
     return node;
   }
@@ -899,9 +909,8 @@ function mergeStatements(statements: StatementLineage[]): StatementLineage {
   });
 
   const totalJoinCount = statements.reduce((sum, stmt) => sum + stmt.joinCount, 0);
-  const maxComplexity = statements.length > 0
-    ? Math.max(...statements.map((stmt) => stmt.complexityScore))
-    : 1;
+  const maxComplexity =
+    statements.length > 0 ? Math.max(...statements.map((stmt) => stmt.complexityScore)) : 1;
 
   return {
     statementIndex: 0,
@@ -1202,7 +1211,9 @@ self.onmessage = (event: MessageEvent<GraphBuildRequest | ScriptGraphBuildReques
     }
 
     const duration = performance.now() - startTime;
-    console.log(`[GraphBuilder Worker] Build completed in ${duration.toFixed(2)}ms: ${nodes.length} nodes, ${edges.length} edges`);
+    console.log(
+      `[GraphBuilder Worker] Build completed in ${duration.toFixed(2)}ms: ${nodes.length} nodes, ${edges.length} edges`
+    );
 
     const response: GraphBuildResponse = {
       type: 'build-result',

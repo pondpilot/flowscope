@@ -18,7 +18,12 @@ import { useLineage, useLineageStore } from '../store';
 import { useNodeFocus } from '../hooks/useNodeFocus';
 import { useGraphFiltering } from '../hooks/useGraphFiltering';
 import type { GraphViewProps, TableNodeData, LayoutAlgorithm } from '../types';
-import { getLayoutedElements, getLayoutedElementsInWorker, getFastLayoutedNodes, cancelLayoutRequests } from '../utils/layout';
+import {
+  getLayoutedElements,
+  getLayoutedElementsInWorker,
+  getFastLayoutedNodes,
+  cancelLayoutRequests,
+} from '../utils/layout';
 import { LayoutSelector } from './LayoutSelector';
 import { isTableNodeData } from '../utils/graphTraversal';
 import { GRAPH_DEBUG, nowMs } from '../utils/debug';
@@ -303,7 +308,19 @@ export function GraphView({
   const setGraphMetrics = useLineageStore((store) => store.setGraphMetrics);
   const setIsLayouting = useLineageStore((store) => store.setIsLayouting);
   const setIsBuilding = useLineageStore((store) => store.setIsBuilding);
-  const { result, selectedNodeId, searchTerm, viewMode, layoutAlgorithm, collapsedNodeIds, defaultCollapsed, showColumnEdges, showScriptTables, expandedTableIds, tableFilter } = state;
+  const {
+    result,
+    selectedNodeId,
+    searchTerm,
+    viewMode,
+    layoutAlgorithm,
+    collapsedNodeIds,
+    defaultCollapsed,
+    showColumnEdges,
+    showScriptTables,
+    expandedTableIds,
+    tableFilter,
+  } = state;
   // Use result directly instead of useDeferredValue. The deferred approach was causing
   // ~7 second delays during concurrent rendering. Worker-based computation with
   // isBuilding/isLayouting indicators now provides better UX than deferred rendering.
@@ -319,13 +336,16 @@ export function GraphView({
   const [focusMode, setFocusMode] = useState(false);
 
   // Handle search term changes - just update store or call callback, no local state
-  const handleSearchTermChange = useCallback((newSearchTerm: string) => {
-    if (isSearchControlled) {
-      onSearchTermChange?.(newSearchTerm);
-    } else {
-      actions.setSearchTerm(newSearchTerm);
-    }
-  }, [isSearchControlled, onSearchTermChange, actions]);
+  const handleSearchTermChange = useCallback(
+    (newSearchTerm: string) => {
+      if (isSearchControlled) {
+        onSearchTermChange?.(newSearchTerm);
+      } else {
+        actions.setSearchTerm(newSearchTerm);
+      }
+    },
+    [isSearchControlled, onSearchTermChange, actions]
+  );
 
   // Handle focus mode changes
   const handleFocusModeChange = useCallback((enabled: boolean) => {
@@ -353,7 +373,10 @@ export function GraphView({
   }, [viewMode, showColumnEdges]);
 
   // State for async graph building results
-  const [builtGraph, setBuiltGraph] = useState<{ nodes: FlowNode[]; edges: FlowEdge[] }>({ nodes: [], edges: [] });
+  const [builtGraph, setBuiltGraph] = useState<{ nodes: FlowNode[]; edges: FlowEdge[] }>({
+    nodes: [],
+    edges: [],
+  });
   const [buildDurationMs, setBuildDurationMs] = useState<number | null>(null);
 
   // Counter for unique build request IDs (avoids StrictMode timing confusion)
@@ -388,26 +411,30 @@ export function GraphView({
       }
 
       const workerStartTime = nowMs();
-      if (GRAPH_DEBUG) console.log(`[GraphBuilder #${buildId}] Calling worker (${(workerStartTime - buildStartTime).toFixed(1)}ms since effect start)`);
+      if (GRAPH_DEBUG)
+        console.log(
+          `[GraphBuilder #${buildId}] Calling worker (${(workerStartTime - buildStartTime).toFixed(1)}ms since effect start)`
+        );
 
-      const buildPromise = viewMode === 'script'
-        ? buildScriptGraphInWorker({
-            statements: analysisResult.statements,
-            selectedNodeId,
-            searchTerm: effectiveSearchTerm,
-            showTables: showScriptTables,
-          })
-        : buildTableGraphInWorker({
-            statements: analysisResult.statements,
-            selectedNodeId,
-            searchTerm: effectiveSearchTerm,
-            collapsedNodeIds,
-            expandedTableIds,
-            resolvedSchema: analysisResult.resolvedSchema,
-            defaultCollapsed,
-            globalLineage: analysisResult.globalLineage,
-            showColumnEdges,
-          });
+      const buildPromise =
+        viewMode === 'script'
+          ? buildScriptGraphInWorker({
+              statements: analysisResult.statements,
+              selectedNodeId,
+              searchTerm: effectiveSearchTerm,
+              showTables: showScriptTables,
+            })
+          : buildTableGraphInWorker({
+              statements: analysisResult.statements,
+              selectedNodeId,
+              searchTerm: effectiveSearchTerm,
+              collapsedNodeIds,
+              expandedTableIds,
+              resolvedSchema: analysisResult.resolvedSchema,
+              defaultCollapsed,
+              globalLineage: analysisResult.globalLineage,
+              showColumnEdges,
+            });
 
       buildPromise
         .then(({ nodes, edges, lineageNodes }) => {
@@ -416,8 +443,12 @@ export function GraphView({
           const workerRoundtrip = callbackTime - workerStartTime;
 
           if (GRAPH_DEBUG) {
-            console.log(`[GraphBuilder #${buildId}] Worker returned: ${nodes.length} nodes, ${edges.length} edges`);
-            console.log(`[GraphBuilder #${buildId}] Worker roundtrip: ${workerRoundtrip.toFixed(1)}ms, Total: ${totalDuration.toFixed(1)}ms`);
+            console.log(
+              `[GraphBuilder #${buildId}] Worker returned: ${nodes.length} nodes, ${edges.length} edges`
+            );
+            console.log(
+              `[GraphBuilder #${buildId}] Worker roundtrip: ${workerRoundtrip.toFixed(1)}ms, Total: ${totalDuration.toFixed(1)}ms`
+            );
           }
 
           if (!cancelled) {
@@ -453,7 +484,18 @@ export function GraphView({
       cancelled = true;
       cancelPendingBuilds();
     };
-  }, [analysisResult, selectedNodeId, effectiveSearchTerm, viewMode, collapsedNodeIds, defaultCollapsed, showColumnEdges, showScriptTables, expandedTableIds, setIsBuilding]);
+  }, [
+    analysisResult,
+    selectedNodeId,
+    effectiveSearchTerm,
+    viewMode,
+    collapsedNodeIds,
+    defaultCollapsed,
+    showColumnEdges,
+    showScriptTables,
+    expandedTableIds,
+    setIsBuilding,
+  ]);
 
   // Apply filtering (focus mode, table filter, namespace filter) and compute highlights
   const { filteredGraph, highlightIds } = useGraphFiltering({
@@ -498,7 +540,8 @@ export function GraphView({
     return map;
   }, [renderGraph.edges]);
 
-  const showMiniMap = renderGraph.nodes.length > 0 && renderGraph.nodes.length <= MINIMAP_NODE_LIMIT;
+  const showMiniMap =
+    renderGraph.nodes.length > 0 && renderGraph.nodes.length <= MINIMAP_NODE_LIMIT;
 
   useEffect(() => {
     if (!analysisResult) {
@@ -511,7 +554,13 @@ export function GraphView({
       edgeCount: builtGraph.edges.length,
       lastUpdatedAt: Date.now(),
     });
-  }, [analysisResult, buildDurationMs, builtGraph.nodes.length, builtGraph.edges.length, setGraphMetrics]);
+  }, [
+    analysisResult,
+    buildDurationMs,
+    builtGraph.nodes.length,
+    builtGraph.edges.length,
+    setGraphMetrics,
+  ]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<FlowEdge>([]);
@@ -582,7 +631,13 @@ export function GraphView({
     if (GRAPH_DEBUG) console.timeEnd('[Layout] Stage 1: preserve positions');
 
     if (GRAPH_DEBUG) {
-      console.log('[Layout] Starting worker layout for', layoutNodes.length, 'nodes,', layoutEdges.length, 'edges');
+      console.log(
+        '[Layout] Starting worker layout for',
+        layoutNodes.length,
+        'nodes,',
+        layoutEdges.length,
+        'edges'
+      );
       console.time('[Layout] Worker layout total');
     }
 
@@ -592,62 +647,78 @@ export function GraphView({
 
       // Use worker-based layout for both algorithms to keep UI responsive
       getLayoutedElementsInWorker(layoutNodes, layoutEdges, direction, effectiveLayoutAlgorithm)
-      .then(({ nodes, edges }) => {
-        if (GRAPH_DEBUG) console.timeEnd('[Layout] Worker layout total');
-        if (!cancelled) {
-          if (GRAPH_DEBUG) console.time('[Layout] Apply layouted nodes/edges');
-          setLayoutedNodes(nodes);
-          setLayoutedEdges(edges);
-          if (GRAPH_DEBUG) console.timeEnd('[Layout] Apply layouted nodes/edges');
-          const durationMs = layoutStartRef.current !== null
-            ? nowMs() - layoutStartRef.current
-            : null;
-          setLayoutMetrics({
-            lastDurationMs: durationMs,
-            nodeCount: nodes.length,
-            edgeCount: edges.length,
-            algorithm: effectiveLayoutAlgorithm,
-            lastUpdatedAt: Date.now(),
-          });
-          setIsLayouting(false);
-        }
-      })
-      .catch((error) => {
-        // Ignore cancellation errors - these are expected during React StrictMode
-        // double-invoke or when dependencies change rapidly
-        if (error instanceof Error && error.message === 'Layout cancelled') {
-          if (GRAPH_DEBUG) console.log('[Layout] Cancelled (expected)');
-          return;
-        }
+        .then(({ nodes, edges }) => {
+          if (GRAPH_DEBUG) console.timeEnd('[Layout] Worker layout total');
+          if (!cancelled) {
+            if (GRAPH_DEBUG) console.time('[Layout] Apply layouted nodes/edges');
+            setLayoutedNodes(nodes);
+            setLayoutedEdges(edges);
+            if (GRAPH_DEBUG) console.timeEnd('[Layout] Apply layouted nodes/edges');
+            const durationMs =
+              layoutStartRef.current !== null ? nowMs() - layoutStartRef.current : null;
+            setLayoutMetrics({
+              lastDurationMs: durationMs,
+              nodeCount: nodes.length,
+              edgeCount: edges.length,
+              algorithm: effectiveLayoutAlgorithm,
+              lastUpdatedAt: Date.now(),
+            });
+            setIsLayouting(false);
+          }
+        })
+        .catch((error) => {
+          // Ignore cancellation errors - these are expected during React StrictMode
+          // double-invoke or when dependencies change rapidly
+          if (error instanceof Error && error.message === 'Layout cancelled') {
+            if (GRAPH_DEBUG) console.log('[Layout] Cancelled (expected)');
+            return;
+          }
 
-        console.error('Layout failed:', error);
-        // Final fallback to sync dagre on main thread
-        if (!cancelled) {
-          if (GRAPH_DEBUG) console.time('[Layout] Fallback sync layout');
-          const { nodes, edges } = getLayoutedElements(layoutNodes, layoutEdges, direction, 'dagre');
-          if (GRAPH_DEBUG) console.timeEnd('[Layout] Fallback sync layout');
-          setLayoutedNodes(nodes);
-          setLayoutedEdges(edges);
-          const durationMs = layoutStartRef.current !== null
-            ? nowMs() - layoutStartRef.current
-            : null;
-          setLayoutMetrics({
-            lastDurationMs: durationMs,
-            nodeCount: nodes.length,
-            edgeCount: edges.length,
-            algorithm: 'dagre',
-            lastUpdatedAt: Date.now(),
-          });
-          setIsLayouting(false);
-        }
-      });
+          console.error('Layout failed:', error);
+          // Final fallback to sync dagre on main thread
+          if (!cancelled) {
+            if (GRAPH_DEBUG) console.time('[Layout] Fallback sync layout');
+            const { nodes, edges } = getLayoutedElements(
+              layoutNodes,
+              layoutEdges,
+              direction,
+              'dagre'
+            );
+            if (GRAPH_DEBUG) console.timeEnd('[Layout] Fallback sync layout');
+            setLayoutedNodes(nodes);
+            setLayoutedEdges(edges);
+            const durationMs =
+              layoutStartRef.current !== null ? nowMs() - layoutStartRef.current : null;
+            setLayoutMetrics({
+              lastDurationMs: durationMs,
+              nodeCount: nodes.length,
+              edgeCount: edges.length,
+              algorithm: 'dagre',
+              lastUpdatedAt: Date.now(),
+            });
+            setIsLayouting(false);
+          }
+        });
     });
 
     return () => {
       cancelled = true;
       cancelLayoutRequests();
     };
-  }, [layoutNodes, layoutEdges, direction, layoutAlgorithm, defaultCollapsed, showScriptTables, viewMode, analysisResult, setNodes, setEdges, setLayoutMetrics, setIsLayouting]);
+  }, [
+    layoutNodes,
+    layoutEdges,
+    direction,
+    layoutAlgorithm,
+    defaultCollapsed,
+    showScriptTables,
+    viewMode,
+    analysisResult,
+    setNodes,
+    setEdges,
+    setLayoutMetrics,
+    setIsLayouting,
+  ]);
 
   const isInitialized = useRef(false);
   const lastResultId = useRef<string | null>(null);
@@ -711,7 +782,8 @@ export function GraphView({
     const currentResultId = layoutSnapshot.resultSummary
       ? JSON.stringify(layoutSnapshot.resultSummary)
       : null;
-    const defaultCollapseChanged = layoutSnapshot.defaultCollapsed !== lastAppliedDefaultCollapsed.current;
+    const defaultCollapseChanged =
+      layoutSnapshot.defaultCollapsed !== lastAppliedDefaultCollapsed.current;
 
     // Check if any individual node's collapse state changed (affects node height/layout)
     const nodeCollapseChanged = layoutedNodes.some((node) => {
@@ -791,7 +863,11 @@ export function GraphView({
         }
         onNodeClick?.(lineageNode);
 
-        if (!sourceName && lineageNode.metadata && typeof lineageNode.metadata.sourceName === 'string') {
+        if (
+          !sourceName &&
+          lineageNode.metadata &&
+          typeof lineageNode.metadata.sourceName === 'string'
+        ) {
           sourceName = lineageNode.metadata.sourceName;
         }
       }
@@ -899,7 +975,13 @@ export function GraphView({
               onClick={() => actions.setAllNodesCollapsed(!defaultCollapsed)}
               ariaLabel={defaultCollapsed ? 'Expand all tables' : 'Collapse all tables'}
               tooltip={defaultCollapsed ? 'Expand all tables' : 'Collapse all tables'}
-              icon={defaultCollapsed ? <Maximize2 className="size-4" strokeWidth={1.5} /> : <Minimize2 className="size-4" strokeWidth={1.5} />}
+              icon={
+                defaultCollapsed ? (
+                  <Maximize2 className="size-4" strokeWidth={1.5} />
+                ) : (
+                  <Minimize2 className="size-4" strokeWidth={1.5} />
+                )
+              }
             />
           )}
           {viewMode !== 'script' && (
@@ -908,7 +990,13 @@ export function GraphView({
               onClick={actions.toggleColumnEdges}
               ariaLabel={showColumnEdges ? 'Show table connections' : 'Show column lineage'}
               tooltip={showColumnEdges ? 'Show table connections' : 'Show column lineage'}
-              icon={showColumnEdges ? <GitBranch className="size-4" strokeWidth={1.5} /> : <Route className="size-4" strokeWidth={1.5} />}
+              icon={
+                showColumnEdges ? (
+                  <GitBranch className="size-4" strokeWidth={1.5} />
+                ) : (
+                  <Route className="size-4" strokeWidth={1.5} />
+                )
+              }
             />
           )}
           {viewMode !== 'script' && <TableFilterDropdown />}

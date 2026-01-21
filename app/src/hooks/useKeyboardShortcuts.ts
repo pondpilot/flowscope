@@ -25,7 +25,7 @@ export function useKeyboardShortcuts(shortcuts: KeyboardShortcutHandler[]) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       for (const shortcut of shortcuts) {
-        const modifierMatched = shortcut.modifiers.some(modifier => e[modifier]);
+        const modifierMatched = shortcut.modifiers.some((modifier) => e[modifier]);
         if (modifierMatched && e.key === shortcut.key) {
           e.preventDefault();
           shortcut.handler();
@@ -87,7 +87,7 @@ function detectCollisions(shortcuts: GlobalShortcut[]): void {
     if (existingIndex !== undefined) {
       console.warn(
         `Shortcut collision detected: "${key}" is registered at indices ${existingIndex} and ${index}. ` +
-        'The first handler will always be used.'
+          'The first handler will always be used.'
       );
     } else {
       seen.set(key, index);
@@ -101,53 +101,56 @@ export function useGlobalShortcuts(shortcuts: GlobalShortcut[]) {
     detectCollisions(shortcuts);
   }, [shortcuts]);
 
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    const target = e.target as HTMLElement;
-    const isInEditable = isEditableElement(target);
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const isInEditable = isEditableElement(target);
 
-    for (const shortcut of shortcuts) {
-      // Modifier shortcuts (Cmd/Ctrl+key) are safe in inputs by default
-      // Bare key shortcuts (no modifiers) are blocked in inputs unless explicitly allowed
-      const hasModifier = shortcut.cmdOrCtrl || shortcut.alt;
-      const blockedInEditable = isInEditable && !hasModifier && !shortcut.allowInInput;
+      for (const shortcut of shortcuts) {
+        // Modifier shortcuts (Cmd/Ctrl+key) are safe in inputs by default
+        // Bare key shortcuts (no modifiers) are blocked in inputs unless explicitly allowed
+        const hasModifier = shortcut.cmdOrCtrl || shortcut.alt;
+        const blockedInEditable = isInEditable && !hasModifier && !shortcut.allowInInput;
 
-      if (blockedInEditable) {
-        continue;
-      }
+        if (blockedInEditable) {
+          continue;
+        }
 
-      // Check key match (case-insensitive)
-      if (e.key.toLowerCase() !== shortcut.key.toLowerCase()) {
-        continue;
-      }
+        // Check key match (case-insensitive)
+        if (e.key.toLowerCase() !== shortcut.key.toLowerCase()) {
+          continue;
+        }
 
-      // Check Cmd/Ctrl modifier
-      if (shortcut.cmdOrCtrl && !(e.metaKey || e.ctrlKey)) {
-        continue;
-      }
-      if (!shortcut.cmdOrCtrl && (e.metaKey || e.ctrlKey)) {
-        continue;
-      }
+        // Check Cmd/Ctrl modifier
+        if (shortcut.cmdOrCtrl && !(e.metaKey || e.ctrlKey)) {
+          continue;
+        }
+        if (!shortcut.cmdOrCtrl && (e.metaKey || e.ctrlKey)) {
+          continue;
+        }
 
-      // Check Shift modifier
-      if (shortcut.shift && !e.shiftKey) {
-        continue;
-      }
-      if (!shortcut.shift && e.shiftKey && shortcut.cmdOrCtrl) {
-        // Allow shift to be pressed if we're using Cmd/Ctrl and shift isn't explicitly required
-        // This prevents Cmd+Shift+O from matching Cmd+O
-        continue;
-      }
+        // Check Shift modifier
+        if (shortcut.shift && !e.shiftKey) {
+          continue;
+        }
+        if (!shortcut.shift && e.shiftKey && shortcut.cmdOrCtrl) {
+          // Allow shift to be pressed if we're using Cmd/Ctrl and shift isn't explicitly required
+          // This prevents Cmd+Shift+O from matching Cmd+O
+          continue;
+        }
 
-      // Check Alt modifier
-      if (shortcut.alt && !e.altKey) {
-        continue;
-      }
+        // Check Alt modifier
+        if (shortcut.alt && !e.altKey) {
+          continue;
+        }
 
-      e.preventDefault();
-      shortcut.handler();
-      break;
-    }
-  }, [shortcuts]);
+        e.preventDefault();
+        shortcut.handler();
+        break;
+      }
+    },
+    [shortcuts]
+  );
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);

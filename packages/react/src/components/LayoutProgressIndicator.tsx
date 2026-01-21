@@ -23,9 +23,7 @@ export function LayoutProgressIndicator(): JSX.Element | null {
   return (
     <div className={PANEL_STYLES.container} data-graph-panel>
       <Loader2 className="size-4 animate-spin text-slate-500 dark:text-slate-400 ml-2" />
-      <span className="text-sm text-slate-600 dark:text-slate-300 px-2">
-        {message}
-      </span>
+      <span className="text-sm text-slate-600 dark:text-slate-300 px-2">{message}</span>
     </div>
   );
 }

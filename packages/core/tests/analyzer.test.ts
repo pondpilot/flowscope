@@ -75,9 +75,9 @@ describe('analyzer', () => {
 
   it('validates dialect values', async () => {
     const { analyzeSql } = await loadAnalyzer();
-    await expect(
-      analyzeSql({ sql: 'SELECT 1', dialect: 'unsupported' as never })
-    ).rejects.toThrow(/Invalid dialect/);
+    await expect(analyzeSql({ sql: 'SELECT 1', dialect: 'unsupported' as never })).rejects.toThrow(
+      /Invalid dialect/
+    );
   });
 
   it('throws when wasm returns malformed JSON', async () => {

@@ -1,5 +1,12 @@
 import type { Node as FlowNode, Edge as FlowEdge } from '@xyflow/react';
-import type { Node, Edge, StatementLineage, ResolvedSchemaMetadata, GlobalLineage, GlobalNode } from '@pondpilot/flowscope-core';
+import type {
+  Node,
+  Edge,
+  StatementLineage,
+  ResolvedSchemaMetadata,
+  GlobalLineage,
+  GlobalNode,
+} from '@pondpilot/flowscope-core';
 import { isTableLikeType } from '@pondpilot/flowscope-core';
 import type {
   TableNodeData,
@@ -87,9 +94,8 @@ export function mergeStatements(statements: StatementLineage[]): StatementLineag
 
   // Aggregate stats from all statements
   const totalJoinCount = statements.reduce((sum, stmt) => sum + stmt.joinCount, 0);
-  const maxComplexity = statements.length > 0
-    ? Math.max(...statements.map((stmt) => stmt.complexityScore))
-    : 1;
+  const maxComplexity =
+    statements.length > 0 ? Math.max(...statements.map((stmt) => stmt.complexityScore)) : 1;
 
   return {
     statementIndex: 0,
@@ -160,7 +166,7 @@ function processTableColumns(
     }));
     return {
       columns: [...existingColumns, ...injectedColumns],
-      hiddenColumnCount
+      hiddenColumnCount,
     };
   }
 
@@ -304,9 +310,7 @@ export function buildFlowNodes(
     });
   }
   const recursiveNodeIds = new Set(
-    statement.edges
-      .filter((e) => e.type === 'data_flow' && e.from === e.to)
-      .map((e) => e.from)
+    statement.edges.filter((e) => e.type === 'data_flow' && e.from === e.to).map((e) => e.from)
   );
 
   const tableColumnMap = new Map<string, ColumnNodeInfo[]>();
@@ -359,14 +363,19 @@ export function buildFlowNodes(
       id: node.id,
       type: 'tableNode',
       position: { x: 0, y: 0 },
-      data: buildTableNodeData(node, columns, {
-        selectedNodeId,
-        searchTerm,
-        isCollapsed: computeIsCollapsed(node.id, defaultCollapsed, collapsedNodeIds),
-        hiddenColumnCount,
-        isRecursive: recursiveNodeIds.has(node.id),
-        isBaseTable: baseTableIds.has(node.id),
-      }, globalNodeMap),
+      data: buildTableNodeData(
+        node,
+        columns,
+        {
+          selectedNodeId,
+          searchTerm,
+          isCollapsed: computeIsCollapsed(node.id, defaultCollapsed, collapsedNodeIds),
+          hiddenColumnCount,
+          isRecursive: recursiveNodeIds.has(node.id),
+          isBaseTable: baseTableIds.has(node.id),
+        },
+        globalNodeMap
+      ),
     });
   }
 
@@ -591,7 +600,9 @@ export function buildFlowEdges(
     statement.edges
       .filter(
         (edge) =>
-          edge.type === 'data_flow' || edge.type === 'derivation' || edge.type === JOIN_DEPENDENCY_EDGE_TYPE
+          edge.type === 'data_flow' ||
+          edge.type === 'derivation' ||
+          edge.type === JOIN_DEPENDENCY_EDGE_TYPE
       )
       .forEach((edge) => {
         if (!relationNodeIds.has(edge.from) || !relationNodeIds.has(edge.to)) {
@@ -930,9 +941,7 @@ function buildHybridGraph(
 /**
  * Build direct script-to-script graph
  */
-function buildDirectScriptGraph(
-  scriptMap: Map<string, StatementLineageWithSource[]>
-): FlowEdge[] {
+function buildDirectScriptGraph(scriptMap: Map<string, StatementLineageWithSource[]>): FlowEdge[] {
   const edges: FlowEdge[] = [];
   const edgeSet = new Set<string>();
 
@@ -1005,4 +1014,3 @@ export function buildScriptLevelGraph(
     };
   }
 }
-

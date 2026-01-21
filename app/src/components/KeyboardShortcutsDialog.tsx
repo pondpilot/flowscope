@@ -50,7 +50,7 @@ function ShortcutSection({ title, shortcuts }: ShortcutSectionProps) {
         {title}
       </h3>
       <div className="space-y-0.5">
-        {shortcuts.map(shortcut => (
+        {shortcuts.map((shortcut) => (
           <ShortcutItem key={shortcut.id} shortcut={shortcut} />
         ))}
       </div>
@@ -82,7 +82,11 @@ const CONTEXT_LABELS: Record<ShortcutContext, string> = {
   editor: 'Editor',
 };
 
-export function KeyboardShortcutsDialog({ open, onOpenChange, activeTab }: KeyboardShortcutsDialogProps) {
+export function KeyboardShortcutsDialog({
+  open,
+  onOpenChange,
+  activeTab,
+}: KeyboardShortcutsDialogProps) {
   // Determine current context from active tab
   const currentContext = activeTab ? TAB_TO_CONTEXT[activeTab] : undefined;
 
@@ -93,13 +97,13 @@ export function KeyboardShortcutsDialog({ open, onOpenChange, activeTab }: Keybo
         if (category === 'view') {
           // Filter view shortcuts to show only those relevant to current tab
           // If no tab context, show all view shortcuts
-          acc[category] = SHORTCUTS.filter(s => {
+          acc[category] = SHORTCUTS.filter((s) => {
             if (s.category !== 'view') return false;
             if (!currentContext) return true;
             return s.context === currentContext || s.context === 'global';
           });
         } else {
-          acc[category] = SHORTCUTS.filter(s => s.category === category);
+          acc[category] = SHORTCUTS.filter((s) => s.category === category);
         }
         return acc;
       },
@@ -118,7 +122,8 @@ export function KeyboardShortcutsDialog({ open, onOpenChange, activeTab }: Keybo
         <DialogHeader>
           <DialogTitle className="text-xl">Keyboard Shortcuts</DialogTitle>
           <DialogDescription>
-            Press <kbd className="px-1.5 py-0.5 text-xs bg-muted rounded border font-mono">?</kbd> anytime to show this dialog
+            Press <kbd className="px-1.5 py-0.5 text-xs bg-muted rounded border font-mono">?</kbd>{' '}
+            anytime to show this dialog
           </DialogDescription>
         </DialogHeader>
 
@@ -133,10 +138,7 @@ export function KeyboardShortcutsDialog({ open, onOpenChange, activeTab }: Keybo
 
           {/* Right column: View, Actions, Settings */}
           <div className="space-y-6">
-            <ShortcutSection
-              title={viewTitle}
-              shortcuts={shortcutsByCategory.view}
-            />
+            <ShortcutSection title={viewTitle} shortcuts={shortcutsByCategory.view} />
             <ShortcutSection
               title={CATEGORY_LABELS.actions}
               shortcuts={shortcutsByCategory.actions}
@@ -150,7 +152,9 @@ export function KeyboardShortcutsDialog({ open, onOpenChange, activeTab }: Keybo
 
         <div className="border-t pt-3 mt-auto">
           <p className="text-xs text-muted-foreground text-center">
-            Press <kbd className="px-1 py-0.5 text-[10px] bg-muted rounded border font-mono">Esc</kbd> to close
+            Press{' '}
+            <kbd className="px-1 py-0.5 text-[10px] bg-muted rounded border font-mono">Esc</kbd> to
+            close
           </p>
         </div>
       </DialogContent>

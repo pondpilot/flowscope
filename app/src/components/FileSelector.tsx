@@ -1,11 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import {
-  ChevronDown,
-  Plus,
-  Upload,
-  FolderUp,
-  Search,
-} from 'lucide-react';
+import { ChevronDown, Plus, Upload, FolderUp, Search } from 'lucide-react';
 import { useProject } from '@/lib/project-store';
 import { Input } from '@/components/ui/input';
 import {
@@ -52,15 +46,15 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
   const open = controlledOpen ?? internalOpen;
   const setOpen = onOpenChange ?? setInternalOpen;
 
-  const activeFile = currentProject?.files.find(f => f.id === currentProject.activeFileId);
+  const activeFile = currentProject?.files.find((f) => f.id === currentProject.activeFileId);
 
   const filteredFiles = useMemo(() => {
     if (!currentProject?.files) return [];
     if (!search.trim()) return currentProject.files;
     const searchLower = search.toLowerCase();
-    return currentProject.files.filter(f =>
-      f.name.toLowerCase().includes(searchLower) ||
-      f.path.toLowerCase().includes(searchLower)
+    return currentProject.files.filter(
+      (f) =>
+        f.name.toLowerCase().includes(searchLower) || f.path.toLowerCase().includes(searchLower)
     );
   }, [currentProject?.files, search]);
 
@@ -189,184 +183,205 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
   const [footerButtonIndex, setFooterButtonIndex] = useState(0);
 
   const focusFooterButton = useCallback((index: number) => {
-    const buttons = footerRef.current?.querySelectorAll('[role="menuitem"]') as NodeListOf<HTMLElement>;
+    const buttons = footerRef.current?.querySelectorAll(
+      '[role="menuitem"]'
+    ) as NodeListOf<HTMLElement>;
     if (buttons && buttons[index]) {
       buttons[index].focus();
       setFooterButtonIndex(index);
     }
   }, []);
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (renamingFileId) return;
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (renamingFileId) return;
 
-    const fileCount = filesInTreeOrder.length;
+      const fileCount = filesInTreeOrder.length;
 
-    // Find current index of focused file in tree order
-    const currentIndex = focusedFileId ? filesInTreeOrder.findIndex(f => f.id === focusedFileId) : -1;
+      // Find current index of focused file in tree order
+      const currentIndex = focusedFileId
+        ? filesInTreeOrder.findIndex((f) => f.id === focusedFileId)
+        : -1;
 
-    if (e.key === 'Tab') {
-      e.preventDefault();
-      e.stopPropagation();
-      if (e.shiftKey) {
-        // Shift+Tab: go backwards
-        if (focusZone === 'footer') {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.shiftKey) {
+          // Shift+Tab: go backwards
+          if (focusZone === 'footer') {
+            setFocusZone('tree');
+            setFocusedFileId(fileCount > 0 ? filesInTreeOrder[fileCount - 1].id : null);
+            fileTreeRef.current?.focus();
+          } else if (focusZone === 'tree') {
+            setFocusZone('search');
+            setFocusedFileId(null);
+            searchInputRef.current?.focus();
+          } else {
+            // From search, go to footer
+            setFocusZone('footer');
+            setFocusedFileId(null);
+            setFooterButtonIndex(0);
+            focusFooterButton(0);
+          }
+        } else {
+          // Tab: go forwards
+          if (focusZone === 'search') {
+            setFocusZone('tree');
+            setFocusedFileId(fileCount > 0 ? filesInTreeOrder[0].id : null);
+            fileTreeRef.current?.focus();
+          } else if (focusZone === 'tree') {
+            setFocusZone('footer');
+            setFocusedFileId(null);
+            setFooterButtonIndex(0);
+            focusFooterButton(0);
+          } else {
+            // From footer, go to search
+            setFocusZone('search');
+            setFocusedFileId(null);
+            searchInputRef.current?.focus();
+          }
+        }
+        return;
+      }
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (focusZone === 'search' && fileCount > 0) {
           setFocusZone('tree');
-          setFocusedFileId(fileCount > 0 ? filesInTreeOrder[fileCount - 1].id : null);
+          setFocusedFileId(filesInTreeOrder[0].id);
           fileTreeRef.current?.focus();
-        } else if (focusZone === 'tree') {
-          setFocusZone('search');
-          setFocusedFileId(null);
-          searchInputRef.current?.focus();
-        } else {
-          // From search, go to footer
-          setFocusZone('footer');
-          setFocusedFileId(null);
-          setFooterButtonIndex(0);
-          focusFooterButton(0);
+        } else if (focusZone === 'tree' && fileCount > 0) {
+          const nextIndex = Math.min(currentIndex + 1, fileCount - 1);
+          setFocusedFileId(filesInTreeOrder[nextIndex].id);
         }
-      } else {
-        // Tab: go forwards
-        if (focusZone === 'search') {
-          setFocusZone('tree');
-          setFocusedFileId(fileCount > 0 ? filesInTreeOrder[0].id : null);
-          fileTreeRef.current?.focus();
-        } else if (focusZone === 'tree') {
-          setFocusZone('footer');
-          setFocusedFileId(null);
-          setFooterButtonIndex(0);
-          focusFooterButton(0);
-        } else {
-          // From footer, go to search
-          setFocusZone('search');
-          setFocusedFileId(null);
-          searchInputRef.current?.focus();
+        return;
+      }
+
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (focusZone === 'tree') {
+          if (currentIndex <= 0) {
+            setFocusZone('search');
+            setFocusedFileId(null);
+            searchInputRef.current?.focus();
+          } else {
+            setFocusedFileId(filesInTreeOrder[currentIndex - 1].id);
+          }
         }
+        return;
       }
-      return;
-    }
 
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      e.stopPropagation();
-      if (focusZone === 'search' && fileCount > 0) {
-        setFocusZone('tree');
-        setFocusedFileId(filesInTreeOrder[0].id);
-        fileTreeRef.current?.focus();
-      } else if (focusZone === 'tree' && fileCount > 0) {
-        const nextIndex = Math.min(currentIndex + 1, fileCount - 1);
-        setFocusedFileId(filesInTreeOrder[nextIndex].id);
+      if (e.key === 'ArrowLeft' && focusZone === 'footer') {
+        e.preventDefault();
+        e.stopPropagation();
+        const newIndex = Math.max(0, footerButtonIndex - 1);
+        focusFooterButton(newIndex);
+        return;
       }
-      return;
-    }
 
-    if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      e.stopPropagation();
-      if (focusZone === 'tree') {
-        if (currentIndex <= 0) {
-          setFocusZone('search');
-          setFocusedFileId(null);
-          searchInputRef.current?.focus();
-        } else {
-          setFocusedFileId(filesInTreeOrder[currentIndex - 1].id);
+      if (e.key === 'ArrowRight' && focusZone === 'footer') {
+        e.preventDefault();
+        e.stopPropagation();
+        const buttons = footerRef.current?.querySelectorAll('[role="menuitem"]');
+        const maxIndex = buttons ? buttons.length - 1 : 0;
+        const newIndex = Math.min(maxIndex, footerButtonIndex + 1);
+        focusFooterButton(newIndex);
+        return;
+      }
+
+      if (e.key === 'Enter' && focusZone === 'tree' && focusedFileId) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleSelectFile(focusedFileId);
+        return;
+      }
+
+      // Space toggles file selection when in tree zone
+      if (e.key === ' ' && focusZone === 'tree' && focusedFileId && currentProject) {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleFileSelection(currentProject.id, focusedFileId);
+        return;
+      }
+
+      // Rename shortcut
+      if ((e.key === 'r' || e.key === 'R') && focusZone === 'tree' && focusedFileId) {
+        e.preventDefault();
+        e.stopPropagation();
+        const file = filteredFiles.find((f) => f.id === focusedFileId);
+        if (file) {
+          handleStartRename(focusedFileId, file.name);
         }
+        return;
       }
-      return;
-    }
 
-    if (e.key === 'ArrowLeft' && focusZone === 'footer') {
-      e.preventDefault();
-      e.stopPropagation();
-      const newIndex = Math.max(0, footerButtonIndex - 1);
-      focusFooterButton(newIndex);
-      return;
-    }
-
-    if (e.key === 'ArrowRight' && focusZone === 'footer') {
-      e.preventDefault();
-      e.stopPropagation();
-      const buttons = footerRef.current?.querySelectorAll('[role="menuitem"]');
-      const maxIndex = buttons ? buttons.length - 1 : 0;
-      const newIndex = Math.min(maxIndex, footerButtonIndex + 1);
-      focusFooterButton(newIndex);
-      return;
-    }
-
-    if (e.key === 'Enter' && focusZone === 'tree' && focusedFileId) {
-      e.preventDefault();
-      e.stopPropagation();
-      handleSelectFile(focusedFileId);
-      return;
-    }
-
-    // Space toggles file selection when in tree zone
-    if (e.key === ' ' && focusZone === 'tree' && focusedFileId && currentProject) {
-      e.preventDefault();
-      e.stopPropagation();
-      toggleFileSelection(currentProject.id, focusedFileId);
-      return;
-    }
-
-    // Rename shortcut
-    if ((e.key === 'r' || e.key === 'R') && focusZone === 'tree' && focusedFileId) {
-      e.preventDefault();
-      e.stopPropagation();
-      const file = filteredFiles.find(f => f.id === focusedFileId);
-      if (file) {
-        handleStartRename(focusedFileId, file.name);
+      // Delete shortcut
+      if ((e.key === 'd' || e.key === 'D') && focusZone === 'tree' && focusedFileId) {
+        e.preventDefault();
+        e.stopPropagation();
+        const canDelete = currentProject ? currentProject.files.length > 1 : false;
+        if (canDelete) {
+          if (deletingFileId === focusedFileId) {
+            deleteFile(focusedFileId);
+            setDeletingFileId(null);
+          } else {
+            setDeletingFileId(focusedFileId);
+          }
+        }
+        return;
       }
-      return;
-    }
 
-    // Delete shortcut
-    if ((e.key === 'd' || e.key === 'D') && focusZone === 'tree' && focusedFileId) {
-      e.preventDefault();
-      e.stopPropagation();
-      const canDelete = currentProject ? currentProject.files.length > 1 : false;
-      if (canDelete) {
-        if (deletingFileId === focusedFileId) {
-          deleteFile(focusedFileId);
+      // Cancel delete or rename with Escape
+      if (e.key === 'Escape') {
+        if (deletingFileId) {
+          e.preventDefault();
+          e.stopPropagation();
           setDeletingFileId(null);
-        } else {
-          setDeletingFileId(focusedFileId);
+          return;
+        }
+        if (renamingFileId) {
+          e.preventDefault();
+          e.stopPropagation();
+          handleCancelRename();
+          return;
         }
       }
-      return;
-    }
 
-    // Cancel delete or rename with Escape
-    if (e.key === 'Escape') {
-      if (deletingFileId) {
+      // Cancel delete with N
+      if ((e.key === 'n' || e.key === 'N') && deletingFileId) {
         e.preventDefault();
         e.stopPropagation();
         setDeletingFileId(null);
         return;
       }
-      if (renamingFileId) {
+
+      // Confirm delete with Y
+      if ((e.key === 'y' || e.key === 'Y') && deletingFileId) {
         e.preventDefault();
         e.stopPropagation();
-        handleCancelRename();
+        deleteFile(deletingFileId);
+        setDeletingFileId(null);
         return;
       }
-    }
-
-    // Cancel delete with N
-    if ((e.key === 'n' || e.key === 'N') && deletingFileId) {
-      e.preventDefault();
-      e.stopPropagation();
-      setDeletingFileId(null);
-      return;
-    }
-
-    // Confirm delete with Y
-    if ((e.key === 'y' || e.key === 'Y') && deletingFileId) {
-      e.preventDefault();
-      e.stopPropagation();
-      deleteFile(deletingFileId);
-      setDeletingFileId(null);
-      return;
-    }
-  }, [focusZone, focusedFileId, filesInTreeOrder, filteredFiles, renamingFileId, deletingFileId, currentProject, handleSelectFile, handleStartRename, handleCancelRename, deleteFile, footerButtonIndex, focusFooterButton]);
+    },
+    [
+      focusZone,
+      focusedFileId,
+      filesInTreeOrder,
+      filteredFiles,
+      renamingFileId,
+      deletingFileId,
+      currentProject,
+      handleSelectFile,
+      handleStartRename,
+      handleCancelRename,
+      deleteFile,
+      footerButtonIndex,
+      focusFooterButton,
+    ]
+  );
 
   return (
     <>
@@ -376,9 +391,7 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
             className="flex h-[30px] items-center justify-between gap-2 rounded-full border border-border-primary-light dark:border-border-primary-dark bg-background px-4 text-xs transition-all duration-200 ease-pondpilot placeholder:text-muted-foreground focus:outline-hidden focus:border-accent-light dark:focus:border-accent-dark disabled:cursor-not-allowed disabled:opacity-60 [&>span]:line-clamp-1 hover:border-accent-light dark:hover:border-accent-dark min-w-0 shrink"
             data-testid="file-selector-trigger"
           >
-            <span className="truncate">
-              {activeFile?.name || 'No file selected'}
-            </span>
+            <span className="truncate">{activeFile?.name || 'No file selected'}</span>
             <ChevronDown className="size-4 opacity-50 shrink-0" />
           </button>
         </DropdownMenuTrigger>
@@ -406,7 +419,10 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
           {/* Search Input */}
           <div className="px-3 py-2 border-b">
             <div className="relative flex items-center rounded-full border border-border bg-background h-9 px-2 shadow-xs">
-              <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" strokeWidth={1.5} />
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground"
+                strokeWidth={1.5}
+              />
               <Input
                 ref={searchInputRef}
                 value={search}
@@ -478,7 +494,9 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
                   <Plus className="size-4" />
                   <span>New</span>
                 </div>
-                <kbd className="rounded bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">N</kbd>
+                <kbd className="rounded bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">
+                  N
+                </kbd>
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => fileInputRef.current?.click()}
@@ -489,7 +507,9 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
                   <Upload className="size-4" />
                   <span>Files</span>
                 </div>
-                <kbd className="rounded bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">U</kbd>
+                <kbd className="rounded bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">
+                  U
+                </kbd>
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => folderInputRef.current?.click()}
@@ -500,7 +520,9 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
                   <FolderUp className="size-4" />
                   <span>Folder</span>
                 </div>
-                <kbd className="rounded bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">F</kbd>
+                <kbd className="rounded bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">
+                  F
+                </kbd>
               </DropdownMenuItem>
             </div>
           </div>
@@ -523,7 +545,7 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
         className="hidden"
         onChange={handleFolderUpload}
         data-testid="folder-upload-input"
-        {...{ webkitdirectory: '', directory: '' } as React.InputHTMLAttributes<HTMLInputElement>}
+        {...({ webkitdirectory: '', directory: '' } as React.InputHTMLAttributes<HTMLInputElement>)}
       />
     </>
   );

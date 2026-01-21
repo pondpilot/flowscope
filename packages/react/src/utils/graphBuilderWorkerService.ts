@@ -5,7 +5,12 @@
  * This service offloads the CPU-intensive graph building (buildFlowNodes, buildFlowEdges)
  * to a Web Worker, preventing UI blocking when processing large SQL files.
  */
-import type { StatementLineage, ResolvedSchemaMetadata, GlobalLineage, Node as LineageNode } from '@pondpilot/flowscope-core';
+import type {
+  StatementLineage,
+  ResolvedSchemaMetadata,
+  GlobalLineage,
+  Node as LineageNode,
+} from '@pondpilot/flowscope-core';
 import type { Node as FlowNode, Edge as FlowEdge } from '@xyflow/react';
 import type {
   GraphBuildRequest,
@@ -32,10 +37,9 @@ const pendingRequests = new Map<string, PendingRequest>();
 function getWorker(): Worker {
   if (!worker) {
     // Vite handles worker bundling with this syntax
-    worker = new Worker(
-      new URL('../workers/graphBuilder.worker.ts', import.meta.url),
-      { type: 'module' }
-    );
+    worker = new Worker(new URL('../workers/graphBuilder.worker.ts', import.meta.url), {
+      type: 'module',
+    });
 
     worker.onmessage = (event: MessageEvent<GraphBuildResponse>) => {
       const { requestId, nodes, edges, error, lineageNodes } = event.data;

@@ -36,7 +36,9 @@ async function build() {
     console.log('Copied wasm-node/ to dist/wasm-node/');
   } else {
     console.warn('Warning: wasm-node/ not found at', wasmNodeSrc);
-    console.warn('Run "wasm-pack build crates/flowscope-wasm --target nodejs --out-dir ../../vscode/wasm-node" first');
+    console.warn(
+      'Run "wasm-pack build crates/flowscope-wasm --target nodejs --out-dir ../../vscode/wasm-node" first'
+    );
   }
 
   const ctx = await esbuild.context({

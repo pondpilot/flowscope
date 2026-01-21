@@ -1,19 +1,10 @@
 {
   "bigquery": {
     "normalization": "case_insensitive",
-    "pseudocolumns": [
-      "_FILE_NAME",
-      "_PARTITIONDATE",
-      "_PARTITIONTIME",
-      "_TABLE_SUFFIX"
-    ],
+    "pseudocolumns": ["_FILE_NAME", "_PARTITIONDATE", "_PARTITIONTIME", "_TABLE_SUFFIX"],
     "quote_chars": {
-      "identifier_quotes": [
-        "`"
-      ],
-      "string_escapes": [
-        "\\"
-      ]
+      "identifier_quotes": ["`"],
+      "string_escapes": ["\\"]
     },
     "parser_settings": {
       "tablesample_csv": false,
@@ -37,14 +28,8 @@
     "normalization": "case_sensitive",
     "pseudocolumns": [],
     "quote_chars": {
-      "identifier_quotes": [
-        "\"",
-        "`"
-      ],
-      "string_escapes": [
-        "'",
-        "\\"
-      ]
+      "identifier_quotes": ["\"", "`"],
+      "string_escapes": ["'", "\\"]
     },
     "parser_settings": {
       "tablesample_csv": false,
@@ -68,12 +53,8 @@
     "normalization": "case_insensitive",
     "pseudocolumns": [],
     "quote_chars": {
-      "identifier_quotes": [
-        "`"
-      ],
-      "string_escapes": [
-        "\\"
-      ]
+      "identifier_quotes": ["`"],
+      "string_escapes": ["\\"]
     },
     "parser_settings": {
       "tablesample_csv": false,
@@ -97,14 +78,8 @@
     "normalization": "case_sensitive",
     "pseudocolumns": [],
     "quote_chars": {
-      "identifier_quotes": [
-        "`"
-      ],
-      "string_escapes": [
-        "'",
-        "\"",
-        "\\"
-      ]
+      "identifier_quotes": ["`"],
+      "string_escapes": ["'", "\"", "\\"]
     },
     "parser_settings": {
       "tablesample_csv": false,
@@ -127,12 +102,8 @@
     "normalization": "lowercase",
     "pseudocolumns": [],
     "quote_chars": {
-      "identifier_quotes": [
-        "`"
-      ],
-      "string_escapes": [
-        "\\"
-      ]
+      "identifier_quotes": ["`"],
+      "string_escapes": ["\\"]
     },
     "parser_settings": {
       "tablesample_csv": false,
@@ -156,12 +127,8 @@
     "normalization": "case_insensitive",
     "pseudocolumns": [],
     "quote_chars": {
-      "identifier_quotes": [
-        "\""
-      ],
-      "string_escapes": [
-        "'"
-      ]
+      "identifier_quotes": ["\""],
+      "string_escapes": ["'"]
     },
     "parser_settings": {
       "tablesample_csv": false,
@@ -185,12 +152,8 @@
     "normalization": "case_insensitive",
     "pseudocolumns": [],
     "quote_chars": {
-      "identifier_quotes": [
-        "`"
-      ],
-      "string_escapes": [
-        "\\"
-      ]
+      "identifier_quotes": ["`"],
+      "string_escapes": ["\\"]
     },
     "parser_settings": {
       "tablesample_csv": false,
@@ -214,14 +177,8 @@
     "normalization": "case_sensitive",
     "pseudocolumns": [],
     "quote_chars": {
-      "identifier_quotes": [
-        "`"
-      ],
-      "string_escapes": [
-        "'",
-        "\"",
-        "\\"
-      ]
+      "identifier_quotes": ["`"],
+      "string_escapes": ["'", "\"", "\\"]
     },
     "parser_settings": {
       "tablesample_csv": false,
@@ -242,20 +199,10 @@
   },
   "oracle": {
     "normalization": "uppercase",
-    "pseudocolumns": [
-      "LEVEL",
-      "OBJECT_ID",
-      "OBJECT_VALUE",
-      "ROWID",
-      "ROWNUM"
-    ],
+    "pseudocolumns": ["LEVEL", "OBJECT_ID", "OBJECT_VALUE", "ROWID", "ROWNUM"],
     "quote_chars": {
-      "identifier_quotes": [
-        "\""
-      ],
-      "string_escapes": [
-        "'"
-      ]
+      "identifier_quotes": ["\""],
+      "string_escapes": ["'"]
     },
     "parser_settings": {
       "tablesample_csv": false,
@@ -279,12 +226,8 @@
     "normalization": "lowercase",
     "pseudocolumns": [],
     "quote_chars": {
-      "identifier_quotes": [
-        "\""
-      ],
-      "string_escapes": [
-        "'"
-      ]
+      "identifier_quotes": ["\""],
+      "string_escapes": ["'"]
     },
     "parser_settings": {
       "tablesample_csv": false,
@@ -308,12 +251,8 @@
     "normalization": "case_insensitive",
     "pseudocolumns": [],
     "quote_chars": {
-      "identifier_quotes": [
-        "\""
-      ],
-      "string_escapes": [
-        "'"
-      ]
+      "identifier_quotes": ["\""],
+      "string_escapes": ["'"]
     },
     "parser_settings": {
       "tablesample_csv": false,
@@ -337,13 +276,8 @@
     "normalization": "case_insensitive",
     "pseudocolumns": [],
     "quote_chars": {
-      "identifier_quotes": [
-        "\""
-      ],
-      "string_escapes": [
-        "\\",
-        "'"
-      ]
+      "identifier_quotes": ["\""],
+      "string_escapes": ["\\", "'"]
     },
     "parser_settings": {
       "tablesample_csv": false,
@@ -365,17 +299,10 @@
   },
   "snowflake": {
     "normalization": "uppercase",
-    "pseudocolumns": [
-      "LEVEL"
-    ],
+    "pseudocolumns": ["LEVEL"],
     "quote_chars": {
-      "identifier_quotes": [
-        "\""
-      ],
-      "string_escapes": [
-        "\\",
-        "'"
-      ]
+      "identifier_quotes": ["\""],
+      "string_escapes": ["\\", "'"]
     },
     "parser_settings": {
       "tablesample_csv": false,
@@ -399,12 +326,8 @@
     "normalization": "case_insensitive",
     "pseudocolumns": [],
     "quote_chars": {
-      "identifier_quotes": [
-        "`"
-      ],
-      "string_escapes": [
-        "\\"
-      ]
+      "identifier_quotes": ["`"],
+      "string_escapes": ["\\"]
     },
     "parser_settings": {
       "tablesample_csv": false,
@@ -428,17 +351,8 @@
     "normalization": "case_insensitive",
     "pseudocolumns": [],
     "quote_chars": {
-      "identifier_quotes": [
-        "\"",
-        [
-          "[",
-          "]"
-        ],
-        "`"
-      ],
-      "string_escapes": [
-        "'"
-      ]
+      "identifier_quotes": ["\"", ["[", "]"], "`"],
+      "string_escapes": ["'"]
     },
     "parser_settings": {
       "tablesample_csv": false,
@@ -462,14 +376,8 @@
     "normalization": "case_sensitive",
     "pseudocolumns": [],
     "quote_chars": {
-      "identifier_quotes": [
-        "`"
-      ],
-      "string_escapes": [
-        "'",
-        "\"",
-        "\\"
-      ]
+      "identifier_quotes": ["`"],
+      "string_escapes": ["'", "\"", "\\"]
     },
     "parser_settings": {
       "tablesample_csv": false,
@@ -492,15 +400,8 @@
     "normalization": "lowercase",
     "pseudocolumns": [],
     "quote_chars": {
-      "identifier_quotes": [
-        [
-          "[",
-          "]"
-        ]
-      ],
-      "string_escapes": [
-        "'"
-      ]
+      "identifier_quotes": [["[", "]"]],
+      "string_escapes": ["'"]
     },
     "parser_settings": {
       "tablesample_csv": false,
@@ -524,12 +425,8 @@
     "normalization": "lowercase",
     "pseudocolumns": [],
     "quote_chars": {
-      "identifier_quotes": [
-        "\""
-      ],
-      "string_escapes": [
-        "'"
-      ]
+      "identifier_quotes": ["\""],
+      "string_escapes": ["'"]
     },
     "parser_settings": {
       "tablesample_csv": true,
@@ -553,12 +450,8 @@
     "normalization": "case_insensitive",
     "pseudocolumns": [],
     "quote_chars": {
-      "identifier_quotes": [
-        "\""
-      ],
-      "string_escapes": [
-        "'"
-      ]
+      "identifier_quotes": ["\""],
+      "string_escapes": ["'"]
     },
     "parser_settings": {
       "tablesample_csv": false,
@@ -582,16 +475,8 @@
     "normalization": "case_insensitive",
     "pseudocolumns": [],
     "quote_chars": {
-      "identifier_quotes": [
-        [
-          "[",
-          "]"
-        ],
-        "\""
-      ],
-      "string_escapes": [
-        "'"
-      ]
+      "identifier_quotes": [["[", "]"], "\""],
+      "string_escapes": ["'"]
     },
     "parser_settings": {
       "tablesample_csv": false,

@@ -189,8 +189,7 @@ export const useViewStateStore = create<ViewStateStore>()(
 
       getViewState: (projectId, view) => get().viewStates[projectId]?.[view],
 
-      getActiveTab: (projectId) =>
-        get().viewStates[projectId]?.activeTab ?? 'lineage',
+      getActiveTab: (projectId) => get().viewStates[projectId]?.activeTab ?? 'lineage',
 
       setActiveTab: (projectId, tab) =>
         set((state) => ({

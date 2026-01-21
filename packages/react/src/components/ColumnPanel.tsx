@@ -12,11 +12,7 @@ interface ColumnInfo {
   downstream: Node[];
 }
 
-function findColumnInfo(
-  nodes: Node[],
-  edges: Edge[],
-  nodeId: string
-): ColumnInfo | null {
+function findColumnInfo(nodes: Node[], edges: Edge[], nodeId: string): ColumnInfo | null {
   const node = nodes.find((n) => n.id === nodeId);
   if (!node) return null;
 
@@ -37,11 +33,7 @@ function findColumnInfo(
   return { node, upstream, downstream };
 }
 
-function findTableColumns(
-  nodes: Node[],
-  edges: Edge[],
-  tableId: string
-): Node[] {
+function findTableColumns(nodes: Node[], edges: Edge[], tableId: string): Node[] {
   const columns: Node[] = [];
   for (const edge of edges) {
     if (edge.from === tableId && edge.type === 'ownership') {
@@ -199,16 +191,23 @@ export function ColumnPanel({ className }: ColumnPanelProps): JSX.Element {
                     cursor: 'pointer',
                   }}
                 >
-                  <Columns3 style={{ width: '12px', height: '12px', color: COLORS.nodes.table.textSecondary }} />
+                  <Columns3
+                    style={{
+                      width: '12px',
+                      height: '12px',
+                      color: COLORS.nodes.table.textSecondary,
+                    }}
+                  />
                   <span>{node.label}</span>
-                  {node.qualifiedName && (() => {
-                    const prefix = node.qualifiedName.split('.').slice(0, -1).join('.');
-                    return prefix ? (
-                      <span style={{ fontSize: '10px', color: COLORS.nodes.table.textSecondary }}>
-                        ({prefix})
-                      </span>
-                    ) : null;
-                  })()}
+                  {node.qualifiedName &&
+                    (() => {
+                      const prefix = node.qualifiedName.split('.').slice(0, -1).join('.');
+                      return prefix ? (
+                        <span style={{ fontSize: '10px', color: COLORS.nodes.table.textSecondary }}>
+                          ({prefix})
+                        </span>
+                      ) : null;
+                    })()}
                 </li>
               ))}
             </ul>
@@ -241,7 +240,13 @@ export function ColumnPanel({ className }: ColumnPanelProps): JSX.Element {
                     cursor: 'pointer',
                   }}
                 >
-                  <Columns3 style={{ width: '12px', height: '12px', color: COLORS.nodes.table.textSecondary }} />
+                  <Columns3
+                    style={{
+                      width: '12px',
+                      height: '12px',
+                      color: COLORS.nodes.table.textSecondary,
+                    }}
+                  />
                   <span>{node.label}</span>
                 </li>
               ))}
@@ -252,15 +257,23 @@ export function ColumnPanel({ className }: ColumnPanelProps): JSX.Element {
         {flowPath.length > 1 && (
           <div className="flowscope-section">
             <h4>Data Flow</h4>
-            <div className="flowscope-flow-path" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px' }}>
+            <div
+              className="flowscope-flow-path"
+              style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px' }}
+            >
               {flowPath.map((label, idx) => {
                 const isSelected = label === selectedNode.label;
                 return (
-                  <span key={`${label}-${idx}`} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span
+                    key={`${label}-${idx}`}
+                    style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+                  >
                     <span
                       className="flowscope-flow-chip"
                       style={{
-                        backgroundColor: isSelected ? COLORS.interactive.selection : 'var(--flowscope-surface-muted)',
+                        backgroundColor: isSelected
+                          ? COLORS.interactive.selection
+                          : 'var(--flowscope-surface-muted)',
                         color: isSelected ? '#FFFFFF' : 'var(--flowscope-text)',
                         padding: '2px 8px',
                         borderRadius: '4px',

@@ -172,7 +172,8 @@ export class GraphErrorBoundary extends Component<ErrorBoundaryProps, ErrorBound
               textAlign: 'center',
             }}
           >
-            There was an error rendering the graph. This might be due to invalid data or a rendering issue.
+            There was an error rendering the graph. This might be due to invalid data or a rendering
+            issue.
           </div>
           <button
             onClick={() => this.setState({ hasError: false, error: null })}

@@ -38,7 +38,11 @@ function ScriptNodeComponent({ data, selected }: NodeProps): JSX.Element {
             }}
             className="min-w-[180px] rounded-lg border shadow-xs transition-all duration-200"
           >
-            <Handle type="target" position={Position.Left} className="bg-transparent! border-none!" />
+            <Handle
+              type="target"
+              position={Position.Left}
+              className="bg-transparent! border-none!"
+            />
 
             <div className="flex items-center gap-2 px-3 py-2.5">
               <div
@@ -64,17 +68,27 @@ function ScriptNodeComponent({ data, selected }: NodeProps): JSX.Element {
               </div>
             </div>
 
-            <Handle type="source" position={Position.Right} className="bg-transparent! border-none!" />
+            <Handle
+              type="source"
+              position={Position.Right}
+              className="bg-transparent! border-none!"
+            />
           </div>
         </GraphTooltipTrigger>
 
         <GraphTooltipPortal>
-          <GraphTooltipContent side="right" sideOffset={10} className="max-w-[300px] p-0 overflow-hidden bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 border border-gray-200 dark:border-slate-700 shadow-xl">
+          <GraphTooltipContent
+            side="right"
+            sideOffset={10}
+            className="max-w-[300px] p-0 overflow-hidden bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 border border-gray-200 dark:border-slate-700 shadow-xl"
+          >
             <div
               className="px-3 py-2 border-b"
               style={{ backgroundColor: scriptColors.headerBg, borderColor: scriptColors.border }}
             >
-              <h4 className="font-semibold text-sm" style={{ color: scriptColors.text }}>{label}</h4>
+              <h4 className="font-semibold text-sm" style={{ color: scriptColors.text }}>
+                {label}
+              </h4>
               <p className="text-xs" style={{ color: scriptColors.textSecondary }}>
                 {statementCount} statement{statementCount !== 1 ? 's' : ''}
               </p>
@@ -83,7 +97,10 @@ function ScriptNodeComponent({ data, selected }: NodeProps): JSX.Element {
             <div className="p-3 space-y-3 text-xs">
               {tablesRead.length > 0 && (
                 <div>
-                  <div className="font-semibold mb-1 flex items-center gap-1" style={{ color: colors.status.success }}>
+                  <div
+                    className="font-semibold mb-1 flex items-center gap-1"
+                    style={{ color: colors.status.success }}
+                  >
                     <span
                       className="w-1.5 h-1.5 rounded-full"
                       style={{ backgroundColor: colors.status.success }}
@@ -93,7 +110,10 @@ function ScriptNodeComponent({ data, selected }: NodeProps): JSX.Element {
                   <div className="text-gray-600 dark:text-slate-300 pl-2.5 leading-relaxed">
                     {tablesRead.slice(0, UI_CONSTANTS.MAX_TOOLTIP_TABLES).join(', ')}
                     {tablesRead.length > UI_CONSTANTS.MAX_TOOLTIP_TABLES && (
-                      <span className="text-gray-400 dark:text-slate-500"> +{tablesRead.length - UI_CONSTANTS.MAX_TOOLTIP_TABLES} more</span>
+                      <span className="text-gray-400 dark:text-slate-500">
+                        {' '}
+                        +{tablesRead.length - UI_CONSTANTS.MAX_TOOLTIP_TABLES} more
+                      </span>
                     )}
                   </div>
                 </div>
@@ -101,7 +121,10 @@ function ScriptNodeComponent({ data, selected }: NodeProps): JSX.Element {
 
               {tablesWritten.length > 0 && (
                 <div>
-                  <div className="font-semibold mb-1 flex items-center gap-1" style={{ color: colors.status.info }}>
+                  <div
+                    className="font-semibold mb-1 flex items-center gap-1"
+                    style={{ color: colors.status.info }}
+                  >
                     <span
                       className="w-1.5 h-1.5 rounded-full"
                       style={{ backgroundColor: colors.status.info }}
@@ -111,14 +134,19 @@ function ScriptNodeComponent({ data, selected }: NodeProps): JSX.Element {
                   <div className="text-gray-600 dark:text-slate-300 pl-2.5 leading-relaxed">
                     {tablesWritten.slice(0, UI_CONSTANTS.MAX_TOOLTIP_TABLES).join(', ')}
                     {tablesWritten.length > UI_CONSTANTS.MAX_TOOLTIP_TABLES && (
-                      <span className="text-gray-400 dark:text-slate-500"> +{tablesWritten.length - UI_CONSTANTS.MAX_TOOLTIP_TABLES} more</span>
+                      <span className="text-gray-400 dark:text-slate-500">
+                        {' '}
+                        +{tablesWritten.length - UI_CONSTANTS.MAX_TOOLTIP_TABLES} more
+                      </span>
                     )}
                   </div>
                 </div>
               )}
 
               {tablesRead.length === 0 && tablesWritten.length === 0 && (
-                <div className="text-gray-400 dark:text-slate-500 italic">No table dependencies detected</div>
+                <div className="text-gray-400 dark:text-slate-500 italic">
+                  No table dependencies detected
+                </div>
               )}
             </div>
             <GraphTooltipArrow className="fill-white dark:fill-slate-800" />

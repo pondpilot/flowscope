@@ -11,7 +11,7 @@ export function useAnalysisWorkerInit() {
 
   const initializeWorker = useCallback(async (isRetry = false) => {
     if (isRetry) {
-      setState(prev => ({ ...prev, error: null, isRetrying: true }));
+      setState((prev) => ({ ...prev, error: null, isRetrying: true }));
     }
 
     try {

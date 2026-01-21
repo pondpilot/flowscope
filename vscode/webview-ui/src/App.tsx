@@ -24,7 +24,7 @@ interface Message {
   message?: string;
 }
 
-export function App(): JSX.Element {
+export function App() {
   const [result, setResult] = useState<AnalyzeResult | null>(null);
   const [sql, setSql] = useState<string>('');
   const [error, setError] = useState<string | null>(null);

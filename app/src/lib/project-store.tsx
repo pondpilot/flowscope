@@ -22,7 +22,7 @@ function validateProjectName(name: string, existingNames: string[]): string | nu
 
   // Check for duplicate names (case-insensitive)
   const lowerName = trimmed.toLowerCase();
-  if (existingNames.some(existing => existing.toLowerCase() === lowerName)) {
+  if (existingNames.some((existing) => existing.toLowerCase() === lowerName)) {
     return null;
   }
 
@@ -135,7 +135,7 @@ const saveProjectsToStorage = (projects: Project[]) => {
 const loadActiveProjectIdFromStorage = (projects: Project[]): string | null => {
   try {
     const saved = localStorage.getItem(STORAGE_KEYS.ACTIVE_PROJECT_ID);
-    if (saved && projects.some(p => p.id === saved)) {
+    if (saved && projects.some((p) => p.id === saved)) {
       return saved;
     }
   } catch (error) {
@@ -170,95 +170,114 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     saveActiveProjectIdToStorage(activeProjectId);
   }, [activeProjectId]);
 
-  const currentProject = projects.find(p => p.id === activeProjectId) || null;
+  const currentProject = projects.find((p) => p.id === activeProjectId) || null;
 
-  const createProject = useCallback((name: string) => {
-    const existingNames = projects.map(p => p.name);
-    const validatedName = validateProjectName(name, existingNames);
+  const createProject = useCallback(
+    (name: string) => {
+      const existingNames = projects.map((p) => p.name);
+      const validatedName = validateProjectName(name, existingNames);
 
-    if (!validatedName) {
-      return;
-    }
+      if (!validatedName) {
+        return;
+      }
 
-    const newProject: Project = {
-      id: uuidv4(),
-      name: validatedName,
-      files: [],
-      activeFileId: null,
-      dialect: 'generic',
-      runMode: 'all',
-      selectedFileIds: [],
-      schemaSQL: '',
-      templateMode: 'raw'
-    };
-    setProjects(prev => [...prev, newProject]);
-    setActiveProjectId(newProject.id);
-  }, [projects]);
+      const newProject: Project = {
+        id: uuidv4(),
+        name: validatedName,
+        files: [],
+        activeFileId: null,
+        dialect: 'generic',
+        runMode: 'all',
+        selectedFileIds: [],
+        schemaSQL: '',
+        templateMode: 'raw',
+      };
+      setProjects((prev) => [...prev, newProject]);
+      setActiveProjectId(newProject.id);
+    },
+    [projects]
+  );
 
-  const deleteProject = useCallback((id: string) => {
-    setProjects(prev => prev.filter(p => p.id !== id));
-    if (activeProjectId === id) {
-      setActiveProjectId(null);
-    }
-  }, [activeProjectId]);
+  const deleteProject = useCallback(
+    (id: string) => {
+      setProjects((prev) => prev.filter((p) => p.id !== id));
+      if (activeProjectId === id) {
+        setActiveProjectId(null);
+      }
+    },
+    [activeProjectId]
+  );
 
-  const renameProject = useCallback((id: string, newName: string) => {
-    // Exclude the project being renamed from the duplicate check
-    const existingNames = projects.filter(p => p.id !== id).map(p => p.name);
-    const validatedName = validateProjectName(newName, existingNames);
+  const renameProject = useCallback(
+    (id: string, newName: string) => {
+      // Exclude the project being renamed from the duplicate check
+      const existingNames = projects.filter((p) => p.id !== id).map((p) => p.name);
+      const validatedName = validateProjectName(newName, existingNames);
 
-    if (!validatedName) {
-      return;
-    }
+      if (!validatedName) {
+        return;
+      }
 
-    setProjects(prev => prev.map(p => {
-      if (p.id !== id) return p;
-      return { ...p, name: validatedName };
-    }));
-  }, [projects]);
+      setProjects((prev) =>
+        prev.map((p) => {
+          if (p.id !== id) return p;
+          return { ...p, name: validatedName };
+        })
+      );
+    },
+    [projects]
+  );
 
   const selectProject = useCallback((id: string) => {
     setActiveProjectId(id);
   }, []);
 
   const setProjectDialect = useCallback((projectId: string, dialect: Dialect) => {
-    setProjects(prev => prev.map(p => {
-      if (p.id !== projectId) return p;
-      return { ...p, dialect };
-    }));
+    setProjects((prev) =>
+      prev.map((p) => {
+        if (p.id !== projectId) return p;
+        return { ...p, dialect };
+      })
+    );
   }, []);
 
   const setRunMode = useCallback((projectId: string, mode: RunMode) => {
-    setProjects(prev => prev.map(p => {
-      if (p.id !== projectId) return p;
-      return { ...p, runMode: mode };
-    }));
+    setProjects((prev) =>
+      prev.map((p) => {
+        if (p.id !== projectId) return p;
+        return { ...p, runMode: mode };
+      })
+    );
   }, []);
 
   const setTemplateMode = useCallback((projectId: string, mode: TemplateMode) => {
-    setProjects(prev => prev.map(p => {
-      if (p.id !== projectId) return p;
-      return { ...p, templateMode: mode };
-    }));
+    setProjects((prev) =>
+      prev.map((p) => {
+        if (p.id !== projectId) return p;
+        return { ...p, templateMode: mode };
+      })
+    );
   }, []);
 
   const toggleFileSelection = useCallback((projectId: string, fileId: string) => {
-    setProjects(prev => prev.map(p => {
-      if (p.id !== projectId) return p;
-      const currentSelected = p.selectedFileIds || [];
-      const newSelected = currentSelected.includes(fileId)
-        ? currentSelected.filter(id => id !== fileId)
-        : [...currentSelected, fileId];
+    setProjects((prev) =>
+      prev.map((p) => {
+        if (p.id !== projectId) return p;
+        const currentSelected = p.selectedFileIds || [];
+        const newSelected = currentSelected.includes(fileId)
+          ? currentSelected.filter((id) => id !== fileId)
+          : [...currentSelected, fileId];
 
-      // Automatically switch runMode based on selection:
-      // - Selecting files implies the user wants 'custom' mode
-      // - Deselecting all files reverts to 'all' mode as a sensible default
-      return {
-        ...p,
-        selectedFileIds: newSelected,
-        runMode: newSelected.length > 0 ? 'custom' : 'all',
-      };
-    }));
+        // Automatically switch runMode based on selection:
+        // - Selecting files implies the user wants 'custom' mode
+        // - Deselecting all files reverts to 'all' mode as a sensible default
+        return {
+          ...p,
+          selectedFileIds: newSelected,
+          runMode: newSelected.length > 0 ? 'custom' : 'all',
+        };
+      })
+    );
   }, []);
 
   const getFileLanguage = (fileName: string): ProjectFile['language'] => {
@@ -267,94 +286,120 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     return 'text';
   };
 
-  const createFile = useCallback((name: string, content: string = '', path?: string) => {
-    if (!activeProjectId) return;
+  const createFile = useCallback(
+    (name: string, content: string = '', path?: string) => {
+      if (!activeProjectId) return;
 
-    const newFile: ProjectFile = {
-      id: uuidv4(),
-      name,
-      path: path || name, // Default path to filename if not provided
-      content,
-      language: getFileLanguage(name),
-    };
-
-    setProjects(prev =>
-      prev.map(p => {
-        if (p.id !== activeProjectId) return p;
-        return {
-          ...p,
-          files: [...p.files, newFile],
-          activeFileId: newFile.id,
-        };
-      })
-    );
-  }, [activeProjectId]);
-
-  const updateFile = useCallback((fileId: string, content: string) => {
-    if (!activeProjectId) return;
-    
-    setProjects(prev => prev.map(p => {
-      if (p.id !== activeProjectId) return p;
-      return {
-        ...p,
-        files: p.files.map(f => f.id === fileId ? { ...f, content } : f)
+      const newFile: ProjectFile = {
+        id: uuidv4(),
+        name,
+        path: path || name, // Default path to filename if not provided
+        content,
+        language: getFileLanguage(name),
       };
-    }));
-  }, [activeProjectId]);
 
-  const deleteFile = useCallback((fileId: string) => {
-    if (!activeProjectId) return;
+      setProjects((prev) =>
+        prev.map((p) => {
+          if (p.id !== activeProjectId) return p;
+          return {
+            ...p,
+            files: [...p.files, newFile],
+            activeFileId: newFile.id,
+          };
+        })
+      );
+    },
+    [activeProjectId]
+  );
 
-    setProjects(prev => prev.map(p => {
-      if (p.id !== activeProjectId) return p;
-      const remainingFiles = p.files.filter(f => f.id !== fileId);
-      return {
-        ...p,
-        files: remainingFiles,
-        activeFileId: p.activeFileId === fileId ? (remainingFiles[0]?.id || null) : p.activeFileId,
-        selectedFileIds: (p.selectedFileIds || []).filter(id => id !== fileId)
-      };
-    }));
-  }, [activeProjectId]);
+  const updateFile = useCallback(
+    (fileId: string, content: string) => {
+      if (!activeProjectId) return;
 
-  const renameFile = useCallback((fileId: string, newName: string) => {
-    if (!activeProjectId) return;
+      setProjects((prev) =>
+        prev.map((p) => {
+          if (p.id !== activeProjectId) return p;
+          return {
+            ...p,
+            files: p.files.map((f) => (f.id === fileId ? { ...f, content } : f)),
+          };
+        })
+      );
+    },
+    [activeProjectId]
+  );
 
-    setProjects(prev =>
-      prev.map(p => {
-        if (p.id !== activeProjectId) return p;
-        return {
-          ...p,
-          files: p.files.map(f => {
-            if (f.id !== fileId) return f;
-            const lastSlashIndex = f.path.lastIndexOf('/');
-            const newPath =
-              lastSlashIndex === -1 ? newName : `${f.path.slice(0, lastSlashIndex + 1)}${newName}`;
-            return {
-              ...f,
-              name: newName,
-              path: newPath,
-            };
-          }),
-        };
-      })
-    );
-  }, [activeProjectId]);
+  const deleteFile = useCallback(
+    (fileId: string) => {
+      if (!activeProjectId) return;
 
-  const selectFile = useCallback((fileId: string) => {
-    if (!activeProjectId) return;
+      setProjects((prev) =>
+        prev.map((p) => {
+          if (p.id !== activeProjectId) return p;
+          const remainingFiles = p.files.filter((f) => f.id !== fileId);
+          return {
+            ...p,
+            files: remainingFiles,
+            activeFileId:
+              p.activeFileId === fileId ? remainingFiles[0]?.id || null : p.activeFileId,
+            selectedFileIds: (p.selectedFileIds || []).filter((id) => id !== fileId),
+          };
+        })
+      );
+    },
+    [activeProjectId]
+  );
 
-    setProjects(prev => prev.map(p => {
-      if (p.id !== activeProjectId) return p;
-      return { ...p, activeFileId: fileId };
-    }));
-  }, [activeProjectId]);
+  const renameFile = useCallback(
+    (fileId: string, newName: string) => {
+      if (!activeProjectId) return;
+
+      setProjects((prev) =>
+        prev.map((p) => {
+          if (p.id !== activeProjectId) return p;
+          return {
+            ...p,
+            files: p.files.map((f) => {
+              if (f.id !== fileId) return f;
+              const lastSlashIndex = f.path.lastIndexOf('/');
+              const newPath =
+                lastSlashIndex === -1
+                  ? newName
+                  : `${f.path.slice(0, lastSlashIndex + 1)}${newName}`;
+              return {
+                ...f,
+                name: newName,
+                path: newPath,
+              };
+            }),
+          };
+        })
+      );
+    },
+    [activeProjectId]
+  );
+
+  const selectFile = useCallback(
+    (fileId: string) => {
+      if (!activeProjectId) return;
+
+      setProjects((prev) =>
+        prev.map((p) => {
+          if (p.id !== activeProjectId) return p;
+          return { ...p, activeFileId: fileId };
+        })
+      );
+    },
+    [activeProjectId]
+  );
 
   const updateSchemaSQL = useCallback((projectId: string, schemaSQL: string) => {
-    setProjects(prev => prev.map(p => {
-      if (p.id !== projectId) return p;
-      return { ...p, schemaSQL };
-    }));
+    setProjects((prev) =>
+      prev.map((p) => {
+        if (p.id !== projectId) return p;
+        return { ...p, schemaSQL };
+      })
+    );
   }, []);
 
   const importFiles = useCallback(
@@ -378,8 +423,8 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         });
       }
 
-      setProjects(prev =>
-        prev.map(p => {
+      setProjects((prev) =>
+        prev.map((p) => {
           if (p.id !== activeProjectId) return p;
           return {
             ...p,
@@ -392,53 +437,56 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     [activeProjectId]
   );
 
-  const importProject = useCallback((payload: SharePayload): string => {
-    // Generate unique name if collision (with safety limit)
-    const existingNames = projects.map(p => p.name.toLowerCase());
-    let name = payload.n;
-    let counter = 1;
-    while (
-      existingNames.includes(name.toLowerCase()) &&
-      counter <= SHARE_LIMITS.MAX_NAME_COLLISION_ATTEMPTS
-    ) {
-      name = `${payload.n} (${counter++})`;
-    }
-    // Fallback if we hit the limit
-    if (existingNames.includes(name.toLowerCase())) {
-      name = `${payload.n} (${Date.now()})`;
-    }
+  const importProject = useCallback(
+    (payload: SharePayload): string => {
+      // Generate unique name if collision (with safety limit)
+      const existingNames = projects.map((p) => p.name.toLowerCase());
+      let name = payload.n;
+      let counter = 1;
+      while (
+        existingNames.includes(name.toLowerCase()) &&
+        counter <= SHARE_LIMITS.MAX_NAME_COLLISION_ATTEMPTS
+      ) {
+        name = `${payload.n} (${counter++})`;
+      }
+      // Fallback if we hit the limit
+      if (existingNames.includes(name.toLowerCase())) {
+        name = `${payload.n} (${Date.now()})`;
+      }
 
-    // Create files with new IDs
-    const newFiles: ProjectFile[] = payload.f.map(f => ({
-      id: uuidv4(),
-      name: f.n,
-      path: f.p || f.n, // Use path if available, otherwise default to filename
-      content: f.c,
-      language: f.l || DEFAULT_FILE_LANGUAGE,
-    }));
+      // Create files with new IDs
+      const newFiles: ProjectFile[] = payload.f.map((f) => ({
+        id: uuidv4(),
+        name: f.n,
+        path: f.p || f.n, // Use path if available, otherwise default to filename
+        content: f.c,
+        language: f.l || DEFAULT_FILE_LANGUAGE,
+      }));
 
-    // Map selected file indices to new IDs
-    const selectedFileIds = (payload.sel || [])
-      .filter(i => i >= 0 && i < newFiles.length)
-      .map(i => newFiles[i].id);
+      // Map selected file indices to new IDs
+      const selectedFileIds = (payload.sel || [])
+        .filter((i) => i >= 0 && i < newFiles.length)
+        .map((i) => newFiles[i].id);
 
-    const newProject: Project = {
-      id: uuidv4(),
-      name,
-      files: newFiles,
-      activeFileId: newFiles[0]?.id || null,
-      dialect: payload.d,
-      runMode: payload.r,
-      selectedFileIds,
-      schemaSQL: payload.s,
-      templateMode: parseTemplateMode((payload as { t?: unknown }).t),
-    };
+      const newProject: Project = {
+        id: uuidv4(),
+        name,
+        files: newFiles,
+        activeFileId: newFiles[0]?.id || null,
+        dialect: payload.d,
+        runMode: payload.r,
+        selectedFileIds,
+        schemaSQL: payload.s,
+        templateMode: parseTemplateMode(payload.t),
+      };
 
-    setProjects(prev => [...prev, newProject]);
-    setActiveProjectId(newProject.id);
+      setProjects((prev) => [...prev, newProject]);
+      setActiveProjectId(newProject.id);
 
-    return name;
-  }, [projects]);
+      return name;
+    },
+    [projects]
+  );
 
   const value = {
     projects,
@@ -462,11 +510,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     importProject,
   };
 
-  return (
-    <ProjectContext.Provider value={value}>
-      {children}
-    </ProjectContext.Provider>
-  );
+  return <ProjectContext.Provider value={value}>{children}</ProjectContext.Provider>;
 }
 
 export function useProject() {

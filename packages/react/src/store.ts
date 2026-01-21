@@ -2,7 +2,16 @@ import { createContext, createElement, useContext, type ReactNode } from 'react'
 import { useStore } from 'zustand';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { AnalyzeResult, Span } from '@pondpilot/flowscope-core';
-import type { LineageViewMode, LayoutAlgorithm, LayoutMetrics, GraphBuildMetrics, NavigationRequest, MatrixSubMode, TableFilterDirection, TableFilter } from './types';
+import type {
+  LineageViewMode,
+  LayoutAlgorithm,
+  LayoutMetrics,
+  GraphBuildMetrics,
+  NavigationRequest,
+  MatrixSubMode,
+  TableFilterDirection,
+  TableFilter,
+} from './types';
 
 const DEFAULT_LAYOUT_ALGORITHM: LayoutAlgorithm = 'dagre';
 
@@ -82,7 +91,9 @@ function saveViewMode(mode: LineageViewMode): void {
   saveToStorage(STORAGE_KEYS.viewMode, mode);
 }
 
-function loadLayoutAlgorithm(defaultAlgorithm: LayoutAlgorithm = DEFAULT_LAYOUT_ALGORITHM): LayoutAlgorithm {
+function loadLayoutAlgorithm(
+  defaultAlgorithm: LayoutAlgorithm = DEFAULT_LAYOUT_ALGORITHM
+): LayoutAlgorithm {
   return loadFromStorage(
     STORAGE_KEYS.layoutAlgorithm,
     (v) => v === 'dagre' || v === 'elk',

@@ -31,7 +31,10 @@ const DEFAULT_MAX_SUGGESTIONS = 8;
  */
 function deduplicateSuggestions(items: SearchSuggestion[]): SearchSuggestion[] {
   // Group by label + type
-  const groups = new Map<string, { item: SearchSuggestion; count: number; contexts: Set<string> }>();
+  const groups = new Map<
+    string,
+    { item: SearchSuggestion; count: number; contexts: Set<string> }
+  >();
 
   for (const item of items) {
     const key = `${item.type}:${item.label.toLowerCase()}`;

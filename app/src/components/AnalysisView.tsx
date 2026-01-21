@@ -14,18 +14,8 @@ import { Button } from '@/components/ui/button';
 import { useGlobalShortcuts } from '@/hooks';
 import type { GlobalShortcut } from '@/hooks';
 import { getShortcutDisplay } from '@/lib/shortcuts';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePersistedLineageState } from '@/hooks/usePersistedLineageState';
 import { usePersistedMatrixState } from '@/hooks/usePersistedMatrixState';
 import { usePersistedSchemaState } from '@/hooks/usePersistedSchemaState';
@@ -116,7 +106,7 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
         setLineageFocusNodeId(navigationTarget.tableId);
       } else if (navigationTarget.fitView) {
         // Trigger fitView to show all nodes (e.g., from Issues panel)
-        setFitViewTrigger(prev => prev + 1);
+        setFitViewTrigger((prev) => prev + 1);
       }
       clearNavigationTarget();
     }
@@ -140,8 +130,8 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
   }, [result]);
 
   // Read namespace filter state from view state store
-  const storedNamespaceFilter = useViewStateStore(
-    (state) => activeProjectId ? state.viewStates[activeProjectId]?.namespaceFilter : undefined
+  const storedNamespaceFilter = useViewStateStore((state) =>
+    activeProjectId ? state.viewStates[activeProjectId]?.namespaceFilter : undefined
   );
   const namespaceFilter = useMemo(
     () => getNamespaceFilterStateWithDefaults(storedNamespaceFilter),
@@ -174,18 +164,24 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
     };
   }, [result]);
 
-  const handleSaveSchema = useCallback((schemaSQL: string) => {
-    if (activeProjectId) {
-      updateSchemaSQL(activeProjectId, schemaSQL);
-      // Analysis will be re-triggered automatically via useEffect in parent
-    }
-  }, [activeProjectId, updateSchemaSQL]);
+  const handleSaveSchema = useCallback(
+    (schemaSQL: string) => {
+      if (activeProjectId) {
+        updateSchemaSQL(activeProjectId, schemaSQL);
+        // Analysis will be re-triggered automatically via useEffect in parent
+      }
+    },
+    [activeProjectId, updateSchemaSQL]
+  );
 
-  const handleTabChange = useCallback((value: string) => {
-    if (isValidTab(value)) {
-      setActiveTab(value);
-    }
-  }, [setActiveTab]);
+  const handleTabChange = useCallback(
+    (value: string) => {
+      if (isValidTab(value)) {
+        setActiveTab(value);
+      }
+    },
+    [setActiveTab]
+  );
 
   // Ensure the active tab is always mounted (handles both user clicks and external changes)
   useEffect(() => {
@@ -202,111 +198,121 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
   }, [handleTabChange]);
 
   const summary = result?.summary;
-  const hasIssues = summary ? (summary.issueCount.errors > 0 || summary.issueCount.warnings > 0) : false;
+  const hasIssues = summary
+    ? summary.issueCount.errors > 0 || summary.issueCount.warnings > 0
+    : false;
 
   // Tab switching and schema editor shortcuts
   // Uses refs for frequently-changing values to avoid re-memoization on every state change
-  const tabShortcuts = useMemo<GlobalShortcut[]>(() => [
-    { key: '1', handler: () => handleTabChangeRef.current('lineage') },
-    { key: '2', handler: () => handleTabChangeRef.current('hierarchy') },
-    { key: '3', handler: () => handleTabChangeRef.current('matrix') },
-    { key: '4', handler: () => handleTabChangeRef.current('schema') },
-    { key: '5', handler: () => { if (hasIssues) handleTabChangeRef.current('issues'); } },
-    // Schema editor shortcut
-    {
-      key: 'k',
-      cmdOrCtrl: true,
-      shift: true,
-      handler: () => setSchemaEditorOpen(true),
-    },
-    // Lineage view shortcuts (only active when on lineage tab)
-    {
-      key: 'v',
-      handler: () => {
-        if (activeTabRef.current === 'lineage') {
-          const newMode = stateRef.current.viewMode === 'table' ? 'script' : 'table';
-          actionsRef.current.setViewMode(newMode);
-        }
+  const tabShortcuts = useMemo<GlobalShortcut[]>(
+    () => [
+      { key: '1', handler: () => handleTabChangeRef.current('lineage') },
+      { key: '2', handler: () => handleTabChangeRef.current('hierarchy') },
+      { key: '3', handler: () => handleTabChangeRef.current('matrix') },
+      { key: '4', handler: () => handleTabChangeRef.current('schema') },
+      {
+        key: '5',
+        handler: () => {
+          if (hasIssues) handleTabChangeRef.current('issues');
+        },
       },
-    },
-    {
-      key: 'c',
-      handler: () => {
-        if (activeTabRef.current === 'lineage') {
-          actionsRef.current.toggleColumnEdges();
-        }
+      // Schema editor shortcut
+      {
+        key: 'k',
+        cmdOrCtrl: true,
+        shift: true,
+        handler: () => setSchemaEditorOpen(true),
       },
-    },
-    {
-      key: 'e',
-      handler: () => {
-        if (activeTabRef.current === 'lineage') {
-          actionsRef.current.setAllNodesCollapsed(false); // Expand all
-        }
+      // Lineage view shortcuts (only active when on lineage tab)
+      {
+        key: 'v',
+        handler: () => {
+          if (activeTabRef.current === 'lineage') {
+            const newMode = stateRef.current.viewMode === 'table' ? 'script' : 'table';
+            actionsRef.current.setViewMode(newMode);
+          }
+        },
       },
-    },
-    {
-      key: 'e',
-      shift: true,
-      handler: () => {
-        if (activeTabRef.current === 'lineage') {
-          actionsRef.current.setAllNodesCollapsed(true); // Collapse all
-        }
+      {
+        key: 'c',
+        handler: () => {
+          if (activeTabRef.current === 'lineage') {
+            actionsRef.current.toggleColumnEdges();
+          }
+        },
       },
-    },
-    {
-      key: 't',
-      handler: () => {
-        if (activeTabRef.current === 'lineage') {
-          actionsRef.current.toggleShowScriptTables();
-        }
+      {
+        key: 'e',
+        handler: () => {
+          if (activeTabRef.current === 'lineage') {
+            actionsRef.current.setAllNodesCollapsed(false); // Expand all
+          }
+        },
       },
-    },
-    {
-      key: 'l',
-      handler: () => {
-        if (activeTabRef.current === 'lineage') {
-          const newLayout = stateRef.current.layoutAlgorithm === 'dagre' ? 'elk' : 'dagre';
-          actionsRef.current.setLayoutAlgorithm(newLayout);
-        }
+      {
+        key: 'e',
+        shift: true,
+        handler: () => {
+          if (activeTabRef.current === 'lineage') {
+            actionsRef.current.setAllNodesCollapsed(true); // Collapse all
+          }
+        },
       },
-    },
-    {
-      key: '/',
-      handler: () => {
-        // Focus the search input in the current view
-        if (activeTabRef.current === 'lineage') {
-          focusSearchInput('[data-graph-search-input]', 'lineage search');
-        } else if (activeTabRef.current === 'hierarchy') {
-          // Use ref for hierarchy view (app layer, full control)
-          hierarchyViewRef.current?.focusSearch();
-        } else if (activeTabRef.current === 'matrix') {
-          focusSearchInput('[data-matrix-search-input]', 'matrix search');
-        }
+      {
+        key: 't',
+        handler: () => {
+          if (activeTabRef.current === 'lineage') {
+            actionsRef.current.toggleShowScriptTables();
+          }
+        },
       },
-    },
-    // Matrix view shortcuts
-    {
-      key: 'h',
-      handler: () => {
-        if (activeTabRef.current === 'matrix') {
-          const ms = matrixStateRef.current;
-          const currentHeatmap = ms.controlledState.heatmapMode ?? false;
-          ms.onStateChange({ heatmapMode: !currentHeatmap });
-        }
+      {
+        key: 'l',
+        handler: () => {
+          if (activeTabRef.current === 'lineage') {
+            const newLayout = stateRef.current.layoutAlgorithm === 'dagre' ? 'elk' : 'dagre';
+            actionsRef.current.setLayoutAlgorithm(newLayout);
+          }
+        },
       },
-    },
-    {
-      key: 'x',
-      handler: () => {
-        if (activeTabRef.current === 'matrix') {
-          const ms = matrixStateRef.current;
-          const currentXRay = ms.controlledState.xRayMode ?? false;
-          ms.onStateChange({ xRayMode: !currentXRay });
-        }
+      {
+        key: '/',
+        handler: () => {
+          // Focus the search input in the current view
+          if (activeTabRef.current === 'lineage') {
+            focusSearchInput('[data-graph-search-input]', 'lineage search');
+          } else if (activeTabRef.current === 'hierarchy') {
+            // Use ref for hierarchy view (app layer, full control)
+            hierarchyViewRef.current?.focusSearch();
+          } else if (activeTabRef.current === 'matrix') {
+            focusSearchInput('[data-matrix-search-input]', 'matrix search');
+          }
+        },
       },
-    },
-  ], [hasIssues, focusSearchInput]);
+      // Matrix view shortcuts
+      {
+        key: 'h',
+        handler: () => {
+          if (activeTabRef.current === 'matrix') {
+            const ms = matrixStateRef.current;
+            const currentHeatmap = ms.controlledState.heatmapMode ?? false;
+            ms.onStateChange({ heatmapMode: !currentHeatmap });
+          }
+        },
+      },
+      {
+        key: 'x',
+        handler: () => {
+          if (activeTabRef.current === 'matrix') {
+            const ms = matrixStateRef.current;
+            const currentXRay = ms.controlledState.xRayMode ?? false;
+            ms.onStateChange({ xRayMode: !currentXRay });
+          }
+        },
+      },
+    ],
+    [hasIssues, focusSearchInput]
+  );
 
   useGlobalShortcuts(tabShortcuts);
 
@@ -333,7 +339,11 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
 
   return (
     <div className="flex flex-col h-full bg-background">
-      <Tabs value={activeTab} onValueChange={handleTabChange} className="flex-1 flex flex-col min-h-0">
+      <Tabs
+        value={activeTab}
+        onValueChange={handleTabChange}
+        className="flex-1 flex flex-col min-h-0"
+      >
         <div className="px-4 py-2 border-b flex items-center justify-between bg-muted/10 h-[44px] shrink-0">
           <TabsList>
             <TabsTrigger value="lineage">Lineage</TabsTrigger>
@@ -371,7 +381,9 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
                 <TooltipContent>
                   <p className="flex items-center gap-2">
                     Edit schema
-                    <kbd className="px-1.5 py-0.5 text-xs bg-muted rounded border font-mono">{getShortcutDisplay('edit-schema')}</kbd>
+                    <kbd className="px-1.5 py-0.5 text-xs bg-muted rounded border font-mono">
+                      {getShortcutDisplay('edit-schema')}
+                    </kbd>
                   </p>
                 </TooltipContent>
               </Tooltip>
@@ -390,7 +402,11 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
 
         <div className="flex-1 overflow-hidden relative">
           {/* forceMount keeps components mounted when switching tabs to preserve state */}
-          <TabsContent value="lineage" forceMount className="h-full mt-0 p-0 absolute inset-0 data-[state=inactive]:hidden">
+          <TabsContent
+            value="lineage"
+            forceMount
+            className="h-full mt-0 p-0 absolute inset-0 data-[state=inactive]:hidden"
+          >
             <GraphErrorBoundary>
               <GraphView
                 graphContainerRef={graphContainerRef}
@@ -407,15 +423,27 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
             </GraphErrorBoundary>
           </TabsContent>
 
-          <TabsContent value="hierarchy" forceMount className="h-full mt-0 p-0 absolute inset-0 data-[state=inactive]:hidden">
+          <TabsContent
+            value="hierarchy"
+            forceMount
+            className="h-full mt-0 p-0 absolute inset-0 data-[state=inactive]:hidden"
+          >
             {mountedTabs.has('hierarchy') && (
               <GraphErrorBoundary>
-                <HierarchyView ref={hierarchyViewRef} className="h-full" projectId={activeProjectId} />
+                <HierarchyView
+                  ref={hierarchyViewRef}
+                  className="h-full"
+                  projectId={activeProjectId}
+                />
               </GraphErrorBoundary>
             )}
           </TabsContent>
 
-          <TabsContent value="matrix" forceMount className="h-full mt-0 p-0 absolute inset-0 data-[state=inactive]:hidden">
+          <TabsContent
+            value="matrix"
+            forceMount
+            className="h-full mt-0 p-0 absolute inset-0 data-[state=inactive]:hidden"
+          >
             {mountedTabs.has('matrix') && (
               <MatrixView
                 className="h-full"
@@ -425,7 +453,11 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
             )}
           </TabsContent>
 
-          <TabsContent value="schema" forceMount className="h-full mt-0 p-0 absolute inset-0 data-[state=inactive]:hidden">
+          <TabsContent
+            value="schema"
+            forceMount
+            className="h-full mt-0 p-0 absolute inset-0 data-[state=inactive]:hidden"
+          >
             {mountedTabs.has('schema') && (
               <SchemaView
                 schema={schema}
@@ -436,9 +468,16 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
           </TabsContent>
 
           {hasIssues && activeProjectId && (
-            <TabsContent value="issues" forceMount className="h-full mt-0 overflow-auto p-0 absolute inset-0 data-[state=inactive]:hidden">
+            <TabsContent
+              value="issues"
+              forceMount
+              className="h-full mt-0 overflow-auto p-0 absolute inset-0 data-[state=inactive]:hidden"
+            >
               {mountedTabs.has('issues') && (
-                <SchemaAwareIssuesPanel projectId={activeProjectId} onOpenSchemaEditor={() => setSchemaEditorOpen(true)} />
+                <SchemaAwareIssuesPanel
+                  projectId={activeProjectId}
+                  onOpenSchemaEditor={() => setSchemaEditorOpen(true)}
+                />
               )}
             </TabsContent>
           )}

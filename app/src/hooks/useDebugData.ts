@@ -95,13 +95,15 @@ export function useDebugData(): DebugData {
 
   const debugData = useMemo<DebugData>(() => {
     const currentProject = projectContext?.currentProject;
-    const activeFile = currentProject?.files.find(
-      (f) => f.id === currentProject.activeFileId
-    );
+    const activeFile = currentProject?.files.find((f) => f.id === currentProject.activeFileId);
 
     const resolvedSchema = lineageState.result?.resolvedSchema;
-    const importedCount = resolvedSchema?.tables?.filter((t: ResolvedSchemaTable) => t.origin === 'imported').length ?? 0;
-    const impliedCount = resolvedSchema?.tables?.filter((t: ResolvedSchemaTable) => t.origin === 'implied').length ?? 0;
+    const importedCount =
+      resolvedSchema?.tables?.filter((t: ResolvedSchemaTable) => t.origin === 'imported').length ??
+      0;
+    const impliedCount =
+      resolvedSchema?.tables?.filter((t: ResolvedSchemaTable) => t.origin === 'implied').length ??
+      0;
 
     const metrics = currentProject?.id ? getMetrics(currentProject.id) : null;
 
@@ -126,8 +128,14 @@ export function useDebugData(): DebugData {
           nodeCount: lineageState.result?.globalLineage?.nodes?.length ?? 0,
           edgeCount: lineageState.result?.globalLineage?.edges?.length ?? 0,
           tableNodes: (lineageState.result?.globalLineage?.nodes ?? [])
-            .filter((n: { type: string }) => n.type === 'table' || n.type === 'view' || n.type === 'cte')
-            .map((n: { id: string; label: string; type: string }) => ({ id: n.id, label: n.label, type: n.type })),
+            .filter(
+              (n: { type: string }) => n.type === 'table' || n.type === 'view' || n.type === 'cte'
+            )
+            .map((n: { id: string; label: string; type: string }) => ({
+              id: n.id,
+              label: n.label,
+              type: n.type,
+            })),
         },
       },
       schema: {
@@ -140,7 +148,10 @@ export function useDebugData(): DebugData {
         rawResult: lineageState.result, // Full result to inspect all fields
         parseDebug: {
           parsedTableCount: getLastParseResult()?.resolvedSchema?.tables?.length ?? 0,
-          parseErrors: getLastParseResult()?.issues?.filter((i: Issue) => i.severity === 'error').map((i: Issue) => i.message) ?? [],
+          parseErrors:
+            getLastParseResult()
+              ?.issues?.filter((i: Issue) => i.severity === 'error')
+              .map((i: Issue) => i.message) ?? [],
           parseResult: getLastParseResult(),
         },
       },

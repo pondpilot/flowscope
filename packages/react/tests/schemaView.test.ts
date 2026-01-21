@@ -316,10 +316,7 @@ describe('buildSchemaFlowEdges', () => {
       },
       {
         name: 'order_items',
-        columns: [
-          { name: 'id', isPrimaryKey: true },
-          { name: 'order_id' },
-        ],
+        columns: [{ name: 'id', isPrimaryKey: true }, { name: 'order_id' }],
         constraints: [
           {
             constraintType: 'foreign_key',

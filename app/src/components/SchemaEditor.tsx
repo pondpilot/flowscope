@@ -20,23 +20,21 @@ interface SchemaEditorProps {
   onSave: (schemaSQL: string) => void;
 }
 
-export function SchemaEditor({
-  open,
-  onOpenChange,
-  schemaSQL,
-  onSave,
-}: SchemaEditorProps) {
+export function SchemaEditor({ open, onOpenChange, schemaSQL, onSave }: SchemaEditorProps) {
   const [editedSQL, setEditedSQL] = useState(schemaSQL);
   const theme = useThemeStore((state) => state.theme);
   const isDark = resolveTheme(theme) === 'dark';
 
   // Reset to prop value when dialog opens
-  const handleOpenChange = useCallback((newOpen: boolean) => {
-    if (newOpen) {
-      setEditedSQL(schemaSQL);
-    }
-    onOpenChange(newOpen);
-  }, [schemaSQL, onOpenChange]);
+  const handleOpenChange = useCallback(
+    (newOpen: boolean) => {
+      if (newOpen) {
+        setEditedSQL(schemaSQL);
+      }
+      onOpenChange(newOpen);
+    },
+    [schemaSQL, onOpenChange]
+  );
 
   const handleSave = useCallback(() => {
     onSave(editedSQL);
@@ -54,8 +52,8 @@ export function SchemaEditor({
         <DialogHeader>
           <DialogTitle>Edit Schema</DialogTitle>
           <DialogDescription>
-            Define your database schema using CREATE TABLE statements. This schema will be
-            used to augment the lineage analysis without appearing in the graph.
+            Define your database schema using CREATE TABLE statements. This schema will be used to
+            augment the lineage analysis without appearing in the graph.
           </DialogDescription>
         </DialogHeader>
 
@@ -73,9 +71,7 @@ export function SchemaEditor({
           <Button variant="outline" onClick={handleCancel}>
             Cancel
           </Button>
-          <Button onClick={handleSave}>
-            Save Schema
-          </Button>
+          <Button onClick={handleSave}>Save Schema</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

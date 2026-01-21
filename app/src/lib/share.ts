@@ -2,8 +2,9 @@
  * Share utilities for encoding/decoding project data into URLs
  */
 import { gzipSync, gunzipSync, strToU8, strFromU8 } from 'fflate';
-import type { Project, Dialect, RunMode } from './project-store';
+import type { Project, Dialect, RunMode, TemplateMode } from './project-store';
 import { SHARE_LIMITS } from './constants';
+import { isValidTemplateMode } from '@/types';
 
 const SHARE_URL_SOFT_LIMIT = SHARE_LIMITS.URL_SOFT_LIMIT;
 const SHARE_URL_HARD_LIMIT = SHARE_LIMITS.URL_HARD_LIMIT;
@@ -17,6 +18,7 @@ export interface SharePayload {
   n: string; // name
   d: Dialect; // dialect
   r: RunMode; // runMode
+  t?: TemplateMode; // templateMode (optional for backwards compatibility)
   s: string; // schemaSQL
   f: Array<{
     n: string; // name
@@ -47,10 +49,7 @@ function base64UrlEncode(data: Uint8Array): string {
     const chunk = data.subarray(i, i + chunkSize);
     binary += String.fromCharCode.apply(null, chunk as unknown as number[]);
   }
-  return btoa(binary)
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 /**
@@ -86,7 +85,7 @@ export function encodeProject(project: Project, options: EncodeOptions = {}): En
 
   // Filter files if fileIds provided
   const filesToShare = fileIds
-    ? project.files.filter(f => fileIds.includes(f.id))
+    ? project.files.filter((f) => fileIds.includes(f.id))
     : project.files;
 
   if (filesToShare.length === 0) {
@@ -105,8 +104,9 @@ export function encodeProject(project: Project, options: EncodeOptions = {}): En
     n: project.name,
     d: project.dialect,
     r: project.runMode,
+    t: project.templateMode,
     s: includeSchema ? project.schemaSQL : '',
-    f: filesToShare.map(f => ({
+    f: filesToShare.map((f) => ({
       n: f.name,
       c: f.content,
       // Only include path if it differs from name (saves space for flat file structures)
@@ -118,8 +118,8 @@ export function encodeProject(project: Project, options: EncodeOptions = {}): En
   // Add selected file indices if in custom mode (relative to shared files)
   if (project.runMode === 'custom' && project.selectedFileIds.length > 0) {
     const indices = project.selectedFileIds
-      .map(id => filesToShare.findIndex(f => f.id === id))
-      .filter(i => i >= 0);
+      .map((id) => filesToShare.findIndex((f) => f.id === id))
+      .filter((i) => i >= 0);
     if (indices.length > 0) {
       payload.sel = indices;
     }
@@ -233,6 +233,9 @@ function validatePayload(payload: unknown): SharePayload | null {
   }
 
   if (p.s !== undefined && typeof p.s !== 'string') {
+    return null;
+  }
+  if (p.t !== undefined && !isValidTemplateMode(p.t)) {
     return null;
   }
 

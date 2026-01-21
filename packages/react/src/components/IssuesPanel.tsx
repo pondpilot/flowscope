@@ -8,9 +8,10 @@ export function IssuesPanel({ className, onIssueClick }: IssuesPanelProps): JSX.
   const { state, actions } = useLineage();
   const { result } = state;
 
-  const sortedIssues = result?.issues
-    .slice()
-    .sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]) || [];
+  const sortedIssues =
+    result?.issues
+      .slice()
+      .sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]) || [];
 
   const handleIssueClick = (issue: Issue) => {
     if (issue.span) {
@@ -40,9 +41,7 @@ export function IssuesPanel({ className, onIssueClick }: IssuesPanelProps): JSX.
           {errors > 0 && <span className="flowscope-count-error">{errors} errors</span>}
           {warnings > 0 && <span className="flowscope-count-warning">{warnings} warnings</span>}
           {infos > 0 && <span className="flowscope-count-info">{infos} info</span>}
-          {sortedIssues.length === 0 && (
-            <span className="flowscope-count-success">No issues</span>
-          )}
+          {sortedIssues.length === 0 && <span className="flowscope-count-success">No issues</span>}
         </div>
       </div>
       <div className="flowscope-panel-content">

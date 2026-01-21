@@ -91,7 +91,10 @@ function readLayoutCache<N extends NodeData>(nodes: Node<N>[], cacheKey: string)
   return applyPositionsToNodes(nodes, cached.positions);
 }
 
-function writeLayoutCache(cacheKey: string, positions: Record<string, { x: number; y: number }>): void {
+function writeLayoutCache(
+  cacheKey: string,
+  positions: Record<string, { x: number; y: number }>
+): void {
   if (Object.keys(positions).length === 0) {
     return;
   }
@@ -102,7 +105,9 @@ function writeLayoutCache(cacheKey: string, positions: Record<string, { x: numbe
     return;
   }
 
-  const entries = Array.from(layoutCache.entries()).sort((left, right) => left[1].lastUsedAt - right[1].lastUsedAt);
+  const entries = Array.from(layoutCache.entries()).sort(
+    (left, right) => left[1].lastUsedAt - right[1].lastUsedAt
+  );
   while (entries.length > LAYOUT_CACHE_LIMIT) {
     const entry = entries.shift();
     if (entry) {
@@ -111,7 +116,10 @@ function writeLayoutCache(cacheKey: string, positions: Record<string, { x: numbe
   }
 }
 
-export function getFastLayoutedNodes<N extends NodeData>(nodes: Node<N>[], direction: 'LR' | 'TB'): Node<N>[] {
+export function getFastLayoutedNodes<N extends NodeData>(
+  nodes: Node<N>[],
+  direction: 'LR' | 'TB'
+): Node<N>[] {
   if (nodes.length === 0) {
     return nodes;
   }
@@ -298,7 +306,10 @@ export function getLayoutedElements<N extends NodeData, E extends Record<string,
 /**
  * Async version for ELK layout - use this when you need ELK specifically.
  */
-export async function getLayoutedElementsAsync<N extends NodeData, E extends Record<string, unknown>>(
+export async function getLayoutedElementsAsync<
+  N extends NodeData,
+  E extends Record<string, unknown>,
+>(
   nodes: Node<N>[],
   edges: Edge<E>[],
   direction: 'LR' | 'TB' = 'LR',
@@ -319,7 +330,10 @@ export async function getLayoutedElementsAsync<N extends NodeData, E extends Rec
  *
  * This is the preferred method for large graphs as it keeps the UI responsive.
  */
-export async function getLayoutedElementsInWorker<N extends NodeData, E extends Record<string, unknown>>(
+export async function getLayoutedElementsInWorker<
+  N extends NodeData,
+  E extends Record<string, unknown>,
+>(
   nodes: Node<N>[],
   edges: Edge<E>[],
   direction: 'LR' | 'TB' = 'LR',

@@ -126,15 +126,7 @@ export type GraphDetailLevel = 'script' | 'table' | 'column';
 export type MermaidView = 'all' | 'script' | 'table' | 'column' | 'hybrid';
 
 /** Export format identifiers. */
-export type ExportFormat =
-  | 'json'
-  | 'mermaid'
-  | 'html'
-  | 'sql'
-  | 'csv'
-  | 'xlsx'
-  | 'duckdb'
-  | 'png';
+export type ExportFormat = 'json' | 'mermaid' | 'html' | 'sql' | 'csv' | 'xlsx' | 'duckdb' | 'png';
 
 /** Options controlling the analysis behavior. */
 export interface AnalysisOptions {
