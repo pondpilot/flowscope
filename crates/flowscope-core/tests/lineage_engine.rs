@@ -6830,3 +6830,90 @@ fn backward_inference_cycle_detection() {
         "Data flow edges should exist from shared_source.id (referenced through both branches)"
     );
 }
+
+// Task 1: Tier 1 Edge Cases - Lineage assertions
+
+#[test]
+fn nested_joins_track_all_tables() {
+    // Level 3: Triple-nested join with parentheses
+    let sql = r#"
+        SELECT
+            o.order_id,
+            c.email,
+            p.product_name,
+            s.supplier_name
+        FROM
+            (
+                (
+                    (
+                        orders o
+                        JOIN customers c ON c.customer_id = o.customer_id
+                    )
+                    JOIN products p ON p.product_id = o.product_id
+                )
+                JOIN suppliers s ON s.supplier_id = p.supplier_id
+            )
+        WHERE c.email = 'sample@example.com'
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let tables = collect_table_names(&result);
+
+    // All four tables should be tracked through nested join structure
+    for expected in ["orders", "customers", "products", "suppliers"] {
+        assert!(
+            tables.contains(expected),
+            "nested join should track table {expected}; saw {tables:?}"
+        );
+    }
+
+    let stmt = first_statement(&result);
+
+    // Verify output columns are present
+    let columns = column_labels(stmt);
+    for expected in ["order_id", "email", "product_name", "supplier_name"] {
+        assert!(
+            columns.contains(&expected.to_string()),
+            "expected column {expected} in output; saw {columns:?}"
+        );
+    }
+
+    // Verify data flow edges exist (joins create data flow between tables)
+    let data_flow_edges = edges_by_type(stmt, EdgeType::DataFlow);
+    assert!(
+        !data_flow_edges.is_empty(),
+        "expected data flow edges for 4-way join"
+    );
+}
+
+#[test]
+fn postgres_array_slicing_tracks_source_table() {
+    let sql = r#"
+        SELECT a[:], b[:1], c[2:], d[2:3]
+        FROM array_data
+    "#;
+
+    let result = run_analysis(sql, Dialect::Postgres, None);
+    let tables = collect_table_names(&result);
+
+    assert!(
+        tables.contains("array_data"),
+        "array slicing query should track source table; saw {tables:?}"
+    );
+
+    let stmt = first_statement(&result);
+
+    // Verify the statement was parsed without errors
+    assert!(
+        !result.summary.has_errors,
+        "array slicing query should parse without errors: {:?}",
+        result.issues
+    );
+
+    // Verify the table node exists
+    let table_node = find_table_node(stmt, "array_data");
+    assert!(
+        table_node.is_some(),
+        "array_data table node should exist in lineage"
+    );
+}

@@ -28,6 +28,29 @@ fn run_snapshot_test(name: &str, sql: &str) {
     });
 }
 
+fn run_postgres_snapshot_test(name: &str, sql: &str) {
+    let request = AnalyzeRequest {
+        sql: sql.to_string(),
+        files: None,
+        dialect: Dialect::Postgres,
+        source_name: None,
+        options: None,
+        schema: None,
+        #[cfg(feature = "templating")]
+        template_config: None,
+    };
+
+    let result = analyze(&request);
+    let clean_result = prepare_for_snapshot(result);
+
+    let mut settings = Settings::clone_current();
+    settings.set_snapshot_suffix(name);
+
+    settings.bind(|| {
+        assert_json_snapshot!(clean_result);
+    });
+}
+
 #[test]
 fn test_complex_cte_join() {
     let sql = r#"
@@ -96,4 +119,83 @@ fn test_dml_merge_statement() {
     "#;
 
     run_snapshot_test("dml_merge_statement", sql);
+}
+
+// Edge case fixtures - Task 1: Tier 1 Edge Cases
+
+#[test]
+fn test_bracket_in_comment() {
+    let sql = r#"
+        -- Comment containing closing bracket/paren that should not affect parsing
+        SELECT a
+        /*
+        )
+        */
+        FROM b;
+    "#;
+
+    run_snapshot_test("bracket_in_comment", sql);
+}
+
+#[test]
+fn test_nested_joins_level3() {
+    let sql = r#"
+        -- Level 3: Triple-nested join
+        SELECT
+            o.order_id,
+            c.email,
+            p.product_name,
+            s.supplier_name
+        FROM
+            (
+                (
+                    (
+                        orders o
+                        JOIN customers c ON c.customer_id = o.customer_id
+                    )
+                    JOIN products p ON p.product_id = o.product_id
+                )
+                JOIN suppliers s ON s.supplier_id = p.supplier_id
+            )
+        WHERE c.email = 'sample@example.com';
+    "#;
+
+    run_snapshot_test("nested_joins_level3", sql);
+}
+
+#[test]
+fn test_expression_recursion_stress() {
+    let sql = r#"
+        SELECT id, name, status
+        FROM items
+        WHERE
+            status = 'a' OR status = 'b' OR status = 'c' OR status = 'd' OR status = 'e'
+            OR status = 'f' OR status = 'g' OR status = 'h' OR status = 'i' OR status = 'j'
+            OR status = 'k' OR status = 'l' OR status = 'm' OR status = 'n' OR status = 'o'
+            OR status = 'p' OR status = 'q' OR status = 'r' OR status = 's' OR status = 't'
+            OR status = 'u' OR status = 'v' OR status = 'w' OR status = 'x' OR status = 'y'
+            OR status = 'z' OR status = 'aa' OR status = 'ab' OR status = 'ac' OR status = 'ad'
+            OR status = 'ae' OR status = 'af' OR status = 'ag' OR status = 'ah' OR status = 'ai'
+            OR status = 'aj' OR status = 'ak' OR status = 'al' OR status = 'am' OR status = 'an'
+            OR status = 'ao' OR status = 'ap';
+    "#;
+
+    run_snapshot_test("expression_recursion_stress", sql);
+}
+
+#[test]
+fn test_empty_input() {
+    let sql = "";
+    run_snapshot_test("empty_input", sql);
+}
+
+#[test]
+fn test_postgres_array_slicing() {
+    let sql = r#"
+        -- PostgreSQL array slicing syntax variations
+        SELECT a[:], b[:1], c[2:], d[2:3]
+        FROM array_data;
+    "#;
+
+    run_postgres_snapshot_test("postgres_array_slicing", sql);
 }

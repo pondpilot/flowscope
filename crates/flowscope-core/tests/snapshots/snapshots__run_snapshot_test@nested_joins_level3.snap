@@ -1,0 +1,645 @@
+---
+source: crates/flowscope-core/tests/snapshots.rs
+expression: clean_result
+---
+{
+  "statements": [
+    {
+      "statementIndex": 0,
+      "statementType": "SELECT",
+      "nodes": [
+        {
+          "id": "column_087b7e48b6c97660",
+          "type": "column",
+          "label": "supplier_name"
+        },
+        {
+          "id": "column_11dd4284c883d245",
+          "type": "column",
+          "label": "email"
+        },
+        {
+          "id": "column_294e2368a65dc2b2",
+          "type": "column",
+          "label": "order_id",
+          "qualifiedName": "orders.order_id"
+        },
+        {
+          "id": "column_52f3cd32be0b3d40",
+          "type": "column",
+          "label": "product_name",
+          "qualifiedName": "products.product_name"
+        },
+        {
+          "id": "column_68824a617e7c7079",
+          "type": "column",
+          "label": "supplier_name",
+          "qualifiedName": "suppliers.supplier_name"
+        },
+        {
+          "id": "column_7021a839d96cf205",
+          "type": "column",
+          "label": "order_id"
+        },
+        {
+          "id": "column_86b7a87819f6125b",
+          "type": "column",
+          "label": "product_name"
+        },
+        {
+          "id": "column_c7ce485a3125265a",
+          "type": "column",
+          "label": "email",
+          "qualifiedName": "customers.email"
+        },
+        {
+          "id": "output_b558dd754c71cfa6",
+          "type": "output",
+          "label": "Output"
+        },
+        {
+          "id": "table_4ce0fb06426c39fb",
+          "type": "table",
+          "label": "suppliers",
+          "qualifiedName": "suppliers",
+          "joinType": "INNER",
+          "joinCondition": "s.supplier_id = p.supplier_id"
+        },
+        {
+          "id": "table_7253befe2c400508",
+          "type": "table",
+          "label": "products",
+          "qualifiedName": "products",
+          "joinType": "INNER",
+          "joinCondition": "p.product_id = o.product_id"
+        },
+        {
+          "id": "table_e500054d128e991c",
+          "type": "table",
+          "label": "customers",
+          "qualifiedName": "customers",
+          "filters": [
+            {
+              "expression": "c.email = 'sample@example.com'",
+              "clauseType": "WHERE"
+            }
+          ],
+          "joinType": "INNER",
+          "joinCondition": "c.customer_id = o.customer_id"
+        },
+        {
+          "id": "table_eaa6ebb8f158751f",
+          "type": "table",
+          "label": "orders",
+          "qualifiedName": "orders"
+        }
+      ],
+      "edges": [
+        {
+          "id": "edge_474dbb9f7be1aa81",
+          "from": "table_7253befe2c400508",
+          "to": "column_52f3cd32be0b3d40",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_52c9c774e1c2efa0",
+          "from": "output_b558dd754c71cfa6",
+          "to": "column_11dd4284c883d245",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_5c25d189c2e2f4f2",
+          "from": "column_52f3cd32be0b3d40",
+          "to": "column_86b7a87819f6125b",
+          "type": "data_flow"
+        },
+        {
+          "id": "edge_5f530d5e48d4edc2",
+          "from": "column_c7ce485a3125265a",
+          "to": "column_11dd4284c883d245",
+          "type": "data_flow"
+        },
+        {
+          "id": "edge_6e2a9d0805aed929",
+          "from": "column_68824a617e7c7079",
+          "to": "column_087b7e48b6c97660",
+          "type": "data_flow"
+        },
+        {
+          "id": "edge_7ba4d705ab735ae9",
+          "from": "output_b558dd754c71cfa6",
+          "to": "column_86b7a87819f6125b",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_7cd923168b222fa0",
+          "from": "table_4ce0fb06426c39fb",
+          "to": "column_68824a617e7c7079",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_b2c886eb23cb3433",
+          "from": "table_e500054d128e991c",
+          "to": "column_c7ce485a3125265a",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_b9ef57f9abab8f9c",
+          "from": "output_b558dd754c71cfa6",
+          "to": "column_7021a839d96cf205",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_fa057b597723c73b",
+          "from": "table_eaa6ebb8f158751f",
+          "to": "column_294e2368a65dc2b2",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_fa6d31fe0ff2d48c",
+          "from": "column_294e2368a65dc2b2",
+          "to": "column_7021a839d96cf205",
+          "type": "data_flow"
+        },
+        {
+          "id": "edge_fc62022a3044cc37",
+          "from": "output_b558dd754c71cfa6",
+          "to": "column_087b7e48b6c97660",
+          "type": "ownership"
+        }
+      ],
+      "joinCount": 3,
+      "complexityScore": 52
+    }
+  ],
+  "globalLineage": {
+    "nodes": [
+      {
+        "id": "column_087b7e48b6c97660",
+        "type": "column",
+        "label": "supplier_name",
+        "canonicalName": {
+          "name": "supplier_name"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_087b7e48b6c97660"
+          }
+        ]
+      },
+      {
+        "id": "column_11dd4284c883d245",
+        "type": "column",
+        "label": "email",
+        "canonicalName": {
+          "name": "email"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_11dd4284c883d245"
+          }
+        ]
+      },
+      {
+        "id": "column_294e2368a65dc2b2",
+        "type": "column",
+        "label": "order_id",
+        "canonicalName": {
+          "schema": "orders",
+          "name": "order_id"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_294e2368a65dc2b2"
+          }
+        ]
+      },
+      {
+        "id": "column_52f3cd32be0b3d40",
+        "type": "column",
+        "label": "product_name",
+        "canonicalName": {
+          "schema": "products",
+          "name": "product_name"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_52f3cd32be0b3d40"
+          }
+        ]
+      },
+      {
+        "id": "column_68824a617e7c7079",
+        "type": "column",
+        "label": "supplier_name",
+        "canonicalName": {
+          "schema": "suppliers",
+          "name": "supplier_name"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_68824a617e7c7079"
+          }
+        ]
+      },
+      {
+        "id": "column_7021a839d96cf205",
+        "type": "column",
+        "label": "order_id",
+        "canonicalName": {
+          "name": "order_id"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_7021a839d96cf205"
+          }
+        ]
+      },
+      {
+        "id": "column_86b7a87819f6125b",
+        "type": "column",
+        "label": "product_name",
+        "canonicalName": {
+          "name": "product_name"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_86b7a87819f6125b"
+          }
+        ]
+      },
+      {
+        "id": "column_c7ce485a3125265a",
+        "type": "column",
+        "label": "email",
+        "canonicalName": {
+          "schema": "customers",
+          "name": "email"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_c7ce485a3125265a"
+          }
+        ]
+      },
+      {
+        "id": "output_b558dd754c71cfa6",
+        "type": "output",
+        "label": "Output",
+        "canonicalName": {
+          "name": "Output"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "output_b558dd754c71cfa6"
+          }
+        ]
+      },
+      {
+        "id": "table_4ce0fb06426c39fb",
+        "type": "table",
+        "label": "suppliers",
+        "canonicalName": {
+          "name": "suppliers"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "table_4ce0fb06426c39fb"
+          }
+        ]
+      },
+      {
+        "id": "table_7253befe2c400508",
+        "type": "table",
+        "label": "products",
+        "canonicalName": {
+          "name": "products"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "table_7253befe2c400508"
+          }
+        ]
+      },
+      {
+        "id": "table_e500054d128e991c",
+        "type": "table",
+        "label": "customers",
+        "canonicalName": {
+          "name": "customers"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "table_e500054d128e991c"
+          }
+        ]
+      },
+      {
+        "id": "table_eaa6ebb8f158751f",
+        "type": "table",
+        "label": "orders",
+        "canonicalName": {
+          "name": "orders"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "table_eaa6ebb8f158751f"
+          }
+        ]
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge_474dbb9f7be1aa81",
+        "from": "table_7253befe2c400508",
+        "to": "column_52f3cd32be0b3d40",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_52c9c774e1c2efa0",
+        "from": "output_b558dd754c71cfa6",
+        "to": "column_11dd4284c883d245",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_5c25d189c2e2f4f2",
+        "from": "column_52f3cd32be0b3d40",
+        "to": "column_86b7a87819f6125b",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_5f530d5e48d4edc2",
+        "from": "column_c7ce485a3125265a",
+        "to": "column_11dd4284c883d245",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_6e2a9d0805aed929",
+        "from": "column_68824a617e7c7079",
+        "to": "column_087b7e48b6c97660",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_7ba4d705ab735ae9",
+        "from": "output_b558dd754c71cfa6",
+        "to": "column_86b7a87819f6125b",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_7cd923168b222fa0",
+        "from": "table_4ce0fb06426c39fb",
+        "to": "column_68824a617e7c7079",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_b2c886eb23cb3433",
+        "from": "table_e500054d128e991c",
+        "to": "column_c7ce485a3125265a",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_b9ef57f9abab8f9c",
+        "from": "output_b558dd754c71cfa6",
+        "to": "column_7021a839d96cf205",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_fa057b597723c73b",
+        "from": "table_eaa6ebb8f158751f",
+        "to": "column_294e2368a65dc2b2",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_fa6d31fe0ff2d48c",
+        "from": "column_294e2368a65dc2b2",
+        "to": "column_7021a839d96cf205",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_fc62022a3044cc37",
+        "from": "output_b558dd754c71cfa6",
+        "to": "column_087b7e48b6c97660",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      }
+    ]
+  },
+  "issues": [],
+  "summary": {
+    "statementCount": 1,
+    "tableCount": 4,
+    "columnCount": 8,
+    "joinCount": 3,
+    "complexityScore": 52,
+    "issueCount": {
+      "errors": 0,
+      "warnings": 0,
+      "infos": 0
+    },
+    "hasErrors": false
+  },
+  "resolvedSchema": {
+    "tables": [
+      {
+        "name": "customers",
+        "columns": [
+          {
+            "name": "customer_id",
+            "origin": "implied",
+            "foreignKey": {
+              "table": "orders",
+              "column": "customer_id"
+            }
+          },
+          {
+            "name": "email",
+            "origin": "implied"
+          }
+        ],
+        "origin": "implied",
+        "sourceStatementIndex": 0,
+        "updatedAt": "2024-01-01T00:00:00Z",
+        "constraints": [
+          {
+            "constraintType": "foreign_key",
+            "columns": [
+              "customer_id"
+            ],
+            "referencedTable": "orders",
+            "referencedColumns": [
+              "customer_id"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "orders",
+        "columns": [
+          {
+            "name": "customer_id",
+            "origin": "implied",
+            "foreignKey": {
+              "table": "customers",
+              "column": "customer_id"
+            }
+          },
+          {
+            "name": "product_id",
+            "origin": "implied",
+            "foreignKey": {
+              "table": "products",
+              "column": "product_id"
+            }
+          }
+        ],
+        "origin": "implied",
+        "sourceStatementIndex": 0,
+        "updatedAt": "2024-01-01T00:00:00Z",
+        "constraints": [
+          {
+            "constraintType": "foreign_key",
+            "columns": [
+              "customer_id"
+            ],
+            "referencedTable": "customers",
+            "referencedColumns": [
+              "customer_id"
+            ]
+          },
+          {
+            "constraintType": "foreign_key",
+            "columns": [
+              "product_id"
+            ],
+            "referencedTable": "products",
+            "referencedColumns": [
+              "product_id"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "products",
+        "columns": [
+          {
+            "name": "product_id",
+            "origin": "implied",
+            "foreignKey": {
+              "table": "orders",
+              "column": "product_id"
+            }
+          },
+          {
+            "name": "supplier_id",
+            "origin": "implied",
+            "foreignKey": {
+              "table": "suppliers",
+              "column": "supplier_id"
+            }
+          }
+        ],
+        "origin": "implied",
+        "sourceStatementIndex": 0,
+        "updatedAt": "2024-01-01T00:00:00Z",
+        "constraints": [
+          {
+            "constraintType": "foreign_key",
+            "columns": [
+              "product_id"
+            ],
+            "referencedTable": "orders",
+            "referencedColumns": [
+              "product_id"
+            ]
+          },
+          {
+            "constraintType": "foreign_key",
+            "columns": [
+              "supplier_id"
+            ],
+            "referencedTable": "suppliers",
+            "referencedColumns": [
+              "supplier_id"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "suppliers",
+        "columns": [
+          {
+            "name": "supplier_id",
+            "origin": "implied",
+            "foreignKey": {
+              "table": "products",
+              "column": "supplier_id"
+            }
+          }
+        ],
+        "origin": "implied",
+        "sourceStatementIndex": 0,
+        "updatedAt": "2024-01-01T00:00:00Z",
+        "constraints": [
+          {
+            "constraintType": "foreign_key",
+            "columns": [
+              "supplier_id"
+            ],
+            "referencedTable": "products",
+            "referencedColumns": [
+              "supplier_id"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

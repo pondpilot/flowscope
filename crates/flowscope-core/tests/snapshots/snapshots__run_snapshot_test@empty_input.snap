@@ -1,0 +1,31 @@
+---
+source: crates/flowscope-core/tests/snapshots.rs
+expression: clean_result
+---
+{
+  "statements": [],
+  "globalLineage": {
+    "nodes": [],
+    "edges": []
+  },
+  "issues": [
+    {
+      "severity": "error",
+      "code": "INVALID_REQUEST",
+      "message": "Provide inline SQL or at least one file to analyze"
+    }
+  ],
+  "summary": {
+    "statementCount": 0,
+    "tableCount": 0,
+    "columnCount": 0,
+    "joinCount": 0,
+    "complexityScore": 1,
+    "issueCount": {
+      "errors": 1,
+      "warnings": 0,
+      "infos": 0
+    },
+    "hasErrors": true
+  }
+}

@@ -13,14 +13,14 @@ Source: `/home/sasha/Developer/tries/2026-01-20-sqlfluff/test/fixtures/dialects/
 
 Add 5 high-value edge case fixtures that catch parser bugs and improve robustness. These tests cover comment handling, deeply nested joins, expression recursion stress testing, empty input, and PostgreSQL array slicing syntax.
 
-- [ ] Add `fixtures/generic/bracket_in_comment.sql` - SQL with comments containing brackets/parens
-- [ ] Add `fixtures/generic/nested_joins.sql` - Joins nested up to 3 levels with parentheses
-- [ ] Add `fixtures/generic/expression_recursion.sql` - 40+ OR conditions stress test
-- [ ] Add `fixtures/generic/empty_file.sql` - Empty input edge case
-- [ ] Add `fixtures/postgres/array_slicing.sql` - Array slice syntax `a[:], b[:1], c[2:], d[2:3]`
-- [ ] Add parsing snapshot tests for all 5 fixtures
-- [ ] Add lineage assertions for SELECT-based fixtures (nested_joins, array_slicing)
-- [ ] Run `just test-rust` and verify all tests pass
+- [x] Add `fixtures/generic/bracket_in_comment.sql` - SQL with comments containing brackets/parens
+- [x] Add `fixtures/generic/nested_joins.sql` - Joins nested up to 3 levels with parentheses
+- [x] Add `fixtures/generic/expression_recursion.sql` - 40+ OR conditions stress test
+- [x] Add `fixtures/generic/empty_file.sql` - Empty input edge case (tested via snapshot, not fixture - empty fixtures cause validation error)
+- [x] Add `fixtures/postgres/array_slicing.sql` - Array slice syntax `a[:], b[:1], c[2:], d[2:3]`
+- [x] Add parsing snapshot tests for all 5 fixtures
+- [x] Add lineage assertions for SELECT-based fixtures (nested_joins, array_slicing)
+- [x] Run `just test-rust` and verify all tests pass
 
 ### Task 2: Tier 2 PostgreSQL Dialect Depth
 

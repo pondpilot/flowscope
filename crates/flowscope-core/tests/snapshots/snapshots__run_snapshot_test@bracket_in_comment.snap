@@ -1,0 +1,162 @@
+---
+source: crates/flowscope-core/tests/snapshots.rs
+expression: clean_result
+---
+{
+  "statements": [
+    {
+      "statementIndex": 0,
+      "statementType": "SELECT",
+      "nodes": [
+        {
+          "id": "column_b0a93676e4fd73eb",
+          "type": "column",
+          "label": "a"
+        },
+        {
+          "id": "column_b88eb99e57967cf9",
+          "type": "column",
+          "label": "a",
+          "qualifiedName": "b.a"
+        },
+        {
+          "id": "output_b558dd754c71cfa6",
+          "type": "output",
+          "label": "Output"
+        },
+        {
+          "id": "table_36d2446b5916819d",
+          "type": "table",
+          "label": "b",
+          "qualifiedName": "b"
+        }
+      ],
+      "edges": [
+        {
+          "id": "edge_20925209cf1ad699",
+          "from": "output_b558dd754c71cfa6",
+          "to": "column_b0a93676e4fd73eb",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_b328209e9d27b744",
+          "from": "column_b88eb99e57967cf9",
+          "to": "column_b0a93676e4fd73eb",
+          "type": "data_flow"
+        },
+        {
+          "id": "edge_e6380314c992d57f",
+          "from": "table_36d2446b5916819d",
+          "to": "column_b88eb99e57967cf9",
+          "type": "ownership"
+        }
+      ],
+      "joinCount": 0,
+      "complexityScore": 5
+    }
+  ],
+  "globalLineage": {
+    "nodes": [
+      {
+        "id": "column_b0a93676e4fd73eb",
+        "type": "column",
+        "label": "a",
+        "canonicalName": {
+          "name": "a"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_b0a93676e4fd73eb"
+          }
+        ]
+      },
+      {
+        "id": "column_b88eb99e57967cf9",
+        "type": "column",
+        "label": "a",
+        "canonicalName": {
+          "schema": "b",
+          "name": "a"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_b88eb99e57967cf9"
+          }
+        ]
+      },
+      {
+        "id": "output_b558dd754c71cfa6",
+        "type": "output",
+        "label": "Output",
+        "canonicalName": {
+          "name": "Output"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "output_b558dd754c71cfa6"
+          }
+        ]
+      },
+      {
+        "id": "table_36d2446b5916819d",
+        "type": "table",
+        "label": "b",
+        "canonicalName": {
+          "name": "b"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "table_36d2446b5916819d"
+          }
+        ]
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge_20925209cf1ad699",
+        "from": "output_b558dd754c71cfa6",
+        "to": "column_b0a93676e4fd73eb",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_b328209e9d27b744",
+        "from": "column_b88eb99e57967cf9",
+        "to": "column_b0a93676e4fd73eb",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_e6380314c992d57f",
+        "from": "table_36d2446b5916819d",
+        "to": "column_b88eb99e57967cf9",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      }
+    ]
+  },
+  "issues": [],
+  "summary": {
+    "statementCount": 1,
+    "tableCount": 1,
+    "columnCount": 2,
+    "joinCount": 0,
+    "complexityScore": 5,
+    "issueCount": {
+      "errors": 0,
+      "warnings": 0,
+      "infos": 0
+    },
+    "hasErrors": false
+  }
+}

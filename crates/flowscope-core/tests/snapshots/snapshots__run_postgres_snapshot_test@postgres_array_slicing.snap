@@ -1,0 +1,217 @@
+---
+source: crates/flowscope-core/tests/snapshots.rs
+expression: clean_result
+---
+{
+  "statements": [
+    {
+      "statementIndex": 0,
+      "statementType": "SELECT",
+      "nodes": [
+        {
+          "id": "column_4be704ab7757e136",
+          "type": "column",
+          "label": "col_3",
+          "expression": "d[2:3]"
+        },
+        {
+          "id": "column_5448d894ac69aeb6",
+          "type": "column",
+          "label": "col_1",
+          "expression": "b[:1]"
+        },
+        {
+          "id": "column_72f850d7dba6250a",
+          "type": "column",
+          "label": "col_2",
+          "expression": "c[2:]"
+        },
+        {
+          "id": "column_74afe1a40e295390",
+          "type": "column",
+          "label": "col_0",
+          "expression": "a[:]"
+        },
+        {
+          "id": "output_b558dd754c71cfa6",
+          "type": "output",
+          "label": "Output"
+        },
+        {
+          "id": "table_eb6f82b7323d024e",
+          "type": "table",
+          "label": "array_data",
+          "qualifiedName": "array_data"
+        }
+      ],
+      "edges": [
+        {
+          "id": "edge_15b3ce05a8a40512",
+          "from": "output_b558dd754c71cfa6",
+          "to": "column_5448d894ac69aeb6",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_445b1ea15d20468b",
+          "from": "output_b558dd754c71cfa6",
+          "to": "column_4be704ab7757e136",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_cb2b6e95c8f3389d",
+          "from": "output_b558dd754c71cfa6",
+          "to": "column_72f850d7dba6250a",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_e7356791f1505379",
+          "from": "output_b558dd754c71cfa6",
+          "to": "column_74afe1a40e295390",
+          "type": "ownership"
+        }
+      ],
+      "joinCount": 0,
+      "complexityScore": 5
+    }
+  ],
+  "globalLineage": {
+    "nodes": [
+      {
+        "id": "column_4be704ab7757e136",
+        "type": "column",
+        "label": "col_3",
+        "canonicalName": {
+          "name": "col_3"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_4be704ab7757e136"
+          }
+        ]
+      },
+      {
+        "id": "column_5448d894ac69aeb6",
+        "type": "column",
+        "label": "col_1",
+        "canonicalName": {
+          "name": "col_1"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_5448d894ac69aeb6"
+          }
+        ]
+      },
+      {
+        "id": "column_72f850d7dba6250a",
+        "type": "column",
+        "label": "col_2",
+        "canonicalName": {
+          "name": "col_2"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_72f850d7dba6250a"
+          }
+        ]
+      },
+      {
+        "id": "column_74afe1a40e295390",
+        "type": "column",
+        "label": "col_0",
+        "canonicalName": {
+          "name": "col_0"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_74afe1a40e295390"
+          }
+        ]
+      },
+      {
+        "id": "output_b558dd754c71cfa6",
+        "type": "output",
+        "label": "Output",
+        "canonicalName": {
+          "name": "Output"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "output_b558dd754c71cfa6"
+          }
+        ]
+      },
+      {
+        "id": "table_eb6f82b7323d024e",
+        "type": "table",
+        "label": "array_data",
+        "canonicalName": {
+          "name": "array_data"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "table_eb6f82b7323d024e"
+          }
+        ]
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge_15b3ce05a8a40512",
+        "from": "output_b558dd754c71cfa6",
+        "to": "column_5448d894ac69aeb6",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_445b1ea15d20468b",
+        "from": "output_b558dd754c71cfa6",
+        "to": "column_4be704ab7757e136",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_cb2b6e95c8f3389d",
+        "from": "output_b558dd754c71cfa6",
+        "to": "column_72f850d7dba6250a",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_e7356791f1505379",
+        "from": "output_b558dd754c71cfa6",
+        "to": "column_74afe1a40e295390",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      }
+    ]
+  },
+  "issues": [],
+  "summary": {
+    "statementCount": 1,
+    "tableCount": 1,
+    "columnCount": 4,
+    "joinCount": 0,
+    "complexityScore": 5,
+    "issueCount": {
+      "errors": 0,
+      "warnings": 0,
+      "infos": 0
+    },
+    "hasErrors": false
+  }
+}
