@@ -16,10 +16,16 @@ const MAX_CONNECTIONS: u32 = 2;
 /// Also serves as an implicit connect timeout since acquisition waits for connection.
 const ACQUIRE_TIMEOUT_SECS: u64 = 10;
 
-/// Safe maximum length for MySQL identifier truncation.
+/// Safe maximum length for identifier truncation and validation.
+///
+/// Used for:
+/// - MySQL VARCHAR coercion in information_schema queries (longtext → varchar)
+/// - SQLite table name validation in PRAGMA queries
+///
 /// MySQL limits identifiers to 64 chars by default, max 256 with special configuration.
-/// We use 255 as a safe upper bound that works with SQLx Any driver's VARCHAR coercion.
-const MYSQL_IDENTIFIER_SAFE_LENGTH: usize = 255;
+/// We use 255 as a safe upper bound that works with SQLx Any driver and covers both
+/// MySQL identifier limits and SQLite validation needs.
+const IDENTIFIER_SAFE_LENGTH: usize = 255;
 
 /// Guard for one-time SQLx driver installation.
 static INSTALL_DRIVERS: Once = Once::new();
@@ -176,8 +182,8 @@ impl SqlxMetadataProvider {
         // For MySQL, if no schema filter is provided, we query the current database.
         // Use LEFT(..., N) to coerce columns to VARCHAR for SQLx Any driver compatibility
         // (information_schema uses longtext which Any driver maps to BLOB and can't decode).
-        // See MYSQL_IDENTIFIER_SAFE_LENGTH for the limit rationale.
-        let limit = MYSQL_IDENTIFIER_SAFE_LENGTH;
+        // See IDENTIFIER_SAFE_LENGTH for the limit rationale.
+        let limit = IDENTIFIER_SAFE_LENGTH;
         let query = if self.schema_filter.is_some() {
             format!(
                 r#"
@@ -233,7 +239,7 @@ impl SqlxMetadataProvider {
     ///
     /// Tables with exotic names will be skipped with a warning on stderr.
     fn validate_sqlite_table_name(name: &str) -> Result<()> {
-        if name.is_empty() || name.len() > MYSQL_IDENTIFIER_SAFE_LENGTH {
+        if name.is_empty() || name.len() > IDENTIFIER_SAFE_LENGTH {
             return Err(anyhow!("Invalid table name length: {}", name.len()));
         }
         // Allow alphanumeric, underscore, and dot (for attached databases)
@@ -270,8 +276,13 @@ impl SqlxMetadataProvider {
                 continue;
             }
 
-            // Get column info for each table using pragma_table_info
-            // Note: We need to use dynamic SQL here since pragma_table_info is a table-valued function
+            // Get column info for each table using pragma_table_info.
+            //
+            // SECURITY: This query uses dynamic SQL because SQLite's PRAGMA doesn't support
+            // parameterized queries. The table_name MUST be validated by validate_sqlite_table_name()
+            // before reaching this point to prevent SQL injection. The validation above ensures
+            // only alphanumeric characters, underscores, and dots are allowed.
+            // DO NOT remove or bypass the validation without security review.
             let columns_query = format!("PRAGMA table_info('{}')", table_name.replace('\'', "''"));
 
             let column_rows = sqlx::query(&columns_query).fetch_all(&self.pool).await?;
@@ -630,19 +641,19 @@ mod tests {
     }
 
     // =========================================================================
-    // MySQL Identifier Length Constant Tests
+    // Identifier Length Constant Tests
     // =========================================================================
 
     #[test]
-    fn test_mysql_identifier_safe_length_constant() {
+    fn test_identifier_safe_length_constant() {
         // Verify the constant is set correctly
-        assert_eq!(MYSQL_IDENTIFIER_SAFE_LENGTH, 255);
+        assert_eq!(IDENTIFIER_SAFE_LENGTH, 255);
 
         // Verify it's within MySQL's documented limits (64 default, 256 max)
         // Using const block to satisfy clippy assertions_on_constants
         const _: () = {
-            assert!(MYSQL_IDENTIFIER_SAFE_LENGTH <= 256);
-            assert!(MYSQL_IDENTIFIER_SAFE_LENGTH >= 64);
+            assert!(IDENTIFIER_SAFE_LENGTH <= 256);
+            assert!(IDENTIFIER_SAFE_LENGTH >= 64);
         };
     }
 

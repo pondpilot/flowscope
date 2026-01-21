@@ -83,6 +83,9 @@ pub fn assert_has_table(output: &Output, table_name: &str) {
 }
 
 /// Assert that the lineage output contains a specific column by label.
+///
+/// Reserved for future column-level integration tests when we add more granular
+/// schema introspection validation.
 #[allow(dead_code)]
 pub fn assert_has_column(output: &Output, column_name: &str) {
     let json = parse_json_output(output);
@@ -96,6 +99,8 @@ pub fn assert_has_column(output: &Output, column_name: &str) {
 }
 
 /// Assert that the lineage output contains at least N data flow edges.
+///
+/// Reserved for future tests validating edge count in complex multi-statement scenarios.
 #[allow(dead_code)]
 pub fn assert_has_min_edges(output: &Output, min_count: usize) {
     let json = parse_json_output(output);
@@ -128,6 +133,8 @@ pub fn assert_no_errors(output: &Output) {
 }
 
 /// Assert that the SELECT * was expanded to the expected columns.
+///
+/// Reserved for future tests validating wildcard expansion with live database metadata.
 #[allow(dead_code)]
 pub fn assert_star_expansion(output: &Output, expected_columns: &[&str]) {
     let json = parse_json_output(output);

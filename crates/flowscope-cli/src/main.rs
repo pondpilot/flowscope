@@ -129,6 +129,14 @@ fn load_schema_metadata(
     // Live database connection takes precedence
     #[cfg(feature = "metadata-provider")]
     if let Some(ref url) = args.metadata_url {
+        // Warn if credentials appear to be embedded in the URL
+        if url.contains('@') && !url.starts_with("sqlite") {
+            eprintln!(
+                "flowscope: warning: Database credentials in --metadata-url may be logged in shell history. \
+                 Consider using environment variables or a .pgpass file instead."
+            );
+        }
+
         let schema = metadata::fetch_metadata_from_database(url, args.metadata_schema.clone())?;
         return Ok(Some(schema));
     }
