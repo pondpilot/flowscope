@@ -223,6 +223,7 @@ fn has_edge(
 #[case("snowflake", Dialect::Snowflake)]
 #[case("bigquery", Dialect::Bigquery)]
 #[case("redshift", Dialect::Redshift)]
+#[case("mysql", Dialect::Mysql)]
 fn multi_dialect_fixtures_cover_core_constructs(#[case] dir_name: &str, #[case] dialect: Dialect) {
     let dir = dialect_fixture_dir(dir_name);
     let fixtures = list_fixture_files(&dir);

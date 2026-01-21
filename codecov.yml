@@ -1,0 +1,16 @@
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
+
+ignore:
+  - "crates/flowscope-wasm/**"
+  - "packages/core/wasm/**"
+  - "packages/core/src/wasm/**"
+  - "**/generated/**"
+  - "**/tests/**"
+  - "app/**"

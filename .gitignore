@@ -31,6 +31,7 @@ pkg/
 
 # Test artifacts
 coverage/
+lcov.info
 .nyc_output/
 playwright-report/
 test-results/

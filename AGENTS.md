@@ -64,7 +64,9 @@ Key areas:
 - `just test-lineage` (`cargo test -p flowscope-core --test lineage_engine`).
 - `just test-lineage-verbose` (same test with `--nocapture`).
 - `just check-schema` (Rust schema guard + TS schema compatibility).
-- `just coverage` (runs `./scripts/generate_test_coverage.sh`).
+- `just coverage` (generate HTML coverage report in `coverage/`, requires `cargo-llvm-cov`).
+- `just coverage-lcov` (generate LCOV file at `lcov.info` for CI/Codecov).
+- `just coverage-summary` (print coverage summary to stdout).
 
 ## Workspace Utilities
 
