@@ -5176,3 +5176,38 @@ fn create_table_with_composite_primary_key() {
     assert!(pk_constraint.columns.contains(&"order_id".to_string()));
     assert!(pk_constraint.columns.contains(&"line_number".to_string()));
 }
+
+// =============================================================================
+// COPY STATEMENT LINEAGE
+// =============================================================================
+
+#[test]
+fn test_copy_statement_lineage() {
+    let sql = "COPY users FROM 's3://bucket/users.csv'";
+    let result = run_analysis(sql, Dialect::Generic, None);
+
+    assert!(result.issues.iter().all(|i| i.severity != Severity::Error));
+    // COPY FROM: external source -> table (users is target)
+    let stmt = &result.statements[0];
+    assert!(stmt.nodes.iter().any(|n| n.label.contains("users")));
+}
+
+#[test]
+fn test_copy_into_snowflake() {
+    let sql = "COPY INTO analytics.orders FROM @my_stage/orders/";
+    let result = run_analysis(sql, Dialect::Snowflake, None);
+
+    assert!(result.issues.iter().all(|i| i.severity != Severity::Error));
+    let stmt = &result.statements[0];
+    assert!(stmt.nodes.iter().any(|n| n.label.contains("orders")));
+}
+
+#[test]
+fn test_copy_to_with_query() {
+    let sql = "COPY (SELECT id, name FROM users WHERE active = true) TO '/tmp/out.csv'";
+    let result = run_analysis(sql, Dialect::Postgres, None);
+
+    // COPY TO with query: users is source
+    let stmt = &result.statements[0];
+    assert!(stmt.nodes.iter().any(|n| n.label.contains("users")));
+}

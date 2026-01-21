@@ -17,8 +17,9 @@ use crate::types::{
     issue_codes, Edge, EdgeType, Issue, JoinType, Node, NodeType, Span, StatementLineage,
 };
 use sqlparser::ast::{
-    self, Assignment, Expr, FromTable, MergeAction, MergeClause, MergeInsertKind, ObjectName,
-    Statement, TableFactor, TableWithJoins, UpdateTableFromKind,
+    self, Assignment, CopyIntoSnowflakeKind, CopySource, CopyTarget, Expr, FromTable, MergeAction,
+    MergeClause, MergeInsertKind, ObjectName, Statement, TableFactor, TableWithJoins,
+    UpdateTableFromKind,
 };
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
@@ -152,8 +153,22 @@ impl<'a> Analyzer<'a> {
             Statement::DropFunction { .. } => "DROP_FUNCTION".to_string(),
             Statement::DropProcedure { .. } => "DROP_PROCEDURE".to_string(),
             Statement::DropTrigger { .. } => "DROP_TRIGGER".to_string(),
-            Statement::Copy { .. } => "COPY".to_string(),
-            Statement::CopyIntoSnowflake { .. } => "COPY".to_string(),
+            Statement::Copy {
+                source, to, target, ..
+            } => {
+                self.analyze_copy(&mut ctx, source, *to, target);
+                "COPY".to_string()
+            }
+            Statement::CopyIntoSnowflake {
+                kind,
+                into,
+                from_obj,
+                from_query,
+                ..
+            } => {
+                self.analyze_copy_into_snowflake(&mut ctx, kind, into, from_obj, from_query);
+                "COPY".to_string()
+            }
             _ => {
                 self.issues.push(
                     Issue::warning(
@@ -524,6 +539,133 @@ impl<'a> Analyzer<'a> {
                 // Only remove if it's an implied entry (not imported)
                 self.schema.remove_implied(&canonical);
                 self.tracker.remove(&canonical);
+            }
+        }
+    }
+
+    /// Analyzes a PostgreSQL-style COPY statement for lineage.
+    ///
+    /// COPY has two forms:
+    /// - `COPY table FROM file`: loads data from file into table (table is target)
+    /// - `COPY table/query TO file`: exports data from table/query to file (table is source)
+    pub(super) fn analyze_copy(
+        &mut self,
+        ctx: &mut StatementContext,
+        source: &CopySource,
+        to: bool,
+        _target: &CopyTarget,
+    ) {
+        match source {
+            CopySource::Table { table_name, .. } => {
+                let name = table_name.to_string();
+                let canonical = self.normalize_table_name(&name);
+                let node_id = generate_node_id("table", &canonical);
+
+                ctx.add_node(Node {
+                    id: node_id,
+                    node_type: NodeType::Table,
+                    label: extract_simple_name(&name).into(),
+                    qualified_name: Some(canonical.clone().into()),
+                    expression: None,
+                    span: None,
+                    metadata: None,
+                    resolution_source: None,
+                    filters: Vec::new(),
+                    join_type: None,
+                    join_condition: None,
+                    aggregation: None,
+                });
+
+                if to {
+                    // COPY table TO file: table is source (consumed)
+                    self.tracker
+                        .record_consumed(&canonical, ctx.statement_index);
+                } else {
+                    // COPY table FROM file: table is target (produced)
+                    self.tracker
+                        .record_produced(&canonical, ctx.statement_index);
+                }
+            }
+            CopySource::Query(query) => {
+                // COPY (SELECT ...) TO file: analyze query as source
+                // Note: COPY with query is always TO (exporting)
+                self.analyze_query(ctx, query, None);
+            }
+        }
+    }
+
+    /// Analyzes a Snowflake-style COPY INTO statement for lineage.
+    ///
+    /// COPY INTO has two forms:
+    /// - `COPY INTO table FROM stage/location`: loads data into table (table is target)
+    /// - `COPY INTO location FROM table/query`: exports data to location (table/query is source)
+    pub(super) fn analyze_copy_into_snowflake(
+        &mut self,
+        ctx: &mut StatementContext,
+        kind: &CopyIntoSnowflakeKind,
+        into: &ObjectName,
+        from_obj: &Option<ObjectName>,
+        from_query: &Option<Box<ast::Query>>,
+    ) {
+        match kind {
+            CopyIntoSnowflakeKind::Table => {
+                // COPY INTO table FROM stage: table is target (produced)
+                let name = into.to_string();
+                let canonical = self.normalize_table_name(&name);
+                let target_id = generate_node_id("table", &canonical);
+
+                ctx.add_node(Node {
+                    id: target_id.clone(),
+                    node_type: NodeType::Table,
+                    label: extract_simple_name(&name).into(),
+                    qualified_name: Some(canonical.clone().into()),
+                    expression: None,
+                    span: None,
+                    metadata: None,
+                    resolution_source: None,
+                    filters: Vec::new(),
+                    join_type: None,
+                    join_condition: None,
+                    aggregation: None,
+                });
+
+                self.tracker
+                    .record_produced(&canonical, ctx.statement_index);
+
+                // If there's a source query in the transformation, analyze it
+                if let Some(query) = from_query {
+                    self.analyze_query(ctx, query, Some(&target_id));
+                }
+            }
+            CopyIntoSnowflakeKind::Location => {
+                // COPY INTO location FROM table/query: source is table or query
+                if let Some(query) = from_query {
+                    // Source is a query
+                    self.analyze_query(ctx, query, None);
+                } else if let Some(table_name) = from_obj {
+                    // Source is a table
+                    let name = table_name.to_string();
+                    let canonical = self.normalize_table_name(&name);
+                    let node_id = generate_node_id("table", &canonical);
+
+                    ctx.add_node(Node {
+                        id: node_id,
+                        node_type: NodeType::Table,
+                        label: extract_simple_name(&name).into(),
+                        qualified_name: Some(canonical.clone().into()),
+                        expression: None,
+                        span: None,
+                        metadata: None,
+                        resolution_source: None,
+                        filters: Vec::new(),
+                        join_type: None,
+                        join_condition: None,
+                        aggregation: None,
+                    });
+
+                    self.tracker
+                        .record_consumed(&canonical, ctx.statement_index);
+                }
             }
         }
     }
