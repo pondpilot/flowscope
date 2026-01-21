@@ -25,6 +25,18 @@ pub struct Args {
     #[arg(short, long, value_name = "FILE")]
     pub schema: Option<PathBuf>,
 
+    /// Database connection URL for live schema introspection
+    /// (e.g., postgres://user:pass@host/db, mysql://..., sqlite://...)
+    #[cfg(feature = "metadata-provider")]
+    #[arg(long, value_name = "URL")]
+    pub metadata_url: Option<String>,
+
+    /// Schema name to filter when using --metadata-url
+    /// (e.g., 'public' for PostgreSQL, database name for MySQL)
+    #[cfg(feature = "metadata-provider")]
+    #[arg(long, value_name = "SCHEMA")]
+    pub metadata_schema: Option<String>,
+
     /// Output file (defaults to stdout)
     #[arg(short, long, value_name = "FILE")]
     pub output: Option<PathBuf>,

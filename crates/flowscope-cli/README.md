@@ -58,6 +58,10 @@ Options:
   -f, --format <FORMAT>    Output format [default: table]
                            [possible values: table, json, mermaid, html, sql, csv, xlsx, duckdb]
   -s, --schema <FILE>      Schema DDL file for table/column resolution
+      --metadata-url <URL> Database connection URL for live schema introspection
+                           (e.g., postgres://user:pass@host/db, mysql://..., sqlite://...)
+      --metadata-schema <SCHEMA>
+                           Schema name to filter when using --metadata-url
   -o, --output <FILE>      Output file (defaults to stdout)
       --project-name <PROJECT_NAME>
                            Project name used for default export filenames [default: lineage]
@@ -91,4 +95,40 @@ flowscope -s schema.sql -f mermaid -v column query.sql
 
 ```bash
 flowscope -f csv -o lineage.csv.zip query.sql
+```
+
+### Live Database Schema Introspection
+
+Instead of providing a DDL schema file, you can connect directly to a database to fetch schema metadata at runtime. This enables accurate `SELECT *` resolution without manual schema maintenance.
+
+Supported databases:
+- PostgreSQL (`postgres://` or `postgresql://`)
+- MySQL/MariaDB (`mysql://` or `mariadb://`)
+- SQLite (`sqlite://`)
+
+```bash
+# PostgreSQL: fetch schema from public schema
+flowscope --metadata-url postgres://user:pass@localhost/mydb query.sql
+
+# PostgreSQL: filter to a specific schema
+flowscope --metadata-url postgres://user:pass@localhost/mydb --metadata-schema analytics query.sql
+
+# MySQL: fetch schema from the connected database
+flowscope --metadata-url mysql://user:pass@localhost/mydb query.sql
+
+# SQLite: fetch schema from a local database file
+flowscope --metadata-url sqlite:///path/to/database.db query.sql
+```
+
+When both `--metadata-url` and `-s/--schema` are provided, the live database connection takes precedence.
+
+**Security Note:** Passing credentials in command-line arguments may expose them via shell history and process listings (`ps`). For sensitive environments, consider:
+- Using environment variables: `--metadata-url "$DATABASE_URL"`
+- Using a `.pgpass` file for PostgreSQL
+- Using socket-based authentication where available
+
+This feature requires the `metadata-provider` feature flag (enabled by default). To build without it:
+
+```bash
+cargo build -p flowscope-cli --no-default-features
 ```

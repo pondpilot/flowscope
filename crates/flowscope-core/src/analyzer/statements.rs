@@ -9,6 +9,7 @@ use super::context::StatementContext;
 use super::expression::ExpressionAnalyzer;
 use super::helpers::{
     classify_query_type, extract_simple_name, generate_edge_id, generate_node_id,
+    split_qualified_identifiers,
 };
 use super::visitor::{LineageVisitor, Visitor};
 use super::Analyzer;
@@ -17,7 +18,8 @@ use crate::types::{
     issue_codes, Edge, EdgeType, Issue, JoinType, Node, NodeType, Span, StatementLineage,
 };
 use sqlparser::ast::{
-    self, Assignment, Expr, FromTable, MergeAction, MergeClause, MergeInsertKind, ObjectName,
+    self, AlterTableOperation, Assignment, CopyIntoSnowflakeKind, CopySource, CopyTarget, Expr,
+    FromTable, MergeAction, MergeClause, MergeInsertKind, ObjectName, RenameTableNameKind,
     Statement, TableFactor, TableWithJoins, UpdateTableFromKind,
 };
 use std::collections::{HashMap, HashSet};
@@ -118,9 +120,14 @@ impl<'a> Analyzer<'a> {
                 self.analyze_drop(&mut ctx, object_type, names);
                 "DROP".to_string()
             }
+            Statement::AlterTable {
+                name, operations, ..
+            } => {
+                self.analyze_alter_table(&mut ctx, name, operations);
+                "ALTER_TABLE".to_string()
+            }
             // Statements that are recognized but don't produce lineage
             // (admin, session, and metadata operations)
-            Statement::AlterTable { .. } => "ALTER_TABLE".to_string(),
             Statement::AlterView { .. } => "ALTER_VIEW".to_string(),
             Statement::AlterIndex { .. } => "ALTER_INDEX".to_string(),
             Statement::AlterSchema(_) => "ALTER_SCHEMA".to_string(),
@@ -152,8 +159,28 @@ impl<'a> Analyzer<'a> {
             Statement::DropFunction { .. } => "DROP_FUNCTION".to_string(),
             Statement::DropProcedure { .. } => "DROP_PROCEDURE".to_string(),
             Statement::DropTrigger { .. } => "DROP_TRIGGER".to_string(),
-            Statement::Copy { .. } => "COPY".to_string(),
-            Statement::CopyIntoSnowflake { .. } => "COPY".to_string(),
+            Statement::Copy {
+                source, to, target, ..
+            } => {
+                self.analyze_copy(&mut ctx, source, *to, target);
+                "COPY".to_string()
+            }
+            Statement::CopyIntoSnowflake {
+                kind,
+                into,
+                from_obj,
+                from_query,
+                ..
+            } => {
+                self.analyze_copy_into_snowflake(&mut ctx, kind, into, from_obj, from_query);
+                "COPY".to_string()
+            }
+            Statement::Unload {
+                query, query_text, ..
+            } => {
+                self.analyze_unload(&mut ctx, query, query_text);
+                "UNLOAD".to_string()
+            }
             _ => {
                 self.issues.push(
                     Issue::warning(
@@ -524,6 +551,284 @@ impl<'a> Analyzer<'a> {
                 // Only remove if it's an implied entry (not imported)
                 self.schema.remove_implied(&canonical);
                 self.tracker.remove(&canonical);
+            }
+        }
+    }
+
+    /// Analyzes a PostgreSQL-style COPY statement for lineage.
+    ///
+    /// COPY has two forms:
+    /// - `COPY table FROM file`: loads data from file into table (table is target)
+    /// - `COPY table/query TO file`: exports data from table/query to file (table is source)
+    pub(super) fn analyze_copy(
+        &mut self,
+        ctx: &mut StatementContext,
+        source: &CopySource,
+        to: bool,
+        _target: &CopyTarget,
+    ) {
+        match source {
+            CopySource::Table { table_name, .. } => {
+                let name = table_name.to_string();
+                let canonical = self.normalize_table_name(&name);
+                let node_id = generate_node_id("table", &canonical);
+
+                ctx.add_node(Node {
+                    id: node_id,
+                    node_type: NodeType::Table,
+                    label: extract_simple_name(&name).into(),
+                    qualified_name: Some(canonical.clone().into()),
+                    expression: None,
+                    span: None,
+                    metadata: None,
+                    resolution_source: None,
+                    filters: Vec::new(),
+                    join_type: None,
+                    join_condition: None,
+                    aggregation: None,
+                });
+
+                if to {
+                    // COPY table TO file: table is source (consumed)
+                    self.tracker
+                        .record_consumed(&canonical, ctx.statement_index);
+                } else {
+                    // COPY table FROM file: table is target (produced)
+                    self.tracker
+                        .record_produced(&canonical, ctx.statement_index);
+                }
+            }
+            CopySource::Query(query) => {
+                // COPY (SELECT ...) TO file: analyze query as source
+                // Note: COPY with query is always TO (exporting)
+                self.analyze_query(ctx, query, None);
+            }
+        }
+    }
+
+    /// Analyzes a Snowflake-style COPY INTO statement for lineage.
+    ///
+    /// COPY INTO has two forms:
+    /// - `COPY INTO table FROM stage/location`: loads data into table (table is target)
+    /// - `COPY INTO location FROM table/query`: exports data to location (table/query is source)
+    pub(super) fn analyze_copy_into_snowflake(
+        &mut self,
+        ctx: &mut StatementContext,
+        kind: &CopyIntoSnowflakeKind,
+        into: &ObjectName,
+        from_obj: &Option<ObjectName>,
+        from_query: &Option<Box<ast::Query>>,
+    ) {
+        match kind {
+            CopyIntoSnowflakeKind::Table => {
+                // COPY INTO table FROM stage: table is target (produced)
+                let name = into.to_string();
+                let canonical = self.normalize_table_name(&name);
+                let target_id = generate_node_id("table", &canonical);
+
+                ctx.add_node(Node {
+                    id: target_id.clone(),
+                    node_type: NodeType::Table,
+                    label: extract_simple_name(&name).into(),
+                    qualified_name: Some(canonical.clone().into()),
+                    expression: None,
+                    span: None,
+                    metadata: None,
+                    resolution_source: None,
+                    filters: Vec::new(),
+                    join_type: None,
+                    join_condition: None,
+                    aggregation: None,
+                });
+
+                self.tracker
+                    .record_produced(&canonical, ctx.statement_index);
+
+                // If there's a source query in the transformation, analyze it
+                if let Some(query) = from_query {
+                    self.analyze_query(ctx, query, Some(&target_id));
+                }
+            }
+            CopyIntoSnowflakeKind::Location => {
+                // COPY INTO location FROM table/query: source is table or query
+                if let Some(query) = from_query {
+                    // Source is a query
+                    self.analyze_query(ctx, query, None);
+                } else if let Some(table_name) = from_obj {
+                    // Source is a table
+                    let name = table_name.to_string();
+                    let canonical = self.normalize_table_name(&name);
+                    let node_id = generate_node_id("table", &canonical);
+
+                    ctx.add_node(Node {
+                        id: node_id,
+                        node_type: NodeType::Table,
+                        label: extract_simple_name(&name).into(),
+                        qualified_name: Some(canonical.clone().into()),
+                        expression: None,
+                        span: None,
+                        metadata: None,
+                        resolution_source: None,
+                        filters: Vec::new(),
+                        join_type: None,
+                        join_condition: None,
+                        aggregation: None,
+                    });
+
+                    self.tracker
+                        .record_consumed(&canonical, ctx.statement_index);
+                }
+            }
+        }
+    }
+
+    /// Analyzes an ALTER TABLE statement for lineage.
+    ///
+    /// Currently handles:
+    /// - `ALTER TABLE old_name RENAME TO new_name`: Creates dataflow edge from old to new table
+    pub(super) fn analyze_alter_table(
+        &mut self,
+        ctx: &mut StatementContext,
+        old_name: &ObjectName,
+        operations: &[AlterTableOperation],
+    ) {
+        for op in operations {
+            if let AlterTableOperation::RenameTable { table_name } = op {
+                self.analyze_rename_table(ctx, old_name, table_name);
+            }
+            // Other ALTER TABLE operations could be handled here in the future
+        }
+    }
+
+    /// Analyzes an ALTER TABLE RENAME statement for lineage.
+    ///
+    /// Creates nodes for both old and new table names with a dataflow edge
+    /// connecting them to represent the rename relationship.
+    fn analyze_rename_table(
+        &mut self,
+        ctx: &mut StatementContext,
+        old_name: &ObjectName,
+        new_name: &RenameTableNameKind,
+    ) {
+        // Extract the new table name from the enum
+        let new_table_name = match new_name {
+            RenameTableNameKind::To(name) | RenameTableNameKind::As(name) => name,
+        };
+
+        // Normalize and create nodes for both old and new table names
+        let old_name_str = old_name.to_string();
+        let old_canonical = self.normalize_table_name(&old_name_str);
+        let old_node_id = generate_node_id("table", &old_canonical);
+
+        let new_name_str = new_table_name.to_string();
+        let mut inherited_parts = split_qualified_identifiers(&old_name_str);
+        let new_parts = split_qualified_identifiers(&new_name_str);
+        let new_name_with_schema = if new_parts.len() == 1 && inherited_parts.len() > 1 {
+            inherited_parts.pop();
+            inherited_parts.push(new_name_str.clone());
+            inherited_parts.join(".")
+        } else {
+            new_name_str.clone()
+        };
+        let new_canonical = self.normalize_table_name(&new_name_with_schema);
+        let new_node_id = generate_node_id("table", &new_canonical);
+
+        // Create node for old table (source of rename)
+        ctx.add_node(Node {
+            id: old_node_id.clone(),
+            node_type: NodeType::Table,
+            label: extract_simple_name(&old_name_str).into(),
+            qualified_name: Some(old_canonical.clone().into()),
+            expression: None,
+            span: None,
+            metadata: None,
+            resolution_source: None,
+            filters: Vec::new(),
+            join_type: None,
+            join_condition: None,
+            aggregation: None,
+        });
+
+        // Create node for new table (target of rename)
+        ctx.add_node(Node {
+            id: new_node_id.clone(),
+            node_type: NodeType::Table,
+            label: extract_simple_name(&new_name_str).into(),
+            qualified_name: Some(new_canonical.clone().into()),
+            expression: None,
+            span: None,
+            metadata: None,
+            resolution_source: None,
+            filters: Vec::new(),
+            join_type: None,
+            join_condition: None,
+            aggregation: None,
+        });
+
+        // Create dataflow edge from old to new table
+        let edge_id = generate_edge_id(&old_node_id, &new_node_id);
+        ctx.add_edge(Edge {
+            id: edge_id,
+            from: old_node_id,
+            to: new_node_id,
+            edge_type: EdgeType::DataFlow,
+            expression: None,
+            operation: Some("RENAME".into()),
+            join_type: None,
+            join_condition: None,
+            metadata: None,
+            approximate: None,
+        });
+
+        // Track that the old table is consumed and the new table is produced
+        self.tracker
+            .record_consumed(&old_canonical, ctx.statement_index);
+        self.tracker
+            .record_produced(&new_canonical, ctx.statement_index);
+    }
+
+    /// Analyzes a Redshift-style UNLOAD statement for lineage.
+    ///
+    /// UNLOAD exports query results to external storage (e.g., S3).
+    /// All tables referenced in the query are tracked as sources (consumed).
+    ///
+    /// Supports two forms:
+    /// - `UNLOAD ('SELECT ...') TO 's3://...'` - query as string literal
+    /// - `UNLOAD (SELECT ...) TO 's3://...'` - query as parsed expression
+    pub(super) fn analyze_unload(
+        &mut self,
+        ctx: &mut StatementContext,
+        query: &Option<Box<ast::Query>>,
+        query_text: &Option<String>,
+    ) {
+        // If we have a parsed query, analyze it directly
+        if let Some(ref parsed_query) = query {
+            self.analyze_query(ctx, parsed_query, None);
+            return;
+        }
+
+        // If we have query text (string literal form), parse and analyze it
+        if let Some(ref text) = query_text {
+            // Parse the query string using the same dialect
+            let dialect = self.request.dialect.to_sqlparser_dialect();
+            match sqlparser::parser::Parser::parse_sql(dialect.as_ref(), text) {
+                Ok(statements) => {
+                    for stmt in statements {
+                        if let Statement::Query(parsed_query) = stmt {
+                            self.analyze_query(ctx, &parsed_query, None);
+                        }
+                    }
+                }
+                Err(_) => {
+                    // If parsing fails, emit a warning but don't fail the analysis
+                    self.issues.push(
+                        Issue::warning(
+                            issue_codes::PARSE_ERROR,
+                            "Could not parse UNLOAD query string for lineage analysis",
+                        )
+                        .with_statement(ctx.statement_index),
+                    );
+                }
             }
         }
     }

@@ -7,7 +7,7 @@ use super::query::OutputColumnParams;
 use super::Analyzer;
 use crate::types::FilterClauseType;
 use sqlparser::ast::{self, Select, SelectItem};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 /// Analyzes SELECT statements to extract column lineage.
 pub(crate) struct SelectAnalyzer<'a, 'b> {
@@ -101,8 +101,15 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
     }
 
     fn analyze_projection(&mut self, projection: &[SelectItem]) {
-        // Track aliases defined in this SELECT list for lateral column alias checking
+        // Track aliases defined in this SELECT list for lateral column alias checking.
+        // For dialects that support lateral aliases, we also track the sources so we can
+        // resolve references to them in subsequent SELECT items.
         let mut defined_aliases: HashSet<String> = HashSet::new();
+        // Maps normalized alias name -> sources (column refs that compose the alias)
+        let mut lateral_alias_sources: HashMap<String, Vec<ColumnRef>> = HashMap::new();
+
+        let dialect = self.analyzer.request.dialect;
+        let supports_lateral = dialect.lateral_column_alias();
 
         for (idx, item) in projection.iter().enumerate() {
             match item {
@@ -110,7 +117,7 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
                     // Check for lateral column alias usage
                     self.check_lateral_column_alias(expr, &defined_aliases);
 
-                    let (sources, name, aggregation) = {
+                    let (mut sources, name, aggregation) = {
                         let mut ea = ExpressionAnalyzer::new(self.analyzer, self.ctx);
                         let column_refs = ea.extract_column_refs_with_warning(expr);
                         (
@@ -119,6 +126,15 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
                             ea.detect_aggregation(expr),
                         )
                     };
+
+                    // Resolve lateral alias references if dialect supports them
+                    if supports_lateral {
+                        sources = self.resolve_lateral_alias_sources(
+                            expr,
+                            sources,
+                            &lateral_alias_sources,
+                        );
+                    }
 
                     let expr_text = if is_simple_column_ref(expr) {
                         None
@@ -146,11 +162,20 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
                     // Check for lateral column alias usage
                     self.check_lateral_column_alias(expr, &defined_aliases);
 
-                    let (sources, aggregation) = {
+                    let (mut sources, aggregation) = {
                         let mut ea = ExpressionAnalyzer::new(self.analyzer, self.ctx);
                         let column_refs = ea.extract_column_refs_with_warning(expr);
                         (column_refs, ea.detect_aggregation(expr))
                     };
+
+                    // Resolve lateral alias references if dialect supports them
+                    if supports_lateral {
+                        sources = self.resolve_lateral_alias_sources(
+                            expr,
+                            sources,
+                            &lateral_alias_sources,
+                        );
+                    }
 
                     let name = alias.value.clone();
                     let expr_text = if is_simple_column_ref(expr) {
@@ -164,7 +189,12 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
 
                     // Record this alias for subsequent lateral column alias checking
                     let normalized_alias = self.analyzer.normalize_identifier(&name);
-                    defined_aliases.insert(normalized_alias);
+                    defined_aliases.insert(normalized_alias.clone());
+
+                    // Track sources for lateral alias resolution in subsequent items
+                    if supports_lateral {
+                        lateral_alias_sources.insert(normalized_alias, sources.clone());
+                    }
 
                     self.analyzer.add_output_column_with_aggregation(
                         self.ctx,
@@ -193,6 +223,55 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
                 }
             }
         }
+    }
+
+    /// Resolves lateral column alias references in the sources.
+    ///
+    /// For dialects that support lateral column aliases (BigQuery, Snowflake, etc.),
+    /// when an unqualified identifier in the expression matches a previously-defined
+    /// alias, we replace that identifier's source with the sources of the alias.
+    ///
+    /// Example: `SELECT a + 1 AS b, b + 1 AS c FROM t`
+    /// When processing `c`, the identifier `b` matches the lateral alias, so we
+    /// resolve `c`'s sources to include `t.a` (via `b`) instead of treating `b`
+    /// as an unresolved column reference.
+    fn resolve_lateral_alias_sources(
+        &self,
+        expr: &sqlparser::ast::Expr,
+        mut sources: Vec<ColumnRef>,
+        lateral_alias_sources: &HashMap<String, Vec<ColumnRef>>,
+    ) -> Vec<ColumnRef> {
+        if lateral_alias_sources.is_empty() {
+            return sources;
+        }
+
+        // Find unqualified identifiers in the expression that match lateral aliases
+        let identifiers = ExpressionAnalyzer::extract_simple_identifiers(expr);
+        let mut additional_sources = Vec::new();
+
+        for ident in &identifiers {
+            let normalized_ident = self.analyzer.normalize_identifier(ident);
+            if let Some(alias_sources) = lateral_alias_sources.get(&normalized_ident) {
+                // This identifier is a lateral alias reference. Add the alias's sources
+                // to our sources list, and remove any ColumnRef that just has the alias
+                // name without a table (since it's not a real table column).
+                additional_sources.extend(alias_sources.clone());
+
+                // Remove the unresolved reference to the alias itself
+                sources.retain(|s| {
+                    !(s.table.is_none()
+                        && self.analyzer.normalize_identifier(&s.column) == normalized_ident)
+                });
+            }
+        }
+
+        sources.extend(additional_sources);
+
+        // Deduplicate sources by (table, column) to avoid duplicate edges in lineage
+        let mut seen: HashSet<(Option<String>, String)> = HashSet::new();
+        sources.retain(|s| seen.insert((s.table.clone(), s.column.clone())));
+
+        sources
     }
 
     /// Emits a warning for unsupported alias usage in a clause.

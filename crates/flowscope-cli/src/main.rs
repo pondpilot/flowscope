@@ -2,6 +2,8 @@
 
 mod cli;
 mod input;
+#[cfg(feature = "metadata-provider")]
+mod metadata;
 mod output;
 mod schema;
 
@@ -43,12 +45,9 @@ fn run() -> Result<bool> {
 
     // Load schema if provided
     let dialect = args.dialect.into();
-    let schema_metadata = args
-        .schema
-        .as_ref()
-        .map(|path| schema::load_schema_from_ddl(path, dialect))
-        .transpose()
-        .context("Failed to load schema")?;
+
+    // Schema can come from DDL file or live database connection
+    let schema_metadata = load_schema_metadata(&args, dialect)?;
 
     // Build analysis request
     let request = build_request(sources, dialect, schema_metadata);
@@ -115,6 +114,39 @@ fn run() -> Result<bool> {
     }
 
     Ok(result.summary.has_errors)
+}
+
+/// Load schema metadata from DDL file or live database connection.
+///
+/// Priority:
+/// 1. If `--metadata-url` is provided, connect to the database and fetch schema
+/// 2. If `--schema` is provided, parse the DDL file
+/// 3. Otherwise, return None
+fn load_schema_metadata(
+    args: &Args,
+    dialect: flowscope_core::Dialect,
+) -> Result<Option<flowscope_core::SchemaMetadata>> {
+    // Live database connection takes precedence
+    #[cfg(feature = "metadata-provider")]
+    if let Some(ref url) = args.metadata_url {
+        // Warn if credentials appear to be embedded in the URL
+        if url.contains('@') && !url.starts_with("sqlite") {
+            eprintln!(
+                "flowscope: warning: Database credentials in --metadata-url may be logged in shell history. \
+                 Consider using environment variables or a .pgpass file instead."
+            );
+        }
+
+        let schema = metadata::fetch_metadata_from_database(url, args.metadata_schema.clone())?;
+        return Ok(Some(schema));
+    }
+
+    // Fall back to DDL file
+    args.schema
+        .as_ref()
+        .map(|path| schema::load_schema_from_ddl(path, dialect))
+        .transpose()
+        .context("Failed to load schema")
 }
 
 fn build_request(

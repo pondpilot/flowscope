@@ -632,3 +632,268 @@ fn missing_table_warned_when_other_tables_known() {
         unresolved_warnings[0]
     );
 }
+
+// --- Lateral column alias LINEAGE tests ---
+// These tests verify that when a dialect supports lateral column aliases,
+// the lineage is correctly resolved through the alias chain.
+
+#[test]
+fn test_lateral_column_alias_lineage_bigquery() {
+    // BigQuery supports lateral column aliases.
+    // SELECT a + 1 AS b, b + 1 AS c FROM t
+    // Expected lineage: t.a -> b -> c (c derives from b which derives from a)
+    let sql = "SELECT a + 1 AS b, b + 1 AS c FROM t";
+
+    let request = AnalyzeRequest {
+        sql: sql.to_string(),
+        files: None,
+        dialect: Dialect::Bigquery,
+        source_name: Some("test_lateral_lineage_bigquery".to_string()),
+        options: Some(AnalysisOptions {
+            enable_column_lineage: Some(true),
+            ..Default::default()
+        }),
+        schema: None,
+    };
+
+    let result = analyze(&request);
+
+    // Should have no warnings (BigQuery supports lateral aliases)
+    let lateral_warnings = count_warnings(&result, |issue| {
+        issue.code == issue_codes::UNSUPPORTED_SYNTAX
+            && issue.message.contains("lateral column alias")
+    });
+    assert_eq!(
+        lateral_warnings, 0,
+        "BigQuery should not warn about lateral aliases: {:?}",
+        result.issues
+    );
+
+    // Find column nodes
+    let stmt = &result.statements[0];
+    let col_b = stmt
+        .nodes
+        .iter()
+        .find(|n| n.node_type == flowscope_core::types::NodeType::Column && &*n.label == "b");
+    let col_c = stmt
+        .nodes
+        .iter()
+        .find(|n| n.node_type == flowscope_core::types::NodeType::Column && &*n.label == "c");
+    let col_a = stmt
+        .nodes
+        .iter()
+        .find(|n| n.node_type == flowscope_core::types::NodeType::Column && &*n.label == "a");
+
+    assert!(col_b.is_some(), "Column 'b' should exist");
+    assert!(col_c.is_some(), "Column 'c' should exist");
+    assert!(col_a.is_some(), "Column 'a' should exist (source from t)");
+
+    let col_a = col_a.unwrap();
+    let _col_b = col_b.unwrap();
+    let col_c = col_c.unwrap();
+
+    // Verify lineage: c should derive from a (transitively through b)
+    // Since lateral alias resolution substitutes b's sources for b references,
+    // c should have a Derivation edge from a
+    let c_derives_from_a = stmt.edges.iter().any(|e| {
+        e.from == col_a.id
+            && e.to == col_c.id
+            && e.edge_type == flowscope_core::types::EdgeType::Derivation
+    });
+
+    assert!(
+        c_derives_from_a,
+        "Column 'c' should derive from 'a' (via lateral alias 'b'). Edges: {:?}",
+        stmt.edges
+    );
+}
+
+#[test]
+fn test_lateral_column_alias_lineage_snowflake() {
+    // Snowflake also supports lateral column aliases
+    // Note: Snowflake normalizes identifiers to UPPERCASE
+    let sql = "SELECT x AS first, first * 2 AS doubled FROM data";
+
+    let request = AnalyzeRequest {
+        sql: sql.to_string(),
+        files: None,
+        dialect: Dialect::Snowflake,
+        source_name: Some("test_lateral_lineage_snowflake".to_string()),
+        options: Some(AnalysisOptions {
+            enable_column_lineage: Some(true),
+            ..Default::default()
+        }),
+        schema: None,
+    };
+
+    let result = analyze(&request);
+
+    // Should have no warnings
+    let lateral_warnings = count_warnings(&result, |issue| {
+        issue.code == issue_codes::UNSUPPORTED_SYNTAX
+            && issue.message.contains("lateral column alias")
+    });
+    assert_eq!(lateral_warnings, 0, "Snowflake supports lateral aliases");
+
+    // Find column nodes
+    // Note: Output columns (FIRST, DOUBLED) are normalized per dialect, but source columns
+    // from table references may retain original case in their labels.
+    let stmt = &result.statements[0];
+
+    let col_first = stmt
+        .nodes
+        .iter()
+        .find(|n| n.node_type == flowscope_core::types::NodeType::Column && &*n.label == "FIRST");
+    let col_doubled = stmt
+        .nodes
+        .iter()
+        .find(|n| n.node_type == flowscope_core::types::NodeType::Column && &*n.label == "DOUBLED");
+    // Source column 'x' from table may be lowercase
+    let col_x = stmt.nodes.iter().find(|n| {
+        n.node_type == flowscope_core::types::NodeType::Column
+            && (n.label.eq_ignore_ascii_case("x"))
+    });
+
+    assert!(col_first.is_some(), "Column 'FIRST' should exist");
+    assert!(col_doubled.is_some(), "Column 'DOUBLED' should exist");
+    assert!(col_x.is_some(), "Column 'x' or 'X' should exist");
+
+    let col_x = col_x.unwrap();
+    let col_doubled = col_doubled.unwrap();
+
+    // 'DOUBLED' should derive from 'X' (transitively through 'FIRST')
+    let doubled_derives_from_x = stmt.edges.iter().any(|e| {
+        e.from == col_x.id
+            && e.to == col_doubled.id
+            && e.edge_type == flowscope_core::types::EdgeType::Derivation
+    });
+
+    assert!(
+        doubled_derives_from_x,
+        "Column 'DOUBLED' should derive from 'X' (via lateral alias 'FIRST'). Edges: {:?}",
+        stmt.edges
+    );
+}
+
+#[test]
+fn test_lateral_column_alias_no_lineage_postgres() {
+    // PostgreSQL does NOT support lateral column aliases.
+    // The reference to 'b' in 'b + 1' should NOT be resolved to t.a.
+    // Instead, it should be treated as an unresolved column reference.
+    let sql = "SELECT a + 1 AS b, b + 1 AS c FROM t";
+
+    let request = AnalyzeRequest {
+        sql: sql.to_string(),
+        files: None,
+        dialect: Dialect::Postgres,
+        source_name: Some("test_lateral_no_lineage_postgres".to_string()),
+        options: Some(AnalysisOptions {
+            enable_column_lineage: Some(true),
+            ..Default::default()
+        }),
+        schema: None,
+    };
+
+    let result = analyze(&request);
+
+    // Should have a warning about lateral alias usage
+    let lateral_warnings = count_warnings(&result, |issue| {
+        issue.code == issue_codes::UNSUPPORTED_SYNTAX
+            && issue.message.contains("lateral column alias")
+    });
+    assert_eq!(
+        lateral_warnings, 1,
+        "PostgreSQL should warn about lateral alias 'b': {:?}",
+        result.issues
+    );
+
+    // Find column nodes
+    let stmt = &result.statements[0];
+    let col_c = stmt
+        .nodes
+        .iter()
+        .find(|n| n.node_type == flowscope_core::types::NodeType::Column && &*n.label == "c");
+    let col_a = stmt
+        .nodes
+        .iter()
+        .find(|n| n.node_type == flowscope_core::types::NodeType::Column && &*n.label == "a");
+
+    assert!(col_c.is_some(), "Column 'c' should exist");
+    // 'a' should exist as source column for 'b'
+    assert!(col_a.is_some(), "Column 'a' should exist");
+
+    let col_a = col_a.unwrap();
+    let col_c = col_c.unwrap();
+
+    // In PostgreSQL (no lateral alias support), 'c' should NOT derive from 'a'
+    // because we don't resolve the lateral alias reference
+    let c_derives_from_a = stmt.edges.iter().any(|e| {
+        e.from == col_a.id
+            && e.to == col_c.id
+            && (e.edge_type == flowscope_core::types::EdgeType::Derivation
+                || e.edge_type == flowscope_core::types::EdgeType::DataFlow)
+    });
+
+    assert!(
+        !c_derives_from_a,
+        "In PostgreSQL, 'c' should NOT derive from 'a' (lateral alias not resolved). Edges: {:?}",
+        stmt.edges
+    );
+}
+
+#[test]
+fn test_lateral_column_alias_chain_lineage() {
+    // Test a chain of lateral aliases: a -> b -> c -> d
+    let sql = "SELECT a AS x, x + 1 AS y, y + 1 AS z FROM t";
+
+    let request = AnalyzeRequest {
+        sql: sql.to_string(),
+        files: None,
+        dialect: Dialect::Bigquery,
+        source_name: Some("test_lateral_chain".to_string()),
+        options: Some(AnalysisOptions {
+            enable_column_lineage: Some(true),
+            ..Default::default()
+        }),
+        schema: None,
+    };
+
+    let result = analyze(&request);
+
+    // Should have no warnings
+    let lateral_warnings = count_warnings(&result, |issue| {
+        issue.code == issue_codes::UNSUPPORTED_SYNTAX
+            && issue.message.contains("lateral column alias")
+    });
+    assert_eq!(lateral_warnings, 0, "BigQuery supports lateral aliases");
+
+    // Find nodes
+    let stmt = &result.statements[0];
+    let col_a = stmt
+        .nodes
+        .iter()
+        .find(|n| n.node_type == flowscope_core::types::NodeType::Column && &*n.label == "a");
+    let col_z = stmt
+        .nodes
+        .iter()
+        .find(|n| n.node_type == flowscope_core::types::NodeType::Column && &*n.label == "z");
+
+    assert!(col_a.is_some(), "Column 'a' should exist");
+    assert!(col_z.is_some(), "Column 'z' should exist");
+
+    let col_a = col_a.unwrap();
+    let col_z = col_z.unwrap();
+
+    // 'z' should ultimately derive from 'a' (through the chain x -> y -> z)
+    let z_derives_from_a = stmt.edges.iter().any(|e| {
+        e.from == col_a.id
+            && e.to == col_z.id
+            && e.edge_type == flowscope_core::types::EdgeType::Derivation
+    });
+
+    assert!(
+        z_derives_from_a,
+        "Column 'z' should derive from 'a' (via chain x -> y -> z). Edges: {:?}",
+        stmt.edges
+    );
+}

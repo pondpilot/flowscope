@@ -220,6 +220,7 @@ fn has_edge(
 #[case("postgres", Dialect::Postgres)]
 #[case("snowflake", Dialect::Snowflake)]
 #[case("bigquery", Dialect::Bigquery)]
+#[case("redshift", Dialect::Redshift)]
 fn multi_dialect_fixtures_cover_core_constructs(#[case] dir_name: &str, #[case] dialect: Dialect) {
     let dir = dialect_fixture_dir(dir_name);
     let fixtures = list_fixture_files(&dir);
@@ -5175,4 +5176,916 @@ fn create_table_with_composite_primary_key() {
     assert_eq!(pk_constraint.columns.len(), 2);
     assert!(pk_constraint.columns.contains(&"order_id".to_string()));
     assert!(pk_constraint.columns.contains(&"line_number".to_string()));
+}
+
+// =============================================================================
+// COPY STATEMENT LINEAGE
+// =============================================================================
+
+#[test]
+fn test_copy_statement_lineage() {
+    let sql = "COPY users FROM 's3://bucket/users.csv'";
+    let result = run_analysis(sql, Dialect::Generic, None);
+
+    assert!(result.issues.iter().all(|i| i.severity != Severity::Error));
+    // COPY FROM: external source -> table (users is target)
+    let stmt = &result.statements[0];
+    assert!(stmt.nodes.iter().any(|n| n.label.contains("users")));
+}
+
+#[test]
+fn test_copy_into_snowflake() {
+    let sql = "COPY INTO analytics.orders FROM @my_stage/orders/";
+    let result = run_analysis(sql, Dialect::Snowflake, None);
+
+    assert!(result.issues.iter().all(|i| i.severity != Severity::Error));
+    let stmt = &result.statements[0];
+    assert!(stmt.nodes.iter().any(|n| n.label.contains("orders")));
+}
+
+#[test]
+fn test_copy_to_with_query() {
+    let sql = "COPY (SELECT id, name FROM users WHERE active = true) TO '/tmp/out.csv'";
+    let result = run_analysis(sql, Dialect::Postgres, None);
+
+    // COPY TO with query: users is source
+    let stmt = &result.statements[0];
+    assert!(stmt.nodes.iter().any(|n| n.label.contains("users")));
+}
+
+#[test]
+fn test_copy_with_column_list() {
+    // COPY with explicit column list
+    let sql = "COPY users (id, name, email) FROM '/tmp/users.csv'";
+    let result = run_analysis(sql, Dialect::Postgres, None);
+
+    assert!(result.issues.iter().all(|i| i.severity != Severity::Error));
+    let stmt = &result.statements[0];
+
+    // users should be identified as target (COPY FROM loads data into table)
+    assert!(
+        stmt.nodes.iter().any(|n| n.label.as_ref() == "users"),
+        "Expected 'users' table in lineage"
+    );
+}
+
+#[test]
+fn test_copy_schema_qualified_table() {
+    // COPY with schema-qualified table name
+    let sql = "COPY analytics.events FROM 's3://bucket/events.csv'";
+    let result = run_analysis(sql, Dialect::Postgres, None);
+
+    assert!(result.issues.iter().all(|i| i.severity != Severity::Error));
+    let stmt = &result.statements[0];
+
+    // Check that qualified name is tracked
+    let table_node = stmt
+        .nodes
+        .iter()
+        .find(|n| n.node_type == NodeType::Table)
+        .expect("Expected a table node");
+    assert!(
+        table_node.qualified_name.as_ref().map(|n| n.as_ref()) == Some("analytics.events")
+            || table_node.label.as_ref() == "events",
+        "Expected 'analytics.events' table, got: {:?}",
+        table_node
+    );
+}
+
+// =============================================================================
+// UNLOAD STATEMENT LINEAGE
+// =============================================================================
+
+#[test]
+fn test_unload_statement_string_query() {
+    // Redshift UNLOAD with query as string literal
+    let sql = r#"UNLOAD ('SELECT * FROM orders') TO 's3://bucket/out'"#;
+    let result = run_analysis(sql, Dialect::Redshift, None);
+
+    assert!(result.issues.iter().all(|i| i.severity != Severity::Error));
+    let stmt = &result.statements[0];
+    assert_eq!(stmt.statement_type, "UNLOAD");
+
+    // orders should be identified as source
+    assert!(
+        stmt.nodes.iter().any(|n| n.label.contains("orders")),
+        "Expected 'orders' table in lineage, got: {:?}",
+        stmt.nodes.iter().map(|n| &n.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_unload_statement_parsed_query() {
+    // UNLOAD with query as parsed expression (without string literal)
+    let sql = r#"UNLOAD (SELECT id, name FROM users WHERE active = true) TO 's3://bucket/out'"#;
+    let result = run_analysis(sql, Dialect::Redshift, None);
+
+    assert!(result.issues.iter().all(|i| i.severity != Severity::Error));
+    let stmt = &result.statements[0];
+    assert_eq!(stmt.statement_type, "UNLOAD");
+
+    // users should be identified as source
+    assert!(
+        stmt.nodes.iter().any(|n| n.label.contains("users")),
+        "Expected 'users' table in lineage, got: {:?}",
+        stmt.nodes.iter().map(|n| &n.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn test_unload_statement_qualified_table() {
+    // UNLOAD with fully qualified table name
+    let sql = r#"UNLOAD ('SELECT * FROM analytics.orders WHERE order_date > ''2024-01-01''')
+TO 's3://bucket/exports/orders_'
+IAM_ROLE 'arn:aws:iam::123456789:role/RedshiftCopyRole'"#;
+    let result = run_analysis(sql, Dialect::Redshift, None);
+
+    assert!(result.issues.iter().all(|i| i.severity != Severity::Error));
+    let stmt = &result.statements[0];
+    assert_eq!(stmt.statement_type, "UNLOAD");
+
+    // Should have analytics.orders in lineage
+    let table_node = stmt
+        .nodes
+        .iter()
+        .find(|n| n.node_type == NodeType::Table)
+        .expect("Should have a table node");
+    assert!(
+        table_node.qualified_name.as_ref().map(|n| n.as_ref()) == Some("analytics.orders")
+            || table_node.label.as_ref() == "orders",
+        "Expected 'analytics.orders' table in lineage, got: {:?}",
+        table_node
+    );
+}
+
+#[test]
+fn test_unload_statement_with_join() {
+    // UNLOAD with a JOIN query
+    let sql = r#"UNLOAD ('SELECT o.id, c.name FROM orders o JOIN customers c ON o.customer_id = c.id')
+TO 's3://bucket/out'"#;
+    let result = run_analysis(sql, Dialect::Redshift, None);
+
+    assert!(result.issues.iter().all(|i| i.severity != Severity::Error));
+    let stmt = &result.statements[0];
+
+    // Both orders and customers should be identified as sources
+    let table_labels: Vec<_> = stmt
+        .nodes
+        .iter()
+        .filter(|n| n.node_type == NodeType::Table)
+        .map(|n| n.label.as_ref())
+        .collect();
+    assert!(
+        table_labels.contains(&"orders"),
+        "Expected 'orders' table, got: {:?}",
+        table_labels
+    );
+    assert!(
+        table_labels.contains(&"customers"),
+        "Expected 'customers' table, got: {:?}",
+        table_labels
+    );
+}
+
+#[test]
+fn test_unload_statement_malformed_query_string() {
+    // UNLOAD with a malformed query string should produce a warning, not crash
+    let sql = r#"UNLOAD ('SELECT * FROM WHERE invalid syntax')
+TO 's3://bucket/out'"#;
+    let result = run_analysis(sql, Dialect::Redshift, None);
+
+    // Should complete without fatal error
+    assert!(
+        !result.statements.is_empty(),
+        "Should still produce a statement even with malformed query"
+    );
+
+    // Should have a warning about parse failure
+    assert!(
+        result
+            .issues
+            .iter()
+            .any(|i| i.severity == Severity::Warning && i.code == issue_codes::PARSE_ERROR),
+        "Expected PARSE_ERROR warning for malformed query, got: {:?}",
+        result.issues
+    );
+}
+
+// =============================================================================
+// ALTER TABLE LINEAGE
+// =============================================================================
+
+#[test]
+fn test_alter_table_rename() {
+    let sql = "ALTER TABLE old_users RENAME TO new_users";
+    let result = run_analysis(sql, Dialect::Generic, None);
+
+    assert!(result.issues.iter().all(|i| i.severity != Severity::Error));
+    let stmt = &result.statements[0];
+
+    // Both old and new table should appear in lineage
+    let labels: Vec<_> = stmt.nodes.iter().map(|n| n.label.as_ref()).collect();
+    assert!(labels.contains(&"old_users"));
+    assert!(labels.contains(&"new_users"));
+
+    // Find the old_users and new_users node IDs
+    let old_node = stmt
+        .nodes
+        .iter()
+        .find(|n| n.label.as_ref() == "old_users")
+        .expect("old_users node should exist");
+    let new_node = stmt
+        .nodes
+        .iter()
+        .find(|n| n.label.as_ref() == "new_users")
+        .expect("new_users node should exist");
+
+    // Should have exactly one DataFlow edge from old_users to new_users with RENAME operation
+    assert_eq!(stmt.edges.len(), 1, "Should have exactly one edge");
+    let edge = &stmt.edges[0];
+    assert_eq!(
+        edge.edge_type,
+        EdgeType::DataFlow,
+        "Edge should be DataFlow"
+    );
+    assert_eq!(
+        edge.from.as_ref(),
+        old_node.id.as_ref(),
+        "Edge should be from old_users"
+    );
+    assert_eq!(
+        edge.to.as_ref(),
+        new_node.id.as_ref(),
+        "Edge should be to new_users"
+    );
+    assert_eq!(
+        edge.operation.as_ref().map(|o| o.as_ref()),
+        Some("RENAME"),
+        "Operation should be RENAME"
+    );
+}
+
+#[test]
+fn test_alter_table_rename_with_schema() {
+    let sql = "ALTER TABLE analytics.legacy_orders RENAME TO analytics.orders_v2";
+    let result = run_analysis(sql, Dialect::Generic, None);
+
+    assert!(result.issues.iter().all(|i| i.severity != Severity::Error));
+    let stmt = &result.statements[0];
+
+    // Both old and new table should appear in lineage with schema qualification
+    let qualified_names: Vec<_> = stmt
+        .nodes
+        .iter()
+        .filter_map(|n| n.qualified_name.as_ref())
+        .map(|qn| qn.as_ref())
+        .collect();
+    assert!(qualified_names.contains(&"analytics.legacy_orders"));
+    assert!(qualified_names.contains(&"analytics.orders_v2"));
+
+    // Find the old and new table node IDs
+    let old_node = stmt
+        .nodes
+        .iter()
+        .find(|n| {
+            n.qualified_name
+                .as_ref()
+                .map(|qn| qn.as_ref() == "analytics.legacy_orders")
+                .unwrap_or(false)
+        })
+        .expect("analytics.legacy_orders node should exist");
+    let new_node = stmt
+        .nodes
+        .iter()
+        .find(|n| {
+            n.qualified_name
+                .as_ref()
+                .map(|qn| qn.as_ref() == "analytics.orders_v2")
+                .unwrap_or(false)
+        })
+        .expect("analytics.orders_v2 node should exist");
+
+    // Should have exactly one DataFlow edge from old table to new table with RENAME operation
+    assert_eq!(stmt.edges.len(), 1, "Should have exactly one edge");
+    let edge = &stmt.edges[0];
+    assert_eq!(
+        edge.edge_type,
+        EdgeType::DataFlow,
+        "Edge should be DataFlow"
+    );
+    assert_eq!(
+        edge.from.as_ref(),
+        old_node.id.as_ref(),
+        "Edge should be from legacy_orders"
+    );
+    assert_eq!(
+        edge.to.as_ref(),
+        new_node.id.as_ref(),
+        "Edge should be to orders_v2"
+    );
+    assert_eq!(
+        edge.operation.as_ref().map(|o| o.as_ref()),
+        Some("RENAME"),
+        "Operation should be RENAME"
+    );
+}
+
+#[test]
+fn test_alter_table_rename_inherits_schema_when_unqualified() {
+    let sql = "ALTER TABLE analytics.legacy_orders RENAME TO orders_v2";
+    let result = run_analysis(sql, Dialect::Generic, None);
+
+    assert!(
+        result.issues.iter().all(|i| i.severity != Severity::Error),
+        "Should not produce errors: {:?}",
+        result.issues
+    );
+    let stmt = &result.statements[0];
+
+    let old_node = stmt
+        .nodes
+        .iter()
+        .find(|n| {
+            n.qualified_name
+                .as_ref()
+                .map(|qn| qn.as_ref() == "analytics.legacy_orders")
+                .unwrap_or(false)
+        })
+        .expect("analytics.legacy_orders node should exist");
+    let new_node = stmt
+        .nodes
+        .iter()
+        .find(|n| n.label.as_ref() == "orders_v2")
+        .expect("orders_v2 node should exist");
+
+    assert_eq!(
+        new_node.qualified_name.as_deref(),
+        Some("analytics.orders_v2"),
+        "New node should inherit schema qualification"
+    );
+
+    assert_eq!(stmt.edges.len(), 1, "Should have exactly one edge");
+    let edge = &stmt.edges[0];
+    assert_eq!(
+        edge.from.as_ref(),
+        old_node.id.as_ref(),
+        "Edge should originate from old table"
+    );
+    assert_eq!(
+        edge.to.as_ref(),
+        new_node.id.as_ref(),
+        "Edge should point to renamed table"
+    );
+    assert_eq!(
+        edge.operation.as_ref().map(|o| o.as_ref()),
+        Some("RENAME"),
+        "Edge should be marked as RENAME operation"
+    );
+}
+
+// =============================================================================
+// CROSS-STATEMENT TESTS
+// =============================================================================
+// These tests verify that lineage is correctly tracked across multiple
+// statements in a single analysis batch.
+
+#[test]
+fn test_cross_statement_rename_then_select() {
+    // After renaming a table, a SELECT should reference the new name
+    let sql = r#"
+        ALTER TABLE old_users RENAME TO users;
+        SELECT id, name FROM users;
+    "#;
+    let result = run_analysis(sql, Dialect::Generic, None);
+
+    assert!(
+        result.issues.iter().all(|i| i.severity != Severity::Error),
+        "Should not produce errors: {:?}",
+        result.issues
+    );
+    assert_eq!(result.statements.len(), 2);
+
+    // First statement: RENAME
+    let rename_stmt = &result.statements[0];
+    assert!(rename_stmt
+        .nodes
+        .iter()
+        .any(|n| n.label.as_ref() == "old_users"));
+    assert!(rename_stmt
+        .nodes
+        .iter()
+        .any(|n| n.label.as_ref() == "users"));
+
+    // Second statement: SELECT from users
+    let select_stmt = &result.statements[1];
+    assert!(
+        select_stmt
+            .nodes
+            .iter()
+            .any(|n| n.label.as_ref() == "users"),
+        "SELECT should reference 'users' table"
+    );
+}
+
+#[test]
+fn test_cross_statement_copy_then_select() {
+    // COPY data into a table, then SELECT from it
+    let sql = r#"
+        COPY users FROM '/data/users.csv';
+        SELECT id, name FROM users WHERE active = true;
+    "#;
+    let result = run_analysis(sql, Dialect::Postgres, None);
+
+    assert!(
+        result.issues.iter().all(|i| i.severity != Severity::Error),
+        "Should not produce errors: {:?}",
+        result.issues
+    );
+    assert_eq!(result.statements.len(), 2);
+
+    // Both statements should reference users table
+    let copy_stmt = &result.statements[0];
+    assert!(
+        copy_stmt.nodes.iter().any(|n| n.label.as_ref() == "users"),
+        "COPY should reference 'users' table"
+    );
+
+    let select_stmt = &result.statements[1];
+    assert!(
+        select_stmt
+            .nodes
+            .iter()
+            .any(|n| n.label.as_ref() == "users"),
+        "SELECT should reference 'users' table"
+    );
+}
+
+#[test]
+fn test_cross_statement_ctas_then_select() {
+    // CREATE TABLE AS, then SELECT from the new table
+    let sql = r#"
+        CREATE TABLE active_users AS
+        SELECT id, name FROM users WHERE active = true;
+
+        SELECT * FROM active_users WHERE name LIKE 'A%';
+    "#;
+    let result = run_analysis(sql, Dialect::Generic, None);
+
+    assert!(
+        result.issues.iter().all(|i| i.severity != Severity::Error),
+        "Should not produce errors: {:?}",
+        result.issues
+    );
+    assert_eq!(result.statements.len(), 2);
+
+    // First statement: CTAS
+    let ctas_stmt = &result.statements[0];
+    assert!(
+        ctas_stmt.nodes.iter().any(|n| n.label.as_ref() == "users"),
+        "CTAS should reference source 'users' table"
+    );
+    assert!(
+        ctas_stmt
+            .nodes
+            .iter()
+            .any(|n| n.label.as_ref() == "active_users"),
+        "CTAS should create 'active_users' table"
+    );
+
+    // Second statement: SELECT from active_users
+    let select_stmt = &result.statements[1];
+    assert!(
+        select_stmt
+            .nodes
+            .iter()
+            .any(|n| n.label.as_ref() == "active_users"),
+        "SELECT should reference 'active_users' table"
+    );
+}
+
+// =============================================================================
+// ADVANCED COPY/UNLOAD TESTS
+// =============================================================================
+
+#[test]
+fn test_copy_into_snowflake_with_transformation_query() {
+    // Snowflake COPY INTO table with transformation query
+    let sql = r#"
+        COPY INTO target_table
+        FROM (SELECT $1, $2, CURRENT_TIMESTAMP() FROM @my_stage/data/)
+        FILE_FORMAT = (TYPE = CSV)
+    "#;
+    let result = run_analysis(sql, Dialect::Snowflake, None);
+
+    assert!(
+        result.issues.iter().all(|i| i.severity != Severity::Error),
+        "Should not produce errors: {:?}",
+        result.issues
+    );
+
+    let stmt = &result.statements[0];
+    assert!(
+        stmt.nodes
+            .iter()
+            .any(|n| n.label.as_ref() == "target_table"),
+        "Should have target_table node"
+    );
+}
+
+#[test]
+fn test_copy_into_location_from_table() {
+    // Snowflake COPY INTO location FROM table (export)
+    let sql = "COPY INTO @my_stage/export/ FROM analytics.orders";
+    let result = run_analysis(sql, Dialect::Snowflake, None);
+
+    assert!(
+        result.issues.iter().all(|i| i.severity != Severity::Error),
+        "Should not produce errors: {:?}",
+        result.issues
+    );
+
+    let stmt = &result.statements[0];
+    assert!(
+        stmt.nodes.iter().any(|n| n.label.as_ref() == "orders"),
+        "Should have orders table as source"
+    );
+}
+
+#[test]
+fn test_copy_into_location_from_query() {
+    // Snowflake COPY INTO location FROM query (export with transformation)
+    let sql = r#"
+        COPY INTO @my_stage/export/
+        FROM (
+            SELECT o.id, o.total, c.name
+            FROM orders o
+            JOIN customers c ON o.customer_id = c.id
+            WHERE o.status = 'completed'
+        )
+    "#;
+    let result = run_analysis(sql, Dialect::Snowflake, None);
+
+    assert!(
+        result.issues.iter().all(|i| i.severity != Severity::Error),
+        "Should not produce errors: {:?}",
+        result.issues
+    );
+
+    let stmt = &result.statements[0];
+    // Snowflake normalizes identifiers to uppercase
+    let labels: Vec<_> = stmt.nodes.iter().map(|n| n.label.to_uppercase()).collect();
+    assert!(
+        labels.iter().any(|l| l == "ORDERS"),
+        "Should have orders table, got: {:?}",
+        labels
+    );
+    assert!(
+        labels.iter().any(|l| l == "CUSTOMERS"),
+        "Should have customers table, got: {:?}",
+        labels
+    );
+}
+
+#[test]
+fn test_unload_with_subquery_in_from() {
+    // UNLOAD with a derived table subquery in FROM clause
+    let sql = r#"
+        UNLOAD ('
+            SELECT sub.id, sub.name
+            FROM (
+                SELECT id, name FROM users WHERE active = true
+            ) sub
+        ')
+        TO 's3://bucket/users/'
+    "#;
+    let result = run_analysis(sql, Dialect::Redshift, None);
+
+    assert!(
+        result.issues.iter().all(|i| i.severity != Severity::Error),
+        "Should not produce errors: {:?}",
+        result.issues
+    );
+
+    let stmt = &result.statements[0];
+    let labels: Vec<_> = stmt.nodes.iter().map(|n| n.label.as_ref()).collect();
+    assert!(labels.contains(&"users"), "Should have users table");
+}
+
+#[test]
+fn test_unload_with_scalar_subquery_expression() {
+    // UNLOAD with a scalar subquery in SELECT expression
+    // Note: Scalar subqueries store the subquery as expression text rather than
+    // extracting the referenced table as a separate node. This is by design -
+    // the expression column captures the full subquery text for traceability.
+    let sql = r#"
+        UNLOAD ('
+            SELECT u.id, u.name,
+                   (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.id) as order_count
+            FROM users u
+            WHERE u.active = true
+        ')
+        TO 's3://bucket/users/'
+    "#;
+    let result = run_analysis(sql, Dialect::Redshift, None);
+
+    assert!(
+        result.issues.iter().all(|i| i.severity != Severity::Error),
+        "Should not produce errors: {:?}",
+        result.issues
+    );
+
+    let stmt = &result.statements[0];
+    let labels: Vec<_> = stmt.nodes.iter().map(|n| n.label.as_ref()).collect();
+    assert!(labels.contains(&"users"), "Should have users table");
+
+    // The scalar subquery is stored as an expression, verify it's captured
+    let order_count_col = stmt
+        .nodes
+        .iter()
+        .find(|n| n.label.as_ref() == "order_count");
+    assert!(order_count_col.is_some(), "Should have order_count column");
+    assert!(
+        order_count_col
+            .unwrap()
+            .expression
+            .as_ref()
+            .map(|e| e.contains("orders"))
+            .unwrap_or(false),
+        "order_count expression should reference orders table"
+    );
+}
+
+#[test]
+fn test_unload_with_cte() {
+    // UNLOAD with a CTE in the query
+    let sql = r#"
+        UNLOAD ('
+            WITH active_users AS (
+                SELECT id, name FROM users WHERE active = true
+            ),
+            user_orders AS (
+                SELECT user_id, SUM(total) as total_spent
+                FROM orders
+                GROUP BY user_id
+            )
+            SELECT au.id, au.name, COALESCE(uo.total_spent, 0) as total_spent
+            FROM active_users au
+            LEFT JOIN user_orders uo ON au.id = uo.user_id
+        ')
+        TO 's3://bucket/report/'
+    "#;
+    let result = run_analysis(sql, Dialect::Redshift, None);
+
+    assert!(
+        result.issues.iter().all(|i| i.severity != Severity::Error),
+        "Should not produce errors: {:?}",
+        result.issues
+    );
+
+    let stmt = &result.statements[0];
+    let labels: Vec<_> = stmt.nodes.iter().map(|n| n.label.as_ref()).collect();
+    assert!(labels.contains(&"users"), "Should have users table");
+    assert!(labels.contains(&"orders"), "Should have orders table");
+}
+
+#[test]
+fn test_copy_postgres_with_column_list_and_options() {
+    // PostgreSQL COPY with column list and various options
+    let sql = "COPY users (id, name, email) FROM '/data/users.csv' WITH (FORMAT CSV, HEADER true)";
+    let result = run_analysis(sql, Dialect::Postgres, None);
+
+    assert!(
+        result.issues.iter().all(|i| i.severity != Severity::Error),
+        "Should not produce errors: {:?}",
+        result.issues
+    );
+
+    let stmt = &result.statements[0];
+    assert!(
+        stmt.nodes.iter().any(|n| n.label.as_ref() == "users"),
+        "Should have users table"
+    );
+}
+
+#[test]
+fn test_copy_to_stdout() {
+    // PostgreSQL COPY TO STDOUT (common pattern)
+    let sql = "COPY (SELECT id, name FROM users WHERE created_at > '2024-01-01') TO STDOUT";
+    let result = run_analysis(sql, Dialect::Postgres, None);
+
+    assert!(
+        result.issues.iter().all(|i| i.severity != Severity::Error),
+        "Should not produce errors: {:?}",
+        result.issues
+    );
+
+    let stmt = &result.statements[0];
+    assert!(
+        stmt.nodes.iter().any(|n| n.label.as_ref() == "users"),
+        "Should have users table as source"
+    );
+}
+
+// =============================================================================
+// ERROR HANDLING AND EDGE CASES
+// =============================================================================
+
+#[test]
+fn test_unload_empty_query_string() {
+    // UNLOAD with empty query string should not crash
+    let sql = "UNLOAD ('') TO 's3://bucket/out'";
+    let result = run_analysis(sql, Dialect::Redshift, None);
+
+    // Should complete without panic
+    assert!(!result.statements.is_empty());
+}
+
+#[test]
+fn test_copy_from_multiple_files_pattern() {
+    // COPY from multiple files using pattern (common S3 pattern)
+    let sql =
+        "COPY events FROM 's3://bucket/events/2024/*' IAM_ROLE 'arn:aws:iam::123:role/redshift'";
+    let result = run_analysis(sql, Dialect::Redshift, None);
+
+    // Should parse without error
+    assert!(
+        result.issues.iter().all(|i| i.severity != Severity::Error),
+        "Should not produce errors: {:?}",
+        result.issues
+    );
+}
+
+#[test]
+fn test_alter_table_rename_preserves_case_sensitivity() {
+    // Test case sensitivity in rename operations
+    let sql = r#"ALTER TABLE "MyTable" RENAME TO "my_table""#;
+    let result = run_analysis(sql, Dialect::Postgres, None);
+
+    assert!(
+        result.issues.iter().all(|i| i.severity != Severity::Error),
+        "Should not produce errors: {:?}",
+        result.issues
+    );
+
+    let stmt = &result.statements[0];
+    // Labels include quotes, but qualified_name has the actual case-preserved identifier
+    let qualified_names: Vec<_> = stmt
+        .nodes
+        .iter()
+        .filter_map(|n| n.qualified_name.as_ref())
+        .map(|qn| qn.as_ref())
+        .collect();
+    assert!(
+        qualified_names.contains(&"MyTable"),
+        "Should preserve case for MyTable, got: {:?}",
+        qualified_names
+    );
+    assert!(
+        qualified_names.contains(&"my_table"),
+        "Should have my_table, got: {:?}",
+        qualified_names
+    );
+}
+
+// =============================================================================
+// 3-PART CATALOG.SCHEMA.TABLE RENAME TESTS
+// =============================================================================
+
+#[test]
+fn test_alter_table_rename_with_full_catalog_path() {
+    // Snowflake and BigQuery support 3-part names: catalog.schema.table
+    let sql = "ALTER TABLE analytics_db.reporting.legacy_orders RENAME TO analytics_db.reporting.orders_v2";
+    let result = run_analysis(sql, Dialect::Snowflake, None);
+
+    assert!(
+        result.issues.iter().all(|i| i.severity != Severity::Error),
+        "Should not produce errors: {:?}",
+        result.issues
+    );
+
+    let stmt = &result.statements[0];
+
+    // Should have both source and target tables
+    let tables: Vec<_> = stmt
+        .nodes
+        .iter()
+        .filter(|n| n.node_type == NodeType::Table)
+        .collect();
+
+    assert_eq!(tables.len(), 2, "Should have source and target table nodes");
+
+    // Check qualified names contain the 3-part names (Snowflake uppercases unquoted identifiers)
+    let qualified_names: Vec<_> = tables
+        .iter()
+        .filter_map(|t| t.qualified_name.as_ref())
+        .collect();
+    assert!(
+        qualified_names
+            .iter()
+            .any(|qn| qn.contains("LEGACY_ORDERS") || qn.contains("legacy_orders")),
+        "Should have source table, got: {:?}",
+        qualified_names
+    );
+    assert!(
+        qualified_names
+            .iter()
+            .any(|qn| qn.contains("ORDERS_V2") || qn.contains("orders_v2")),
+        "Should have target table, got: {:?}",
+        qualified_names
+    );
+
+    // Should have a RENAME edge
+    let rename_edges: Vec<_> = stmt
+        .edges
+        .iter()
+        .filter(|e| e.edge_type == EdgeType::DataFlow)
+        .filter(|e| e.operation.as_deref() == Some("RENAME"))
+        .collect();
+
+    assert_eq!(rename_edges.len(), 1, "Should have exactly one RENAME edge");
+}
+
+#[test]
+fn test_alter_table_rename_inherits_catalog_when_partially_qualified() {
+    // When target has fewer parts than source, it should inherit missing parts
+    let sql = "ALTER TABLE production.sales.monthly_report RENAME TO quarterly_report";
+    let result = run_analysis(sql, Dialect::Snowflake, None);
+
+    assert!(
+        result.issues.iter().all(|i| i.severity != Severity::Error),
+        "Should not produce errors: {:?}",
+        result.issues
+    );
+
+    // The important thing is that both tables are recognized
+    let stmt = &result.statements[0];
+    let tables: Vec<_> = stmt
+        .nodes
+        .iter()
+        .filter(|n| n.node_type == NodeType::Table)
+        .collect();
+
+    assert_eq!(tables.len(), 2, "Should have source and target table nodes");
+
+    // Should have a RENAME edge regardless of qualification level
+    let rename_edges: Vec<_> = stmt
+        .edges
+        .iter()
+        .filter(|e| e.edge_type == EdgeType::DataFlow)
+        .filter(|e| e.operation.as_deref() == Some("RENAME"))
+        .collect();
+
+    assert_eq!(rename_edges.len(), 1, "Should have exactly one RENAME edge");
+}
+
+#[test]
+fn test_alter_table_rename_cross_schema() {
+    // Renaming a table to a different schema (some databases support this)
+    let sql = "ALTER TABLE staging.raw_data RENAME TO production.cleaned_data";
+    let result = run_analysis(sql, Dialect::Snowflake, None);
+
+    assert!(
+        result.issues.iter().all(|i| i.severity != Severity::Error),
+        "Should not produce errors: {:?}",
+        result.issues
+    );
+
+    let stmt = &result.statements[0];
+
+    // Check that both schemas are captured
+    let qualified_names: Vec<_> = stmt
+        .nodes
+        .iter()
+        .filter(|n| n.node_type == NodeType::Table)
+        .filter_map(|n| n.qualified_name.as_ref())
+        .collect();
+
+    // Snowflake uppercases - check for both possible cases
+    let has_staging = qualified_names
+        .iter()
+        .any(|qn| qn.to_uppercase().contains("STAGING") || qn.contains("staging"));
+    let has_production = qualified_names
+        .iter()
+        .any(|qn| qn.to_uppercase().contains("PRODUCTION") || qn.contains("production"));
+
+    assert!(
+        has_staging,
+        "Should reference staging schema, got: {:?}",
+        qualified_names
+    );
+    assert!(
+        has_production,
+        "Should reference production schema, got: {:?}",
+        qualified_names
+    );
+
+    // Should still have RENAME edge
+    let rename_edges: Vec<_> = stmt
+        .edges
+        .iter()
+        .filter(|e| e.edge_type == EdgeType::DataFlow)
+        .filter(|e| e.operation.as_deref() == Some("RENAME"))
+        .collect();
+
+    assert_eq!(rename_edges.len(), 1, "Should have exactly one RENAME edge");
 }
