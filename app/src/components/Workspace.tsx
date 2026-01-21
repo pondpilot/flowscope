@@ -57,6 +57,7 @@ export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspacePr
   const [fileSelectorOpen, setFileSelectorOpen] = useState(false);
   const [projectSelectorOpen, setProjectSelectorOpen] = useState(false);
   const [dialectSelectorOpen, setDialectSelectorOpen] = useState(false);
+  const [templateSelectorOpen, setTemplateSelectorOpen] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [shortcutsDialogOpen, setShortcutsDialogOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -457,6 +458,8 @@ export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspacePr
                 onFileSelectorOpenChange={setFileSelectorOpen}
                 dialectSelectorOpen={dialectSelectorOpen}
                 onDialectSelectorOpenChange={setDialectSelectorOpen}
+                templateSelectorOpen={templateSelectorOpen}
+                onTemplateSelectorOpenChange={setTemplateSelectorOpen}
               />
             </ResizablePanel>
 

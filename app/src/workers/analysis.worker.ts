@@ -4,6 +4,7 @@ import { parseSchemaSQL } from '../lib/schema-parser';
 import { readCachedAnalysisResult, writeCachedAnalysisResult, clearAnalysisCache } from '../lib/analysis-cache';
 import { buildAnalysisCacheKey } from '../lib/analysis-hash';
 import { ANALYSIS_CACHE_MAX_BYTES } from '../lib/constants';
+import type { TemplateMode } from '../types';
 
 export interface AnalysisWorkerPayload {
   files?: Array<{ name: string; content: string }>;
@@ -12,6 +13,7 @@ export interface AnalysisWorkerPayload {
   schemaSQL: string;
   hideCTEs: boolean;
   enableColumnLineage: boolean;
+  templateMode?: TemplateMode;
 }
 
 export interface SyncFilesPayload {
@@ -171,6 +173,7 @@ async function runAnalysis(
     schemaSQL: resolvedPayload.schemaSQL,
     hideCTEs: resolvedPayload.hideCTEs,
     enableColumnLineage: resolvedPayload.enableColumnLineage,
+    templateMode: resolvedPayload.templateMode,
   });
 
   if (knownCacheKey && knownCacheKey === cacheKey) {
@@ -219,7 +222,16 @@ async function runAnalysis(
   const schemaParseMs = nowMs() - schemaStart;
 
   const analyzeStart = nowMs();
-  const result = await analyzeSql({
+  // Build templateConfig if a non-raw template mode is specified
+  // The WASM layer handles template rendering before SQL parsing
+  const templateConfig = resolvedPayload.templateMode && resolvedPayload.templateMode !== 'raw'
+    ? { mode: resolvedPayload.templateMode, context: {} }
+    : undefined;
+  // Note: templateConfig is supported by the WASM API but not yet typed in @pondpilot/flowscope-core.
+  // The request is serialized to JSON, and the Rust side deserializes it with templateConfig support.
+  const analysisRequest: Parameters<typeof analyzeSql>[0] & {
+    templateConfig?: { mode: TemplateMode; context: Record<string, unknown> };
+  } = {
     sql: '',
     files: resolvedPayload.files,
     dialect: resolvedPayload.dialect,
@@ -228,7 +240,11 @@ async function runAnalysis(
       enableColumnLineage: resolvedPayload.enableColumnLineage,
       hideCtes: resolvedPayload.hideCTEs,
     },
-  });
+  };
+  if (templateConfig) {
+    analysisRequest.templateConfig = templateConfig;
+  }
+  const result = await analyzeSql(analysisRequest);
   const analyzeMs = nowMs() - analyzeStart;
 
   if (schemaErrors.length > 0) {
@@ -273,6 +289,7 @@ async function getCachedAnalysis(payload: AnalysisWorkerPayload): Promise<Analys
     schemaSQL: resolvedPayload.schemaSQL,
     hideCTEs: resolvedPayload.hideCTEs,
     enableColumnLineage: resolvedPayload.enableColumnLineage,
+    templateMode: resolvedPayload.templateMode,
   });
 
   const cacheReadStart = nowMs();

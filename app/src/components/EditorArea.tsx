@@ -9,7 +9,7 @@ import { useAnalysis, useDebounce, useFileNavigation, useGlobalShortcuts } from 
 import type { GlobalShortcut } from '@/hooks';
 import { EditorToolbar } from './EditorToolbar';
 import { DEFAULT_FILE_NAMES } from '@/lib/constants';
-import type { Dialect, RunMode } from '@/lib/project-store';
+import type { Dialect, RunMode, TemplateMode } from '@/lib/project-store';
 
 interface EditorAreaProps {
   wasmReady: boolean;
@@ -18,15 +18,18 @@ interface EditorAreaProps {
   onFileSelectorOpenChange: (open: boolean) => void;
   dialectSelectorOpen: boolean;
   onDialectSelectorOpenChange: (open: boolean) => void;
+  templateSelectorOpen: boolean;
+  onTemplateSelectorOpenChange: (open: boolean) => void;
 }
 
-export function EditorArea({ wasmReady, className, fileSelectorOpen, onFileSelectorOpenChange, dialectSelectorOpen, onDialectSelectorOpenChange }: EditorAreaProps) {
+export function EditorArea({ wasmReady, className, fileSelectorOpen, onFileSelectorOpenChange, dialectSelectorOpen, onDialectSelectorOpenChange, templateSelectorOpen, onTemplateSelectorOpenChange }: EditorAreaProps) {
   const {
     currentProject,
     updateFile,
     createFile,
     setProjectDialect,
     setRunMode,
+    setTemplateMode,
   } = useProject();
 
   const theme = useThemeStore((state) => state.theme);
@@ -151,6 +154,8 @@ export function EditorArea({ wasmReady, className, fileSelectorOpen, onFileSelec
       <EditorToolbar
         dialect={currentProject.dialect}
         onDialectChange={(dialect: Dialect) => setProjectDialect(currentProject.id, dialect)}
+        templateMode={currentProject.templateMode}
+        onTemplateModeChange={(mode: TemplateMode) => setTemplateMode(currentProject.id, mode)}
         runMode={currentProject.runMode}
         onRunModeChange={(mode: RunMode) => setRunMode(currentProject.id, mode)}
         isAnalyzing={isAnalyzing}
@@ -162,6 +167,8 @@ export function EditorArea({ wasmReady, className, fileSelectorOpen, onFileSelec
         onFileSelectorOpenChange={onFileSelectorOpenChange}
         dialectSelectorOpen={dialectSelectorOpen}
         onDialectSelectorOpenChange={onDialectSelectorOpenChange}
+        templateSelectorOpen={templateSelectorOpen}
+        onTemplateSelectorOpenChange={onTemplateSelectorOpenChange}
       />
 
       <div ref={editorContainerRef} className="flex-1 overflow-hidden relative" data-testid="sql-editor">

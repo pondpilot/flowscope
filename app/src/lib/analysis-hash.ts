@@ -1,4 +1,5 @@
 import type { Dialect } from './project-store';
+import type { TemplateMode } from '@/types';
 
 const HASH_VERSION = 'v1';
 const FNV_OFFSET_BASIS = 0xcbf29ce484222325n;
@@ -11,6 +12,7 @@ export interface AnalysisHashInput {
   schemaSQL: string;
   hideCTEs: boolean;
   enableColumnLineage: boolean;
+  templateMode?: TemplateMode;
 }
 
 export interface FileSyncInput {
@@ -33,6 +35,7 @@ export function buildAnalysisCacheKey(input: AnalysisHashInput): string {
   hash = updateHashWithString(hash, input.hideCTEs ? '1' : '0');
   hash = updateHashWithString(hash, input.enableColumnLineage ? '1' : '0');
   hash = updateHashWithString(hash, input.schemaSQL ?? '');
+  hash = updateHashWithString(hash, input.templateMode ?? 'raw');
 
   for (const file of input.files) {
     hash = updateHashWithString(hash, file.name);

@@ -206,6 +206,7 @@ export function useAnalysis(wasmReady: boolean) {
           schemaSQL: project.schemaSQL ?? '',
           hideCTEs,
           enableColumnLineage: true,
+          templateMode: project.templateMode,
         });
       })
       .then((cached) => {
@@ -308,6 +309,7 @@ export function useAnalysis(wasmReady: boolean) {
           schemaSQL: currentProject.schemaSQL ?? '',
           hideCTEs,
           enableColumnLineage: true,
+          templateMode: currentProject.templateMode,
         };
 
         const cachedResult = activeProjectId ? getResult(activeProjectId, hideCTEs) : null;

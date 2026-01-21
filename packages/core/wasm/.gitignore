@@ -1,1 +1,13 @@
-# Keep wasm artifacts available for publishing
+# Ignore all generated files by default
+*
+
+# Keep essential files for publishing
+!.gitignore
+!package.json
+!README.md
+
+# Keep WASM build artifacts needed for the npm package
+!flowscope_wasm_bg.wasm
+!flowscope_wasm_bg.wasm.d.ts
+!flowscope_wasm.d.ts
+!flowscope_wasm.js

@@ -17,11 +17,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { FileSelector } from './FileSelector';
-import type { Dialect, RunMode } from '@/lib/project-store';
+import type { Dialect, RunMode, TemplateMode } from '@/lib/project-store';
 
 interface EditorToolbarProps {
   dialect: Dialect;
   onDialectChange: (dialect: Dialect) => void;
+  templateMode: TemplateMode;
+  onTemplateModeChange: (mode: TemplateMode) => void;
   runMode: RunMode;
   onRunModeChange: (mode: RunMode) => void;
   isAnalyzing: boolean;
@@ -33,11 +35,15 @@ interface EditorToolbarProps {
   onFileSelectorOpenChange: (open: boolean) => void;
   dialectSelectorOpen: boolean;
   onDialectSelectorOpenChange: (open: boolean) => void;
+  templateSelectorOpen: boolean;
+  onTemplateSelectorOpenChange: (open: boolean) => void;
 }
 
 export function EditorToolbar({
   dialect,
   onDialectChange,
+  templateMode,
+  onTemplateModeChange,
   runMode,
   onRunModeChange,
   isAnalyzing,
@@ -49,6 +55,8 @@ export function EditorToolbar({
   onFileSelectorOpenChange,
   dialectSelectorOpen,
   onDialectSelectorOpenChange,
+  templateSelectorOpen,
+  onTemplateSelectorOpenChange,
 }: EditorToolbarProps) {
   return (
     <div className="flex items-center justify-between px-3 py-2 border-b h-[44px] shrink-0 bg-muted/30 overflow-hidden gap-2">
@@ -80,6 +88,22 @@ export function EditorToolbar({
             <SelectItem value="redshift">Redshift</SelectItem>
             <SelectItem value="snowflake">Snowflake</SelectItem>
             <SelectItem value="sqlite">SQLite</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={templateMode}
+          onValueChange={v => onTemplateModeChange(v as TemplateMode)}
+          open={templateSelectorOpen}
+          onOpenChange={onTemplateSelectorOpenChange}
+        >
+          <SelectTrigger className="h-8 w-[100px] min-w-0 text-xs">
+            <SelectValue placeholder="Template" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="raw">No Template</SelectItem>
+            <SelectItem value="jinja">Jinja</SelectItem>
+            <SelectItem value="dbt">dbt</SelectItem>
           </SelectContent>
         </Select>
       </div>

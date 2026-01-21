@@ -73,3 +73,32 @@ export interface AnalysisContext {
   fileCount: number;
   files: Array<{ name: string; content: string }>;
 }
+
+/**
+ * Template preprocessing mode for SQL analysis.
+ * - 'raw': No templating, SQL passed through unchanged
+ * - 'jinja': Standard Jinja2 template rendering
+ * - 'dbt': dbt-style templating with builtin macros (ref, source, config, var)
+ */
+export type TemplateMode = 'raw' | 'jinja' | 'dbt';
+
+/** Valid template mode values for runtime validation */
+const VALID_TEMPLATE_MODES: readonly TemplateMode[] = ['raw', 'jinja', 'dbt'] as const;
+
+/**
+ * Validates and parses a template mode value.
+ * Returns the validated mode or 'raw' as a safe fallback for invalid values.
+ */
+export function parseTemplateMode(value: unknown): TemplateMode {
+  if (typeof value === 'string' && VALID_TEMPLATE_MODES.includes(value as TemplateMode)) {
+    return value as TemplateMode;
+  }
+  return 'raw';
+}
+
+/**
+ * Type guard to check if a value is a valid TemplateMode.
+ */
+export function isValidTemplateMode(value: unknown): value is TemplateMode {
+  return typeof value === 'string' && VALID_TEMPLATE_MODES.includes(value as TemplateMode);
+}
