@@ -543,12 +543,20 @@ expression: clean_result
         "name": "employees",
         "columns": [
           {
+            "name": "employee_id",
+            "origin": "implied"
+          },
+          {
             "name": "manager_id",
             "origin": "implied",
             "foreignKey": {
               "table": "subordinates",
               "column": "employee_id"
             }
+          },
+          {
+            "name": "name",
+            "origin": "implied"
           }
         ],
         "origin": "implied",

@@ -165,10 +165,12 @@ fn check_binary_op_types(
                     // Valid: numeric addition or string concatenation
                     return;
                 }
-                // Allow implicit casts between numeric types
-                if (l_numeric || r_numeric)
-                    && (can_implicitly_cast(l_type, r_type) || can_implicitly_cast(r_type, l_type))
-                {
+                // Allow if both can be treated as numeric (one is numeric, other can cast TO numeric)
+                let l_can_be_numeric =
+                    l_numeric || can_implicitly_cast(l_type, CanonicalType::Float);
+                let r_can_be_numeric =
+                    r_numeric || can_implicitly_cast(r_type, CanonicalType::Float);
+                if l_can_be_numeric && r_can_be_numeric {
                     return;
                 }
             } else {
@@ -348,5 +350,18 @@ mod tests {
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::TYPE_MISMATCH);
         assert!(issues[0].message.contains("BOOLEAN"));
+    }
+
+    #[test]
+    fn test_numeric_plus_text_mismatch() {
+        // 1 + 'text' should warn - cannot mix numeric and text in addition
+        // Even though Float can implicitly cast to Text, the reverse is not true
+        // so this is not a valid numeric addition
+        let expr = parse_expr("1 + 'text'");
+        let issues = check_expr_types(&expr, 0);
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::TYPE_MISMATCH);
+        assert!(issues[0].message.contains("FLOAT"));
+        assert!(issues[0].message.contains("TEXT"));
     }
 }

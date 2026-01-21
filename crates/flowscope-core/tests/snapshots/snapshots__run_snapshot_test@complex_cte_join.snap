@@ -868,12 +868,10 @@ expression: clean_result
         "columns": [
           {
             "name": "id",
-            "dataType": "INTEGER",
             "origin": "implied"
           },
           {
             "name": "total",
-            "dataType": "FLOAT",
             "origin": "implied"
           },
           {
