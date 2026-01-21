@@ -55,18 +55,8 @@ impl SqlxMetadataProvider {
         let db_type = DatabaseType::from_url(url)
             .ok_or_else(|| format!("Unsupported database URL scheme: {url}"))?;
 
-        // Install the SQLx any driver for the detected database type
-        match db_type {
-            DatabaseType::Postgres => {
-                sqlx::any::install_default_drivers();
-            }
-            DatabaseType::Mysql => {
-                sqlx::any::install_default_drivers();
-            }
-            DatabaseType::Sqlite => {
-                sqlx::any::install_default_drivers();
-            }
-        }
+        // Install the SQLx any drivers for all supported database types
+        sqlx::any::install_default_drivers();
 
         let pool = AnyPool::connect(url).await?;
 
@@ -321,8 +311,10 @@ pub fn fetch_metadata_from_database(
     schema_filter: Option<String>,
 ) -> Result<SchemaMetadata, Box<dyn Error + Send + Sync>> {
     let rt = tokio::runtime::Runtime::new()?;
-    let provider = rt.block_on(SqlxMetadataProvider::connect(url, schema_filter))?;
-    provider.fetch_schema()
+    rt.block_on(async {
+        let provider = SqlxMetadataProvider::connect(url, schema_filter).await?;
+        provider.fetch_schema_async().await
+    })
 }
 
 #[cfg(test)]
