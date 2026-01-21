@@ -94,9 +94,19 @@ fn test_sqlite_metadata_provider() {
         )
         .status();
 
-    if setup_result.is_err() {
-        eprintln!("sqlite3 CLI not available, skipping test");
-        return;
+    match setup_result {
+        Err(e) => {
+            eprintln!("sqlite3 CLI not available ({e}), skipping test");
+            return;
+        }
+        Ok(status) if !status.success() => {
+            eprintln!(
+                "sqlite3 command failed with exit code {:?}, skipping test",
+                status.code()
+            );
+            return;
+        }
+        Ok(_) => {}
     }
 
     // Write a query that uses SELECT *

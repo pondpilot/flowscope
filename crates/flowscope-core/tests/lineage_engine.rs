@@ -5365,8 +5365,7 @@ TO 's3://bucket/out'"#;
         result
             .issues
             .iter()
-            .any(|i| i.severity == Severity::Warning
-                && i.code == issue_codes::PARSE_ERROR),
+            .any(|i| i.severity == Severity::Warning && i.code == issue_codes::PARSE_ERROR),
         "Expected PARSE_ERROR warning for malformed query, got: {:?}",
         result.issues
     );

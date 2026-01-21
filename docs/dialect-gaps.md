@@ -79,4 +79,4 @@ To request a new dialect in sqlparser-rs:
 ### Open Upstream Issues
 
 - Oracle: No active issue (complex PL/SQL support needed)
-- Spark SQL: [sqlparser-rs#1234](https://github.com/sqlparser-rs/sqlparser-rs/issues) (placeholder - check for actual issue)
+- Spark SQL: No dedicated dialect (use Hive or Databricks as workaround)

@@ -3,8 +3,9 @@
 //! Supports PostgreSQL, MySQL, and SQLite databases.
 
 use flowscope_core::{ColumnSchema, SchemaMetadata, SchemaTable};
-use sqlx::{AnyPool, Row};
+use sqlx::{any::AnyPoolOptions, AnyPool, Row};
 use std::error::Error;
+use std::time::Duration;
 
 use super::MetadataProvider;
 
@@ -58,7 +59,16 @@ impl SqlxMetadataProvider {
         // Install the SQLx any drivers for all supported database types
         sqlx::any::install_default_drivers();
 
-        let pool = AnyPool::connect(url).await?;
+        // Connection pool settings optimized for CLI usage:
+        // - max_connections(2): CLI tools run sequential queries; 2 connections
+        //   handles metadata + query execution without resource waste
+        // - acquire_timeout(10s): Prevents indefinite hangs on unreachable hosts
+        //   while allowing time for slow network connections
+        let pool = AnyPoolOptions::new()
+            .max_connections(2)
+            .acquire_timeout(Duration::from_secs(10))
+            .connect(url)
+            .await?;
 
         Ok(Self {
             pool,

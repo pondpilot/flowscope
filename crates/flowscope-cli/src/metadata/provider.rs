@@ -7,6 +7,7 @@ use std::error::Error;
 ///
 /// Implementations connect to databases and query system catalogs
 /// (e.g., information_schema) to extract table and column definitions.
+#[allow(dead_code)] // Trait defines the abstraction; concrete types used directly for now
 pub trait MetadataProvider {
     /// Fetch schema metadata from the connected database.
     ///
