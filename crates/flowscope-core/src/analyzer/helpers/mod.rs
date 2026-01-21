@@ -4,6 +4,7 @@ mod id;
 mod naming;
 mod query;
 mod span;
+mod type_check;
 mod types;
 
 pub use alias::{alias_visibility_warning, lateral_alias_warning};
@@ -22,4 +23,5 @@ pub use span::{
     find_cte_definition_span, find_derived_table_alias_span, find_identifier_span,
     line_col_to_offset,
 };
+pub use type_check::{check_expr_types, check_expr_types_with_span};
 pub use types::{canonical_type_from_data_type, infer_expr_type};

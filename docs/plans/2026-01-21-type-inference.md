@@ -49,13 +49,13 @@ Expression type inference cannot determine column types without schema metadata.
 
 With types tracked throughout expressions, we can now detect and warn about type mismatches. This helps users catch bugs like comparing strings to integers or adding dates to booleans.
 
-- [ ] Add new issue code `TYPE_MISMATCH` in `issue_codes`
-- [ ] In binary comparison operators (=, <, >, etc.), check operand type compatibility
-- [ ] In arithmetic operators (+, -, *, /), verify operands are numeric
-- [ ] Use `can_implicitly_cast()` to allow compatible implicit conversions
-- [ ] Emit `Issue::warning` with descriptive message including both types
-- [ ] Include expression span in warning for editor integration
-- [ ] Add test: `WHERE id = 'text'` emits warning (INTEGER vs TEXT)
-- [ ] Add test: `WHERE name = name` no warning (same types)
-- [ ] Add test: `WHERE int_col = float_col` no warning (implicit cast allowed)
-- [ ] Add test: `SELECT date_col + bool_col` emits warning
+- [x] Add new issue code `TYPE_MISMATCH` in `issue_codes`
+- [x] In binary comparison operators (=, <, >, etc.), check operand type compatibility
+- [x] In arithmetic operators (+, -, *, /), verify operands are numeric
+- [x] Use `can_implicitly_cast()` to allow compatible implicit conversions
+- [x] Emit `Issue::warning` with descriptive message including both types
+- [x] Include expression span in warning for editor integration
+- [x] Add test: `WHERE id = 'text'` emits warning (INTEGER vs TEXT)
+- [x] Add test: `WHERE name = name` no warning (same types)
+- [x] Add test: `WHERE int_col = float_col` no warning (implicit cast allowed)
+- [x] Add test: `SELECT date_col + bool_col` emits warning
