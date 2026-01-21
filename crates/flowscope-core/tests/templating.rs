@@ -591,3 +591,325 @@ fn dbt_context_with_nested_json() {
         "Complex context should not cause panic"
     );
 }
+
+// ============================================================================
+// RelationEmulator Integration Tests
+// ============================================================================
+
+#[test]
+#[cfg(feature = "templating")]
+fn dbt_ref_relation_attribute_access() {
+    // Test that ref().identifier works in lineage analysis
+    let sql = "SELECT * FROM {{ ref('orders').identifier }}";
+    let context = HashMap::new();
+
+    let result = analyze_with_template(sql, TemplateMode::Dbt, context);
+
+    assert!(
+        !result.summary.has_errors,
+        "Relation attribute access should work: {:?}",
+        result.issues
+    );
+    assert!(
+        has_table(&result, "orders"),
+        "Should detect 'orders' from ref().identifier"
+    );
+}
+
+#[test]
+#[cfg(feature = "templating")]
+fn dbt_source_relation_attribute_access() {
+    // Test that source().schema works
+    let sql = "SELECT '{{ source('raw', 'events').schema }}' as schema_name, * FROM {{ source('raw', 'events') }}";
+    let context = HashMap::new();
+
+    let result = analyze_with_template(sql, TemplateMode::Dbt, context);
+
+    assert!(
+        !result.summary.has_errors,
+        "Source relation attribute should work: {:?}",
+        result.issues
+    );
+    assert!(
+        has_table(&result, "raw.events"),
+        "Should detect 'raw.events' from source()"
+    );
+}
+
+// ============================================================================
+// this Global Integration Tests
+// ============================================================================
+
+#[test]
+#[cfg(feature = "templating")]
+fn dbt_this_with_model_context() {
+    let sql = r#"
+        SELECT * FROM {{ ref('source_table') }}
+        {% if is_incremental() %}
+        WHERE updated_at > (SELECT MAX(updated_at) FROM {{ this }})
+        {% endif %}
+    "#;
+
+    let mut context = HashMap::new();
+    context.insert("model_name".to_string(), serde_json::json!("target_model"));
+    context.insert("schema".to_string(), serde_json::json!("analytics"));
+
+    let result = analyze_with_template(sql, TemplateMode::Dbt, context);
+
+    assert!(
+        !result.summary.has_errors,
+        "this with model context should work: {:?}",
+        result.issues
+    );
+    // is_incremental() returns false, so this block is skipped
+    assert!(
+        has_table(&result, "source_table"),
+        "Should detect 'source_table'"
+    );
+}
+
+// ============================================================================
+// zip() Function Integration Tests
+// ============================================================================
+
+#[test]
+#[cfg(feature = "templating")]
+fn dbt_zip_function_generates_valid_sql() {
+    // Test that zip() generates valid SQL when used to build column lists
+    let sql = r#"
+        SELECT
+            {% for col, alias in zip(['user_id', 'email'], ['id', 'contact']) %}
+            {{ col }} AS {{ alias }}{% if not loop.last %},{% endif %}
+            {% endfor %}
+        FROM {{ ref('users') }}
+    "#;
+    let context = HashMap::new();
+
+    let result = analyze_with_template(sql, TemplateMode::Dbt, context);
+
+    assert!(
+        !result.summary.has_errors,
+        "zip() should produce valid SQL: {:?}",
+        result.issues
+    );
+    assert!(has_table(&result, "users"), "Should detect 'users' table");
+}
+
+#[test]
+#[cfg(feature = "templating")]
+fn dbt_zip_with_context_arrays() {
+    // Test zip() with arrays from template context
+    let sql = r#"
+        SELECT
+            {% for src, tgt in zip(source_cols, target_cols) %}
+            {{ src }} AS {{ tgt }}{% if not loop.last %},{% endif %}
+            {% endfor %}
+        FROM {{ ref('data') }}
+    "#;
+    let mut context = HashMap::new();
+    context.insert(
+        "source_cols".to_string(),
+        serde_json::json!(["col_a", "col_b"]),
+    );
+    context.insert(
+        "target_cols".to_string(),
+        serde_json::json!(["alias_a", "alias_b"]),
+    );
+
+    let result = analyze_with_template(sql, TemplateMode::Dbt, context);
+
+    assert!(
+        !result.summary.has_errors,
+        "zip() with context arrays should work: {:?}",
+        result.issues
+    );
+    assert!(has_table(&result, "data"), "Should detect 'data' table");
+}
+
+#[test]
+#[cfg(feature = "templating")]
+fn dbt_zip_strict_with_equal_lengths() {
+    // Test zip_strict() works with equal-length arrays
+    let sql = r#"
+        SELECT
+            {% for a, b in zip_strict(['x', 'y'], [1, 2]) %}
+            '{{ a }}' AS col_{{ b }}{% if not loop.last %},{% endif %}
+            {% endfor %}
+        FROM {{ ref('items') }}
+    "#;
+    let context = HashMap::new();
+
+    let result = analyze_with_template(sql, TemplateMode::Dbt, context);
+
+    assert!(
+        !result.summary.has_errors,
+        "zip_strict() with equal lengths should work: {:?}",
+        result.issues
+    );
+    assert!(has_table(&result, "items"), "Should detect 'items' table");
+}
+
+// ============================================================================
+// MiniJinja Built-in Feature Integration Tests
+// ============================================================================
+
+#[test]
+#[cfg(feature = "templating")]
+fn jinja_loop_first_in_sql() {
+    // Test loop.first generates valid SQL
+    let sql = r#"
+        SELECT
+            {% for col in columns %}
+            {% if loop.first %}{{ col }}{% else %}, {{ col }}{% endif %}
+            {% endfor %}
+        FROM users
+    "#;
+    let mut context = HashMap::new();
+    context.insert(
+        "columns".to_string(),
+        serde_json::json!(["id", "name", "email"]),
+    );
+
+    let result = analyze_with_template(sql, TemplateMode::Jinja, context);
+
+    assert!(
+        !result.summary.has_errors,
+        "loop.first should produce valid SQL: {:?}",
+        result.issues
+    );
+    assert!(has_table(&result, "users"), "Should detect 'users' table");
+}
+
+#[test]
+#[cfg(feature = "templating")]
+fn jinja_whitespace_control_in_sql() {
+    // Test whitespace control produces clean SQL
+    let sql = r#"SELECT
+        {%- for col in ['a', 'b', 'c'] %}
+        {{ col }}
+        {%- if not loop.last %},{% endif %}
+        {%- endfor %}
+        FROM users"#;
+    let context = HashMap::new();
+
+    let result = analyze_with_template(sql, TemplateMode::Jinja, context);
+
+    assert!(
+        !result.summary.has_errors,
+        "Whitespace control should produce valid SQL: {:?}",
+        result.issues
+    );
+    assert!(has_table(&result, "users"), "Should detect 'users' table");
+}
+
+// ============================================================================
+// env_var() Integration Tests
+// ============================================================================
+
+#[test]
+#[cfg(feature = "templating")]
+fn dbt_env_var_in_config() {
+    let sql = "SELECT * FROM {{ env_var('TARGET_SCHEMA', 'public') }}.users";
+    let mut context = HashMap::new();
+    context.insert(
+        "env_vars".to_string(),
+        serde_json::json!({ "TARGET_SCHEMA": "production" }),
+    );
+
+    let result = analyze_with_template(sql, TemplateMode::Dbt, context);
+
+    assert!(
+        !result.summary.has_errors,
+        "env_var should work: {:?}",
+        result.issues
+    );
+    assert!(
+        has_table(&result, "production.users"),
+        "Should detect 'production.users' from env_var"
+    );
+}
+
+// ============================================================================
+// execute Flag Integration Tests
+// ============================================================================
+
+#[test]
+#[cfg(feature = "templating")]
+fn dbt_execute_flag_skips_run_query() {
+    // Common pattern: only run query when execute is true
+    let sql = r#"
+        {% if execute %}
+        {% set results = run_query("SELECT DISTINCT category FROM products") %}
+        {% for row in results %}
+        UNION ALL SELECT '{{ row.category }}' as category
+        {% endfor %}
+        {% endif %}
+        SELECT * FROM products
+    "#;
+    let context = HashMap::new();
+
+    let result = analyze_with_template(sql, TemplateMode::Dbt, context);
+
+    assert!(
+        !result.summary.has_errors,
+        "execute flag pattern should work: {:?}",
+        result.issues
+    );
+    assert!(
+        has_table(&result, "products"),
+        "Should detect 'products' table"
+    );
+}
+
+// ============================================================================
+// Tag Preprocessing Integration Tests
+// ============================================================================
+
+#[test]
+#[cfg(feature = "templating")]
+fn dbt_test_block_stripped() {
+    let sql = r#"
+        {% test unique_orders(model) %}
+        SELECT order_id FROM {{ model }} GROUP BY order_id HAVING COUNT(*) > 1
+        {% endtest %}
+
+        SELECT * FROM {{ ref('orders') }}
+    "#;
+    let context = HashMap::new();
+
+    let result = analyze_with_template(sql, TemplateMode::Dbt, context);
+
+    assert!(
+        !result.summary.has_errors,
+        "Test block should be stripped: {:?}",
+        result.issues
+    );
+    assert!(
+        has_table(&result, "orders"),
+        "Should detect 'orders' from main query"
+    );
+}
+
+#[test]
+#[cfg(feature = "templating")]
+fn dbt_snapshot_block_content_preserved() {
+    let sql = r#"
+        {% snapshot orders_snapshot %}
+        {{ config(unique_key='id', strategy='timestamp', updated_at='updated_at') }}
+        SELECT * FROM {{ source('raw', 'orders') }}
+        {% endsnapshot %}
+    "#;
+    let context = HashMap::new();
+
+    let result = analyze_with_template(sql, TemplateMode::Dbt, context);
+
+    assert!(
+        !result.summary.has_errors,
+        "Snapshot content should be preserved: {:?}",
+        result.issues
+    );
+    assert!(
+        has_table(&result, "raw.orders"),
+        "Should detect 'raw.orders' from snapshot content"
+    );
+}

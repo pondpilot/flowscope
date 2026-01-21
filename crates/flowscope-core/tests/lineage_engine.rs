@@ -2960,6 +2960,59 @@ fn derived_table_alias_tracks_column_flow() {
 }
 
 #[test]
+fn derived_table_alias_does_not_shadow_cte_with_same_name() {
+    let sql = r#"
+        WITH sales AS (
+            SELECT order_id
+            FROM orders
+        )
+        SELECT order_id
+        FROM (
+            SELECT order_id
+            FROM web_orders
+        ) AS sales
+        UNION ALL
+        SELECT order_id
+        FROM sales;
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let stmt = first_statement(&result);
+
+    let cte_node = stmt
+        .nodes
+        .iter()
+        .find(|node| {
+            node.node_type == NodeType::Cte
+                && node.id.starts_with("cte_")
+                && &*node.label == "sales"
+        })
+        .expect("original sales CTE should exist");
+
+    let cte_columns: HashSet<_> = stmt
+        .edges
+        .iter()
+        .filter(|edge| edge.edge_type == EdgeType::Ownership && edge.from == cte_node.id)
+        .map(|edge| edge.to.clone())
+        .collect();
+
+    assert!(
+        !cte_columns.is_empty(),
+        "sales CTE should expose columns for downstream references"
+    );
+
+    let cte_flows_into_union = stmt
+        .edges
+        .iter()
+        .any(|edge| edge.edge_type == EdgeType::DataFlow && cte_columns.contains(&edge.from));
+
+    assert!(
+        cte_flows_into_union,
+        "sales CTE columns should feed into the UNION output even when a derived table reuses the alias"
+    );
+}
+
+#[test]
 fn column_union_combines_column_sets() {
     let sql = r#"
         SELECT user_id, amount FROM orders

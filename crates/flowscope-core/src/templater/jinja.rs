@@ -1,10 +1,14 @@
 //! MiniJinja wrapper for template rendering.
 
+use super::dbt::passthrough_arg_to_string;
 use super::error::TemplateError;
 use minijinja::{Environment, Value};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
+
+use regex::Regex;
+use std::sync::LazyLock;
 
 /// Renders a Jinja2 template with the given context.
 ///
@@ -17,6 +21,57 @@ const RECURSION_LIMIT: usize = 100;
 /// Maximum time allowed for the dbt render retry loop to prevent DoS via templates
 /// with many distinct unknown macros.
 const RENDER_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Maximum template size for regex preprocessing (10 MB).
+/// Templates larger than this skip preprocessing to avoid regex DoS.
+const MAX_PREPROCESS_SIZE: usize = 10_000_000;
+
+/// Regex to match dbt {% test ... %} ... {% endtest %} blocks.
+/// These define test macros which should be stripped for lineage analysis.
+///
+/// Pattern uses `[^%]*` for tag contents to prevent pathological backtracking
+/// on crafted input (can't match across the `%}` delimiter).
+static TEST_BLOCK_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?s)\{%-?\s*test\b[^%]*-?%\}.*?\{%-?\s*endtest\s*-?%\}").unwrap()
+});
+
+/// Regex to match dbt {% snapshot ... %} ... {% endsnapshot %} blocks.
+/// We keep the inner content but strip the snapshot tags.
+///
+/// Pattern uses `[^%]*` for tag contents to prevent pathological backtracking.
+static SNAPSHOT_BLOCK_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?s)\{%-?\s*snapshot\b[^%]*-?%\}(.*?)\{%-?\s*endsnapshot\s*-?%\}").unwrap()
+});
+
+/// Preprocesses dbt-specific template tags that MiniJinja doesn't recognize.
+///
+/// This handles:
+/// - `{% test ... %} ... {% endtest %}` - Removed entirely (test macro definitions)
+/// - `{% snapshot ... %} ... {% endsnapshot %}` - Tags stripped, inner content preserved
+///
+/// # Arguments
+///
+/// * `template` - The template string that may contain dbt-specific tags
+///
+/// # Returns
+///
+/// The preprocessed template with dbt-specific tags handled.
+/// Templates larger than `MAX_PREPROCESS_SIZE` are returned unchanged to prevent
+/// regex DoS on very large inputs.
+fn preprocess_dbt_tags(template: &str) -> String {
+    // Skip preprocessing for very large templates to avoid regex DoS
+    if template.len() > MAX_PREPROCESS_SIZE {
+        return template.to_string();
+    }
+
+    // Remove test blocks entirely
+    let result = TEST_BLOCK_RE.replace_all(template, "");
+
+    // For snapshot blocks, keep the inner content
+    let result = SNAPSHOT_BLOCK_RE.replace_all(&result, "$1");
+
+    result.into_owned()
+}
 
 pub(crate) fn render_jinja(
     template: &str,
@@ -55,6 +110,9 @@ pub(crate) fn render_dbt(
     template: &str,
     context: &HashMap<String, serde_json::Value>,
 ) -> Result<String, TemplateError> {
+    // Preprocess dbt-specific tags that MiniJinja doesn't recognize
+    let preprocessed = preprocess_dbt_tags(template);
+
     // Track which unknown functions we've already stubbed to avoid infinite loops
     let mut stubbed_functions: HashSet<String> = HashSet::new();
     let start_time = Instant::now();
@@ -64,16 +122,11 @@ pub(crate) fn render_dbt(
     for _ in 0..MAX_RETRIES {
         // Check timeout to prevent DoS via templates with many unknown macros
         if start_time.elapsed() > RENDER_TIMEOUT {
-            let stubbed_list: Vec<_> = stubbed_functions.iter().cloned().collect();
             return Err(TemplateError::RenderError(format!(
                 "Template rendering timed out after {:?}. Stubbed {} unknown functions: {}",
                 RENDER_TIMEOUT,
-                stubbed_list.len(),
-                if stubbed_list.is_empty() {
-                    "(none)".to_string()
-                } else {
-                    stubbed_list.join(", ")
-                }
+                stubbed_functions.len(),
+                format_stubbed_list(&stubbed_functions)
             )));
         }
         let mut env = Environment::new();
@@ -93,8 +146,8 @@ pub(crate) fn render_dbt(
             register_passthrough_function(&mut env, func_name);
         }
 
-        // Add the template
-        env.add_template("sql", template)?;
+        // Add the preprocessed template
+        env.add_template("sql", &preprocessed)?;
 
         // Convert context to MiniJinja values
         let ctx = json_context_to_minijinja(context);
@@ -138,14 +191,9 @@ pub(crate) fn render_dbt(
         }
     }
 
-    let stubbed_list: Vec<_> = stubbed_functions.iter().cloned().collect();
     Err(TemplateError::RenderError(format!(
         "Too many unknown functions in template (limit: {MAX_RETRIES}). Stubbed: {}",
-        if stubbed_list.is_empty() {
-            "(none)".to_string()
-        } else {
-            stubbed_list.join(", ")
-        }
+        format_stubbed_list(&stubbed_functions)
     )))
 }
 
@@ -155,18 +203,17 @@ pub(crate) fn render_dbt(
 /// but want to produce parseable SQL for lineage analysis.
 fn register_passthrough_function(env: &mut Environment<'_>, name: &str) {
     let name_owned = name.to_string();
-    let name_for_closure = name_owned.clone();
-    env.add_function(name_owned, move |args: &[Value]| -> Value {
+    env.add_function(name_owned.clone(), move |args: &[Value]| -> Value {
         // If the macro has arguments, return the first one (common pattern)
         // Otherwise return empty string
         if let Some(first) = args.first() {
-            if let Some(s) = first.as_str() {
-                return Value::from(s);
+            if let Some(rendered) = passthrough_arg_to_string(first) {
+                return Value::from(rendered);
             }
         }
         // For macros like {{ generate_schema_name() }}, return the macro name
         // as a placeholder identifier
-        Value::from(format!("__{name_for_closure}__"))
+        Value::from(format!("__{name_owned}__"))
     });
 }
 
@@ -205,6 +252,17 @@ fn extract_unknown_function(err: &minijinja::Error) -> Option<String> {
     }
 
     Some(func_name.to_string())
+}
+
+/// Formats a set of stubbed function names for error messages.
+fn format_stubbed_list(stubbed: &HashSet<String>) -> String {
+    if stubbed.is_empty() {
+        "(none)".to_string()
+    } else {
+        let mut list: Vec<_> = stubbed.iter().cloned().collect();
+        list.sort();
+        list.join(", ")
+    }
 }
 
 /// Converts a JSON context map to MiniJinja Value format.
@@ -266,5 +324,89 @@ mod tests {
         let result = render_jinja("SELECT * FROM {{ unclosed", &ctx);
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), TemplateError::SyntaxError(_)));
+    }
+
+    // =========================================================================
+    // Tag preprocessing tests
+    // =========================================================================
+
+    #[test]
+    fn preprocess_removes_test_blocks() {
+        let template = r#"{% test my_test(model) %}
+SELECT * FROM {{ model }} WHERE id IS NULL
+{% endtest %}
+
+SELECT * FROM users"#;
+
+        let result = preprocess_dbt_tags(template);
+        assert!(!result.contains("test my_test"));
+        assert!(!result.contains("endtest"));
+        assert!(result.contains("SELECT * FROM users"));
+    }
+
+    #[test]
+    fn preprocess_removes_test_blocks_with_whitespace_control() {
+        let template = r#"{%- test not_null(model, column_name) -%}
+SELECT * FROM {{ model }} WHERE {{ column_name }} IS NULL
+{%- endtest -%}
+SELECT 1"#;
+
+        let result = preprocess_dbt_tags(template);
+        assert!(!result.contains("test not_null"));
+        assert!(result.contains("SELECT 1"));
+    }
+
+    #[test]
+    fn preprocess_keeps_snapshot_content() {
+        let template = r#"{% snapshot orders_snapshot %}
+SELECT * FROM orders
+{% endsnapshot %}"#;
+
+        let result = preprocess_dbt_tags(template);
+        assert!(!result.contains("snapshot orders_snapshot"));
+        assert!(!result.contains("endsnapshot"));
+        assert!(result.contains("SELECT * FROM orders"));
+    }
+
+    #[test]
+    fn preprocess_handles_multiple_blocks() {
+        let template = r#"{% test test1() %}test sql{% endtest %}
+{% snapshot snap1 %}SELECT 1{% endsnapshot %}
+{% test test2() %}more test sql{% endtest %}
+SELECT * FROM final"#;
+
+        let result = preprocess_dbt_tags(template);
+        assert!(!result.contains("test1"));
+        assert!(!result.contains("test2"));
+        assert!(result.contains("SELECT 1")); // snapshot content preserved
+        assert!(result.contains("SELECT * FROM final"));
+    }
+
+    #[test]
+    fn dbt_render_with_test_block() {
+        // Full integration: test block should be stripped before rendering
+        let ctx = HashMap::new();
+        let template = r#"{% test my_test(model) %}
+SELECT * FROM {{ ref('test_model') }}
+{% endtest %}
+
+SELECT * FROM {{ ref('users') }}"#;
+
+        let result = render_dbt(template, &ctx).unwrap();
+        assert!(!result.contains("test_model"));
+        assert!(result.contains("users"));
+    }
+
+    #[test]
+    fn dbt_render_with_snapshot_block() {
+        let ctx = HashMap::new();
+        let template = r#"{% snapshot my_snapshot %}
+{{ config(unique_key='id') }}
+SELECT * FROM {{ ref('source_table') }}
+{% endsnapshot %}"#;
+
+        let result = render_dbt(template, &ctx).unwrap();
+        assert!(result.contains("SELECT * FROM source_table"));
+        assert!(!result.contains("snapshot"));
     }
 }
