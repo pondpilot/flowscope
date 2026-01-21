@@ -5211,3 +5211,44 @@ fn test_copy_to_with_query() {
     let stmt = &result.statements[0];
     assert!(stmt.nodes.iter().any(|n| n.label.contains("users")));
 }
+
+#[test]
+fn test_alter_table_rename() {
+    let sql = "ALTER TABLE old_users RENAME TO new_users";
+    let result = run_analysis(sql, Dialect::Generic, None);
+
+    assert!(result.issues.iter().all(|i| i.severity != Severity::Error));
+    let stmt = &result.statements[0];
+
+    // Both old and new table should appear in lineage
+    let labels: Vec<_> = stmt.nodes.iter().map(|n| n.label.as_ref()).collect();
+    assert!(labels.iter().any(|l| l.contains("old_users")));
+    assert!(labels.iter().any(|l| l.contains("new_users")));
+
+    // Should have a rename edge or dataflow edge
+    assert!(!stmt.edges.is_empty());
+}
+
+#[test]
+fn test_alter_table_rename_with_schema() {
+    let sql = "ALTER TABLE analytics.legacy_orders RENAME TO analytics.orders_v2";
+    let result = run_analysis(sql, Dialect::Generic, None);
+
+    assert!(result.issues.iter().all(|i| i.severity != Severity::Error));
+    let stmt = &result.statements[0];
+
+    // Both old and new table should appear in lineage with schema qualification
+    let qualified_names: Vec<_> = stmt
+        .nodes
+        .iter()
+        .filter_map(|n| n.qualified_name.as_ref())
+        .map(|qn| qn.as_ref())
+        .collect();
+    assert!(qualified_names
+        .iter()
+        .any(|qn| qn.contains("legacy_orders")));
+    assert!(qualified_names.iter().any(|qn| qn.contains("orders_v2")));
+
+    // Should have a dataflow edge between them
+    assert!(!stmt.edges.is_empty());
+}

@@ -17,9 +17,9 @@ use crate::types::{
     issue_codes, Edge, EdgeType, Issue, JoinType, Node, NodeType, Span, StatementLineage,
 };
 use sqlparser::ast::{
-    self, Assignment, CopyIntoSnowflakeKind, CopySource, CopyTarget, Expr, FromTable, MergeAction,
-    MergeClause, MergeInsertKind, ObjectName, Statement, TableFactor, TableWithJoins,
-    UpdateTableFromKind,
+    self, AlterTableOperation, Assignment, CopyIntoSnowflakeKind, CopySource, CopyTarget, Expr,
+    FromTable, MergeAction, MergeClause, MergeInsertKind, ObjectName, RenameTableNameKind,
+    Statement, TableFactor, TableWithJoins, UpdateTableFromKind,
 };
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
@@ -119,9 +119,14 @@ impl<'a> Analyzer<'a> {
                 self.analyze_drop(&mut ctx, object_type, names);
                 "DROP".to_string()
             }
+            Statement::AlterTable {
+                name, operations, ..
+            } => {
+                self.analyze_alter_table(&mut ctx, name, operations);
+                "ALTER_TABLE".to_string()
+            }
             // Statements that are recognized but don't produce lineage
             // (admin, session, and metadata operations)
-            Statement::AlterTable { .. } => "ALTER_TABLE".to_string(),
             Statement::AlterView { .. } => "ALTER_VIEW".to_string(),
             Statement::AlterIndex { .. } => "ALTER_INDEX".to_string(),
             Statement::AlterSchema(_) => "ALTER_SCHEMA".to_string(),
@@ -668,5 +673,101 @@ impl<'a> Analyzer<'a> {
                 }
             }
         }
+    }
+
+    /// Analyzes an ALTER TABLE statement for lineage.
+    ///
+    /// Currently handles:
+    /// - `ALTER TABLE old_name RENAME TO new_name`: Creates dataflow edge from old to new table
+    pub(super) fn analyze_alter_table(
+        &mut self,
+        ctx: &mut StatementContext,
+        old_name: &ObjectName,
+        operations: &[AlterTableOperation],
+    ) {
+        for op in operations {
+            if let AlterTableOperation::RenameTable { table_name } = op {
+                self.analyze_rename_table(ctx, old_name, table_name);
+            }
+            // Other ALTER TABLE operations could be handled here in the future
+        }
+    }
+
+    /// Analyzes an ALTER TABLE RENAME statement for lineage.
+    ///
+    /// Creates nodes for both old and new table names with a dataflow edge
+    /// connecting them to represent the rename relationship.
+    fn analyze_rename_table(
+        &mut self,
+        ctx: &mut StatementContext,
+        old_name: &ObjectName,
+        new_name: &RenameTableNameKind,
+    ) {
+        // Extract the new table name from the enum
+        let new_table_name = match new_name {
+            RenameTableNameKind::To(name) | RenameTableNameKind::As(name) => name,
+        };
+
+        // Normalize and create nodes for both old and new table names
+        let old_name_str = old_name.to_string();
+        let old_canonical = self.normalize_table_name(&old_name_str);
+        let old_node_id = generate_node_id("table", &old_canonical);
+
+        let new_name_str = new_table_name.to_string();
+        let new_canonical = self.normalize_table_name(&new_name_str);
+        let new_node_id = generate_node_id("table", &new_canonical);
+
+        // Create node for old table (source of rename)
+        ctx.add_node(Node {
+            id: old_node_id.clone(),
+            node_type: NodeType::Table,
+            label: extract_simple_name(&old_name_str).into(),
+            qualified_name: Some(old_canonical.clone().into()),
+            expression: None,
+            span: None,
+            metadata: None,
+            resolution_source: None,
+            filters: Vec::new(),
+            join_type: None,
+            join_condition: None,
+            aggregation: None,
+        });
+
+        // Create node for new table (target of rename)
+        ctx.add_node(Node {
+            id: new_node_id.clone(),
+            node_type: NodeType::Table,
+            label: extract_simple_name(&new_name_str).into(),
+            qualified_name: Some(new_canonical.clone().into()),
+            expression: None,
+            span: None,
+            metadata: None,
+            resolution_source: None,
+            filters: Vec::new(),
+            join_type: None,
+            join_condition: None,
+            aggregation: None,
+        });
+
+        // Create dataflow edge from old to new table
+        let edge_id = generate_edge_id(&old_node_id, &new_node_id);
+        ctx.add_edge(Edge {
+            id: edge_id,
+            from: old_node_id,
+            to: new_node_id,
+            edge_type: EdgeType::DataFlow,
+            expression: None,
+            operation: Some("RENAME".into()),
+            join_type: None,
+            join_condition: None,
+            metadata: None,
+            approximate: None,
+        });
+
+        // Track that the old table is consumed and the new table is produced
+        self.tracker
+            .record_consumed(&old_canonical, ctx.statement_index);
+        self.tracker
+            .record_produced(&new_canonical, ctx.statement_index);
     }
 }
