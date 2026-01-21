@@ -6,6 +6,7 @@
 //! names to canonical types, implicit cast checking, and dialect-specific type name mapping.
 
 use crate::Dialect;
+use std::fmt;
 
 /// Canonical SQL types for cross-dialect type system.
 ///
@@ -39,6 +40,24 @@ impl CanonicalType {
             CanonicalType::Binary => "binary",
             CanonicalType::Json => "json",
             CanonicalType::Array => "array",
+        }
+    }
+}
+
+impl fmt::Display for CanonicalType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Use uppercase for SQL-standard output representation
+        match self {
+            CanonicalType::Integer => write!(f, "INTEGER"),
+            CanonicalType::Float => write!(f, "FLOAT"),
+            CanonicalType::Text => write!(f, "TEXT"),
+            CanonicalType::Boolean => write!(f, "BOOLEAN"),
+            CanonicalType::Timestamp => write!(f, "TIMESTAMP"),
+            CanonicalType::Date => write!(f, "DATE"),
+            CanonicalType::Time => write!(f, "TIME"),
+            CanonicalType::Binary => write!(f, "BINARY"),
+            CanonicalType::Json => write!(f, "JSON"),
+            CanonicalType::Array => write!(f, "ARRAY"),
         }
     }
 }

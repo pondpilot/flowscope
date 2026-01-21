@@ -12,13 +12,13 @@ Add comprehensive type inference to the SQL analyzer with schema-aware type look
 
 Currently there are two type enums: `SqlType` in `types.rs` (7 types) and `CanonicalType` in generated code (10 types). This task consolidates them into a single type system based on `CanonicalType`, which has broader coverage including Time, Binary, Json, and Array types.
 
-- [ ] Remove `SqlType` enum from `src/analyzer/helpers/types.rs`
-- [ ] Update `infer_expr_type()` to return `Option<CanonicalType>` instead of `Option<SqlType>`
-- [ ] Add `impl Display for CanonicalType` in generated code for API output
-- [ ] Update all call sites that use `SqlType` to use `CanonicalType`
-- [ ] Update `sql_type_from_data_type()` to return `Option<CanonicalType>`
-- [ ] Update tests in `types.rs` to use `CanonicalType`
-- [ ] Verify all existing tests pass
+- [x] Remove `SqlType` enum from `src/analyzer/helpers/types.rs`
+- [x] Update `infer_expr_type()` to return `Option<CanonicalType>` instead of `Option<SqlType>`
+- [x] Add `impl Display for CanonicalType` in generated code for API output
+- [x] Update all call sites that use `SqlType` to use `CanonicalType`
+- [x] Update `sql_type_from_data_type()` to return `Option<CanonicalType>`
+- [x] Update tests in `types.rs` to use `CanonicalType`
+- [x] Verify all existing tests pass
 
 ### Task 2: Populate Column Types in Output
 

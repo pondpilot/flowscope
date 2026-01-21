@@ -22,4 +22,4 @@ pub use span::{
     find_cte_definition_span, find_derived_table_alias_span, find_identifier_span,
     line_col_to_offset,
 };
-pub use types::{infer_expr_type, SqlType};
+pub use types::{canonical_type_from_data_type, infer_expr_type};

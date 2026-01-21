@@ -13,7 +13,7 @@ expression: clean_result
           "type": "column",
           "label": "total_spend",
           "metadata": {
-            "data_type": "NUMBER"
+            "data_type": "FLOAT"
           }
         },
         {
@@ -59,7 +59,7 @@ expression: clean_result
           "label": "total_spend",
           "expression": "SUM(o.total)",
           "metadata": {
-            "data_type": "NUMBER"
+            "data_type": "FLOAT"
           },
           "aggregation": {
             "isGroupingKey": false,
@@ -873,7 +873,7 @@ expression: clean_result
           },
           {
             "name": "total",
-            "dataType": "NUMBER",
+            "dataType": "FLOAT",
             "origin": "implied"
           },
           {
