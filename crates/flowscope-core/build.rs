@@ -231,9 +231,37 @@ fn load_scoping_rules(spec_dir: &Path) -> Result<BTreeMap<String, ScopingRule>, 
 
 #[derive(Debug, Deserialize)]
 struct DialectBehavior {
+    value_table_functions: ValueTableFunctions,
     null_ordering: BTreeMap<String, String>,
     unnest: UnnestBehavior,
     date_functions: BTreeMap<String, BTreeMap<String, toml::Value>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ValueTableFunctions {
+    common: Vec<String>,
+    #[serde(default)]
+    postgres: Vec<String>,
+    #[serde(default)]
+    bigquery: Vec<String>,
+    #[serde(default)]
+    snowflake: Vec<String>,
+    #[serde(default)]
+    redshift: Vec<String>,
+    #[serde(default)]
+    mysql: Vec<String>,
+    #[serde(default)]
+    mssql: Vec<String>,
+    #[serde(default)]
+    duckdb: Vec<String>,
+    #[serde(default)]
+    clickhouse: Vec<String>,
+    #[serde(default)]
+    databricks: Vec<String>,
+    #[serde(default)]
+    hive: Vec<String>,
+    #[serde(default)]
+    sqlite: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -818,7 +846,101 @@ impl Dialect {
         ));
     }
 
+    // Generate is_value_table_function
+    generate_value_table_function(&mut code, behavior);
+
     write_if_changed(&dir.join("function_rules.rs"), &code)
+}
+
+fn generate_value_table_function(code: &mut String, behavior: &DialectBehavior) {
+    let vtf = &behavior.value_table_functions;
+
+    // Build common functions pattern
+    let common_funcs: Vec<_> = vtf
+        .common
+        .iter()
+        .map(|s| format!("\"{}\"", s.to_ascii_uppercase()))
+        .collect();
+
+    code.push_str(
+        r#"
+/// Checks if a function is a value table function (returns rows) for the given dialect.
+///
+/// Value table functions (like UNNEST, GENERATE_SERIES, FLATTEN) return rows/tables
+/// rather than scalar values. This classification is used during lineage analysis
+/// to determine how FROM clause function calls should be handled.
+///
+/// # Arguments
+///
+/// * `dialect` - The SQL dialect being analyzed
+/// * `func_name` - The function name (case-insensitive)
+///
+/// # Returns
+///
+/// `true` if the function is a value table function for the given dialect.
+///
+/// # Example
+///
+/// ```ignore
+/// use flowscope_core::generated::is_value_table_function;
+/// use flowscope_core::Dialect;
+///
+/// assert!(is_value_table_function(Dialect::Postgres, "UNNEST"));
+/// assert!(is_value_table_function(Dialect::Snowflake, "FLATTEN"));
+/// assert!(!is_value_table_function(Dialect::Postgres, "COUNT"));
+/// ```
+pub fn is_value_table_function(dialect: Dialect, func_name: &str) -> bool {
+    let name = func_name.to_ascii_uppercase();
+    // Check common functions
+"#,
+    );
+
+    if common_funcs.is_empty() {
+        code.push_str("    // No common value table functions defined\n");
+    } else {
+        code.push_str(&format!(
+            "    if matches!(name.as_str(), {}) {{\n        return true;\n    }}\n",
+            common_funcs.join(" | ")
+        ));
+    }
+
+    code.push_str("    // Check dialect-specific functions\n");
+    code.push_str("    match dialect {\n");
+
+    // Generate match arms for each dialect with non-empty value table functions
+    let dialect_configs = [
+        ("postgres", &vtf.postgres, "Postgres"),
+        ("bigquery", &vtf.bigquery, "Bigquery"),
+        ("snowflake", &vtf.snowflake, "Snowflake"),
+        ("redshift", &vtf.redshift, "Redshift"),
+        ("mysql", &vtf.mysql, "Mysql"),
+        ("mssql", &vtf.mssql, "Mssql"),
+        ("duckdb", &vtf.duckdb, "Duckdb"),
+        ("clickhouse", &vtf.clickhouse, "Clickhouse"),
+        ("databricks", &vtf.databricks, "Databricks"),
+        ("hive", &vtf.hive, "Hive"),
+        ("sqlite", &vtf.sqlite, "Sqlite"),
+    ];
+
+    for (_dialect_name, funcs, variant) in dialect_configs {
+        // Filter out functions that are already in common
+        let dialect_specific: Vec<_> = funcs
+            .iter()
+            .filter(|f| !vtf.common.iter().any(|c| c.eq_ignore_ascii_case(f)))
+            .map(|s| format!("\"{}\"", s.to_ascii_uppercase()))
+            .collect();
+
+        if !dialect_specific.is_empty() {
+            code.push_str(&format!(
+                "        Dialect::{} => matches!(name.as_str(), {}),\n",
+                variant,
+                dialect_specific.join(" | ")
+            ));
+        }
+    }
+
+    code.push_str("        _ => false,\n");
+    code.push_str("    }\n}\n");
 }
 
 /// Converts a PascalCase class name to a SQL function name (lowercase with underscores).
