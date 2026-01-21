@@ -112,7 +112,10 @@ pub(crate) fn register_dbt_builtins(
 
     // Register default dbt package namespaces as passthrough objects
     for package in DEFAULT_DBT_PACKAGES {
-        env.add_global(*package, Value::from_object(PassthroughNamespace::new(package)));
+        env.add_global(
+            *package,
+            Value::from_object(PassthroughNamespace::new(package)),
+        );
     }
 
     // Register custom packages from context["dbt_packages"] if provided

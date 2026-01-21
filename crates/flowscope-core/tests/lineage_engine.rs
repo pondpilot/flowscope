@@ -6091,3 +6091,689 @@ fn test_alter_table_rename_cross_schema() {
 
     assert_eq!(rename_edges.len(), 1, "Should have exactly one RENAME edge");
 }
+
+// ============================================================================
+// BACKWARD COLUMN INFERENCE TESTS
+// Tests for inferring columns from downstream usage through SELECT * chains
+// ============================================================================
+
+#[test]
+fn backward_inference_basic_select_star() {
+    // Basic test: CTE with SELECT *, downstream explicit columns
+    let sql = r#"
+        WITH orders AS (
+            SELECT * FROM stg_orders
+        ),
+        customer_orders AS (
+            SELECT
+                customer_id,
+                COUNT(order_id) AS order_count
+            FROM orders
+            GROUP BY customer_id
+        )
+        SELECT * FROM customer_orders
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let stmt = first_statement(&result);
+
+    // stg_orders should exist as a source table
+    let stg_orders_node = find_table_node(stmt, "stg_orders");
+    assert!(
+        stg_orders_node.is_some(),
+        "stg_orders table node should exist"
+    );
+    let stg_orders_id = &stg_orders_node.unwrap().id;
+
+    // Find column ownership edges from stg_orders
+    let stg_orders_column_edges: Vec<_> = stmt
+        .edges
+        .iter()
+        .filter(|e| e.from == *stg_orders_id && e.edge_type == EdgeType::Ownership)
+        .collect();
+
+    // stg_orders should have exactly 2 inferred columns (customer_id and order_id)
+    assert_eq!(
+        stg_orders_column_edges.len(),
+        2,
+        "stg_orders should have exactly 2 inferred column ownership edges (customer_id, order_id), found {}",
+        stg_orders_column_edges.len()
+    );
+
+    // Verify specific columns were inferred
+    let stg_orders_column_labels: Vec<_> = stmt
+        .nodes
+        .iter()
+        .filter(|n| {
+            n.node_type == NodeType::Column
+                && n.qualified_name
+                    .as_ref()
+                    .map(|qn| qn.starts_with("stg_orders."))
+                    .unwrap_or(false)
+        })
+        .map(|n| n.label.to_string())
+        .collect();
+
+    assert!(
+        stg_orders_column_labels.contains(&"customer_id".to_string()),
+        "customer_id should be inferred on stg_orders"
+    );
+    assert!(
+        stg_orders_column_labels.contains(&"order_id".to_string()),
+        "order_id should be inferred on stg_orders"
+    );
+
+    // Verify data flow edges exist from inferred columns to CTE columns
+    // Find a stg_orders column and check it has a data flow edge to the orders CTE column
+    let stg_orders_customer_id = stmt
+        .nodes
+        .iter()
+        .find(|n| {
+            n.node_type == NodeType::Column
+                && n.label.as_ref() == "customer_id"
+                && n.qualified_name
+                    .as_ref()
+                    .map(|qn| qn.starts_with("stg_orders."))
+                    .unwrap_or(false)
+        })
+        .expect("stg_orders.customer_id should exist");
+
+    let data_flow_from_stg_orders_customer_id: Vec<_> = stmt
+        .edges
+        .iter()
+        .filter(|e| e.from == stg_orders_customer_id.id && e.edge_type == EdgeType::DataFlow)
+        .collect();
+
+    assert!(
+        !data_flow_from_stg_orders_customer_id.is_empty(),
+        "Data flow edge should exist from stg_orders.customer_id to orders.customer_id"
+    );
+}
+
+#[test]
+fn backward_inference_select_star_in_derived_table() {
+    // Regression test: derived tables using SELECT * should register pending wildcards
+    // so that downstream column references infer the source columns.
+    let sql = r#"
+        SELECT
+            o.customer_id
+        FROM (
+            SELECT * FROM raw_orders
+        ) AS o
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let stmt = first_statement(&result);
+
+    let raw_orders_customer_id = stmt
+        .nodes
+        .iter()
+        .find(|n| {
+            n.node_type == NodeType::Column
+                && n.qualified_name.as_deref() == Some("raw_orders.customer_id")
+        })
+        .expect("raw_orders.customer_id should be inferred through derived table");
+
+    let has_data_flow = stmt
+        .edges
+        .iter()
+        .any(|edge| edge.edge_type == EdgeType::DataFlow && edge.from == raw_orders_customer_id.id);
+
+    assert!(
+        has_data_flow,
+        "raw_orders.customer_id should participate in data flow after inference"
+    );
+}
+
+#[test]
+fn backward_inference_transitive_chain() {
+    // Transitive chain: step3 → SELECT * FROM step2 → SELECT * FROM step1 → SELECT * FROM source
+    // Columns used in step3 should propagate back to source
+    let sql = r#"
+        WITH step1 AS (
+            SELECT * FROM raw_events
+        ),
+        step2 AS (
+            SELECT * FROM step1
+        ),
+        step3 AS (
+            SELECT
+                event_id,
+                event_type,
+                user_id
+            FROM step2
+        )
+        SELECT * FROM step3
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let stmt = first_statement(&result);
+
+    // raw_events should exist as a source table
+    let raw_events_node = find_table_node(stmt, "raw_events");
+    assert!(
+        raw_events_node.is_some(),
+        "raw_events table node should exist"
+    );
+
+    // Verify exactly 3 columns were inferred on the source table
+    let raw_events_columns: Vec<_> = stmt
+        .nodes
+        .iter()
+        .filter(|n| {
+            n.node_type == NodeType::Column
+                && n.qualified_name
+                    .as_ref()
+                    .map(|qn| qn.starts_with("raw_events."))
+                    .unwrap_or(false)
+        })
+        .map(|n| n.label.to_string())
+        .collect();
+
+    assert_eq!(
+        raw_events_columns.len(),
+        3,
+        "raw_events should have exactly 3 inferred columns (event_id, event_type, user_id), found: {:?}",
+        raw_events_columns
+    );
+    assert!(
+        raw_events_columns.contains(&"event_id".to_string()),
+        "event_id should be inferred on raw_events"
+    );
+    assert!(
+        raw_events_columns.contains(&"event_type".to_string()),
+        "event_type should be inferred on raw_events"
+    );
+    assert!(
+        raw_events_columns.contains(&"user_id".to_string()),
+        "user_id should be inferred on raw_events"
+    );
+
+    // Verify data flow edges exist from inferred source columns through the chain
+    let raw_events_event_id = stmt
+        .nodes
+        .iter()
+        .find(|n| {
+            n.node_type == NodeType::Column
+                && n.qualified_name.as_deref() == Some("raw_events.event_id")
+        })
+        .expect("raw_events.event_id should exist");
+
+    let data_flow_edges_from_event_id: Vec<_> = stmt
+        .edges
+        .iter()
+        .filter(|e| e.from == raw_events_event_id.id && e.edge_type == EdgeType::DataFlow)
+        .collect();
+
+    assert!(
+        !data_flow_edges_from_event_id.is_empty(),
+        "Data flow edges should exist from raw_events.event_id through the CTE chain"
+    );
+}
+
+#[test]
+fn backward_inference_multiple_sources() {
+    // Multiple source tables with SELECT *, columns from each inferred separately
+    // Note: This test uses simpler column references without table aliases in the
+    // combined CTE to avoid scope-related non-determinism issues.
+    let sql = r#"
+        WITH orders AS (
+            SELECT * FROM stg_orders
+        ),
+        customers AS (
+            SELECT * FROM stg_customers
+        ),
+        combined AS (
+            SELECT
+                orders.order_id,
+                orders.order_date,
+                customers.customer_name,
+                customers.email
+            FROM orders
+            JOIN customers ON orders.customer_id = customers.customer_id
+        )
+        SELECT * FROM combined
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let stmt = first_statement(&result);
+
+    // Verify stg_orders has its columns inferred from SELECT list
+    // Note: customer_id from JOIN condition is tracked separately via source_table_columns,
+    // but backward inference specifically propagates columns from CTE output (SELECT list)
+    let stg_orders_columns: Vec<_> = stmt
+        .nodes
+        .iter()
+        .filter(|n| {
+            n.node_type == NodeType::Column
+                && n.qualified_name
+                    .as_ref()
+                    .map(|qn| qn.starts_with("stg_orders."))
+                    .unwrap_or(false)
+        })
+        .map(|n| n.label.to_string())
+        .collect();
+
+    assert_eq!(
+        stg_orders_columns.len(),
+        2,
+        "stg_orders should have exactly 2 inferred columns from SELECT, found: {:?}",
+        stg_orders_columns
+    );
+    assert!(
+        stg_orders_columns.contains(&"order_id".to_string()),
+        "order_id should be inferred on stg_orders"
+    );
+    assert!(
+        stg_orders_columns.contains(&"order_date".to_string()),
+        "order_date should be inferred on stg_orders"
+    );
+
+    // Verify stg_customers has its columns inferred from SELECT list
+    let stg_customers_columns: Vec<_> = stmt
+        .nodes
+        .iter()
+        .filter(|n| {
+            n.node_type == NodeType::Column
+                && n.qualified_name
+                    .as_ref()
+                    .map(|qn| qn.starts_with("stg_customers."))
+                    .unwrap_or(false)
+        })
+        .map(|n| n.label.to_string())
+        .collect();
+
+    assert_eq!(
+        stg_customers_columns.len(),
+        2,
+        "stg_customers should have exactly 2 inferred columns from SELECT, found: {:?}",
+        stg_customers_columns
+    );
+    assert!(
+        stg_customers_columns.contains(&"customer_name".to_string()),
+        "customer_name should be inferred on stg_customers"
+    );
+    assert!(
+        stg_customers_columns.contains(&"email".to_string()),
+        "email should be inferred on stg_customers"
+    );
+
+    // Verify data flow edges exist from both source tables
+    let stg_orders_order_id = stmt
+        .nodes
+        .iter()
+        .find(|n| {
+            n.node_type == NodeType::Column
+                && n.qualified_name.as_deref() == Some("stg_orders.order_id")
+        })
+        .expect("stg_orders.order_id should exist");
+
+    let stg_customers_customer_name = stmt
+        .nodes
+        .iter()
+        .find(|n| {
+            n.node_type == NodeType::Column
+                && n.qualified_name.as_deref() == Some("stg_customers.customer_name")
+        })
+        .expect("stg_customers.customer_name should exist");
+
+    let has_orders_data_flow = stmt
+        .edges
+        .iter()
+        .any(|e| e.from == stg_orders_order_id.id && e.edge_type == EdgeType::DataFlow);
+
+    let has_customers_data_flow = stmt
+        .edges
+        .iter()
+        .any(|e| e.from == stg_customers_customer_name.id && e.edge_type == EdgeType::DataFlow);
+
+    assert!(
+        has_orders_data_flow,
+        "Data flow edge should exist from stg_orders.order_id to orders CTE"
+    );
+    assert!(
+        has_customers_data_flow,
+        "Data flow edge should exist from stg_customers.customer_name to customers CTE"
+    );
+}
+
+#[test]
+fn backward_inference_with_schema_no_inference_needed() {
+    // When schema is provided, no backward inference should be needed
+    let sql = r#"
+        WITH orders AS (
+            SELECT * FROM stg_orders
+        )
+        SELECT customer_id, order_id FROM orders
+    "#;
+
+    let schema = SchemaMetadata {
+        allow_implied: true,
+        default_catalog: None,
+        default_schema: None,
+        search_path: None,
+        case_sensitivity: None,
+        tables: vec![schema_table(
+            None,
+            None,
+            "stg_orders",
+            &["customer_id", "order_id", "amount", "order_date"],
+        )],
+    };
+
+    let result = run_analysis(sql, Dialect::Generic, Some(schema));
+    let stmt = first_statement(&result);
+
+    // With schema, all columns should come from schema resolution
+    let stg_orders_columns: Vec<_> = stmt
+        .nodes
+        .iter()
+        .filter(|n| {
+            n.node_type == NodeType::Column
+                && n.qualified_name
+                    .as_ref()
+                    .map(|qn| qn.starts_with("stg_orders."))
+                    .unwrap_or(false)
+        })
+        .collect();
+
+    // Should have columns from schema expansion
+    assert!(
+        !stg_orders_columns.is_empty(),
+        "stg_orders should have columns from schema"
+    );
+
+    // Should NOT have APPROXIMATE_LINEAGE issues for this table
+    let approximate_issues: Vec<_> = result
+        .issues
+        .iter()
+        .filter(|i| i.code == issue_codes::APPROXIMATE_LINEAGE && i.message.contains("stg_orders"))
+        .collect();
+    assert!(
+        approximate_issues.is_empty(),
+        "Should not have approximate lineage issues when schema is provided"
+    );
+}
+
+#[test]
+fn backward_inference_mixed_schema_and_no_schema() {
+    // One source has schema, one doesn't - only the one without should have inference
+    let sql = r#"
+        WITH orders AS (
+            SELECT * FROM stg_orders
+        ),
+        customers AS (
+            SELECT * FROM stg_customers
+        ),
+        combined AS (
+            SELECT
+                o.order_id,
+                c.customer_name
+            FROM orders o
+            JOIN customers c ON o.customer_id = c.customer_id
+        )
+        SELECT * FROM combined
+    "#;
+
+    // Only provide schema for stg_orders
+    let schema = SchemaMetadata {
+        allow_implied: true,
+        default_catalog: None,
+        default_schema: None,
+        search_path: None,
+        case_sensitivity: None,
+        tables: vec![schema_table(
+            None,
+            None,
+            "stg_orders",
+            &["customer_id", "order_id", "amount"],
+        )],
+    };
+
+    let result = run_analysis(sql, Dialect::Generic, Some(schema));
+    let stmt = first_statement(&result);
+
+    // stg_orders should have columns from schema (not inferred)
+    let stg_orders_order_id = stmt.nodes.iter().find(|n| {
+        n.node_type == NodeType::Column
+            && n.qualified_name.as_deref() == Some("stg_orders.order_id")
+    });
+    assert!(
+        stg_orders_order_id.is_some(),
+        "stg_orders.order_id should exist from schema"
+    );
+
+    // stg_customers should have columns inferred
+    let stg_customers_columns: Vec<_> = stmt
+        .nodes
+        .iter()
+        .filter(|n| {
+            n.node_type == NodeType::Column
+                && n.qualified_name
+                    .as_ref()
+                    .map(|qn| qn.starts_with("stg_customers."))
+                    .unwrap_or(false)
+        })
+        .map(|n| n.label.to_string())
+        .collect();
+
+    assert!(
+        stg_customers_columns.contains(&"customer_name".to_string()),
+        "customer_name should be inferred on stg_customers"
+    );
+
+    // Should have APPROXIMATE_LINEAGE issue only for stg_customers
+    let approximate_issues: Vec<_> = result
+        .issues
+        .iter()
+        .filter(|i| i.code == issue_codes::APPROXIMATE_LINEAGE)
+        .collect();
+    assert!(
+        approximate_issues
+            .iter()
+            .any(|i| i.message.contains("stg_customers")),
+        "Should have approximate lineage issue for stg_customers"
+    );
+}
+
+#[test]
+fn backward_inference_aggregation_preserves_column_names() {
+    // Aggregations like COUNT(col), SUM(col) should still infer the column name
+    let sql = r#"
+        WITH orders AS (
+            SELECT * FROM raw_orders
+        ),
+        summary AS (
+            SELECT
+                customer_id,
+                COUNT(order_id) AS order_count,
+                SUM(amount) AS total_amount,
+                MIN(order_date) AS first_order
+            FROM orders
+            GROUP BY customer_id
+        )
+        SELECT * FROM summary
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let stmt = first_statement(&result);
+
+    // raw_orders should have all columns inferred
+    let raw_orders_columns: Vec<_> = stmt
+        .nodes
+        .iter()
+        .filter(|n| {
+            n.node_type == NodeType::Column
+                && n.qualified_name
+                    .as_ref()
+                    .map(|qn| qn.starts_with("raw_orders."))
+                    .unwrap_or(false)
+        })
+        .map(|n| n.label.to_string())
+        .collect();
+
+    assert!(
+        raw_orders_columns.contains(&"customer_id".to_string()),
+        "customer_id should be inferred on raw_orders"
+    );
+    assert!(
+        raw_orders_columns.contains(&"order_id".to_string()),
+        "order_id should be inferred on raw_orders"
+    );
+    assert!(
+        raw_orders_columns.contains(&"amount".to_string()),
+        "amount should be inferred on raw_orders"
+    );
+    assert!(
+        raw_orders_columns.contains(&"order_date".to_string()),
+        "order_date should be inferred on raw_orders"
+    );
+}
+
+#[test]
+fn backward_inference_deep_nesting() {
+    // Test with a chain longer than typical to verify recursion handling.
+    // The depth limit (MAX_INFERENCE_DEPTH=20) prevents stack overflow on pathological cases.
+    // This test uses 10 levels which should work fine.
+    let sql = r#"
+        WITH step1 AS (SELECT * FROM source_table),
+             step2 AS (SELECT * FROM step1),
+             step3 AS (SELECT * FROM step2),
+             step4 AS (SELECT * FROM step3),
+             step5 AS (SELECT * FROM step4),
+             step6 AS (SELECT * FROM step5),
+             step7 AS (SELECT * FROM step6),
+             step8 AS (SELECT * FROM step7),
+             step9 AS (SELECT * FROM step8),
+             step10 AS (SELECT id, name, value FROM step9)
+        SELECT * FROM step10
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let stmt = first_statement(&result);
+
+    // source_table should have columns inferred through the entire chain
+    let source_columns: Vec<_> = stmt
+        .nodes
+        .iter()
+        .filter(|n| {
+            n.node_type == NodeType::Column
+                && n.qualified_name
+                    .as_ref()
+                    .map(|qn| qn.starts_with("source_table."))
+                    .unwrap_or(false)
+        })
+        .map(|n| n.label.to_string())
+        .collect();
+
+    assert_eq!(
+        source_columns.len(),
+        3,
+        "source_table should have exactly 3 inferred columns through 10-level chain, found: {:?}",
+        source_columns
+    );
+    assert!(
+        source_columns.contains(&"id".to_string()),
+        "id should be inferred on source_table"
+    );
+    assert!(
+        source_columns.contains(&"name".to_string()),
+        "name should be inferred on source_table"
+    );
+    assert!(
+        source_columns.contains(&"value".to_string()),
+        "value should be inferred on source_table"
+    );
+
+    // Verify data flow edges exist from source_table through the 10-level chain
+    let source_table_id = stmt
+        .nodes
+        .iter()
+        .find(|n| {
+            n.node_type == NodeType::Column
+                && n.qualified_name.as_deref() == Some("source_table.id")
+        })
+        .expect("source_table.id should exist");
+
+    let data_flow_from_id: Vec<_> = stmt
+        .edges
+        .iter()
+        .filter(|e| e.from == source_table_id.id && e.edge_type == EdgeType::DataFlow)
+        .collect();
+
+    assert!(
+        !data_flow_from_id.is_empty(),
+        "Data flow edges should exist from source_table.id through the deep CTE chain"
+    );
+}
+
+#[test]
+fn backward_inference_cycle_detection() {
+    // Test that self-referential patterns don't cause infinite loops.
+    // While true cycles aren't possible in standard SQL CTEs, this tests that
+    // our visited_pairs tracking handles the same source being referenced
+    // through different paths.
+    let sql = r#"
+        WITH base AS (
+            SELECT * FROM shared_source
+        ),
+        branch_a AS (
+            SELECT * FROM base
+        ),
+        branch_b AS (
+            SELECT * FROM base
+        ),
+        combined AS (
+            SELECT
+                branch_a.id AS a_id,
+                branch_b.id AS b_id
+            FROM branch_a, branch_b
+        )
+        SELECT * FROM combined
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let stmt = first_statement(&result);
+
+    // shared_source should have id inferred (referenced through both branches)
+    let source_columns: Vec<_> = stmt
+        .nodes
+        .iter()
+        .filter(|n| {
+            n.node_type == NodeType::Column
+                && n.qualified_name
+                    .as_ref()
+                    .map(|qn| qn.starts_with("shared_source."))
+                    .unwrap_or(false)
+        })
+        .map(|n| n.label.to_string())
+        .collect();
+
+    // Should have id column (referenced as a_id and b_id both resolve to base.id -> shared_source.id)
+    assert!(
+        source_columns.contains(&"id".to_string()),
+        "id should be inferred on shared_source, found: {:?}",
+        source_columns
+    );
+
+    // Verify data flow edges exist from shared_source.id
+    let shared_source_id = stmt
+        .nodes
+        .iter()
+        .find(|n| {
+            n.node_type == NodeType::Column
+                && n.qualified_name.as_deref() == Some("shared_source.id")
+        })
+        .expect("shared_source.id should exist");
+
+    let data_flow_from_shared_source: Vec<_> = stmt
+        .edges
+        .iter()
+        .filter(|e| e.from == shared_source_id.id && e.edge_type == EdgeType::DataFlow)
+        .collect();
+
+    assert!(
+        !data_flow_from_shared_source.is_empty(),
+        "Data flow edges should exist from shared_source.id (referenced through both branches)"
+    );
+}

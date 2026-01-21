@@ -551,6 +551,9 @@ impl<'a, 'b> Visitor for LineageVisitor<'a, 'b> {
                 self.ctx
                     .cte_definitions
                     .insert(cte_name.clone(), cte_id.clone());
+                self.ctx
+                    .cte_node_to_name
+                    .insert(cte_id.clone(), cte_name.clone());
                 self.analyzer.tracker.record_cte(&cte_name);
                 cte_ids.push((cte_name, cte_id));
             }
@@ -694,6 +697,15 @@ impl<'a, 'b> Visitor for LineageVisitor<'a, 'b> {
                         aggregation: None,
                     })
                 });
+
+                if let (Some(name), Some(node_id)) = (alias_name.as_ref(), derived_node_id.as_ref())
+                {
+                    // Track reverse mapping for wildcard inference without polluting
+                    // the global CTE definition map (which stores real WITH items).
+                    self.ctx
+                        .cte_node_to_name
+                        .insert(node_id.clone(), name.clone());
+                }
 
                 let mut derived_visitor = LineageVisitor::new(
                     self.analyzer,

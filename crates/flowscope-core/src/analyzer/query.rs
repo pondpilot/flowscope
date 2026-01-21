@@ -4,7 +4,7 @@
 //! FROM clauses, JOINs, WHERE/HAVING filters, and wildcard expansion. It builds the
 //! column-level lineage graph by tracking data flow from source columns to output columns.
 
-use super::context::{ColumnRef, OutputColumn, StatementContext};
+use super::context::{ColumnRef, OutputColumn, PendingWildcard, StatementContext};
 use super::helpers::{generate_column_node_id, generate_edge_id};
 use super::visitor::{LineageVisitor, Visitor};
 use super::Analyzer;
@@ -14,7 +14,10 @@ use crate::types::{
 };
 use serde_json::json;
 use sqlparser::ast::{self, Query, SetExpr};
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 /// Represents the information needed to add an expanded column during wildcard expansion.
 struct ExpandedColumnInfo {
@@ -338,8 +341,9 @@ impl<'a> Analyzer<'a> {
             let resolved = self.resolve_table_alias(ctx, Some(qualifier));
             resolved.into_iter().collect()
         } else {
-            // Expand all tables in scope
-            ctx.table_node_ids.keys().cloned().collect()
+            // Expand all tables in current scope (not global table_node_ids)
+            // This ensures SELECT * only expands tables from the current query's FROM clause
+            ctx.tables_in_current_scope()
         };
 
         for table_canonical in tables_to_expand {
@@ -364,17 +368,28 @@ impl<'a> Analyzer<'a> {
                 .or_else(|| {
                     ctx.aliased_subquery_columns
                         .get(&table_canonical)
-                        .map(|cte_cols| {
-                            cte_cols
-                                .iter()
-                                .map(|col| {
-                                    ExpandedColumnInfo::new(
-                                        col.name.clone(),
-                                        table_canonical.clone(),
-                                        col.data_type.clone(),
-                                    )
-                                })
-                                .collect()
+                        .and_then(|cte_cols| {
+                            // Only return Some if there are actual columns.
+                            // An empty column list means the CTE used SELECT * without schema,
+                            // since valid SQL CTEs always produce at least one column.
+                            // Note: A future improvement could use an enum like CteColumns::Known(Vec)
+                            // vs CteColumns::Unknown to make this distinction explicit.
+                            if cte_cols.is_empty() {
+                                None
+                            } else {
+                                Some(
+                                    cte_cols
+                                        .iter()
+                                        .map(|col| {
+                                            ExpandedColumnInfo::new(
+                                                col.name.clone(),
+                                                table_canonical.clone(),
+                                                col.data_type.clone(),
+                                            )
+                                        })
+                                        .collect(),
+                                )
+                            }
                         })
                 });
 
@@ -409,9 +424,11 @@ impl<'a> Analyzer<'a> {
                 self.issues.push(issue);
 
                 // If there's a target node, create an approximate edge from source table to target
+                // and record the pending wildcard for backward inference
                 if let Some(target) = target_node {
-                    if let Some(source_node_id) = ctx.table_node_ids.get(&table_canonical) {
-                        let edge_id = generate_edge_id(source_node_id, target);
+                    if let Some(source_node_id) = ctx.table_node_ids.get(&table_canonical).cloned()
+                    {
+                        let edge_id = generate_edge_id(&source_node_id, target);
                         if !ctx.edge_ids.contains(&edge_id) {
                             ctx.add_edge(Edge {
                                 id: edge_id,
@@ -424,6 +441,20 @@ impl<'a> Analyzer<'a> {
                                 join_condition: None,
                                 metadata: None,
                                 approximate: Some(true),
+                            });
+                        }
+
+                        // Find the CTE/alias name from the node ID for backward inference
+                        // Use the cte_node_to_name reverse mapping for efficient lookup
+                        let target_alias_name =
+                            ctx.cte_node_to_name.get(&Arc::from(target)).cloned();
+
+                        // Record pending wildcard for backward column inference
+                        if let Some(alias_name) = target_alias_name {
+                            ctx.pending_wildcards.push(PendingWildcard {
+                                source_canonical: table_canonical.clone(),
+                                target_name: alias_name,
+                                source_node_id,
                             });
                         }
                     }
@@ -843,5 +874,248 @@ impl<'a> Analyzer<'a> {
                 node.filters.extend(filters);
             }
         }
+    }
+
+    /// Maximum recursion depth for backward column inference.
+    /// Prevents stack overflow on pathological or cyclic queries.
+    const MAX_INFERENCE_DEPTH: usize = 20;
+
+    /// Propagates inferred columns backward through SELECT * chains.
+    ///
+    /// When columns are referenced from a CTE that was created via SELECT *,
+    /// this traces the chain back to the source table and creates column nodes.
+    /// This enables column-level lineage even when schema metadata is unavailable.
+    pub(super) fn propagate_inferred_columns(&mut self, ctx: &mut StatementContext) {
+        if ctx.pending_wildcards.is_empty() {
+            return;
+        }
+
+        // Build map: target_name -> Vec<PendingWildcard>
+        let mut wildcards_by_target: HashMap<String, Vec<PendingWildcard>> = HashMap::new();
+        for pw in ctx.pending_wildcards.drain(..) {
+            wildcards_by_target
+                .entry(pw.target_name.clone())
+                .or_default()
+                .push(pw);
+        }
+
+        // Track visited target/source pairs to prevent cycles
+        let mut visited_pairs: HashSet<(String, String)> = HashSet::new();
+
+        for (target_name, wildcards) in &wildcards_by_target {
+            let Some(cte_node_id) = self.lookup_inference_target_node(ctx, target_name) else {
+                continue;
+            };
+
+            let owned_columns = self.collect_owned_columns(ctx, &cte_node_id);
+            if owned_columns.is_empty() {
+                continue;
+            }
+
+            for wildcard in wildcards {
+                self.propagate_wildcard_columns(
+                    ctx,
+                    target_name,
+                    wildcard,
+                    &owned_columns,
+                    &wildcards_by_target,
+                    &mut visited_pairs,
+                    0, // Start at depth 0
+                );
+            }
+        }
+    }
+
+    /// Locates the node ID to use as the inference target for a wildcard.
+    fn lookup_inference_target_node(
+        &self,
+        ctx: &StatementContext,
+        target_name: &str,
+    ) -> Option<Arc<str>> {
+        if let Some(node_id) = ctx.cte_definitions.get(target_name) {
+            return Some(node_id.clone());
+        }
+
+        ctx.cte_node_to_name
+            .iter()
+            .find_map(|(node_id, name)| (name == target_name).then(|| node_id.clone()))
+    }
+
+    /// Collects column information owned by a CTE node.
+    fn collect_owned_columns(
+        &self,
+        ctx: &StatementContext,
+        cte_node_id: &Arc<str>,
+    ) -> Vec<(String, Option<String>, Arc<str>)> {
+        ctx.edges
+            .iter()
+            .filter(|e| e.edge_type == EdgeType::Ownership && e.from == *cte_node_id)
+            .filter_map(|e| {
+                ctx.nodes
+                    .iter()
+                    .find(|n| n.id == e.to && n.node_type == NodeType::Column)
+                    .map(|n| {
+                        let data_type = n
+                            .metadata
+                            .as_ref()
+                            .and_then(|m| m.get("data_type"))
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string());
+                        (n.label.to_string(), data_type, n.id.clone())
+                    })
+            })
+            .collect()
+    }
+
+    /// Propagates columns through a single wildcard, creating source columns and edges.
+    fn propagate_wildcard_columns(
+        &mut self,
+        ctx: &mut StatementContext,
+        target_name: &str,
+        wildcard: &PendingWildcard,
+        columns: &[(String, Option<String>, Arc<str>)],
+        wildcards_by_target: &HashMap<String, Vec<PendingWildcard>>,
+        visited_pairs: &mut HashSet<(String, String)>,
+        depth: usize,
+    ) {
+        // Enforce recursion depth limit to prevent stack overflow
+        if depth >= Self::MAX_INFERENCE_DEPTH {
+            return;
+        }
+
+        let pair = (target_name.to_string(), wildcard.source_canonical.clone());
+        if !visited_pairs.insert(pair.clone()) {
+            return;
+        }
+
+        let source_columns: Vec<_> = columns
+            .iter()
+            .filter_map(|(col_name, data_type, target_col_id)| {
+                self.create_inferred_column_with_edge(
+                    ctx,
+                    &wildcard.source_canonical,
+                    &wildcard.source_node_id,
+                    col_name,
+                    data_type.clone(),
+                    target_col_id,
+                )
+            })
+            .collect();
+
+        // Recursively propagate if this source is itself a target of another wildcard
+        if let Some(upstream_wildcards) = wildcards_by_target.get(&wildcard.source_canonical) {
+            for upstream_wildcard in upstream_wildcards {
+                self.propagate_wildcard_columns(
+                    ctx,
+                    &wildcard.source_canonical,
+                    upstream_wildcard,
+                    &source_columns,
+                    wildcards_by_target,
+                    visited_pairs,
+                    depth + 1,
+                );
+            }
+        }
+
+        visited_pairs.remove(&pair);
+    }
+
+    /// Creates an inferred source column and a data flow edge to the target column.
+    ///
+    /// Returns the column info tuple for recursive propagation, or None if creation failed.
+    fn create_inferred_column_with_edge(
+        &mut self,
+        ctx: &mut StatementContext,
+        source_canonical: &str,
+        source_node_id: &Arc<str>,
+        column_name: &str,
+        data_type: Option<String>,
+        target_col_id: &Arc<str>,
+    ) -> Option<(String, Option<String>, Arc<str>)> {
+        let src_id = self.create_inferred_source_column(
+            ctx,
+            source_canonical,
+            source_node_id,
+            column_name,
+            data_type.clone(),
+        )?;
+
+        let edge_id = generate_edge_id(&src_id, target_col_id);
+        if !ctx.edge_ids.contains(&edge_id) {
+            ctx.add_edge(Edge {
+                id: edge_id,
+                from: src_id.clone(),
+                to: target_col_id.clone(),
+                edge_type: EdgeType::DataFlow,
+                expression: None,
+                operation: None,
+                join_type: None,
+                join_condition: None,
+                metadata: None,
+                approximate: None,
+            });
+        }
+
+        Some((column_name.to_string(), data_type, src_id))
+    }
+
+    /// Creates an inferred column node on a source table.
+    ///
+    /// This is used during backward inference to add column nodes to source tables
+    /// that were referenced via SELECT * but lacked schema metadata.
+    ///
+    /// Returns the column node ID (whether newly created or already existing).
+    fn create_inferred_source_column(
+        &mut self,
+        ctx: &mut StatementContext,
+        source_canonical: &str,
+        source_node_id: &Arc<str>,
+        column_name: &str,
+        data_type: Option<String>,
+    ) -> Option<Arc<str>> {
+        let col_node_id = generate_column_node_id(Some(source_node_id), column_name);
+
+        if ctx.node_ids.contains(&col_node_id) {
+            // Already exists, return the ID for edge creation
+            return Some(col_node_id);
+        }
+
+        // Create column node with Implied resolution source
+        ctx.add_node(Node {
+            id: col_node_id.clone(),
+            node_type: NodeType::Column,
+            label: column_name.to_string().into(),
+            qualified_name: Some(format!("{}.{}", source_canonical, column_name).into()),
+            expression: None,
+            span: None,
+            metadata: None,
+            resolution_source: Some(ResolutionSource::Implied),
+            filters: Vec::new(),
+            join_type: None,
+            join_condition: None,
+            aggregation: None,
+        });
+
+        // Create ownership edge: table -> column
+        let edge_id = generate_edge_id(source_node_id, &col_node_id);
+        if !ctx.edge_ids.contains(&edge_id) {
+            ctx.add_edge(Edge {
+                id: edge_id,
+                from: source_node_id.clone(),
+                to: col_node_id.clone(),
+                edge_type: EdgeType::Ownership,
+                expression: None,
+                operation: None,
+                join_type: None,
+                join_condition: None,
+                metadata: None,
+                approximate: None,
+            });
+        }
+
+        // Record in source_table_columns for implied schema
+        ctx.record_source_column(source_canonical, column_name, data_type);
+
+        Some(col_node_id)
     }
 }

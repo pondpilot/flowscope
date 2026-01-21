@@ -551,10 +551,7 @@ fn dbt_many_unknown_macros_error_message() {
     let result = analyze_with_template(&sql, TemplateMode::Dbt, context);
 
     // Should have TEMPLATE_ERROR with details about stubbed functions
-    let template_error = result
-        .issues
-        .iter()
-        .find(|i| i.code == "TEMPLATE_ERROR");
+    let template_error = result.issues.iter().find(|i| i.code == "TEMPLATE_ERROR");
     assert!(
         template_error.is_some(),
         "Should have template error for too many unknown macros"
