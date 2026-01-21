@@ -1891,7 +1891,11 @@ fn bigquery_unnest_with_offset() {
 
     // UNNEST on literal array should parse without error
     assert!(
-        result.issues.is_empty() || result.issues.iter().all(|i| i.severity != flowscope_core::Severity::Error),
+        result.issues.is_empty()
+            || result
+                .issues
+                .iter()
+                .all(|i| i.severity != flowscope_core::Severity::Error),
         "UNNEST with OFFSET should parse without errors"
     );
 }
@@ -7081,7 +7085,12 @@ fn lateral_join_tracks_outer_and_subquery_tables() {
 
     // Verify output columns are present
     let columns = column_labels(stmt);
-    for expected in ["department_id", "department_name", "employee_name", "salary"] {
+    for expected in [
+        "department_id",
+        "department_name",
+        "employee_name",
+        "salary",
+    ] {
         assert!(
             columns.contains(&expected.to_string()),
             "expected column {expected} in LATERAL join output; saw {columns:?}"
@@ -7120,7 +7129,12 @@ fn filter_clause_tracks_aggregation_sources() {
 
     // Verify output columns are present
     let columns = column_labels(stmt);
-    for expected in ["department_id", "total_salary", "senior_salary", "high_performer_avg"] {
+    for expected in [
+        "department_id",
+        "total_salary",
+        "senior_salary",
+        "high_performer_avg",
+    ] {
         assert!(
             columns.contains(&expected.to_string()),
             "expected column {expected} in FILTER clause output; saw {columns:?}"
@@ -7237,7 +7251,12 @@ fn cube_tracks_all_dimensions() {
 
     // Verify dimension columns are present
     let columns = column_labels(stmt);
-    for expected in ["product_category", "sales_region", "total_quantity", "total_amount"] {
+    for expected in [
+        "product_category",
+        "sales_region",
+        "total_quantity",
+        "total_amount",
+    ] {
         assert!(
             columns.contains(&expected.to_string()),
             "expected column {expected} in CUBE output; saw {columns:?}"

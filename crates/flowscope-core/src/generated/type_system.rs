@@ -73,12 +73,18 @@ pub fn normalize_type_name(type_name: &str) -> Option<CanonicalType> {
         "binary" | "varbinary" | "bytea" | "blob" | "bytes" => Some(CanonicalType::Binary),
         "bool" | "boolean" => Some(CanonicalType::Boolean),
         "date" => Some(CanonicalType::Date),
-        "float" | "float4" | "float8" | "double" | "real" | "decimal" | "numeric" | "number" => Some(CanonicalType::Float),
-        "int" | "int4" | "integer" | "int64" | "bigint" | "smallint" | "tinyint" | "int2" | "int8" => Some(CanonicalType::Integer),
+        "float" | "float4" | "float8" | "double" | "real" | "decimal" | "numeric" | "number" => {
+            Some(CanonicalType::Float)
+        }
+        "int" | "int4" | "integer" | "int64" | "bigint" | "smallint" | "tinyint" | "int2"
+        | "int8" => Some(CanonicalType::Integer),
         "json" | "jsonb" | "variant" | "object" => Some(CanonicalType::Json),
-        "varchar" | "char" | "text" | "string" | "nvarchar" | "nchar" | "character" => Some(CanonicalType::Text),
+        "varchar" | "char" | "text" | "string" | "nvarchar" | "nchar" | "character" => {
+            Some(CanonicalType::Text)
+        }
         "time" | "timetz" => Some(CanonicalType::Time),
-        "timestamp" | "timestamptz" | "datetime" | "timestamp_ntz" | "timestamp_ltz" | "timestamp_tz" => Some(CanonicalType::Timestamp),
+        "timestamp" | "timestamptz" | "datetime" | "timestamp_ntz" | "timestamp_ltz"
+        | "timestamp_tz" => Some(CanonicalType::Timestamp),
         _ => None,
     }
 }
