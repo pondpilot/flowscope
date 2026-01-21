@@ -255,3 +255,116 @@ fn test_postgres_group_by_cube_rollup() {
 
     run_postgres_snapshot_test("postgres_group_by_cube_rollup", sql);
 }
+
+fn run_snowflake_snapshot_test(name: &str, sql: &str) {
+    let request = AnalyzeRequest {
+        sql: sql.to_string(),
+        files: None,
+        dialect: Dialect::Snowflake,
+        source_name: None,
+        options: None,
+        schema: None,
+        #[cfg(feature = "templating")]
+        template_config: None,
+    };
+
+    let result = analyze(&request);
+    let clean_result = prepare_for_snapshot(result);
+
+    let mut settings = Settings::clone_current();
+    settings.set_snapshot_suffix(name);
+
+    settings.bind(|| {
+        assert_json_snapshot!(clean_result);
+    });
+}
+
+// Task 3: Tier 3 Snowflake Features
+
+#[test]
+fn test_snowflake_time_travel() {
+    let sql = r#"
+        -- AT with TIMESTAMP
+        SELECT * FROM my_table AT (TIMESTAMP => '2024-06-05 12:30:00'::TIMESTAMP_LTZ);
+    "#;
+
+    run_snowflake_snapshot_test("snowflake_time_travel", sql);
+}
+
+#[test]
+fn test_snowflake_time_travel_before() {
+    let sql = r#"
+        -- BEFORE with STATEMENT
+        SELECT * FROM my_table BEFORE (STATEMENT => '8e5d0ca9-005e-44e6-b858-a8f5b37c5726');
+    "#;
+
+    run_snowflake_snapshot_test("snowflake_time_travel_before", sql);
+}
+
+#[test]
+fn test_snowflake_lateral_flatten() {
+    let sql = r#"
+        -- FLATTEN after inner join
+        SELECT
+            value AS p_id,
+            name
+        FROM a
+        INNER JOIN b ON b.c_id = a.c_id,
+        LATERAL FLATTEN(input => b.cool_ids);
+    "#;
+
+    run_snowflake_snapshot_test("snowflake_lateral_flatten", sql);
+}
+
+#[test]
+fn test_snowflake_higher_order_functions() {
+    let sql = r#"
+        -- FILTER and TRANSFORM with lambda expressions
+        SELECT
+            FILTER(ident, i -> i:value > 0) AS sample_filter,
+            TRANSFORM(ident, j -> j:value) AS sample_transform
+        FROM ref;
+    "#;
+
+    run_snowflake_snapshot_test("snowflake_higher_order_functions", sql);
+}
+
+#[test]
+fn test_snowflake_reduce() {
+    let sql = r#"
+        -- REDUCE for array aggregation
+        SELECT REDUCE([1, 2, 3], 0, (acc, val) -> acc + val) AS sum_result;
+    "#;
+
+    run_snowflake_snapshot_test("snowflake_reduce", sql);
+}
+
+#[test]
+fn test_snowflake_group_by_cube_rollup() {
+    let sql = r#"
+        -- CUBE for all dimension combinations
+        SELECT
+            name,
+            age,
+            COUNT(*) AS record_count
+        FROM people
+        GROUP BY CUBE (name, age);
+    "#;
+
+    run_snowflake_snapshot_test("snowflake_group_by_cube_rollup", sql);
+}
+
+#[test]
+fn test_snowflake_grouping_sets() {
+    let sql = r#"
+        -- GROUPING SETS for specific aggregation combinations
+        SELECT
+            foo,
+            bar,
+            COUNT(*) AS cnt
+        FROM baz
+        GROUP BY GROUPING SETS ((foo), (bar));
+    "#;
+
+    run_snowflake_snapshot_test("snowflake_grouping_sets", sql);
+}

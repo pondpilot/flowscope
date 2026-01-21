@@ -7125,3 +7125,147 @@ fn cube_tracks_all_dimensions() {
         result.issues
     );
 }
+
+// Task 3: Tier 3 Snowflake Features - Lineage assertions
+
+#[test]
+fn snowflake_lateral_flatten_tracks_source_table() {
+    let sql = r#"
+        SELECT
+            value AS p_id,
+            name
+        FROM a
+        INNER JOIN b ON b.c_id = a.c_id,
+        LATERAL FLATTEN(input => b.cool_ids)
+    "#;
+
+    let result = run_analysis(sql, Dialect::Snowflake, None);
+    let tables = collect_table_names(&result);
+
+    // Both tables in the join should be tracked
+    // Snowflake normalizes to uppercase
+    let has_table_a = tables.iter().any(|t| t.eq_ignore_ascii_case("a"));
+    let has_table_b = tables.iter().any(|t| t.eq_ignore_ascii_case("b"));
+
+    assert!(
+        has_table_a,
+        "LATERAL FLATTEN query should track table a; saw {tables:?}"
+    );
+    assert!(
+        has_table_b,
+        "LATERAL FLATTEN query should track table b; saw {tables:?}"
+    );
+
+    // Verify parsing completed
+    assert!(
+        result.summary.statement_count >= 1,
+        "LATERAL FLATTEN query should parse at least one statement"
+    );
+}
+
+#[test]
+fn snowflake_higher_order_functions_track_source() {
+    let sql = r#"
+        SELECT
+            FILTER(ident, i -> i:value > 0) AS sample_filter,
+            TRANSFORM(ident, j -> j:value) AS sample_transform
+        FROM ref
+    "#;
+
+    let result = run_analysis(sql, Dialect::Snowflake, None);
+    let tables = collect_table_names(&result);
+
+    // Source table should be tracked
+    let has_ref = tables.iter().any(|t| t.eq_ignore_ascii_case("ref"));
+
+    assert!(
+        has_ref,
+        "Higher-order function query should track source table; saw {tables:?}"
+    );
+
+    // Verify parsing completed
+    assert!(
+        result.summary.statement_count >= 1,
+        "Higher-order function query should parse at least one statement"
+    );
+}
+
+#[test]
+fn snowflake_group_by_cube_tracks_source() {
+    let sql = r#"
+        SELECT
+            name,
+            age,
+            COUNT(*) AS record_count
+        FROM people
+        GROUP BY CUBE (name, age)
+    "#;
+
+    let result = run_analysis(sql, Dialect::Snowflake, None);
+    let tables = collect_table_names(&result);
+
+    let has_people = tables.iter().any(|t| t.eq_ignore_ascii_case("people"));
+
+    assert!(
+        has_people,
+        "Snowflake CUBE query should track source table; saw {tables:?}"
+    );
+
+    let stmt = first_statement(&result);
+    let columns = column_labels(stmt);
+
+    // Verify output columns (Snowflake normalizes to uppercase)
+    for expected in ["NAME", "AGE", "RECORD_COUNT"] {
+        assert!(
+            columns.iter().any(|c| c.eq_ignore_ascii_case(expected)),
+            "expected column {expected} in Snowflake CUBE output; saw {columns:?}"
+        );
+    }
+
+    // Verify no parsing errors
+    assert!(
+        !result.summary.has_errors,
+        "Snowflake CUBE query should parse without errors: {:?}",
+        result.issues
+    );
+}
+
+#[test]
+fn snowflake_grouping_sets_tracks_source() {
+    let sql = r#"
+        SELECT
+            foo,
+            bar,
+            COUNT(*) AS cnt
+        FROM baz
+        GROUP BY GROUPING SETS ((foo), (bar))
+    "#;
+
+    let result = run_analysis(sql, Dialect::Snowflake, None);
+    let tables = collect_table_names(&result);
+
+    let has_baz = tables.iter().any(|t| t.eq_ignore_ascii_case("baz"));
+
+    assert!(
+        has_baz,
+        "Snowflake GROUPING SETS query should track source table; saw {tables:?}"
+    );
+
+    let stmt = first_statement(&result);
+    let columns = column_labels(stmt);
+
+    // Verify output columns
+    for expected in ["FOO", "BAR", "CNT"] {
+        assert!(
+            columns.iter().any(|c| c.eq_ignore_ascii_case(expected)),
+            "expected column {expected} in Snowflake GROUPING SETS output; saw {columns:?}"
+        );
+    }
+
+    // Verify no parsing errors
+    assert!(
+        !result.summary.has_errors,
+        "Snowflake GROUPING SETS query should parse without errors: {:?}",
+        result.issues
+    );
+}

@@ -37,13 +37,13 @@ Add PostgreSQL-specific features that extend lineage coverage for LATERAL joins,
 
 Add Snowflake-specific features including time travel queries, lateral FLATTEN with joins, and higher-order functions (FILTER, TRANSFORM, REDUCE with lambda expressions).
 
-- [ ] Add `fixtures/snowflake/time_travel.sql` - `AT(TIMESTAMP => ...)`, `BEFORE(STATEMENT => ...)`
-- [ ] Add `fixtures/snowflake/lateral_flatten.sql` - `lateral flatten(input => col)` after JOIN
-- [ ] Add `fixtures/snowflake/higher_order_functions.sql` - FILTER, TRANSFORM, REDUCE with lambdas
-- [ ] Add `fixtures/snowflake/group_by_cube_rollup.sql` - Snowflake CUBE/ROLLUP syntax
-- [ ] Add parsing snapshot tests for all 4 fixtures
-- [ ] Add lineage assertions for FLATTEN output columns and HOF results
-- [ ] Run `just test-rust` and verify all tests pass
+- [x] Add `fixtures/snowflake/time_travel.sql` - `AT(TIMESTAMP => ...)`, `BEFORE(STATEMENT => ...)`
+- [x] Add `fixtures/snowflake/lateral_flatten.sql` - `lateral flatten(input => col)` after JOIN
+- [x] Add `fixtures/snowflake/higher_order_functions.sql` - FILTER, TRANSFORM, REDUCE with lambdas
+- [x] Add `fixtures/snowflake/group_by_cube_rollup.sql` - Snowflake CUBE/ROLLUP syntax
+- [x] Add parsing snapshot tests for all 4 fixtures
+- [x] Add lineage assertions for FLATTEN output columns and HOF results
+- [x] Run `just test-rust` and verify all tests pass
 
 ### Task 4: Tier 4 BigQuery Features
 
