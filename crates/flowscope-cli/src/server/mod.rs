@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use axum::Router;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 
 pub use state::{AppState, ServerConfig};
 
@@ -32,7 +32,7 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
         }
     });
 
-    let app = build_router(state);
+    let app = build_router(state, config.port);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], config.port));
 
@@ -63,11 +63,23 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
 }
 
 /// Build the main router with all routes.
-pub fn build_router(state: Arc<AppState>) -> Router {
+pub fn build_router(state: Arc<AppState>, port: u16) -> Router {
+    // Restrict CORS to same-origin to prevent cross-site requests from reading local files.
+    // The server only binds to localhost, but without CORS restrictions any website could
+    // make requests to http://127.0.0.1:<port> and read the user's SQL files.
+    let allowed_origins = [
+        format!("http://localhost:{port}").parse().unwrap(),
+        format!("http://127.0.0.1:{port}").parse().unwrap(),
+    ];
+
     let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+        .allow_origin(allowed_origins)
+        .allow_methods([
+            axum::http::Method::GET,
+            axum::http::Method::POST,
+            axum::http::Method::OPTIONS,
+        ])
+        .allow_headers([axum::http::header::CONTENT_TYPE]);
 
     Router::new()
         .nest("/api", api::api_routes())
@@ -98,8 +110,10 @@ pub fn scan_sql_files(dirs: &[PathBuf]) -> Result<Vec<flowscope_core::FileSource
             continue;
         }
 
+        // Don't follow symlinks to prevent accessing files outside watched directories.
+        // A symlink could point to sensitive files that shouldn't be exposed via the API.
         for entry in walkdir::WalkDir::new(dir)
-            .follow_links(true)
+            .follow_links(false)
             .into_iter()
             .filter_map(|e| e.ok())
         {

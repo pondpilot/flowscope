@@ -36,7 +36,7 @@ async fn spawn_test_server(
 ) -> (String, tokio::task::JoinHandle<()>) {
     let port = config.port;
     let state = test_state_from_files(config, files);
-    let app = build_router(state);
+    let app = build_router(state, port);
 
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();

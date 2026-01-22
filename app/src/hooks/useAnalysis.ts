@@ -100,7 +100,9 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
     (
       project: Project | null,
       activeFileContent?: string,
-      activeFileName?: string
+      // Use path (not just basename) for consistency with custom/all modes.
+      // This ensures sourceName matches across all run modes.
+      activeFilePath?: string
     ): AnalysisContext | null => {
       if (!project) return null;
 
@@ -108,19 +110,23 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
       let filesToAnalyze: Array<{ name: string; content: string }> = [];
       const runMode = project.runMode;
 
-      if (runMode === 'current' && activeFileContent && activeFileName) {
-        filesToAnalyze = [{ name: activeFileName, content: activeFileContent }];
-        contextDescription = `Analyzing file: ${activeFileName}`;
+      if (runMode === 'current' && activeFileContent && activeFilePath) {
+        filesToAnalyze = [{ name: activeFilePath, content: activeFileContent }];
+        contextDescription = `Analyzing file: ${activeFilePath}`;
       } else if (runMode === 'custom') {
         const selectedIds = project.selectedFileIds || [];
         const selectedFiles = project.files.filter(
           (f) => selectedIds.includes(f.id) && f.name.endsWith('.sql')
         );
-        filesToAnalyze = selectedFiles.map((f) => ({ name: f.name, content: f.content }));
+        // Use path instead of name to avoid collisions when files in different
+        // directories have the same basename (e.g., "dir1/query.sql" and "dir2/query.sql")
+        filesToAnalyze = selectedFiles.map((f) => ({ name: f.path, content: f.content }));
         contextDescription = `Analyzing selected: ${filesToAnalyze.length} files`;
       } else {
         const sqlFiles = project.files.filter((f) => f.name.endsWith('.sql'));
-        filesToAnalyze = sqlFiles.map((f) => ({ name: f.name, content: f.content }));
+        // Use path instead of name to avoid collisions when files in different
+        // directories have the same basename (e.g., "dir1/query.sql" and "dir2/query.sql")
+        filesToAnalyze = sqlFiles.map((f) => ({ name: f.path, content: f.content }));
         contextDescription = `Analyzing project: ${sqlFiles.length} files`;
       }
 
@@ -139,15 +145,17 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
     }
 
     let cancelled = false;
-    const sqlFiles = currentProject.files.filter((file) => file.name.endsWith('.sql'));
+    // Use file.path as name to match how buildAnalysisContext keys files.
+    // This ensures the worker cache uses consistent keys (paths) across sync and analysis.
+    const sqlFiles = currentProject.files
+      .filter((file) => file.name.endsWith('.sql'))
+      .map((f) => ({ name: f.path, content: f.content }));
 
     if (ANALYSIS_DEBUG)
       console.log(`[useAnalysis] File sync effect triggered (${sqlFiles.length} SQL files)`);
     const syncEffectStart = nowMs();
 
-    const syncFiles = adapter
-      ? adapter.syncFiles(sqlFiles)
-      : syncAnalysisFiles(sqlFiles);
+    const syncFiles = adapter ? adapter.syncFiles(sqlFiles) : syncAnalysisFiles(sqlFiles);
 
     syncFiles
       .then(() => {
@@ -224,7 +232,7 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
     }
 
     const activeFile = project.files.find((file) => file.id === project.activeFileId);
-    const context = buildAnalysisContext(project, activeFile?.content, activeFile?.name);
+    const context = buildAnalysisContext(project, activeFile?.content, activeFile?.path);
     if (!context || context.files.length === 0) {
       return;
     }
@@ -312,7 +320,7 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
   ]);
 
   const runAnalysis = useCallback(
-    async (activeFileContent?: string, activeFileName?: string) => {
+    async (activeFileContent?: string, activeFilePath?: string) => {
       if (!backendReady || !currentProject) return;
 
       const requestId = analysisRequestRef.current + 1;
@@ -325,7 +333,7 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
       try {
-        const context = buildAnalysisContext(currentProject, activeFileContent, activeFileName);
+        const context = buildAnalysisContext(currentProject, activeFileContent, activeFilePath);
 
         if (!context) {
           setError('No project context available');

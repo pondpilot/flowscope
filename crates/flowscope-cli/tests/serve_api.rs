@@ -43,7 +43,7 @@ fn default_config() -> ServerConfig {
 #[tokio::test]
 async fn health_returns_ok_status() {
     let state = test_state(default_config(), vec![]);
-    let app = build_router(state);
+    let app = build_router(state, 3000);
 
     let response = app
         .oneshot(Request::get("/api/health").body(Body::empty()).unwrap())
@@ -66,7 +66,7 @@ async fn health_returns_ok_status() {
 #[tokio::test]
 async fn analyze_simple_select() {
     let state = test_state(default_config(), vec![]);
-    let app = build_router(state);
+    let app = build_router(state, 3000);
 
     let response = app
         .oneshot(
@@ -97,7 +97,7 @@ async fn analyze_simple_select() {
 #[tokio::test]
 async fn analyze_with_join() {
     let state = test_state(default_config(), vec![]);
-    let app = build_router(state);
+    let app = build_router(state, 3000);
 
     let response = app
         .oneshot(
@@ -131,7 +131,7 @@ async fn analyze_with_join() {
 #[tokio::test]
 async fn completion_returns_items() {
     let state = test_state(default_config(), vec![]);
-    let app = build_router(state);
+    let app = build_router(state, 3000);
 
     let response = app
         .oneshot(
@@ -165,7 +165,7 @@ async fn completion_returns_items() {
 #[tokio::test]
 async fn split_multiple_statements() {
     let state = test_state(default_config(), vec![]);
-    let app = build_router(state);
+    let app = build_router(state, 3000);
 
     let response = app
         .oneshot(
@@ -199,7 +199,7 @@ async fn split_multiple_statements() {
 #[tokio::test]
 async fn files_returns_empty_when_no_files() {
     let state = test_state(default_config(), vec![]);
-    let app = build_router(state);
+    let app = build_router(state, 3000);
 
     let response = app
         .oneshot(Request::get("/api/files").body(Body::empty()).unwrap())
@@ -231,7 +231,7 @@ async fn files_returns_loaded_files() {
     ];
 
     let state = test_state(default_config(), files);
-    let app = build_router(state);
+    let app = build_router(state, 3000);
 
     let response = app
         .oneshot(Request::get("/api/files").body(Body::empty()).unwrap())
@@ -258,7 +258,7 @@ async fn files_returns_loaded_files() {
 #[tokio::test]
 async fn schema_returns_null_when_no_schema() {
     let state = test_state(default_config(), vec![]);
-    let app = build_router(state);
+    let app = build_router(state, 3000);
 
     let response = app
         .oneshot(Request::get("/api/schema").body(Body::empty()).unwrap())
@@ -289,7 +289,7 @@ async fn config_returns_server_configuration() {
     };
 
     let state = test_state(config, vec![]);
-    let app = build_router(state);
+    let app = build_router(state, 3000);
 
     let response = app
         .oneshot(Request::get("/api/config").body(Body::empty()).unwrap())
@@ -313,7 +313,7 @@ async fn config_returns_server_configuration() {
 #[tokio::test]
 async fn export_json_format() {
     let state = test_state(default_config(), vec![]);
-    let app = build_router(state);
+    let app = build_router(state, 3000);
 
     let response = app
         .oneshot(
@@ -340,7 +340,7 @@ async fn export_json_format() {
 #[tokio::test]
 async fn export_mermaid_format() {
     let state = test_state(default_config(), vec![]);
-    let app = build_router(state);
+    let app = build_router(state, 3000);
 
     let response = app
         .oneshot(
@@ -367,7 +367,7 @@ async fn export_mermaid_format() {
 #[tokio::test]
 async fn export_unknown_format_returns_error() {
     let state = test_state(default_config(), vec![]);
-    let app = build_router(state);
+    let app = build_router(state, 3000);
 
     let response = app
         .oneshot(
