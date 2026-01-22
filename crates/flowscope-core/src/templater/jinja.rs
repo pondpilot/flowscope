@@ -6,10 +6,13 @@ use minijinja::{Environment, Value};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::time::{Duration, Instant};
 
 use regex::Regex;
 use std::sync::LazyLock;
+
+// Time-based guards are only available on native builds (not WASM)
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::{Duration, Instant};
 
 /// Renders a Jinja2 template with the given context.
 ///
@@ -19,13 +22,14 @@ use std::sync::LazyLock;
 /// Set lower than MiniJinja's default (500) for extra safety in WASM environments.
 const RECURSION_LIMIT: usize = 100;
 
-/// Maximum time allowed for the dbt render retry loop to prevent DoS via templates
-/// with many distinct unknown macros.
-const RENDER_TIMEOUT: Duration = Duration::from_secs(5);
-
 /// Maximum template size for regex preprocessing (10 MB).
 /// Templates larger than this skip preprocessing to avoid regex DoS.
 const MAX_PREPROCESS_SIZE: usize = 10_000_000;
+
+/// Timeout for template rendering on native builds.
+/// Not available in WASM where Instant is unreliable.
+#[cfg(not(target_arch = "wasm32"))]
+const RENDER_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Regex to match dbt {% test ... %} ... {% endtest %} blocks.
 /// These define test macros which should be stripped for lineage analysis.
@@ -133,7 +137,6 @@ pub(crate) fn render_dbt(
 
     // Track which unknown functions we've already stubbed to avoid infinite loops
     let mut stubbed_functions: HashSet<String> = HashSet::new();
-    let start_time = Instant::now();
 
     // Create environment once and reuse across retries
     let mut env = Environment::new();
@@ -155,18 +158,31 @@ pub(crate) fn render_dbt(
     let ctx = json_context_to_minijinja(context);
 
     // Retry loop: keep trying until we succeed or hit a non-function error
-    const MAX_RETRIES: usize = 50; // Prevent infinite loops
+    //
+    // DoS Protection Design Decision:
+    // On WASM, we use only iteration limits (MAX_RETRIES) because time-based checks
+    // (e.g., Instant::elapsed()) are unreliable where Instant may not be available.
+    // On native builds, we add an additional time-based guard for defense-in-depth.
+    // The combination of MAX_RETRIES and RECURSION_LIMIT provides baseline protection:
+    // - MAX_RETRIES caps the number of unknown macro stubbing attempts
+    // - RECURSION_LIMIT (set on the MiniJinja environment) prevents deeply nested templates
+    // - MAX_PREPROCESS_SIZE prevents regex DoS on very large inputs
+    // - RENDER_TIMEOUT (native only) provides a wall-clock safety net
+    const MAX_RETRIES: usize = 50;
+
+    #[cfg(not(target_arch = "wasm32"))]
+    let start_time = Instant::now();
+
     for _ in 0..MAX_RETRIES {
-        // Check timeout to prevent DoS via templates with many unknown macros
+        // On native builds, check timeout before each render attempt
+        #[cfg(not(target_arch = "wasm32"))]
         if start_time.elapsed() > RENDER_TIMEOUT {
             return Err(TemplateError::RenderError(format!(
-                "Template rendering timed out after {:?}. Stubbed {} unknown functions: {}",
+                "Template rendering timed out after {:?}. Stubbed functions: {}",
                 RENDER_TIMEOUT,
-                stubbed_functions.len(),
                 format_stubbed_list(&stubbed_functions)
             )));
         }
-
         // Try to render the template
         let tmpl = env.get_template("sql")?;
         match tmpl.render(ctx.clone()) {

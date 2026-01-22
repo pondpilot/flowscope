@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use super::Span;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
 #[serde(rename_all = "camelCase")]
 pub enum CompletionClause {
     Select,
@@ -21,6 +21,7 @@ pub enum CompletionClause {
     Update,
     Delete,
     With,
+    #[default]
     Unknown,
 }
 
@@ -127,15 +128,28 @@ pub enum CompletionItemCategory {
     Function,
 }
 
+/// A completion item representing a suggested token (column, table, function, etc.).
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CompletionItem {
+    /// Display label for the completion item
     pub label: String,
+    /// Text to insert when the completion is accepted
     pub insert_text: String,
+    /// Kind of completion item (keyword, function, table, column, etc.)
     pub kind: CompletionItemKind,
+    /// Category for scoring and filtering purposes
     pub category: CompletionItemCategory,
+    /// Computed relevance score (higher = more relevant)
     pub score: i32,
+    /// Whether this item is specifically relevant to the current clause
     pub clause_specific: bool,
+    /// Additional detail shown in the completion popup.
+    ///
+    /// For columns, this contains the SQL data type (e.g., "INTEGER", "VARCHAR").
+    /// This is used both for display and for type-aware scoring in comparison contexts.
+    ///
+    /// For functions, this contains the function signature (e.g., "COUNT(expr) → INTEGER").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
 }

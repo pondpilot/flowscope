@@ -193,6 +193,12 @@ impl<'a> Analyzer<'a> {
             is_temporary,
             "CREATE TABLE AS",
         );
+
+        // Mark as DDL-seeded to prevent schema overwriting by later queries.
+        // CTAS derives complete schema from its query projection, so it should
+        // not be overwritten by partial column sets from subsequent statements.
+        self.schema.mark_as_ddl_seeded(&canonical);
+
         // Column-level lineage from analyze_query handles the data flow edges.
         // No need to create redundant table-to-table edges here.
     }
@@ -304,6 +310,12 @@ impl<'a> Analyzer<'a> {
             is_temporary,
             "VIEW definition",
         );
+
+        // Mark as DDL-seeded to prevent schema overwriting by later queries.
+        // Views derive complete schema from their query projection, so they should
+        // not be overwritten by partial column sets from subsequent statements.
+        self.schema.mark_as_ddl_seeded(&canonical);
+
         // Column-level lineage from analyze_query handles the data flow edges.
         // No need to create redundant table-to-table edges here.
     }

@@ -10,7 +10,8 @@ use crate::types::{
     Dialect, SchemaMetadata, Span,
 };
 
-use super::ast_extractor::extract_ast_context;
+use super::ast_extractor::{extract_ast_context, extract_lateral_aliases};
+use super::functions::{get_function_completions, FunctionCompletionContext};
 use super::parse_strategies::try_parse_for_completion;
 
 /// Maximum SQL input size (10MB) to prevent memory exhaustion.
@@ -19,6 +20,12 @@ const MAX_SQL_LENGTH: usize = 10 * 1024 * 1024;
 
 // Scoring constants for completion item ranking.
 // Higher scores = higher priority in completion list.
+//
+// Scoring guidelines:
+// - Base category scores start at 1000 and decrease by 100 per rank
+// - Prefix matches add 100-300 depending on match quality
+// - Context-aware adjustments range from -300 to +800
+// - Type compatibility adds +100 for matches, -50 for mismatches
 
 /// Bonus for column name prefix matches (when typing matches the column name portion of "table.column")
 const SCORE_COLUMN_NAME_MATCH_BONUS: i32 = 150;
@@ -32,6 +39,12 @@ const SCORE_OTHER_KEYWORD_PENALTY: i32 = -200;
 const SCORE_F_FUNCTION_PENALTY: i32 = -250;
 /// Additional penalty for functions starting with 'from_' (e.g., from_json)
 const SCORE_FROM_FUNCTION_PENALTY: i32 = -300;
+/// Bonus for columns whose type matches the expected type in comparison context.
+/// Applied when the column can be implicitly cast to the expected type (e.g., INT matches INT).
+const SCORE_TYPE_COMPATIBLE: i32 = 100;
+/// Penalty for columns whose type is incompatible with expected type.
+/// Smaller magnitude than bonus to avoid completely hiding potentially useful columns.
+const SCORE_TYPE_INCOMPATIBLE: i32 = -50;
 
 #[derive(Debug, Clone)]
 struct TokenInfo {
@@ -360,6 +373,181 @@ fn detect_clause(tokens: &[TokenInfo], cursor_offset: usize) -> CompletionClause
     }
 
     clause
+}
+
+/// Detects whether the statement contains a GROUP BY clause.
+///
+/// This is used for context-aware function scoring - aggregates get boosted
+/// when GROUP BY is present.
+fn has_group_by(tokens: &[TokenInfo]) -> bool {
+    for (index, token_info) in tokens.iter().enumerate() {
+        if let Some(keyword) = keyword_from_token(&token_info.token) {
+            if keyword == "GROUP" {
+                if let Some(next) = tokens.get(index + 1) {
+                    if keyword_from_token(&next.token).as_deref() == Some("BY") {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
+/// Detects whether the cursor is currently inside an `OVER (...)` window clause.
+///
+/// Clause detection never reports `CompletionClause::Window` when typing inside
+/// regular `OVER` expressions, so we manually track parentheses that follow an
+/// `OVER` keyword before the cursor position.
+fn in_over_clause(tokens: &[TokenInfo], cursor_offset: usize) -> bool {
+    let mut pending_over = false;
+    let mut paren_depth: usize = 0;
+    let mut over_stack: Vec<usize> = Vec::new();
+
+    for token_info in tokens {
+        if token_info.span.start >= cursor_offset {
+            break;
+        }
+
+        match &token_info.token {
+            Token::Word(word) => {
+                if word.keyword == Keyword::NoKeyword {
+                    pending_over = false;
+                } else if keyword_from_token(&token_info.token).as_deref() == Some("OVER") {
+                    pending_over = true;
+                }
+            }
+            Token::LParen => {
+                paren_depth = paren_depth.saturating_add(1);
+                if pending_over {
+                    over_stack.push(paren_depth);
+                    pending_over = false;
+                }
+            }
+            Token::RParen => {
+                if paren_depth > 0 {
+                    if over_stack.last() == Some(&paren_depth) {
+                        over_stack.pop();
+                    }
+                    paren_depth -= 1;
+                }
+                if pending_over {
+                    pending_over = false;
+                }
+            }
+            Token::Whitespace(_) => {}
+            _ => {
+                if pending_over {
+                    pending_over = false;
+                }
+            }
+        }
+    }
+
+    !over_stack.is_empty()
+}
+
+use crate::generated::{can_implicitly_cast, normalize_type_name, CanonicalType};
+
+/// Represents the expected type context for completion scoring.
+///
+/// When the cursor is in a binary expression context (e.g., `WHERE age > |`),
+/// we can infer the expected type from the left operand and score columns
+/// by type compatibility.
+#[derive(Debug, Clone)]
+pub(crate) struct TypeContext {
+    /// The expected canonical type for completions
+    pub expected_type: CanonicalType,
+    /// The column/expression name that provided the expected type (for debugging)
+    #[allow(dead_code)]
+    pub source_name: String,
+}
+
+/// Attempts to infer the expected type context from the tokens before the cursor.
+///
+/// This is used in WHERE, HAVING, and ON clauses to boost type-compatible columns.
+/// For example, in `WHERE age > |`, we detect that `age` is an INTEGER and boost
+/// integer-compatible columns in the completion list.
+fn infer_type_context(
+    tokens: &[TokenInfo],
+    cursor_offset: usize,
+    sql: &str,
+    registry: &SchemaRegistry,
+    tables: &[CompletionTable],
+) -> Option<TypeContext> {
+    // Find tokens before cursor
+    let mut tokens_before: Vec<&TokenInfo> = tokens
+        .iter()
+        .filter(|t| t.span.end <= cursor_offset)
+        .collect();
+
+    // We need at least 2 tokens: identifier and comparison operator
+    if tokens_before.len() < 2 {
+        return None;
+    }
+
+    // Pop the last token (should be an operator for our context)
+    let last_token = tokens_before.pop()?;
+
+    // Check if last token is a comparison operator
+    let is_comparison = matches!(
+        last_token.token,
+        Token::Eq | Token::Neq | Token::Lt | Token::Gt | Token::LtEq | Token::GtEq
+    );
+
+    if !is_comparison {
+        return None;
+    }
+
+    // Get the identifier before the operator
+    let identifier_token = tokens_before.pop()?;
+
+    let identifier = match &identifier_token.token {
+        Token::Word(word) if word.keyword == Keyword::NoKeyword => sql
+            .get(identifier_token.span.start..identifier_token.span.end)
+            .unwrap_or(&word.value)
+            .to_string(),
+        _ => return None,
+    };
+
+    // Try to find the type of this identifier in the schema
+    for table in tables {
+        if let Some(data_type) = registry.lookup_column_type(&table.canonical, &identifier) {
+            if let Some(canonical_type) = normalize_type_name(&data_type) {
+                return Some(TypeContext {
+                    expected_type: canonical_type,
+                    source_name: identifier,
+                });
+            }
+        }
+    }
+
+    None
+}
+
+/// Calculates a type compatibility score for a column given an expected type.
+///
+/// Returns a positive score bonus for compatible types, negative for incompatible.
+/// Compatibility is determined by whether the column type can be implicitly cast
+/// to the expected type (one direction only).
+fn type_compatibility_score(column_type: Option<&str>, expected: &TypeContext) -> i32 {
+    match column_type.and_then(normalize_type_name) {
+        Some(col_type) => {
+            // Check if column type can be cast TO expected type
+            // (e.g., for "age > |" where age is INTEGER, we want other integers)
+            if col_type == expected.expected_type
+                || can_implicitly_cast(col_type, expected.expected_type)
+            {
+                SCORE_TYPE_COMPATIBLE
+            } else {
+                SCORE_TYPE_INCOMPATIBLE
+            }
+        }
+        None => {
+            // Unknown type - no adjustment
+            0
+        }
+    }
 }
 
 fn token_kind(token: &Token) -> CompletionTokenKind {
@@ -1301,17 +1489,6 @@ fn items_from_keyword_set(
     items
 }
 
-/// Try to parse SQL and extract AST context for enrichment.
-/// Returns None if parsing fails - token-based completion will be used instead.
-fn try_extract_ast_context(
-    sql: &str,
-    cursor_offset: usize,
-    dialect: Dialect,
-) -> Option<AstContext> {
-    let parse_result = try_parse_for_completion(sql, cursor_offset, dialect)?;
-    Some(extract_ast_context(&parse_result.statements))
-}
-
 /// Enrich columns with CTE and subquery columns from AST context.
 ///
 /// Uses a HashSet for O(1) deduplication instead of O(n²) iteration.
@@ -1501,7 +1678,53 @@ pub fn completion_items(request: &CompletionRequest) -> CompletionItemsResult {
         }
     };
 
+    // Tokenize once for GROUP BY detection and type context inference
+    let tokens_opt = tokenize_sql(&request.sql, request.dialect).ok();
+    let statement_tokens_opt = tokens_opt
+        .as_ref()
+        .map(|tokens| token_list_for_statement(tokens, &context.statement_span));
+
     if !restrict_to_columns {
+        // Add smart function completions with context-aware scoring before keyword hints so they
+        // retain signature metadata and clause-specific scoring.
+        let group_by_present = statement_tokens_opt
+            .as_ref()
+            .map(|tokens| has_group_by(tokens))
+            .unwrap_or(false);
+        let in_window_context = if context.clause == CompletionClause::Window {
+            true
+        } else {
+            statement_tokens_opt
+                .as_ref()
+                .map(|tokens| in_over_clause(tokens, request.cursor_offset))
+                .unwrap_or(false)
+        };
+
+        let function_prefix = context.token.as_ref().and_then(|token| match token.kind {
+            CompletionTokenKind::Identifier
+            | CompletionTokenKind::Keyword
+            | CompletionTokenKind::QuotedIdentifier => {
+                let trimmed = token.value.trim();
+                if trimmed.is_empty() {
+                    None
+                } else {
+                    Some(trimmed.to_string())
+                }
+            }
+            _ => None,
+        });
+
+        let func_ctx = FunctionCompletionContext {
+            clause: context.clause,
+            has_group_by: group_by_present,
+            in_window_context,
+            prefix: function_prefix,
+        };
+
+        for item in get_function_completions(&func_ctx) {
+            push_item(item);
+        }
+
         for item in items_from_keyword_set(&context.keyword_hints.clause, true) {
             push_item(item);
         }
@@ -1509,6 +1732,25 @@ pub fn completion_items(request: &CompletionRequest) -> CompletionItemsResult {
             push_item(item);
         }
     }
+
+    // Infer type context for WHERE/HAVING/ON clauses
+    // This is used for type-aware column scoring (reuses tokens from above)
+    let type_context = if matches!(
+        context.clause,
+        CompletionClause::Where | CompletionClause::Having | CompletionClause::On
+    ) {
+        statement_tokens_opt.as_ref().and_then(|tokens| {
+            infer_type_context(
+                tokens,
+                request.cursor_offset,
+                &request.sql,
+                &registry,
+                &context.tables_in_scope,
+            )
+        })
+    } else {
+        None
+    };
 
     let mut columns = context.columns_in_scope.clone();
     if columns.is_empty() && context.clause == CompletionClause::Select {
@@ -1519,13 +1761,59 @@ pub fn completion_items(request: &CompletionRequest) -> CompletionItemsResult {
 
     // Try AST-based enrichment for CTE and subquery columns
     let mut tables_enriched = context.tables_in_scope.clone();
-    if let Some(ast_ctx) =
-        try_extract_ast_context(&request.sql, request.cursor_offset, request.dialect)
-    {
+    let parse_result =
+        try_parse_for_completion(&request.sql, request.cursor_offset, request.dialect);
+    if let Some(ref result) = parse_result {
+        let ast_ctx = extract_ast_context(&result.statements);
         // Enrich tables with CTE definitions
         enrich_tables_from_ast(&mut tables_enriched, &ast_ctx);
         // Enrich columns with CTE and subquery columns
         enrich_columns_from_ast(&mut columns, &tables_enriched, &ast_ctx);
+    }
+
+    // Extract lateral aliases for dialects that support them (e.g., DuckDB, BigQuery, Snowflake)
+    // Lateral aliases are only available in SELECT clause, without a table qualifier
+    let should_add_lateral_aliases = context.clause == CompletionClause::Select
+        && request.dialect.lateral_column_alias()
+        && !restrict_to_columns;
+
+    if should_add_lateral_aliases {
+        if let Some(ref result) = parse_result {
+            for alias in extract_lateral_aliases(&result.statements, &request.sql) {
+                // Only include aliases within the current statement and before cursor
+                let statement_span = context.statement_span;
+                if alias.definition_end >= request.cursor_offset
+                    || statement_span.end <= statement_span.start
+                {
+                    continue;
+                }
+                if alias.definition_end <= statement_span.start
+                    || alias.definition_end > statement_span.end
+                {
+                    continue;
+                }
+                // Only include aliases from the SELECT projection that contains the cursor
+                // This prevents CTE aliases from leaking into outer SELECT scopes
+                if request.cursor_offset < alias.projection_start
+                    || request.cursor_offset > alias.projection_end
+                {
+                    continue;
+                }
+                // Avoid duplicating if the alias name matches an existing column
+                let already_exists = columns
+                    .iter()
+                    .any(|c| c.name.eq_ignore_ascii_case(&alias.name));
+                if !already_exists {
+                    columns.push(CompletionColumn {
+                        name: alias.name,
+                        data_type: Some("lateral alias".to_string()),
+                        table: None,
+                        canonical_table: None,
+                        is_ambiguous: false,
+                    });
+                }
+            }
+        }
     }
 
     if let Some(resolution) = qualifier_resolution.as_ref() {
@@ -1694,7 +1982,8 @@ pub fn completion_items(request: &CompletionRequest) -> CompletionItemsResult {
     }
 
     for item in items.iter_mut() {
-        let base = category_score(context.clause, item.category);
+        let precomputed_score = item.score;
+        let category_base = category_score(context.clause, item.category);
         let prefix = prefix_score(&item.label, &token_value);
         let column_prefix = if item.category == CompletionItemCategory::Column {
             let column_name = column_name_from_label(&item.label);
@@ -1712,6 +2001,23 @@ pub fn completion_items(request: &CompletionRequest) -> CompletionItemsResult {
         } else {
             0
         };
+
+        // Type compatibility scoring for columns in comparison contexts.
+        //
+        // Design note: For columns, `item.detail` contains the SQL data type (e.g., "INTEGER").
+        // This coupling is intentional - the detail field displays type info in the UI, and we
+        // reuse it for type-aware scoring. If `detail` format changes for columns, update
+        // `type_compatibility_score` accordingly.
+        let type_score = if item.category == CompletionItemCategory::Column {
+            if let Some(ref ctx) = type_context {
+                type_compatibility_score(item.detail.as_deref(), ctx)
+            } else {
+                0
+            }
+        } else {
+            0
+        };
+
         let mut special = 0;
         if context.clause == CompletionClause::Select && token_value.starts_with('f') {
             let label_lower = item.label.to_lowercase();
@@ -1728,9 +2034,11 @@ pub fn completion_items(request: &CompletionRequest) -> CompletionItemsResult {
         }
         let prefix_score = prefix.max(column_prefix);
         // Use saturating arithmetic to prevent overflow with extreme inputs
-        item.score = base
+        item.score = precomputed_score
+            .saturating_add(category_base)
             .saturating_add(prefix_score)
             .saturating_add(clause_score)
+            .saturating_add(type_score)
             .saturating_add(special);
     }
 
@@ -2395,6 +2703,429 @@ mod tests {
             column_names.contains(&"name"),
             "Should have 'name' column from users_cte. Columns found: {:?}",
             column_names
+        );
+    }
+
+    #[test]
+    fn test_type_context_inference() {
+        // Direct test of type context inference
+        let schema = SchemaMetadata {
+            default_catalog: None,
+            default_schema: Some("public".to_string()),
+            search_path: None,
+            case_sensitivity: None,
+            allow_implied: true,
+            tables: vec![SchemaTable {
+                catalog: None,
+                schema: Some("public".to_string()),
+                name: "users".to_string(),
+                columns: vec![
+                    ColumnSchema {
+                        name: "age".to_string(),
+                        data_type: Some("integer".to_string()),
+                        is_primary_key: None,
+                        foreign_key: None,
+                    },
+                    ColumnSchema {
+                        name: "name".to_string(),
+                        data_type: Some("varchar".to_string()),
+                        is_primary_key: None,
+                        foreign_key: None,
+                    },
+                ],
+            }],
+        };
+
+        let sql = "SELECT * FROM users WHERE age > ";
+        let cursor_offset = sql.len();
+
+        // Tokenize
+        let tokens = tokenize_sql(sql, Dialect::Duckdb).expect("tokenization should succeed");
+
+        // Create registry and completion context
+        let (registry, _) = SchemaRegistry::new(Some(&schema), Dialect::Duckdb);
+
+        // Get completion context to have tables with canonical names
+        let request = CompletionRequest {
+            sql: sql.to_string(),
+            dialect: Dialect::Duckdb,
+            cursor_offset,
+            schema: Some(schema.clone()),
+        };
+        let ctx = completion_context(&request);
+
+        // Test type context inference
+        let type_ctx =
+            infer_type_context(&tokens, cursor_offset, sql, &registry, &ctx.tables_in_scope);
+
+        assert!(
+            type_ctx.is_some(),
+            "Should infer type context from 'age > '. Tables in scope: {:?}",
+            ctx.tables_in_scope
+                .iter()
+                .map(|t| format!("{}(canonical:{})", t.name, t.canonical))
+                .collect::<Vec<_>>()
+        );
+
+        let type_ctx = type_ctx.unwrap();
+        assert_eq!(
+            type_ctx.expected_type,
+            CanonicalType::Integer,
+            "Expected type should be Integer for 'age' column"
+        );
+    }
+
+    #[test]
+    fn test_type_aware_column_completion_in_where() {
+        // Test that type-compatible columns score higher in comparison contexts
+        let schema = SchemaMetadata {
+            default_catalog: None,
+            default_schema: Some("public".to_string()),
+            search_path: None,
+            case_sensitivity: None,
+            allow_implied: true,
+            tables: vec![SchemaTable {
+                catalog: None,
+                schema: Some("public".to_string()),
+                name: "users".to_string(),
+                columns: vec![
+                    ColumnSchema {
+                        name: "age".to_string(),
+                        data_type: Some("integer".to_string()),
+                        is_primary_key: None,
+                        foreign_key: None,
+                    },
+                    ColumnSchema {
+                        name: "created_at".to_string(),
+                        data_type: Some("timestamp".to_string()),
+                        is_primary_key: None,
+                        foreign_key: None,
+                    },
+                    ColumnSchema {
+                        name: "name".to_string(),
+                        data_type: Some("varchar".to_string()),
+                        is_primary_key: None,
+                        foreign_key: None,
+                    },
+                    ColumnSchema {
+                        name: "score".to_string(),
+                        data_type: Some("integer".to_string()),
+                        is_primary_key: None,
+                        foreign_key: None,
+                    },
+                ],
+            }],
+        };
+
+        // Cursor after "age > " - should boost integer-compatible columns
+        let sql = "SELECT * FROM users WHERE age > ";
+        let cursor_offset = sql.len();
+
+        let request = CompletionRequest {
+            sql: sql.to_string(),
+            dialect: Dialect::Duckdb,
+            cursor_offset,
+            schema: Some(schema),
+        };
+
+        let result = completion_items(&request);
+        assert!(result.should_show);
+
+        // Find column completions
+        let columns: Vec<_> = result
+            .items
+            .iter()
+            .filter(|item| item.category == CompletionItemCategory::Column)
+            .collect();
+
+        // age and score (both integers) should score higher than name (varchar)
+        let age_item = columns.iter().find(|c| c.label == "age");
+        let score_item = columns.iter().find(|c| c.label == "score");
+        let name_item = columns.iter().find(|c| c.label == "name");
+
+        assert!(age_item.is_some(), "age column should be in completions");
+        assert!(
+            score_item.is_some(),
+            "score column should be in completions"
+        );
+        assert!(name_item.is_some(), "name column should be in completions");
+
+        // Integer columns should score higher than varchar in "age > " context
+        let age_score = age_item.unwrap().score;
+        let score_score = score_item.unwrap().score;
+        let name_score = name_item.unwrap().score;
+
+        assert!(
+            age_score > name_score,
+            "Integer column 'age' (score: {}) should rank higher than varchar 'name' (score: {}) in integer comparison context",
+            age_score,
+            name_score
+        );
+        assert!(
+            score_score > name_score,
+            "Integer column 'score' (score: {}) should rank higher than varchar 'name' (score: {}) in integer comparison context",
+            score_score,
+            name_score
+        );
+    }
+
+    // Lateral column alias completion tests
+
+    #[test]
+    fn test_lateral_alias_completion_duckdb() {
+        let sql = "SELECT price * qty AS total, ";
+        let cursor_offset = sql.len();
+
+        let request = CompletionRequest {
+            sql: sql.to_string(),
+            dialect: Dialect::Duckdb,
+            cursor_offset,
+            schema: None,
+        };
+
+        let result = completion_items(&request);
+
+        // 'total' should be available as a lateral alias
+        let total_item = result
+            .items
+            .iter()
+            .find(|i| i.label == "total" && i.detail == Some("lateral alias".to_string()));
+        assert!(
+            total_item.is_some(),
+            "Lateral alias 'total' should be in completions for DuckDB"
+        );
+    }
+
+    #[test]
+    fn test_lateral_alias_not_available_postgres() {
+        let sql = "SELECT price * qty AS total, ";
+        let cursor_offset = sql.len();
+
+        let request = CompletionRequest {
+            sql: sql.to_string(),
+            dialect: Dialect::Postgres,
+            cursor_offset,
+            schema: None,
+        };
+
+        let result = completion_items(&request);
+
+        // 'total' should NOT be available as a lateral alias in PostgreSQL
+        let total_item = result
+            .items
+            .iter()
+            .find(|i| i.label == "total" && i.detail == Some("lateral alias".to_string()));
+        assert!(
+            total_item.is_none(),
+            "Lateral alias should not appear for PostgreSQL"
+        );
+    }
+
+    #[test]
+    fn test_lateral_alias_position_aware() {
+        // Cursor is within the SELECT but before the alias definition ends
+        let sql = "SELECT a + b AS total FROM t";
+        let cursor_offset = 9; // After "SELECT a "
+
+        let request = CompletionRequest {
+            sql: sql.to_string(),
+            dialect: Dialect::Duckdb,
+            cursor_offset,
+            schema: None,
+        };
+
+        let result = completion_items(&request);
+
+        // 'total' should NOT be available - cursor is before alias definition
+        let total_item = result
+            .items
+            .iter()
+            .find(|i| i.label == "total" && i.detail == Some("lateral alias".to_string()));
+        assert!(
+            total_item.is_none(),
+            "Alias defined after cursor should not appear"
+        );
+    }
+
+    #[test]
+    fn test_multiple_lateral_aliases() {
+        let sql = "SELECT a AS x, b AS y, ";
+        let cursor_offset = sql.len();
+
+        let request = CompletionRequest {
+            sql: sql.to_string(),
+            dialect: Dialect::Duckdb,
+            cursor_offset,
+            schema: None,
+        };
+
+        let result = completion_items(&request);
+
+        // Both 'x' and 'y' should be available
+        let x_item = result
+            .items
+            .iter()
+            .find(|i| i.label == "x" && i.detail == Some("lateral alias".to_string()));
+        let y_item = result
+            .items
+            .iter()
+            .find(|i| i.label == "y" && i.detail == Some("lateral alias".to_string()));
+        assert!(
+            x_item.is_some(),
+            "Lateral alias 'x' should be in completions"
+        );
+        assert!(
+            y_item.is_some(),
+            "Lateral alias 'y' should be in completions"
+        );
+    }
+
+    #[test]
+    fn test_lateral_alias_quoted() {
+        let sql = r#"SELECT a AS "My Total", "#;
+        let cursor_offset = sql.len();
+
+        let request = CompletionRequest {
+            sql: sql.to_string(),
+            dialect: Dialect::Duckdb,
+            cursor_offset,
+            schema: None,
+        };
+
+        let result = completion_items(&request);
+
+        // Quoted alias should be available
+        let alias_item = result
+            .items
+            .iter()
+            .find(|i| i.label == "My Total" && i.detail == Some("lateral alias".to_string()));
+        assert!(
+            alias_item.is_some(),
+            "Quoted lateral alias should be in completions"
+        );
+    }
+
+    #[test]
+    fn test_lateral_alias_bigquery_dialect() {
+        // BigQuery also supports lateral aliases
+        let sql = "SELECT price AS p, p * 0.1 AS ";
+        let cursor_offset = sql.len();
+
+        let request = CompletionRequest {
+            sql: sql.to_string(),
+            dialect: Dialect::Bigquery,
+            cursor_offset,
+            schema: None,
+        };
+
+        let result = completion_items(&request);
+
+        // 'p' should be available as a lateral alias
+        let p_item = result
+            .items
+            .iter()
+            .find(|i| i.label == "p" && i.detail == Some("lateral alias".to_string()));
+        assert!(
+            p_item.is_some(),
+            "Lateral alias 'p' should be in completions for BigQuery"
+        );
+    }
+
+    #[test]
+    fn test_lateral_alias_snowflake_dialect() {
+        // Snowflake also supports lateral aliases
+        let sql = "SELECT amount AS amt, ";
+        let cursor_offset = sql.len();
+
+        let request = CompletionRequest {
+            sql: sql.to_string(),
+            dialect: Dialect::Snowflake,
+            cursor_offset,
+            schema: None,
+        };
+
+        let result = completion_items(&request);
+
+        // 'amt' should be available as a lateral alias
+        let amt_item = result
+            .items
+            .iter()
+            .find(|i| i.label == "amt" && i.detail == Some("lateral alias".to_string()));
+        assert!(
+            amt_item.is_some(),
+            "Lateral alias 'amt' should be in completions for Snowflake"
+        );
+    }
+
+    #[test]
+    fn test_lateral_alias_not_in_from_clause() {
+        // Lateral aliases should not appear when cursor is in FROM clause
+        let sql = "SELECT a AS x FROM ";
+        let cursor_offset = sql.len();
+
+        let request = CompletionRequest {
+            sql: sql.to_string(),
+            dialect: Dialect::Duckdb,
+            cursor_offset,
+            schema: None,
+        };
+
+        let result = completion_items(&request);
+
+        // 'x' should NOT be available in FROM clause context
+        let x_item = result
+            .items
+            .iter()
+            .find(|i| i.label == "x" && i.detail == Some("lateral alias".to_string()));
+        assert!(
+            x_item.is_none(),
+            "Lateral alias should not appear in FROM clause"
+        );
+    }
+
+    #[test]
+    fn test_lateral_alias_not_with_qualifier() {
+        // Lateral aliases should not appear when there's a table qualifier (e.g., "t.")
+        let sql = "SELECT a AS x, t.";
+        let cursor_offset = sql.len();
+
+        let schema = SchemaMetadata {
+            default_catalog: None,
+            default_schema: None,
+            search_path: None,
+            case_sensitivity: None,
+            allow_implied: true,
+            tables: vec![SchemaTable {
+                catalog: None,
+                schema: None,
+                name: "t".to_string(),
+                columns: vec![ColumnSchema {
+                    name: "col1".to_string(),
+                    data_type: Some("integer".to_string()),
+                    is_primary_key: None,
+                    foreign_key: None,
+                }],
+            }],
+        };
+
+        let request = CompletionRequest {
+            sql: sql.to_string(),
+            dialect: Dialect::Duckdb,
+            cursor_offset,
+            schema: Some(schema),
+        };
+
+        let result = completion_items(&request);
+
+        // When there's a qualifier, we should only show columns from that table
+        // Lateral aliases should not appear (they don't have a table qualifier)
+        let x_item = result
+            .items
+            .iter()
+            .find(|i| i.label == "x" && i.detail == Some("lateral alias".to_string()));
+        assert!(
+            x_item.is_none(),
+            "Lateral alias should not appear when using table qualifier"
         );
     }
 }

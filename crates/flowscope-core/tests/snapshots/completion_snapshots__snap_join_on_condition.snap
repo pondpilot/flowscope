@@ -237,20 +237,3514 @@ expression: result
       "clauseSpecific": true
     },
     {
-      "label": "ARRAY_AGG",
-      "insertText": "ARRAY_AGG(",
+      "label": "ABS",
+      "insertText": "ABS(",
       "kind": "function",
-      "category": "aggregate",
-      "score": 750,
-      "clauseSpecific": true
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ABS(this)"
     },
     {
-      "label": "AVG",
-      "insertText": "AVG(",
+      "label": "ACOS",
+      "insertText": "ACOS(",
       "kind": "function",
-      "category": "aggregate",
-      "score": 750,
-      "clauseSpecific": true
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ACOS(this)"
+    },
+    {
+      "label": "ACOSH",
+      "insertText": "ACOSH(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ACOSH(this)"
+    },
+    {
+      "label": "ADD_MONTHS",
+      "insertText": "ADD_MONTHS(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ADD_MONTHS(this, expression)"
+    },
+    {
+      "label": "AI_CLASSIFY",
+      "insertText": "AI_CLASSIFY(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "AI_CLASSIFY(this, [config], categories)"
+    },
+    {
+      "label": "AND",
+      "insertText": "AND(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "AND(this, expression) → BOOLEAN"
+    },
+    {
+      "label": "APPLY",
+      "insertText": "APPLY(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "APPLY(this, expression)"
+    },
+    {
+      "label": "ARRAY",
+      "insertText": "ARRAY(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ARRAY([expressions])"
+    },
+    {
+      "label": "ARRAY_ALL",
+      "insertText": "ARRAY_ALL(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ARRAY_ALL(expression, this)"
+    },
+    {
+      "label": "ARRAY_ANY",
+      "insertText": "ARRAY_ANY(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ARRAY_ANY(this, expression)"
+    },
+    {
+      "label": "ARRAY_CONCAT",
+      "insertText": "ARRAY_CONCAT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ARRAY_CONCAT([expressions], this)"
+    },
+    {
+      "label": "ARRAY_CONSTRUCT_COMPACT",
+      "insertText": "ARRAY_CONSTRUCT_COMPACT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ARRAY_CONSTRUCT_COMPACT(expressions)"
+    },
+    {
+      "label": "ARRAY_CONTAINS",
+      "insertText": "ARRAY_CONTAINS(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ARRAY_CONTAINS(expression, this)"
+    },
+    {
+      "label": "ARRAY_CONTAINS_ALL",
+      "insertText": "ARRAY_CONTAINS_ALL(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ARRAY_CONTAINS_ALL(expression, this)"
+    },
+    {
+      "label": "ARRAY_FILTER",
+      "insertText": "ARRAY_FILTER(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ARRAY_FILTER(expression, this)"
+    },
+    {
+      "label": "ARRAY_FIRST",
+      "insertText": "ARRAY_FIRST(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ARRAY_FIRST(this)"
+    },
+    {
+      "label": "ARRAY_INTERSECT",
+      "insertText": "ARRAY_INTERSECT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ARRAY_INTERSECT(expressions)"
+    },
+    {
+      "label": "ARRAY_LAST",
+      "insertText": "ARRAY_LAST(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ARRAY_LAST(this)"
+    },
+    {
+      "label": "ARRAY_OVERLAPS",
+      "insertText": "ARRAY_OVERLAPS(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ARRAY_OVERLAPS(expression, this)"
+    },
+    {
+      "label": "ARRAY_REMOVE",
+      "insertText": "ARRAY_REMOVE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ARRAY_REMOVE(expression, this)"
+    },
+    {
+      "label": "ARRAY_REVERSE",
+      "insertText": "ARRAY_REVERSE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ARRAY_REVERSE(this)"
+    },
+    {
+      "label": "ARRAY_SIZE",
+      "insertText": "ARRAY_SIZE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ARRAY_SIZE([expression], this)"
+    },
+    {
+      "label": "ARRAY_SLICE",
+      "insertText": "ARRAY_SLICE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ARRAY_SLICE([end], this, [step], start)"
+    },
+    {
+      "label": "ARRAY_SORT",
+      "insertText": "ARRAY_SORT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ARRAY_SORT(this, [expression])"
+    },
+    {
+      "label": "ARRAY_SUM",
+      "insertText": "ARRAY_SUM(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ARRAY_SUM([expression], this)"
+    },
+    {
+      "label": "ARRAY_TO_STRING",
+      "insertText": "ARRAY_TO_STRING(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ARRAY_TO_STRING(this, expression, [null])"
+    },
+    {
+      "label": "ASCII",
+      "insertText": "ASCII(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ASCII(this)"
+    },
+    {
+      "label": "ASIN",
+      "insertText": "ASIN(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ASIN(this)"
+    },
+    {
+      "label": "ASINH",
+      "insertText": "ASINH(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ASINH(this)"
+    },
+    {
+      "label": "ATAN",
+      "insertText": "ATAN(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ATAN(this, [expression])"
+    },
+    {
+      "label": "ATAN2",
+      "insertText": "ATAN2(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ATAN2(expression, this)"
+    },
+    {
+      "label": "ATANH",
+      "insertText": "ATANH(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ATANH(this)"
+    },
+    {
+      "label": "BASE64DECODE_BINARY",
+      "insertText": "BASE64DECODE_BINARY(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "BASE64DECODE_BINARY([alphabet], this)"
+    },
+    {
+      "label": "BASE64DECODE_STRING",
+      "insertText": "BASE64DECODE_STRING(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "BASE64DECODE_STRING([alphabet], this)"
+    },
+    {
+      "label": "BASE64ENCODE",
+      "insertText": "BASE64ENCODE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "BASE64ENCODE([alphabet], this, [max_line_length])"
+    },
+    {
+      "label": "BIT_LENGTH",
+      "insertText": "BIT_LENGTH(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "BIT_LENGTH(this)"
+    },
+    {
+      "label": "BITMAP_BIT_POSITION",
+      "insertText": "BITMAP_BIT_POSITION(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "BITMAP_BIT_POSITION(this)"
+    },
+    {
+      "label": "BITMAP_BUCKET_NUMBER",
+      "insertText": "BITMAP_BUCKET_NUMBER(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "BITMAP_BUCKET_NUMBER(this)"
+    },
+    {
+      "label": "BITMAP_COUNT",
+      "insertText": "BITMAP_COUNT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "BITMAP_COUNT(this)"
+    },
+    {
+      "label": "BITWISE_COUNT",
+      "insertText": "BITWISE_COUNT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "BITWISE_COUNT(this)"
+    },
+    {
+      "label": "BOOLAND",
+      "insertText": "BOOLAND(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "BOOLAND(this, expression)"
+    },
+    {
+      "label": "BOOLNOT",
+      "insertText": "BOOLNOT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "BOOLNOT(this)"
+    },
+    {
+      "label": "BOOLOR",
+      "insertText": "BOOLOR(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "BOOLOR(expression, this)"
+    },
+    {
+      "label": "BYTE_LENGTH",
+      "insertText": "BYTE_LENGTH(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "BYTE_LENGTH(this)"
+    },
+    {
+      "label": "CASE",
+      "insertText": "CASE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "CASE(ifs, [default], [this])"
+    },
+    {
+      "label": "CAST",
+      "insertText": "CAST(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "CAST([format], [action], to, this, [default], [safe])"
+    },
+    {
+      "label": "CAST_TO_STR_TYPE",
+      "insertText": "CAST_TO_STR_TYPE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "CAST_TO_STR_TYPE(this, to)"
+    },
+    {
+      "label": "CBRT",
+      "insertText": "CBRT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "CBRT(this)"
+    },
+    {
+      "label": "CEIL",
+      "insertText": "CEIL(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "CEIL([decimals], this, [to])"
+    },
+    {
+      "label": "CHR",
+      "insertText": "CHR(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "CHR(expressions, [charset])"
+    },
+    {
+      "label": "COALESCE",
+      "insertText": "COALESCE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "COALESCE(this, [is_nvl], [is_null], [expressions]) → T"
+    },
+    {
+      "label": "CODE_POINTS_TO_BYTES",
+      "insertText": "CODE_POINTS_TO_BYTES(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "CODE_POINTS_TO_BYTES(this)"
+    },
+    {
+      "label": "CODE_POINTS_TO_STRING",
+      "insertText": "CODE_POINTS_TO_STRING(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "CODE_POINTS_TO_STRING(this)"
+    },
+    {
+      "label": "COLLATE",
+      "insertText": "COLLATE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "COLLATE(this, expression)"
+    },
+    {
+      "label": "COLLATION",
+      "insertText": "COLLATION(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "COLLATION(this)"
+    },
+    {
+      "label": "COLUMNS",
+      "insertText": "COLUMNS(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "COLUMNS(this, [unpack])"
+    },
+    {
+      "label": "COMPRESS",
+      "insertText": "COMPRESS(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "COMPRESS(this, [method])"
+    },
+    {
+      "label": "CONCAT",
+      "insertText": "CONCAT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "CONCAT(expressions, [safe], [coalesce]) → TEXT"
+    },
+    {
+      "label": "CONCAT_WS",
+      "insertText": "CONCAT_WS(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "CONCAT_WS([coalesce], expressions, [safe]) → TEXT"
+    },
+    {
+      "label": "CONNECT_BY_ROOT",
+      "insertText": "CONNECT_BY_ROOT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "CONNECT_BY_ROOT(this)"
+    },
+    {
+      "label": "CONTAINS",
+      "insertText": "CONTAINS(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "CONTAINS(this, expression, [json_scope])"
+    },
+    {
+      "label": "CONVERT",
+      "insertText": "CONVERT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "CONVERT([style], expression, [safe], this)"
+    },
+    {
+      "label": "CONVERT_TIMEZONE",
+      "insertText": "CONVERT_TIMEZONE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "CONVERT_TIMEZONE(target_tz, [options], [source_tz], timestamp)"
+    },
+    {
+      "label": "CONVERT_TO_CHARSET",
+      "insertText": "CONVERT_TO_CHARSET(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "CONVERT_TO_CHARSET(dest, this, [source])"
+    },
+    {
+      "label": "COS",
+      "insertText": "COS(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "COS(this)"
+    },
+    {
+      "label": "COSH",
+      "insertText": "COSH(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "COSH(this)"
+    },
+    {
+      "label": "COSINE_DISTANCE",
+      "insertText": "COSINE_DISTANCE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "COSINE_DISTANCE(this, expression)"
+    },
+    {
+      "label": "COT",
+      "insertText": "COT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "COT(this)"
+    },
+    {
+      "label": "COTH",
+      "insertText": "COTH(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "COTH(this)"
+    },
+    {
+      "label": "CSC",
+      "insertText": "CSC(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "CSC(this)"
+    },
+    {
+      "label": "CSCH",
+      "insertText": "CSCH(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "CSCH(this)"
+    },
+    {
+      "label": "CUME_DIST",
+      "insertText": "CUME_DIST(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "CUME_DIST([expressions])"
+    },
+    {
+      "label": "CURRENT_DATE",
+      "insertText": "CURRENT_DATE",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "CURRENT_DATE([this]) → DATE"
+    },
+    {
+      "label": "CURRENT_DATETIME",
+      "insertText": "CURRENT_DATETIME",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "CURRENT_DATETIME([this])"
+    },
+    {
+      "label": "CURRENT_SCHEMA",
+      "insertText": "CURRENT_SCHEMA",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "CURRENT_SCHEMA([this])"
+    },
+    {
+      "label": "CURRENT_TIME",
+      "insertText": "CURRENT_TIME",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "CURRENT_TIME([this])"
+    },
+    {
+      "label": "CURRENT_TIMESTAMP",
+      "insertText": "CURRENT_TIMESTAMP",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "CURRENT_TIMESTAMP([this], [sysdate]) → TIMESTAMP"
+    },
+    {
+      "label": "CURRENT_TIMESTAMP_LTZ",
+      "insertText": "CURRENT_TIMESTAMP_LTZ",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "CURRENT_TIMESTAMP_LTZ()"
+    },
+    {
+      "label": "CURRENT_USER",
+      "insertText": "CURRENT_USER",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "CURRENT_USER([this])"
+    },
+    {
+      "label": "DATE",
+      "insertText": "DATE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "DATE([this], [expressions], [zone])"
+    },
+    {
+      "label": "DATE_ADD",
+      "insertText": "DATE_ADD(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "DATE_ADD(this, expression, [unit])"
+    },
+    {
+      "label": "DATE_BIN",
+      "insertText": "DATE_BIN(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "DATE_BIN([unit], [zone], [origin], this, expression)"
+    },
+    {
+      "label": "DATE_DIFF",
+      "insertText": "DATE_DIFF(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "DATE_DIFF([big_int], expression, this, [zone], [unit])"
+    },
+    {
+      "label": "DATE_FROM_PARTS",
+      "insertText": "DATE_FROM_PARTS(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "DATE_FROM_PARTS([day], year, [month])"
+    },
+    {
+      "label": "DATE_FROM_UNIX_DATE",
+      "insertText": "DATE_FROM_UNIX_DATE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "DATE_FROM_UNIX_DATE(this)"
+    },
+    {
+      "label": "DATE_STR_TO_DATE",
+      "insertText": "DATE_STR_TO_DATE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "DATE_STR_TO_DATE(this)"
+    },
+    {
+      "label": "DATE_SUB",
+      "insertText": "DATE_SUB(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "DATE_SUB([unit], expression, this)"
+    },
+    {
+      "label": "DATE_TO_DATE_STR",
+      "insertText": "DATE_TO_DATE_STR(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "DATE_TO_DATE_STR(this)"
+    },
+    {
+      "label": "DATE_TO_DI",
+      "insertText": "DATE_TO_DI(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "DATE_TO_DI(this)"
+    },
+    {
+      "label": "DATE_TRUNC",
+      "insertText": "DATE_TRUNC(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "DATE_TRUNC(unit, this, [zone]) → T"
+    },
+    {
+      "label": "DATETIME",
+      "insertText": "DATETIME(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "DATETIME([expression], this)"
+    },
+    {
+      "label": "DATETIME_ADD",
+      "insertText": "DATETIME_ADD(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "DATETIME_ADD(expression, this, [unit])"
+    },
+    {
+      "label": "DATETIME_DIFF",
+      "insertText": "DATETIME_DIFF(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "DATETIME_DIFF([unit], this, expression)"
+    },
+    {
+      "label": "DATETIME_SUB",
+      "insertText": "DATETIME_SUB(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "DATETIME_SUB(this, expression, [unit])"
+    },
+    {
+      "label": "DATETIME_TRUNC",
+      "insertText": "DATETIME_TRUNC(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "DATETIME_TRUNC(unit, this, [zone])"
+    },
+    {
+      "label": "DAY",
+      "insertText": "DAY(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "DAY(this)"
+    },
+    {
+      "label": "DAY_OF_MONTH",
+      "insertText": "DAY_OF_MONTH(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "DAY_OF_MONTH(this)"
+    },
+    {
+      "label": "DAY_OF_WEEK",
+      "insertText": "DAY_OF_WEEK(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "DAY_OF_WEEK(this)"
+    },
+    {
+      "label": "DAY_OF_WEEK_ISO",
+      "insertText": "DAY_OF_WEEK_ISO(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "DAY_OF_WEEK_ISO(this)"
+    },
+    {
+      "label": "DAY_OF_YEAR",
+      "insertText": "DAY_OF_YEAR(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "DAY_OF_YEAR(this)"
+    },
+    {
+      "label": "DECODE",
+      "insertText": "DECODE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "DECODE([replace], this, charset)"
+    },
+    {
+      "label": "DECODE_CASE",
+      "insertText": "DECODE_CASE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "DECODE_CASE(expressions)"
+    },
+    {
+      "label": "DECOMPRESS_BINARY",
+      "insertText": "DECOMPRESS_BINARY(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "DECOMPRESS_BINARY(method, this)"
+    },
+    {
+      "label": "DECOMPRESS_STRING",
+      "insertText": "DECOMPRESS_STRING(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "DECOMPRESS_STRING(method, this)"
+    },
+    {
+      "label": "DEGREES",
+      "insertText": "DEGREES(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "DEGREES(this)"
+    },
+    {
+      "label": "DENSE_RANK",
+      "insertText": "DENSE_RANK(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "DENSE_RANK([expressions]) → INTEGER"
+    },
+    {
+      "label": "DI_TO_DATE",
+      "insertText": "DI_TO_DATE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "DI_TO_DATE(this)"
+    },
+    {
+      "label": "ENCODE",
+      "insertText": "ENCODE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ENCODE(charset, this)"
+    },
+    {
+      "label": "ENDS_WITH",
+      "insertText": "ENDS_WITH(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ENDS_WITH(this, expression)"
+    },
+    {
+      "label": "EQUAL_NULL",
+      "insertText": "EQUAL_NULL(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "EQUAL_NULL(this, expression)"
+    },
+    {
+      "label": "EUCLIDEAN_DISTANCE",
+      "insertText": "EUCLIDEAN_DISTANCE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "EUCLIDEAN_DISTANCE(expression, this)"
+    },
+    {
+      "label": "EXISTS",
+      "insertText": "EXISTS(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "EXISTS([expression], this)"
+    },
+    {
+      "label": "EXP",
+      "insertText": "EXP(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "EXP(this)"
+    },
+    {
+      "label": "EXPLODE",
+      "insertText": "EXPLODE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "EXPLODE(this, [expressions])"
+    },
+    {
+      "label": "EXPLODE_OUTER",
+      "insertText": "EXPLODE_OUTER(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "EXPLODE_OUTER(this, [expressions])"
+    },
+    {
+      "label": "EXPLODING_GENERATE_SERIES",
+      "insertText": "EXPLODING_GENERATE_SERIES(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "EXPLODING_GENERATE_SERIES([is_end_exclusive], start, [step], end)"
+    },
+    {
+      "label": "EXTRACT",
+      "insertText": "EXTRACT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "EXTRACT(this, expression)"
+    },
+    {
+      "label": "FACTORIAL",
+      "insertText": "FACTORIAL(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "FACTORIAL(this)"
+    },
+    {
+      "label": "FARM_FINGERPRINT",
+      "insertText": "FARM_FINGERPRINT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "FARM_FINGERPRINT(expressions)"
+    },
+    {
+      "label": "FEATURES_AT_TIME",
+      "insertText": "FEATURES_AT_TIME(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "FEATURES_AT_TIME([ignore_feature_nulls], [time], this, [num_rows])"
+    },
+    {
+      "label": "FIRST_VALUE",
+      "insertText": "FIRST_VALUE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "FIRST_VALUE(this) → T"
+    },
+    {
+      "label": "FLATTEN",
+      "insertText": "FLATTEN(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "FLATTEN(this)"
+    },
+    {
+      "label": "FLOAT64",
+      "insertText": "FLOAT64(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "FLOAT64([expression], this)"
+    },
+    {
+      "label": "FLOOR",
+      "insertText": "FLOOR(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "FLOOR([decimals], this, [to])"
+    },
+    {
+      "label": "FORMAT",
+      "insertText": "FORMAT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "FORMAT(this, [expressions])"
+    },
+    {
+      "label": "FROM_BASE",
+      "insertText": "FROM_BASE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "FROM_BASE(expression, this)"
+    },
+    {
+      "label": "FROM_BASE32",
+      "insertText": "FROM_BASE32(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "FROM_BASE32(this)"
+    },
+    {
+      "label": "FROM_BASE64",
+      "insertText": "FROM_BASE64(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "FROM_BASE64(this)"
+    },
+    {
+      "label": "FROM_ISO8601TIMESTAMP",
+      "insertText": "FROM_ISO8601TIMESTAMP(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "FROM_ISO8601TIMESTAMP(this)"
+    },
+    {
+      "label": "GAP_FILL",
+      "insertText": "GAP_FILL(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "GAP_FILL([value_columns], [ignore_nulls], [partitioning_columns], [origin], this, ts_column, bucket_width)"
+    },
+    {
+      "label": "GENERATE_DATE_ARRAY",
+      "insertText": "GENERATE_DATE_ARRAY(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "GENERATE_DATE_ARRAY(start, [step], end)"
+    },
+    {
+      "label": "GENERATE_EMBEDDING",
+      "insertText": "GENERATE_EMBEDDING(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "GENERATE_EMBEDDING([params_struct], [is_text], this, expression)"
+    },
+    {
+      "label": "GENERATE_SERIES",
+      "insertText": "GENERATE_SERIES(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "GENERATE_SERIES([step], start, [is_end_exclusive], end)"
+    },
+    {
+      "label": "GENERATE_TIMESTAMP_ARRAY",
+      "insertText": "GENERATE_TIMESTAMP_ARRAY(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "GENERATE_TIMESTAMP_ARRAY(start, step, end)"
+    },
+    {
+      "label": "GET_EXTRACT",
+      "insertText": "GET_EXTRACT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "GET_EXTRACT(this, expression)"
+    },
+    {
+      "label": "GETBIT",
+      "insertText": "GETBIT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "GETBIT(this, expression)"
+    },
+    {
+      "label": "GREATEST",
+      "insertText": "GREATEST(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "GREATEST([expressions], [null_if_any_null], this)"
+    },
+    {
+      "label": "GREATEST_IGNORE_NULLS",
+      "insertText": "GREATEST_IGNORE_NULLS(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "GREATEST_IGNORE_NULLS(expressions)"
+    },
+    {
+      "label": "HEX",
+      "insertText": "HEX(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "HEX(this)"
+    },
+    {
+      "label": "HEX_DECODE_STRING",
+      "insertText": "HEX_DECODE_STRING(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "HEX_DECODE_STRING(this)"
+    },
+    {
+      "label": "HEX_ENCODE",
+      "insertText": "HEX_ENCODE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "HEX_ENCODE([case], this)"
+    },
+    {
+      "label": "HOUR",
+      "insertText": "HOUR(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "HOUR(this)"
+    },
+    {
+      "label": "IF",
+      "insertText": "IF(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "IF([false], true, this)"
+    },
+    {
+      "label": "INITCAP",
+      "insertText": "INITCAP(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "INITCAP(this, [expression])"
+    },
+    {
+      "label": "INLINE",
+      "insertText": "INLINE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "INLINE(this)"
+    },
+    {
+      "label": "INT64",
+      "insertText": "INT64(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "INT64(this)"
+    },
+    {
+      "label": "IS_ASCII",
+      "insertText": "IS_ASCII(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "IS_ASCII(this)"
+    },
+    {
+      "label": "IS_INF",
+      "insertText": "IS_INF(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "IS_INF(this)"
+    },
+    {
+      "label": "IS_NAN",
+      "insertText": "IS_NAN(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "IS_NAN(this)"
+    },
+    {
+      "label": "IS_NULL_VALUE",
+      "insertText": "IS_NULL_VALUE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "IS_NULL_VALUE(this)"
+    },
+    {
+      "label": "JAROWINKLER_SIMILARITY",
+      "insertText": "JAROWINKLER_SIMILARITY(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "JAROWINKLER_SIMILARITY(this, expression)"
+    },
+    {
+      "label": "JSON_ARRAY",
+      "insertText": "JSON_ARRAY(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "JSON_ARRAY([strict], [expressions], [null_handling], [return_type])"
+    },
+    {
+      "label": "JSON_ARRAY_AGG",
+      "insertText": "JSON_ARRAY_AGG(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "JSON_ARRAY_AGG(this, [return_type], [strict], [null_handling], [order])"
+    },
+    {
+      "label": "JSON_ARRAY_APPEND",
+      "insertText": "JSON_ARRAY_APPEND(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "JSON_ARRAY_APPEND(this, expressions)"
+    },
+    {
+      "label": "JSON_ARRAY_CONTAINS",
+      "insertText": "JSON_ARRAY_CONTAINS(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "JSON_ARRAY_CONTAINS([json_type], this, expression)"
+    },
+    {
+      "label": "JSON_ARRAY_INSERT",
+      "insertText": "JSON_ARRAY_INSERT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "JSON_ARRAY_INSERT(this, expressions)"
+    },
+    {
+      "label": "JSON_BOOL",
+      "insertText": "JSON_BOOL(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "JSON_BOOL(this)"
+    },
+    {
+      "label": "JSON_CAST",
+      "insertText": "JSON_CAST(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "JSON_CAST([format], this, [action], [safe], to, [default])"
+    },
+    {
+      "label": "JSON_EXISTS",
+      "insertText": "JSON_EXISTS(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "JSON_EXISTS(this, path, [on_condition], [passing])"
+    },
+    {
+      "label": "JSON_EXTRACT",
+      "insertText": "JSON_EXTRACT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "JSON_EXTRACT([json_query], this, expression, [expressions], [variant_extract], [option], [only_json_types], [on_condition], [quote], [requires_json])"
+    },
+    {
+      "label": "JSON_EXTRACT_ARRAY",
+      "insertText": "JSON_EXTRACT_ARRAY(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "JSON_EXTRACT_ARRAY(this, [expression])"
+    },
+    {
+      "label": "JSON_EXTRACT_SCALAR",
+      "insertText": "JSON_EXTRACT_SCALAR(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "JSON_EXTRACT_SCALAR(this, expression, [only_json_types], [json_type], [scalar_only], [expressions])"
+    },
+    {
+      "label": "JSON_FORMAT",
+      "insertText": "JSON_FORMAT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "JSON_FORMAT([options], [to_json], [this], [is_json])"
+    },
+    {
+      "label": "JSON_KEYS_AT_DEPTH",
+      "insertText": "JSON_KEYS_AT_DEPTH(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "JSON_KEYS_AT_DEPTH(this, [expression], [mode])"
+    },
+    {
+      "label": "JSON_OBJECT",
+      "insertText": "JSON_OBJECT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "JSON_OBJECT([expressions], [encoding], [null_handling], [unique_keys], [return_type])"
+    },
+    {
+      "label": "JSON_REMOVE",
+      "insertText": "JSON_REMOVE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "JSON_REMOVE(this, expressions)"
+    },
+    {
+      "label": "JSON_SET",
+      "insertText": "JSON_SET(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "JSON_SET(expressions, this)"
+    },
+    {
+      "label": "JSON_STRIP_NULLS",
+      "insertText": "JSON_STRIP_NULLS(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "JSON_STRIP_NULLS(this, [include_arrays], [remove_empty], [expression])"
+    },
+    {
+      "label": "JSON_TABLE",
+      "insertText": "JSON_TABLE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "JSON_TABLE([path], [error_handling], schema, this, [empty_handling])"
+    },
+    {
+      "label": "JSON_TYPE",
+      "insertText": "JSON_TYPE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "JSON_TYPE([expression], this)"
+    },
+    {
+      "label": "JSON_VALUE_ARRAY",
+      "insertText": "JSON_VALUE_ARRAY(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "JSON_VALUE_ARRAY(this, [expression])"
+    },
+    {
+      "label": "JSONB_CONTAINS",
+      "insertText": "JSONB_CONTAINS(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "JSONB_CONTAINS(expression, this)"
+    },
+    {
+      "label": "JSONB_CONTAINS_ALL_TOP_KEYS",
+      "insertText": "JSONB_CONTAINS_ALL_TOP_KEYS(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "JSONB_CONTAINS_ALL_TOP_KEYS(this, expression)"
+    },
+    {
+      "label": "JSONB_CONTAINS_ANY_TOP_KEYS",
+      "insertText": "JSONB_CONTAINS_ANY_TOP_KEYS(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "JSONB_CONTAINS_ANY_TOP_KEYS(expression, this)"
+    },
+    {
+      "label": "JSONB_DELETE_AT_PATH",
+      "insertText": "JSONB_DELETE_AT_PATH(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "JSONB_DELETE_AT_PATH(this, expression)"
+    },
+    {
+      "label": "JSONB_EXISTS",
+      "insertText": "JSONB_EXISTS(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "JSONB_EXISTS(path, this)"
+    },
+    {
+      "label": "JSONB_EXTRACT",
+      "insertText": "JSONB_EXTRACT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "JSONB_EXTRACT(this, expression)"
+    },
+    {
+      "label": "JSONB_EXTRACT_SCALAR",
+      "insertText": "JSONB_EXTRACT_SCALAR(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "JSONB_EXTRACT_SCALAR([json_type], this, expression)"
+    },
+    {
+      "label": "JUSTIFY_DAYS",
+      "insertText": "JUSTIFY_DAYS(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "JUSTIFY_DAYS(this)"
+    },
+    {
+      "label": "JUSTIFY_HOURS",
+      "insertText": "JUSTIFY_HOURS(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "JUSTIFY_HOURS(this)"
+    },
+    {
+      "label": "JUSTIFY_INTERVAL",
+      "insertText": "JUSTIFY_INTERVAL(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "JUSTIFY_INTERVAL(this)"
+    },
+    {
+      "label": "LAG",
+      "insertText": "LAG(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "LAG([offset], this, [default]) → T"
+    },
+    {
+      "label": "LAST_DAY",
+      "insertText": "LAST_DAY(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "LAST_DAY(this, [unit])"
+    },
+    {
+      "label": "LAST_VALUE",
+      "insertText": "LAST_VALUE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "LAST_VALUE(this) → T"
+    },
+    {
+      "label": "LAX_BOOL",
+      "insertText": "LAX_BOOL(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "LAX_BOOL(this)"
+    },
+    {
+      "label": "LAX_FLOAT64",
+      "insertText": "LAX_FLOAT64(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "LAX_FLOAT64(this)"
+    },
+    {
+      "label": "LAX_INT64",
+      "insertText": "LAX_INT64(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "LAX_INT64(this)"
+    },
+    {
+      "label": "LAX_STRING",
+      "insertText": "LAX_STRING(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "LAX_STRING(this)"
+    },
+    {
+      "label": "LEAD",
+      "insertText": "LEAD(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "LEAD(this, [offset], [default]) → T"
+    },
+    {
+      "label": "LEAST",
+      "insertText": "LEAST(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "LEAST(this, [null_if_any_null], [expressions])"
+    },
+    {
+      "label": "LEAST_IGNORE_NULLS",
+      "insertText": "LEAST_IGNORE_NULLS(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "LEAST_IGNORE_NULLS(expressions)"
+    },
+    {
+      "label": "LEFT",
+      "insertText": "LEFT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "LEFT(expression, this)"
+    },
+    {
+      "label": "LENGTH",
+      "insertText": "LENGTH(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "LENGTH([binary], [encoding], this)"
+    },
+    {
+      "label": "LEVENSHTEIN",
+      "insertText": "LEVENSHTEIN(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "LEVENSHTEIN([del_cost], [ins_cost], [max_dist], [sub_cost], this, [expression])"
+    },
+    {
+      "label": "LIST",
+      "insertText": "LIST(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "LIST([expressions])"
+    },
+    {
+      "label": "LN",
+      "insertText": "LN(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "LN(this)"
+    },
+    {
+      "label": "LOG",
+      "insertText": "LOG(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "LOG(this, [expression])"
+    },
+    {
+      "label": "LOWER",
+      "insertText": "LOWER(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "LOWER(this) → TEXT"
+    },
+    {
+      "label": "LOWER_HEX",
+      "insertText": "LOWER_HEX(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "LOWER_HEX(this)"
+    },
+    {
+      "label": "MAKE_INTERVAL",
+      "insertText": "MAKE_INTERVAL(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "MAKE_INTERVAL([second], [day], [month], [year], [hour], [minute])"
+    },
+    {
+      "label": "MAP",
+      "insertText": "MAP(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "MAP([values], [keys])"
+    },
+    {
+      "label": "MAP_FROM_ENTRIES",
+      "insertText": "MAP_FROM_ENTRIES(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "MAP_FROM_ENTRIES(this)"
+    },
+    {
+      "label": "MATCH_AGAINST",
+      "insertText": "MATCH_AGAINST(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "MATCH_AGAINST([modifier], this, expressions)"
+    },
+    {
+      "label": "MD5",
+      "insertText": "MD5(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "MD5(this)"
+    },
+    {
+      "label": "MD5DIGEST",
+      "insertText": "MD5DIGEST(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "MD5DIGEST(this)"
+    },
+    {
+      "label": "MD5NUMBER_LOWER64",
+      "insertText": "MD5NUMBER_LOWER64(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "MD5NUMBER_LOWER64(this)"
+    },
+    {
+      "label": "MD5NUMBER_UPPER64",
+      "insertText": "MD5NUMBER_UPPER64(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "MD5NUMBER_UPPER64(this)"
+    },
+    {
+      "label": "MINUTE",
+      "insertText": "MINUTE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "MINUTE(this)"
+    },
+    {
+      "label": "ML_FORECAST",
+      "insertText": "ML_FORECAST(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ML_FORECAST([params_struct], this, [expression])"
+    },
+    {
+      "label": "ML_TRANSLATE",
+      "insertText": "ML_TRANSLATE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ML_TRANSLATE(params_struct, expression, this)"
+    },
+    {
+      "label": "MONTH",
+      "insertText": "MONTH(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "MONTH(this)"
+    },
+    {
+      "label": "MONTHNAME",
+      "insertText": "MONTHNAME(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "MONTHNAME(this)"
+    },
+    {
+      "label": "MONTHS_BETWEEN",
+      "insertText": "MONTHS_BETWEEN(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "MONTHS_BETWEEN(this, expression, [roundoff])"
+    },
+    {
+      "label": "NEXT_DAY",
+      "insertText": "NEXT_DAY(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "NEXT_DAY(expression, this)"
+    },
+    {
+      "label": "NEXT_VALUE_FOR",
+      "insertText": "NEXT_VALUE_FOR(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "NEXT_VALUE_FOR(this, [order])"
+    },
+    {
+      "label": "NORMALIZE",
+      "insertText": "NORMALIZE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "NORMALIZE([is_casefold], this, [form])"
+    },
+    {
+      "label": "NOW",
+      "insertText": "NOW(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "NOW() → TIMESTAMP"
+    },
+    {
+      "label": "NTH_VALUE",
+      "insertText": "NTH_VALUE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "NTH_VALUE(offset, this)"
+    },
+    {
+      "label": "NTILE",
+      "insertText": "NTILE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "NTILE([this]) → INTEGER"
+    },
+    {
+      "label": "NULLIF",
+      "insertText": "NULLIF(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "NULLIF(this, expression)"
+    },
+    {
+      "label": "NUMBER_TO_STR",
+      "insertText": "NUMBER_TO_STR(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "NUMBER_TO_STR(this, format, [culture])"
+    },
+    {
+      "label": "NVL2",
+      "insertText": "NVL2(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "NVL2(this, [false], true)"
+    },
+    {
+      "label": "OBJECT_INSERT",
+      "insertText": "OBJECT_INSERT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "OBJECT_INSERT(value, key, [update_flag], this)"
+    },
+    {
+      "label": "OPEN_JSON",
+      "insertText": "OPEN_JSON(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "OPEN_JSON([expressions], [path], this)"
+    },
+    {
+      "label": "OR",
+      "insertText": "OR(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "OR(expression, this) → BOOLEAN"
+    },
+    {
+      "label": "OVERLAY",
+      "insertText": "OVERLAY(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "OVERLAY(expression, [for_], this, from_)"
+    },
+    {
+      "label": "PAD",
+      "insertText": "PAD(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "PAD(expression, [fill_pattern], is_left, this)"
+    },
+    {
+      "label": "PARSE_BIGNUMERIC",
+      "insertText": "PARSE_BIGNUMERIC(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "PARSE_BIGNUMERIC(this)"
+    },
+    {
+      "label": "PARSE_DATETIME",
+      "insertText": "PARSE_DATETIME(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "PARSE_DATETIME([zone], [format], this)"
+    },
+    {
+      "label": "PARSE_IP",
+      "insertText": "PARSE_IP(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "PARSE_IP(type, [permissive], this)"
+    },
+    {
+      "label": "PARSE_JSON",
+      "insertText": "PARSE_JSON(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "PARSE_JSON([safe], this, [expression])"
+    },
+    {
+      "label": "PARSE_NUMERIC",
+      "insertText": "PARSE_NUMERIC(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "PARSE_NUMERIC(this)"
+    },
+    {
+      "label": "PARSE_TIME",
+      "insertText": "PARSE_TIME(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "PARSE_TIME(format, this)"
+    },
+    {
+      "label": "PARSE_URL",
+      "insertText": "PARSE_URL(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "PARSE_URL([permissive], this, [part_to_extract], [key])"
+    },
+    {
+      "label": "PERCENT_RANK",
+      "insertText": "PERCENT_RANK(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "PERCENT_RANK([expressions])"
+    },
+    {
+      "label": "PERCENTILE_CONT",
+      "insertText": "PERCENTILE_CONT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "PERCENTILE_CONT([expression], this)"
+    },
+    {
+      "label": "PERCENTILE_DISC",
+      "insertText": "PERCENTILE_DISC(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "PERCENTILE_DISC(this, [expression])"
+    },
+    {
+      "label": "PI",
+      "insertText": "PI(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "PI()"
+    },
+    {
+      "label": "POSEXPLODE",
+      "insertText": "POSEXPLODE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "POSEXPLODE(this, [expressions])"
+    },
+    {
+      "label": "POSEXPLODE_OUTER",
+      "insertText": "POSEXPLODE_OUTER(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "POSEXPLODE_OUTER(this, [expressions])"
+    },
+    {
+      "label": "POW",
+      "insertText": "POW(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "POW(expression, this)"
+    },
+    {
+      "label": "PREDICT",
+      "insertText": "PREDICT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "PREDICT(expression, this, [params_struct])"
+    },
+    {
+      "label": "PREVIOUS_DAY",
+      "insertText": "PREVIOUS_DAY(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "PREVIOUS_DAY(expression, this)"
+    },
+    {
+      "label": "QUARTER",
+      "insertText": "QUARTER(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "QUARTER(this)"
+    },
+    {
+      "label": "RADIANS",
+      "insertText": "RADIANS(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "RADIANS(this)"
+    },
+    {
+      "label": "RAND",
+      "insertText": "RAND(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "RAND([this], [lower], [upper])"
+    },
+    {
+      "label": "RANDN",
+      "insertText": "RANDN(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "RANDN([this])"
+    },
+    {
+      "label": "RANGE_BUCKET",
+      "insertText": "RANGE_BUCKET(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "RANGE_BUCKET(this, expression)"
+    },
+    {
+      "label": "RANGE_N",
+      "insertText": "RANGE_N(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "RANGE_N(expressions, [each], this)"
+    },
+    {
+      "label": "RANK",
+      "insertText": "RANK(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "RANK([expressions]) → INTEGER"
+    },
+    {
+      "label": "READ_CSV",
+      "insertText": "READ_CSV(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "READ_CSV([expressions], this)"
+    },
+    {
+      "label": "READ_PARQUET",
+      "insertText": "READ_PARQUET(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "READ_PARQUET(expressions)"
+    },
+    {
+      "label": "REDUCE",
+      "insertText": "REDUCE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "REDUCE([finish], merge, this, initial)"
+    },
+    {
+      "label": "REGEXP_COUNT",
+      "insertText": "REGEXP_COUNT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "REGEXP_COUNT([parameters], this, expression, [position])"
+    },
+    {
+      "label": "REGEXP_EXTRACT",
+      "insertText": "REGEXP_EXTRACT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "REGEXP_EXTRACT(expression, [occurrence], [group], [position], [parameters], this)"
+    },
+    {
+      "label": "REGEXP_EXTRACT_ALL",
+      "insertText": "REGEXP_EXTRACT_ALL(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "REGEXP_EXTRACT_ALL([position], [occurrence], [group], expression, [parameters], this)"
+    },
+    {
+      "label": "REGEXP_FULL_MATCH",
+      "insertText": "REGEXP_FULL_MATCH(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "REGEXP_FULL_MATCH(this, [options], expression)"
+    },
+    {
+      "label": "REGEXP_I_LIKE",
+      "insertText": "REGEXP_I_LIKE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "REGEXP_I_LIKE(expression, [flag], this)"
+    },
+    {
+      "label": "REGEXP_INSTR",
+      "insertText": "REGEXP_INSTR(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "REGEXP_INSTR([parameters], [group], [position], [occurrence], this, [option], expression)"
+    },
+    {
+      "label": "REGEXP_LIKE",
+      "insertText": "REGEXP_LIKE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "REGEXP_LIKE([flag], expression, this)"
+    },
+    {
+      "label": "REGEXP_REPLACE",
+      "insertText": "REGEXP_REPLACE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "REGEXP_REPLACE([occurrence], expression, [position], [modifiers], this, [single_replace], [replacement])"
+    },
+    {
+      "label": "REGEXP_SPLIT",
+      "insertText": "REGEXP_SPLIT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "REGEXP_SPLIT(expression, this, [limit])"
+    },
+    {
+      "label": "REGR_AVGX",
+      "insertText": "REGR_AVGX(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "REGR_AVGX(this, expression)"
+    },
+    {
+      "label": "REGR_AVGY",
+      "insertText": "REGR_AVGY(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "REGR_AVGY(this, expression)"
+    },
+    {
+      "label": "REGR_VALX",
+      "insertText": "REGR_VALX(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "REGR_VALX(this, expression)"
+    },
+    {
+      "label": "REGR_VALY",
+      "insertText": "REGR_VALY(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "REGR_VALY(this, expression)"
+    },
+    {
+      "label": "REPEAT",
+      "insertText": "REPEAT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "REPEAT(times, this)"
+    },
+    {
+      "label": "REPLACE",
+      "insertText": "REPLACE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "REPLACE(this, expression, [replacement]) → TEXT"
+    },
+    {
+      "label": "REVERSE",
+      "insertText": "REVERSE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "REVERSE(this)"
+    },
+    {
+      "label": "RIGHT",
+      "insertText": "RIGHT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "RIGHT(this, expression)"
+    },
+    {
+      "label": "ROUND",
+      "insertText": "ROUND(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ROUND([truncate], this, [decimals])"
+    },
+    {
+      "label": "ROW_NUMBER",
+      "insertText": "ROW_NUMBER(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ROW_NUMBER([this]) → INTEGER"
+    },
+    {
+      "label": "RTRIMMED_LENGTH",
+      "insertText": "RTRIMMED_LENGTH(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "RTRIMMED_LENGTH(this)"
+    },
+    {
+      "label": "SAFE_ADD",
+      "insertText": "SAFE_ADD(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "SAFE_ADD(expression, this)"
+    },
+    {
+      "label": "SAFE_CONVERT_BYTES_TO_STRING",
+      "insertText": "SAFE_CONVERT_BYTES_TO_STRING(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "SAFE_CONVERT_BYTES_TO_STRING(this)"
+    },
+    {
+      "label": "SAFE_DIVIDE",
+      "insertText": "SAFE_DIVIDE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "SAFE_DIVIDE(this, expression)"
+    },
+    {
+      "label": "SAFE_MULTIPLY",
+      "insertText": "SAFE_MULTIPLY(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "SAFE_MULTIPLY(this, expression)"
+    },
+    {
+      "label": "SAFE_NEGATE",
+      "insertText": "SAFE_NEGATE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "SAFE_NEGATE(this)"
+    },
+    {
+      "label": "SAFE_SUBTRACT",
+      "insertText": "SAFE_SUBTRACT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "SAFE_SUBTRACT(expression, this)"
+    },
+    {
+      "label": "SEARCH",
+      "insertText": "SEARCH(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "SEARCH([json_scope], [search_mode], this, expression, [analyzer_options], [analyzer])"
+    },
+    {
+      "label": "SEC",
+      "insertText": "SEC(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "SEC(this)"
+    },
+    {
+      "label": "SECH",
+      "insertText": "SECH(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "SECH(this)"
+    },
+    {
+      "label": "SECOND",
+      "insertText": "SECOND(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "SECOND(this)"
+    },
+    {
+      "label": "SHA",
+      "insertText": "SHA(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "SHA(this)"
+    },
+    {
+      "label": "SHA1DIGEST",
+      "insertText": "SHA1DIGEST(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "SHA1DIGEST(this)"
+    },
+    {
+      "label": "SHA2",
+      "insertText": "SHA2(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "SHA2(this, [length])"
+    },
+    {
+      "label": "SHA2DIGEST",
+      "insertText": "SHA2DIGEST(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "SHA2DIGEST(this, [length])"
+    },
+    {
+      "label": "SIGN",
+      "insertText": "SIGN(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "SIGN(this)"
+    },
+    {
+      "label": "SIN",
+      "insertText": "SIN(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "SIN(this)"
+    },
+    {
+      "label": "SINH",
+      "insertText": "SINH(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "SINH(this)"
+    },
+    {
+      "label": "SORT_ARRAY",
+      "insertText": "SORT_ARRAY(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "SORT_ARRAY([asc], this, [nulls_first])"
+    },
+    {
+      "label": "SOUNDEX",
+      "insertText": "SOUNDEX(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "SOUNDEX(this)"
+    },
+    {
+      "label": "SOUNDEX_P123",
+      "insertText": "SOUNDEX_P123(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "SOUNDEX_P123(this)"
+    },
+    {
+      "label": "SPACE",
+      "insertText": "SPACE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "SPACE(this)"
+    },
+    {
+      "label": "SPLIT",
+      "insertText": "SPLIT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "SPLIT(expression, [limit], this)"
+    },
+    {
+      "label": "SPLIT_PART",
+      "insertText": "SPLIT_PART(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "SPLIT_PART(this, [delimiter], [part_index])"
+    },
+    {
+      "label": "SQRT",
+      "insertText": "SQRT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "SQRT(this)"
+    },
+    {
+      "label": "ST_DISTANCE",
+      "insertText": "ST_DISTANCE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ST_DISTANCE(expression, this, [use_spheroid])"
+    },
+    {
+      "label": "ST_POINT",
+      "insertText": "ST_POINT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "ST_POINT(this, expression, [null])"
+    },
+    {
+      "label": "STANDARD_HASH",
+      "insertText": "STANDARD_HASH(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "STANDARD_HASH(this, [expression])"
+    },
+    {
+      "label": "STAR_MAP",
+      "insertText": "STAR_MAP(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "STAR_MAP(this)"
+    },
+    {
+      "label": "STARTS_WITH",
+      "insertText": "STARTS_WITH(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "STARTS_WITH(this, expression)"
+    },
+    {
+      "label": "STR_POSITION",
+      "insertText": "STR_POSITION(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "STR_POSITION(substr, [occurrence], [position], this)"
+    },
+    {
+      "label": "STR_TO_DATE",
+      "insertText": "STR_TO_DATE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "STR_TO_DATE(this, [safe], [format])"
+    },
+    {
+      "label": "STR_TO_MAP",
+      "insertText": "STR_TO_MAP(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "STR_TO_MAP([duplicate_resolution_callback], [key_value_delim], [pair_delim], this)"
+    },
+    {
+      "label": "STR_TO_TIME",
+      "insertText": "STR_TO_TIME(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "STR_TO_TIME([safe], this, [zone], format)"
+    },
+    {
+      "label": "STR_TO_UNIX",
+      "insertText": "STR_TO_UNIX(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "STR_TO_UNIX([this], [format])"
+    },
+    {
+      "label": "STRING",
+      "insertText": "STRING(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "STRING([zone], this)"
+    },
+    {
+      "label": "STRING_TO_ARRAY",
+      "insertText": "STRING_TO_ARRAY(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "STRING_TO_ARRAY([null], [expression], this)"
+    },
+    {
+      "label": "STRUCT",
+      "insertText": "STRUCT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "STRUCT([expressions])"
+    },
+    {
+      "label": "STRUCT_EXTRACT",
+      "insertText": "STRUCT_EXTRACT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "STRUCT_EXTRACT(this, expression)"
+    },
+    {
+      "label": "STUFF",
+      "insertText": "STUFF(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "STUFF(this, expression, start, length)"
+    },
+    {
+      "label": "SUBSTRING",
+      "insertText": "SUBSTRING(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "SUBSTRING([length], [start], this) → TEXT"
+    },
+    {
+      "label": "SUBSTRING_INDEX",
+      "insertText": "SUBSTRING_INDEX(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "SUBSTRING_INDEX(this, delimiter, count)"
+    },
+    {
+      "label": "TAN",
+      "insertText": "TAN(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TAN(this)"
+    },
+    {
+      "label": "TANH",
+      "insertText": "TANH(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TANH(this)"
+    },
+    {
+      "label": "TIME",
+      "insertText": "TIME(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TIME([this], [zone])"
+    },
+    {
+      "label": "TIME_ADD",
+      "insertText": "TIME_ADD(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TIME_ADD([unit], this, expression)"
+    },
+    {
+      "label": "TIME_DIFF",
+      "insertText": "TIME_DIFF(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TIME_DIFF(this, expression, [unit])"
+    },
+    {
+      "label": "TIME_FROM_PARTS",
+      "insertText": "TIME_FROM_PARTS(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TIME_FROM_PARTS(min, sec, [fractions], [nano], [precision], hour)"
+    },
+    {
+      "label": "TIME_SLICE",
+      "insertText": "TIME_SLICE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TIME_SLICE(this, unit, [kind], expression)"
+    },
+    {
+      "label": "TIME_STR_TO_DATE",
+      "insertText": "TIME_STR_TO_DATE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TIME_STR_TO_DATE(this)"
+    },
+    {
+      "label": "TIME_STR_TO_TIME",
+      "insertText": "TIME_STR_TO_TIME(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TIME_STR_TO_TIME([zone], this)"
+    },
+    {
+      "label": "TIME_STR_TO_UNIX",
+      "insertText": "TIME_STR_TO_UNIX(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TIME_STR_TO_UNIX(this)"
+    },
+    {
+      "label": "TIME_SUB",
+      "insertText": "TIME_SUB(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TIME_SUB([unit], this, expression)"
+    },
+    {
+      "label": "TIME_TO_STR",
+      "insertText": "TIME_TO_STR(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TIME_TO_STR([culture], [zone], format, this)"
+    },
+    {
+      "label": "TIME_TO_TIME_STR",
+      "insertText": "TIME_TO_TIME_STR(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TIME_TO_TIME_STR(this)"
+    },
+    {
+      "label": "TIME_TO_UNIX",
+      "insertText": "TIME_TO_UNIX(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TIME_TO_UNIX(this)"
+    },
+    {
+      "label": "TIME_TRUNC",
+      "insertText": "TIME_TRUNC(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TIME_TRUNC([zone], this, unit)"
+    },
+    {
+      "label": "TIMESTAMP",
+      "insertText": "TIMESTAMP(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TIMESTAMP([with_tz], [this], [zone])"
+    },
+    {
+      "label": "TIMESTAMP_ADD",
+      "insertText": "TIMESTAMP_ADD(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TIMESTAMP_ADD([unit], this, expression)"
+    },
+    {
+      "label": "TIMESTAMP_DIFF",
+      "insertText": "TIMESTAMP_DIFF(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TIMESTAMP_DIFF([unit], this, expression)"
+    },
+    {
+      "label": "TIMESTAMP_FROM_PARTS",
+      "insertText": "TIMESTAMP_FROM_PARTS(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TIMESTAMP_FROM_PARTS([milli], [nano], [zone], [this], [expression], [year], [min], [month], [day], [sec], [hour])"
+    },
+    {
+      "label": "TIMESTAMP_LTZ_FROM_PARTS",
+      "insertText": "TIMESTAMP_LTZ_FROM_PARTS(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TIMESTAMP_LTZ_FROM_PARTS([nano], [hour], [month], [day], [year], [min], [sec])"
+    },
+    {
+      "label": "TIMESTAMP_SUB",
+      "insertText": "TIMESTAMP_SUB(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TIMESTAMP_SUB(expression, [unit], this)"
+    },
+    {
+      "label": "TIMESTAMP_TRUNC",
+      "insertText": "TIMESTAMP_TRUNC(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TIMESTAMP_TRUNC(this, [zone], unit)"
+    },
+    {
+      "label": "TIMESTAMP_TZ_FROM_PARTS",
+      "insertText": "TIMESTAMP_TZ_FROM_PARTS(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TIMESTAMP_TZ_FROM_PARTS([nano], [hour], [zone], [sec], [year], [month], [min], [day])"
+    },
+    {
+      "label": "TO_ARRAY",
+      "insertText": "TO_ARRAY(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TO_ARRAY(this)"
+    },
+    {
+      "label": "TO_BASE32",
+      "insertText": "TO_BASE32(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TO_BASE32(this)"
+    },
+    {
+      "label": "TO_BASE64",
+      "insertText": "TO_BASE64(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TO_BASE64(this)"
+    },
+    {
+      "label": "TO_CHAR",
+      "insertText": "TO_CHAR(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TO_CHAR([format], [nlsparam], [is_numeric], this)"
+    },
+    {
+      "label": "TO_CODE_POINTS",
+      "insertText": "TO_CODE_POINTS(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TO_CODE_POINTS(this)"
+    },
+    {
+      "label": "TO_DAYS",
+      "insertText": "TO_DAYS(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TO_DAYS(this)"
+    },
+    {
+      "label": "TO_DOUBLE",
+      "insertText": "TO_DOUBLE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TO_DOUBLE([format], this)"
+    },
+    {
+      "label": "TO_MAP",
+      "insertText": "TO_MAP(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TO_MAP(this)"
+    },
+    {
+      "label": "TO_NUMBER",
+      "insertText": "TO_NUMBER(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TO_NUMBER(this, [scale], [nlsparam], [format], [precision])"
+    },
+    {
+      "label": "TRANSFORM",
+      "insertText": "TRANSFORM(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TRANSFORM(this, expression)"
+    },
+    {
+      "label": "TRANSLATE",
+      "insertText": "TRANSLATE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TRANSLATE(from_, to, this)"
+    },
+    {
+      "label": "TRIM",
+      "insertText": "TRIM(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TRIM(this, [position], [expression], [collation]) → TEXT"
+    },
+    {
+      "label": "TRY",
+      "insertText": "TRY(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TRY(this)"
+    },
+    {
+      "label": "TRY_BASE64DECODE_BINARY",
+      "insertText": "TRY_BASE64DECODE_BINARY(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TRY_BASE64DECODE_BINARY([alphabet], this)"
+    },
+    {
+      "label": "TRY_BASE64DECODE_STRING",
+      "insertText": "TRY_BASE64DECODE_STRING(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TRY_BASE64DECODE_STRING([alphabet], this)"
+    },
+    {
+      "label": "TRY_CAST",
+      "insertText": "TRY_CAST(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TRY_CAST([format], [default], [safe], to, [action], this, [requires_string])"
+    },
+    {
+      "label": "TRY_HEX_DECODE_BINARY",
+      "insertText": "TRY_HEX_DECODE_BINARY(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TRY_HEX_DECODE_BINARY(this)"
+    },
+    {
+      "label": "TRY_HEX_DECODE_STRING",
+      "insertText": "TRY_HEX_DECODE_STRING(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TRY_HEX_DECODE_STRING(this)"
+    },
+    {
+      "label": "TS_OR_DI_TO_DI",
+      "insertText": "TS_OR_DI_TO_DI(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TS_OR_DI_TO_DI(this)"
+    },
+    {
+      "label": "TS_OR_DS_ADD",
+      "insertText": "TS_OR_DS_ADD(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TS_OR_DS_ADD(expression, [unit], [return_type], this)"
+    },
+    {
+      "label": "TS_OR_DS_DIFF",
+      "insertText": "TS_OR_DS_DIFF(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TS_OR_DS_DIFF(this, expression, [unit])"
+    },
+    {
+      "label": "TS_OR_DS_TO_DATE",
+      "insertText": "TS_OR_DS_TO_DATE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TS_OR_DS_TO_DATE(this, [safe], [format])"
+    },
+    {
+      "label": "TS_OR_DS_TO_DATE_STR",
+      "insertText": "TS_OR_DS_TO_DATE_STR(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TS_OR_DS_TO_DATE_STR(this)"
+    },
+    {
+      "label": "TS_OR_DS_TO_DATETIME",
+      "insertText": "TS_OR_DS_TO_DATETIME(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TS_OR_DS_TO_DATETIME(this)"
+    },
+    {
+      "label": "TS_OR_DS_TO_TIME",
+      "insertText": "TS_OR_DS_TO_TIME(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TS_OR_DS_TO_TIME(this, [format], [safe])"
+    },
+    {
+      "label": "TS_OR_DS_TO_TIMESTAMP",
+      "insertText": "TS_OR_DS_TO_TIMESTAMP(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TS_OR_DS_TO_TIMESTAMP(this)"
+    },
+    {
+      "label": "TYPEOF",
+      "insertText": "TYPEOF(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "TYPEOF(this)"
+    },
+    {
+      "label": "UNHEX",
+      "insertText": "UNHEX(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "UNHEX(this, [expression])"
+    },
+    {
+      "label": "UNICODE",
+      "insertText": "UNICODE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "UNICODE(this)"
+    },
+    {
+      "label": "UNIX_DATE",
+      "insertText": "UNIX_DATE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "UNIX_DATE(this)"
+    },
+    {
+      "label": "UNIX_MICROS",
+      "insertText": "UNIX_MICROS(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "UNIX_MICROS(this)"
+    },
+    {
+      "label": "UNIX_MILLIS",
+      "insertText": "UNIX_MILLIS(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "UNIX_MILLIS(this)"
+    },
+    {
+      "label": "UNIX_SECONDS",
+      "insertText": "UNIX_SECONDS(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "UNIX_SECONDS(this)"
+    },
+    {
+      "label": "UNIX_TO_STR",
+      "insertText": "UNIX_TO_STR(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "UNIX_TO_STR([format], this)"
+    },
+    {
+      "label": "UNIX_TO_TIME",
+      "insertText": "UNIX_TO_TIME(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "UNIX_TO_TIME([zone], [hours], [scale], [minutes], this, [format])"
+    },
+    {
+      "label": "UNIX_TO_TIME_STR",
+      "insertText": "UNIX_TO_TIME_STR(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "UNIX_TO_TIME_STR(this)"
+    },
+    {
+      "label": "UNNEST",
+      "insertText": "UNNEST(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "UNNEST([offset], expressions, [alias], [explode_array])"
+    },
+    {
+      "label": "UPPER",
+      "insertText": "UPPER(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "UPPER(this) → TEXT"
+    },
+    {
+      "label": "UTC_DATE",
+      "insertText": "UTC_DATE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "UTC_DATE()"
+    },
+    {
+      "label": "UTC_TIME",
+      "insertText": "UTC_TIME(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "UTC_TIME([this])"
+    },
+    {
+      "label": "UTC_TIMESTAMP",
+      "insertText": "UTC_TIMESTAMP(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "UTC_TIMESTAMP([this])"
+    },
+    {
+      "label": "UUID",
+      "insertText": "UUID(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "UUID([this], [name], [is_string])"
+    },
+    {
+      "label": "VAR_MAP",
+      "insertText": "VAR_MAP(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "VAR_MAP(keys, values)"
+    },
+    {
+      "label": "VECTOR_SEARCH",
+      "insertText": "VECTOR_SEARCH(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "VECTOR_SEARCH(this, [options], query_table, column_to_search, [query_column_to_search], [top_k], [distance_type])"
+    },
+    {
+      "label": "WEEK",
+      "insertText": "WEEK(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "WEEK([mode], this)"
+    },
+    {
+      "label": "WEEK_OF_YEAR",
+      "insertText": "WEEK_OF_YEAR(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "WEEK_OF_YEAR(this)"
+    },
+    {
+      "label": "WIDTH_BUCKET",
+      "insertText": "WIDTH_BUCKET(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "WIDTH_BUCKET(max_value, min_value, this, num_buckets)"
+    },
+    {
+      "label": "XML_ELEMENT",
+      "insertText": "XML_ELEMENT(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "XML_ELEMENT(this, [expressions])"
+    },
+    {
+      "label": "XML_TABLE",
+      "insertText": "XML_TABLE(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "XML_TABLE([by_ref], [columns], this, [passing], [namespaces])"
+    },
+    {
+      "label": "XOR",
+      "insertText": "XOR(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "XOR([expression], [expressions], [this])"
+    },
+    {
+      "label": "YEAR",
+      "insertText": "YEAR(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "YEAR(this)"
+    },
+    {
+      "label": "YEAR_OF_WEEK",
+      "insertText": "YEAR_OF_WEEK(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "YEAR_OF_WEEK(this)"
+    },
+    {
+      "label": "YEAR_OF_WEEK_ISO",
+      "insertText": "YEAR_OF_WEEK_ISO(",
+      "kind": "function",
+      "category": "function",
+      "score": 800,
+      "clauseSpecific": false,
+      "detail": "YEAR_OF_WEEK_ISO(this)"
     },
     {
       "label": "BOOL_AND",
@@ -269,38 +3763,6 @@ expression: result
       "clauseSpecific": true
     },
     {
-      "label": "COUNT",
-      "insertText": "COUNT(",
-      "kind": "function",
-      "category": "aggregate",
-      "score": 750,
-      "clauseSpecific": true
-    },
-    {
-      "label": "MAX",
-      "insertText": "MAX(",
-      "kind": "function",
-      "category": "aggregate",
-      "score": 750,
-      "clauseSpecific": true
-    },
-    {
-      "label": "MIN",
-      "insertText": "MIN(",
-      "kind": "function",
-      "category": "aggregate",
-      "score": 750,
-      "clauseSpecific": true
-    },
-    {
-      "label": "STDDEV",
-      "insertText": "STDDEV(",
-      "kind": "function",
-      "category": "aggregate",
-      "score": 750,
-      "clauseSpecific": true
-    },
-    {
       "label": "STRING_AGG",
       "insertText": "STRING_AGG(",
       "kind": "function",
@@ -309,20 +3771,517 @@ expression: result
       "clauseSpecific": true
     },
     {
+      "label": "AGG_FUNC",
+      "insertText": "AGG_FUNC(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "AGG_FUNC(this)"
+    },
+    {
+      "label": "AI_AGG",
+      "insertText": "AI_AGG(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "AI_AGG(expression, this)"
+    },
+    {
+      "label": "AI_SUMMARIZE_AGG",
+      "insertText": "AI_SUMMARIZE_AGG(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "AI_SUMMARIZE_AGG(this)"
+    },
+    {
+      "label": "ANY_VALUE",
+      "insertText": "ANY_VALUE(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "ANY_VALUE(this) → T"
+    },
+    {
+      "label": "APPROX_DISTINCT",
+      "insertText": "APPROX_DISTINCT(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "APPROX_DISTINCT([accuracy], this)"
+    },
+    {
+      "label": "APPROX_QUANTILE",
+      "insertText": "APPROX_QUANTILE(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "APPROX_QUANTILE([accuracy], this, quantile, [weight], [error_tolerance])"
+    },
+    {
+      "label": "APPROX_QUANTILES",
+      "insertText": "APPROX_QUANTILES(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "APPROX_QUANTILES(this, [expression])"
+    },
+    {
+      "label": "APPROX_TOP_K",
+      "insertText": "APPROX_TOP_K(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "APPROX_TOP_K(this, [counters], [expression])"
+    },
+    {
+      "label": "APPROX_TOP_K_ACCUMULATE",
+      "insertText": "APPROX_TOP_K_ACCUMULATE(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "APPROX_TOP_K_ACCUMULATE(this, [expression])"
+    },
+    {
+      "label": "APPROX_TOP_K_COMBINE",
+      "insertText": "APPROX_TOP_K_COMBINE(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "APPROX_TOP_K_COMBINE(this, [expression])"
+    },
+    {
+      "label": "APPROX_TOP_SUM",
+      "insertText": "APPROX_TOP_SUM(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "APPROX_TOP_SUM(this, count, expression)"
+    },
+    {
+      "label": "APPROXIMATE_SIMILARITY",
+      "insertText": "APPROXIMATE_SIMILARITY(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "APPROXIMATE_SIMILARITY(this)"
+    },
+    {
+      "label": "ARG_MAX",
+      "insertText": "ARG_MAX(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "ARG_MAX(expression, [count], this)"
+    },
+    {
+      "label": "ARG_MIN",
+      "insertText": "ARG_MIN(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "ARG_MIN(expression, [count], this)"
+    },
+    {
+      "label": "ARRAY_AGG",
+      "insertText": "ARRAY_AGG(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "ARRAY_AGG(this)"
+    },
+    {
+      "label": "ARRAY_CONCAT_AGG",
+      "insertText": "ARRAY_CONCAT_AGG(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "ARRAY_CONCAT_AGG(this)"
+    },
+    {
+      "label": "ARRAY_UNION_AGG",
+      "insertText": "ARRAY_UNION_AGG(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "ARRAY_UNION_AGG(this)"
+    },
+    {
+      "label": "ARRAY_UNIQUE_AGG",
+      "insertText": "ARRAY_UNIQUE_AGG(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "ARRAY_UNIQUE_AGG(this)"
+    },
+    {
+      "label": "AVG",
+      "insertText": "AVG(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "AVG(this) → NUMERIC"
+    },
+    {
+      "label": "BITMAP_CONSTRUCT_AGG",
+      "insertText": "BITMAP_CONSTRUCT_AGG(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "BITMAP_CONSTRUCT_AGG(this)"
+    },
+    {
+      "label": "BITMAP_OR_AGG",
+      "insertText": "BITMAP_OR_AGG(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "BITMAP_OR_AGG(this)"
+    },
+    {
+      "label": "BITWISE_AND_AGG",
+      "insertText": "BITWISE_AND_AGG(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "BITWISE_AND_AGG(this)"
+    },
+    {
+      "label": "BITWISE_OR_AGG",
+      "insertText": "BITWISE_OR_AGG(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "BITWISE_OR_AGG(this)"
+    },
+    {
+      "label": "BITWISE_XOR_AGG",
+      "insertText": "BITWISE_XOR_AGG(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "BITWISE_XOR_AGG(this)"
+    },
+    {
+      "label": "BOOLXOR_AGG",
+      "insertText": "BOOLXOR_AGG(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "BOOLXOR_AGG(this)"
+    },
+    {
+      "label": "COMBINED_AGG_FUNC",
+      "insertText": "COMBINED_AGG_FUNC(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "COMBINED_AGG_FUNC(this, [expressions])"
+    },
+    {
+      "label": "COMBINED_PARAMETERIZED_AGG",
+      "insertText": "COMBINED_PARAMETERIZED_AGG(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "COMBINED_PARAMETERIZED_AGG(expressions, this, params)"
+    },
+    {
+      "label": "CORR",
+      "insertText": "CORR(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "CORR(this, expression)"
+    },
+    {
+      "label": "COUNT",
+      "insertText": "COUNT(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "COUNT([this], [expressions], [big_int]) → INTEGER"
+    },
+    {
+      "label": "COUNT_IF",
+      "insertText": "COUNT_IF(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "COUNT_IF(this)"
+    },
+    {
+      "label": "COVAR_POP",
+      "insertText": "COVAR_POP(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "COVAR_POP(expression, this)"
+    },
+    {
+      "label": "COVAR_SAMP",
+      "insertText": "COVAR_SAMP(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "COVAR_SAMP(this, expression)"
+    },
+    {
+      "label": "FIRST",
+      "insertText": "FIRST(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "FIRST([expression], this)"
+    },
+    {
+      "label": "GROUP_CONCAT",
+      "insertText": "GROUP_CONCAT(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "GROUP_CONCAT(this, [separator], [on_overflow])"
+    },
+    {
+      "label": "GROUPING",
+      "insertText": "GROUPING(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "GROUPING(expressions)"
+    },
+    {
+      "label": "GROUPING_ID",
+      "insertText": "GROUPING_ID(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "GROUPING_ID(expressions)"
+    },
+    {
+      "label": "HLL",
+      "insertText": "HLL(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "HLL(this, [expressions])"
+    },
+    {
+      "label": "JSON_OBJECT_AGG",
+      "insertText": "JSON_OBJECT_AGG(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "JSON_OBJECT_AGG([unique_keys], [return_type], [encoding], [null_handling], [expressions])"
+    },
+    {
+      "label": "JSONB_OBJECT_AGG",
+      "insertText": "JSONB_OBJECT_AGG(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "JSONB_OBJECT_AGG(this, expression)"
+    },
+    {
+      "label": "LAST",
+      "insertText": "LAST(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "LAST(this, [expression])"
+    },
+    {
+      "label": "LOGICAL_AND",
+      "insertText": "LOGICAL_AND(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "LOGICAL_AND(this)"
+    },
+    {
+      "label": "LOGICAL_OR",
+      "insertText": "LOGICAL_OR(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "LOGICAL_OR(this)"
+    },
+    {
+      "label": "MAX",
+      "insertText": "MAX(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "MAX(this, [expressions]) → T"
+    },
+    {
+      "label": "MEDIAN",
+      "insertText": "MEDIAN(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "MEDIAN(this)"
+    },
+    {
+      "label": "MIN",
+      "insertText": "MIN(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "MIN(this, [expressions]) → T"
+    },
+    {
+      "label": "MINHASH",
+      "insertText": "MINHASH(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "MINHASH(expressions, this)"
+    },
+    {
+      "label": "MINHASH_COMBINE",
+      "insertText": "MINHASH_COMBINE(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "MINHASH_COMBINE(this)"
+    },
+    {
+      "label": "OBJECT_AGG",
+      "insertText": "OBJECT_AGG(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "OBJECT_AGG(expression, this)"
+    },
+    {
+      "label": "PARAMETERIZED_AGG",
+      "insertText": "PARAMETERIZED_AGG(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "PARAMETERIZED_AGG(params, this, expressions)"
+    },
+    {
+      "label": "QUANTILE",
+      "insertText": "QUANTILE(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "QUANTILE(this, quantile)"
+    },
+    {
+      "label": "SKEWNESS",
+      "insertText": "SKEWNESS(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "SKEWNESS(this)"
+    },
+    {
+      "label": "STDDEV",
+      "insertText": "STDDEV(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "STDDEV(this)"
+    },
+    {
+      "label": "STDDEV_POP",
+      "insertText": "STDDEV_POP(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "STDDEV_POP(this)"
+    },
+    {
+      "label": "STDDEV_SAMP",
+      "insertText": "STDDEV_SAMP(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "STDDEV_SAMP(this)"
+    },
+    {
       "label": "SUM",
       "insertText": "SUM(",
       "kind": "function",
       "category": "aggregate",
-      "score": 750,
-      "clauseSpecific": true
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "SUM(this) → NUMERIC"
     },
     {
       "label": "VARIANCE",
       "insertText": "VARIANCE(",
       "kind": "function",
       "category": "aggregate",
-      "score": 750,
-      "clauseSpecific": true
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "VARIANCE(this)"
+    },
+    {
+      "label": "VARIANCE_POP",
+      "insertText": "VARIANCE_POP(",
+      "kind": "function",
+      "category": "aggregate",
+      "score": 700,
+      "clauseSpecific": false,
+      "detail": "VARIANCE_POP(this)"
     },
     {
       "label": "AND",

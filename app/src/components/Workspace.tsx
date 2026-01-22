@@ -54,8 +54,6 @@ export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspacePr
   const { result, viewMode, layoutAlgorithm } = lineageState;
   const [fileSelectorOpen, setFileSelectorOpen] = useState(false);
   const [projectSelectorOpen, setProjectSelectorOpen] = useState(false);
-  const [dialectSelectorOpen, setDialectSelectorOpen] = useState(false);
-  const [templateSelectorOpen, setTemplateSelectorOpen] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [shortcutsDialogOpen, setShortcutsDialogOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -173,11 +171,6 @@ export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspacePr
         handler: () => setProjectSelectorOpen((prev) => !prev),
       },
       {
-        key: 'd',
-        cmdOrCtrl: true,
-        handler: () => setDialectSelectorOpen((prev) => !prev),
-      },
-      {
         key: 'b',
         cmdOrCtrl: true,
         handler: toggleEditorPanel,
@@ -237,9 +230,6 @@ export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspacePr
           break;
         case 'open-projects':
           setProjectSelectorOpen(true);
-          break;
-        case 'open-dialect':
-          setDialectSelectorOpen(true);
           break;
         case 'toggle-editor':
           toggleEditorPanel();
@@ -455,10 +445,6 @@ export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspacePr
                   wasmReady={wasmReady}
                   fileSelectorOpen={fileSelectorOpen}
                   onFileSelectorOpenChange={setFileSelectorOpen}
-                  dialectSelectorOpen={dialectSelectorOpen}
-                  onDialectSelectorOpenChange={setDialectSelectorOpen}
-                  templateSelectorOpen={templateSelectorOpen}
-                  onTemplateSelectorOpenChange={setTemplateSelectorOpen}
                 />
               </ResizablePanel>
 

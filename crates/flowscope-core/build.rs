@@ -11,8 +11,9 @@
 //! - `normalization_overrides.toml`: Manual corrections to normalization
 //! - `type_system.toml`: Type categories, aliases, implicit casts, and dialect mappings
 
+use indexmap::IndexMap;
 use serde::Deserialize;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::error::Error;
 use std::fs;
@@ -170,7 +171,7 @@ struct FunctionDef {
     #[serde(default)]
     sql_names: Vec<String>,
     #[serde(default)]
-    arg_types: HashMap<String, serde_json::Value>,
+    arg_types: IndexMap<String, serde_json::Value>,
     #[serde(default)]
     dialects: Vec<String>,
     #[serde(default)]
@@ -1035,6 +1036,15 @@ fn class_name_to_sql_name(class_name: &str) -> String {
     result
 }
 
+/// Parsed function signature for completion
+struct FunctionSigData {
+    name: String,
+    display_name: String,        // Uppercase version for display
+    params: Vec<(String, bool)>, // (param_name, is_required)
+    return_rule: Option<String>,
+    category: String, // "aggregate", "window", "scalar"
+}
+
 fn generate_functions(
     dir: &Path,
     functions: &BTreeMap<String, FunctionDef>,
@@ -1044,11 +1054,39 @@ fn generate_functions(
     let mut udtfs: BTreeSet<String> = BTreeSet::new();
     // Map from sql_name (lowercase) to return_type rule
     let mut return_types: BTreeMap<String, String> = BTreeMap::new();
+    // Collect function signatures for completion
+    let mut signatures: Vec<FunctionSigData> = Vec::new();
 
     for def in functions.values() {
         // Use the class name to derive the SQL function name, as the dictionary keys
         // may have mangled names (e.g., "J_S_O_N_B_OBJECT_AGG" instead of "JSONB_OBJECT_AGG")
         let sql_name = class_name_to_sql_name(&def.class);
+
+        // Determine primary category for completion.
+        //
+        // Category Priority: aggregate > window > scalar
+        //
+        // Some functions can serve multiple roles (e.g., SUM can be both an aggregate
+        // and a window function when used with OVER). For completion purposes, we assign
+        // a single primary category using this priority:
+        //
+        // 1. "aggregate" - Functions that aggregate multiple rows (SUM, COUNT, AVG, etc.)
+        //    These get special treatment in GROUP BY contexts.
+        // 2. "window" - Functions that compute over a window frame (ROW_NUMBER, RANK, etc.)
+        //    These get boosted in OVER/WINDOW contexts.
+        // 3. "scalar" - Regular functions that operate on single values.
+        //
+        // This means a function marked as both "aggregate" and "window" will be classified
+        // as "aggregate" for completion scoring. This is intentional: aggregate functions
+        // are more commonly used outside window contexts, so we prioritize that behavior.
+        let category = if def.categories.contains(&"aggregate".to_string()) {
+            "aggregate"
+        } else if def.categories.contains(&"window".to_string()) {
+            "window"
+        } else {
+            "scalar"
+        };
+
         for cat in &def.categories {
             match cat.as_str() {
                 "aggregate" => {
@@ -1066,8 +1104,34 @@ fn generate_functions(
 
         // Collect return types
         if let Some(ref rt) = def.return_type {
-            return_types.insert(sql_name, rt.rule.clone());
+            return_types.insert(sql_name.clone(), rt.rule.clone());
         }
+
+        // Build parameter list from arg_types
+        // Filter out internal/metadata fields
+        let skip_params = [
+            "bracket_notation",
+            "struct_name_inheritance",
+            "ensure_variant",
+            "nulls_excluded",
+        ];
+        let params: Vec<(String, bool)> = def
+            .arg_types
+            .iter()
+            .filter(|(k, _)| !skip_params.contains(&k.as_str()))
+            .map(|(k, v)| {
+                let required = v.as_bool().unwrap_or(false);
+                (k.clone(), required)
+            })
+            .collect();
+
+        signatures.push(FunctionSigData {
+            name: sql_name.clone(),
+            display_name: sql_name.to_ascii_uppercase(),
+            params,
+            return_rule: def.return_type.as_ref().map(|rt| rt.rule.clone()),
+            category: category.to_string(),
+        });
     }
 
     let mut code = String::from(
@@ -1245,6 +1309,186 @@ pub fn infer_function_return_type(name: &str) -> Option<ReturnTypeRule> {
     code.push_str(
         r#"        _ => None,
     }
+}
+"#,
+    );
+
+    // Generate FunctionCategory enum and FunctionSignature struct
+    code.push_str(
+        r#"
+/// Function category for completion context filtering.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FunctionCategory {
+    /// Aggregate functions (SUM, COUNT, AVG, etc.)
+    Aggregate,
+    /// Window functions (ROW_NUMBER, RANK, LAG, etc.)
+    Window,
+    /// Scalar functions (LOWER, CONCAT, ABS, etc.)
+    Scalar,
+}
+
+/// Function parameter information for completion.
+#[derive(Debug, Clone)]
+pub struct FunctionParam {
+    /// Parameter name (e.g., "expression", "separator")
+    pub name: &'static str,
+    /// Whether this parameter is required
+    pub required: bool,
+}
+
+/// Function signature for smart completion.
+///
+/// Contains all metadata needed to display rich function completions
+/// with parameter hints and return type information.
+#[derive(Debug, Clone)]
+pub struct FunctionSignature {
+    /// Function name in lowercase (for lookup)
+    pub name: &'static str,
+    /// Display name in uppercase (for completion label)
+    pub display_name: &'static str,
+    /// Function parameters
+    pub params: &'static [FunctionParam],
+    /// Return type rule, if known
+    pub return_type: Option<ReturnTypeRule>,
+    /// Function category
+    pub category: FunctionCategory,
+}
+
+impl FunctionSignature {
+    /// Formats the function signature as "NAME(params) → TYPE"
+    pub fn format_signature(&self) -> String {
+        let params_str = self.params
+            .iter()
+            .map(|p| {
+                if p.required {
+                    p.name.to_string()
+                } else {
+                    format!("[{}]", p.name)
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let return_str = self.return_type
+            .map(|rt| format!(" → {}", match rt {
+                ReturnTypeRule::Integer => "INTEGER",
+                ReturnTypeRule::Numeric => "NUMERIC",
+                ReturnTypeRule::Text => "TEXT",
+                ReturnTypeRule::Timestamp => "TIMESTAMP",
+                ReturnTypeRule::Boolean => "BOOLEAN",
+                ReturnTypeRule::Date => "DATE",
+                ReturnTypeRule::MatchFirstArg => "T",
+            }))
+            .unwrap_or_default();
+
+        format!("{}({}){}", self.display_name, params_str, return_str)
+    }
+}
+
+"#,
+    );
+
+    // Generate static function signatures
+    code.push_str("/// Static function parameter definitions.\n");
+
+    // First, generate static parameter arrays for each function
+    for sig in &signatures {
+        if sig.params.is_empty() {
+            continue;
+        }
+        let params_name = format!("PARAMS_{}", sig.name.to_ascii_uppercase());
+        code.push_str(&format!("static {params_name}: &[FunctionParam] = &[\n"));
+        for (param_name, required) in &sig.params {
+            code.push_str(&format!(
+                "    FunctionParam {{ name: \"{param_name}\", required: {required} }},\n"
+            ));
+        }
+        code.push_str("];\n");
+    }
+
+    // Generate the lookup function
+    code.push_str(
+        r#"
+/// Looks up a function signature by name.
+///
+/// Returns the complete function signature including parameters, return type,
+/// and category. The lookup is case-insensitive.
+///
+/// # Arguments
+///
+/// * `name` - The function name (case-insensitive)
+///
+/// # Returns
+///
+/// `Some(FunctionSignature)` if the function is known, `None` otherwise.
+pub fn get_function_signature(name: &str) -> Option<FunctionSignature> {
+    let lower = name.to_ascii_lowercase();
+    match lower.as_str() {
+"#,
+    );
+
+    for sig in &signatures {
+        let params_ref = if sig.params.is_empty() {
+            "&[]".to_string()
+        } else {
+            format!("PARAMS_{}", sig.name.to_ascii_uppercase())
+        };
+
+        let return_type = sig
+            .return_rule
+            .as_ref()
+            .and_then(|r| match r.as_str() {
+                "integer" => Some("Some(ReturnTypeRule::Integer)"),
+                "numeric" => Some("Some(ReturnTypeRule::Numeric)"),
+                "text" => Some("Some(ReturnTypeRule::Text)"),
+                "timestamp" => Some("Some(ReturnTypeRule::Timestamp)"),
+                "boolean" => Some("Some(ReturnTypeRule::Boolean)"),
+                "date" => Some("Some(ReturnTypeRule::Date)"),
+                "match_first_arg" => Some("Some(ReturnTypeRule::MatchFirstArg)"),
+                _ => None,
+            })
+            .unwrap_or("None");
+
+        let category = match sig.category.as_str() {
+            "aggregate" => "FunctionCategory::Aggregate",
+            "window" => "FunctionCategory::Window",
+            _ => "FunctionCategory::Scalar",
+        };
+
+        code.push_str(&format!(
+            r#"        "{}" => Some(FunctionSignature {{
+            name: "{}",
+            display_name: "{}",
+            params: {},
+            return_type: {},
+            category: {},
+        }}),
+"#,
+            sig.name, sig.name, sig.display_name, params_ref, return_type, category
+        ));
+    }
+
+    code.push_str(
+        r#"        _ => None,
+    }
+}
+
+/// Returns all function signatures for completion.
+///
+/// This provides access to all known SQL functions for populating
+/// completion lists. Functions are returned in a static slice for efficiency.
+pub fn all_function_signatures() -> impl Iterator<Item = FunctionSignature> {
+    static NAMES: &[&str] = &[
+"#,
+    );
+
+    for sig in &signatures {
+        code.push_str(&format!("        \"{}\",\n", sig.name));
+    }
+
+    code.push_str(
+        r#"    ];
+    NAMES.iter().filter_map(|name| get_function_signature(name))
 }
 "#,
     );

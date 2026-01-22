@@ -1,6 +1,6 @@
 use flowscope_core::{
-    completion_context, completion_items, ColumnSchema, CompletionClause, CompletionItemCategory,
-    CompletionRequest, Dialect, SchemaMetadata, SchemaTable,
+    completion_context, completion_items, ColumnSchema, CompletionClause, CompletionItem,
+    CompletionItemCategory, CompletionRequest, Dialect, SchemaMetadata, SchemaTable,
 };
 
 fn sample_schema() -> SchemaMetadata {
@@ -64,6 +64,13 @@ fn request_at_cursor(sql: &str, schema: Option<SchemaMetadata>) -> CompletionReq
         cursor_offset,
         schema,
     }
+}
+
+fn item_score(items: &[CompletionItem], label: &str) -> Option<i32> {
+    items
+        .iter()
+        .find(|item| item.label == label)
+        .map(|item| item.score)
 }
 
 /// Schema with catalog: sales.public.customers
@@ -221,6 +228,52 @@ fn completion_items_resolves_schema_qualifier() {
         .iter()
         .all(|item| item.category == CompletionItemCategory::SchemaTable));
     assert!(result.items.iter().any(|item| item.label == "public.users"));
+}
+
+#[test]
+fn completion_items_do_not_leak_lateral_aliases_across_statements() {
+    let sql = "SELECT total * 2 AS doubled FROM orders; SELECT | FROM users";
+    let request = request_at_cursor(sql, Some(sample_schema()));
+    let result = completion_items(&request);
+
+    assert!(
+        !result
+            .items
+            .iter()
+            .any(|item| item.label.eq_ignore_ascii_case("doubled")),
+        "Second statement should not surface lateral aliases defined in the first statement"
+    );
+}
+
+#[test]
+fn completion_items_group_by_detection_is_statement_local() {
+    let sql = "SELECT total, COUNT(*) FROM orders GROUP BY total; SELECT | FROM users";
+    let request = request_at_cursor(sql, Some(sample_schema()));
+    let ctx = completion_context(&request);
+    assert_eq!(
+        ctx.statement_index, 1,
+        "Cursor should be in the second statement"
+    );
+    assert!(
+        ctx.statement_span.start > 0,
+        "Second statement span should start after the semicolon"
+    );
+    let result = completion_items(&request);
+
+    let sum_item = result
+        .items
+        .iter()
+        .find(|item| item.label == "SUM")
+        .expect("SUM completion should be present");
+
+    assert!(
+        !sum_item.clause_specific,
+        "SUM should not be treated as clause-specific when current statement lacks GROUP BY"
+    );
+    assert!(
+        sum_item.score < 900,
+        "SUM should receive the no-group penalty when editing a non-grouped statement"
+    );
 }
 
 #[test]
@@ -1131,6 +1184,52 @@ fn window_aggregate_over() {
     let request = request_at_cursor("SELECT SUM(id) OVER (|) FROM users", Some(sample_schema()));
     let result = completion_items(&request);
     assert!(result.should_show);
+}
+
+// =============================================================================
+// Context-Aware Function Scoring
+// =============================================================================
+
+#[test]
+fn aggregate_scores_respect_context_adjustments() {
+    let group_request = request_at_cursor(
+        "SELECT | FROM users GROUP BY 1",
+        Some(sample_schema()),
+    );
+    let group_result = completion_items(&group_request);
+    assert!(group_result.should_show);
+    let group_sum = item_score(&group_result.items, "SUM").expect("SUM present in GROUP BY");
+
+    let where_request =
+        request_at_cursor("SELECT * FROM users WHERE |", Some(sample_schema()));
+    let where_result = completion_items(&where_request);
+    assert!(where_result.should_show);
+    let where_sum = item_score(&where_result.items, "SUM").expect("SUM present in WHERE");
+
+    assert!(
+        group_sum > where_sum,
+        "SUM score should be higher with GROUP BY context (group: {group_sum}, where: {where_sum})"
+    );
+}
+
+#[test]
+fn window_functions_boosted_inside_over_clause() {
+    let request = request_at_cursor(
+        "SELECT ROW_NUMBER() OVER (ORDER BY |) FROM users",
+        Some(sample_schema()),
+    );
+    let result = completion_items(&request);
+    assert!(result.should_show);
+
+    let row_number = item_score(&result.items, "ROW_NUMBER").expect("ROW_NUMBER present");
+    let abs_score = item_score(&result.items, "ABS").expect("ABS present");
+
+    assert!(
+        row_number > abs_score,
+        "ROW_NUMBER should outrank ABS inside OVER clause ({} vs {})",
+        row_number,
+        abs_score
+    );
 }
 
 // =============================================================================

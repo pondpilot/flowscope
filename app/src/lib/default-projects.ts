@@ -16,7 +16,40 @@ export const DEFAULT_DBT_PROJECT: Project = {
   dialect: 'snowflake',
   runMode: 'all',
   selectedFileIds: [],
-  schemaSQL: '',
+  schemaSQL: `-- dbt Source Tables Schema
+-- These define the raw source tables referenced by source() macros
+
+CREATE TABLE jaffle_shop.raw_customers (
+    id INTEGER PRIMARY KEY,
+    first_name VARCHAR(100),
+    last_name VARCHAR(100),
+    created_at TIMESTAMP
+);
+
+CREATE TABLE jaffle_shop.raw_orders (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER,
+    order_date DATE,
+    status VARCHAR(50),
+    _etl_loaded_at TIMESTAMP
+);
+
+CREATE TABLE stripe.payments (
+    id INTEGER PRIMARY KEY,
+    order_id INTEGER,
+    payment_method VARCHAR(50),
+    amount INTEGER,
+    status VARCHAR(50),
+    created_at TIMESTAMP
+);
+
+CREATE TABLE segment.events (
+    event_id INTEGER PRIMARY KEY,
+    user_id INTEGER,
+    event_type VARCHAR(100),
+    event_timestamp TIMESTAMP,
+    properties VARIANT
+);`,
   templateMode: 'dbt',
   files: [
     {
@@ -63,7 +96,7 @@ SELECT
 
 FROM {{ source('jaffle_shop', 'raw_orders') }}
 
-WHERE order_date >= '{{ var("min_order_date", "2020-01-01") }}'`,
+WHERE order_date >= '{{ env_var("MIN_ORDER_DATE", var("min_order_date", "2020-01-01")) }}'`,
     },
     {
       id: 'dbt-file-3',
@@ -268,6 +301,121 @@ SELECT
 FROM daily_metrics
 ORDER BY order_date DESC`,
     },
+    {
+      id: 'dbt-file-8',
+      name: 'stg_events.sql',
+      path: 'models/staging/stg_events.sql',
+      language: 'sql',
+      content: `{{ config(materialized='view') }}
+
+-- Staging model for raw event stream
+-- Demonstrates: Jinja loops for column selection
+
+{% set event_columns = ['event_id', 'user_id', 'event_type', 'event_timestamp'] %}
+
+SELECT
+    {% for col in event_columns %}
+    {{ col }},
+    {% endfor %}
+    properties->>'page_url' AS page_url,
+    properties->>'referrer' AS referrer
+
+FROM {{ source('segment', 'events') }}
+
+WHERE event_timestamp >= '{{ var("events_start_date", "2020-01-01") }}'`,
+    },
+    {
+      id: 'dbt-file-9',
+      name: 'fct_daily_events.sql',
+      path: 'models/marts/fct_daily_events.sql',
+      language: 'sql',
+      content: `{{ config(
+    materialized='incremental',
+    unique_key='event_date'
+) }}
+
+-- Daily event aggregations
+-- Demonstrates: Incremental pattern, env_var(), this reference
+
+WITH events AS (
+    SELECT * FROM {{ ref('stg_events') }}
+),
+
+daily_agg AS (
+    SELECT
+        DATE_TRUNC('day', event_timestamp) AS event_date,
+        COUNT(*) AS total_events,
+        COUNT(DISTINCT user_id) AS unique_users,
+        COUNT(DISTINCT CASE WHEN event_type = 'page_view' THEN user_id END) AS viewers,
+        COUNT(DISTINCT CASE WHEN event_type = 'purchase' THEN user_id END) AS purchasers
+
+    FROM events
+
+    {% if is_incremental() %}
+    -- Only process new events since last run
+    WHERE event_timestamp > (
+        SELECT MAX(event_date) FROM {{ this }}
+    ) - INTERVAL '{{ env_var("DBT_LOOKBACK_DAYS", "3") }} days'
+    {% endif %}
+
+    GROUP BY DATE_TRUNC('day', event_timestamp)
+)
+
+SELECT * FROM daily_agg`,
+    },
+    {
+      id: 'dbt-file-10',
+      name: 'fct_customer_360.sql',
+      path: 'models/marts/fct_customer_360.sql',
+      language: 'sql',
+      content: `{{ config(materialized='table') }}
+
+-- Customer 360 view combining all customer data
+-- Demonstrates: Cross-mart references, dbt_utils.star(), deep lineage
+
+WITH customer_base AS (
+    -- All columns from customers mart
+    SELECT {{ dbt_utils.star(ref('customers')) }}
+    FROM {{ ref('customers') }}
+),
+
+order_summary AS (
+    SELECT
+        customer_id,
+        COUNT(*) AS orders_in_period,
+        SUM(total_amount) AS revenue_in_period,
+        AVG(total_amount) AS avg_order_value
+    FROM {{ ref('orders') }}
+    WHERE order_date >= CURRENT_DATE - INTERVAL '{{ var("analysis_window_days", 90) }} days'
+    GROUP BY customer_id
+),
+
+event_engagement AS (
+    SELECT
+        user_id AS customer_id,
+        SUM(total_events) AS total_events,
+        SUM(unique_users) AS active_days
+    FROM {{ ref('fct_daily_events') }}
+    GROUP BY user_id
+),
+
+final AS (
+    SELECT
+        cb.*,
+        COALESCE(os.orders_in_period, 0) AS recent_orders,
+        COALESCE(os.revenue_in_period, 0) AS recent_revenue,
+        os.avg_order_value AS recent_aov,
+        COALESCE(ee.total_events, 0) AS engagement_events,
+        COALESCE(ee.active_days, 0) AS active_days,
+        -- Engagement score combining orders + events
+        (COALESCE(os.orders_in_period, 0) * 10) + COALESCE(ee.active_days, 0) AS engagement_score
+    FROM customer_base cb
+    LEFT JOIN order_summary os ON cb.customer_id = os.customer_id
+    LEFT JOIN event_engagement ee ON cb.customer_id = ee.customer_id
+)
+
+SELECT * FROM final`,
+    },
   ],
 };
 
@@ -282,7 +430,76 @@ export const DEFAULT_PROJECT: Project = {
   dialect: 'postgres',
   runMode: 'all',
   selectedFileIds: [],
-  schemaSQL: '',
+  schemaSQL: `/* E-Commerce Analytics Schema Definition
+   This schema defines all base tables and their relationships.
+   The Schema tab uses this to display table connections. */
+
+-- ============================================
+-- DATABASE: warehouse_db (Core Business Data)
+-- ============================================
+
+CREATE TABLE warehouse_db.core.users (
+  user_id VARCHAR(50) PRIMARY KEY,
+  email VARCHAR(255) NOT NULL UNIQUE,
+  full_name VARCHAR(100),
+  signup_source VARCHAR(50),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  is_active BOOLEAN DEFAULT TRUE
+);
+
+CREATE TABLE warehouse_db.core.products (
+  product_id VARCHAR(50) PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  category VARCHAR(50),
+  price DECIMAL(10, 2) NOT NULL,
+  cost DECIMAL(10, 2),
+  stock_level INTEGER DEFAULT 0
+);
+
+CREATE TABLE warehouse_db.core.orders (
+  order_id VARCHAR(50) PRIMARY KEY,
+  user_id VARCHAR(50) NOT NULL REFERENCES warehouse_db.core.users (user_id),
+  status VARCHAR(20) DEFAULT 'pending',
+  total_amount DECIMAL(12, 2) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  shipping_address JSONB
+);
+
+CREATE TABLE warehouse_db.core.order_items (
+  item_id VARCHAR(50) PRIMARY KEY,
+  order_id VARCHAR(50) NOT NULL REFERENCES warehouse_db.core.orders (order_id),
+  product_id VARCHAR(50) NOT NULL REFERENCES warehouse_db.core.products (product_id),
+  quantity INTEGER NOT NULL,
+  unit_price DECIMAL(10, 2) NOT NULL
+);
+
+-- ============================================
+-- DATABASE: raw_db (Clickstream Events)
+-- ============================================
+
+CREATE TABLE raw_db.events.page_views (
+  event_id VARCHAR(50) PRIMARY KEY,
+  user_id VARCHAR(50) REFERENCES warehouse_db.core.users (user_id),
+  session_id VARCHAR(50) NOT NULL,
+  url VARCHAR(2048) NOT NULL,
+  timestamp TIMESTAMP NOT NULL,
+  browser_info JSONB
+);
+
+CREATE TABLE raw_db.events.add_to_cart (
+  event_id VARCHAR(50) PRIMARY KEY,
+  session_id VARCHAR(50) NOT NULL,
+  product_id VARCHAR(50) NOT NULL REFERENCES warehouse_db.core.products (product_id),
+  quantity INTEGER NOT NULL DEFAULT 1,
+  timestamp TIMESTAMP NOT NULL
+);
+
+CREATE TABLE raw_db.events.purchases (
+  event_id VARCHAR(50) PRIMARY KEY,
+  order_id VARCHAR(50) NOT NULL REFERENCES warehouse_db.core.orders (order_id),
+  session_id VARCHAR(50) NOT NULL,
+  timestamp TIMESTAMP NOT NULL
+);`,
   templateMode: 'raw',
   files: [
     {
@@ -319,7 +536,9 @@ CREATE TABLE warehouse_db.core.orders (
   total_amount DECIMAL(12, 2) NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   shipping_address JSONB,
-  CONSTRAINT pk_orders PRIMARY KEY (order_id)
+  CONSTRAINT pk_orders PRIMARY KEY (order_id),
+  CONSTRAINT fk_orders_user FOREIGN KEY (user_id)
+    REFERENCES warehouse_db.core.users (user_id)
 );
 
 CREATE TABLE warehouse_db.core.order_items (
@@ -328,7 +547,11 @@ CREATE TABLE warehouse_db.core.order_items (
   product_id VARCHAR(50) NOT NULL,
   quantity INTEGER NOT NULL,
   unit_price DECIMAL(10, 2) NOT NULL,
-  CONSTRAINT pk_order_items PRIMARY KEY (item_id)
+  CONSTRAINT pk_order_items PRIMARY KEY (item_id),
+  CONSTRAINT fk_order_items_order FOREIGN KEY (order_id)
+    REFERENCES warehouse_db.core.orders (order_id),
+  CONSTRAINT fk_order_items_product FOREIGN KEY (product_id)
+    REFERENCES warehouse_db.core.products (product_id)
 );`,
     },
     {
@@ -336,11 +559,16 @@ CREATE TABLE warehouse_db.core.order_items (
       name: '02_raw_events.sql',
       path: '02_raw_events.sql',
       language: 'sql',
-      content: `/* Raw Clickstream Events - raw_db.events schema */
+      content: `/* Raw Clickstream Events - raw_db.events schema
+   Cross-database relationships (documented, not enforced):
+   - page_views.user_id → warehouse_db.core.users.user_id
+   - add_to_cart.product_id → warehouse_db.core.products.product_id
+   - purchases.order_id → warehouse_db.core.orders.order_id
+*/
 
 CREATE TABLE raw_db.events.page_views (
   event_id VARCHAR(50) NOT NULL,
-  user_id VARCHAR(50),
+  user_id VARCHAR(50),  -- FK: warehouse_db.core.users.user_id
   session_id VARCHAR(50) NOT NULL,
   url VARCHAR(2048) NOT NULL,
   timestamp TIMESTAMP NOT NULL,
@@ -351,7 +579,7 @@ CREATE TABLE raw_db.events.page_views (
 CREATE TABLE raw_db.events.add_to_cart (
   event_id VARCHAR(50) NOT NULL,
   session_id VARCHAR(50) NOT NULL,
-  product_id VARCHAR(50) NOT NULL,
+  product_id VARCHAR(50) NOT NULL,  -- FK: warehouse_db.core.products.product_id
   quantity INTEGER NOT NULL DEFAULT 1,
   timestamp TIMESTAMP NOT NULL,
   CONSTRAINT pk_add_to_cart PRIMARY KEY (event_id)
@@ -359,7 +587,7 @@ CREATE TABLE raw_db.events.add_to_cart (
 
 CREATE TABLE raw_db.events.purchases (
   event_id VARCHAR(50) NOT NULL,
-  order_id VARCHAR(50) NOT NULL,
+  order_id VARCHAR(50) NOT NULL,  -- FK: warehouse_db.core.orders.order_id
   session_id VARCHAR(50) NOT NULL,
   timestamp TIMESTAMP NOT NULL,
   CONSTRAINT pk_purchases PRIMARY KEY (event_id)
@@ -546,6 +774,404 @@ FROM daily_sessions s
 LEFT JOIN daily_carts c ON s.day = c.day
 LEFT JOIN daily_purchases p ON s.day = p.day
 ORDER BY s.day DESC;`,
+    },
+    {
+      id: 'file-7',
+      name: '07_cohort_analysis.sql',
+      path: '07_cohort_analysis.sql',
+      language: 'sql',
+      content: `/* Cohort Analysis with Advanced Window Functions
+   Demonstrates: LAG/LEAD, NTILE, FIRST_VALUE/LAST_VALUE, running totals
+   Type inference: dates → integers → decimals through CTEs */
+
+-- Monthly cohort retention analysis
+CREATE TABLE warehouse_db.analytics.cohort_retention AS
+WITH user_cohorts AS (
+  -- Assign users to their signup month cohort
+  SELECT
+    u.user_id,
+    DATE_TRUNC('month', u.created_at) AS cohort_month,
+    DATE_TRUNC('month', o.created_at) AS order_month,
+    o.total_amount
+  FROM warehouse_db.core.users u
+  LEFT JOIN warehouse_db.core.orders o ON u.user_id = o.user_id
+  WHERE o.status != 'cancelled'
+),
+cohort_activity AS (
+  -- Calculate months since signup for each order
+  SELECT
+    cohort_month,
+    order_month,
+    -- Type inference: date difference → integer
+    EXTRACT(YEAR FROM order_month) * 12 + EXTRACT(MONTH FROM order_month)
+      - (EXTRACT(YEAR FROM cohort_month) * 12 + EXTRACT(MONTH FROM cohort_month))
+      AS months_since_signup,
+    COUNT(DISTINCT user_id) AS active_users,
+    SUM(total_amount) AS cohort_revenue
+  FROM user_cohorts
+  WHERE order_month IS NOT NULL
+  GROUP BY cohort_month, order_month
+),
+cohort_sizes AS (
+  SELECT
+    DATE_TRUNC('month', created_at) AS cohort_month,
+    COUNT(DISTINCT user_id) AS cohort_size
+  FROM warehouse_db.core.users
+  GROUP BY DATE_TRUNC('month', created_at)
+)
+SELECT
+  ca.cohort_month,
+  ca.months_since_signup,
+  ca.active_users,
+  cs.cohort_size,
+  -- Type inference: integers → decimal percentage
+  ROUND(100.0 * ca.active_users / cs.cohort_size, 2) AS retention_rate,
+  ca.cohort_revenue,
+  -- Running total of revenue per cohort
+  SUM(ca.cohort_revenue) OVER (
+    PARTITION BY ca.cohort_month
+    ORDER BY ca.months_since_signup
+  ) AS cumulative_revenue
+FROM cohort_activity ca
+JOIN cohort_sizes cs ON ca.cohort_month = cs.cohort_month;
+
+-- Month-over-month growth metrics with LAG/LEAD
+CREATE TABLE mart_db.reporting.mom_growth AS
+WITH monthly_metrics AS (
+  SELECT
+    DATE_TRUNC('month', created_at) AS month,
+    COUNT(DISTINCT order_id) AS orders,
+    COUNT(DISTINCT user_id) AS customers,
+    SUM(total_amount) AS revenue
+  FROM warehouse_db.core.orders
+  WHERE status != 'cancelled'
+  GROUP BY DATE_TRUNC('month', created_at)
+),
+with_comparisons AS (
+  SELECT
+    month,
+    orders,
+    customers,
+    revenue,
+    -- LAG: compare to previous month
+    LAG(revenue, 1) OVER (ORDER BY month) AS prev_month_revenue,
+    LAG(orders, 1) OVER (ORDER BY month) AS prev_month_orders,
+    -- LEAD: peek at next month (for forecasting context)
+    LEAD(revenue, 1) OVER (ORDER BY month) AS next_month_revenue,
+    -- FIRST_VALUE/LAST_VALUE: cohort boundaries
+    FIRST_VALUE(revenue) OVER (ORDER BY month) AS first_month_revenue,
+    LAST_VALUE(revenue) OVER (
+      ORDER BY month
+      ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+    ) AS last_month_revenue,
+    -- NTILE: segment months into quartiles by revenue
+    NTILE(4) OVER (ORDER BY revenue) AS revenue_quartile
+  FROM monthly_metrics
+)
+SELECT
+  month,
+  orders,
+  customers,
+  revenue,
+  prev_month_revenue,
+  -- Calculate growth rate (type: decimal)
+  CASE
+    WHEN prev_month_revenue > 0
+    THEN ROUND(100.0 * (revenue - prev_month_revenue) / prev_month_revenue, 2)
+    ELSE NULL
+  END AS revenue_growth_pct,
+  revenue_quartile,
+  -- Running average revenue
+  AVG(revenue) OVER (ORDER BY month ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS revenue_3m_avg
+FROM with_comparisons
+ORDER BY month;`,
+    },
+    {
+      id: 'file-8',
+      name: '08_browser_analytics.sql',
+      path: '08_browser_analytics.sql',
+      language: 'sql',
+      content: `/* Browser Analytics - JSON Operations
+   Demonstrates: JSON field extraction (->,->>), type coercion, JSON aggregations
+   Uses browser_info JSONB from raw_db.events.page_views */
+
+-- Browser statistics from JSON telemetry data
+CREATE TABLE warehouse_db.analytics.browser_stats AS
+SELECT
+  -- Extract string fields with ->> operator
+  browser_info->>'browser_name' AS browser,
+  browser_info->>'browser_version' AS version,
+  browser_info->>'os' AS operating_system,
+  -- Extract nested object then field
+  browser_info->'device'->>'type' AS device_type,
+  browser_info->'device'->>'brand' AS device_brand,
+  -- Extract boolean and cast to native type
+  (browser_info->>'is_mobile')::BOOLEAN AS is_mobile,
+  -- Extract numeric value with type coercion
+  (browser_info->'viewport'->>'width')::INTEGER AS viewport_width,
+  (browser_info->'viewport'->>'height')::INTEGER AS viewport_height,
+  -- Aggregations
+  COUNT(DISTINCT event_id) AS page_views,
+  COUNT(DISTINCT session_id) AS unique_sessions,
+  COUNT(DISTINCT user_id) AS unique_users
+FROM raw_db.events.page_views
+WHERE browser_info IS NOT NULL
+GROUP BY
+  browser_info->>'browser_name',
+  browser_info->>'browser_version',
+  browser_info->>'os',
+  browser_info->'device'->>'type',
+  browser_info->'device'->>'brand',
+  (browser_info->>'is_mobile')::BOOLEAN,
+  (browser_info->'viewport'->>'width')::INTEGER,
+  (browser_info->'viewport'->>'height')::INTEGER;
+
+-- Device-level conversion analysis
+CREATE VIEW mart_db.reporting.device_conversion AS
+WITH device_sessions AS (
+  SELECT
+    pv.session_id,
+    -- Coalesce JSON extraction with fallback
+    COALESCE(pv.browser_info->'device'->>'type', 'unknown') AS device_type,
+    COALESCE(pv.browser_info->>'os', 'unknown') AS os,
+    (pv.browser_info->>'is_mobile')::BOOLEAN AS is_mobile,
+    COUNT(DISTINCT pv.event_id) AS pages_viewed,
+    MIN(pv.timestamp) AS session_start
+  FROM raw_db.events.page_views pv
+  GROUP BY
+    pv.session_id,
+    pv.browser_info->'device'->>'type',
+    pv.browser_info->>'os',
+    (pv.browser_info->>'is_mobile')::BOOLEAN
+),
+session_outcomes AS (
+  SELECT
+    ds.session_id,
+    ds.device_type,
+    ds.os,
+    ds.is_mobile,
+    ds.pages_viewed,
+    -- Check if session had cart activity
+    CASE WHEN atc.session_id IS NOT NULL THEN 1 ELSE 0 END AS had_cart,
+    -- Check if session had purchase
+    CASE WHEN p.session_id IS NOT NULL THEN 1 ELSE 0 END AS had_purchase,
+    -- Get order value if purchased
+    o.total_amount AS order_value
+  FROM device_sessions ds
+  LEFT JOIN raw_db.events.add_to_cart atc ON ds.session_id = atc.session_id
+  LEFT JOIN raw_db.events.purchases p ON ds.session_id = p.session_id
+  LEFT JOIN warehouse_db.core.orders o ON p.order_id = o.order_id
+)
+SELECT
+  device_type,
+  os,
+  is_mobile,
+  COUNT(DISTINCT session_id) AS total_sessions,
+  AVG(pages_viewed) AS avg_pages_per_session,
+  SUM(had_cart) AS sessions_with_cart,
+  SUM(had_purchase) AS sessions_with_purchase,
+  ROUND(100.0 * SUM(had_cart) / COUNT(*), 2) AS cart_rate,
+  ROUND(100.0 * SUM(had_purchase) / NULLIF(SUM(had_cart), 0), 2) AS cart_to_purchase_rate,
+  ROUND(AVG(order_value), 2) AS avg_order_value
+FROM session_outcomes
+GROUP BY device_type, os, is_mobile
+ORDER BY total_sessions DESC;`,
+    },
+    {
+      id: 'file-9',
+      name: '09_unified_events.sql',
+      path: '09_unified_events.sql',
+      language: 'sql',
+      content: `/* Unified Event Stream - Set Operations & Type Compatibility
+   Demonstrates: UNION ALL, UNION, type alignment, NULL casting, CASE consistency */
+
+-- Unified event timeline combining all event sources
+CREATE TABLE warehouse_db.analytics.unified_events AS
+
+-- Page view events
+SELECT
+  event_id,
+  'page_view' AS event_type,
+  session_id,
+  user_id,
+  timestamp AS event_time,
+  url AS event_target,
+  -- Type alignment: cast NULL to match other branches
+  NULL::VARCHAR(50) AS product_id,
+  NULL::VARCHAR(50) AS order_id,
+  NULL::INTEGER AS quantity,
+  -- Consistent CASE return type (VARCHAR)
+  CASE
+    WHEN url LIKE '%/product/%' THEN 'product_page'
+    WHEN url LIKE '%/cart%' THEN 'cart_page'
+    WHEN url LIKE '%/checkout%' THEN 'checkout_page'
+    ELSE 'other_page'
+  END AS event_category
+FROM raw_db.events.page_views
+
+UNION ALL
+
+-- Add to cart events
+SELECT
+  event_id,
+  'add_to_cart' AS event_type,
+  session_id,
+  NULL::VARCHAR(50) AS user_id,  -- Not available in this table
+  timestamp AS event_time,
+  NULL::VARCHAR(2048) AS event_target,
+  product_id,
+  NULL::VARCHAR(50) AS order_id,
+  quantity,
+  'cart_action' AS event_category
+FROM raw_db.events.add_to_cart
+
+UNION ALL
+
+-- Purchase events
+SELECT
+  event_id,
+  'purchase' AS event_type,
+  session_id,
+  NULL::VARCHAR(50) AS user_id,
+  timestamp AS event_time,
+  NULL::VARCHAR(2048) AS event_target,
+  NULL::VARCHAR(50) AS product_id,
+  order_id,
+  NULL::INTEGER AS quantity,
+  'conversion' AS event_category
+FROM raw_db.events.purchases;
+
+-- User journey: distinct touchpoints per user (uses UNION for dedup)
+CREATE VIEW mart_db.reporting.user_journey AS
+WITH user_touchpoints AS (
+  -- Get user sessions from page views
+  SELECT DISTINCT
+    user_id,
+    session_id,
+    'browse' AS journey_stage,
+    1 AS stage_order
+  FROM raw_db.events.page_views
+  WHERE user_id IS NOT NULL
+
+  UNION  -- Dedup: user may have multiple page views in same session
+
+  -- Cart sessions (need to join to get user_id)
+  SELECT DISTINCT
+    s.user_id,
+    atc.session_id,
+    'cart' AS journey_stage,
+    2 AS stage_order
+  FROM raw_db.events.add_to_cart atc
+  JOIN warehouse_db.analytics.sessions s ON atc.session_id = s.session_id
+  WHERE s.user_id IS NOT NULL
+
+  UNION
+
+  -- Purchase sessions
+  SELECT DISTINCT
+    s.user_id,
+    p.session_id,
+    'purchase' AS journey_stage,
+    3 AS stage_order
+  FROM raw_db.events.purchases p
+  JOIN warehouse_db.analytics.sessions s ON p.session_id = s.session_id
+  WHERE s.user_id IS NOT NULL
+),
+journey_progress AS (
+  SELECT
+    user_id,
+    -- Furthest stage reached (type: integer from MAX)
+    MAX(stage_order) AS max_stage_reached,
+    -- Count distinct stages
+    COUNT(DISTINCT journey_stage) AS stages_completed,
+    -- Count total sessions across journey
+    COUNT(DISTINCT session_id) AS total_sessions
+  FROM user_touchpoints
+  GROUP BY user_id
+)
+SELECT
+  jp.user_id,
+  u.email,
+  u.signup_source,
+  jp.max_stage_reached,
+  -- Map stage number back to name
+  CASE jp.max_stage_reached
+    WHEN 1 THEN 'browse_only'
+    WHEN 2 THEN 'cart_abandoner'
+    WHEN 3 THEN 'purchaser'
+  END AS furthest_stage,
+  jp.stages_completed,
+  jp.total_sessions,
+  -- Join with LTV data for context
+  COALESCE(ltv.lifetime_value, 0) AS lifetime_value
+FROM journey_progress jp
+JOIN warehouse_db.core.users u ON jp.user_id = u.user_id
+LEFT JOIN warehouse_db.analytics.user_ltv ltv ON jp.user_id = ltv.user_id
+ORDER BY jp.max_stage_reached DESC, ltv.lifetime_value DESC;`,
+    },
+    {
+      id: 'file-10',
+      name: '10_customer_360_view.sql',
+      path: '10_customer_360_view.sql',
+      language: 'sql',
+      content: `/* Customer Analytics View - Multi-Layer Column Inference Demo
+   Demonstrates: SELECT * through multiple CTE layers,
+   showing how columns are traced through the entire pipeline */
+
+CREATE VIEW warehouse_db.analytics.customer_summary AS (
+  WITH customers AS (
+    SELECT * FROM warehouse_db.core.users
+  ),
+
+  orders AS (
+    SELECT * FROM warehouse_db.core.orders
+  ),
+
+  order_items AS (
+    SELECT * FROM warehouse_db.core.order_items
+  ),
+
+  customer_orders AS (
+    SELECT
+      user_id AS customer_id,
+      MIN(created_at) AS first_order,
+      MAX(created_at) AS most_recent_order,
+      COUNT(order_id) AS number_of_orders,
+      SUM(total_amount) AS total_spent
+    FROM orders
+    GROUP BY user_id
+  ),
+
+  customer_items AS (
+    SELECT
+      o.user_id AS customer_id,
+      COUNT(DISTINCT oi.product_id) AS unique_products,
+      SUM(oi.quantity) AS total_items
+    FROM orders o
+    JOIN order_items oi ON o.order_id = oi.order_id
+    GROUP BY o.user_id
+  ),
+
+  final AS (
+    SELECT
+      customers.user_id AS customer_id,
+      customers.email,
+      customers.full_name,
+      customers.signup_source,
+      customer_orders.first_order,
+      customer_orders.most_recent_order,
+      customer_orders.number_of_orders,
+      customer_orders.total_spent,
+      customer_items.unique_products,
+      customer_items.total_items,
+      customer_orders.total_spent / NULLIF(customer_orders.number_of_orders, 0) AS avg_order_value
+    FROM customers
+    LEFT JOIN customer_orders ON customers.user_id = customer_orders.customer_id
+    LEFT JOIN customer_items ON customers.user_id = customer_items.customer_id
+  )
+
+  SELECT * FROM final
+);`,
     },
   ],
 };

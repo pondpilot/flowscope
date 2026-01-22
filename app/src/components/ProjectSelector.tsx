@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ChevronDown, Plus, FolderOpen, Trash } from 'lucide-react';
 import { toast } from 'sonner';
 import { clearAnalysisWorkerCache } from '@/lib/analysis-worker';
-import { useProject } from '@/lib/project-store';
+import { useProject, isValidDialect, DIALECT_OPTIONS } from '@/lib/project-store';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -13,12 +13,37 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ProjectMenuItem } from './ProjectMenuItem';
+import { isValidTemplateMode, TEMPLATE_MODE_OPTIONS } from '@/types';
 
 interface ProjectSelectorProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+}
+
+/**
+ * Keyboard handler for interactive dropdown sections.
+ * Stops propagation for all keys except Escape, allowing the dropdown to close.
+ */
+function handleDropdownSectionKeyDown(e: React.KeyboardEvent): void {
+  if (e.key === 'Escape') return;
+  e.stopPropagation();
+}
+
+/**
+ * Click handler for interactive dropdown sections.
+ * Stops propagation to prevent the dropdown from closing.
+ */
+function handleDropdownSectionClick(e: React.MouseEvent): void {
+  e.stopPropagation();
 }
 
 export function ProjectSelector({ open: controlledOpen, onOpenChange }: ProjectSelectorProps) {
@@ -30,6 +55,8 @@ export function ProjectSelector({ open: controlledOpen, onOpenChange }: ProjectS
     createProject,
     deleteProject,
     renameProject,
+    setProjectDialect,
+    setTemplateMode,
   } = useProject();
 
   const [isCreating, setIsCreating] = useState(false);
@@ -42,10 +69,15 @@ export function ProjectSelector({ open: controlledOpen, onOpenChange }: ProjectS
   const handleCreate = () => {
     const trimmedName = newProjectName.trim();
     if (trimmedName) {
-      createProject(trimmedName);
-      setNewProjectName('');
-      setIsCreating(false);
-      setOpen(false);
+      try {
+        createProject(trimmedName);
+        setNewProjectName('');
+        setIsCreating(false);
+        setOpen(false);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        toast.error(`Failed to create project: ${message}`);
+      }
     }
   };
 
@@ -99,11 +131,66 @@ export function ProjectSelector({ open: controlledOpen, onOpenChange }: ProjectS
 
           <DropdownMenuSeparator />
 
+          {/* Project Settings Section */}
+          {currentProject && (
+            <div
+              className="px-2 py-2"
+              onClick={handleDropdownSectionClick}
+              onKeyDown={handleDropdownSectionKeyDown}
+            >
+              <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-2">
+                Project Settings
+              </div>
+              <div className="flex gap-2">
+                <Select
+                  value={currentProject.dialect}
+                  onValueChange={(v) => {
+                    if (isValidDialect(v)) {
+                      setProjectDialect(currentProject.id, v);
+                    }
+                  }}
+                >
+                  <SelectTrigger className="h-7 flex-1 text-xs">
+                    <SelectValue placeholder="Dialect" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DIALECT_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={currentProject.templateMode}
+                  onValueChange={(v) => {
+                    if (isValidTemplateMode(v)) {
+                      setTemplateMode(currentProject.id, v);
+                    }
+                  }}
+                >
+                  <SelectTrigger className="h-7 w-24 text-xs">
+                    <SelectValue placeholder="Template" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TEMPLATE_MODE_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+
+          <DropdownMenuSeparator />
+
           {isCreating ? (
             <div
               className="p-2"
-              onClick={(e) => e.stopPropagation()}
-              onKeyDown={(e) => e.stopPropagation()}
+              onClick={handleDropdownSectionClick}
+              onKeyDown={handleDropdownSectionKeyDown}
             >
               <div className="flex gap-2">
                 <Input

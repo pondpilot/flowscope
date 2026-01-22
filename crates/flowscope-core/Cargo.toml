@@ -33,6 +33,7 @@ minijinja = { version = "2.14", optional = true, default-features = false, featu
 toml = "0.9"
 serde = { version = "1.0.215", features = ["derive"] }
 serde_json = "1.0.133"
+indexmap = { version = "2.6", features = ["serde"] }
 
 [dev-dependencies]
 rstest = "0.26"

@@ -319,6 +319,16 @@ impl SchemaRegistry {
         self.ddl_seeded_tables.contains(canonical)
     }
 
+    /// Marks a table as DDL-seeded to protect its schema from being overwritten.
+    ///
+    /// This is used after registering schema from CTAS (CREATE TABLE AS SELECT)
+    /// and CREATE VIEW statements. These statements derive complete column schemas
+    /// from their query projections and should not have their schemas overwritten
+    /// by partial column sets discovered when other queries reference them.
+    pub(crate) fn mark_as_ddl_seeded(&mut self, canonical: &str) {
+        self.ddl_seeded_tables.insert(canonical.to_string());
+    }
+
     /// Removes an implied schema entry (for DROP statements).
     pub(crate) fn remove_implied(&mut self, canonical: &str) {
         if !self.imported_tables.contains(canonical) {

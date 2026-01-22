@@ -9,22 +9,10 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
 } from '@/components/ui/dropdown-menu';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { FileSelector } from './FileSelector';
-import type { Dialect, RunMode, TemplateMode } from '@/lib/project-store';
-import { isValidTemplateMode, TEMPLATE_MODE_OPTIONS } from '@/types';
+import type { RunMode } from '@/lib/project-store';
 
 interface EditorToolbarProps {
-  dialect: Dialect;
-  onDialectChange: (dialect: Dialect) => void;
-  templateMode: TemplateMode;
-  onTemplateModeChange: (mode: TemplateMode) => void;
   runMode: RunMode;
   onRunModeChange: (mode: RunMode) => void;
   isAnalyzing: boolean;
@@ -34,17 +22,9 @@ interface EditorToolbarProps {
   selectedCount: number;
   fileSelectorOpen: boolean;
   onFileSelectorOpenChange: (open: boolean) => void;
-  dialectSelectorOpen: boolean;
-  onDialectSelectorOpenChange: (open: boolean) => void;
-  templateSelectorOpen: boolean;
-  onTemplateSelectorOpenChange: (open: boolean) => void;
 }
 
 export function EditorToolbar({
-  dialect,
-  onDialectChange,
-  templateMode,
-  onTemplateModeChange,
   runMode,
   onRunModeChange,
   isAnalyzing,
@@ -54,62 +34,11 @@ export function EditorToolbar({
   selectedCount,
   fileSelectorOpen,
   onFileSelectorOpenChange,
-  dialectSelectorOpen,
-  onDialectSelectorOpenChange,
-  templateSelectorOpen,
-  onTemplateSelectorOpenChange,
 }: EditorToolbarProps) {
   return (
     <div className="flex items-center justify-between px-3 py-2 border-b h-[44px] shrink-0 bg-muted/30 overflow-hidden gap-2">
       <div className="flex items-center gap-2 min-w-0 flex-1">
         <FileSelector open={fileSelectorOpen} onOpenChange={onFileSelectorOpenChange} />
-
-        <Select
-          value={dialect}
-          onValueChange={(v) => onDialectChange(v as Dialect)}
-          open={dialectSelectorOpen}
-          onOpenChange={onDialectSelectorOpenChange}
-        >
-          <SelectTrigger className="h-8 w-[130px] min-w-0 text-xs">
-            <SelectValue placeholder="Dialect" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="generic">Generic SQL</SelectItem>
-            <SelectItem value="bigquery">BigQuery</SelectItem>
-            <SelectItem value="clickhouse">ClickHouse</SelectItem>
-            <SelectItem value="databricks">Databricks</SelectItem>
-            <SelectItem value="duckdb">DuckDB</SelectItem>
-            <SelectItem value="hive">Hive</SelectItem>
-            <SelectItem value="mssql">MS SQL Server</SelectItem>
-            <SelectItem value="mysql">MySQL</SelectItem>
-            <SelectItem value="postgres">PostgreSQL</SelectItem>
-            <SelectItem value="redshift">Redshift</SelectItem>
-            <SelectItem value="snowflake">Snowflake</SelectItem>
-            <SelectItem value="sqlite">SQLite</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Select
-          value={templateMode}
-          onValueChange={(v) => {
-            if (isValidTemplateMode(v)) {
-              onTemplateModeChange(v);
-            }
-          }}
-          open={templateSelectorOpen}
-          onOpenChange={onTemplateSelectorOpenChange}
-        >
-          <SelectTrigger className="h-8 w-[100px] min-w-0 text-xs">
-            <SelectValue placeholder="Template" />
-          </SelectTrigger>
-          <SelectContent>
-            {TEMPLATE_MODE_OPTIONS.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
