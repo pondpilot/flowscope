@@ -1,13 +1,13 @@
 //! FlowScope CLI - SQL lineage analyzer
 
-mod cli;
-mod input;
+use flowscope_cli::cli;
+use flowscope_cli::input;
 #[cfg(feature = "metadata-provider")]
-mod metadata;
-mod output;
-mod schema;
+use flowscope_cli::metadata;
+use flowscope_cli::output;
+use flowscope_cli::schema;
 #[cfg(feature = "serve")]
-mod server;
+use flowscope_cli::server;
 
 use anyhow::{Context, Result};
 use clap::Parser;

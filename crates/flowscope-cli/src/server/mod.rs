@@ -3,9 +3,9 @@
 //! This module provides a local HTTP server that serves the embedded web UI
 //! and exposes a REST API for SQL lineage analysis.
 
-mod api;
+pub mod api;
 mod assets;
-mod state;
+pub mod state;
 mod watcher;
 
 use std::net::SocketAddr;
@@ -61,7 +61,7 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
 }
 
 /// Build the main router with all routes.
-fn build_router(state: Arc<AppState>) -> Router {
+pub fn build_router(state: Arc<AppState>) -> Router {
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods(Any)

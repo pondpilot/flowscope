@@ -169,10 +169,10 @@ Add a `--serve` flag to `flowscope-cli` that starts a local HTTP server serving 
 
 ### Task 12: Write tests
 
-- [ ] Unit tests for API handlers with mock state
-- [ ] Integration test: server startup and health endpoint
-- [ ] Integration test: analyze endpoint with sample SQL
-- [ ] Integration test: file watcher triggers update
+- [x] Unit tests for API handlers with mock state
+- [x] Integration test: server startup and health endpoint
+- [x] Integration test: analyze endpoint with sample SQL
+- [x] Integration test: file watcher triggers update
 
 **Files:** `crates/flowscope-cli/tests/serve_*.rs`
 
