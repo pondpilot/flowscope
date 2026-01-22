@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+#### CLI (flowscope-cli)
+- **Serve mode**: Run FlowScope as a local HTTP server with embedded web UI
+  - `--serve` flag to start HTTP server
+  - `--port <PORT>` to specify server port (default: 3000)
+  - `--watch <DIR>` for directories to watch for SQL files (repeatable)
+  - `--open` to auto-open browser on startup
+  - REST API endpoints for analysis, completion, file listing, and export
+  - File watcher with 100ms debounce for automatic reload on changes
+  - Assets embedded at compile time via rust-embed for single-binary deployment
+
+#### Web App (app/)
+- Backend adapter pattern for REST/WASM detection
+- Read-only mode for files loaded from backend
+- Schema display from database introspection in serve mode
+
 ## [0.3.0] - 2026-01-22
 
 ### Added

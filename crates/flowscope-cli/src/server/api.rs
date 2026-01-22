@@ -42,6 +42,12 @@ struct AnalyzeRequest {
     sql: String,
     #[serde(default)]
     files: Option<Vec<flowscope_core::FileSource>>,
+    #[serde(default)]
+    hide_ctes: Option<bool>,
+    #[serde(default)]
+    enable_column_lineage: Option<bool>,
+    #[serde(default)]
+    template_mode: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -87,15 +93,42 @@ async fn analyze(
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let schema = state.schema.read().await.clone();
 
+    // Build analysis options from request
+    let options = if payload.hide_ctes.is_some() || payload.enable_column_lineage.is_some() {
+        Some(flowscope_core::AnalysisOptions {
+            hide_ctes: payload.hide_ctes,
+            enable_column_lineage: payload.enable_column_lineage,
+            ..Default::default()
+        })
+    } else {
+        None
+    };
+
+    // Build template config if template mode is specified
+    #[cfg(feature = "templating")]
+    let template_config = payload.template_mode.as_ref().and_then(|mode| {
+        match mode.as_str() {
+            "jinja" => Some(flowscope_core::TemplateConfig {
+                mode: flowscope_core::TemplateMode::Jinja,
+                ..Default::default()
+            }),
+            "dbt" => Some(flowscope_core::TemplateConfig {
+                mode: flowscope_core::TemplateMode::Dbt,
+                ..Default::default()
+            }),
+            _ => None,
+        }
+    });
+
     let request = flowscope_core::AnalyzeRequest {
         sql: payload.sql,
         files: payload.files,
         dialect: state.config.dialect,
         source_name: None,
-        options: None,
+        options,
         schema,
         #[cfg(feature = "templating")]
-        template_config: None,
+        template_config,
     };
 
     let result = flowscope_core::analyze(&request);

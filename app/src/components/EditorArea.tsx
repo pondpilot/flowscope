@@ -5,6 +5,7 @@ import { SqlView, useLineageState } from '@pondpilot/flowscope-react';
 import { cn } from '@/lib/utils';
 import { useProject } from '@/lib/project-store';
 import { useThemeStore, resolveTheme } from '@/lib/theme-store';
+import { useBackend } from '@/lib/backend-context';
 import { useAnalysis, useDebounce, useFileNavigation, useGlobalShortcuts } from '@/hooks';
 import type { GlobalShortcut } from '@/hooks';
 import { EditorToolbar } from './EditorToolbar';
@@ -59,7 +60,9 @@ export function EditorArea({
     setSqlViewMode('template');
   }, [currentProject?.activeFileId]);
 
-  const { isAnalyzing, error, runAnalysis, setError } = useAnalysis(wasmReady);
+  // Use backend adapter for analysis when available
+  const { adapter } = useBackend();
+  const { isAnalyzing, error, runAnalysis, setError } = useAnalysis(wasmReady, { adapter });
 
   // Show error toast when error occurs
   useEffect(() => {

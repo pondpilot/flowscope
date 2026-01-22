@@ -30,7 +30,9 @@ pub async fn start_watcher(state: Arc<AppState>) -> Result<()> {
 
     // Create debounced watcher
     let mut debouncer = new_debouncer(DEBOUNCE_DURATION, move |result| {
-        let _ = tx.blocking_send(result);
+        if let Err(e) = tx.blocking_send(result) {
+            eprintln!("flowscope: warning: failed to send file event: {e}");
+        }
     })
     .map_err(|e| anyhow::anyhow!("Failed to create file watcher: {e}"))?;
 
