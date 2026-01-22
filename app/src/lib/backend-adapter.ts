@@ -99,14 +99,14 @@ export class RestBackendAdapter implements BackendAdapter {
   async analyze(payload: AnalysisPayload): Promise<AnalysisResult> {
     const startTime = performance.now();
 
+    // Note: dialect and schema are controlled by the server (--dialect flag and database introspection)
+    // so we don't send them from the client - only analysis options and files
     const response = await fetch(`${this.baseUrl}/api/analyze`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         sql: '',
         files: payload.files,
-        dialect: payload.dialect,
-        schema_sql: payload.schemaSQL,
         hide_ctes: payload.hideCTEs,
         enable_column_lineage: payload.enableColumnLineage,
         template_mode: payload.templateMode,

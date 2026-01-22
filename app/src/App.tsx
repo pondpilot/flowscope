@@ -19,20 +19,14 @@ function ShareImportHandler() {
 }
 
 function AppContent() {
-  const { ready, error, isRetrying, retry, backendType } = useBackendReady();
+  const { ready, error, isRetrying, retry } = useBackendReady();
 
   return (
     <>
       <ShareImportHandler />
       <LineageProvider defaultLayoutAlgorithm="dagre">
         <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
-          <Workspace
-            wasmReady={ready}
-            error={error}
-            onRetry={retry}
-            isRetrying={isRetrying}
-            backendType={backendType}
-          />
+          <Workspace wasmReady={ready} error={error} onRetry={retry} isRetrying={isRetrying} />
         </div>
         <Toaster position="bottom-right" />
         <WelcomeModal />

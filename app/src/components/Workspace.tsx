@@ -30,7 +30,6 @@ interface WorkspaceProps {
   error: string | null;
   onRetry?: () => void;
   isRetrying?: boolean;
-  backendType?: 'rest' | 'wasm' | null;
 }
 
 /**
@@ -40,13 +39,7 @@ interface WorkspaceProps {
  */
 const EDITOR_PANEL_DEFAULT_SIZE = 33;
 
-export function Workspace({
-  wasmReady,
-  error,
-  onRetry,
-  isRetrying,
-  backendType: _backendType,
-}: WorkspaceProps) {
+export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspaceProps) {
   const { currentProject, selectFile, activeProjectId } = useProject();
   const lineageActions = useLineageActions();
   const {

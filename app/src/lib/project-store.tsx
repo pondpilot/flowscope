@@ -246,7 +246,12 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   // Get backend state
   const { backendType } = useBackend();
   const isBackendMode = backendType === 'rest';
-  const { files: backendFiles, schema: backendSchema, refresh: refreshBackendFiles } = useBackendFiles(isBackendMode);
+  const {
+    files: backendFiles,
+    schema: backendSchema,
+    dialect: backendDialect,
+    refresh: refreshBackendFiles,
+  } = useBackendFiles(isBackendMode);
 
   // Create a virtual project from backend files
   const backendProject: Project | null = useMemo(() => {
@@ -257,13 +262,13 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       name: 'Server Files',
       files: backendFiles.map(fileSourceToProjectFile),
       activeFileId: backendFiles.length > 0 ? backendFiles[0].name : null,
-      dialect: 'generic', // Will be overridden by server config
+      dialect: backendDialect,
       runMode: 'all' as const,
       selectedFileIds: [],
       schemaSQL: '', // Schema comes from backend
       templateMode: 'raw' as const,
     };
-  }, [isBackendMode, backendFiles]);
+  }, [isBackendMode, backendFiles, backendDialect]);
 
   useEffect(() => {
     saveProjectsToStorage(projects);

@@ -35,19 +35,21 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
     let app = build_router(state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], config.port));
+
+    // Bind to port first to ensure it's available before opening browser
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
+        .context("Failed to bind to address")?;
+
     println!("flowscope: server listening on http://{addr}");
 
-    // Open browser if requested
+    // Open browser if requested (only after successful bind)
     if config.open_browser {
         let url = format!("http://localhost:{}", config.port);
         if let Err(e) = open::that(&url) {
             eprintln!("flowscope: warning: failed to open browser: {e}");
         }
     }
-
-    let listener = tokio::net::TcpListener::bind(addr)
-        .await
-        .context("Failed to bind to address")?;
 
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())

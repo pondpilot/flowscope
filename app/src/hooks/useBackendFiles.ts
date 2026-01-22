@@ -7,12 +7,23 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import type { FileSource, SchemaMetadata } from '@pondpilot/flowscope-core';
+import type { Dialect } from '@/lib/project-store';
+import { isValidDialect } from '@/lib/project-store';
+
+/** Response from /api/config endpoint */
+interface BackendConfig {
+  dialect: string;
+  watch_dirs: string[];
+  has_schema: boolean;
+}
 
 export interface BackendFilesState {
   /** Files loaded from backend, null if not in backend mode or loading */
   files: FileSource[] | null;
   /** Schema metadata from backend (from database introspection) */
   schema: SchemaMetadata | null;
+  /** Dialect from backend configuration */
+  dialect: Dialect;
   /** Whether files are currently loading */
   loading: boolean;
   /** Error message if loading failed */
@@ -30,6 +41,7 @@ export interface BackendFilesState {
 export function useBackendFiles(enabled: boolean, baseUrl = ''): BackendFilesState {
   const [files, setFiles] = useState<FileSource[] | null>(null);
   const [schema, setSchema] = useState<SchemaMetadata | null>(null);
+  const [dialect, setDialect] = useState<Dialect>('generic');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,6 +49,7 @@ export function useBackendFiles(enabled: boolean, baseUrl = ''): BackendFilesSta
     if (!enabled) {
       setFiles(null);
       setSchema(null);
+      setDialect('generic');
       return;
     }
 
@@ -44,10 +57,11 @@ export function useBackendFiles(enabled: boolean, baseUrl = ''): BackendFilesSta
     setError(null);
 
     try {
-      // Fetch files and schema in parallel
-      const [filesResponse, schemaResponse] = await Promise.all([
+      // Fetch files, schema, and config in parallel
+      const [filesResponse, schemaResponse, configResponse] = await Promise.all([
         fetch(`${baseUrl}/api/files`),
         fetch(`${baseUrl}/api/schema`),
+        fetch(`${baseUrl}/api/config`),
       ]);
 
       if (!filesResponse.ok) {
@@ -64,11 +78,21 @@ export function useBackendFiles(enabled: boolean, baseUrl = ''): BackendFilesSta
       } else {
         setSchema(null);
       }
+
+      // Parse dialect from config (backend returns e.g. "Postgres" from Debug format)
+      if (configResponse.ok) {
+        const configData = (await configResponse.json()) as BackendConfig;
+        const dialectLower = configData.dialect.toLowerCase() as Dialect;
+        if (isValidDialect(dialectLower)) {
+          setDialect(dialectLower);
+        }
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setError(message);
       setFiles(null);
       setSchema(null);
+      setDialect('generic');
     } finally {
       setLoading(false);
     }
@@ -82,6 +106,7 @@ export function useBackendFiles(enabled: boolean, baseUrl = ''): BackendFilesSta
   return {
     files,
     schema,
+    dialect,
     loading,
     error,
     refresh: fetchFiles,
