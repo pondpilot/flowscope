@@ -3,53 +3,42 @@
 //! This module provides basic type inference for SQL expressions, attempting to
 //! determine the data type of columns and expressions based on their structure.
 
-use crate::generated::{infer_function_return_type, ReturnTypeRule};
+use crate::generated::{
+    infer_function_return_type, normalize_type_name, CanonicalType, ReturnTypeRule,
+};
 use sqlparser::ast::{self as ast, Expr, FunctionArg, FunctionArgExpr};
-use std::fmt;
 
-/// Inferred SQL data type
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SqlType {
-    Number,
-    Integer,
-    Text,
-    Boolean,
-    Date,
-    Timestamp,
-    Custom(String),
-}
-
-impl fmt::Display for SqlType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            SqlType::Number => write!(f, "NUMBER"),
-            SqlType::Integer => write!(f, "INTEGER"),
-            SqlType::Text => write!(f, "TEXT"),
-            SqlType::Boolean => write!(f, "BOOLEAN"),
-            SqlType::Date => write!(f, "DATE"),
-            SqlType::Timestamp => write!(f, "TIMESTAMP"),
-            SqlType::Custom(name) => write!(f, "{name}"),
-        }
-    }
+/// Normalizes a schema type string to a canonical type display string.
+///
+/// Converts dialect-specific type names (e.g., "varchar", "int4", "TIMESTAMP_NTZ")
+/// to canonical uppercase type names (e.g., "TEXT", "INTEGER", "TIMESTAMP").
+/// If the type cannot be normalized, returns the original type string.
+///
+/// This is used consistently across the analyzer to normalize types from schema
+/// metadata and CTE output columns.
+pub fn normalize_schema_type(type_name: &str) -> String {
+    normalize_type_name(type_name)
+        .map(|canonical| canonical.as_uppercase_str().to_string())
+        .unwrap_or_else(|| type_name.to_string())
 }
 
 /// Basic type inference for expressions
-pub fn infer_expr_type(expr: &Expr) -> Option<SqlType> {
+pub fn infer_expr_type(expr: &Expr) -> Option<CanonicalType> {
     match expr {
         Expr::Value(val) => match &val.value {
-            ast::Value::Number(_, _) => Some(SqlType::Number),
+            ast::Value::Number(_, _) => Some(CanonicalType::Float),
             ast::Value::SingleQuotedString(_) | ast::Value::DollarQuotedString(_) => {
-                Some(SqlType::Text)
+                Some(CanonicalType::Text)
             }
-            ast::Value::Boolean(_) => Some(SqlType::Boolean),
+            ast::Value::Boolean(_) => Some(CanonicalType::Boolean),
             ast::Value::Null => None,
             _ => None,
         },
-        Expr::Cast { data_type, .. } => sql_type_from_data_type(data_type),
-        Expr::TypedString(typed_string) => sql_type_from_data_type(&typed_string.data_type),
+        Expr::Cast { data_type, .. } => canonical_type_from_data_type(data_type),
+        Expr::TypedString(typed_string) => canonical_type_from_data_type(&typed_string.data_type),
         Expr::Nested(inner) => infer_expr_type(inner),
         Expr::UnaryOp { op, expr } => match op {
-            ast::UnaryOperator::Not => Some(SqlType::Boolean),
+            ast::UnaryOperator::Not => Some(CanonicalType::Boolean),
             ast::UnaryOperator::Plus | ast::UnaryOperator::Minus => infer_expr_type(expr),
             _ => None,
         },
@@ -61,14 +50,15 @@ pub fn infer_expr_type(expr: &Expr) -> Option<SqlType> {
             | ast::BinaryOperator::Lt
             | ast::BinaryOperator::LtEq
             | ast::BinaryOperator::Gt
-            | ast::BinaryOperator::GtEq => Some(SqlType::Boolean),
+            | ast::BinaryOperator::GtEq => Some(CanonicalType::Boolean),
             ast::BinaryOperator::Plus => {
                 let l_type = infer_expr_type(left);
                 let r_type = infer_expr_type(right);
                 if is_numeric_type(&l_type) || is_numeric_type(&r_type) {
-                    Some(SqlType::Number)
-                } else if l_type == Some(SqlType::Text) || r_type == Some(SqlType::Text) {
-                    Some(SqlType::Text)
+                    Some(CanonicalType::Float)
+                } else if l_type == Some(CanonicalType::Text) || r_type == Some(CanonicalType::Text)
+                {
+                    Some(CanonicalType::Text)
                 } else {
                     l_type.or(r_type)
                 }
@@ -80,7 +70,7 @@ pub fn infer_expr_type(expr: &Expr) -> Option<SqlType> {
                 let l_type = infer_expr_type(left);
                 let r_type = infer_expr_type(right);
                 if is_numeric_type(&l_type) || is_numeric_type(&r_type) {
-                    Some(SqlType::Number)
+                    Some(CanonicalType::Float)
                 } else {
                     l_type.or(r_type)
                 }
@@ -92,12 +82,12 @@ pub fn infer_expr_type(expr: &Expr) -> Option<SqlType> {
             // Try data-driven type inference first
             if let Some(rule) = infer_function_return_type(&name) {
                 return match rule {
-                    ReturnTypeRule::Integer => Some(SqlType::Integer),
-                    ReturnTypeRule::Numeric => Some(SqlType::Number),
-                    ReturnTypeRule::Text => Some(SqlType::Text),
-                    ReturnTypeRule::Timestamp => Some(SqlType::Timestamp),
-                    ReturnTypeRule::Boolean => Some(SqlType::Boolean),
-                    ReturnTypeRule::Date => Some(SqlType::Date),
+                    ReturnTypeRule::Integer => Some(CanonicalType::Integer),
+                    ReturnTypeRule::Numeric => Some(CanonicalType::Float),
+                    ReturnTypeRule::Text => Some(CanonicalType::Text),
+                    ReturnTypeRule::Timestamp => Some(CanonicalType::Timestamp),
+                    ReturnTypeRule::Boolean => Some(CanonicalType::Boolean),
+                    ReturnTypeRule::Date => Some(CanonicalType::Date),
                     ReturnTypeRule::MatchFirstArg => {
                         // Special handling for COALESCE/IFNULL/NVL: iterate through args
                         // to find first non-null type since first arg might be NULL
@@ -122,11 +112,13 @@ pub fn infer_expr_type(expr: &Expr) -> Option<SqlType> {
             let name_upper = name.to_uppercase();
             match name_upper.as_str() {
                 // String functions not yet in functions.json
-                "LEFT" | "RIGHT" | "LTRIM" | "RTRIM" | "CHR" | "INITCAP" => Some(SqlType::Text),
+                "LEFT" | "RIGHT" | "LTRIM" | "RTRIM" | "CHR" | "INITCAP" => {
+                    Some(CanonicalType::Text)
+                }
                 // Timestamp functions not yet in functions.json
-                "GETDATE" | "SYSDATE" | "TIMEOFDAY" => Some(SqlType::Timestamp),
+                "GETDATE" | "SYSDATE" | "TIMEOFDAY" => Some(CanonicalType::Timestamp),
                 // Date functions not yet in functions.json
-                "CURDATE" | "TODAY" => Some(SqlType::Date),
+                "CURDATE" | "TODAY" => Some(CanonicalType::Date),
                 _ => None,
             }
         }
@@ -135,7 +127,7 @@ pub fn infer_expr_type(expr: &Expr) -> Option<SqlType> {
 }
 
 /// Infer type of the first argument in a function call
-fn infer_first_arg_type(func: &ast::Function) -> Option<SqlType> {
+fn infer_first_arg_type(func: &ast::Function) -> Option<CanonicalType> {
     if let ast::FunctionArguments::List(args) = &func.args {
         if let Some(FunctionArg::Unnamed(FunctionArgExpr::Expr(e))) = args.args.first() {
             return infer_expr_type(e);
@@ -144,34 +136,57 @@ fn infer_first_arg_type(func: &ast::Function) -> Option<SqlType> {
     None
 }
 
-/// Convert SQL data type to SqlType
-fn sql_type_from_data_type(data_type: &ast::DataType) -> Option<SqlType> {
+/// Convert SQL data type to CanonicalType
+pub fn canonical_type_from_data_type(data_type: &ast::DataType) -> Option<CanonicalType> {
     match data_type {
         ast::DataType::Int(_)
         | ast::DataType::Integer(_)
         | ast::DataType::BigInt(_)
         | ast::DataType::SmallInt(_)
-        | ast::DataType::TinyInt(_) => Some(SqlType::Integer),
+        | ast::DataType::TinyInt(_)
+        | ast::DataType::Int64
+        | ast::DataType::Int128
+        | ast::DataType::Int256
+        | ast::DataType::Int4(_)
+        | ast::DataType::Int8(_)
+        | ast::DataType::Int2(_)
+        | ast::DataType::UInt8
+        | ast::DataType::UInt16
+        | ast::DataType::UInt32
+        | ast::DataType::UInt64
+        | ast::DataType::UInt128
+        | ast::DataType::UInt256 => Some(CanonicalType::Integer),
         ast::DataType::Float(_)
         | ast::DataType::Double(_)
         | ast::DataType::DoublePrecision
         | ast::DataType::Real
         | ast::DataType::Decimal(_)
-        | ast::DataType::Numeric(_) => Some(SqlType::Number),
+        | ast::DataType::Numeric(_) => Some(CanonicalType::Float),
         ast::DataType::Char(_)
         | ast::DataType::Varchar(_)
         | ast::DataType::Text
-        | ast::DataType::String(_) => Some(SqlType::Text),
-        ast::DataType::Boolean => Some(SqlType::Boolean),
-        ast::DataType::Date => Some(SqlType::Date),
-        ast::DataType::Timestamp(_, _) | ast::DataType::Datetime(_) => Some(SqlType::Timestamp),
-        ast::DataType::Custom(obj_name, _) => Some(SqlType::Custom(obj_name.to_string())),
-        _ => Some(SqlType::Custom(data_type.to_string())),
+        | ast::DataType::String(_) => Some(CanonicalType::Text),
+        ast::DataType::Boolean => Some(CanonicalType::Boolean),
+        ast::DataType::Date => Some(CanonicalType::Date),
+        ast::DataType::Time(_, _) => Some(CanonicalType::Time),
+        ast::DataType::Timestamp(_, _) | ast::DataType::Datetime(_) => {
+            Some(CanonicalType::Timestamp)
+        }
+        ast::DataType::Bytea
+        | ast::DataType::Binary(_)
+        | ast::DataType::Varbinary(_)
+        | ast::DataType::Blob(_) => Some(CanonicalType::Binary),
+        ast::DataType::JSON | ast::DataType::JSONB => Some(CanonicalType::Json),
+        ast::DataType::Array(_) => Some(CanonicalType::Array),
+        // For custom types, try to normalize using the type system
+        ast::DataType::Custom(obj_name, _) => normalize_type_name(&obj_name.to_string()),
+        // For other types, return None (unknown type)
+        _ => None,
     }
 }
 
-fn is_numeric_type(t: &Option<SqlType>) -> bool {
-    matches!(t, Some(SqlType::Number) | Some(SqlType::Integer))
+fn is_numeric_type(t: &Option<CanonicalType>) -> bool {
+    matches!(t, Some(CanonicalType::Float) | Some(CanonicalType::Integer))
 }
 
 #[cfg(test)]
@@ -198,23 +213,35 @@ mod tests {
 
     #[test]
     fn test_infer_literals() {
-        assert_eq!(infer_expr_type(&parse_expr("123")), Some(SqlType::Number));
-        assert_eq!(infer_expr_type(&parse_expr("'abc'")), Some(SqlType::Text));
-        assert_eq!(infer_expr_type(&parse_expr("true")), Some(SqlType::Boolean));
+        assert_eq!(
+            infer_expr_type(&parse_expr("123")),
+            Some(CanonicalType::Float)
+        );
+        assert_eq!(
+            infer_expr_type(&parse_expr("'abc'")),
+            Some(CanonicalType::Text)
+        );
+        assert_eq!(
+            infer_expr_type(&parse_expr("true")),
+            Some(CanonicalType::Boolean)
+        );
         assert_eq!(infer_expr_type(&parse_expr("NULL")), None);
     }
 
     #[test]
     fn test_infer_binary_ops() {
-        assert_eq!(infer_expr_type(&parse_expr("1 + 2")), Some(SqlType::Number));
+        assert_eq!(
+            infer_expr_type(&parse_expr("1 + 2")),
+            Some(CanonicalType::Float)
+        );
         assert_eq!(
             infer_expr_type(&parse_expr("a > b")),
-            Some(SqlType::Boolean)
+            Some(CanonicalType::Boolean)
         );
         // Recursive
         assert_eq!(
             infer_expr_type(&parse_expr("(1 + 2) * 3")),
-            Some(SqlType::Number)
+            Some(CanonicalType::Float)
         );
     }
 
@@ -222,16 +249,19 @@ mod tests {
     fn test_infer_string_concatenation() {
         assert_eq!(
             infer_expr_type(&parse_expr("'a' + 'b'")),
-            Some(SqlType::Text)
+            Some(CanonicalType::Text)
         );
     }
 
     #[test]
     fn test_infer_unary_ops() {
-        assert_eq!(infer_expr_type(&parse_expr("-10")), Some(SqlType::Number));
+        assert_eq!(
+            infer_expr_type(&parse_expr("-10")),
+            Some(CanonicalType::Float)
+        );
         assert_eq!(
             infer_expr_type(&parse_expr("NOT (a > b)")),
-            Some(SqlType::Boolean)
+            Some(CanonicalType::Boolean)
         );
     }
 
@@ -239,19 +269,19 @@ mod tests {
     fn test_infer_functions() {
         assert_eq!(
             infer_expr_type(&parse_expr("COUNT(*)")),
-            Some(SqlType::Integer)
+            Some(CanonicalType::Integer)
         );
         assert_eq!(
             infer_expr_type(&parse_expr("ROW_NUMBER() OVER(ORDER BY x)")),
-            Some(SqlType::Integer)
+            Some(CanonicalType::Integer)
         );
         assert_eq!(
             infer_expr_type(&parse_expr("CONCAT(a, b)")),
-            Some(SqlType::Text)
+            Some(CanonicalType::Text)
         );
         assert_eq!(
             infer_expr_type(&parse_expr("NOW()")),
-            Some(SqlType::Timestamp)
+            Some(CanonicalType::Timestamp)
         );
     }
 
@@ -259,19 +289,19 @@ mod tests {
     fn test_infer_aggregate_functions() {
         assert_eq!(
             infer_expr_type(&parse_expr("SUM(amount)")),
-            Some(SqlType::Number)
+            Some(CanonicalType::Float)
         );
         assert_eq!(
             infer_expr_type(&parse_expr("AVG(price)")),
-            Some(SqlType::Number)
+            Some(CanonicalType::Float)
         );
         assert_eq!(
             infer_expr_type(&parse_expr("MIN(123)")),
-            Some(SqlType::Number)
+            Some(CanonicalType::Float)
         );
         assert_eq!(
             infer_expr_type(&parse_expr("MAX('text')")),
-            Some(SqlType::Text)
+            Some(CanonicalType::Text)
         );
     }
 
@@ -279,11 +309,11 @@ mod tests {
     fn test_infer_coalesce() {
         assert_eq!(
             infer_expr_type(&parse_expr("COALESCE(NULL, 1)")),
-            Some(SqlType::Number)
+            Some(CanonicalType::Float)
         );
         assert_eq!(
             infer_expr_type(&parse_expr("COALESCE(NULL, 'a')")),
-            Some(SqlType::Text)
+            Some(CanonicalType::Text)
         );
     }
 
@@ -291,7 +321,7 @@ mod tests {
     fn test_infer_nested_coalesce() {
         assert_eq!(
             infer_expr_type(&parse_expr("COALESCE(NULL, COUNT(*))")),
-            Some(SqlType::Integer)
+            Some(CanonicalType::Integer)
         );
     }
 
@@ -299,15 +329,26 @@ mod tests {
     fn test_infer_cast() {
         assert_eq!(
             infer_expr_type(&parse_expr("CAST(x AS INTEGER)")),
-            Some(SqlType::Integer)
+            Some(CanonicalType::Integer)
         );
         assert_eq!(
             infer_expr_type(&parse_expr("CAST(x AS VARCHAR(100))")),
-            Some(SqlType::Text)
+            Some(CanonicalType::Text)
         );
+        // Custom types that can be normalized
+        assert_eq!(
+            infer_expr_type(&parse_expr("CAST(x AS INT64)")),
+            Some(CanonicalType::Integer)
+        );
+        // VARIANT maps to Json in the type system (Snowflake semi-structured)
         assert_eq!(
             infer_expr_type(&parse_expr("CAST(x AS VARIANT)")),
-            Some(SqlType::Custom("VARIANT".to_string()))
+            Some(CanonicalType::Json)
+        );
+        // Truly unknown custom types return None
+        assert_eq!(
+            infer_expr_type(&parse_expr("CAST(x AS MY_CUSTOM_UDT)")),
+            None
         );
     }
 
@@ -317,13 +358,30 @@ mod tests {
     }
 
     #[test]
-    fn test_sql_type_display() {
-        assert_eq!(SqlType::Number.to_string(), "NUMBER");
-        assert_eq!(SqlType::Integer.to_string(), "INTEGER");
-        assert_eq!(SqlType::Text.to_string(), "TEXT");
-        assert_eq!(SqlType::Boolean.to_string(), "BOOLEAN");
-        assert_eq!(SqlType::Date.to_string(), "DATE");
-        assert_eq!(SqlType::Timestamp.to_string(), "TIMESTAMP");
-        assert_eq!(SqlType::Custom("VARIANT".into()).to_string(), "VARIANT");
+    fn test_canonical_type_display() {
+        assert_eq!(CanonicalType::Float.to_string(), "FLOAT");
+        assert_eq!(CanonicalType::Integer.to_string(), "INTEGER");
+        assert_eq!(CanonicalType::Text.to_string(), "TEXT");
+        assert_eq!(CanonicalType::Boolean.to_string(), "BOOLEAN");
+        assert_eq!(CanonicalType::Date.to_string(), "DATE");
+        assert_eq!(CanonicalType::Timestamp.to_string(), "TIMESTAMP");
+        assert_eq!(CanonicalType::Time.to_string(), "TIME");
+        assert_eq!(CanonicalType::Binary.to_string(), "BINARY");
+        assert_eq!(CanonicalType::Json.to_string(), "JSON");
+        assert_eq!(CanonicalType::Array.to_string(), "ARRAY");
+    }
+
+    #[test]
+    fn test_canonical_type_from_data_type_extended() {
+        // Test Time type
+        assert_eq!(
+            infer_expr_type(&parse_expr("CAST(x AS TIME)")),
+            Some(CanonicalType::Time)
+        );
+        // Test JSON type
+        assert_eq!(
+            infer_expr_type(&parse_expr("CAST(x AS JSON)")),
+            Some(CanonicalType::Json)
+        );
     }
 }

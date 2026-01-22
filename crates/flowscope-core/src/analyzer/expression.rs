@@ -13,6 +13,7 @@
 
 use super::context::{ColumnRef, StatementContext};
 use super::functions;
+use super::helpers::check_expr_types;
 use super::Analyzer;
 use crate::generated;
 use crate::types::{AggregationInfo, FilterClauseType};
@@ -56,9 +57,19 @@ impl<'a, 'b> ExpressionAnalyzer<'a, 'b> {
     /// This method:
     /// 1. Recursively traverses the expression to find and analyze subqueries
     /// 2. Validates that referenced columns exist in their respective tables
+    /// 3. Checks for type mismatches in binary operations
     pub(crate) fn analyze(&mut self, expr: &Expr) {
         self.visit_expression_for_subqueries(expr, 0);
         self.validate_column_refs(expr);
+        self.check_type_mismatches(expr);
+    }
+
+    /// Checks for type mismatches in binary operations and emits warnings.
+    fn check_type_mismatches(&mut self, expr: &Expr) {
+        let statement_index = self.ctx.statement_index;
+        let dialect = self.analyzer.request.dialect;
+        let issues = check_expr_types(expr, statement_index, dialect);
+        self.analyzer.issues.extend(issues);
     }
 
     /// Extracts column references from an expression and validates each one.

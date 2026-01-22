@@ -2,6 +2,7 @@ use super::context::{ColumnRef, StatementContext};
 use super::expression::ExpressionAnalyzer;
 use super::helpers::{
     alias_visibility_warning, infer_expr_type, is_simple_column_ref, lateral_alias_warning,
+    normalize_schema_type,
 };
 use super::query::OutputColumnParams;
 use super::Analyzer;
@@ -136,14 +137,24 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
                         );
                     }
 
-                    let expr_text = if is_simple_column_ref(expr) {
+                    let is_simple_ref = is_simple_column_ref(expr);
+                    let expr_text = if is_simple_ref {
                         None
                     } else {
                         Some(expr.to_string())
                     };
-                    let data_type = infer_expr_type(expr).map(|t| t.to_string());
+                    // First try to infer type from expression structure (literals, functions, etc.)
+                    // If that fails, look up the type from CTE/subquery output columns
+                    let data_type = infer_expr_type(expr)
+                        .map(|t| t.to_string())
+                        .or_else(|| self.lookup_source_column_type(&sources));
 
-                    self.record_source_columns_with_type(&sources, &data_type);
+                    // Record source columns for implied schema. For simple column references,
+                    // we can safely propagate the type. For transformed expressions (CAST,
+                    // functions, arithmetic), we only record the column existence without
+                    // a type since the expression output type differs from source column type.
+                    let source_type = if is_simple_ref { &data_type } else { &None };
+                    self.record_source_columns_with_type(&sources, source_type);
 
                     self.analyzer.add_output_column_with_aggregation(
                         self.ctx,
@@ -178,14 +189,24 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
                     }
 
                     let name = alias.value.clone();
-                    let expr_text = if is_simple_column_ref(expr) {
+                    let is_simple_ref = is_simple_column_ref(expr);
+                    let expr_text = if is_simple_ref {
                         None
                     } else {
                         Some(expr.to_string())
                     };
-                    let data_type = infer_expr_type(expr).map(|t| t.to_string());
+                    // First try to infer type from expression structure (literals, functions, etc.)
+                    // If that fails, look up the type from CTE/subquery output columns
+                    let data_type = infer_expr_type(expr)
+                        .map(|t| t.to_string())
+                        .or_else(|| self.lookup_source_column_type(&sources));
 
-                    self.record_source_columns_with_type(&sources, &data_type);
+                    // Record source columns for implied schema. For simple column references,
+                    // we can safely propagate the type. For transformed expressions (CAST,
+                    // functions, arithmetic), we only record the column existence without
+                    // a type since the expression output type differs from source column type.
+                    let source_type = if is_simple_ref { &data_type } else { &None };
+                    self.record_source_columns_with_type(&sources, source_type);
 
                     // Record this alias for subsequent lateral column alias checking
                     let normalized_alias = self.analyzer.normalize_identifier(&name);
@@ -354,13 +375,14 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
     }
 
     /// Record source columns with inferred data types for implied schema tracking.
+    ///
+    /// Always records the column existence for implied schema. If a data type is
+    /// provided, it will be recorded as well (but won't overwrite existing types).
     fn record_source_columns_with_type(
         &mut self,
         sources: &[ColumnRef],
         data_type: &Option<String>,
     ) {
-        let Some(ref dt) = data_type else { return };
-
         for col_ref in sources {
             let Some(table) = col_ref.table.as_deref() else {
                 continue;
@@ -369,7 +391,76 @@ impl<'a, 'b> SelectAnalyzer<'a, 'b> {
                 continue;
             };
             self.ctx
-                .record_source_column(&canonical, &col_ref.column, Some(dt.clone()));
+                .record_source_column(&canonical, &col_ref.column, data_type.clone());
         }
+    }
+
+    /// Look up the data type of a column from CTE/subquery output columns or schema.
+    ///
+    /// Resolution priority:
+    /// 1. CTE/derived table output columns (for columns from CTEs or subqueries)
+    /// 2. Schema registry (for columns from base tables with user-provided or DDL-inferred schema)
+    ///
+    /// When referencing columns from CTEs or derived tables, we can inherit the
+    /// type from the CTE's output column definition. This enables type propagation
+    /// through CTE chains even when the column is just a simple identifier reference.
+    ///
+    /// For columns from base tables, we look up the type from the schema registry
+    /// if the table and column exist there.
+    fn lookup_source_column_type(&self, sources: &[ColumnRef]) -> Option<String> {
+        // Only look up type if we have a single source column (simple column reference)
+        if sources.len() != 1 {
+            return None;
+        }
+
+        let source = &sources[0];
+        let normalized_col = self.analyzer.normalize_identifier(&source.column);
+
+        // If table is specified, resolve it. Otherwise, search all CTEs/subqueries in scope.
+        if let Some(table) = source.table.as_ref() {
+            // Resolve alias to canonical name for CTE lookup
+            let canonical = self.analyzer.resolve_table_alias(self.ctx, Some(table))?;
+
+            // Check aliased_subquery_columns (CTEs and derived tables) first
+            if let Some(cte_cols) = self.ctx.aliased_subquery_columns.get(&canonical) {
+                if let Some(col) = cte_cols.iter().find(|c| c.name == normalized_col) {
+                    if col.data_type.is_some() {
+                        return col.data_type.clone();
+                    }
+                }
+            }
+
+            // Fall back to schema registry for base table column types
+            if let Some(schema_type) = self
+                .analyzer
+                .schema
+                .lookup_column_type(&canonical, &source.column)
+            {
+                return Some(normalize_schema_type(&schema_type));
+            }
+        } else {
+            // No table qualifier - search all CTEs/subqueries in current scope
+            for table_canonical in self.ctx.tables_in_current_scope() {
+                // Check CTE/subquery columns first
+                if let Some(cte_cols) = self.ctx.aliased_subquery_columns.get(&table_canonical) {
+                    if let Some(col) = cte_cols.iter().find(|c| c.name == normalized_col) {
+                        if col.data_type.is_some() {
+                            return col.data_type.clone();
+                        }
+                    }
+                }
+
+                // Then check schema registry
+                if let Some(schema_type) = self
+                    .analyzer
+                    .schema
+                    .lookup_column_type(&table_canonical, &source.column)
+                {
+                    return Some(normalize_schema_type(&schema_type));
+                }
+            }
+        }
+
+        None
     }
 }

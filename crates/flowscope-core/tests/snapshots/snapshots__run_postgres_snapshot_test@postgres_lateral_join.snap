@@ -609,6 +609,26 @@ expression: clean_result
           {
             "name": "department_id",
             "origin": "implied"
+          },
+          {
+            "name": "name",
+            "origin": "implied"
+          }
+        ],
+        "origin": "implied",
+        "sourceStatementIndex": 0,
+        "updatedAt": "2024-01-01T00:00:00Z"
+      },
+      {
+        "name": "emp",
+        "columns": [
+          {
+            "name": "employee_name",
+            "origin": "implied"
+          },
+          {
+            "name": "salary",
+            "origin": "implied"
           }
         ],
         "origin": "implied",
@@ -620,6 +640,10 @@ expression: clean_result
         "columns": [
           {
             "name": "department_id",
+            "origin": "implied"
+          },
+          {
+            "name": "name",
             "origin": "implied"
           },
           {

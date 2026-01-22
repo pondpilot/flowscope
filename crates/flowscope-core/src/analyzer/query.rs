@@ -5,7 +5,7 @@
 //! column-level lineage graph by tracking data flow from source columns to output columns.
 
 use super::context::{ColumnRef, OutputColumn, PendingWildcard, StatementContext};
-use super::helpers::{generate_column_node_id, generate_edge_id};
+use super::helpers::{generate_column_node_id, generate_edge_id, normalize_schema_type};
 use super::visitor::{LineageVisitor, Visitor};
 use super::Analyzer;
 use crate::types::{
@@ -360,7 +360,7 @@ impl<'a> Analyzer<'a> {
                             ExpandedColumnInfo::new(
                                 col.name.clone(),
                                 table_canonical.clone(),
-                                col.data_type.clone(),
+                                col.data_type.as_ref().map(|dt| normalize_schema_type(dt)),
                             )
                         })
                         .collect()

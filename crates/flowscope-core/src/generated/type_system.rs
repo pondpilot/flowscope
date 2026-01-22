@@ -6,6 +6,7 @@
 //! names to canonical types, implicit cast checking, and dialect-specific type name mapping.
 
 use crate::Dialect;
+use std::fmt;
 
 /// Canonical SQL types for cross-dialect type system.
 ///
@@ -41,6 +42,43 @@ impl CanonicalType {
             CanonicalType::Array => "array",
         }
     }
+
+    /// Returns the canonical type name as an uppercase SQL-standard string.
+    ///
+    /// This is more efficient than `to_string()` when you only need a static string,
+    /// as it avoids heap allocation.
+    pub const fn as_uppercase_str(&self) -> &'static str {
+        match self {
+            CanonicalType::Integer => "INTEGER",
+            CanonicalType::Float => "FLOAT",
+            CanonicalType::Text => "TEXT",
+            CanonicalType::Boolean => "BOOLEAN",
+            CanonicalType::Timestamp => "TIMESTAMP",
+            CanonicalType::Date => "DATE",
+            CanonicalType::Time => "TIME",
+            CanonicalType::Binary => "BINARY",
+            CanonicalType::Json => "JSON",
+            CanonicalType::Array => "ARRAY",
+        }
+    }
+}
+
+impl fmt::Display for CanonicalType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Use uppercase for SQL-standard output representation
+        match self {
+            CanonicalType::Integer => write!(f, "INTEGER"),
+            CanonicalType::Float => write!(f, "FLOAT"),
+            CanonicalType::Text => write!(f, "TEXT"),
+            CanonicalType::Boolean => write!(f, "BOOLEAN"),
+            CanonicalType::Timestamp => write!(f, "TIMESTAMP"),
+            CanonicalType::Date => write!(f, "DATE"),
+            CanonicalType::Time => write!(f, "TIME"),
+            CanonicalType::Binary => write!(f, "BINARY"),
+            CanonicalType::Json => write!(f, "JSON"),
+            CanonicalType::Array => write!(f, "ARRAY"),
+        }
+    }
 }
 
 /// Normalize a type name to its canonical type.
@@ -73,12 +111,18 @@ pub fn normalize_type_name(type_name: &str) -> Option<CanonicalType> {
         "binary" | "varbinary" | "bytea" | "blob" | "bytes" => Some(CanonicalType::Binary),
         "bool" | "boolean" => Some(CanonicalType::Boolean),
         "date" => Some(CanonicalType::Date),
-        "float" | "float4" | "float8" | "double" | "real" | "decimal" | "numeric" | "number" => Some(CanonicalType::Float),
-        "int" | "int4" | "integer" | "int64" | "bigint" | "smallint" | "tinyint" | "int2" | "int8" => Some(CanonicalType::Integer),
+        "float" | "float4" | "float8" | "double" | "real" | "decimal" | "numeric" | "number" => {
+            Some(CanonicalType::Float)
+        }
+        "int" | "int4" | "integer" | "int64" | "bigint" | "smallint" | "tinyint" | "int2"
+        | "int8" => Some(CanonicalType::Integer),
         "json" | "jsonb" | "variant" | "object" => Some(CanonicalType::Json),
-        "varchar" | "char" | "text" | "string" | "nvarchar" | "nchar" | "character" => Some(CanonicalType::Text),
+        "varchar" | "char" | "text" | "string" | "nvarchar" | "nchar" | "character" => {
+            Some(CanonicalType::Text)
+        }
         "time" | "timetz" => Some(CanonicalType::Time),
-        "timestamp" | "timestamptz" | "datetime" | "timestamp_ntz" | "timestamp_ltz" | "timestamp_tz" => Some(CanonicalType::Timestamp),
+        "timestamp" | "timestamptz" | "datetime" | "timestamp_ntz" | "timestamp_ltz"
+        | "timestamp_tz" => Some(CanonicalType::Timestamp),
         _ => None,
     }
 }

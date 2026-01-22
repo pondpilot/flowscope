@@ -1262,6 +1262,7 @@ fn generate_type_system(dir: &Path, type_system: &TypeSystem) -> Result<(), Box<
 //! names to canonical types, implicit cast checking, and dialect-specific type name mapping.
 
 use crate::Dialect;
+use std::fmt;
 
 /// Canonical SQL types for cross-dialect type system.
 ///
@@ -1295,6 +1296,43 @@ impl CanonicalType {
             CanonicalType::Binary => "binary",
             CanonicalType::Json => "json",
             CanonicalType::Array => "array",
+        }
+    }
+
+    /// Returns the canonical type name as an uppercase SQL-standard string.
+    ///
+    /// This is more efficient than `to_string()` when you only need a static string,
+    /// as it avoids heap allocation.
+    pub const fn as_uppercase_str(&self) -> &'static str {
+        match self {
+            CanonicalType::Integer => "INTEGER",
+            CanonicalType::Float => "FLOAT",
+            CanonicalType::Text => "TEXT",
+            CanonicalType::Boolean => "BOOLEAN",
+            CanonicalType::Timestamp => "TIMESTAMP",
+            CanonicalType::Date => "DATE",
+            CanonicalType::Time => "TIME",
+            CanonicalType::Binary => "BINARY",
+            CanonicalType::Json => "JSON",
+            CanonicalType::Array => "ARRAY",
+        }
+    }
+}
+
+impl fmt::Display for CanonicalType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Use uppercase for SQL-standard output representation
+        match self {
+            CanonicalType::Integer => write!(f, "INTEGER"),
+            CanonicalType::Float => write!(f, "FLOAT"),
+            CanonicalType::Text => write!(f, "TEXT"),
+            CanonicalType::Boolean => write!(f, "BOOLEAN"),
+            CanonicalType::Timestamp => write!(f, "TIMESTAMP"),
+            CanonicalType::Date => write!(f, "DATE"),
+            CanonicalType::Time => write!(f, "TIME"),
+            CanonicalType::Binary => write!(f, "BINARY"),
+            CanonicalType::Json => write!(f, "JSON"),
+            CanonicalType::Array => write!(f, "ARRAY"),
         }
     }
 }

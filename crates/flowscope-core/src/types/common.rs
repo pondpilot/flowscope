@@ -188,6 +188,7 @@ pub mod issue_codes {
     pub const MEMORY_LIMIT_EXCEEDED: &str = "MEMORY_LIMIT_EXCEEDED";
     pub const SCHEMA_CONFLICT: &str = "SCHEMA_CONFLICT";
     pub const TEMPLATE_ERROR: &str = "TEMPLATE_ERROR";
+    pub const TYPE_MISMATCH: &str = "TYPE_MISMATCH";
 }
 
 #[cfg(test)]

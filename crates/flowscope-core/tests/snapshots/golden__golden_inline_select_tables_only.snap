@@ -1,6 +1,5 @@
 ---
 source: crates/flowscope-core/tests/golden.rs
-assertion_line: 21
 expression: cleaned
 ---
 {
@@ -272,6 +271,10 @@ expression: cleaned
       {
         "name": "orders",
         "columns": [
+          {
+            "name": "total_amount",
+            "origin": "implied"
+          },
           {
             "name": "user_id",
             "origin": "implied",

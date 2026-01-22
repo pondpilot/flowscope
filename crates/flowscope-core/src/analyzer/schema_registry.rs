@@ -707,6 +707,37 @@ impl SchemaRegistry {
         normalized.join(".")
     }
 
+    /// Looks up the data type of a column from the schema.
+    ///
+    /// Returns the column's data type as a string if the table and column exist
+    /// in the schema and the column has a type defined. Returns `None` if:
+    /// - The table is not in the schema
+    /// - The column is not found in the table
+    /// - The column exists but has no type defined
+    ///
+    /// # Parameters
+    ///
+    /// - `canonical`: The canonical table name
+    /// - `column`: The column name to look up
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let schema_type = registry.lookup_column_type("public.users", "created_at");
+    /// // Returns Some("timestamp") if the column exists with that type
+    /// ```
+    pub(crate) fn lookup_column_type(&self, canonical: &str, column: &str) -> Option<String> {
+        let entry = self.schema_tables.get(canonical)?;
+        let normalized_col = self.normalize_identifier(column);
+
+        entry
+            .table
+            .columns
+            .iter()
+            .find(|c| self.normalize_identifier(&c.name) == normalized_col)
+            .and_then(|c| c.data_type.clone())
+    }
+
     /// Validates that a column exists in the schema for a given table.
     ///
     /// Returns an optional warning issue if the column is not found.
@@ -1538,5 +1569,154 @@ mod tests {
             entry.constraints[0].constraint_type,
             ConstraintType::ForeignKey
         );
+    }
+
+    #[test]
+    fn test_lookup_column_type_found() {
+        let schema = SchemaMetadata {
+            tables: vec![SchemaTable {
+                catalog: None,
+                schema: Some("public".to_string()),
+                name: "users".to_string(),
+                columns: vec![
+                    ColumnSchema {
+                        name: "id".to_string(),
+                        data_type: Some("integer".to_string()),
+                        is_primary_key: None,
+                        foreign_key: None,
+                    },
+                    ColumnSchema {
+                        name: "email".to_string(),
+                        data_type: Some("varchar".to_string()),
+                        is_primary_key: None,
+                        foreign_key: None,
+                    },
+                    ColumnSchema {
+                        name: "created_at".to_string(),
+                        data_type: Some("timestamp".to_string()),
+                        is_primary_key: None,
+                        foreign_key: None,
+                    },
+                ],
+            }],
+            default_catalog: None,
+            default_schema: Some("public".to_string()),
+            search_path: None,
+            case_sensitivity: None,
+            allow_implied: true,
+        };
+
+        let (registry, _) = SchemaRegistry::new(Some(&schema), Dialect::Postgres);
+
+        // Should find column types
+        assert_eq!(
+            registry.lookup_column_type("public.users", "id"),
+            Some("integer".to_string())
+        );
+        assert_eq!(
+            registry.lookup_column_type("public.users", "email"),
+            Some("varchar".to_string())
+        );
+        assert_eq!(
+            registry.lookup_column_type("public.users", "created_at"),
+            Some("timestamp".to_string())
+        );
+    }
+
+    #[test]
+    fn test_lookup_column_type_not_found() {
+        let schema = SchemaMetadata {
+            tables: vec![SchemaTable {
+                catalog: None,
+                schema: Some("public".to_string()),
+                name: "users".to_string(),
+                columns: vec![ColumnSchema {
+                    name: "id".to_string(),
+                    data_type: Some("integer".to_string()),
+                    is_primary_key: None,
+                    foreign_key: None,
+                }],
+            }],
+            default_catalog: None,
+            default_schema: Some("public".to_string()),
+            search_path: None,
+            case_sensitivity: None,
+            allow_implied: true,
+        };
+
+        let (registry, _) = SchemaRegistry::new(Some(&schema), Dialect::Postgres);
+
+        // Unknown column should return None
+        assert_eq!(
+            registry.lookup_column_type("public.users", "nonexistent"),
+            None
+        );
+
+        // Unknown table should return None
+        assert_eq!(
+            registry.lookup_column_type("public.unknown_table", "id"),
+            None
+        );
+    }
+
+    #[test]
+    fn test_lookup_column_type_case_insensitive() {
+        let schema = SchemaMetadata {
+            tables: vec![SchemaTable {
+                catalog: None,
+                schema: Some("public".to_string()),
+                name: "users".to_string(),
+                columns: vec![ColumnSchema {
+                    name: "UserName".to_string(),
+                    data_type: Some("text".to_string()),
+                    is_primary_key: None,
+                    foreign_key: None,
+                }],
+            }],
+            default_catalog: None,
+            default_schema: Some("public".to_string()),
+            search_path: None,
+            case_sensitivity: None,
+            allow_implied: true,
+        };
+
+        let (registry, _) = SchemaRegistry::new(Some(&schema), Dialect::Postgres);
+
+        // Should match case-insensitively for Postgres
+        assert_eq!(
+            registry.lookup_column_type("public.users", "username"),
+            Some("text".to_string())
+        );
+        assert_eq!(
+            registry.lookup_column_type("public.users", "USERNAME"),
+            Some("text".to_string())
+        );
+    }
+
+    #[test]
+    fn test_lookup_column_type_no_type_defined() {
+        let schema = SchemaMetadata {
+            tables: vec![SchemaTable {
+                catalog: None,
+                schema: Some("public".to_string()),
+                name: "users".to_string(),
+                columns: vec![ColumnSchema {
+                    name: "id".to_string(),
+                    data_type: None, // No type defined
+                    is_primary_key: None,
+                    foreign_key: None,
+                }],
+            }],
+            default_catalog: None,
+            default_schema: Some("public".to_string()),
+            search_path: None,
+            case_sensitivity: None,
+            allow_implied: true,
+        };
+
+        let (registry, _) = SchemaRegistry::new(Some(&schema), Dialect::Postgres);
+
+        // Column exists but has no type - should return None
+        assert_eq!(registry.lookup_column_type("public.users", "id"), None);
     }
 }
