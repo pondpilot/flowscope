@@ -24,6 +24,15 @@ use cli::{Args, OutputFormat, ViewMode};
 use output::format_table;
 
 fn main() -> ExitCode {
+    // Check for serve mode first (requires tokio runtime)
+    #[cfg(feature = "serve")]
+    {
+        let args = Args::parse();
+        if args.serve {
+            return run_serve_mode(args);
+        }
+    }
+
     match run() {
         Ok(has_errors) => {
             if has_errors {
@@ -35,6 +44,38 @@ fn main() -> ExitCode {
         Err(e) => {
             eprintln!("flowscope: error: {e:#}");
             ExitCode::from(66)
+        }
+    }
+}
+
+/// Run the CLI in serve mode with embedded web UI.
+#[cfg(feature = "serve")]
+fn run_serve_mode(args: Args) -> ExitCode {
+    use server::ServerConfig;
+
+    let config = ServerConfig {
+        dialect: args.dialect.into(),
+        watch_dirs: args.watch.clone(),
+        #[cfg(feature = "metadata-provider")]
+        metadata_url: args.metadata_url.clone(),
+        #[cfg(not(feature = "metadata-provider"))]
+        metadata_url: None,
+        #[cfg(feature = "metadata-provider")]
+        metadata_schema: args.metadata_schema.clone(),
+        #[cfg(not(feature = "metadata-provider"))]
+        metadata_schema: None,
+        port: args.port,
+        open_browser: args.open,
+    };
+
+    // Create tokio runtime and run server
+    let runtime = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
+
+    match runtime.block_on(server::run_server(config)) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("flowscope: server error: {e:#}");
+            ExitCode::from(1)
         }
     }
 }

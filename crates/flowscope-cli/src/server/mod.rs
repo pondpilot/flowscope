@@ -3,9 +3,6 @@
 //! This module provides a local HTTP server that serves the embedded web UI
 //! and exposes a REST API for SQL lineage analysis.
 
-// Allow unused code during module construction - will be wired up in Task 8
-#![allow(dead_code)]
-
 mod api;
 mod assets;
 mod state;

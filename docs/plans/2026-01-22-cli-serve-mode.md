@@ -123,11 +123,11 @@ Add a `--serve` flag to `flowscope-cli` that starts a local HTTP server serving 
 
 ### Task 8: Wire up server in main.rs
 
-- [ ] Check `args.serve` flag in main
-- [ ] Build `ServerConfig` from CLI args
-- [ ] Create tokio runtime and call `server::run_server()`
-- [ ] Print server URL on startup
-- [ ] Optionally open browser with `--open` flag
+- [x] Check `args.serve` flag in main
+- [x] Build `ServerConfig` from CLI args
+- [x] Create tokio runtime and call `server::run_server()`
+- [x] Print server URL on startup
+- [x] Optionally open browser with `--open` flag
 
 **Files:** `crates/flowscope-cli/src/main.rs`
 
