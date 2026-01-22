@@ -6,6 +6,7 @@
 import type { Dialect } from './project-store';
 import type {
   SchemaTable,
+  SchemaMetadata,
   AnalyzeRequest,
   AnalyzeResult,
   ColumnSchema,
@@ -161,4 +162,47 @@ export async function parseSchemaSQL(
   }
 
   return { tables, errors };
+}
+
+/**
+ * Convert SchemaMetadata to SQL-like representation for display.
+ * This creates a human-readable representation of the schema tables.
+ */
+export function schemaMetadataToSQL(schema: SchemaMetadata | null): string {
+  if (!schema || !schema.tables || schema.tables.length === 0) {
+    return '-- No schema metadata available from server';
+  }
+
+  const lines: string[] = [
+    '-- Schema loaded from server (database introspection)',
+    '-- This schema is read-only in serve mode',
+    '',
+  ];
+
+  for (const table of schema.tables) {
+    // Build qualified table name
+    const qualifiedName = [table.catalog, table.schema, table.name].filter(Boolean).join('.');
+
+    lines.push(`CREATE TABLE ${qualifiedName} (`);
+
+    if (table.columns && table.columns.length > 0) {
+      const columnLines = table.columns.map((col, index) => {
+        const parts = [`  ${col.name}`];
+        if (col.dataType) {
+          parts.push(col.dataType);
+        }
+        if (col.isPrimaryKey) {
+          parts.push('PRIMARY KEY');
+        }
+        const isLast = index === table.columns!.length - 1;
+        return parts.join(' ') + (isLast ? '' : ',');
+      });
+      lines.push(...columnLines);
+    }
+
+    lines.push(');');
+    lines.push('');
+  }
+
+  return lines.join('\n');
 }

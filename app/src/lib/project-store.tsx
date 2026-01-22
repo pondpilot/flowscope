@@ -1,9 +1,12 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
+import type { FileSource, SchemaMetadata } from '@pondpilot/flowscope-core';
 import { STORAGE_KEYS, FILE_EXTENSIONS, SHARE_LIMITS, DEFAULT_FILE_LANGUAGE } from './constants';
 import type { SharePayload } from './share';
 import { parseTemplateMode } from '@/types';
 import type { TemplateMode } from '@/types';
 import { DEFAULT_PROJECT, DEFAULT_DBT_PROJECT } from './default-projects';
+import { useBackend } from './backend-context';
+import { useBackendFiles } from '@/hooks/useBackendFiles';
 
 const uuidv4 = () => crypto.randomUUID();
 
@@ -149,6 +152,16 @@ interface ProjectContextType {
 
   // Import from shared URL
   importProject: (payload: SharePayload) => string;
+
+  // Backend mode state
+  /** True when connected to REST backend (serve mode) */
+  isBackendMode: boolean;
+  /** True when files are read-only (in backend mode) */
+  isReadOnly: boolean;
+  /** Schema metadata from backend (database introspection), null if not available */
+  backendSchema: SchemaMetadata | null;
+  /** Refresh files from backend */
+  refreshBackendFiles: () => Promise<void>;
 }
 
 const ProjectContext = createContext<ProjectContextType | null>(null);
@@ -210,11 +223,47 @@ const saveActiveProjectIdToStorage = (projectId: string | null) => {
   }
 };
 
+/** Convert backend FileSource to ProjectFile format */
+function fileSourceToProjectFile(file: FileSource): ProjectFile {
+  return {
+    id: file.name, // Use name as ID for backend files (stable identifier)
+    name: file.name.split('/').pop() || file.name,
+    path: file.name,
+    content: file.content,
+    language: file.name.endsWith('.sql') ? 'sql' : file.name.endsWith('.json') ? 'json' : 'text',
+  };
+}
+
+/** Backend project ID constant */
+const BACKEND_PROJECT_ID = '__backend__';
+
 export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const [projects, setProjects] = useState<Project[]>(loadProjectsFromStorage);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(() =>
     loadActiveProjectIdFromStorage(projects)
   );
+
+  // Get backend state
+  const { backendType } = useBackend();
+  const isBackendMode = backendType === 'rest';
+  const { files: backendFiles, schema: backendSchema, refresh: refreshBackendFiles } = useBackendFiles(isBackendMode);
+
+  // Create a virtual project from backend files
+  const backendProject: Project | null = useMemo(() => {
+    if (!isBackendMode || !backendFiles) return null;
+
+    return {
+      id: BACKEND_PROJECT_ID,
+      name: 'Server Files',
+      files: backendFiles.map(fileSourceToProjectFile),
+      activeFileId: backendFiles.length > 0 ? backendFiles[0].name : null,
+      dialect: 'generic', // Will be overridden by server config
+      runMode: 'all' as const,
+      selectedFileIds: [],
+      schemaSQL: '', // Schema comes from backend
+      templateMode: 'raw' as const,
+    };
+  }, [isBackendMode, backendFiles]);
 
   useEffect(() => {
     saveProjectsToStorage(projects);
@@ -224,7 +273,16 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     saveActiveProjectIdToStorage(activeProjectId);
   }, [activeProjectId]);
 
-  const currentProject = projects.find((p) => p.id === activeProjectId) || null;
+  // In backend mode, use the backend project; otherwise use regular projects
+  const effectiveProjects = isBackendMode && backendProject
+    ? [backendProject, ...projects]
+    : projects;
+
+  // In backend mode, default to backend project
+  const effectiveActiveProjectId = isBackendMode ? BACKEND_PROJECT_ID : activeProjectId;
+
+  const currentProject = effectiveProjects.find((p) => p.id === effectiveActiveProjectId) || null;
+  const isReadOnly = isBackendMode && currentProject?.id === BACKEND_PROJECT_ID;
 
   const createProject = useCallback(
     (name: string) => {
@@ -543,8 +601,8 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   );
 
   const value = {
-    projects,
-    activeProjectId,
+    projects: effectiveProjects,
+    activeProjectId: effectiveActiveProjectId,
     currentProject,
     createProject,
     deleteProject,
@@ -562,6 +620,11 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     updateSchemaSQL,
     importFiles,
     importProject,
+    // Backend mode state
+    isBackendMode,
+    isReadOnly,
+    backendSchema,
+    refreshBackendFiles,
   };
 
   return <ProjectContext.Provider value={value}>{children}</ProjectContext.Provider>;

@@ -37,7 +37,7 @@ export function EditorArea({
   fileSelectorOpen,
   onFileSelectorOpenChange,
 }: EditorAreaProps) {
-  const { currentProject, updateFile, createFile, setRunMode } = useProject();
+  const { currentProject, updateFile, createFile, setRunMode, isReadOnly } = useProject();
 
   const theme = useThemeStore((state) => state.theme);
   const isDark = resolveTheme(theme) === 'dark';
@@ -238,7 +238,7 @@ export function EditorArea({
             value={displayContent}
             onChange={(val) => updateFile(activeFile.id, val)}
             className="h-full text-sm"
-            editable={sqlViewMode === 'template'}
+            editable={sqlViewMode === 'template' && !isReadOnly}
             isDark={isDark}
             highlightedSpan={sqlViewMode === 'template' ? highlightedSpan : null}
           />

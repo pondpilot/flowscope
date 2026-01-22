@@ -147,10 +147,10 @@ Add a `--serve` flag to `flowscope-cli` that starts a local HTTP server serving 
 
 ### Task 10: Frontend file loading from backend
 
-- [ ] Add `useBackendFiles()` hook to fetch `/api/files`
-- [ ] Integrate with ProjectProvider when in backend mode
-- [ ] Files from backend are read-only in UI
-- [ ] Schema comes from `/api/schema` instead of local DDL editor
+- [x] Add `useBackendFiles()` hook to fetch `/api/files`
+- [x] Integrate with ProjectProvider when in backend mode
+- [x] Files from backend are read-only in UI
+- [x] Schema comes from `/api/schema` instead of local DDL editor
 
 **Files:** `app/src/hooks/useBackendFiles.ts`, `app/src/lib/project-store.tsx`
 

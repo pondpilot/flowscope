@@ -22,6 +22,7 @@ import { usePersistedSchemaState } from '@/hooks/usePersistedSchemaState';
 import { isValidTab, useNavigation } from '@/lib/navigation-context';
 import { useViewStateStore, getNamespaceFilterStateWithDefaults } from '@/lib/view-state-store';
 import { useProject } from '@/lib/project-store';
+import { schemaMetadataToSQL } from '@/lib/schema-parser';
 import { HierarchyView, type HierarchyViewRef } from './HierarchyView';
 import { StatsPopover } from './StatsPopover';
 import { NamespaceFilterBar } from './NamespaceFilterBar';
@@ -75,7 +76,8 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
     actionsRef.current = actions;
     stateRef.current = state;
   }, [actions, state]);
-  const { currentProject, updateSchemaSQL, activeProjectId } = useProject();
+  const { currentProject, updateSchemaSQL, activeProjectId, isBackendMode, backendSchema } =
+    useProject();
   const [schemaEditorOpen, setSchemaEditorOpen] = useState(false);
   const { activeTab, setActiveTab, navigationTarget, clearNavigationTarget } = useNavigation();
   const [lineageFocusNodeId, setLineageFocusNodeId] = useState<string | undefined>(undefined);
@@ -489,9 +491,12 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
         <SchemaEditor
           open={schemaEditorOpen}
           onOpenChange={setSchemaEditorOpen}
-          schemaSQL={currentProject.schemaSQL}
+          schemaSQL={
+            isBackendMode ? schemaMetadataToSQL(backendSchema) : currentProject.schemaSQL
+          }
           dialect={currentProject.dialect}
           onSave={handleSaveSchema}
+          isReadOnly={isBackendMode}
         />
       )}
     </div>
