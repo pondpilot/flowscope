@@ -158,10 +158,10 @@ Add a `--serve` flag to `flowscope-cli` that starts a local HTTP server serving 
 
 ### Task 11: Build pipeline integration
 
-- [ ] Add `build-cli-serve` target to justfile
-- [ ] Ensure app builds before CLI with serve feature
-- [ ] Add CI job for building/testing serve feature
-- [ ] Document build order in AGENTS.md
+- [x] Add `build-cli-serve` target to justfile
+- [x] Ensure app builds before CLI with serve feature
+- [x] Add CI job for building/testing serve feature
+- [x] Document build order in AGENTS.md
 
 **Files:** `justfile`, `.github/workflows/ci.yml`, `AGENTS.md`
 

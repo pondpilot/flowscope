@@ -22,6 +22,18 @@ build-rust-release:
 build-cli:
     cargo build -p flowscope-cli --release
 
+# Build CLI with serve feature (embeds web UI - requires app to be built first)
+build-cli-serve: _build-app-dist
+    cargo build -p flowscope-cli --features serve --release
+
+# Build CLI with serve feature in debug mode
+build-cli-serve-debug: _build-app-dist
+    cargo build -p flowscope-cli --features serve
+
+# Internal: Build app dist for embedding into CLI
+_build-app-dist:
+    cd app && yarn build
+
 # Install CLI locally
 install-cli:
     cargo install --path crates/flowscope-cli --force
@@ -37,6 +49,10 @@ cli-release *ARGS:
 # Run CLI tests
 test-cli:
     cargo test -p flowscope-cli
+
+# Run CLI tests with serve feature
+test-cli-serve: _build-app-dist
+    cargo test -p flowscope-cli --features serve
 
 # Run CLI integration tests (SQLite + PostgreSQL + MySQL)
 test-integration: test-integration-sqlite test-integration-postgres test-integration-mysql
