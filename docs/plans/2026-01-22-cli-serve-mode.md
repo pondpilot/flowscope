@@ -48,11 +48,11 @@ Add a `--serve` flag to `flowscope-cli` that starts a local HTTP server serving 
 
 ### Task 2: Add CLI arguments for serve mode
 
-- [ ] Add `--serve` flag to start server
-- [ ] Add `--port` with default 3000
-- [ ] Add `--watch` for directories to watch (repeatable)
-- [ ] Add `--open` to auto-open browser
-- [ ] Gate all serve args with `#[cfg(feature = "serve")]`
+- [x] Add `--serve` flag to start server
+- [x] Add `--port` with default 3000
+- [x] Add `--watch` for directories to watch (repeatable)
+- [x] Add `--open` to auto-open browser
+- [x] Gate all serve args with `#[cfg(feature = "serve")]`
 
 **Files:** `crates/flowscope-cli/src/cli.rs`
 
