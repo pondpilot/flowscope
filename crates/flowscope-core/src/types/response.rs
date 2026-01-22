@@ -107,6 +107,12 @@ pub struct StatementLineage {
 
     /// Complexity score (1-100) based on query structure
     pub complexity_score: u8,
+
+    /// Resolved/compiled SQL after template expansion (e.g., dbt Jinja rendering).
+    /// Only present when templating was run in non-raw mode. May contain sensitive
+    /// values from template variables (e.g., database credentials).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resolved_sql: Option<String>,
 }
 
 /// A node in the lineage graph (table, CTE, or column).
@@ -798,6 +804,7 @@ mod tests {
                 span: None,
                 join_count: 0,
                 complexity_score: 5,
+                resolved_sql: None,
             }],
             global_lineage: GlobalLineage::default(),
             issues: vec![],

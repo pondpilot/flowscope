@@ -402,7 +402,9 @@ mod tests {
     fn test_infer_case_expression_with_then() {
         // CASE with string result in THEN branch
         assert_eq!(
-            infer_expr_type(&parse_expr("CASE WHEN x > 0 THEN 'positive' ELSE 'negative' END")),
+            infer_expr_type(&parse_expr(
+                "CASE WHEN x > 0 THEN 'positive' ELSE 'negative' END"
+            )),
             Some(CanonicalType::Text)
         );
     }

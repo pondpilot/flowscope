@@ -1,4 +1,4 @@
-import { Play, Loader2, ChevronDown } from 'lucide-react';
+import { Play, Loader2, ChevronDown, Braces, Code } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -9,8 +9,11 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
 } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { FileSelector } from './FileSelector';
 import type { RunMode } from '@/lib/project-store';
+
+export type SqlViewMode = 'template' | 'resolved';
 
 interface EditorToolbarProps {
   runMode: RunMode;
@@ -22,6 +25,10 @@ interface EditorToolbarProps {
   selectedCount: number;
   fileSelectorOpen: boolean;
   onFileSelectorOpenChange: (open: boolean) => void;
+  sqlViewMode?: SqlViewMode;
+  onSqlViewModeChange?: (mode: SqlViewMode) => void;
+  showSqlViewToggle?: boolean;
+  hasResolvedSql?: boolean;
 }
 
 export function EditorToolbar({
@@ -34,11 +41,54 @@ export function EditorToolbar({
   selectedCount,
   fileSelectorOpen,
   onFileSelectorOpenChange,
+  sqlViewMode = 'template',
+  onSqlViewModeChange,
+  showSqlViewToggle = false,
+  hasResolvedSql = false,
 }: EditorToolbarProps) {
   return (
     <div className="flex items-center justify-between px-3 py-2 border-b h-[44px] shrink-0 bg-muted/30 overflow-hidden gap-2">
       <div className="flex items-center gap-2 min-w-0 flex-1">
         <FileSelector open={fileSelectorOpen} onOpenChange={onFileSelectorOpenChange} />
+
+        {showSqlViewToggle && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  disabled={!hasResolvedSql || !onSqlViewModeChange}
+                  aria-label={
+                    sqlViewMode === 'template'
+                      ? 'Switch to resolved SQL view'
+                      : 'Switch to template SQL view'
+                  }
+                  aria-pressed={sqlViewMode === 'resolved'}
+                  onClick={() => {
+                    onSqlViewModeChange?.(sqlViewMode === 'template' ? 'resolved' : 'template');
+                  }}
+                >
+                  {sqlViewMode === 'template' ? (
+                    <Braces className="h-4 w-4" />
+                  ) : (
+                    <Code className="h-4 w-4" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {!hasResolvedSql ? (
+                  <p>Run analysis to see resolved SQL</p>
+                ) : sqlViewMode === 'template' ? (
+                  <p>Viewing template SQL. Click to see resolved.</p>
+                ) : (
+                  <p>Viewing resolved SQL. Click to see template.</p>
+                )}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
       </div>
 
       <div className="flex items-center gap-2 shrink-0">

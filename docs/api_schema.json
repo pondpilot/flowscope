@@ -434,6 +434,10 @@
             "format": "uint8",
             "minimum": 0,
             "maximum": 255
+          },
+          "resolvedSql": {
+            "description": "Resolved/compiled SQL after template expansion (e.g., dbt Jinja rendering).\nOnly present when templating was run in non-raw mode. May contain sensitive values\nfrom template variables (e.g., database credentials) - handle with appropriate care.",
+            "type": ["string", "null"]
           }
         },
         "required": [

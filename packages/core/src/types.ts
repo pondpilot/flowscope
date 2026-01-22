@@ -400,6 +400,11 @@ export interface StatementLineage {
   joinCount: number;
   /** Complexity score (1-100) based on query structure */
   complexityScore: number;
+  /**
+   * Resolved/compiled SQL after template expansion (e.g., dbt Jinja rendering).
+   * Only present when templating was applied and the result differs from the original.
+   */
+  resolvedSql?: string;
 }
 
 /** A node in the lineage graph (table, CTE, or column). */

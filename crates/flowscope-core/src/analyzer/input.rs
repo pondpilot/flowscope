@@ -38,17 +38,20 @@ fn template_error_issue(
 /// Applies template preprocessing to SQL if configured.
 ///
 /// Returns the (possibly transformed) SQL and whether templating was applied.
+/// The boolean is true when templating was run in non-raw mode, regardless of
+/// whether the rendered result differs from the original SQL.
 #[cfg(feature = "templating")]
 fn apply_template<'a>(
     sql: &'a str,
     config: Option<&crate::templater::TemplateConfig>,
-) -> Result<Cow<'a, str>, crate::templater::TemplateError> {
+) -> Result<(Cow<'a, str>, bool), crate::templater::TemplateError> {
     match config {
         Some(cfg) if cfg.mode != TemplateMode::Raw => {
             let rendered = template_sql(sql, cfg)?;
-            Ok(Cow::Owned(rendered))
+            // Templating was applied
+            Ok((Cow::Owned(rendered), true))
         }
-        _ => Ok(Cow::Borrowed(sql)),
+        _ => Ok((Cow::Borrowed(sql), false)),
     }
 }
 
@@ -89,6 +92,8 @@ struct ParseContext<'a> {
     source_name: Option<Rc<String>>,
     /// SQL dialect for parsing.
     dialect: Dialect,
+    /// Whether template processing was applied to produce `source_sql`.
+    templating_applied: bool,
 }
 
 /// A parsed statement alongside optional source metadata.
@@ -110,6 +115,9 @@ pub(crate) struct StatementInput<'a> {
     pub(crate) source_sql: Cow<'a, str>,
     /// Byte range of the statement within `source_sql`.
     pub(crate) source_range: Range<usize>,
+    /// Whether template processing was applied to produce `source_sql`.
+    /// When true, `source_sql` contains the resolved/compiled SQL.
+    pub(crate) templating_applied: bool,
 }
 
 /// Collects and parses SQL statements from the analysis request.
@@ -173,9 +181,9 @@ pub(crate) fn collect_statements<'a>(
         for file in files {
             // Apply templating if configured
             #[cfg(feature = "templating")]
-            let source_sql: Cow<'_, str> = {
+            let (source_sql, templating_applied): (Cow<'_, str>, bool) = {
                 match apply_template(&file.content, request.template_config.as_ref()) {
-                    Ok(sql) => sql,
+                    Ok((sql, applied)) => (sql, applied),
                     Err(e) => {
                         issues.push(template_error_issue(&e, Some(&file.name)));
                         continue; // Skip this file but continue with others
@@ -183,12 +191,14 @@ pub(crate) fn collect_statements<'a>(
                 }
             };
             #[cfg(not(feature = "templating"))]
-            let source_sql: Cow<'_, str> = Cow::Borrowed(file.content.as_str());
+            let (source_sql, templating_applied): (Cow<'_, str>, bool) =
+                (Cow::Borrowed(file.content.as_str()), false);
 
             let ctx = ParseContext {
                 source_sql,
                 source_name: Some(Rc::new(file.name.clone())),
                 dialect: request.dialect,
+                templating_applied,
             };
             let (file_stmts, file_issues) = parse_statements_individually(&ctx);
             statements.extend(file_stmts);
@@ -200,9 +210,9 @@ pub(crate) fn collect_statements<'a>(
     if has_sql {
         // Apply templating if configured
         #[cfg(feature = "templating")]
-        let source_sql: Cow<'_, str> = {
+        let (source_sql, templating_applied): (Cow<'_, str>, bool) = {
             match apply_template(&request.sql, request.template_config.as_ref()) {
-                Ok(sql) => sql,
+                Ok((sql, applied)) => (sql, applied),
                 Err(e) => {
                     // Record error and return collected statements (same as file error handling).
                     // Inline SQL is processed last, so returning here is equivalent to continuing.
@@ -212,12 +222,14 @@ pub(crate) fn collect_statements<'a>(
             }
         };
         #[cfg(not(feature = "templating"))]
-        let source_sql: Cow<'_, str> = Cow::Borrowed(request.sql.as_str());
+        let (source_sql, templating_applied): (Cow<'_, str>, bool) =
+            (Cow::Borrowed(request.sql.as_str()), false);
 
         let ctx = ParseContext {
             source_sql,
             source_name: request.source_name.clone().map(Rc::new),
             dialect: request.dialect,
+            templating_applied,
         };
         let (inline_stmts, inline_issues) = parse_statements_individually(&ctx);
         statements.extend(inline_stmts);
@@ -308,6 +320,7 @@ fn parse_full_sql_buffer<'a>(
             source_name: ctx.source_name.clone(),
             source_sql: ctx.source_sql.clone(),
             source_range: range,
+            templating_applied: ctx.templating_applied,
         });
     }
 
@@ -451,6 +464,7 @@ fn parse_statement_ranges_best_effort<'a>(
                         source_name: ctx.source_name.clone(),
                         source_sql: ctx.source_sql.clone(),
                         source_range: range.clone(),
+                        templating_applied: ctx.templating_applied,
                     });
                 }
             }

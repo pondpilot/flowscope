@@ -49,6 +49,7 @@ impl<'a> Analyzer<'a> {
         statement: &Statement,
         source_name: Option<String>,
         source_range: Range<usize>,
+        resolved_sql: Option<String>,
     ) -> Result<StatementLineage, ParseError> {
         let mut ctx = StatementContext::new(index);
 
@@ -237,6 +238,7 @@ impl<'a> Analyzer<'a> {
             span: Some(Span::new(source_range.start, source_range.end)),
             join_count,
             complexity_score,
+            resolved_sql,
         })
     }
 

@@ -1,5 +1,5 @@
-import { useEffect, useCallback, useRef, useMemo } from 'react';
-import { Loader2 } from 'lucide-react';
+import { useEffect, useCallback, useRef, useMemo, useState } from 'react';
+import { Loader2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { SqlView, useLineageState } from '@pondpilot/flowscope-react';
 import { cn } from '@/lib/utils';
@@ -8,8 +8,21 @@ import { useThemeStore, resolveTheme } from '@/lib/theme-store';
 import { useAnalysis, useDebounce, useFileNavigation, useGlobalShortcuts } from '@/hooks';
 import type { GlobalShortcut } from '@/hooks';
 import { EditorToolbar } from './EditorToolbar';
+import type { SqlViewMode } from './EditorToolbar';
+import { ErrorBoundary } from './ErrorBoundary';
 import { DEFAULT_FILE_NAMES } from '@/lib/constants';
 import type { RunMode } from '@/lib/project-store';
+
+// Fallback component shown when SqlView encounters an error
+function SqlViewFallback() {
+  return (
+    <div className="flex flex-col items-center justify-center h-full text-muted-foreground bg-muted/5 p-4">
+      <AlertCircle className="h-8 w-8 text-destructive mb-2" />
+      <p className="text-sm font-medium">Failed to render SQL editor</p>
+      <p className="text-xs mt-1">Try reloading the page</p>
+    </div>
+  );
+}
 
 interface EditorAreaProps {
   wasmReady: boolean;
@@ -36,7 +49,15 @@ export function EditorArea({
   const previousSchema = useRef<string | null>(null);
   const previousHideCTEs = useRef<boolean | null>(null);
 
-  const { hideCTEs, highlightedSpan } = useLineageState();
+  const { hideCTEs, highlightedSpan, result } = useLineageState();
+
+  // SQL view mode toggle: 'template' shows original templated SQL, 'resolved' shows compiled SQL
+  const [sqlViewMode, setSqlViewMode] = useState<SqlViewMode>('template');
+
+  // Reset view mode to 'template' when active file changes
+  useEffect(() => {
+    setSqlViewMode('template');
+  }, [currentProject?.activeFileId]);
 
   const { isAnalyzing, error, runAnalysis, setError } = useAnalysis(wasmReady);
 
@@ -107,6 +128,39 @@ export function EditorArea({
     setError,
   ]);
 
+  // Compute resolved SQL from analysis result for the current file
+  // Concatenates resolvedSql from all statements that came from the active file
+  // Size limit prevents browser crashes with very large results
+  const MAX_RESOLVED_SQL_SIZE = 10 * 1024 * 1024; // 10MB
+
+  const resolvedSql = useMemo(() => {
+    const fileName = activeFile?.name;
+    if (!result?.statements || !fileName) return null;
+
+    const resolvedParts = result.statements
+      .filter((stmt) => stmt.sourceName === fileName && stmt.resolvedSql)
+      .map((stmt) => stmt.resolvedSql!);
+
+    if (resolvedParts.length === 0) return null;
+
+    const joined = resolvedParts.join('\n\n');
+    if (joined.length > MAX_RESOLVED_SQL_SIZE) {
+      return joined.slice(0, MAX_RESOLVED_SQL_SIZE) + '\n\n-- [Truncated: resolved SQL exceeds 10MB]';
+    }
+    return joined;
+  }, [result, activeFile?.name]);
+
+  // Determine if we should show the toggle (only in dbt/jinja mode)
+  const showSqlViewToggle = currentProject?.templateMode !== 'raw';
+
+  // Content to display in the editor based on view mode
+  const displayContent = useMemo(() => {
+    if (sqlViewMode === 'resolved' && resolvedSql) {
+      return resolvedSql;
+    }
+    return activeFile?.content ?? '';
+  }, [sqlViewMode, resolvedSql, activeFile?.content]);
+
   const handleAnalyze = useCallback(() => {
     if (activeFile) {
       runAnalysis(activeFile.content, activeFile.name);
@@ -168,6 +222,10 @@ export function EditorArea({
         selectedCount={selectedCount}
         fileSelectorOpen={fileSelectorOpen}
         onFileSelectorOpenChange={onFileSelectorOpenChange}
+        sqlViewMode={sqlViewMode}
+        onSqlViewModeChange={setSqlViewMode}
+        showSqlViewToggle={showSqlViewToggle}
+        hasResolvedSql={!!resolvedSql}
       />
 
       <div
@@ -175,14 +233,16 @@ export function EditorArea({
         className="flex-1 overflow-hidden relative"
         data-testid="sql-editor"
       >
-        <SqlView
-          value={activeFile.content}
-          onChange={(val) => updateFile(activeFile.id, val)}
-          className="h-full text-sm"
-          editable={true}
-          isDark={isDark}
-          highlightedSpan={highlightedSpan}
-        />
+        <ErrorBoundary fallback={<SqlViewFallback />}>
+          <SqlView
+            value={displayContent}
+            onChange={(val) => updateFile(activeFile.id, val)}
+            className="h-full text-sm"
+            editable={sqlViewMode === 'template'}
+            isDark={isDark}
+            highlightedSpan={sqlViewMode === 'template' ? highlightedSpan : null}
+          />
+        </ErrorBoundary>
       </div>
     </div>
   );

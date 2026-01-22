@@ -200,6 +200,7 @@ impl<'a> Analyzer<'a> {
                 source_name,
                 source_sql,
                 source_range,
+                templating_applied,
             },
         ) in all_statements.into_iter().enumerate()
         {
@@ -211,13 +212,27 @@ impl<'a> Analyzer<'a> {
                 stmt_type = ?statement
             )
             .entered();
+
+            // Extract resolved SQL when templating was applied
+            let resolved_sql = if templating_applied {
+                Some(source_sql[source_range.clone()].to_string())
+            } else {
+                None
+            };
+
             self.current_statement_source = Some(StatementSourceSlice {
                 sql: source_sql,
                 range: source_range.clone(),
             });
 
             let source_name_owned = source_name.as_deref().map(String::from);
-            let result = self.analyze_statement(index, &statement, source_name_owned, source_range);
+            let result = self.analyze_statement(
+                index,
+                &statement,
+                source_name_owned,
+                source_range,
+                resolved_sql,
+            );
             self.current_statement_source = None;
 
             match result {

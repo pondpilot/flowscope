@@ -518,8 +518,7 @@ fn infer_type_context(
             }
             // AND/OR mark a boolean boundary - cursor is in a new expression
             Token::Word(word)
-                if paren_depth == 0
-                    && matches!(word.keyword, Keyword::AND | Keyword::OR) =>
+                if paren_depth == 0 && matches!(word.keyword, Keyword::AND | Keyword::OR) =>
             {
                 return None;
             }
