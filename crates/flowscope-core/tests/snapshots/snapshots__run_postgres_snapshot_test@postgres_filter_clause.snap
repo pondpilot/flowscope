@@ -28,7 +28,7 @@ expression: clean_result
           "label": "senior_salary",
           "expression": "SUM(salary) FILTER (WHERE years_employed > 5)",
           "metadata": {
-            "data_type": "NUMBER"
+            "data_type": "FLOAT"
           },
           "aggregation": {
             "isGroupingKey": false,
@@ -47,7 +47,7 @@ expression: clean_result
           "label": "high_performer_avg",
           "expression": "AVG(salary) FILTER (WHERE performance_rating >= 4)",
           "metadata": {
-            "data_type": "NUMBER"
+            "data_type": "FLOAT"
           },
           "aggregation": {
             "isGroupingKey": false,
@@ -60,7 +60,7 @@ expression: clean_result
           "label": "total_salary",
           "expression": "SUM(salary)",
           "metadata": {
-            "data_type": "NUMBER"
+            "data_type": "FLOAT"
           },
           "aggregation": {
             "isGroupingKey": false,

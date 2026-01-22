@@ -276,6 +276,10 @@ expression: clean_result
         "name": "orders",
         "columns": [
           {
+            "name": "order_total",
+            "origin": "implied"
+          },
+          {
             "name": "user_id",
             "origin": "implied",
             "foreignKey": {

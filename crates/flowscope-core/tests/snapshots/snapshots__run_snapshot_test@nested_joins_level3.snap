@@ -532,6 +532,10 @@ expression: clean_result
             }
           },
           {
+            "name": "order_id",
+            "origin": "implied"
+          },
+          {
             "name": "product_id",
             "origin": "implied",
             "foreignKey": {
@@ -578,6 +582,10 @@ expression: clean_result
             }
           },
           {
+            "name": "product_name",
+            "origin": "implied"
+          },
+          {
             "name": "supplier_id",
             "origin": "implied",
             "foreignKey": {
@@ -622,6 +630,10 @@ expression: clean_result
               "table": "products",
               "column": "supplier_id"
             }
+          },
+          {
+            "name": "supplier_name",
+            "origin": "implied"
           }
         ],
         "origin": "implied",
