@@ -73,11 +73,11 @@ Add a `--serve` flag to `flowscope-cli` that starts a local HTTP server serving 
 
 ### Task 4: Implement asset embedding
 
-- [ ] Define `WebAssets` struct with `#[derive(RustEmbed)]`
-- [ ] Configure folder path to `../../app/dist/`
-- [ ] Add include patterns for html, js, css, wasm, svg, png, ico
-- [ ] Implement `static_files` handler serving embedded assets
-- [ ] Handle SPA fallback to index.html for non-asset routes
+- [x] Define `WebAssets` struct with `#[derive(RustEmbed)]`
+- [x] Configure folder path to `../../app/dist/`
+- [x] Add include patterns for html, js, css, wasm, svg, png, ico
+- [x] Implement `static_files` handler serving embedded assets
+- [x] Handle SPA fallback to index.html for non-asset routes
 
 **Files:** `crates/flowscope-cli/src/server/assets.rs`
 
