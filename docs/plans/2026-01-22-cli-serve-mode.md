@@ -180,8 +180,8 @@ Add a `--serve` flag to `flowscope-cli` that starts a local HTTP server serving 
 
 ### Task 13: Documentation and README
 
-- [ ] Add --serve usage examples to CLI README
-- [ ] Document serve mode in main README
-- [ ] Add troubleshooting section (port conflicts, permissions)
+- [x] Add --serve usage examples to CLI README
+- [x] Document serve mode in main README
+- [x] Add troubleshooting section (port conflicts, permissions)
 
 **Files:** `crates/flowscope-cli/README.md`, `README.md`
