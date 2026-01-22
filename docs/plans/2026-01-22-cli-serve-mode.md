@@ -96,14 +96,14 @@ Add a `--serve` flag to `flowscope-cli` that starts a local HTTP server serving 
 
 ### Task 6: Implement API handlers
 
-- [ ] `GET /api/health` — return status and version
-- [ ] `POST /api/analyze` — call `flowscope_core::analyze()`, return JSON
-- [ ] `POST /api/completion` — call completion endpoint
-- [ ] `POST /api/split` — call statement splitting
-- [ ] `GET /api/files` — return watched files with content
-- [ ] `GET /api/schema` — return schema metadata
-- [ ] `POST /api/export/:format` — call export functions
-- [ ] `GET /api/config` — return server configuration
+- [x] `GET /api/health` — return status and version
+- [x] `POST /api/analyze` — call `flowscope_core::analyze()`, return JSON
+- [x] `POST /api/completion` — call completion endpoint
+- [x] `POST /api/split` — call statement splitting
+- [x] `GET /api/files` — return watched files with content
+- [x] `GET /api/schema` — return schema metadata
+- [x] `POST /api/export/:format` — call export functions
+- [x] `GET /api/config` — return server configuration
 
 **Files:** `crates/flowscope-cli/src/server/api.rs`
 
