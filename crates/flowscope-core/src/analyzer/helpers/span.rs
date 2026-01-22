@@ -350,31 +350,39 @@ pub fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize
         return None;
     }
 
+    let bytes = sql.as_bytes();
     let mut current_line = 1;
-    let mut line_start = 0;
+    let mut offset = 0;
 
-    for (idx, ch) in sql.char_indices() {
-        if current_line == line {
-            // Found the target line, calculate column offset
-            let target_offset = line_start + (column - 1);
-            if target_offset <= sql.len() {
-                return Some(target_offset);
-            }
-            return None;
-        }
-
-        if ch == '\n' {
-            current_line += 1;
-            line_start = idx + 1;
-        }
+    // Advance `offset` to the start of the requested line.
+    while current_line < line {
+        let remaining = bytes.get(offset..)?;
+        let newline_pos = remaining.iter().position(|&b| b == b'\n')?;
+        offset += newline_pos + 1;
+        current_line += 1;
     }
 
-    // Handle last line (no trailing newline)
-    if current_line == line {
-        let target_offset = line_start + (column - 1);
-        if target_offset <= sql.len() {
-            return Some(target_offset);
+    let line_start = offset;
+    let remaining = bytes.get(line_start..)?;
+    let line_len = remaining
+        .iter()
+        .position(|&b| b == b'\n')
+        .unwrap_or(remaining.len());
+    let line_end = line_start + line_len;
+    let line_slice = &sql[line_start..line_end];
+
+    // sqlparser reports columns in characters, so iterate char_indices to convert
+    // the 1-based column into a byte offset.
+    let mut current_column = 1;
+    for (rel_offset, _) in line_slice.char_indices() {
+        if current_column == column {
+            return Some(line_start + rel_offset);
         }
+        current_column += 1;
+    }
+
+    if column == current_column {
+        return Some(line_end);
     }
 
     None
@@ -523,6 +531,15 @@ mod tests {
         assert_eq!(line_col_to_offset(sql, 1, 1), Some(0));
         assert_eq!(line_col_to_offset(sql, 2, 1), Some(9));
         assert_eq!(line_col_to_offset(sql, 3, 1), Some(20));
+    }
+
+    #[test]
+    fn test_line_col_to_offset_unicode_columns() {
+        let sql = "SELECT μ, FROM users";
+        // Column 11 should point at the 'F' byte even though the line includes a multi-byte char.
+        assert_eq!(line_col_to_offset(sql, 1, 11), Some("SELECT μ, ".len()));
+        // Column 12 moves one character to the right (the 'R').
+        assert_eq!(line_col_to_offset(sql, 1, 12), Some("SELECT μ, F".len()));
     }
 
     #[test]

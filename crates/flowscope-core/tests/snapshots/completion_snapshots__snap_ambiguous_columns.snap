@@ -1,5 +1,6 @@
 ---
 source: crates/flowscope-core/tests/completion_snapshots.rs
+assertion_line: 177
 expression: result
 ---
 {
@@ -103,7 +104,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "AI_CLASSIFY(this, [config], categories)"
+      "detail": "AI_CLASSIFY(this, categories, [config])"
     },
     {
       "label": "AND",
@@ -139,7 +140,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "ARRAY_ALL(expression, this)"
+      "detail": "ARRAY_ALL(this, expression)"
     },
     {
       "label": "ARRAY_ANY",
@@ -157,7 +158,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "ARRAY_CONCAT([expressions], this)"
+      "detail": "ARRAY_CONCAT(this, [expressions])"
     },
     {
       "label": "ARRAY_CONSTRUCT_COMPACT",
@@ -175,7 +176,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "ARRAY_CONTAINS(expression, this)"
+      "detail": "ARRAY_CONTAINS(this, expression)"
     },
     {
       "label": "ARRAY_CONTAINS_ALL",
@@ -184,7 +185,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "ARRAY_CONTAINS_ALL(expression, this)"
+      "detail": "ARRAY_CONTAINS_ALL(this, expression)"
     },
     {
       "label": "ARRAY_FILTER",
@@ -193,7 +194,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "ARRAY_FILTER(expression, this)"
+      "detail": "ARRAY_FILTER(this, expression)"
     },
     {
       "label": "ARRAY_FIRST",
@@ -229,7 +230,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "ARRAY_OVERLAPS(expression, this)"
+      "detail": "ARRAY_OVERLAPS(this, expression)"
     },
     {
       "label": "ARRAY_REMOVE",
@@ -238,7 +239,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "ARRAY_REMOVE(expression, this)"
+      "detail": "ARRAY_REMOVE(this, expression)"
     },
     {
       "label": "ARRAY_REVERSE",
@@ -256,7 +257,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "ARRAY_SIZE([expression], this)"
+      "detail": "ARRAY_SIZE(this, [expression])"
     },
     {
       "label": "ARRAY_SLICE",
@@ -265,7 +266,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "ARRAY_SLICE([end], this, [step], start)"
+      "detail": "ARRAY_SLICE(this, start, [end], [step])"
     },
     {
       "label": "ARRAY_SORT",
@@ -283,7 +284,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "ARRAY_SUM([expression], this)"
+      "detail": "ARRAY_SUM(this, [expression])"
     },
     {
       "label": "ARRAY_TO_STRING",
@@ -337,7 +338,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "ATAN2(expression, this)"
+      "detail": "ATAN2(this, expression)"
     },
     {
       "label": "ATANH",
@@ -355,7 +356,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "BASE64DECODE_BINARY([alphabet], this)"
+      "detail": "BASE64DECODE_BINARY(this, [alphabet])"
     },
     {
       "label": "BASE64DECODE_STRING",
@@ -364,7 +365,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "BASE64DECODE_STRING([alphabet], this)"
+      "detail": "BASE64DECODE_STRING(this, [alphabet])"
     },
     {
       "label": "BASE64ENCODE",
@@ -373,7 +374,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "BASE64ENCODE([alphabet], this, [max_line_length])"
+      "detail": "BASE64ENCODE(this, [max_line_length], [alphabet])"
     },
     {
       "label": "BIT_LENGTH",
@@ -445,7 +446,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "BOOLOR(expression, this)"
+      "detail": "BOOLOR(this, expression)"
     },
     {
       "label": "BYTE_LENGTH",
@@ -463,7 +464,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "CASE(ifs, [default], [this])"
+      "detail": "CASE([this], ifs, [default])"
     },
     {
       "label": "CAST",
@@ -472,7 +473,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "CAST([format], [action], to, this, [default], [safe])"
+      "detail": "CAST(this, to, [format], [safe], [action], [default])"
     },
     {
       "label": "CAST_TO_STR_TYPE",
@@ -499,7 +500,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "CEIL([decimals], this, [to])"
+      "detail": "CEIL(this, [decimals], [to])"
     },
     {
       "label": "CHR",
@@ -517,7 +518,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "COALESCE(this, [is_nvl], [is_null], [expressions]) → T"
+      "detail": "COALESCE(this, [expressions], [is_nvl], [is_null]) → T"
     },
     {
       "label": "CODE_POINTS_TO_BYTES",
@@ -589,7 +590,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "CONCAT_WS([coalesce], expressions, [safe]) → TEXT"
+      "detail": "CONCAT_WS(expressions, [safe], [coalesce]) → TEXT"
     },
     {
       "label": "CONNECT_BY_ROOT",
@@ -616,7 +617,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "CONVERT([style], expression, [safe], this)"
+      "detail": "CONVERT(this, expression, [style], [safe])"
     },
     {
       "label": "CONVERT_TIMEZONE",
@@ -625,7 +626,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "CONVERT_TIMEZONE(target_tz, [options], [source_tz], timestamp)"
+      "detail": "CONVERT_TIMEZONE([source_tz], target_tz, timestamp, [options])"
     },
     {
       "label": "CONVERT_TO_CHARSET",
@@ -634,7 +635,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "CONVERT_TO_CHARSET(dest, this, [source])"
+      "detail": "CONVERT_TO_CHARSET(this, dest, [source])"
     },
     {
       "label": "COS",
@@ -778,7 +779,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "DATE([this], [expressions], [zone])"
+      "detail": "DATE([this], [zone], [expressions])"
     },
     {
       "label": "DATE_ADD",
@@ -796,7 +797,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "DATE_BIN([unit], [zone], [origin], this, expression)"
+      "detail": "DATE_BIN(this, expression, [unit], [zone], [origin])"
     },
     {
       "label": "DATE_DIFF",
@@ -805,7 +806,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "DATE_DIFF([big_int], expression, this, [zone], [unit])"
+      "detail": "DATE_DIFF(this, expression, [unit], [zone], [big_int])"
     },
     {
       "label": "DATE_FROM_PARTS",
@@ -814,7 +815,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "DATE_FROM_PARTS([day], year, [month])"
+      "detail": "DATE_FROM_PARTS(year, [month], [day])"
     },
     {
       "label": "DATE_FROM_UNIX_DATE",
@@ -841,7 +842,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "DATE_SUB([unit], expression, this)"
+      "detail": "DATE_SUB(this, expression, [unit])"
     },
     {
       "label": "DATE_TO_DATE_STR",
@@ -877,7 +878,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "DATETIME([expression], this)"
+      "detail": "DATETIME(this, [expression])"
     },
     {
       "label": "DATETIME_ADD",
@@ -886,7 +887,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "DATETIME_ADD(expression, this, [unit])"
+      "detail": "DATETIME_ADD(this, expression, [unit])"
     },
     {
       "label": "DATETIME_DIFF",
@@ -895,7 +896,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "DATETIME_DIFF([unit], this, expression)"
+      "detail": "DATETIME_DIFF(this, expression, [unit])"
     },
     {
       "label": "DATETIME_SUB",
@@ -913,7 +914,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "DATETIME_TRUNC(unit, this, [zone])"
+      "detail": "DATETIME_TRUNC(this, unit, [zone])"
     },
     {
       "label": "DAY",
@@ -967,7 +968,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "DECODE([replace], this, charset)"
+      "detail": "DECODE(this, charset, [replace])"
     },
     {
       "label": "DECODE_CASE",
@@ -985,7 +986,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "DECOMPRESS_BINARY(method, this)"
+      "detail": "DECOMPRESS_BINARY(this, method)"
     },
     {
       "label": "DECOMPRESS_STRING",
@@ -994,7 +995,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "DECOMPRESS_STRING(method, this)"
+      "detail": "DECOMPRESS_STRING(this, method)"
     },
     {
       "label": "DEGREES",
@@ -1030,7 +1031,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "ENCODE(charset, this)"
+      "detail": "ENCODE(this, charset)"
     },
     {
       "label": "ENDS_WITH",
@@ -1057,7 +1058,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "EUCLIDEAN_DISTANCE(expression, this)"
+      "detail": "EUCLIDEAN_DISTANCE(this, expression)"
     },
     {
       "label": "EXISTS",
@@ -1066,7 +1067,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "EXISTS([expression], this)"
+      "detail": "EXISTS(this, [expression])"
     },
     {
       "label": "EXP",
@@ -1102,7 +1103,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "EXPLODING_GENERATE_SERIES([is_end_exclusive], start, [step], end)"
+      "detail": "EXPLODING_GENERATE_SERIES(start, end, [step], [is_end_exclusive])"
     },
     {
       "label": "EXTRACT",
@@ -1138,7 +1139,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "FEATURES_AT_TIME([ignore_feature_nulls], [time], this, [num_rows])"
+      "detail": "FEATURES_AT_TIME(this, [time], [num_rows], [ignore_feature_nulls])"
     },
     {
       "label": "FIRST_VALUE",
@@ -1165,7 +1166,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "FLOAT64([expression], this)"
+      "detail": "FLOAT64(this, [expression])"
     },
     {
       "label": "FLOOR",
@@ -1174,7 +1175,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "FLOOR([decimals], this, [to])"
+      "detail": "FLOOR(this, [decimals], [to])"
     },
     {
       "label": "FORMAT",
@@ -1192,7 +1193,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "FROM_BASE(expression, this)"
+      "detail": "FROM_BASE(this, expression)"
     },
     {
       "label": "FROM_BASE32",
@@ -1228,7 +1229,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "GAP_FILL([value_columns], [ignore_nulls], [partitioning_columns], [origin], this, ts_column, bucket_width)"
+      "detail": "GAP_FILL(this, ts_column, bucket_width, [partitioning_columns], [value_columns], [origin], [ignore_nulls])"
     },
     {
       "label": "GENERATE_DATE_ARRAY",
@@ -1237,7 +1238,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "GENERATE_DATE_ARRAY(start, [step], end)"
+      "detail": "GENERATE_DATE_ARRAY(start, end, [step])"
     },
     {
       "label": "GENERATE_EMBEDDING",
@@ -1246,7 +1247,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "GENERATE_EMBEDDING([params_struct], [is_text], this, expression)"
+      "detail": "GENERATE_EMBEDDING(this, expression, [params_struct], [is_text])"
     },
     {
       "label": "GENERATE_SERIES",
@@ -1255,7 +1256,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "GENERATE_SERIES([step], start, [is_end_exclusive], end)"
+      "detail": "GENERATE_SERIES(start, end, [step], [is_end_exclusive])"
     },
     {
       "label": "GENERATE_TIMESTAMP_ARRAY",
@@ -1264,7 +1265,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "GENERATE_TIMESTAMP_ARRAY(start, step, end)"
+      "detail": "GENERATE_TIMESTAMP_ARRAY(start, end, step)"
     },
     {
       "label": "GET_EXTRACT",
@@ -1291,7 +1292,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "GREATEST([expressions], [null_if_any_null], this)"
+      "detail": "GREATEST(this, [expressions], [null_if_any_null])"
     },
     {
       "label": "GREATEST_IGNORE_NULLS",
@@ -1327,7 +1328,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "HEX_ENCODE([case], this)"
+      "detail": "HEX_ENCODE(this, [case])"
     },
     {
       "label": "HOUR",
@@ -1345,7 +1346,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "IF([false], true, this)"
+      "detail": "IF(this, true, [false])"
     },
     {
       "label": "INITCAP",
@@ -1426,7 +1427,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "JSON_ARRAY([strict], [expressions], [null_handling], [return_type])"
+      "detail": "JSON_ARRAY([expressions], [null_handling], [return_type], [strict])"
     },
     {
       "label": "JSON_ARRAY_AGG",
@@ -1435,7 +1436,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "JSON_ARRAY_AGG(this, [return_type], [strict], [null_handling], [order])"
+      "detail": "JSON_ARRAY_AGG(this, [order], [null_handling], [return_type], [strict])"
     },
     {
       "label": "JSON_ARRAY_APPEND",
@@ -1453,7 +1454,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "JSON_ARRAY_CONTAINS([json_type], this, expression)"
+      "detail": "JSON_ARRAY_CONTAINS(this, expression, [json_type])"
     },
     {
       "label": "JSON_ARRAY_INSERT",
@@ -1480,7 +1481,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "JSON_CAST([format], this, [action], [safe], to, [default])"
+      "detail": "JSON_CAST(this, to, [format], [safe], [action], [default])"
     },
     {
       "label": "JSON_EXISTS",
@@ -1489,7 +1490,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "JSON_EXISTS(this, path, [on_condition], [passing])"
+      "detail": "JSON_EXISTS(this, path, [passing], [on_condition])"
     },
     {
       "label": "JSON_EXTRACT",
@@ -1498,7 +1499,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "JSON_EXTRACT([json_query], this, expression, [expressions], [variant_extract], [option], [only_json_types], [on_condition], [quote], [requires_json])"
+      "detail": "JSON_EXTRACT(this, expression, [only_json_types], [expressions], [variant_extract], [json_query], [option], [quote], [on_condition], [requires_json])"
     },
     {
       "label": "JSON_EXTRACT_ARRAY",
@@ -1516,7 +1517,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "JSON_EXTRACT_SCALAR(this, expression, [only_json_types], [json_type], [scalar_only], [expressions])"
+      "detail": "JSON_EXTRACT_SCALAR(this, expression, [only_json_types], [expressions], [json_type], [scalar_only])"
     },
     {
       "label": "JSON_FORMAT",
@@ -1525,7 +1526,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "JSON_FORMAT([options], [to_json], [this], [is_json])"
+      "detail": "JSON_FORMAT([this], [options], [is_json], [to_json])"
     },
     {
       "label": "JSON_KEYS_AT_DEPTH",
@@ -1543,7 +1544,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "JSON_OBJECT([expressions], [encoding], [null_handling], [unique_keys], [return_type])"
+      "detail": "JSON_OBJECT([expressions], [null_handling], [unique_keys], [return_type], [encoding])"
     },
     {
       "label": "JSON_REMOVE",
@@ -1561,7 +1562,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "JSON_SET(expressions, this)"
+      "detail": "JSON_SET(this, expressions)"
     },
     {
       "label": "JSON_STRIP_NULLS",
@@ -1570,7 +1571,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "JSON_STRIP_NULLS(this, [include_arrays], [remove_empty], [expression])"
+      "detail": "JSON_STRIP_NULLS(this, [expression], [include_arrays], [remove_empty])"
     },
     {
       "label": "JSON_TABLE",
@@ -1579,7 +1580,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "JSON_TABLE([path], [error_handling], schema, this, [empty_handling])"
+      "detail": "JSON_TABLE(this, schema, [path], [error_handling], [empty_handling])"
     },
     {
       "label": "JSON_TYPE",
@@ -1588,7 +1589,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "JSON_TYPE([expression], this)"
+      "detail": "JSON_TYPE(this, [expression])"
     },
     {
       "label": "JSON_VALUE_ARRAY",
@@ -1606,7 +1607,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "JSONB_CONTAINS(expression, this)"
+      "detail": "JSONB_CONTAINS(this, expression)"
     },
     {
       "label": "JSONB_CONTAINS_ALL_TOP_KEYS",
@@ -1624,7 +1625,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "JSONB_CONTAINS_ANY_TOP_KEYS(expression, this)"
+      "detail": "JSONB_CONTAINS_ANY_TOP_KEYS(this, expression)"
     },
     {
       "label": "JSONB_DELETE_AT_PATH",
@@ -1642,7 +1643,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "JSONB_EXISTS(path, this)"
+      "detail": "JSONB_EXISTS(this, path)"
     },
     {
       "label": "JSONB_EXTRACT",
@@ -1660,7 +1661,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "JSONB_EXTRACT_SCALAR([json_type], this, expression)"
+      "detail": "JSONB_EXTRACT_SCALAR(this, expression, [json_type])"
     },
     {
       "label": "JUSTIFY_DAYS",
@@ -1696,7 +1697,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "LAG([offset], this, [default]) → T"
+      "detail": "LAG(this, [offset], [default]) → T"
     },
     {
       "label": "LAST_DAY",
@@ -1768,7 +1769,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "LEAST(this, [null_if_any_null], [expressions])"
+      "detail": "LEAST(this, [expressions], [null_if_any_null])"
     },
     {
       "label": "LEAST_IGNORE_NULLS",
@@ -1786,7 +1787,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "LEFT(expression, this)"
+      "detail": "LEFT(this, expression)"
     },
     {
       "label": "LENGTH",
@@ -1795,7 +1796,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "LENGTH([binary], [encoding], this)"
+      "detail": "LENGTH(this, [binary], [encoding])"
     },
     {
       "label": "LEVENSHTEIN",
@@ -1804,7 +1805,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "LEVENSHTEIN([del_cost], [ins_cost], [max_dist], [sub_cost], this, [expression])"
+      "detail": "LEVENSHTEIN(this, [expression], [ins_cost], [del_cost], [sub_cost], [max_dist])"
     },
     {
       "label": "LIST",
@@ -1858,7 +1859,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "MAKE_INTERVAL([second], [day], [month], [year], [hour], [minute])"
+      "detail": "MAKE_INTERVAL([year], [month], [day], [hour], [minute], [second])"
     },
     {
       "label": "MAP",
@@ -1867,7 +1868,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "MAP([values], [keys])"
+      "detail": "MAP([keys], [values])"
     },
     {
       "label": "MAP_FROM_ENTRIES",
@@ -1885,7 +1886,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "MATCH_AGAINST([modifier], this, expressions)"
+      "detail": "MATCH_AGAINST(this, expressions, [modifier])"
     },
     {
       "label": "MD5",
@@ -1939,7 +1940,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "ML_FORECAST([params_struct], this, [expression])"
+      "detail": "ML_FORECAST(this, [expression], [params_struct])"
     },
     {
       "label": "ML_TRANSLATE",
@@ -1948,7 +1949,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "ML_TRANSLATE(params_struct, expression, this)"
+      "detail": "ML_TRANSLATE(this, expression, params_struct)"
     },
     {
       "label": "MONTH",
@@ -1984,7 +1985,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "NEXT_DAY(expression, this)"
+      "detail": "NEXT_DAY(this, expression)"
     },
     {
       "label": "NEXT_VALUE_FOR",
@@ -2002,7 +2003,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "NORMALIZE([is_casefold], this, [form])"
+      "detail": "NORMALIZE(this, [form], [is_casefold])"
     },
     {
       "label": "NOW",
@@ -2020,7 +2021,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "NTH_VALUE(offset, this)"
+      "detail": "NTH_VALUE(this, offset)"
     },
     {
       "label": "NTILE",
@@ -2056,7 +2057,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "NVL2(this, [false], true)"
+      "detail": "NVL2(this, true, [false])"
     },
     {
       "label": "OBJECT_INSERT",
@@ -2065,7 +2066,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "OBJECT_INSERT(value, key, [update_flag], this)"
+      "detail": "OBJECT_INSERT(this, key, value, [update_flag])"
     },
     {
       "label": "OPEN_JSON",
@@ -2074,7 +2075,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "OPEN_JSON([expressions], [path], this)"
+      "detail": "OPEN_JSON(this, [path], [expressions])"
     },
     {
       "label": "OR",
@@ -2083,7 +2084,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "OR(expression, this) → BOOLEAN"
+      "detail": "OR(this, expression) → BOOLEAN"
     },
     {
       "label": "OVERLAY",
@@ -2092,7 +2093,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "OVERLAY(expression, [for_], this, from_)"
+      "detail": "OVERLAY(this, expression, from_, [for_])"
     },
     {
       "label": "PAD",
@@ -2101,7 +2102,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "PAD(expression, [fill_pattern], is_left, this)"
+      "detail": "PAD(this, expression, [fill_pattern], is_left)"
     },
     {
       "label": "PARSE_BIGNUMERIC",
@@ -2119,7 +2120,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "PARSE_DATETIME([zone], [format], this)"
+      "detail": "PARSE_DATETIME(this, [format], [zone])"
     },
     {
       "label": "PARSE_IP",
@@ -2128,7 +2129,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "PARSE_IP(type, [permissive], this)"
+      "detail": "PARSE_IP(this, type, [permissive])"
     },
     {
       "label": "PARSE_JSON",
@@ -2137,7 +2138,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "PARSE_JSON([safe], this, [expression])"
+      "detail": "PARSE_JSON(this, [expression], [safe])"
     },
     {
       "label": "PARSE_NUMERIC",
@@ -2155,7 +2156,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "PARSE_TIME(format, this)"
+      "detail": "PARSE_TIME(this, format)"
     },
     {
       "label": "PARSE_URL",
@@ -2164,7 +2165,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "PARSE_URL([permissive], this, [part_to_extract], [key])"
+      "detail": "PARSE_URL(this, [part_to_extract], [key], [permissive])"
     },
     {
       "label": "PERCENT_RANK",
@@ -2182,7 +2183,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "PERCENTILE_CONT([expression], this)"
+      "detail": "PERCENTILE_CONT(this, [expression])"
     },
     {
       "label": "PERCENTILE_DISC",
@@ -2227,7 +2228,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "POW(expression, this)"
+      "detail": "POW(this, expression)"
     },
     {
       "label": "PREDICT",
@@ -2236,7 +2237,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "PREDICT(expression, this, [params_struct])"
+      "detail": "PREDICT(this, expression, [params_struct])"
     },
     {
       "label": "PREVIOUS_DAY",
@@ -2245,7 +2246,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "PREVIOUS_DAY(expression, this)"
+      "detail": "PREVIOUS_DAY(this, expression)"
     },
     {
       "label": "QUARTER",
@@ -2299,7 +2300,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "RANGE_N(expressions, [each], this)"
+      "detail": "RANGE_N(this, expressions, [each])"
     },
     {
       "label": "RANK",
@@ -2317,7 +2318,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "READ_CSV([expressions], this)"
+      "detail": "READ_CSV(this, [expressions])"
     },
     {
       "label": "READ_PARQUET",
@@ -2335,7 +2336,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "REDUCE([finish], merge, this, initial)"
+      "detail": "REDUCE(this, initial, merge, [finish])"
     },
     {
       "label": "REGEXP_COUNT",
@@ -2344,7 +2345,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "REGEXP_COUNT([parameters], this, expression, [position])"
+      "detail": "REGEXP_COUNT(this, expression, [position], [parameters])"
     },
     {
       "label": "REGEXP_EXTRACT",
@@ -2353,7 +2354,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "REGEXP_EXTRACT(expression, [occurrence], [group], [position], [parameters], this)"
+      "detail": "REGEXP_EXTRACT(this, expression, [position], [occurrence], [parameters], [group])"
     },
     {
       "label": "REGEXP_EXTRACT_ALL",
@@ -2362,7 +2363,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "REGEXP_EXTRACT_ALL([position], [occurrence], [group], expression, [parameters], this)"
+      "detail": "REGEXP_EXTRACT_ALL(this, expression, [group], [parameters], [position], [occurrence])"
     },
     {
       "label": "REGEXP_FULL_MATCH",
@@ -2371,7 +2372,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "REGEXP_FULL_MATCH(this, [options], expression)"
+      "detail": "REGEXP_FULL_MATCH(this, expression, [options])"
     },
     {
       "label": "REGEXP_I_LIKE",
@@ -2380,7 +2381,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "REGEXP_I_LIKE(expression, [flag], this)"
+      "detail": "REGEXP_I_LIKE(this, expression, [flag])"
     },
     {
       "label": "REGEXP_INSTR",
@@ -2389,7 +2390,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "REGEXP_INSTR([parameters], [group], [position], [occurrence], this, [option], expression)"
+      "detail": "REGEXP_INSTR(this, expression, [position], [occurrence], [option], [parameters], [group])"
     },
     {
       "label": "REGEXP_LIKE",
@@ -2398,7 +2399,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "REGEXP_LIKE([flag], expression, this)"
+      "detail": "REGEXP_LIKE(this, expression, [flag])"
     },
     {
       "label": "REGEXP_REPLACE",
@@ -2407,7 +2408,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "REGEXP_REPLACE([occurrence], expression, [position], [modifiers], this, [single_replace], [replacement])"
+      "detail": "REGEXP_REPLACE(this, expression, [replacement], [position], [occurrence], [modifiers], [single_replace])"
     },
     {
       "label": "REGEXP_SPLIT",
@@ -2416,7 +2417,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "REGEXP_SPLIT(expression, this, [limit])"
+      "detail": "REGEXP_SPLIT(this, expression, [limit])"
     },
     {
       "label": "REGR_AVGX",
@@ -2461,7 +2462,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "REPEAT(times, this)"
+      "detail": "REPEAT(this, times)"
     },
     {
       "label": "REPLACE",
@@ -2497,7 +2498,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "ROUND([truncate], this, [decimals])"
+      "detail": "ROUND(this, [decimals], [truncate])"
     },
     {
       "label": "ROW_NUMBER",
@@ -2524,7 +2525,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "SAFE_ADD(expression, this)"
+      "detail": "SAFE_ADD(this, expression)"
     },
     {
       "label": "SAFE_CONVERT_BYTES_TO_STRING",
@@ -2569,7 +2570,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "SAFE_SUBTRACT(expression, this)"
+      "detail": "SAFE_SUBTRACT(this, expression)"
     },
     {
       "label": "SEARCH",
@@ -2578,7 +2579,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "SEARCH([json_scope], [search_mode], this, expression, [analyzer_options], [analyzer])"
+      "detail": "SEARCH(this, expression, [json_scope], [analyzer], [analyzer_options], [search_mode])"
     },
     {
       "label": "SEC",
@@ -2677,7 +2678,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "SORT_ARRAY([asc], this, [nulls_first])"
+      "detail": "SORT_ARRAY(this, [asc], [nulls_first])"
     },
     {
       "label": "SOUNDEX",
@@ -2713,7 +2714,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "SPLIT(expression, [limit], this)"
+      "detail": "SPLIT(this, expression, [limit])"
     },
     {
       "label": "SPLIT_PART",
@@ -2740,7 +2741,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "ST_DISTANCE(expression, this, [use_spheroid])"
+      "detail": "ST_DISTANCE(this, expression, [use_spheroid])"
     },
     {
       "label": "ST_POINT",
@@ -2785,7 +2786,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "STR_POSITION(substr, [occurrence], [position], this)"
+      "detail": "STR_POSITION(this, substr, [position], [occurrence])"
     },
     {
       "label": "STR_TO_DATE",
@@ -2794,7 +2795,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "STR_TO_DATE(this, [safe], [format])"
+      "detail": "STR_TO_DATE(this, [format], [safe])"
     },
     {
       "label": "STR_TO_MAP",
@@ -2803,7 +2804,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "STR_TO_MAP([duplicate_resolution_callback], [key_value_delim], [pair_delim], this)"
+      "detail": "STR_TO_MAP(this, [pair_delim], [key_value_delim], [duplicate_resolution_callback])"
     },
     {
       "label": "STR_TO_TIME",
@@ -2812,7 +2813,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "STR_TO_TIME([safe], this, [zone], format)"
+      "detail": "STR_TO_TIME(this, format, [zone], [safe])"
     },
     {
       "label": "STR_TO_UNIX",
@@ -2830,7 +2831,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "STRING([zone], this)"
+      "detail": "STRING(this, [zone])"
     },
     {
       "label": "STRING_TO_ARRAY",
@@ -2839,7 +2840,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "STRING_TO_ARRAY([null], [expression], this)"
+      "detail": "STRING_TO_ARRAY(this, [expression], [null])"
     },
     {
       "label": "STRUCT",
@@ -2866,7 +2867,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "STUFF(this, expression, start, length)"
+      "detail": "STUFF(this, start, length, expression)"
     },
     {
       "label": "SUBSTRING",
@@ -2875,7 +2876,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "SUBSTRING([length], [start], this) → TEXT"
+      "detail": "SUBSTRING(this, [start], [length]) → TEXT"
     },
     {
       "label": "SUBSTRING_INDEX",
@@ -2920,7 +2921,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "TIME_ADD([unit], this, expression)"
+      "detail": "TIME_ADD(this, expression, [unit])"
     },
     {
       "label": "TIME_DIFF",
@@ -2938,7 +2939,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "TIME_FROM_PARTS(min, sec, [fractions], [nano], [precision], hour)"
+      "detail": "TIME_FROM_PARTS(hour, min, sec, [nano], [fractions], [precision])"
     },
     {
       "label": "TIME_SLICE",
@@ -2947,7 +2948,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "TIME_SLICE(this, unit, [kind], expression)"
+      "detail": "TIME_SLICE(this, expression, unit, [kind])"
     },
     {
       "label": "TIME_STR_TO_DATE",
@@ -2965,7 +2966,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "TIME_STR_TO_TIME([zone], this)"
+      "detail": "TIME_STR_TO_TIME(this, [zone])"
     },
     {
       "label": "TIME_STR_TO_UNIX",
@@ -2983,7 +2984,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "TIME_SUB([unit], this, expression)"
+      "detail": "TIME_SUB(this, expression, [unit])"
     },
     {
       "label": "TIME_TO_STR",
@@ -2992,7 +2993,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "TIME_TO_STR([culture], [zone], format, this)"
+      "detail": "TIME_TO_STR(this, format, [culture], [zone])"
     },
     {
       "label": "TIME_TO_TIME_STR",
@@ -3019,7 +3020,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "TIME_TRUNC([zone], this, unit)"
+      "detail": "TIME_TRUNC(this, unit, [zone])"
     },
     {
       "label": "TIMESTAMP",
@@ -3028,7 +3029,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "TIMESTAMP([with_tz], [this], [zone])"
+      "detail": "TIMESTAMP([this], [zone], [with_tz])"
     },
     {
       "label": "TIMESTAMP_ADD",
@@ -3037,7 +3038,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "TIMESTAMP_ADD([unit], this, expression)"
+      "detail": "TIMESTAMP_ADD(this, expression, [unit])"
     },
     {
       "label": "TIMESTAMP_DIFF",
@@ -3046,7 +3047,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "TIMESTAMP_DIFF([unit], this, expression)"
+      "detail": "TIMESTAMP_DIFF(this, expression, [unit])"
     },
     {
       "label": "TIMESTAMP_FROM_PARTS",
@@ -3055,7 +3056,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "TIMESTAMP_FROM_PARTS([milli], [nano], [zone], [this], [expression], [year], [min], [month], [day], [sec], [hour])"
+      "detail": "TIMESTAMP_FROM_PARTS([year], [month], [day], [hour], [min], [sec], [nano], [zone], [milli], [this], [expression])"
     },
     {
       "label": "TIMESTAMP_LTZ_FROM_PARTS",
@@ -3064,7 +3065,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "TIMESTAMP_LTZ_FROM_PARTS([nano], [hour], [month], [day], [year], [min], [sec])"
+      "detail": "TIMESTAMP_LTZ_FROM_PARTS([year], [month], [day], [hour], [min], [sec], [nano])"
     },
     {
       "label": "TIMESTAMP_SUB",
@@ -3073,7 +3074,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "TIMESTAMP_SUB(expression, [unit], this)"
+      "detail": "TIMESTAMP_SUB(this, expression, [unit])"
     },
     {
       "label": "TIMESTAMP_TRUNC",
@@ -3082,7 +3083,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "TIMESTAMP_TRUNC(this, [zone], unit)"
+      "detail": "TIMESTAMP_TRUNC(this, unit, [zone])"
     },
     {
       "label": "TIMESTAMP_TZ_FROM_PARTS",
@@ -3091,7 +3092,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "TIMESTAMP_TZ_FROM_PARTS([nano], [hour], [zone], [sec], [year], [month], [min], [day])"
+      "detail": "TIMESTAMP_TZ_FROM_PARTS([year], [month], [day], [hour], [min], [sec], [nano], [zone])"
     },
     {
       "label": "TO_ARRAY",
@@ -3127,7 +3128,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "TO_CHAR([format], [nlsparam], [is_numeric], this)"
+      "detail": "TO_CHAR(this, [format], [nlsparam], [is_numeric])"
     },
     {
       "label": "TO_CODE_POINTS",
@@ -3154,7 +3155,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "TO_DOUBLE([format], this)"
+      "detail": "TO_DOUBLE(this, [format])"
     },
     {
       "label": "TO_MAP",
@@ -3172,7 +3173,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "TO_NUMBER(this, [scale], [nlsparam], [format], [precision])"
+      "detail": "TO_NUMBER(this, [format], [nlsparam], [precision], [scale])"
     },
     {
       "label": "TRANSFORM",
@@ -3190,7 +3191,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "TRANSLATE(from_, to, this)"
+      "detail": "TRANSLATE(this, from_, to)"
     },
     {
       "label": "TRIM",
@@ -3199,7 +3200,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "TRIM(this, [position], [expression], [collation]) → TEXT"
+      "detail": "TRIM(this, [expression], [position], [collation]) → TEXT"
     },
     {
       "label": "TRY",
@@ -3217,7 +3218,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "TRY_BASE64DECODE_BINARY([alphabet], this)"
+      "detail": "TRY_BASE64DECODE_BINARY(this, [alphabet])"
     },
     {
       "label": "TRY_BASE64DECODE_STRING",
@@ -3226,7 +3227,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "TRY_BASE64DECODE_STRING([alphabet], this)"
+      "detail": "TRY_BASE64DECODE_STRING(this, [alphabet])"
     },
     {
       "label": "TRY_CAST",
@@ -3235,7 +3236,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "TRY_CAST([format], [default], [safe], to, [action], this, [requires_string])"
+      "detail": "TRY_CAST(this, to, [format], [safe], [action], [default], [requires_string])"
     },
     {
       "label": "TRY_HEX_DECODE_BINARY",
@@ -3271,7 +3272,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "TS_OR_DS_ADD(expression, [unit], [return_type], this)"
+      "detail": "TS_OR_DS_ADD(this, expression, [unit], [return_type])"
     },
     {
       "label": "TS_OR_DS_DIFF",
@@ -3289,7 +3290,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "TS_OR_DS_TO_DATE(this, [safe], [format])"
+      "detail": "TS_OR_DS_TO_DATE(this, [format], [safe])"
     },
     {
       "label": "TS_OR_DS_TO_DATE_STR",
@@ -3397,7 +3398,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "UNIX_TO_STR([format], this)"
+      "detail": "UNIX_TO_STR(this, [format])"
     },
     {
       "label": "UNIX_TO_TIME",
@@ -3406,7 +3407,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "UNIX_TO_TIME([zone], [hours], [scale], [minutes], this, [format])"
+      "detail": "UNIX_TO_TIME(this, [scale], [zone], [hours], [minutes], [format])"
     },
     {
       "label": "UNIX_TO_TIME_STR",
@@ -3424,7 +3425,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "UNNEST([offset], expressions, [alias], [explode_array])"
+      "detail": "UNNEST(expressions, [alias], [offset], [explode_array])"
     },
     {
       "label": "UPPER",
@@ -3487,7 +3488,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "VECTOR_SEARCH(this, [options], query_table, column_to_search, [query_column_to_search], [top_k], [distance_type])"
+      "detail": "VECTOR_SEARCH(this, column_to_search, query_table, [query_column_to_search], [top_k], [distance_type], [options])"
     },
     {
       "label": "WEEK",
@@ -3496,7 +3497,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "WEEK([mode], this)"
+      "detail": "WEEK(this, [mode])"
     },
     {
       "label": "WEEK_OF_YEAR",
@@ -3514,7 +3515,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "WIDTH_BUCKET(max_value, min_value, this, num_buckets)"
+      "detail": "WIDTH_BUCKET(this, min_value, max_value, num_buckets)"
     },
     {
       "label": "XML_ELEMENT",
@@ -3532,7 +3533,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "XML_TABLE([by_ref], [columns], this, [passing], [namespaces])"
+      "detail": "XML_TABLE(this, [namespaces], [passing], [columns], [by_ref])"
     },
     {
       "label": "XOR",
@@ -3541,7 +3542,7 @@ expression: result
       "category": "function",
       "score": 900,
       "clauseSpecific": false,
-      "detail": "XOR([expression], [expressions], [this])"
+      "detail": "XOR([this], [expression], [expressions])"
     },
     {
       "label": "YEAR",
@@ -3599,7 +3600,7 @@ expression: result
       "insertText": "AGG_FUNC(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "AGG_FUNC(this)"
     },
@@ -3608,16 +3609,16 @@ expression: result
       "insertText": "AI_AGG(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
-      "detail": "AI_AGG(expression, this)"
+      "detail": "AI_AGG(this, expression)"
     },
     {
       "label": "AI_SUMMARIZE_AGG",
       "insertText": "AI_SUMMARIZE_AGG(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "AI_SUMMARIZE_AGG(this)"
     },
@@ -3626,7 +3627,7 @@ expression: result
       "insertText": "ANY_VALUE(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "ANY_VALUE(this) → T"
     },
@@ -3635,25 +3636,25 @@ expression: result
       "insertText": "APPROX_DISTINCT(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
-      "detail": "APPROX_DISTINCT([accuracy], this)"
+      "detail": "APPROX_DISTINCT(this, [accuracy])"
     },
     {
       "label": "APPROX_QUANTILE",
       "insertText": "APPROX_QUANTILE(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
-      "detail": "APPROX_QUANTILE([accuracy], this, quantile, [weight], [error_tolerance])"
+      "detail": "APPROX_QUANTILE(this, quantile, [accuracy], [weight], [error_tolerance])"
     },
     {
       "label": "APPROX_QUANTILES",
       "insertText": "APPROX_QUANTILES(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "APPROX_QUANTILES(this, [expression])"
     },
@@ -3662,16 +3663,16 @@ expression: result
       "insertText": "APPROX_TOP_K(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
-      "detail": "APPROX_TOP_K(this, [counters], [expression])"
+      "detail": "APPROX_TOP_K(this, [expression], [counters])"
     },
     {
       "label": "APPROX_TOP_K_ACCUMULATE",
       "insertText": "APPROX_TOP_K_ACCUMULATE(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "APPROX_TOP_K_ACCUMULATE(this, [expression])"
     },
@@ -3680,7 +3681,7 @@ expression: result
       "insertText": "APPROX_TOP_K_COMBINE(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "APPROX_TOP_K_COMBINE(this, [expression])"
     },
@@ -3689,16 +3690,16 @@ expression: result
       "insertText": "APPROX_TOP_SUM(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
-      "detail": "APPROX_TOP_SUM(this, count, expression)"
+      "detail": "APPROX_TOP_SUM(this, expression, count)"
     },
     {
       "label": "APPROXIMATE_SIMILARITY",
       "insertText": "APPROXIMATE_SIMILARITY(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "APPROXIMATE_SIMILARITY(this)"
     },
@@ -3707,25 +3708,25 @@ expression: result
       "insertText": "ARG_MAX(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
-      "detail": "ARG_MAX(expression, [count], this)"
+      "detail": "ARG_MAX(this, expression, [count])"
     },
     {
       "label": "ARG_MIN",
       "insertText": "ARG_MIN(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
-      "detail": "ARG_MIN(expression, [count], this)"
+      "detail": "ARG_MIN(this, expression, [count])"
     },
     {
       "label": "ARRAY_AGG",
       "insertText": "ARRAY_AGG(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "ARRAY_AGG(this)"
     },
@@ -3734,7 +3735,7 @@ expression: result
       "insertText": "ARRAY_CONCAT_AGG(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "ARRAY_CONCAT_AGG(this)"
     },
@@ -3743,7 +3744,7 @@ expression: result
       "insertText": "ARRAY_UNION_AGG(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "ARRAY_UNION_AGG(this)"
     },
@@ -3752,7 +3753,7 @@ expression: result
       "insertText": "ARRAY_UNIQUE_AGG(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "ARRAY_UNIQUE_AGG(this)"
     },
@@ -3761,7 +3762,7 @@ expression: result
       "insertText": "AVG(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "AVG(this) → NUMERIC"
     },
@@ -3770,7 +3771,7 @@ expression: result
       "insertText": "BITMAP_CONSTRUCT_AGG(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "BITMAP_CONSTRUCT_AGG(this)"
     },
@@ -3779,7 +3780,7 @@ expression: result
       "insertText": "BITMAP_OR_AGG(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "BITMAP_OR_AGG(this)"
     },
@@ -3788,7 +3789,7 @@ expression: result
       "insertText": "BITWISE_AND_AGG(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "BITWISE_AND_AGG(this)"
     },
@@ -3797,7 +3798,7 @@ expression: result
       "insertText": "BITWISE_OR_AGG(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "BITWISE_OR_AGG(this)"
     },
@@ -3806,7 +3807,7 @@ expression: result
       "insertText": "BITWISE_XOR_AGG(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "BITWISE_XOR_AGG(this)"
     },
@@ -3815,7 +3816,7 @@ expression: result
       "insertText": "BOOLXOR_AGG(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "BOOLXOR_AGG(this)"
     },
@@ -3824,7 +3825,7 @@ expression: result
       "insertText": "COMBINED_AGG_FUNC(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "COMBINED_AGG_FUNC(this, [expressions])"
     },
@@ -3833,16 +3834,16 @@ expression: result
       "insertText": "COMBINED_PARAMETERIZED_AGG(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
-      "detail": "COMBINED_PARAMETERIZED_AGG(expressions, this, params)"
+      "detail": "COMBINED_PARAMETERIZED_AGG(this, expressions, params)"
     },
     {
       "label": "CORR",
       "insertText": "CORR(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "CORR(this, expression)"
     },
@@ -3851,7 +3852,7 @@ expression: result
       "insertText": "COUNT(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "COUNT([this], [expressions], [big_int]) → INTEGER"
     },
@@ -3860,7 +3861,7 @@ expression: result
       "insertText": "COUNT_IF(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "COUNT_IF(this)"
     },
@@ -3869,16 +3870,16 @@ expression: result
       "insertText": "COVAR_POP(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
-      "detail": "COVAR_POP(expression, this)"
+      "detail": "COVAR_POP(this, expression)"
     },
     {
       "label": "COVAR_SAMP",
       "insertText": "COVAR_SAMP(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "COVAR_SAMP(this, expression)"
     },
@@ -3887,16 +3888,16 @@ expression: result
       "insertText": "FIRST(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
-      "detail": "FIRST([expression], this)"
+      "detail": "FIRST(this, [expression])"
     },
     {
       "label": "GROUP_CONCAT",
       "insertText": "GROUP_CONCAT(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "GROUP_CONCAT(this, [separator], [on_overflow])"
     },
@@ -3905,7 +3906,7 @@ expression: result
       "insertText": "GROUPING(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "GROUPING(expressions)"
     },
@@ -3914,7 +3915,7 @@ expression: result
       "insertText": "GROUPING_ID(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "GROUPING_ID(expressions)"
     },
@@ -3923,7 +3924,7 @@ expression: result
       "insertText": "HLL(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "HLL(this, [expressions])"
     },
@@ -3932,16 +3933,16 @@ expression: result
       "insertText": "JSON_OBJECT_AGG(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
-      "detail": "JSON_OBJECT_AGG([unique_keys], [return_type], [encoding], [null_handling], [expressions])"
+      "detail": "JSON_OBJECT_AGG([expressions], [null_handling], [unique_keys], [return_type], [encoding])"
     },
     {
       "label": "JSONB_OBJECT_AGG",
       "insertText": "JSONB_OBJECT_AGG(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "JSONB_OBJECT_AGG(this, expression)"
     },
@@ -3950,7 +3951,7 @@ expression: result
       "insertText": "LAST(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "LAST(this, [expression])"
     },
@@ -3959,7 +3960,7 @@ expression: result
       "insertText": "LOGICAL_AND(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "LOGICAL_AND(this)"
     },
@@ -3968,7 +3969,7 @@ expression: result
       "insertText": "LOGICAL_OR(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "LOGICAL_OR(this)"
     },
@@ -3977,7 +3978,7 @@ expression: result
       "insertText": "MAX(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "MAX(this, [expressions]) → T"
     },
@@ -3986,7 +3987,7 @@ expression: result
       "insertText": "MEDIAN(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "MEDIAN(this)"
     },
@@ -3995,7 +3996,7 @@ expression: result
       "insertText": "MIN(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "MIN(this, [expressions]) → T"
     },
@@ -4004,16 +4005,16 @@ expression: result
       "insertText": "MINHASH(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
-      "detail": "MINHASH(expressions, this)"
+      "detail": "MINHASH(this, expressions)"
     },
     {
       "label": "MINHASH_COMBINE",
       "insertText": "MINHASH_COMBINE(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "MINHASH_COMBINE(this)"
     },
@@ -4022,25 +4023,25 @@ expression: result
       "insertText": "OBJECT_AGG(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
-      "detail": "OBJECT_AGG(expression, this)"
+      "detail": "OBJECT_AGG(this, expression)"
     },
     {
       "label": "PARAMETERIZED_AGG",
       "insertText": "PARAMETERIZED_AGG(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
-      "detail": "PARAMETERIZED_AGG(params, this, expressions)"
+      "detail": "PARAMETERIZED_AGG(this, expressions, params)"
     },
     {
       "label": "QUANTILE",
       "insertText": "QUANTILE(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "QUANTILE(this, quantile)"
     },
@@ -4049,7 +4050,7 @@ expression: result
       "insertText": "SKEWNESS(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "SKEWNESS(this)"
     },
@@ -4058,7 +4059,7 @@ expression: result
       "insertText": "STDDEV(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "STDDEV(this)"
     },
@@ -4067,7 +4068,7 @@ expression: result
       "insertText": "STDDEV_POP(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "STDDEV_POP(this)"
     },
@@ -4076,7 +4077,7 @@ expression: result
       "insertText": "STDDEV_SAMP(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "STDDEV_SAMP(this)"
     },
@@ -4085,7 +4086,7 @@ expression: result
       "insertText": "SUM(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "SUM(this) → NUMERIC"
     },
@@ -4094,7 +4095,7 @@ expression: result
       "insertText": "VARIANCE(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "VARIANCE(this)"
     },
@@ -4103,7 +4104,7 @@ expression: result
       "insertText": "VARIANCE_POP(",
       "kind": "function",
       "category": "aggregate",
-      "score": 800,
+      "score": 700,
       "clauseSpecific": false,
       "detail": "VARIANCE_POP(this)"
     },

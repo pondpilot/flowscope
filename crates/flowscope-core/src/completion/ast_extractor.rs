@@ -4,8 +4,7 @@
 //! including CTEs, table aliases, and subquery aliases with their columns.
 
 use sqlparser::ast::{
-    Cte, Expr, Query, Select, SelectItem, SetExpr, Spanned, Statement, TableFactor,
-    TableWithJoins,
+    Cte, Expr, Query, Select, SelectItem, SetExpr, Spanned, Statement, TableFactor, TableWithJoins,
 };
 
 use crate::analyzer::helpers::line_col_to_offset;
@@ -530,10 +529,14 @@ fn compute_projection_span(select: &Select, sql: &str) -> Option<(usize, usize)>
         // Use the start of the FROM clause as the end of projection area
         compute_from_clause_start(from_item, sql).unwrap_or_else(|| {
             // Fallback to last projection item
-            select.projection.last().and_then(|item| {
-                let span = select_item_end_span(item)?;
-                line_col_to_offset(sql, span.0 as usize, span.1 as usize)
-            }).unwrap_or(sql.len())
+            select
+                .projection
+                .last()
+                .and_then(|item| {
+                    let span = select_item_end_span(item)?;
+                    line_col_to_offset(sql, span.0 as usize, span.1 as usize)
+                })
+                .unwrap_or(sql.len())
         })
     } else {
         // No FROM clause - use a large value to include trailing positions
@@ -605,7 +608,7 @@ fn rfind_ascii_case_insensitive(haystack: &str, needle: &[u8]) -> Option<usize> 
         for (i, &needle_byte) in needle.iter().enumerate() {
             let hay_byte = haystack_bytes[start + i];
             // ASCII case-insensitive comparison
-            if hay_byte.to_ascii_lowercase() != needle_byte.to_ascii_lowercase() {
+            if !hay_byte.eq_ignore_ascii_case(&needle_byte) {
                 matches = false;
                 break;
             }

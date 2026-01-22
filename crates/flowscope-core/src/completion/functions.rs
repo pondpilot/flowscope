@@ -169,7 +169,8 @@ pub fn get_function_completions(ctx: &FunctionCompletionContext) -> Vec<Completi
             let mut item = cached.item.clone();
 
             // Apply context-based scoring adjustments
-            let score_adjustment = compute_function_score_adjustment_by_category(cached.category, ctx);
+            let score_adjustment =
+                compute_function_score_adjustment_by_category(cached.category, ctx);
             item.score = score_adjustment;
 
             // Mark as clause-specific if we boosted it for the current context

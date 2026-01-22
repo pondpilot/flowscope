@@ -1192,16 +1192,12 @@ fn window_aggregate_over() {
 
 #[test]
 fn aggregate_scores_respect_context_adjustments() {
-    let group_request = request_at_cursor(
-        "SELECT | FROM users GROUP BY 1",
-        Some(sample_schema()),
-    );
+    let group_request = request_at_cursor("SELECT | FROM users GROUP BY 1", Some(sample_schema()));
     let group_result = completion_items(&group_request);
     assert!(group_result.should_show);
     let group_sum = item_score(&group_result.items, "SUM").expect("SUM present in GROUP BY");
 
-    let where_request =
-        request_at_cursor("SELECT * FROM users WHERE |", Some(sample_schema()));
+    let where_request = request_at_cursor("SELECT * FROM users WHERE |", Some(sample_schema()));
     let where_result = completion_items(&where_request);
     assert!(where_result.should_show);
     let where_sum = item_score(&where_result.items, "SUM").expect("SUM present in WHERE");

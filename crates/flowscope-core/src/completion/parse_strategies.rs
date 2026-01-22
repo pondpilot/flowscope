@@ -14,22 +14,101 @@ use std::ops::Range;
 
 use sqlparser::ast::Statement;
 use sqlparser::parser::Parser;
+use sqlparser::tokenizer::{Token, Tokenizer};
 
+use crate::analyzer::helpers::line_col_to_offset;
 use crate::types::{Dialect, ParseStrategy};
 
 /// Maximum number of truncation attempts to prevent DoS with pathological SQL.
 const MAX_TRUNCATION_ATTEMPTS: usize = 50;
 
-/// Type alias for SQL fix functions that return fixed SQL and synthetic ranges.
-type SqlFixFn = fn(&str, usize) -> Option<(String, Vec<Range<usize>>)>;
+/// Maximum number of parentheses to fix to prevent excessive allocation.
+/// Reasonable SQL rarely has more than 20 levels of nesting.
+const MAX_PAREN_FIXES: usize = 20;
 
-/// Find all positions of a keyword in SQL using ASCII case-insensitive matching.
+/// Length of the "FROM" keyword in bytes (ASCII).
+const FROM_KEYWORD_LENGTH: usize = 4;
+
+/// Type alias for SQL fix functions that return fixed SQL and synthetic ranges.
 ///
-/// This function operates directly on the original string bytes, avoiding the
-/// index mismatch issues that can occur with `to_uppercase()` on non-ASCII strings.
+/// The dialect parameter enables token-aware keyword matching, which correctly
+/// handles keywords inside string literals and comments.
+type SqlFixFn = fn(&str, usize, Dialect) -> Option<(String, Vec<Range<usize>>)>;
+
+/// Represents a word token with its position in the original SQL string.
+#[derive(Debug, Clone)]
+struct WordPosition {
+    /// Byte offset where the word starts in the original SQL
+    start: usize,
+    /// The normalized (uppercase) value of the word
+    value_upper: String,
+}
+
+/// Tokenize SQL and extract word token positions.
+///
+/// Uses sqlparser's tokenizer to properly handle string literals and comments.
+/// Returns None if tokenization fails (e.g., for incomplete SQL).
+fn tokenize_word_positions(sql: &str, dialect: Dialect) -> Option<Vec<WordPosition>> {
+    let dialect_impl = dialect.to_sqlparser_dialect();
+    let mut tokenizer = Tokenizer::new(&*dialect_impl, sql);
+    let tokens = tokenizer.tokenize_with_location().ok()?;
+
+    let mut positions = Vec::new();
+    for token_with_span in tokens {
+        if let Token::Word(word) = &token_with_span.token {
+            // Convert line/column to byte offset
+            let start = line_col_to_offset(
+                sql,
+                token_with_span.span.start.line as usize,
+                token_with_span.span.start.column as usize,
+            )?;
+            positions.push(WordPosition {
+                start,
+                value_upper: word.value.to_uppercase(),
+            });
+        }
+    }
+    Some(positions)
+}
+
+/// Find all positions of a keyword in SQL using token-aware matching.
+///
+/// This function respects SQL syntax by only matching keywords that appear as
+/// actual Word tokens, not inside string literals or comments.
+///
+/// Falls back to byte-level matching if tokenization fails (e.g., incomplete SQL).
 ///
 /// Returns byte indices into the original string where the keyword starts.
+///
+/// Note: Production code should use `find_keyword_positions_with_dialect` for
+/// accurate dialect-specific tokenization. This generic wrapper is kept for tests.
+#[cfg(test)]
 fn find_keyword_positions(sql: &str, keyword: &str) -> Vec<usize> {
+    find_keyword_positions_with_dialect(sql, keyword, Dialect::Generic)
+}
+
+/// Find keyword positions with a specific dialect for tokenization.
+fn find_keyword_positions_with_dialect(sql: &str, keyword: &str, dialect: Dialect) -> Vec<usize> {
+    let keyword_upper = keyword.to_uppercase();
+
+    // Try token-aware search first
+    if let Some(word_positions) = tokenize_word_positions(sql, dialect) {
+        return word_positions
+            .into_iter()
+            .filter(|wp| wp.value_upper == keyword_upper)
+            .map(|wp| wp.start)
+            .collect();
+    }
+
+    // Fall back to byte-level search for incomplete/unparseable SQL
+    find_keyword_positions_fallback(sql, keyword)
+}
+
+/// Byte-level keyword search fallback for when tokenization fails.
+///
+/// This is less accurate (can match keywords inside string literals) but works
+/// with incomplete SQL that the tokenizer cannot handle.
+fn find_keyword_positions_fallback(sql: &str, keyword: &str) -> Vec<usize> {
     let sql_bytes = sql.as_bytes();
     let kw_bytes = keyword.as_bytes();
     let kw_len = kw_bytes.len();
@@ -52,10 +131,42 @@ fn find_keyword_positions(sql: &str, keyword: &str) -> Vec<usize> {
     positions
 }
 
-/// Find the last position of a keyword in SQL using ASCII case-insensitive matching.
+/// Find the last position of a keyword in SQL using token-aware matching.
+///
+/// This function respects SQL syntax by only matching keywords that appear as
+/// actual Word tokens, not inside string literals or comments.
 ///
 /// Returns the byte index of the last occurrence, or None if not found.
+///
+/// Note: Production code should use `rfind_keyword_with_dialect` for
+/// accurate dialect-specific tokenization. This generic wrapper is kept for tests.
+#[cfg(test)]
 fn rfind_keyword(sql: &str, keyword: &str) -> Option<usize> {
+    rfind_keyword_with_dialect(sql, keyword, Dialect::Generic)
+}
+
+/// Find the last keyword position with a specific dialect for tokenization.
+///
+/// Uses reverse iteration to find the last match efficiently without
+/// iterating through all positions.
+fn rfind_keyword_with_dialect(sql: &str, keyword: &str, dialect: Dialect) -> Option<usize> {
+    let keyword_upper = keyword.to_uppercase();
+
+    // Try token-aware search first
+    if let Some(word_positions) = tokenize_word_positions(sql, dialect) {
+        // Use rfind() to iterate from the end and find the last match efficiently
+        return word_positions
+            .into_iter()
+            .rfind(|wp| wp.value_upper == keyword_upper)
+            .map(|wp| wp.start);
+    }
+
+    // Fall back to byte-level search for incomplete/unparseable SQL
+    rfind_keyword_fallback(sql, keyword)
+}
+
+/// Byte-level reverse keyword search fallback for when tokenization fails.
+fn rfind_keyword_fallback(sql: &str, keyword: &str) -> Option<usize> {
     let sql_bytes = sql.as_bytes();
     let kw_bytes = keyword.as_bytes();
     let kw_len = kw_bytes.len();
@@ -186,7 +297,7 @@ pub fn try_truncated_parse(
 
     // Try progressively shorter truncations until we find one that parses
     // Limit attempts to prevent DoS with pathological SQL
-    let candidates = find_truncation_candidates(before_cursor);
+    let candidates = find_truncation_candidates(before_cursor, dialect);
     for truncation in candidates.into_iter().take(MAX_TRUNCATION_ATTEMPTS) {
         if truncation == 0 {
             continue;
@@ -246,7 +357,7 @@ pub fn try_with_fixes(
     ];
 
     for fix in fixes {
-        if let Some((fixed_sql, synthetic)) = fix(sql, cursor_offset) {
+        if let Some((fixed_sql, synthetic)) = fix(sql, cursor_offset, dialect) {
             if let Ok(stmts) = Parser::parse_sql(&*dialect_impl, &fixed_sql) {
                 if !stmts.is_empty() {
                     return Some((stmts, synthetic));
@@ -260,7 +371,7 @@ pub fn try_with_fixes(
 
 /// Generate candidate truncation points from longest to shortest.
 /// These are positions where SQL might be syntactically complete.
-fn find_truncation_candidates(sql: &str) -> Vec<usize> {
+fn find_truncation_candidates(sql: &str, dialect: Dialect) -> Vec<usize> {
     let mut candidates = Vec::new();
     let bytes = sql.as_bytes();
 
@@ -278,9 +389,9 @@ fn find_truncation_candidates(sql: &str) -> Vec<usize> {
     ];
 
     // Find positions right before keywords (truncating before the keyword)
-    // Use ASCII case-insensitive matching to avoid index mismatch with non-ASCII
+    // Use token-aware matching to skip keywords inside strings/comments
     for kw in &keywords {
-        for abs_pos in find_keyword_positions(sql, kw) {
+        for abs_pos in find_keyword_positions_with_dialect(sql, kw, dialect) {
             // Make sure it's a word boundary (preceded by whitespace)
             if abs_pos > 0 && bytes[abs_pos - 1].is_ascii_whitespace() {
                 candidates.push(abs_pos);
@@ -315,17 +426,31 @@ fn find_truncation_candidates(sql: &str) -> Vec<usize> {
 }
 
 /// Fix: Remove trailing comma
-fn fix_trailing_comma(sql: &str, _cursor_offset: usize) -> Option<(String, Vec<Range<usize>>)> {
+fn fix_trailing_comma(
+    sql: &str,
+    _cursor_offset: usize,
+    dialect: Dialect,
+) -> Option<(String, Vec<Range<usize>>)> {
     // Look for patterns like "SELECT a, FROM" or "SELECT a, b, FROM"
     let trimmed = sql.trim_end();
 
     // Simple case: trailing comma before FROM
-    // Use ASCII case-insensitive search to find " FROM"
-    if let Some(from_pos) = rfind_keyword(trimmed, " FROM") {
-        let before_from = trimmed[..from_pos].trim_end();
-        if let Some(without_comma) = before_from.strip_suffix(',') {
-            let fixed = format!("{} {}", without_comma, &trimmed[from_pos..]);
-            return Some((fixed, vec![]));
+    // Find "FROM" keyword and verify it's preceded by whitespace
+    if let Some(from_pos) = rfind_keyword_with_dialect(trimmed, "FROM", dialect) {
+        // Ensure FROM is preceded by whitespace (it's a word boundary)
+        if from_pos > 0 && trimmed.as_bytes()[from_pos - 1].is_ascii_whitespace() {
+            let before_from = trimmed[..from_pos].trim_end();
+            if let Some(without_comma) = before_from.strip_suffix(',') {
+                // Normalize spacing: trim any leading whitespace after FROM and add exactly one space
+                let after_from = &trimmed[from_pos + FROM_KEYWORD_LENGTH..];
+                let after_from_trimmed = after_from.trim_start();
+                let fixed = if after_from_trimmed.is_empty() {
+                    format!("{} FROM", without_comma)
+                } else {
+                    format!("{} FROM {}", without_comma, after_from_trimmed)
+                };
+                return Some((fixed, vec![]));
+            }
         }
     }
 
@@ -333,12 +458,20 @@ fn fix_trailing_comma(sql: &str, _cursor_offset: usize) -> Option<(String, Vec<R
 }
 
 /// Fix: Close unclosed parentheses
-fn fix_unclosed_parens(sql: &str, _cursor_offset: usize) -> Option<(String, Vec<Range<usize>>)> {
+fn fix_unclosed_parens(
+    sql: &str,
+    _cursor_offset: usize,
+    _dialect: Dialect,
+) -> Option<(String, Vec<Range<usize>>)> {
     let open = sql.chars().filter(|&c| c == '(').count();
     let close = sql.chars().filter(|&c| c == ')').count();
 
     if open > close {
         let missing = open - close;
+        // Limit allocation to prevent DoS with pathological input
+        if missing > MAX_PAREN_FIXES {
+            return None;
+        }
         let suffix = ")".repeat(missing);
         let synthetic_start = sql.len();
         let fixed = format!("{}{}", sql, suffix);
@@ -349,19 +482,23 @@ fn fix_unclosed_parens(sql: &str, _cursor_offset: usize) -> Option<(String, Vec<
 }
 
 /// Fix: Add placeholder after incomplete SELECT
-fn fix_incomplete_select(sql: &str, _cursor_offset: usize) -> Option<(String, Vec<Range<usize>>)> {
+fn fix_incomplete_select(
+    sql: &str,
+    _cursor_offset: usize,
+    dialect: Dialect,
+) -> Option<(String, Vec<Range<usize>>)> {
     // Look for "SELECT FROM" without anything between
-    // Use ASCII case-insensitive matching
+    // Use token-aware matching to skip keywords in strings/comments
 
     // Find SELECT keyword
-    let positions = find_keyword_positions(sql, "SELECT");
+    let positions = find_keyword_positions_with_dialect(sql, "SELECT", dialect);
     if let Some(&select_pos) = positions.first() {
         let after_select_start = select_pos + 6;
         if after_select_start <= sql.len() {
             let after_select = &sql[after_select_start..];
 
             // Check if FROM follows immediately (with only whitespace)
-            let from_positions = find_keyword_positions(after_select, "FROM");
+            let from_positions = find_keyword_positions_with_dialect(after_select, "FROM", dialect);
             if let Some(&from_rel_pos) = from_positions.first() {
                 let between = after_select[..from_rel_pos].trim();
                 if between.is_empty() {
@@ -379,11 +516,17 @@ fn fix_incomplete_select(sql: &str, _cursor_offset: usize) -> Option<(String, Ve
 }
 
 /// Fix: Add dummy table after incomplete FROM
-fn fix_incomplete_from(sql: &str, _cursor_offset: usize) -> Option<(String, Vec<Range<usize>>)> {
+fn fix_incomplete_from(
+    sql: &str,
+    _cursor_offset: usize,
+    _dialect: Dialect,
+) -> Option<(String, Vec<Range<usize>>)> {
     let trimmed = sql.trim_end();
 
     // Check if SQL ends with FROM (possibly with whitespace)
-    // Use ASCII case-insensitive matching
+    // Use ASCII case-insensitive matching (ends_with_keyword is byte-level,
+    // but this is safe because we're checking the actual end of SQL, not
+    // searching for a keyword that could be inside a string)
     if ends_with_keyword(trimmed, "FROM") {
         let suffix = " _dummy_";
         let synthetic_start = sql.len();
@@ -395,7 +538,11 @@ fn fix_incomplete_from(sql: &str, _cursor_offset: usize) -> Option<(String, Vec<
 }
 
 /// Fix: Close unclosed string literal
-fn fix_unclosed_string(sql: &str, _cursor_offset: usize) -> Option<(String, Vec<Range<usize>>)> {
+fn fix_unclosed_string(
+    sql: &str,
+    _cursor_offset: usize,
+    _dialect: Dialect,
+) -> Option<(String, Vec<Range<usize>>)> {
     // Count quotes
     let single_quotes = sql.chars().filter(|&c| c == '\'').count();
     let double_quotes = sql.chars().filter(|&c| c == '"').count();
@@ -418,6 +565,81 @@ fn fix_unclosed_string(sql: &str, _cursor_offset: usize) -> Option<(String, Vec<
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_find_keyword_skips_string_literals() {
+        // "WHERE" inside a string literal should NOT be matched
+        let sql = "SELECT 'WHERE is fun' FROM users";
+        let positions = find_keyword_positions(sql, "WHERE");
+        assert!(
+            positions.is_empty(),
+            "Should not find WHERE inside string literal, found at: {:?}",
+            positions
+        );
+
+        // But actual WHERE keyword should be found
+        let sql2 = "SELECT 'text' FROM users WHERE id = 1";
+        let positions2 = find_keyword_positions(sql2, "WHERE");
+        assert_eq!(positions2.len(), 1);
+        assert_eq!(&sql2[positions2[0]..positions2[0] + 5], "WHERE");
+    }
+
+    #[test]
+    fn test_find_keyword_skips_comments() {
+        // "WHERE" inside a comment should NOT be matched
+        let sql = "SELECT * FROM users -- WHERE is commented out";
+        let positions = find_keyword_positions(sql, "WHERE");
+        assert!(
+            positions.is_empty(),
+            "Should not find WHERE inside line comment"
+        );
+
+        // Block comment
+        let sql2 = "SELECT * /* WHERE */ FROM users";
+        let positions2 = find_keyword_positions(sql2, "WHERE");
+        assert!(
+            positions2.is_empty(),
+            "Should not find WHERE inside block comment"
+        );
+    }
+
+    #[test]
+    fn test_find_keyword_case_insensitive() {
+        let sql = "select * from users where id = 1";
+        let positions = find_keyword_positions(sql, "WHERE");
+        assert_eq!(positions.len(), 1);
+        assert_eq!(&sql[positions[0]..positions[0] + 5], "where");
+    }
+
+    #[test]
+    fn test_find_keyword_handles_unicode_prefix() {
+        let sql = "SELECT μ, FROM users";
+        let positions = find_keyword_positions(sql, "FROM");
+        assert_eq!(positions, vec!["SELECT μ, ".len()]);
+    }
+
+    #[test]
+    fn test_rfind_keyword_token_aware() {
+        // Should find the actual FROM keyword, not the one in the string
+        let sql = "SELECT 'FROM somewhere' FROM users";
+        let pos = rfind_keyword(sql, "FROM");
+        assert!(pos.is_some());
+        let pos = pos.unwrap();
+        assert_eq!(&sql[pos..pos + 4], "FROM");
+        // The FROM in 'FROM somewhere' is at position 8, actual FROM is at 24
+        assert!(pos > 20, "Should find actual FROM, not one in string");
+    }
+
+    #[test]
+    fn test_rfind_keyword_handles_unicode_prefix() {
+        let sql = "SELECT μ, FROM users";
+        let pos = rfind_keyword(sql, "FROM").expect("should find FROM");
+        assert_eq!(
+            pos,
+            "SELECT μ, ".len(),
+            "should account for multi-byte chars"
+        );
+    }
 
     #[test]
     fn test_full_parse_valid_sql() {
@@ -459,7 +681,7 @@ mod tests {
     #[test]
     fn test_fix_unclosed_parens() {
         let sql = "SELECT COUNT(* FROM users";
-        let result = fix_unclosed_parens(sql, sql.len());
+        let result = fix_unclosed_parens(sql, sql.len(), Dialect::Generic);
         assert!(result.is_some());
         let (fixed, synthetic) = result.unwrap();
         assert!(fixed.ends_with(')'));
@@ -469,7 +691,7 @@ mod tests {
     #[test]
     fn test_fix_incomplete_select() {
         let sql = "SELECT FROM users";
-        let result = fix_incomplete_select(sql, sql.len());
+        let result = fix_incomplete_select(sql, sql.len(), Dialect::Generic);
         assert!(result.is_some());
         let (fixed, synthetic) = result.unwrap();
         assert!(fixed.contains("1"));
@@ -479,7 +701,7 @@ mod tests {
     #[test]
     fn test_fix_incomplete_from() {
         let sql = "SELECT * FROM";
-        let result = fix_incomplete_from(sql, sql.len());
+        let result = fix_incomplete_from(sql, sql.len(), Dialect::Generic);
         assert!(result.is_some());
         let (fixed, _) = result.unwrap();
         assert!(fixed.contains("_dummy_"));
@@ -488,7 +710,7 @@ mod tests {
     #[test]
     fn test_fix_unclosed_string() {
         let sql = "SELECT 'hello";
-        let result = fix_unclosed_string(sql, sql.len());
+        let result = fix_unclosed_string(sql, sql.len(), Dialect::Generic);
         assert!(result.is_some());
         let (fixed, _) = result.unwrap();
         assert!(fixed.ends_with('\''));

@@ -481,6 +481,39 @@ pub(crate) fn split_statement_spans(sql: &str) -> Vec<Span> {
         .collect()
 }
 
+/// Split SQL text into statement ranges by finding semicolons outside of strings/comments.
+///
+/// # Design Decision: Character-Level State Machine
+///
+/// This function intentionally uses a character-by-character state machine rather than
+/// leveraging sqlparser's tokenizer. This is necessary for several reasons:
+///
+/// 1. **Pre-tokenization requirement**: Statement splitting must happen *before* parsing
+///    because some analysis modes need statement boundaries before the dialect is
+///    determined. This is a chicken-and-egg problem where we can't tokenize without
+///    knowing the dialect, but we may need statement boundaries to help determine context.
+///
+/// 2. **Error tolerance**: The parser/tokenizer may fail on incomplete or invalid SQL,
+///    but we still need to identify statement boundaries for partial analysis, error
+///    recovery, and editor features like completions that work with incomplete input.
+///
+/// 3. **Multi-dialect support**: The state machine handles quoting styles from multiple
+///    dialects simultaneously (double quotes, single quotes, backticks, brackets),
+///    allowing statement splitting to work regardless of dialect.
+///
+/// 4. **Dollar-quoted strings**: PostgreSQL's `$tag$...$tag$` strings require special
+///    handling that's simpler to implement in a dedicated state machine.
+///
+/// # Note on Alternatives
+///
+/// While it might seem cleaner to use sqlparser's tokenizer (which properly handles
+/// all these cases), the tokenizer is designed to work on single statements and may
+/// fail on multi-statement input with syntax errors. This function is specifically
+/// designed to be resilient to partial/invalid SQL.
+///
+/// A future improvement could use error-recovering tokenization when available in
+/// sqlparser, but for now this manual approach provides the most reliable results
+/// for the analysis use cases.
 fn compute_statement_ranges(sql: &str) -> Vec<Range<usize>> {
     let mut ranges = Vec::new();
     if sql.is_empty() {

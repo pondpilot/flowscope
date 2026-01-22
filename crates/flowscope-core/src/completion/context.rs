@@ -1046,21 +1046,64 @@ fn should_show_for_cursor(sql: &str, cursor_offset: usize, token_value: &str) ->
     if !token_value.is_empty() {
         return true;
     }
-    if cursor_offset == 0 || cursor_offset > sql.len() {
+    // cursor_offset must be > 0 (we need to look at the previous character) and at a
+    // valid UTF-8 char boundary. The is_char_boundary check also catches out-of-bounds
+    // offsets (returns false for cursor_offset > sql.len()) and handles the case where
+    // an external client (e.g., LSP) sends a byte offset in the middle of a multi-byte
+    // character.
+    if cursor_offset == 0 || !sql.is_char_boundary(cursor_offset) {
         return false;
     }
-    let bytes = sql.as_bytes();
-    let prev = bytes[cursor_offset.saturating_sub(1)];
-    let prev_char = prev as char;
+
+    // Optimized previous character lookup: O(1) for ASCII (common case),
+    // O(n) fallback only for multi-byte UTF-8 characters.
+    let prev_byte = sql.as_bytes()[cursor_offset - 1];
+
+    // Fast path: if it's an ASCII byte, we can check directly without UTF-8 decoding
+    if prev_byte.is_ascii() {
+        let prev_char = prev_byte as char;
+        if prev_char == '.' || prev_char == '(' || prev_char == ',' {
+            return true;
+        }
+        // Whitespace after SQL keywords is a valid completion position
+        // (e.g., "SELECT |" or "FROM |"). Return true to allow completions.
+        if prev_char.is_ascii_whitespace() {
+            return true;
+        }
+        // Not a trigger character - don't show completions in middle of identifiers
+        return false;
+    }
+
+    // Slow path: non-ASCII byte, need to properly decode UTF-8.
+    // This handles multi-byte characters like Unicode whitespace.
+    // Find the previous character by scanning backwards to the character boundary.
+    // UTF-8 continuation bytes have the pattern 10xxxxxx (0x80-0xBF), so we scan
+    // backwards until we find a byte that isn't a continuation byte.
+    // This is O(1) bounded since UTF-8 characters are at most 4 bytes.
+    let mut char_start = cursor_offset - 1;
+    // Safety: UTF-8 characters are at most 4 bytes, so we need at most 3 backward steps
+    for _ in 0..3 {
+        if char_start == 0 || sql.is_char_boundary(char_start) {
+            break;
+        }
+        char_start -= 1;
+    }
+    // If we still haven't found a valid boundary, the string is malformed
+    if !sql.is_char_boundary(char_start) {
+        return false;
+    }
+    let prev_char = match sql[char_start..cursor_offset].chars().next() {
+        Some(ch) => ch,
+        None => return false,
+    };
     if prev_char == '.' || prev_char == '(' || prev_char == ',' {
         return true;
     }
-    // Whitespace after SQL keywords is a valid completion position
-    // (e.g., "SELECT |" or "FROM |"). Return true to allow completions.
     if prev_char.is_whitespace() {
         return true;
     }
-    true
+    // Not a trigger character - don't show completions in middle of identifiers
+    false
 }
 
 /// Checks if a character is valid in an unquoted SQL identifier.
@@ -3127,5 +3170,32 @@ mod tests {
             x_item.is_none(),
             "Lateral alias should not appear when using table qualifier"
         );
+    }
+
+    #[test]
+    fn test_should_show_for_cursor_utf8_boundary() {
+        // Multi-byte UTF-8 character (emoji is 4 bytes)
+        let sql = "SELECT 🎉 FROM";
+        // Emoji starts at byte 7, cursor at byte 8 is mid-character
+        let mid_emoji_offset = 8;
+
+        // Should not panic, should return false for invalid boundary
+        assert!(!should_show_for_cursor(sql, mid_emoji_offset, ""));
+    }
+
+    #[test]
+    fn test_should_show_for_cursor_valid_positions() {
+        // Test various valid cursor positions
+        let sql = "SELECT . FROM";
+        assert!(should_show_for_cursor(sql, 8, "")); // After dot
+        assert!(!should_show_for_cursor(sql, 0, "")); // At start (no prev char)
+        assert!(should_show_for_cursor(sql, 7, "")); // After space
+    }
+
+    #[test]
+    fn test_should_show_for_cursor_out_of_bounds() {
+        let sql = "SELECT";
+        assert!(!should_show_for_cursor(sql, 100, "")); // Way out of bounds
+        assert!(!should_show_for_cursor(sql, sql.len() + 1, "")); // Just past end
     }
 }
