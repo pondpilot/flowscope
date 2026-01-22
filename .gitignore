@@ -31,6 +31,7 @@ pkg/
 
 # Test artifacts
 coverage/
+lcov.info
 .nyc_output/
 playwright-report/
 test-results/
@@ -62,3 +63,6 @@ crates/flowscope-core/fuzz/artifacts/
 
 # Git worktrees
 .worktrees/
+
+# ralphex progress logs
+progress-*.txt

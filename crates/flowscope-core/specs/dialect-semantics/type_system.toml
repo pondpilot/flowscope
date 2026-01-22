@@ -1,31 +1,106 @@
-# SQL Type System
+# SQL Type System Specification
+# Defines canonical types, aliases, and implicit cast rules
 
-[categories]
-text = ["NAME", "CHAR", "NVARCHAR", "NCHAR", "VARCHAR", "TEXT"]
-integer = ["UTINYINT", "INT256", "INT128", "INT", "USMALLINT", "MEDIUMINT", "BIT", "UMEDIUMINT", "UINT256", "BIGINT", "UINT128", "UBIGINT", "SMALLINT", "TINYINT", "UINT"]
-float = ["FLOAT", "DOUBLE"]
-numeric = ["UDECIMAL", "UDOUBLE", "INT256", "INT", "DECIMAL256", "FLOAT", "BIT", "DECIMAL32", "DECIMAL", "UBIGINT", "TINYINT", "UTINYINT", "DOUBLE", "MONEY", "INT128", "USMALLINT", "MEDIUMINT", "UMEDIUMINT", "UINT256", "DECIMAL64", "BIGINT", "DECIMAL128", "UINT128", "SMALLMONEY", "SMALLINT", "UINT", "BIGDECIMAL"]
-temporal = ["SMALLDATETIME", "TIMESTAMP_MS", "TIME", "DATETIME64", "TIMESTAMP_S", "TIMESTAMP", "TIMESTAMPTZ", "TIMESTAMPLTZ", "TIMESTAMP_NS", "TIMETZ", "TIMESTAMPNTZ", "DATETIME2", "DATE", "DATE32", "DATETIME"]
+[type_categories]
+# Canonical types with their common aliases
+integer = ["int", "int4", "integer", "int64", "bigint", "smallint", "tinyint", "int2", "int8"]
+float = ["float", "float4", "float8", "double", "real", "decimal", "numeric", "number"]
+text = ["varchar", "char", "text", "string", "nvarchar", "nchar", "character"]
+boolean = ["bool", "boolean"]
+timestamp = ["timestamp", "timestamptz", "datetime", "timestamp_ntz", "timestamp_ltz", "timestamp_tz"]
+date = ["date"]
+time = ["time", "timetz"]
+binary = ["binary", "varbinary", "bytea", "blob", "bytes"]
+json = ["json", "jsonb", "variant", "object"]
+array = ["array"]
 
-[coercion]
-# Type precedence (highest to lowest)
-text_precedence = ["TEXT", "NVARCHAR", "VARCHAR", "NCHAR", "CHAR"]
-numeric_precedence = ["DOUBLE", "FLOAT", "DECIMAL", "BIGINT", "INT", "SMALLINT", "TINYINT"]
-temporal_precedence = ["TIMESTAMPLTZ", "TIMESTAMPTZ", "TIMESTAMP", "DATETIME", "DATE"]
+[implicit_casts]
+# From type -> types it can implicitly cast to
+integer = ["float", "text"]
+float = ["text"]
+date = ["timestamp", "text"]
+time = ["text"]
+timestamp = ["text"]
+boolean = ["text", "integer"]
+json = ["text"]
 
-[coerces_to]
-# What types each type can be coerced INTO
-NVARCHAR = ["TEXT"]
-VARCHAR = ["TEXT", "NVARCHAR"]
-NCHAR = ["VARCHAR", "TEXT", "NVARCHAR"]
-CHAR = ["VARCHAR", "NCHAR", "TEXT", "NVARCHAR"]
-FLOAT = ["DOUBLE"]
-DECIMAL = ["FLOAT", "DOUBLE", "BIGDECIMAL"]
-BIGINT = ["DECIMAL", "FLOAT", "DOUBLE", "BIGDECIMAL"]
-INT = ["DECIMAL", "BIGINT", "FLOAT", "DOUBLE"]
-SMALLINT = ["BIGINT", "DECIMAL", "DOUBLE", "INT", "FLOAT"]
-TINYINT = ["BIGINT", "DECIMAL", "DOUBLE", "SMALLINT", "INT", "FLOAT"]
-TIMESTAMPTZ = ["TIMESTAMPLTZ"]
-TIMESTAMP = ["TIMESTAMPTZ", "TIMESTAMPLTZ"]
-DATETIME = ["TIMESTAMP", "TIMESTAMPTZ", "TIMESTAMPLTZ"]
-DATE = ["TIMESTAMP", "TIMESTAMPTZ", "TIMESTAMPLTZ", "DATETIME"]
+[dialect_type_mapping]
+# Canonical type -> dialect-specific preferred name
+
+[dialect_type_mapping.integer]
+postgres = "integer"
+bigquery = "INT64"
+snowflake = "INTEGER"
+mysql = "INT"
+mssql = "INT"
+redshift = "INTEGER"
+duckdb = "INTEGER"
+clickhouse = "Int64"
+databricks = "INT"
+hive = "INT"
+sqlite = "INTEGER"
+
+[dialect_type_mapping.float]
+postgres = "double precision"
+bigquery = "FLOAT64"
+snowflake = "FLOAT"
+mysql = "DOUBLE"
+mssql = "FLOAT"
+redshift = "FLOAT8"
+duckdb = "DOUBLE"
+clickhouse = "Float64"
+databricks = "DOUBLE"
+hive = "DOUBLE"
+sqlite = "REAL"
+
+[dialect_type_mapping.text]
+postgres = "text"
+bigquery = "STRING"
+snowflake = "VARCHAR"
+mysql = "VARCHAR"
+mssql = "NVARCHAR"
+redshift = "VARCHAR"
+duckdb = "VARCHAR"
+clickhouse = "String"
+databricks = "STRING"
+hive = "STRING"
+sqlite = "TEXT"
+
+[dialect_type_mapping.boolean]
+postgres = "boolean"
+bigquery = "BOOL"
+snowflake = "BOOLEAN"
+mysql = "BOOLEAN"
+mssql = "BIT"
+redshift = "BOOLEAN"
+duckdb = "BOOLEAN"
+clickhouse = "Bool"
+databricks = "BOOLEAN"
+hive = "BOOLEAN"
+sqlite = "INTEGER"
+
+[dialect_type_mapping.timestamp]
+postgres = "timestamp"
+bigquery = "TIMESTAMP"
+snowflake = "TIMESTAMP_NTZ"
+mysql = "DATETIME"
+mssql = "DATETIME2"
+redshift = "TIMESTAMP"
+duckdb = "TIMESTAMP"
+clickhouse = "DateTime"
+databricks = "TIMESTAMP"
+hive = "TIMESTAMP"
+sqlite = "TEXT"
+
+[dialect_type_mapping.date]
+postgres = "date"
+bigquery = "DATE"
+snowflake = "DATE"
+mysql = "DATE"
+mssql = "DATE"
+redshift = "DATE"
+duckdb = "DATE"
+clickhouse = "Date"
+databricks = "DATE"
+hive = "DATE"
+sqlite = "TEXT"

@@ -141,3 +141,84 @@ pub fn is_udtf_function(name: &str) -> bool {
     let lower = name.to_ascii_lowercase();
     UDTF_FUNCTIONS.contains(lower.as_str())
 }
+
+/// Return type rule for function type inference.
+///
+/// This enum represents the different strategies for determining a function's
+/// return type during type inference in SQL analysis.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReturnTypeRule {
+    /// Returns Integer (e.g., COUNT, ROW_NUMBER)
+    Integer,
+    /// Returns Number (e.g., SUM, AVG)
+    Numeric,
+    /// Returns Text (e.g., CONCAT, SUBSTRING)
+    Text,
+    /// Returns Timestamp (e.g., NOW, CURRENT_TIMESTAMP)
+    Timestamp,
+    /// Returns Boolean (e.g., AND, OR)
+    Boolean,
+    /// Returns Date (e.g., CURRENT_DATE)
+    Date,
+    /// Returns same type as first argument (e.g., MIN, MAX, COALESCE)
+    MatchFirstArg,
+}
+
+/// Infers the return type rule for a SQL function.
+///
+/// This function returns the return type rule for known SQL functions,
+/// enabling data-driven type inference. The check is case-insensitive.
+///
+/// # Arguments
+///
+/// * `name` - The function name (case-insensitive)
+///
+/// # Returns
+///
+/// `Some(ReturnTypeRule)` if the function has a known return type rule,
+/// `None` otherwise (fallback to existing logic).
+///
+/// # Example
+///
+/// ```ignore
+/// use flowscope_core::generated::infer_function_return_type;
+///
+/// assert_eq!(infer_function_return_type("COUNT"), Some(ReturnTypeRule::Integer));
+/// assert_eq!(infer_function_return_type("MIN"), Some(ReturnTypeRule::MatchFirstArg));
+/// assert_eq!(infer_function_return_type("UNKNOWN_FUNC"), None);
+/// ```
+pub fn infer_function_return_type(name: &str) -> Option<ReturnTypeRule> {
+    // SQL function names are ASCII, so we can use the faster ASCII lowercase
+    let lower = name.to_ascii_lowercase();
+    match lower.as_str() {
+        "and" => Some(ReturnTypeRule::Boolean),
+        "any_value" => Some(ReturnTypeRule::MatchFirstArg),
+        "avg" => Some(ReturnTypeRule::Numeric),
+        "coalesce" => Some(ReturnTypeRule::MatchFirstArg),
+        "concat" => Some(ReturnTypeRule::Text),
+        "concat_ws" => Some(ReturnTypeRule::Text),
+        "count" => Some(ReturnTypeRule::Integer),
+        "current_date" => Some(ReturnTypeRule::Date),
+        "current_timestamp" => Some(ReturnTypeRule::Timestamp),
+        "date_trunc" => Some(ReturnTypeRule::MatchFirstArg),
+        "dense_rank" => Some(ReturnTypeRule::Integer),
+        "first_value" => Some(ReturnTypeRule::MatchFirstArg),
+        "lag" => Some(ReturnTypeRule::MatchFirstArg),
+        "last_value" => Some(ReturnTypeRule::MatchFirstArg),
+        "lead" => Some(ReturnTypeRule::MatchFirstArg),
+        "lower" => Some(ReturnTypeRule::Text),
+        "max" => Some(ReturnTypeRule::MatchFirstArg),
+        "min" => Some(ReturnTypeRule::MatchFirstArg),
+        "now" => Some(ReturnTypeRule::Timestamp),
+        "ntile" => Some(ReturnTypeRule::Integer),
+        "or" => Some(ReturnTypeRule::Boolean),
+        "rank" => Some(ReturnTypeRule::Integer),
+        "replace" => Some(ReturnTypeRule::Text),
+        "row_number" => Some(ReturnTypeRule::Integer),
+        "substring" => Some(ReturnTypeRule::Text),
+        "sum" => Some(ReturnTypeRule::Numeric),
+        "trim" => Some(ReturnTypeRule::Text),
+        "upper" => Some(ReturnTypeRule::Text),
+        _ => None,
+    }
+}

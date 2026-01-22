@@ -223,6 +223,7 @@ fn has_edge(
 #[case("snowflake", Dialect::Snowflake)]
 #[case("bigquery", Dialect::Bigquery)]
 #[case("redshift", Dialect::Redshift)]
+#[case("mysql", Dialect::Mysql)]
 fn multi_dialect_fixtures_cover_core_constructs(#[case] dir_name: &str, #[case] dialect: Dialect) {
     let dir = dialect_fixture_dir(dir_name);
     let fixtures = list_fixture_files(&dir);
@@ -1836,6 +1837,136 @@ fn bigquery_unnest_arrays() {
     assert!(
         tables.contains("users"),
         "UNNEST should preserve base table lineage"
+    );
+}
+
+// Task 4: Tier 4 BigQuery Features - Lineage assertions
+
+#[test]
+fn bigquery_hyphenated_project_refs() {
+    let sql = r#"
+        SELECT id, name
+        FROM `project-a.dataset-b.users`;
+    "#;
+
+    let result = run_analysis(sql, Dialect::Bigquery, None);
+    let tables = collect_table_names(&result);
+
+    assert!(
+        tables.contains("project-a.dataset-b.users"),
+        "hyphenated project refs should track full qualified name"
+    );
+}
+
+#[test]
+fn bigquery_hyphenated_refs_join() {
+    let sql = r#"
+        SELECT
+            u.user_id,
+            o.order_total
+        FROM `my-company.core.users` u
+        JOIN `my-company.sales.orders` o ON u.user_id = o.user_id;
+    "#;
+
+    let result = run_analysis(sql, Dialect::Bigquery, None);
+    let tables = collect_table_names(&result);
+
+    assert!(
+        tables.contains("my-company.core.users"),
+        "should track hyphenated users table"
+    );
+    assert!(
+        tables.contains("my-company.sales.orders"),
+        "should track hyphenated orders table"
+    );
+}
+
+#[test]
+fn bigquery_unnest_with_offset() {
+    let sql = r#"
+        SELECT item, offset_pos
+        FROM UNNEST([10, 20, 30]) AS item WITH OFFSET AS offset_pos;
+    "#;
+
+    let result = run_analysis(sql, Dialect::Bigquery, None);
+
+    // UNNEST on literal array should parse without error
+    assert!(
+        result.issues.is_empty()
+            || result
+                .issues
+                .iter()
+                .all(|i| i.severity != flowscope_core::Severity::Error),
+        "UNNEST with OFFSET should parse without errors"
+    );
+}
+
+#[test]
+fn bigquery_unnest_struct_expansion() {
+    let sql = r#"
+        SELECT
+            order_id,
+            line_item.product_id,
+            line_item.quantity
+        FROM orders,
+        UNNEST(line_items) AS line_item;
+    "#;
+
+    let result = run_analysis(sql, Dialect::Bigquery, None);
+    let tables = collect_table_names(&result);
+
+    assert!(
+        tables.contains("orders"),
+        "UNNEST struct expansion should track source table"
+    );
+}
+
+#[test]
+fn bigquery_select_except_excludes_columns() {
+    let sql = r#"
+        SELECT * EXCEPT (password, ssn)
+        FROM users;
+    "#;
+
+    let result = run_analysis(sql, Dialect::Bigquery, None);
+    let tables = collect_table_names(&result);
+
+    assert!(
+        tables.contains("users"),
+        "SELECT EXCEPT should track source table"
+    );
+}
+
+#[test]
+fn bigquery_select_replace_transforms() {
+    let sql = r#"
+        SELECT * REPLACE (UPPER(email) AS email)
+        FROM customers;
+    "#;
+
+    let result = run_analysis(sql, Dialect::Bigquery, None);
+    let tables = collect_table_names(&result);
+
+    assert!(
+        tables.contains("customers"),
+        "SELECT REPLACE should track source table"
+    );
+}
+
+#[test]
+fn bigquery_select_except_replace_combined() {
+    let sql = r#"
+        SELECT * EXCEPT (internal_id)
+        REPLACE (ROUND(price, 2) AS price, LOWER(sku) AS sku)
+        FROM products;
+    "#;
+
+    let result = run_analysis(sql, Dialect::Bigquery, None);
+    let tables = collect_table_names(&result);
+
+    assert!(
+        tables.contains("products"),
+        "Combined EXCEPT/REPLACE should track source table"
     );
 }
 
@@ -6828,5 +6959,459 @@ fn backward_inference_cycle_detection() {
     assert!(
         !data_flow_from_shared_source.is_empty(),
         "Data flow edges should exist from shared_source.id (referenced through both branches)"
+    );
+}
+
+// Task 1: Tier 1 Edge Cases - Lineage assertions
+
+#[test]
+fn nested_joins_track_all_tables() {
+    // Level 3: Triple-nested join with parentheses
+    let sql = r#"
+        SELECT
+            o.order_id,
+            c.email,
+            p.product_name,
+            s.supplier_name
+        FROM
+            (
+                (
+                    (
+                        orders o
+                        JOIN customers c ON c.customer_id = o.customer_id
+                    )
+                    JOIN products p ON p.product_id = o.product_id
+                )
+                JOIN suppliers s ON s.supplier_id = p.supplier_id
+            )
+        WHERE c.email = 'sample@example.com'
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let tables = collect_table_names(&result);
+
+    // All four tables should be tracked through nested join structure
+    for expected in ["orders", "customers", "products", "suppliers"] {
+        assert!(
+            tables.contains(expected),
+            "nested join should track table {expected}; saw {tables:?}"
+        );
+    }
+
+    let stmt = first_statement(&result);
+
+    // Verify output columns are present
+    let columns = column_labels(stmt);
+    for expected in ["order_id", "email", "product_name", "supplier_name"] {
+        assert!(
+            columns.contains(&expected.to_string()),
+            "expected column {expected} in output; saw {columns:?}"
+        );
+    }
+
+    // Verify data flow edges exist (joins create data flow between tables)
+    let data_flow_edges = edges_by_type(stmt, EdgeType::DataFlow);
+    assert!(
+        !data_flow_edges.is_empty(),
+        "expected data flow edges for 4-way join"
+    );
+}
+
+#[test]
+fn postgres_array_slicing_tracks_source_table() {
+    let sql = r#"
+        SELECT a[:], b[:1], c[2:], d[2:3]
+        FROM array_data
+    "#;
+
+    let result = run_analysis(sql, Dialect::Postgres, None);
+    let tables = collect_table_names(&result);
+
+    assert!(
+        tables.contains("array_data"),
+        "array slicing query should track source table; saw {tables:?}"
+    );
+
+    let stmt = first_statement(&result);
+
+    // Verify the statement was parsed without errors
+    assert!(
+        !result.summary.has_errors,
+        "array slicing query should parse without errors: {:?}",
+        result.issues
+    );
+
+    // Verify the table node exists
+    let table_node = find_table_node(stmt, "array_data");
+    assert!(
+        table_node.is_some(),
+        "array_data table node should exist in lineage"
+    );
+}
+
+// Task 2: Tier 2 PostgreSQL Dialect Depth - Lineage assertions
+
+#[test]
+fn lateral_join_tracks_outer_and_subquery_tables() {
+    let sql = r#"
+        SELECT
+            d.department_id,
+            d.name AS department_name,
+            emp.employee_name,
+            emp.salary
+        FROM departments d
+        JOIN LATERAL (
+            SELECT e.name AS employee_name, e.salary
+            FROM employees e
+            WHERE e.department_id = d.department_id
+            ORDER BY e.salary DESC
+            LIMIT 3
+        ) emp ON true
+    "#;
+
+    let result = run_analysis(sql, Dialect::Postgres, None);
+    let tables = collect_table_names(&result);
+
+    // Both the outer table and the table inside LATERAL should be tracked
+    assert!(
+        tables.contains("departments"),
+        "LATERAL join should track outer table; saw {tables:?}"
+    );
+    assert!(
+        tables.contains("employees"),
+        "LATERAL join should track table inside LATERAL subquery; saw {tables:?}"
+    );
+
+    let stmt = first_statement(&result);
+
+    // Verify output columns are present
+    let columns = column_labels(stmt);
+    for expected in [
+        "department_id",
+        "department_name",
+        "employee_name",
+        "salary",
+    ] {
+        assert!(
+            columns.contains(&expected.to_string()),
+            "expected column {expected} in LATERAL join output; saw {columns:?}"
+        );
+    }
+
+    // Verify no parsing errors
+    assert!(
+        !result.summary.has_errors,
+        "LATERAL join should parse without errors: {:?}",
+        result.issues
+    );
+}
+
+#[test]
+fn filter_clause_tracks_aggregation_sources() {
+    let sql = r#"
+        SELECT
+            department_id,
+            SUM(salary) AS total_salary,
+            SUM(salary) FILTER (WHERE years_employed > 5) AS senior_salary,
+            AVG(salary) FILTER (WHERE performance_rating >= 4) AS high_performer_avg
+        FROM employees
+        GROUP BY department_id
+    "#;
+
+    let result = run_analysis(sql, Dialect::Postgres, None);
+    let tables = collect_table_names(&result);
+
+    assert!(
+        tables.contains("employees"),
+        "FILTER clause query should track source table; saw {tables:?}"
+    );
+
+    let stmt = first_statement(&result);
+
+    // Verify output columns are present
+    let columns = column_labels(stmt);
+    for expected in [
+        "department_id",
+        "total_salary",
+        "senior_salary",
+        "high_performer_avg",
+    ] {
+        assert!(
+            columns.contains(&expected.to_string()),
+            "expected column {expected} in FILTER clause output; saw {columns:?}"
+        );
+    }
+
+    // Verify no parsing errors
+    assert!(
+        !result.summary.has_errors,
+        "FILTER clause query should parse without errors: {:?}",
+        result.issues
+    );
+}
+
+#[test]
+fn group_by_cube_rollup_tracks_source_table() {
+    let sql = r#"
+        SELECT
+            region,
+            city,
+            GROUPING(region, city) AS grp_idx,
+            COUNT(DISTINCT id) AS num_total
+        FROM locations
+        GROUP BY GROUPING SETS ((region), (city), (region, city), ())
+    "#;
+
+    let result = run_analysis(sql, Dialect::Postgres, None);
+    let tables = collect_table_names(&result);
+
+    assert!(
+        tables.contains("locations"),
+        "GROUPING SETS query should track source table; saw {tables:?}"
+    );
+
+    let stmt = first_statement(&result);
+
+    // Verify output columns are present
+    let columns = column_labels(stmt);
+    for expected in ["region", "city", "grp_idx", "num_total"] {
+        assert!(
+            columns.contains(&expected.to_string()),
+            "expected column {expected} in GROUPING SETS output; saw {columns:?}"
+        );
+    }
+
+    // Verify no parsing errors
+    assert!(
+        !result.summary.has_errors,
+        "GROUPING SETS query should parse without errors: {:?}",
+        result.issues
+    );
+}
+
+#[test]
+fn rollup_tracks_hierarchical_columns() {
+    let sql = r#"
+        SELECT
+            year,
+            quarter,
+            month,
+            SUM(revenue) AS total_revenue
+        FROM sales
+        GROUP BY ROLLUP (year, quarter, month)
+    "#;
+
+    let result = run_analysis(sql, Dialect::Postgres, None);
+    let tables = collect_table_names(&result);
+
+    assert!(
+        tables.contains("sales"),
+        "ROLLUP query should track source table; saw {tables:?}"
+    );
+
+    let stmt = first_statement(&result);
+
+    // Verify hierarchical columns are present
+    let columns = column_labels(stmt);
+    for expected in ["year", "quarter", "month", "total_revenue"] {
+        assert!(
+            columns.contains(&expected.to_string()),
+            "expected column {expected} in ROLLUP output; saw {columns:?}"
+        );
+    }
+
+    // Verify no parsing errors
+    assert!(
+        !result.summary.has_errors,
+        "ROLLUP query should parse without errors: {:?}",
+        result.issues
+    );
+}
+
+#[test]
+fn cube_tracks_all_dimensions() {
+    let sql = r#"
+        SELECT
+            product_category,
+            sales_region,
+            SUM(quantity) AS total_quantity,
+            SUM(amount) AS total_amount
+        FROM transactions
+        GROUP BY CUBE (product_category, sales_region)
+    "#;
+
+    let result = run_analysis(sql, Dialect::Postgres, None);
+    let tables = collect_table_names(&result);
+
+    assert!(
+        tables.contains("transactions"),
+        "CUBE query should track source table; saw {tables:?}"
+    );
+
+    let stmt = first_statement(&result);
+
+    // Verify dimension columns are present
+    let columns = column_labels(stmt);
+    for expected in [
+        "product_category",
+        "sales_region",
+        "total_quantity",
+        "total_amount",
+    ] {
+        assert!(
+            columns.contains(&expected.to_string()),
+            "expected column {expected} in CUBE output; saw {columns:?}"
+        );
+    }
+
+    // Verify no parsing errors
+    assert!(
+        !result.summary.has_errors,
+        "CUBE query should parse without errors: {:?}",
+        result.issues
+    );
+}
+
+// Task 3: Tier 3 Snowflake Features - Lineage assertions
+
+#[test]
+fn snowflake_lateral_flatten_tracks_source_table() {
+    let sql = r#"
+        SELECT
+            value AS p_id,
+            name
+        FROM a
+        INNER JOIN b ON b.c_id = a.c_id,
+        LATERAL FLATTEN(input => b.cool_ids)
+    "#;
+
+    let result = run_analysis(sql, Dialect::Snowflake, None);
+    let tables = collect_table_names(&result);
+
+    // Both tables in the join should be tracked
+    // Snowflake normalizes to uppercase
+    let has_table_a = tables.iter().any(|t| t.eq_ignore_ascii_case("a"));
+    let has_table_b = tables.iter().any(|t| t.eq_ignore_ascii_case("b"));
+
+    assert!(
+        has_table_a,
+        "LATERAL FLATTEN query should track table a; saw {tables:?}"
+    );
+    assert!(
+        has_table_b,
+        "LATERAL FLATTEN query should track table b; saw {tables:?}"
+    );
+
+    // Verify parsing completed
+    assert!(
+        result.summary.statement_count >= 1,
+        "LATERAL FLATTEN query should parse at least one statement"
+    );
+}
+
+#[test]
+fn snowflake_higher_order_functions_track_source() {
+    let sql = r#"
+        SELECT
+            FILTER(ident, i -> i:value > 0) AS sample_filter,
+            TRANSFORM(ident, j -> j:value) AS sample_transform
+        FROM ref
+    "#;
+
+    let result = run_analysis(sql, Dialect::Snowflake, None);
+    let tables = collect_table_names(&result);
+
+    // Source table should be tracked
+    let has_ref = tables.iter().any(|t| t.eq_ignore_ascii_case("ref"));
+
+    assert!(
+        has_ref,
+        "Higher-order function query should track source table; saw {tables:?}"
+    );
+
+    // Verify parsing completed
+    assert!(
+        result.summary.statement_count >= 1,
+        "Higher-order function query should parse at least one statement"
+    );
+}
+
+#[test]
+fn snowflake_group_by_cube_tracks_source() {
+    let sql = r#"
+        SELECT
+            name,
+            age,
+            COUNT(*) AS record_count
+        FROM people
+        GROUP BY CUBE (name, age)
+    "#;
+
+    let result = run_analysis(sql, Dialect::Snowflake, None);
+    let tables = collect_table_names(&result);
+
+    let has_people = tables.iter().any(|t| t.eq_ignore_ascii_case("people"));
+
+    assert!(
+        has_people,
+        "Snowflake CUBE query should track source table; saw {tables:?}"
+    );
+
+    let stmt = first_statement(&result);
+    let columns = column_labels(stmt);
+
+    // Verify output columns (Snowflake normalizes to uppercase)
+    for expected in ["NAME", "AGE", "RECORD_COUNT"] {
+        assert!(
+            columns.iter().any(|c| c.eq_ignore_ascii_case(expected)),
+            "expected column {expected} in Snowflake CUBE output; saw {columns:?}"
+        );
+    }
+
+    // Verify no parsing errors
+    assert!(
+        !result.summary.has_errors,
+        "Snowflake CUBE query should parse without errors: {:?}",
+        result.issues
+    );
+}
+
+#[test]
+fn snowflake_grouping_sets_tracks_source() {
+    let sql = r#"
+        SELECT
+            foo,
+            bar,
+            COUNT(*) AS cnt
+        FROM baz
+        GROUP BY GROUPING SETS ((foo), (bar))
+    "#;
+
+    let result = run_analysis(sql, Dialect::Snowflake, None);
+    let tables = collect_table_names(&result);
+
+    let has_baz = tables.iter().any(|t| t.eq_ignore_ascii_case("baz"));
+
+    assert!(
+        has_baz,
+        "Snowflake GROUPING SETS query should track source table; saw {tables:?}"
+    );
+
+    let stmt = first_statement(&result);
+    let columns = column_labels(stmt);
+
+    // Verify output columns
+    for expected in ["FOO", "BAR", "CNT"] {
+        assert!(
+            columns.iter().any(|c| c.eq_ignore_ascii_case(expected)),
+            "expected column {expected} in Snowflake GROUPING SETS output; saw {columns:?}"
+        );
+    }
+
+    // Verify no parsing errors
+    assert!(
+        !result.summary.has_errors,
+        "Snowflake GROUPING SETS query should parse without errors: {:?}",
+        result.issues
     );
 }

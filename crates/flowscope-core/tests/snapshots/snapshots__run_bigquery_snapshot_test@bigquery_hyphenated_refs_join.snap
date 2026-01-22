@@ -1,0 +1,335 @@
+---
+source: crates/flowscope-core/tests/snapshots.rs
+expression: clean_result
+---
+{
+  "statements": [
+    {
+      "statementIndex": 0,
+      "statementType": "SELECT",
+      "nodes": [
+        {
+          "id": "column_62688f16cd6c05b7",
+          "type": "column",
+          "label": "user_id",
+          "qualifiedName": "my-company.core.users.user_id"
+        },
+        {
+          "id": "column_88148e1de6379302",
+          "type": "column",
+          "label": "order_total",
+          "qualifiedName": "my-company.sales.orders.order_total"
+        },
+        {
+          "id": "column_8ae0ffa1d32bbce3",
+          "type": "column",
+          "label": "order_total"
+        },
+        {
+          "id": "column_c6c17791694b01ca",
+          "type": "column",
+          "label": "user_id"
+        },
+        {
+          "id": "output_b558dd754c71cfa6",
+          "type": "output",
+          "label": "Output"
+        },
+        {
+          "id": "table_3c0b479aec754659",
+          "type": "table",
+          "label": "orders",
+          "qualifiedName": "my-company.sales.orders",
+          "joinType": "INNER",
+          "joinCondition": "u.user_id = o.user_id"
+        },
+        {
+          "id": "table_fdcf1c848327037a",
+          "type": "table",
+          "label": "users",
+          "qualifiedName": "my-company.core.users"
+        }
+      ],
+      "edges": [
+        {
+          "id": "edge_2077e0b23df1abc7",
+          "from": "column_88148e1de6379302",
+          "to": "column_8ae0ffa1d32bbce3",
+          "type": "data_flow"
+        },
+        {
+          "id": "edge_ad965fe26aeb18ca",
+          "from": "table_fdcf1c848327037a",
+          "to": "column_62688f16cd6c05b7",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_b5f9022f28ddbac0",
+          "from": "output_b558dd754c71cfa6",
+          "to": "column_c6c17791694b01ca",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_baafac940f6b5cde",
+          "from": "table_3c0b479aec754659",
+          "to": "column_88148e1de6379302",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_c423e1a24f537ed3",
+          "from": "output_b558dd754c71cfa6",
+          "to": "column_8ae0ffa1d32bbce3",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_e227da64424f9e80",
+          "from": "column_62688f16cd6c05b7",
+          "to": "column_c6c17791694b01ca",
+          "type": "data_flow"
+        }
+      ],
+      "joinCount": 1,
+      "complexityScore": 20
+    }
+  ],
+  "globalLineage": {
+    "nodes": [
+      {
+        "id": "column_62688f16cd6c05b7",
+        "type": "column",
+        "label": "user_id",
+        "canonicalName": {
+          "name": "my-company.core.users.user_id"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_62688f16cd6c05b7"
+          }
+        ]
+      },
+      {
+        "id": "column_88148e1de6379302",
+        "type": "column",
+        "label": "order_total",
+        "canonicalName": {
+          "name": "my-company.sales.orders.order_total"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_88148e1de6379302"
+          }
+        ]
+      },
+      {
+        "id": "column_8ae0ffa1d32bbce3",
+        "type": "column",
+        "label": "order_total",
+        "canonicalName": {
+          "name": "order_total"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_8ae0ffa1d32bbce3"
+          }
+        ]
+      },
+      {
+        "id": "column_c6c17791694b01ca",
+        "type": "column",
+        "label": "user_id",
+        "canonicalName": {
+          "name": "user_id"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_c6c17791694b01ca"
+          }
+        ]
+      },
+      {
+        "id": "output_b558dd754c71cfa6",
+        "type": "output",
+        "label": "Output",
+        "canonicalName": {
+          "name": "Output"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "output_b558dd754c71cfa6"
+          }
+        ]
+      },
+      {
+        "id": "table_3c0b479aec754659",
+        "type": "table",
+        "label": "orders",
+        "canonicalName": {
+          "catalog": "my-company",
+          "schema": "sales",
+          "name": "orders"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "table_3c0b479aec754659"
+          }
+        ]
+      },
+      {
+        "id": "table_fdcf1c848327037a",
+        "type": "table",
+        "label": "users",
+        "canonicalName": {
+          "catalog": "my-company",
+          "schema": "core",
+          "name": "users"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "table_fdcf1c848327037a"
+          }
+        ]
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge_2077e0b23df1abc7",
+        "from": "column_88148e1de6379302",
+        "to": "column_8ae0ffa1d32bbce3",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_ad965fe26aeb18ca",
+        "from": "table_fdcf1c848327037a",
+        "to": "column_62688f16cd6c05b7",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_b5f9022f28ddbac0",
+        "from": "output_b558dd754c71cfa6",
+        "to": "column_c6c17791694b01ca",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_baafac940f6b5cde",
+        "from": "table_3c0b479aec754659",
+        "to": "column_88148e1de6379302",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_c423e1a24f537ed3",
+        "from": "output_b558dd754c71cfa6",
+        "to": "column_8ae0ffa1d32bbce3",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_e227da64424f9e80",
+        "from": "column_62688f16cd6c05b7",
+        "to": "column_c6c17791694b01ca",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      }
+    ]
+  },
+  "issues": [],
+  "summary": {
+    "statementCount": 1,
+    "tableCount": 2,
+    "columnCount": 4,
+    "joinCount": 1,
+    "complexityScore": 20,
+    "issueCount": {
+      "errors": 0,
+      "warnings": 0,
+      "infos": 0
+    },
+    "hasErrors": false
+  },
+  "resolvedSchema": {
+    "tables": [
+      {
+        "catalog": "my-company",
+        "schema": "sales",
+        "name": "orders",
+        "columns": [
+          {
+            "name": "user_id",
+            "origin": "implied",
+            "foreignKey": {
+              "table": "my-company.core.users",
+              "column": "user_id"
+            }
+          }
+        ],
+        "origin": "implied",
+        "sourceStatementIndex": 0,
+        "updatedAt": "2024-01-01T00:00:00Z",
+        "constraints": [
+          {
+            "constraintType": "foreign_key",
+            "columns": [
+              "user_id"
+            ],
+            "referencedTable": "my-company.core.users",
+            "referencedColumns": [
+              "user_id"
+            ]
+          }
+        ]
+      },
+      {
+        "catalog": "my-company",
+        "schema": "core",
+        "name": "users",
+        "columns": [
+          {
+            "name": "user_id",
+            "origin": "implied",
+            "foreignKey": {
+              "table": "my-company.sales.orders",
+              "column": "user_id"
+            }
+          }
+        ],
+        "origin": "implied",
+        "sourceStatementIndex": 0,
+        "updatedAt": "2024-01-01T00:00:00Z",
+        "constraints": [
+          {
+            "constraintType": "foreign_key",
+            "columns": [
+              "user_id"
+            ],
+            "referencedTable": "my-company.sales.orders",
+            "referencedColumns": [
+              "user_id"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

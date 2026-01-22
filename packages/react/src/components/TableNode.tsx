@@ -297,8 +297,12 @@ function TableNodeComponent({ id, data, selected }: NodeProps): JSX.Element {
       style={{
         minWidth: 180,
         borderRadius: 8,
-        border: `1px solid ${isSelected ? colors.interactive.selection : palette.border}`,
-        borderLeft: schemaColor ? `3px solid ${schemaColor}` : undefined,
+        borderTop: `1px solid ${isSelected ? colors.interactive.selection : palette.border}`,
+        borderRight: `1px solid ${isSelected ? colors.interactive.selection : palette.border}`,
+        borderBottom: `1px solid ${isSelected ? colors.interactive.selection : palette.border}`,
+        borderLeft: schemaColor
+          ? `3px solid ${schemaColor}`
+          : `1px solid ${isSelected ? colors.interactive.selection : palette.border}`,
         boxShadow: isSelected
           ? `0 0 0 2px ${colors.interactive.selectionRing}`
           : isRecursive

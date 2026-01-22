@@ -1,0 +1,117 @@
+---
+source: crates/flowscope-core/tests/snapshots.rs
+expression: clean_result
+---
+{
+  "statements": [
+    {
+      "statementIndex": 0,
+      "statementType": "SELECT",
+      "nodes": [
+        {
+          "id": "column_1ecc1746c4b2c4ce",
+          "type": "column",
+          "label": "SUM_RESULT",
+          "expression": "REDUCE([1, 2, 3], 0, (acc, val) -> acc + val)"
+        },
+        {
+          "id": "output_b558dd754c71cfa6",
+          "type": "output",
+          "label": "Output"
+        }
+      ],
+      "edges": [
+        {
+          "id": "edge_2aac2d41ae2449b9",
+          "from": "output_b558dd754c71cfa6",
+          "to": "column_1ecc1746c4b2c4ce",
+          "type": "ownership"
+        }
+      ],
+      "joinCount": 0,
+      "complexityScore": 1
+    }
+  ],
+  "globalLineage": {
+    "nodes": [
+      {
+        "id": "column_1ecc1746c4b2c4ce",
+        "type": "column",
+        "label": "SUM_RESULT",
+        "canonicalName": {
+          "name": "SUM_RESULT"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_1ecc1746c4b2c4ce"
+          }
+        ]
+      },
+      {
+        "id": "output_b558dd754c71cfa6",
+        "type": "output",
+        "label": "Output",
+        "canonicalName": {
+          "name": "Output"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "output_b558dd754c71cfa6"
+          }
+        ]
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge_2aac2d41ae2449b9",
+        "from": "output_b558dd754c71cfa6",
+        "to": "column_1ecc1746c4b2c4ce",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      }
+    ]
+  },
+  "issues": [
+    {
+      "severity": "warning",
+      "code": "UNRESOLVED_REFERENCE",
+      "message": "Column 'acc' referenced but no tables are currently in scope",
+      "statementIndex": 0
+    },
+    {
+      "severity": "warning",
+      "code": "UNRESOLVED_REFERENCE",
+      "message": "Column 'acc' referenced but no tables are currently in scope",
+      "statementIndex": 0
+    },
+    {
+      "severity": "warning",
+      "code": "UNRESOLVED_REFERENCE",
+      "message": "Column 'val' referenced but no tables are currently in scope",
+      "statementIndex": 0
+    },
+    {
+      "severity": "warning",
+      "code": "UNRESOLVED_REFERENCE",
+      "message": "Column 'val' referenced but no tables are currently in scope",
+      "statementIndex": 0
+    }
+  ],
+  "summary": {
+    "statementCount": 1,
+    "tableCount": 0,
+    "columnCount": 1,
+    "joinCount": 0,
+    "complexityScore": 1,
+    "issueCount": {
+      "errors": 0,
+      "warnings": 4,
+      "infos": 0
+    },
+    "hasErrors": false
+  }
+}

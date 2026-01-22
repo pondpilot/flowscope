@@ -237,9 +237,17 @@ test-core:
 test-ts:
     yarn test:ts
 
-# Generate test coverage report
+# Generate HTML coverage report (requires cargo-llvm-cov)
 coverage:
-    ./scripts/generate_test_coverage.sh
+    cargo llvm-cov --workspace --html --output-dir coverage/
+
+# Generate LCOV coverage file for CI/Codecov integration
+coverage-lcov:
+    cargo llvm-cov --workspace --lcov --output-path lcov.info
+
+# Print coverage summary to stdout
+coverage-summary:
+    cargo llvm-cov --workspace --summary-only
 
 # Run development server
 dev:
@@ -303,10 +311,11 @@ clean:
 install:
     yarn install
 
-# Install Rust tools (wasm-pack, cargo-watch)
+# Install Rust tools (wasm-pack, cargo-watch, cargo-llvm-cov)
 install-rust-tools:
     @command -v wasm-pack >/dev/null 2>&1 || cargo install wasm-pack --version "^0.13"
     @command -v cargo-watch >/dev/null 2>&1 || cargo install cargo-watch --version "^8"
+    @command -v cargo-llvm-cov >/dev/null 2>&1 || cargo install cargo-llvm-cov
 
 # Install pre-commit hooks (requires prek: https://github.com/j178/prek)
 install-hooks:

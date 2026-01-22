@@ -1,5 +1,20 @@
 # Additional dialect behavior rules
 
+[value_table_functions]
+# Functions that return rows (not scalar values)
+common = ["UNNEST", "GENERATE_SERIES", "JSON_TABLE"]
+postgres = ["UNNEST", "GENERATE_SERIES", "GENERATE_SUBSCRIPTS", "REGEXP_MATCHES"]
+bigquery = ["UNNEST"]
+snowflake = ["FLATTEN", "SPLIT_TO_TABLE", "STRTOK_SPLIT_TO_TABLE"]
+redshift = ["UNNEST"]
+mysql = ["JSON_TABLE"]
+mssql = ["OPENJSON", "STRING_SPLIT"]
+duckdb = ["UNNEST", "GENERATE_SERIES", "RANGE"]
+clickhouse = ["ARRAY_JOIN"]
+databricks = ["EXPLODE", "EXPLODE_OUTER", "POSEXPLODE", "POSEXPLODE_OUTER", "INLINE", "INLINE_OUTER"]
+hive = ["EXPLODE", "POSEXPLODE", "INLINE", "JSON_TUPLE", "PARSE_URL_TUPLE"]
+sqlite = []
+
 [null_ordering]
 # Where NULLs appear in ORDER BY by default
 # nulls_are_large = NULLS LAST (Postgres, Oracle, Snowflake)

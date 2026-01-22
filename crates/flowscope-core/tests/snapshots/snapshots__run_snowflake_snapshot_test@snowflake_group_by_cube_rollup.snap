@@ -1,0 +1,289 @@
+---
+source: crates/flowscope-core/tests/snapshots.rs
+expression: clean_result
+---
+{
+  "statements": [
+    {
+      "statementIndex": 0,
+      "statementType": "SELECT",
+      "nodes": [
+        {
+          "id": "column_68bcc147ccf94d84",
+          "type": "column",
+          "label": "RECORD_COUNT",
+          "expression": "COUNT(*)",
+          "metadata": {
+            "data_type": "INTEGER"
+          },
+          "aggregation": {
+            "isGroupingKey": false,
+            "function": "COUNT"
+          }
+        },
+        {
+          "id": "column_6c83f68561063526",
+          "type": "column",
+          "label": "AGE"
+        },
+        {
+          "id": "column_76496ab7d9efb35d",
+          "type": "column",
+          "label": "name",
+          "qualifiedName": "PEOPLE.name"
+        },
+        {
+          "id": "column_a83584022cfb39b9",
+          "type": "column",
+          "label": "NAME"
+        },
+        {
+          "id": "column_ac761f7023a3d25a",
+          "type": "column",
+          "label": "age",
+          "qualifiedName": "PEOPLE.age"
+        },
+        {
+          "id": "output_b558dd754c71cfa6",
+          "type": "output",
+          "label": "Output"
+        },
+        {
+          "id": "table_bdb8046950189433",
+          "type": "table",
+          "label": "PEOPLE",
+          "qualifiedName": "PEOPLE"
+        }
+      ],
+      "edges": [
+        {
+          "id": "edge_14da63c98edfaf59",
+          "from": "column_ac761f7023a3d25a",
+          "to": "column_6c83f68561063526",
+          "type": "data_flow"
+        },
+        {
+          "id": "edge_2c74ad5e18afd5b3",
+          "from": "table_bdb8046950189433",
+          "to": "column_76496ab7d9efb35d",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_33e9980a3eaa63db",
+          "from": "table_bdb8046950189433",
+          "to": "column_ac761f7023a3d25a",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_7c5cfa7376b1a3ab",
+          "from": "output_b558dd754c71cfa6",
+          "to": "column_a83584022cfb39b9",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_ad67e049e8fd4db8",
+          "from": "output_b558dd754c71cfa6",
+          "to": "column_68bcc147ccf94d84",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_d771ade74ff74875",
+          "from": "output_b558dd754c71cfa6",
+          "to": "column_6c83f68561063526",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_da29745f97713663",
+          "from": "column_76496ab7d9efb35d",
+          "to": "column_a83584022cfb39b9",
+          "type": "data_flow"
+        }
+      ],
+      "joinCount": 0,
+      "complexityScore": 5
+    }
+  ],
+  "globalLineage": {
+    "nodes": [
+      {
+        "id": "column_68bcc147ccf94d84",
+        "type": "column",
+        "label": "RECORD_COUNT",
+        "canonicalName": {
+          "name": "RECORD_COUNT"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_68bcc147ccf94d84"
+          }
+        ]
+      },
+      {
+        "id": "column_6c83f68561063526",
+        "type": "column",
+        "label": "AGE",
+        "canonicalName": {
+          "name": "AGE"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_6c83f68561063526"
+          }
+        ]
+      },
+      {
+        "id": "column_76496ab7d9efb35d",
+        "type": "column",
+        "label": "name",
+        "canonicalName": {
+          "schema": "PEOPLE",
+          "name": "name"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_76496ab7d9efb35d"
+          }
+        ]
+      },
+      {
+        "id": "column_a83584022cfb39b9",
+        "type": "column",
+        "label": "NAME",
+        "canonicalName": {
+          "name": "NAME"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_a83584022cfb39b9"
+          }
+        ]
+      },
+      {
+        "id": "column_ac761f7023a3d25a",
+        "type": "column",
+        "label": "age",
+        "canonicalName": {
+          "schema": "PEOPLE",
+          "name": "age"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_ac761f7023a3d25a"
+          }
+        ]
+      },
+      {
+        "id": "output_b558dd754c71cfa6",
+        "type": "output",
+        "label": "Output",
+        "canonicalName": {
+          "name": "Output"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "output_b558dd754c71cfa6"
+          }
+        ]
+      },
+      {
+        "id": "table_bdb8046950189433",
+        "type": "table",
+        "label": "PEOPLE",
+        "canonicalName": {
+          "name": "PEOPLE"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "table_bdb8046950189433"
+          }
+        ]
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge_14da63c98edfaf59",
+        "from": "column_ac761f7023a3d25a",
+        "to": "column_6c83f68561063526",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_2c74ad5e18afd5b3",
+        "from": "table_bdb8046950189433",
+        "to": "column_76496ab7d9efb35d",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_33e9980a3eaa63db",
+        "from": "table_bdb8046950189433",
+        "to": "column_ac761f7023a3d25a",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_7c5cfa7376b1a3ab",
+        "from": "output_b558dd754c71cfa6",
+        "to": "column_a83584022cfb39b9",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_ad67e049e8fd4db8",
+        "from": "output_b558dd754c71cfa6",
+        "to": "column_68bcc147ccf94d84",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_d771ade74ff74875",
+        "from": "output_b558dd754c71cfa6",
+        "to": "column_6c83f68561063526",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_da29745f97713663",
+        "from": "column_76496ab7d9efb35d",
+        "to": "column_a83584022cfb39b9",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      }
+    ]
+  },
+  "issues": [],
+  "summary": {
+    "statementCount": 1,
+    "tableCount": 1,
+    "columnCount": 5,
+    "joinCount": 0,
+    "complexityScore": 5,
+    "issueCount": {
+      "errors": 0,
+      "warnings": 0,
+      "infos": 0
+    },
+    "hasErrors": false
+  }
+}

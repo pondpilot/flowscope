@@ -1,0 +1,138 @@
+---
+source: crates/flowscope-core/tests/snapshots.rs
+expression: clean_result
+---
+{
+  "statements": [
+    {
+      "statementIndex": 0,
+      "statementType": "SELECT",
+      "nodes": [
+        {
+          "id": "column_b2edf5bb56f93962",
+          "type": "column",
+          "label": "item"
+        },
+        {
+          "id": "column_eb1c01583ddc0bc2",
+          "type": "column",
+          "label": "offset_pos"
+        },
+        {
+          "id": "output_b558dd754c71cfa6",
+          "type": "output",
+          "label": "Output"
+        }
+      ],
+      "edges": [
+        {
+          "id": "edge_908c046c0d06a520",
+          "from": "output_b558dd754c71cfa6",
+          "to": "column_eb1c01583ddc0bc2",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_91c3f0955de4619a",
+          "from": "output_b558dd754c71cfa6",
+          "to": "column_b2edf5bb56f93962",
+          "type": "ownership"
+        }
+      ],
+      "joinCount": 0,
+      "complexityScore": 1
+    }
+  ],
+  "globalLineage": {
+    "nodes": [
+      {
+        "id": "column_b2edf5bb56f93962",
+        "type": "column",
+        "label": "item",
+        "canonicalName": {
+          "name": "item"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_b2edf5bb56f93962"
+          }
+        ]
+      },
+      {
+        "id": "column_eb1c01583ddc0bc2",
+        "type": "column",
+        "label": "offset_pos",
+        "canonicalName": {
+          "name": "offset_pos"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_eb1c01583ddc0bc2"
+          }
+        ]
+      },
+      {
+        "id": "output_b558dd754c71cfa6",
+        "type": "output",
+        "label": "Output",
+        "canonicalName": {
+          "name": "Output"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "output_b558dd754c71cfa6"
+          }
+        ]
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge_908c046c0d06a520",
+        "from": "output_b558dd754c71cfa6",
+        "to": "column_eb1c01583ddc0bc2",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_91c3f0955de4619a",
+        "from": "output_b558dd754c71cfa6",
+        "to": "column_b2edf5bb56f93962",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      }
+    ]
+  },
+  "issues": [
+    {
+      "severity": "warning",
+      "code": "UNRESOLVED_REFERENCE",
+      "message": "Column 'item' referenced but no tables are currently in scope",
+      "statementIndex": 0
+    },
+    {
+      "severity": "warning",
+      "code": "UNRESOLVED_REFERENCE",
+      "message": "Column 'offset_pos' referenced but no tables are currently in scope",
+      "statementIndex": 0
+    }
+  ],
+  "summary": {
+    "statementCount": 1,
+    "tableCount": 0,
+    "columnCount": 2,
+    "joinCount": 0,
+    "complexityScore": 1,
+    "issueCount": {
+      "errors": 0,
+      "warnings": 2,
+      "infos": 0
+    },
+    "hasErrors": false
+  }
+}

@@ -1,0 +1,100 @@
+---
+source: crates/flowscope-core/tests/snapshots.rs
+expression: clean_result
+---
+{
+  "statements": [
+    {
+      "statementIndex": 0,
+      "statementType": "SELECT",
+      "nodes": [
+        {
+          "id": "output_b558dd754c71cfa6",
+          "type": "output",
+          "label": "Output"
+        },
+        {
+          "id": "table_e500054d128e991c",
+          "type": "table",
+          "label": "customers",
+          "qualifiedName": "customers"
+        }
+      ],
+      "edges": [
+        {
+          "id": "edge_32c294d85aa8e8b3",
+          "from": "table_e500054d128e991c",
+          "to": "output_b558dd754c71cfa6",
+          "type": "data_flow",
+          "approximate": true
+        }
+      ],
+      "joinCount": 0,
+      "complexityScore": 5
+    }
+  ],
+  "globalLineage": {
+    "nodes": [
+      {
+        "id": "output_b558dd754c71cfa6",
+        "type": "output",
+        "label": "Output",
+        "canonicalName": {
+          "name": "Output"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "output_b558dd754c71cfa6"
+          }
+        ]
+      },
+      {
+        "id": "table_e500054d128e991c",
+        "type": "table",
+        "label": "customers",
+        "canonicalName": {
+          "name": "customers"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "table_e500054d128e991c"
+          }
+        ]
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge_32c294d85aa8e8b3",
+        "from": "table_e500054d128e991c",
+        "to": "output_b558dd754c71cfa6",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      }
+    ]
+  },
+  "issues": [
+    {
+      "severity": "info",
+      "code": "APPROXIMATE_LINEAGE",
+      "message": "SELECT * from 'customers' - column list unknown without schema metadata",
+      "statementIndex": 0
+    }
+  ],
+  "summary": {
+    "statementCount": 1,
+    "tableCount": 1,
+    "columnCount": 0,
+    "joinCount": 0,
+    "complexityScore": 5,
+    "issueCount": {
+      "errors": 0,
+      "warnings": 0,
+      "infos": 1
+    },
+    "hasErrors": false
+  }
+}

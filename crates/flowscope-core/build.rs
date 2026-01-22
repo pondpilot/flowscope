@@ -9,6 +9,7 @@
 //! - `scoping_rules.toml`: Manually curated alias visibility rules
 //! - `dialect_behavior.toml`: Manually curated function argument rules
 //! - `normalization_overrides.toml`: Manual corrections to normalization
+//! - `type_system.toml`: Type categories, aliases, implicit casts, and dialect mappings
 
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -72,6 +73,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     let normalization_overrides = load_normalization_overrides(spec_dir)?;
     let scoping_rules = load_scoping_rules(spec_dir)?;
     let dialect_behavior = load_dialect_behavior(spec_dir)?;
+    let type_system = load_type_system(spec_dir)?;
 
     // Validate dialect coverage
     validate_dialect_coverage(&dialects, &scoping_rules);
@@ -82,6 +84,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     generate_scoping_rules(generated_dir, &scoping_rules)?;
     generate_function_rules(generated_dir, &dialect_behavior)?;
     generate_functions(generated_dir, &functions)?;
+    generate_type_system(generated_dir, &type_system)?;
 
     // Tell Cargo to rerun if specs change
     println!("cargo:rerun-if-changed=specs/dialect-semantics/");
@@ -172,6 +175,13 @@ struct FunctionDef {
     dialects: Vec<String>,
     #[serde(default)]
     dialect_specific: bool,
+    #[serde(default)]
+    return_type: Option<ReturnTypeSpec>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ReturnTypeSpec {
+    rule: String,
 }
 
 fn load_functions_json(spec_dir: &Path) -> Result<BTreeMap<String, FunctionDef>, Box<dyn Error>> {
@@ -224,9 +234,37 @@ fn load_scoping_rules(spec_dir: &Path) -> Result<BTreeMap<String, ScopingRule>, 
 
 #[derive(Debug, Deserialize)]
 struct DialectBehavior {
+    value_table_functions: ValueTableFunctions,
     null_ordering: BTreeMap<String, String>,
     unnest: UnnestBehavior,
     date_functions: BTreeMap<String, BTreeMap<String, toml::Value>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ValueTableFunctions {
+    common: Vec<String>,
+    #[serde(default)]
+    postgres: Vec<String>,
+    #[serde(default)]
+    bigquery: Vec<String>,
+    #[serde(default)]
+    snowflake: Vec<String>,
+    #[serde(default)]
+    redshift: Vec<String>,
+    #[serde(default)]
+    mysql: Vec<String>,
+    #[serde(default)]
+    mssql: Vec<String>,
+    #[serde(default)]
+    duckdb: Vec<String>,
+    #[serde(default)]
+    clickhouse: Vec<String>,
+    #[serde(default)]
+    databricks: Vec<String>,
+    #[serde(default)]
+    hive: Vec<String>,
+    #[serde(default)]
+    sqlite: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -236,6 +274,20 @@ struct UnnestBehavior {
 
 fn load_dialect_behavior(spec_dir: &Path) -> Result<DialectBehavior, Box<dyn Error>> {
     let path = spec_dir.join("dialect_behavior.toml");
+    let content = fs::read_to_string(&path).map_err(|e| format!("Failed to read {path:?}: {e}"))?;
+
+    toml::from_str(&content).map_err(|e| format!("Failed to parse {path:?}: {e}").into())
+}
+
+#[derive(Debug, Deserialize)]
+struct TypeSystem {
+    type_categories: BTreeMap<String, Vec<String>>,
+    implicit_casts: BTreeMap<String, Vec<String>>,
+    dialect_type_mapping: BTreeMap<String, BTreeMap<String, String>>,
+}
+
+fn load_type_system(spec_dir: &Path) -> Result<TypeSystem, Box<dyn Error>> {
+    let path = spec_dir.join("type_system.toml");
     let content = fs::read_to_string(&path).map_err(|e| format!("Failed to read {path:?}: {e}"))?;
 
     toml::from_str(&content).map_err(|e| format!("Failed to parse {path:?}: {e}").into())
@@ -296,10 +348,12 @@ pub mod case_sensitivity;
 pub mod function_rules;
 pub mod functions;
 mod scoping_rules;
+pub mod type_system;
 
 pub use case_sensitivity::*;
 pub use function_rules::*;
 pub use functions::*;
+pub use type_system::*;
 // scoping_rules adds methods to Dialect via impl, no re-export needed
 "#;
 
@@ -811,7 +865,101 @@ impl Dialect {
         ));
     }
 
+    // Generate is_value_table_function
+    generate_value_table_function(&mut code, behavior);
+
     write_if_changed(&dir.join("function_rules.rs"), &code)
+}
+
+fn generate_value_table_function(code: &mut String, behavior: &DialectBehavior) {
+    let vtf = &behavior.value_table_functions;
+
+    // Build common functions pattern
+    let common_funcs: Vec<_> = vtf
+        .common
+        .iter()
+        .map(|s| format!("\"{}\"", s.to_ascii_uppercase()))
+        .collect();
+
+    code.push_str(
+        r#"
+/// Checks if a function is a value table function (returns rows) for the given dialect.
+///
+/// Value table functions (like UNNEST, GENERATE_SERIES, FLATTEN) return rows/tables
+/// rather than scalar values. This classification is used during lineage analysis
+/// to determine how FROM clause function calls should be handled.
+///
+/// # Arguments
+///
+/// * `dialect` - The SQL dialect being analyzed
+/// * `func_name` - The function name (case-insensitive)
+///
+/// # Returns
+///
+/// `true` if the function is a value table function for the given dialect.
+///
+/// # Example
+///
+/// ```ignore
+/// use flowscope_core::generated::is_value_table_function;
+/// use flowscope_core::Dialect;
+///
+/// assert!(is_value_table_function(Dialect::Postgres, "UNNEST"));
+/// assert!(is_value_table_function(Dialect::Snowflake, "FLATTEN"));
+/// assert!(!is_value_table_function(Dialect::Postgres, "COUNT"));
+/// ```
+pub fn is_value_table_function(dialect: Dialect, func_name: &str) -> bool {
+    let name = func_name.to_ascii_uppercase();
+    // Check common functions
+"#,
+    );
+
+    if common_funcs.is_empty() {
+        code.push_str("    // No common value table functions defined\n");
+    } else {
+        code.push_str(&format!(
+            "    if matches!(name.as_str(), {}) {{\n        return true;\n    }}\n",
+            common_funcs.join(" | ")
+        ));
+    }
+
+    code.push_str("    // Check dialect-specific functions\n");
+    code.push_str("    match dialect {\n");
+
+    // Generate match arms for each dialect with non-empty value table functions
+    let dialect_configs = [
+        ("postgres", &vtf.postgres, "Postgres"),
+        ("bigquery", &vtf.bigquery, "Bigquery"),
+        ("snowflake", &vtf.snowflake, "Snowflake"),
+        ("redshift", &vtf.redshift, "Redshift"),
+        ("mysql", &vtf.mysql, "Mysql"),
+        ("mssql", &vtf.mssql, "Mssql"),
+        ("duckdb", &vtf.duckdb, "Duckdb"),
+        ("clickhouse", &vtf.clickhouse, "Clickhouse"),
+        ("databricks", &vtf.databricks, "Databricks"),
+        ("hive", &vtf.hive, "Hive"),
+        ("sqlite", &vtf.sqlite, "Sqlite"),
+    ];
+
+    for (_dialect_name, funcs, variant) in dialect_configs {
+        // Filter out functions that are already in common
+        let dialect_specific: Vec<_> = funcs
+            .iter()
+            .filter(|f| !vtf.common.iter().any(|c| c.eq_ignore_ascii_case(f)))
+            .map(|s| format!("\"{}\"", s.to_ascii_uppercase()))
+            .collect();
+
+        if !dialect_specific.is_empty() {
+            code.push_str(&format!(
+                "        Dialect::{} => matches!(name.as_str(), {}),\n",
+                variant,
+                dialect_specific.join(" | ")
+            ));
+        }
+    }
+
+    code.push_str("        _ => false,\n");
+    code.push_str("    }\n}\n");
 }
 
 /// Converts a PascalCase class name to a SQL function name (lowercase with underscores).
@@ -894,6 +1042,8 @@ fn generate_functions(
     let mut aggregates: BTreeSet<String> = BTreeSet::new();
     let mut windows: BTreeSet<String> = BTreeSet::new();
     let mut udtfs: BTreeSet<String> = BTreeSet::new();
+    // Map from sql_name (lowercase) to return_type rule
+    let mut return_types: BTreeMap<String, String> = BTreeMap::new();
 
     for def in functions.values() {
         // Use the class name to derive the SQL function name, as the dictionary keys
@@ -912,6 +1062,11 @@ fn generate_functions(
                 }
                 _ => {}
             }
+        }
+
+        // Collect return types
+        if let Some(ref rt) = def.return_type {
+            return_types.insert(sql_name, rt.rule.clone());
         }
     }
 
@@ -1012,7 +1167,344 @@ pub fn is_udtf_function(name: &str) -> bool {
 "#,
     );
 
+    // Generate ReturnTypeRule enum
+    code.push_str(
+        r#"
+/// Return type rule for function type inference.
+///
+/// This enum represents the different strategies for determining a function's
+/// return type during type inference in SQL analysis.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReturnTypeRule {
+    /// Returns Integer (e.g., COUNT, ROW_NUMBER)
+    Integer,
+    /// Returns Number (e.g., SUM, AVG)
+    Numeric,
+    /// Returns Text (e.g., CONCAT, SUBSTRING)
+    Text,
+    /// Returns Timestamp (e.g., NOW, CURRENT_TIMESTAMP)
+    Timestamp,
+    /// Returns Boolean (e.g., AND, OR)
+    Boolean,
+    /// Returns Date (e.g., CURRENT_DATE)
+    Date,
+    /// Returns same type as first argument (e.g., MIN, MAX, COALESCE)
+    MatchFirstArg,
+}
+
+/// Infers the return type rule for a SQL function.
+///
+/// This function returns the return type rule for known SQL functions,
+/// enabling data-driven type inference. The check is case-insensitive.
+///
+/// # Arguments
+///
+/// * `name` - The function name (case-insensitive)
+///
+/// # Returns
+///
+/// `Some(ReturnTypeRule)` if the function has a known return type rule,
+/// `None` otherwise (fallback to existing logic).
+///
+/// # Example
+///
+/// ```ignore
+/// use flowscope_core::generated::infer_function_return_type;
+///
+/// assert_eq!(infer_function_return_type("COUNT"), Some(ReturnTypeRule::Integer));
+/// assert_eq!(infer_function_return_type("MIN"), Some(ReturnTypeRule::MatchFirstArg));
+/// assert_eq!(infer_function_return_type("UNKNOWN_FUNC"), None);
+/// ```
+pub fn infer_function_return_type(name: &str) -> Option<ReturnTypeRule> {
+    // SQL function names are ASCII, so we can use the faster ASCII lowercase
+    let lower = name.to_ascii_lowercase();
+    match lower.as_str() {
+"#,
+    );
+
+    // Generate match arms for each function with a return type
+    for (func_name, rule) in &return_types {
+        let variant = match rule.as_str() {
+            "integer" => "ReturnTypeRule::Integer",
+            "numeric" => "ReturnTypeRule::Numeric",
+            "text" => "ReturnTypeRule::Text",
+            "timestamp" => "ReturnTypeRule::Timestamp",
+            "boolean" => "ReturnTypeRule::Boolean",
+            "date" => "ReturnTypeRule::Date",
+            "match_first_arg" => "ReturnTypeRule::MatchFirstArg",
+            unknown => {
+                println!(
+                    "cargo:warning=Unknown return_type rule '{unknown}' for function '{func_name}'"
+                );
+                continue;
+            }
+        };
+        code.push_str(&format!("        \"{func_name}\" => Some({variant}),\n"));
+    }
+
+    code.push_str(
+        r#"        _ => None,
+    }
+}
+"#,
+    );
+
     write_if_changed(&dir.join("functions.rs"), &code)
+}
+
+fn generate_type_system(dir: &Path, type_system: &TypeSystem) -> Result<(), Box<dyn Error>> {
+    let mut code = String::from(
+        r#"//! SQL Type System for cross-dialect type normalization and compatibility.
+//!
+//! Generated from type_system.toml
+//!
+//! This module provides canonical SQL types, type normalization from dialect-specific
+//! names to canonical types, implicit cast checking, and dialect-specific type name mapping.
+
+use crate::Dialect;
+
+/// Canonical SQL types for cross-dialect type system.
+///
+/// These represent the fundamental SQL type categories that can be mapped
+/// from various dialect-specific type names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CanonicalType {
+    Integer,
+    Float,
+    Text,
+    Boolean,
+    Timestamp,
+    Date,
+    Time,
+    Binary,
+    Json,
+    Array,
+}
+
+impl CanonicalType {
+    /// Returns the canonical type name as a lowercase string.
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            CanonicalType::Integer => "integer",
+            CanonicalType::Float => "float",
+            CanonicalType::Text => "text",
+            CanonicalType::Boolean => "boolean",
+            CanonicalType::Timestamp => "timestamp",
+            CanonicalType::Date => "date",
+            CanonicalType::Time => "time",
+            CanonicalType::Binary => "binary",
+            CanonicalType::Json => "json",
+            CanonicalType::Array => "array",
+        }
+    }
+}
+
+/// Normalize a type name to its canonical type.
+///
+/// This function maps any dialect-specific type alias (e.g., "INT64", "VARCHAR",
+/// "TIMESTAMPTZ") to its canonical type category.
+///
+/// # Arguments
+///
+/// * `type_name` - The type name to normalize (case-insensitive)
+///
+/// # Returns
+///
+/// `Some(CanonicalType)` if the type name is recognized, `None` otherwise.
+///
+/// # Example
+///
+/// ```ignore
+/// use flowscope_core::generated::normalize_type_name;
+/// use flowscope_core::generated::CanonicalType;
+///
+/// assert_eq!(normalize_type_name("INT64"), Some(CanonicalType::Integer));
+/// assert_eq!(normalize_type_name("varchar"), Some(CanonicalType::Text));
+/// assert_eq!(normalize_type_name("UNKNOWN_TYPE"), None);
+/// ```
+pub fn normalize_type_name(type_name: &str) -> Option<CanonicalType> {
+    let lower = type_name.to_ascii_lowercase();
+    match lower.as_str() {
+"#,
+    );
+
+    // Generate match arms for each canonical type and its aliases
+    for (canonical_type, aliases) in &type_system.type_categories {
+        let variant = canonical_type_to_variant(canonical_type);
+        let alias_patterns: Vec<_> = aliases.iter().map(|a| format!("\"{}\"", a)).collect();
+        let patterns = alias_patterns.join(" | ");
+        code.push_str(&format!(
+            "        {patterns} => Some(CanonicalType::{variant}),\n"
+        ));
+    }
+
+    code.push_str(
+        r#"        _ => None,
+    }
+}
+
+/// Check if a type can be implicitly cast to another type.
+///
+/// Implicit casts are automatic type conversions that SQL engines perform
+/// without requiring explicit CAST expressions. This function returns true
+/// if the source type can be implicitly converted to the target type.
+///
+/// Note: A type can always be implicitly cast to itself (identity cast).
+///
+/// # Arguments
+///
+/// * `from` - The source canonical type
+/// * `to` - The target canonical type
+///
+/// # Returns
+///
+/// `true` if implicit cast is allowed, `false` otherwise.
+///
+/// # Example
+///
+/// ```ignore
+/// use flowscope_core::generated::{can_implicitly_cast, CanonicalType};
+///
+/// // Integer can be cast to Float
+/// assert!(can_implicitly_cast(CanonicalType::Integer, CanonicalType::Float));
+/// // Float cannot be cast to Integer implicitly
+/// assert!(!can_implicitly_cast(CanonicalType::Float, CanonicalType::Integer));
+/// // Any type can be cast to itself
+/// assert!(can_implicitly_cast(CanonicalType::Text, CanonicalType::Text));
+/// ```
+pub fn can_implicitly_cast(from: CanonicalType, to: CanonicalType) -> bool {
+    if from == to {
+        return true;
+    }
+    match from {
+"#,
+    );
+
+    // Generate match arms for implicit casts
+    for (from_type, to_types) in &type_system.implicit_casts {
+        let from_variant = canonical_type_to_variant(from_type);
+        if to_types.is_empty() {
+            code.push_str(&format!(
+                "        CanonicalType::{from_variant} => false,\n"
+            ));
+        } else {
+            let to_variants: Vec<_> = to_types
+                .iter()
+                .map(|t| format!("CanonicalType::{}", canonical_type_to_variant(t)))
+                .collect();
+            let matches_pattern = to_variants.join(" | ");
+            code.push_str(&format!(
+                "        CanonicalType::{from_variant} => matches!(to, {matches_pattern}),\n"
+            ));
+        }
+    }
+
+    code.push_str(
+        r#"        _ => false,
+    }
+}
+
+/// Get the dialect-specific type name for a canonical type.
+///
+/// This function returns the preferred type name for a given canonical type
+/// in a specific SQL dialect.
+///
+/// # Arguments
+///
+/// * `dialect` - The SQL dialect
+/// * `canonical` - The canonical type
+///
+/// # Returns
+///
+/// The dialect-specific type name as a static string.
+///
+/// # Example
+///
+/// ```ignore
+/// use flowscope_core::generated::{dialect_type_name, CanonicalType};
+/// use flowscope_core::Dialect;
+///
+/// assert_eq!(dialect_type_name(Dialect::Bigquery, CanonicalType::Integer), "INT64");
+/// assert_eq!(dialect_type_name(Dialect::Postgres, CanonicalType::Text), "text");
+/// ```
+pub fn dialect_type_name(dialect: Dialect, canonical: CanonicalType) -> &'static str {
+    match canonical {
+"#,
+    );
+
+    // Generate match arms for dialect type mapping
+    for (canonical_type, dialect_mapping) in &type_system.dialect_type_mapping {
+        let variant = canonical_type_to_variant(canonical_type);
+        code.push_str(&format!(
+            "        CanonicalType::{variant} => match dialect {{\n"
+        ));
+
+        for (dialect_name, type_name) in dialect_mapping {
+            if let Some(dialect_variant) = dialect_to_variant(dialect_name) {
+                code.push_str(&format!(
+                    "            Dialect::{dialect_variant} => \"{type_name}\",\n"
+                ));
+            }
+        }
+
+        // Add default based on the canonical type name
+        let default_name = canonical_type.to_uppercase();
+        code.push_str(&format!("            _ => \"{default_name}\",\n"));
+        code.push_str("        },\n");
+    }
+
+    // Handle types not in the dialect_type_mapping (time, binary, json, array)
+    let mapped_types: BTreeSet<_> = type_system.dialect_type_mapping.keys().collect();
+    let all_types = [
+        "integer",
+        "float",
+        "text",
+        "boolean",
+        "timestamp",
+        "date",
+        "time",
+        "binary",
+        "json",
+        "array",
+    ];
+
+    for type_name in all_types {
+        if !mapped_types.contains(&type_name.to_string()) {
+            let variant = canonical_type_to_variant(type_name);
+            let default_name = type_name.to_uppercase();
+            code.push_str(&format!(
+                "        CanonicalType::{variant} => \"{default_name}\",\n"
+            ));
+        }
+    }
+
+    code.push_str(
+        r#"    }
+}
+"#,
+    );
+
+    write_if_changed(&dir.join("type_system.rs"), &code)
+}
+
+/// Convert canonical type name to Rust enum variant.
+fn canonical_type_to_variant(type_name: &str) -> &'static str {
+    match type_name.to_lowercase().as_str() {
+        "integer" => "Integer",
+        "float" => "Float",
+        "text" => "Text",
+        "boolean" => "Boolean",
+        "timestamp" => "Timestamp",
+        "date" => "Date",
+        "time" => "Time",
+        "binary" => "Binary",
+        "json" => "Json",
+        "array" => "Array",
+        other => {
+            println!("cargo:warning=Unknown type category '{other}' in type_system.toml, defaulting to Text");
+            "Text"
+        }
+    }
 }
 
 // ============================================================================

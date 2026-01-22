@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/pondpilot/flowscope/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/pondpilot/flowscope/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/badge/docs-available-brightgreen.svg)](docs/README.md)
-[![Coverage](https://img.shields.io/badge/coverage-n%2Fa-lightgrey.svg)](https://github.com/pondpilot/flowscope/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/pondpilot/flowscope/graph/badge.svg)](https://codecov.io/gh/pondpilot/flowscope)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.82+-orange.svg)](https://www.rust-lang.org)
 [![TypeScript](https://img.shields.io/badge/typescript-5.0+-blue.svg)](https://www.typescriptlang.org)

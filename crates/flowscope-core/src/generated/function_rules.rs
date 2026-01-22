@@ -93,6 +93,7 @@ pub fn skip_args_for_function(dialect: Dialect, func_name: &str) -> &'static [us
     }
 }
 
+
 /// NULL ordering behavior in ORDER BY.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NullOrdering {
@@ -126,5 +127,49 @@ impl Dialect {
     /// Whether this dialect supports implicit UNNEST (no CROSS JOIN needed).
     pub const fn supports_implicit_unnest(&self) -> bool {
         matches!(self, Dialect::Bigquery | Dialect::Redshift)
+    }
+}
+
+/// Checks if a function is a value table function (returns rows) for the given dialect.
+///
+/// Value table functions (like UNNEST, GENERATE_SERIES, FLATTEN) return rows/tables
+/// rather than scalar values. This classification is used during lineage analysis
+/// to determine how FROM clause function calls should be handled.
+///
+/// # Arguments
+///
+/// * `dialect` - The SQL dialect being analyzed
+/// * `func_name` - The function name (case-insensitive)
+///
+/// # Returns
+///
+/// `true` if the function is a value table function for the given dialect.
+///
+/// # Example
+///
+/// ```ignore
+/// use flowscope_core::generated::is_value_table_function;
+/// use flowscope_core::Dialect;
+///
+/// assert!(is_value_table_function(Dialect::Postgres, "UNNEST"));
+/// assert!(is_value_table_function(Dialect::Snowflake, "FLATTEN"));
+/// assert!(!is_value_table_function(Dialect::Postgres, "COUNT"));
+/// ```
+pub fn is_value_table_function(dialect: Dialect, func_name: &str) -> bool {
+    let name = func_name.to_ascii_uppercase();
+    // Check common functions
+    if matches!(name.as_str(), "UNNEST" | "GENERATE_SERIES" | "JSON_TABLE") {
+        return true;
+    }
+    // Check dialect-specific functions
+    match dialect {
+        Dialect::Postgres => matches!(name.as_str(), "GENERATE_SUBSCRIPTS" | "REGEXP_MATCHES"),
+        Dialect::Snowflake => matches!(name.as_str(), "FLATTEN" | "SPLIT_TO_TABLE" | "STRTOK_SPLIT_TO_TABLE"),
+        Dialect::Mssql => matches!(name.as_str(), "OPENJSON" | "STRING_SPLIT"),
+        Dialect::Duckdb => matches!(name.as_str(), "RANGE"),
+        Dialect::Clickhouse => matches!(name.as_str(), "ARRAY_JOIN"),
+        Dialect::Databricks => matches!(name.as_str(), "EXPLODE" | "EXPLODE_OUTER" | "POSEXPLODE" | "POSEXPLODE_OUTER" | "INLINE" | "INLINE_OUTER"),
+        Dialect::Hive => matches!(name.as_str(), "EXPLODE" | "POSEXPLODE" | "INLINE" | "JSON_TUPLE" | "PARSE_URL_TUPLE"),
+        _ => false,
     }
 }
