@@ -59,6 +59,16 @@ pub async fn start_watcher(state: Arc<AppState>) -> Result<()> {
                 });
 
                 if sql_changed {
+                    // Log which files changed
+                    let changed_files: Vec<_> = events
+                        .iter()
+                        .filter(|e| e.path.extension().is_some_and(|ext| ext == "sql"))
+                        .map(|e| e.path.display().to_string())
+                        .collect();
+                    for file in &changed_files {
+                        println!("flowscope: file changed: {file}");
+                    }
+
                     if let Err(e) = state.reload_files().await {
                         eprintln!("flowscope: failed to reload files: {e}");
                     }

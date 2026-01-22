@@ -111,11 +111,11 @@ Add a `--serve` flag to `flowscope-cli` that starts a local HTTP server serving 
 
 ### Task 7: Implement file watcher
 
-- [ ] Use `notify` crate to watch directories
-- [ ] Filter for `.sql` files
-- [ ] Debounce changes (100ms)
-- [ ] Update `AppState::files` on changes
-- [ ] Log file changes to console
+- [x] Use `notify` crate to watch directories
+- [x] Filter for `.sql` files
+- [x] Debounce changes (100ms)
+- [x] Update `AppState::files` on changes
+- [x] Log file changes to console
 
 **Files:** `crates/flowscope-cli/src/server/watcher.rs`
 
