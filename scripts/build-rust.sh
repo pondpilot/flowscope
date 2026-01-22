@@ -23,6 +23,10 @@ echo "Building WASM module..."
 # Output to packages/core/wasm (same location as package.json build:wasm for npm publishing)
 wasm-pack build crates/flowscope-wasm --target web --out-dir ../../packages/core/wasm
 
+# Restore .gitignore to allow WASM artifacts to be committed
+# (wasm-pack generates a .gitignore that ignores everything)
+echo "# Keep wasm artifacts available for publishing" > packages/core/wasm/.gitignore
+
 # Create symlink for TypeScript development imports
 # The symlink allows TypeScript to import from './wasm' while the actual files
 # live one directory up in packages/core/wasm (for cleaner npm package structure)

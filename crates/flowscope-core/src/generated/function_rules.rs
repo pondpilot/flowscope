@@ -93,6 +93,7 @@ pub fn skip_args_for_function(dialect: Dialect, func_name: &str) -> &'static [us
     }
 }
 
+
 /// NULL ordering behavior in ORDER BY.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NullOrdering {
@@ -163,26 +164,12 @@ pub fn is_value_table_function(dialect: Dialect, func_name: &str) -> bool {
     // Check dialect-specific functions
     match dialect {
         Dialect::Postgres => matches!(name.as_str(), "GENERATE_SUBSCRIPTS" | "REGEXP_MATCHES"),
-        Dialect::Snowflake => matches!(
-            name.as_str(),
-            "FLATTEN" | "SPLIT_TO_TABLE" | "STRTOK_SPLIT_TO_TABLE"
-        ),
+        Dialect::Snowflake => matches!(name.as_str(), "FLATTEN" | "SPLIT_TO_TABLE" | "STRTOK_SPLIT_TO_TABLE"),
         Dialect::Mssql => matches!(name.as_str(), "OPENJSON" | "STRING_SPLIT"),
         Dialect::Duckdb => matches!(name.as_str(), "RANGE"),
         Dialect::Clickhouse => matches!(name.as_str(), "ARRAY_JOIN"),
-        Dialect::Databricks => matches!(
-            name.as_str(),
-            "EXPLODE"
-                | "EXPLODE_OUTER"
-                | "POSEXPLODE"
-                | "POSEXPLODE_OUTER"
-                | "INLINE"
-                | "INLINE_OUTER"
-        ),
-        Dialect::Hive => matches!(
-            name.as_str(),
-            "EXPLODE" | "POSEXPLODE" | "INLINE" | "JSON_TUPLE" | "PARSE_URL_TUPLE"
-        ),
+        Dialect::Databricks => matches!(name.as_str(), "EXPLODE" | "EXPLODE_OUTER" | "POSEXPLODE" | "POSEXPLODE_OUTER" | "INLINE" | "INLINE_OUTER"),
+        Dialect::Hive => matches!(name.as_str(), "EXPLODE" | "POSEXPLODE" | "INLINE" | "JSON_TUPLE" | "PARSE_URL_TUPLE"),
         _ => false,
     }
 }
