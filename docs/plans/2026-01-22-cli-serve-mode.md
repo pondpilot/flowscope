@@ -85,10 +85,10 @@ Add a `--serve` flag to `flowscope-cli` that starts a local HTTP server serving 
 
 ### Task 5: Implement AppState and config
 
-- [ ] Define `AppState` with `RwLock<Vec<FileSource>>` for files
-- [ ] Add `RwLock<Option<SchemaMetadata>>` for schema
-- [ ] Add `ServerConfig` struct (dialect, watch_dirs, metadata_url, port)
-- [ ] Implement `AppState::new()` that loads initial files and schema
+- [x] Define `AppState` with `RwLock<Vec<FileSource>>` for files
+- [x] Add `RwLock<Option<SchemaMetadata>>` for schema
+- [x] Add `ServerConfig` struct (dialect, watch_dirs, metadata_url, port)
+- [x] Implement `AppState::new()` that loads initial files and schema
 
 **Files:** `crates/flowscope-cli/src/server/state.rs`
 
