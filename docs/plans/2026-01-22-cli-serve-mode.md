@@ -135,13 +135,13 @@ Add a `--serve` flag to `flowscope-cli` that starts a local HTTP server serving 
 
 ### Task 9: Frontend backend detection
 
-- [ ] Create `app/src/lib/backend-adapter.ts` with adapter interface
-- [ ] Implement `RestBackendAdapter` using fetch
-- [ ] Implement `WasmBackendAdapter` wrapping existing worker
-- [ ] Add `createBackendAdapter()` factory with health check fallback
-- [ ] Update `useAnalysis.ts` to use adapter pattern
+- [x] Create `app/src/lib/backend-adapter.ts` with adapter interface
+- [x] Implement `RestBackendAdapter` using fetch
+- [x] Implement `WasmBackendAdapter` wrapping existing worker
+- [x] Add `createBackendAdapter()` factory with health check fallback
+- [x] Update `useAnalysis.ts` to use adapter pattern
 
-**Files:** `app/src/lib/backend-adapter.ts`, `app/src/hooks/useAnalysis.ts`
+**Files:** `app/src/lib/backend-adapter.ts`, `app/src/lib/backend-context.tsx`, `app/src/hooks/useAnalysis.ts`
 
 ---
 
