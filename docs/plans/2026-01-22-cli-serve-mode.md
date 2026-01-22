@@ -60,12 +60,12 @@ Add a `--serve` flag to `flowscope-cli` that starts a local HTTP server serving 
 
 ### Task 3: Create server module structure
 
-- [ ] Create `crates/flowscope-cli/src/server/mod.rs` — exports and main server loop
-- [ ] Create `crates/flowscope-cli/src/server/assets.rs` — rust-embed static files
-- [ ] Create `crates/flowscope-cli/src/server/state.rs` — shared AppState
-- [ ] Create `crates/flowscope-cli/src/server/api.rs` — REST handlers
-- [ ] Create `crates/flowscope-cli/src/server/watcher.rs` — file system watcher
-- [ ] Add `mod server` (gated) to `main.rs`
+- [x] Create `crates/flowscope-cli/src/server/mod.rs` — exports and main server loop
+- [x] Create `crates/flowscope-cli/src/server/assets.rs` — rust-embed static files
+- [x] Create `crates/flowscope-cli/src/server/state.rs` — shared AppState
+- [x] Create `crates/flowscope-cli/src/server/api.rs` — REST handlers
+- [x] Create `crates/flowscope-cli/src/server/watcher.rs` — file system watcher
+- [x] Add `mod server` (gated) to `main.rs`
 
 **Files:** `crates/flowscope-cli/src/server/*.rs`, `crates/flowscope-cli/src/main.rs`
 

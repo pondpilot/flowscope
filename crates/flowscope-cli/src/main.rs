@@ -6,6 +6,8 @@ mod input;
 mod metadata;
 mod output;
 mod schema;
+#[cfg(feature = "serve")]
+mod server;
 
 use anyhow::{Context, Result};
 use clap::Parser;

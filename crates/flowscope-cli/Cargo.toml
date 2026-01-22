@@ -23,7 +23,7 @@ metadata-provider = ["sqlx", "tokio"]
 # Integration tests require database connectivity
 integration-tests = ["metadata-provider"]
 # Serve mode: embedded web UI with REST API
-serve = ["dep:axum", "dep:tower-http", "dep:rust-embed", "dep:notify-debouncer-mini", "dep:mime_guess", "dep:open", "tokio/macros", "tokio/signal"]
+serve = ["dep:axum", "dep:tower-http", "dep:rust-embed", "dep:notify-debouncer-mini", "dep:mime_guess", "dep:open", "dep:walkdir", "dep:chrono", "tokio/macros", "tokio/signal"]
 
 [dependencies]
 flowscope-core.workspace = true
@@ -42,10 +42,12 @@ tokio = { version = "1", features = ["rt-multi-thread"], optional = true }
 # Serve mode dependencies (optional, enabled by "serve" feature)
 axum = { version = "0.8", optional = true }
 tower-http = { version = "0.6", features = ["fs", "cors"], optional = true }
-rust-embed = { version = "8", optional = true }
+rust-embed = { version = "8", features = ["include-exclude"], optional = true }
+chrono = { version = "0.4", optional = true }
 notify-debouncer-mini = { version = "0.5", optional = true }
 mime_guess = { version = "2", optional = true }
 open = { version = "5", optional = true }
+walkdir = { version = "2", optional = true }
 
 [dev-dependencies]
 tempfile = "3"
