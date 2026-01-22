@@ -468,6 +468,16 @@ pub(crate) struct TypeContext {
 /// This is used in WHERE, HAVING, and ON clauses to boost type-compatible columns.
 /// For example, in `WHERE age > |`, we detect that `age` is an INTEGER and boost
 /// integer-compatible columns in the completion list.
+///
+/// # Supported patterns
+/// - `column > |` - simple comparison
+/// - `(column) > |` - parenthesized column
+/// - `NOT column > |` - NOT prefix (skipped)
+/// - `((column)) > |` - nested parentheses
+///
+/// # Boundary conditions
+/// - `column > 10 AND |` - returns None (new expression after AND/OR)
+/// - `WHERE |` - returns None (no comparison context)
 fn infer_type_context(
     tokens: &[TokenInfo],
     cursor_offset: usize,
@@ -475,50 +485,130 @@ fn infer_type_context(
     registry: &SchemaRegistry,
     tables: &[CompletionTable],
 ) -> Option<TypeContext> {
-    // Find tokens before cursor
-    let mut tokens_before: Vec<&TokenInfo> = tokens
+    // Collect tokens before cursor
+    let tokens_before: Vec<&TokenInfo> = tokens
         .iter()
         .filter(|t| t.span.end <= cursor_offset)
         .collect();
 
-    // We need at least 2 tokens: identifier and comparison operator
-    if tokens_before.len() < 2 {
+    if tokens_before.is_empty() {
         return None;
     }
 
-    // Pop the last token (should be an operator for our context)
-    let last_token = tokens_before.pop()?;
+    // Phase 1: Walk backward to find comparison operator, skipping balanced parentheses
+    let mut idx = tokens_before.len();
+    let mut paren_depth: i32 = 0;
+    let mut comparison_idx: Option<usize> = None;
 
-    // Check if last token is a comparison operator
-    let is_comparison = matches!(
-        last_token.token,
-        Token::Eq | Token::Neq | Token::Lt | Token::Gt | Token::LtEq | Token::GtEq
-    );
+    while idx > 0 {
+        idx -= 1;
+        let token = &tokens_before[idx].token;
 
-    if !is_comparison {
-        return None;
-    }
-
-    // Get the identifier before the operator
-    let identifier_token = tokens_before.pop()?;
-
-    let identifier = match &identifier_token.token {
-        Token::Word(word) if word.keyword == Keyword::NoKeyword => sql
-            .get(identifier_token.span.start..identifier_token.span.end)
-            .unwrap_or(&word.value)
-            .to_string(),
-        _ => return None,
-    };
-
-    // Try to find the type of this identifier in the schema
-    for table in tables {
-        if let Some(data_type) = registry.lookup_column_type(&table.canonical, &identifier) {
-            if let Some(canonical_type) = normalize_type_name(&data_type) {
-                return Some(TypeContext {
-                    expected_type: canonical_type,
-                    source_name: identifier,
-                });
+        match token {
+            // Track parentheses (walking backward: ) increases depth, ( decreases)
+            Token::RParen => {
+                paren_depth += 1;
             }
+            Token::LParen => {
+                paren_depth -= 1;
+                if paren_depth < 0 {
+                    // Unbalanced - we've gone past the start of this expression
+                    return None;
+                }
+            }
+            // AND/OR mark a boolean boundary - cursor is in a new expression
+            Token::Word(word)
+                if paren_depth == 0
+                    && matches!(word.keyword, Keyword::AND | Keyword::OR) =>
+            {
+                return None;
+            }
+            // Clause boundaries - stop searching
+            Token::Word(word)
+                if paren_depth == 0
+                    && matches!(
+                        word.keyword,
+                        Keyword::WHERE
+                            | Keyword::FROM
+                            | Keyword::SELECT
+                            | Keyword::HAVING
+                            | Keyword::ON
+                            | Keyword::JOIN
+                    ) =>
+            {
+                return None;
+            }
+            // Found comparison operator at depth 0
+            Token::Eq | Token::Neq | Token::Lt | Token::Gt | Token::LtEq | Token::GtEq
+                if paren_depth == 0 =>
+            {
+                comparison_idx = Some(idx);
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    let comp_idx = comparison_idx?;
+    if comp_idx == 0 {
+        return None; // No tokens before the operator
+    }
+
+    // Phase 2: Find identifier before the comparison operator, skipping NOT and parentheses
+    // For `(age) > |`, we need to find `age` which is inside the parens
+    idx = comp_idx;
+    paren_depth = 0;
+
+    while idx > 0 {
+        idx -= 1;
+        let token = &tokens_before[idx].token;
+
+        match token {
+            // Track closing parens (walking backward: ) increases depth)
+            Token::RParen => {
+                paren_depth += 1;
+            }
+            // Track opening parens (walking backward: ( decreases depth)
+            Token::LParen => {
+                paren_depth -= 1;
+                if paren_depth < 0 {
+                    return None; // Unbalanced - we've exited the expression
+                }
+            }
+            // Skip NOT keyword (unary prefix)
+            Token::Word(word) if word.keyword == Keyword::NOT => {
+                continue;
+            }
+            // AND/OR boundary at depth 0 - stop
+            Token::Word(word)
+                if paren_depth == 0 && matches!(word.keyword, Keyword::AND | Keyword::OR) =>
+            {
+                return None;
+            }
+            // Found identifier - accept at any depth (it's inside grouping parens)
+            // For `(age) > |`, we find `age` at depth 1
+            Token::Word(word) if word.keyword == Keyword::NoKeyword => {
+                let identifier = sql
+                    .get(tokens_before[idx].span.start..tokens_before[idx].span.end)
+                    .unwrap_or(&word.value)
+                    .to_string();
+
+                // Look up type in schema
+                for table in tables {
+                    if let Some(data_type) =
+                        registry.lookup_column_type(&table.canonical, &identifier)
+                    {
+                        if let Some(canonical_type) = normalize_type_name(&data_type) {
+                            return Some(TypeContext {
+                                expected_type: canonical_type,
+                                source_name: identifier,
+                            });
+                        }
+                    }
+                }
+                return None; // Identifier found but not in schema
+            }
+            _ => {}
         }
     }
 
@@ -2909,6 +2999,184 @@ mod tests {
             "Integer column 'score' (score: {}) should rank higher than varchar 'name' (score: {}) in integer comparison context",
             score_score,
             name_score
+        );
+    }
+
+    #[test]
+    fn test_type_context_with_parentheses() {
+        // Test that parentheses around identifier are handled: WHERE (age) > |
+        let schema = SchemaMetadata {
+            default_catalog: None,
+            default_schema: Some("public".to_string()),
+            search_path: None,
+            case_sensitivity: None,
+            allow_implied: true,
+            tables: vec![SchemaTable {
+                catalog: None,
+                schema: Some("public".to_string()),
+                name: "users".to_string(),
+                columns: vec![ColumnSchema {
+                    name: "age".to_string(),
+                    data_type: Some("integer".to_string()),
+                    is_primary_key: None,
+                    foreign_key: None,
+                }],
+            }],
+        };
+
+        let sql = "SELECT * FROM users WHERE (age) > ";
+        let cursor_offset = sql.len();
+
+        let tokens = tokenize_sql(sql, Dialect::Duckdb).expect("tokenization should succeed");
+        let (registry, _) = SchemaRegistry::new(Some(&schema), Dialect::Duckdb);
+        let request = CompletionRequest {
+            sql: sql.to_string(),
+            dialect: Dialect::Duckdb,
+            cursor_offset,
+            schema: Some(schema),
+        };
+        let ctx = completion_context(&request);
+
+        let type_ctx =
+            infer_type_context(&tokens, cursor_offset, sql, &registry, &ctx.tables_in_scope);
+
+        assert!(
+            type_ctx.is_some(),
+            "Should infer type context from '(age) > '"
+        );
+        assert_eq!(type_ctx.unwrap().expected_type, CanonicalType::Integer);
+    }
+
+    #[test]
+    fn test_type_context_with_nested_parentheses() {
+        // Test nested parens: WHERE ((age)) > |
+        let schema = SchemaMetadata {
+            default_catalog: None,
+            default_schema: Some("public".to_string()),
+            search_path: None,
+            case_sensitivity: None,
+            allow_implied: true,
+            tables: vec![SchemaTable {
+                catalog: None,
+                schema: Some("public".to_string()),
+                name: "users".to_string(),
+                columns: vec![ColumnSchema {
+                    name: "age".to_string(),
+                    data_type: Some("integer".to_string()),
+                    is_primary_key: None,
+                    foreign_key: None,
+                }],
+            }],
+        };
+
+        let sql = "SELECT * FROM users WHERE ((age)) > ";
+        let cursor_offset = sql.len();
+
+        let tokens = tokenize_sql(sql, Dialect::Duckdb).expect("tokenization should succeed");
+        let (registry, _) = SchemaRegistry::new(Some(&schema), Dialect::Duckdb);
+        let request = CompletionRequest {
+            sql: sql.to_string(),
+            dialect: Dialect::Duckdb,
+            cursor_offset,
+            schema: Some(schema),
+        };
+        let ctx = completion_context(&request);
+
+        let type_ctx =
+            infer_type_context(&tokens, cursor_offset, sql, &registry, &ctx.tables_in_scope);
+
+        assert!(
+            type_ctx.is_some(),
+            "Should infer type context from '((age)) > '"
+        );
+        assert_eq!(type_ctx.unwrap().expected_type, CanonicalType::Integer);
+    }
+
+    #[test]
+    fn test_type_context_after_and_returns_none() {
+        // After AND/OR, we're in a new expression - should return None
+        let schema = SchemaMetadata {
+            default_catalog: None,
+            default_schema: Some("public".to_string()),
+            search_path: None,
+            case_sensitivity: None,
+            allow_implied: true,
+            tables: vec![SchemaTable {
+                catalog: None,
+                schema: Some("public".to_string()),
+                name: "users".to_string(),
+                columns: vec![ColumnSchema {
+                    name: "age".to_string(),
+                    data_type: Some("integer".to_string()),
+                    is_primary_key: None,
+                    foreign_key: None,
+                }],
+            }],
+        };
+
+        let sql = "SELECT * FROM users WHERE age > 10 AND ";
+        let cursor_offset = sql.len();
+
+        let tokens = tokenize_sql(sql, Dialect::Duckdb).expect("tokenization should succeed");
+        let (registry, _) = SchemaRegistry::new(Some(&schema), Dialect::Duckdb);
+        let request = CompletionRequest {
+            sql: sql.to_string(),
+            dialect: Dialect::Duckdb,
+            cursor_offset,
+            schema: Some(schema),
+        };
+        let ctx = completion_context(&request);
+
+        let type_ctx =
+            infer_type_context(&tokens, cursor_offset, sql, &registry, &ctx.tables_in_scope);
+
+        assert!(
+            type_ctx.is_none(),
+            "Should return None after AND (new expression context)"
+        );
+    }
+
+    #[test]
+    fn test_type_context_after_or_returns_none() {
+        // After OR, we're in a new expression - should return None
+        let schema = SchemaMetadata {
+            default_catalog: None,
+            default_schema: Some("public".to_string()),
+            search_path: None,
+            case_sensitivity: None,
+            allow_implied: true,
+            tables: vec![SchemaTable {
+                catalog: None,
+                schema: Some("public".to_string()),
+                name: "users".to_string(),
+                columns: vec![ColumnSchema {
+                    name: "age".to_string(),
+                    data_type: Some("integer".to_string()),
+                    is_primary_key: None,
+                    foreign_key: None,
+                }],
+            }],
+        };
+
+        let sql = "SELECT * FROM users WHERE age > 10 OR ";
+        let cursor_offset = sql.len();
+
+        let tokens = tokenize_sql(sql, Dialect::Duckdb).expect("tokenization should succeed");
+        let (registry, _) = SchemaRegistry::new(Some(&schema), Dialect::Duckdb);
+        let request = CompletionRequest {
+            sql: sql.to_string(),
+            dialect: Dialect::Duckdb,
+            cursor_offset,
+            schema: Some(schema),
+        };
+        let ctx = completion_context(&request);
+
+        let type_ctx =
+            infer_type_context(&tokens, cursor_offset, sql, &registry, &ctx.tables_in_scope);
+
+        assert!(
+            type_ctx.is_none(),
+            "Should return None after OR (new expression context)"
         );
     }
 

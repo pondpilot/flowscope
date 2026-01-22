@@ -22,7 +22,30 @@ pub fn normalize_schema_type(type_name: &str) -> String {
         .unwrap_or_else(|| type_name.to_string())
 }
 
-/// Basic type inference for expressions
+/// Best-effort type inference for SQL expressions.
+///
+/// Attempts to infer the canonical type of an expression based on its structure.
+/// This is used for completion hints and is intentionally permissive - it does not
+/// validate type consistency (e.g., mixed-type CASE branches are not flagged).
+///
+/// # Supported expressions
+/// - Literals: numbers → Float, strings → Text, booleans → Boolean, NULL → None
+/// - CAST/type annotations
+/// - Unary operators (NOT → Boolean, +/- → preserves operand type)
+/// - Binary operators (comparisons → Boolean, arithmetic → Float)
+/// - Function calls (via `infer_function_return_type`)
+/// - CASE expressions (returns first inferable branch type)
+/// - Nested expressions
+///
+/// # CASE expression behavior
+/// For CASE expressions, returns the type of the first THEN branch that can be
+/// typed, or falls back to ELSE. This is a heuristic - it does not verify that
+/// all branches have compatible types. For example:
+/// ```sql
+/// CASE WHEN x > 0 THEN 1 WHEN y > 0 THEN 'text' END
+/// ```
+/// Returns `Float` (from the first branch) without flagging the type mismatch.
+/// NULL branches are skipped since they can match any type.
 pub fn infer_expr_type(expr: &Expr) -> Option<CanonicalType> {
     match expr {
         Expr::Value(val) => match &val.value {
@@ -77,6 +100,24 @@ pub fn infer_expr_type(expr: &Expr) -> Option<CanonicalType> {
             }
             _ => None,
         },
+        Expr::Case {
+            conditions,
+            else_result,
+            ..
+        } => {
+            // Best-effort: return first inferable type from THEN branches or ELSE.
+            // Skips NULL branches (None) and does not validate type consistency.
+            // The `operand` field (for simple CASE) is ignored - we only care about result types.
+            for cond in conditions {
+                if let Some(t) = infer_expr_type(&cond.result) {
+                    return Some(t);
+                }
+            }
+            if let Some(else_expr) = else_result {
+                return infer_expr_type(else_expr);
+            }
+            None
+        }
         Expr::Function(func) => {
             let name = func.name.to_string();
             // Try data-driven type inference first
@@ -355,6 +396,74 @@ mod tests {
     #[test]
     fn test_unknown_function_returns_none() {
         assert_eq!(infer_expr_type(&parse_expr("UNKNOWN_FUNC(x)")), None);
+    }
+
+    #[test]
+    fn test_infer_case_expression_with_then() {
+        // CASE with string result in THEN branch
+        assert_eq!(
+            infer_expr_type(&parse_expr("CASE WHEN x > 0 THEN 'positive' ELSE 'negative' END")),
+            Some(CanonicalType::Text)
+        );
+    }
+
+    #[test]
+    fn test_infer_case_expression_with_numeric() {
+        // CASE with numeric result
+        assert_eq!(
+            infer_expr_type(&parse_expr("CASE WHEN x > 0 THEN 1 ELSE 0 END")),
+            Some(CanonicalType::Float) // Numbers are inferred as Float
+        );
+    }
+
+    #[test]
+    fn test_infer_case_expression_with_null_then() {
+        // CASE where first THEN is NULL, should fall through to second THEN or ELSE
+        assert_eq!(
+            infer_expr_type(&parse_expr(
+                "CASE WHEN x IS NULL THEN NULL WHEN x > 0 THEN 'yes' ELSE 'no' END"
+            )),
+            Some(CanonicalType::Text)
+        );
+    }
+
+    #[test]
+    fn test_infer_case_expression_else_fallback() {
+        // CASE where THEN conditions can't be typed but ELSE can
+        assert_eq!(
+            infer_expr_type(&parse_expr("CASE WHEN x > 0 THEN NULL ELSE 'default' END")),
+            Some(CanonicalType::Text)
+        );
+    }
+
+    #[test]
+    fn test_infer_case_all_null() {
+        // CASE where all branches are NULL
+        assert_eq!(
+            infer_expr_type(&parse_expr("CASE WHEN x > 0 THEN NULL ELSE NULL END")),
+            None
+        );
+    }
+
+    #[test]
+    fn test_infer_case_mixed_types_returns_first() {
+        // Best-effort: returns first typed branch, does NOT validate type consistency.
+        // This documents current behavior - mixed types would be a SQL error at runtime.
+        assert_eq!(
+            infer_expr_type(&parse_expr(
+                "CASE WHEN x > 0 THEN 1 WHEN y > 0 THEN 'text' ELSE TRUE END"
+            )),
+            Some(CanonicalType::Float) // Returns Float from first branch, ignores mismatch
+        );
+    }
+
+    #[test]
+    fn test_infer_case_without_else() {
+        // CASE without ELSE, first THEN has type
+        assert_eq!(
+            infer_expr_type(&parse_expr("CASE WHEN x > 0 THEN 'yes' END")),
+            Some(CanonicalType::Text)
+        );
     }
 
     #[test]

@@ -7,7 +7,7 @@ use sqlparser::ast::{
     Cte, Expr, Query, Select, SelectItem, SetExpr, Spanned, Statement, TableFactor, TableWithJoins,
 };
 
-use crate::analyzer::helpers::line_col_to_offset;
+use crate::analyzer::helpers::{infer_expr_type, line_col_to_offset};
 use crate::types::{AstColumnInfo, AstContext, AstTableInfo, CteInfo, SubqueryInfo};
 
 /// Information about a SELECT alias for lateral reference support.
@@ -323,20 +323,12 @@ fn derive_column_name(expr: &Expr, index: usize) -> String {
     }
 }
 
-/// Basic type inference from expression (very limited)
+/// Infer data type from expression using the analyzer's centralized type inference.
+///
+/// Returns the canonical type name in uppercase (e.g., "TEXT", "INTEGER", "FLOAT").
+/// See [`crate::analyzer::helpers::infer_expr_type`] for supported expressions and behavior.
 fn infer_data_type(expr: &Expr) -> Option<String> {
-    match expr {
-        Expr::Value(v) => match &v.value {
-            sqlparser::ast::Value::Number(_, _) => Some("number".to_string()),
-            sqlparser::ast::Value::SingleQuotedString(_)
-            | sqlparser::ast::Value::DoubleQuotedString(_) => Some("string".to_string()),
-            sqlparser::ast::Value::Boolean(_) => Some("boolean".to_string()),
-            sqlparser::ast::Value::Null => Some("null".to_string()),
-            _ => None,
-        },
-        Expr::Cast { data_type, .. } => Some(data_type.to_string()),
-        _ => None,
-    }
+    infer_expr_type(expr).map(|canonical| canonical.as_uppercase_str().to_string())
 }
 
 /// Extracts SELECT aliases with their positions from parsed statements.
