@@ -38,9 +38,9 @@ Add a `--serve` flag to `flowscope-cli` that starts a local HTTP server serving 
 
 ### Task 1: Add serve feature and dependencies to CLI
 
-- [ ] Add `serve` feature flag to `crates/flowscope-cli/Cargo.toml`
-- [ ] Add dependencies: `axum`, `tower-http`, `rust-embed`, `notify`, `tokio`
-- [ ] Gate dependencies with `optional = true` under serve feature
+- [x] Add `serve` feature flag to `crates/flowscope-cli/Cargo.toml`
+- [x] Add dependencies: `axum`, `tower-http`, `rust-embed`, `notify`, `tokio`
+- [x] Gate dependencies with `optional = true` under serve feature
 
 **Files:** `crates/flowscope-cli/Cargo.toml`
 
