@@ -62,6 +62,9 @@ Options:
                            (e.g., postgres://user:pass@host/db, mysql://..., sqlite://...)
       --metadata-schema <SCHEMA>
                            Schema name to filter when using --metadata-url
+      --template <MODE>    Template preprocessing mode [possible values: jinja, dbt]
+      --template-var <KEY=VALUE>
+                           Template variable (can be repeated)
   -o, --output <FILE>      Output file (defaults to stdout)
       --project-name <PROJECT_NAME>
                            Project name used for default export filenames [default: lineage]
@@ -70,7 +73,7 @@ Options:
   -v, --view <VIEW>        Graph detail level for mermaid output [default: table]
                            [possible values: script, table, column, hybrid]
   -q, --quiet              Suppress warnings on stderr
-      --compact            Compact JSON output (no pretty-printing)
+  -c, --compact            Compact JSON output (no pretty-printing)
   -h, --help               Print help
   -V, --version            Print version
 ```
@@ -132,3 +135,27 @@ This feature requires the `metadata-provider` feature flag (enabled by default).
 ```bash
 cargo build -p flowscope-cli --no-default-features
 ```
+
+### dbt and Jinja Templating
+
+FlowScope can preprocess SQL files that use Jinja or dbt-style templating before analysis. This enables lineage extraction from dbt models without running dbt itself.
+
+```bash
+# Analyze a dbt model with ref() and source() macros
+flowscope --template dbt models/orders.sql
+
+# Pass variables to templates
+flowscope --template dbt --template-var target_schema=prod models/*.sql
+
+# Plain Jinja templating (strict mode - undefined variables cause errors)
+flowscope --template jinja --template-var env=production query.sql
+```
+
+**dbt mode** includes stub implementations of common macros:
+- `ref('model')` / `ref('project', 'model')` - model references
+- `source('schema', 'table')` - source table references
+- `config(...)` - model configuration (returns empty string)
+- `var('name')` / `var('name', 'default')` - variable access
+- `is_incremental()` - always returns false for static analysis
+
+Variables passed via `--template-var` are accessible in dbt mode through `var()` and in Jinja mode directly as template variables.

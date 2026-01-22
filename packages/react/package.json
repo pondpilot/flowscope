@@ -1,6 +1,6 @@
 {
   "name": "@pondpilot/flowscope-react",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "React components for FlowScope SQL lineage visualization",
   "type": "module",
   "main": "dist/index.js",
@@ -30,7 +30,7 @@
     "lint:fix": "eslint src --fix"
   },
   "peerDependencies": {
-    "@pondpilot/flowscope-core": "^0.2.0",
+    "@pondpilot/flowscope-core": "^0.3.0",
     "react": ">=19.0.0",
     "react-dom": ">=19.0.0"
   },

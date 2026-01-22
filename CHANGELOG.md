@@ -7,9 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-01-22
+
 ### Added
 
 #### Core Engine (flowscope-core)
+- **Jinja/dbt templating support**: MiniJinja-based preprocessing for dbt projects
+  - Built-in dbt macros: `ref()`, `source()`, `config()`, `var()`, `is_incremental()`
+  - RelationEmulator for dbt Relation object attribute access (`.schema`, `.identifier`)
+  - `this` global variable and `execute` flag for templates
+  - Custom macro passthrough stubs for graceful handling
+- **COPY statement lineage**: Track source/target tables in COPY/COPY INTO (PostgreSQL, Snowflake)
+- **ALTER TABLE RENAME lineage**: Track table renames as dataflow edges
+- **UNLOAD statement lineage**: Track source tables from Redshift UNLOAD statements
+- **Lateral column alias support**: Resolve aliases in same SELECT list (BigQuery, Snowflake, DuckDB, etc.)
+- **Backward column inference**: Infer columns for SELECT * without schema from downstream usage
 - Type inference for SQL expressions with comprehensive type checking
 - New `TYPE_MISMATCH` warning code for detecting incompatible type comparisons and operations
 - Schema-aware column type lookup - column references now resolve types from provided schema metadata
@@ -17,12 +29,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dialect-aware type compatibility rules (e.g., Boolean/Integer comparison allowed in MySQL but not PostgreSQL)
 - NULL comparison anti-pattern detection (`= NULL` warns to use `IS NULL` instead)
 
+#### Completion API
+- Smart function completions with signature metadata (params, return types, categories)
+- Context-aware scoring: boost aggregates in GROUP BY, window functions in OVER clauses
+- Lateral column alias extraction with proper scope isolation
+- Type-aware column scoring in comparison contexts
+- Dialect-aware keyword parsing using sqlparser tokenizer
+- CASE expression type inference from THEN/ELSE branches
+
+#### CLI (flowscope-cli)
+- `--template jinja|dbt` flag for templated SQL preprocessing
+- `--template-var KEY=VALUE` for template variable injection
+- `--metadata-url` for live database schema introspection (PostgreSQL, MySQL, SQLite)
+- `--metadata-schema` for schema filtering during introspection
+
+#### React Package (@pondpilot/flowscope-react)
+- Web workers for graph/matrix/layout computations (improved UI responsiveness)
+- LayoutProgressIndicator component for visual layout feedback
+- Debug flags (GRAPH_DEBUG, LAYOUT_DEBUG) for performance diagnostics
+
+#### Web App (app/)
+- Template mode selector for dbt/Jinja SQL preprocessing in the toolbar
+- Issue-to-editor navigation: click issues to jump to source location
+- Issues tab filtering: filter by severity, error code, and file
+- Stats popover: complexity dots trigger dropdown with table/column/join counts
+- Clear analysis cache option in project menu
+- Bundled "dbt Jaffle Shop" demo project showcasing ref/source/config/var
+
 ### Changed
 
 #### Core Engine (flowscope-core)
 - Unified type system: `CanonicalType` replaces internal `SqlType` enum with broader coverage (Time, Binary, Json, Array)
 - `OutputColumn.data_type` now populated with inferred types for SELECT expressions
 - Type checking now accepts dialect parameter for dialect-specific rules
+
+### Fixed
+
+#### Core Engine (flowscope-core)
+- dbt model cross-statement linking with proper case normalization for Snowflake
+- DDL-seeded schema preservation (schemas no longer overwritten by later queries)
+- UTF-8 safety in `should_show_for_cursor` when cursor offset is mid-character
 
 ### Known Limitations
 

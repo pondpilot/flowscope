@@ -130,17 +130,6 @@ Or directly with wasm-pack:
 wasm-pack build crates/flowscope-wasm --target web --out-dir ../../packages/core/wasm
 ```
 
-## Artifact Management
-
-The compiled `.wasm` binary is committed to the repository. This enables npm consumers to use the package without requiring a Rust toolchain.
-
-**For contributors:**
-- After modifying Rust source code in `crates/`, rebuild with `just build-wasm`
-- Commit the updated `.wasm` file along with your Rust changes
-- The committed binary should always match the current Rust source
-
-**Note:** The `.wasm` file may contain compiled code from template variables if you've customized the build. Review the binary size and ensure no sensitive data is inadvertently included.
-
 ## License
 
 Apache 2.0

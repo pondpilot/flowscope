@@ -8,12 +8,15 @@ Core SQL lineage analysis engine for FlowScope.
 
 ## Features
 
-- **Multi-Dialect Parsing:** Built on `sqlparser-rs`, supporting PostgreSQL, Snowflake, BigQuery, and Generic ANSI SQL.
+- **Multi-Dialect Parsing:** Built on `sqlparser-rs`, supporting PostgreSQL, Snowflake, BigQuery, DuckDB, Redshift, MySQL, SQLite, Databricks, ClickHouse, and Generic ANSI SQL.
 - **Deep Lineage Extraction:**
-  - Table-level dependencies (SELECT, INSERT, UPDATE, MERGE, etc.)
+  - Table-level dependencies (SELECT, INSERT, UPDATE, MERGE, COPY, UNLOAD, etc.)
   - Column-level data flow (including transformations)
-- **Complex SQL Support:** Handles CTEs (Common Table Expressions), Subqueries, Joins, Unions, and Window Functions.
-- **Schema Awareness:** Can utilize provided schema metadata to validate column references and resolve wildcards (`SELECT *`).
+  - Cross-statement lineage tracking (CREATE TABLE AS, INSERT INTO ... SELECT)
+- **dbt/Jinja Templating:** Preprocess SQL with Jinja or dbt-style templates before analysis, with built-in stubs for `ref()`, `source()`, `config()`, `var()`, and `is_incremental()`.
+- **Complex SQL Support:** Handles CTEs (Common Table Expressions), Subqueries, Joins, Unions, Window Functions, and lateral column aliases.
+- **Schema Awareness:** Utilize provided schema metadata to validate column references and resolve wildcards (`SELECT *`).
+- **Type Inference:** Infer expression types with dialect-aware type compatibility checking.
 - **Diagnostics:** Returns structured issues (errors, warnings) with source spans for precise highlighting.
 
 ## Structure

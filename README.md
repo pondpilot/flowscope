@@ -30,6 +30,7 @@ Features:
 - Drag and drop SQL files or paste queries directly
 - Interactive lineage graph with table and column-level views
 - Multi-file project support with schema DDL
+- dbt/Jinja template preprocessing for dbt models
 - Export to Mermaid, JSON, CSV, Excel, or HTML reports
 - All processing happens in your browser — your SQL never leaves your machine
 
@@ -67,7 +68,8 @@ See [CLI documentation](crates/flowscope-cli/README.md) for all options.
 ## Key Features
 
 - Client-side analysis with zero data egress
-- Multi-dialect coverage (PostgreSQL, Snowflake, BigQuery, DuckdDB and more)
+- Multi-dialect coverage (PostgreSQL, Snowflake, BigQuery, DuckDB, Redshift, and more)
+- dbt and Jinja templating support with built-in macro stubs (`ref()`, `source()`, `var()`)
 - Table and column lineage with schema-aware wildcard expansion
 - Structured diagnostics with spans for precise highlighting
 - Completion API for SQL authoring workflows
