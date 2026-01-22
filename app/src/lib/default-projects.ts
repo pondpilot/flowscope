@@ -13,7 +13,7 @@ export const DEFAULT_DBT_PROJECT: Project = {
   id: 'default-dbt-project',
   name: 'dbt Jaffle Shop',
   activeFileId: 'dbt-file-1',
-  dialect: 'postgres',
+  dialect: 'snowflake',
   runMode: 'all',
   selectedFileIds: [],
   schemaSQL: '',

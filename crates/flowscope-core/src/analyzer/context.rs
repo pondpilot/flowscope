@@ -267,23 +267,29 @@ impl StatementContext {
         }
     }
 
-    pub(crate) fn ensure_output_node(&mut self) -> Arc<str> {
+    /// Creates or returns the output node for this statement.
+    ///
+    /// When `model_name` is provided (e.g., for dbt models), the output node
+    /// will use the model name as both its label and qualified_name. This
+    /// enables proper cross-statement linking for dbt model references.
+    pub(crate) fn ensure_output_node_with_model(&mut self, model_name: Option<&str>) -> Arc<str> {
         if let Some(existing) = self.output_node_id.as_ref() {
             return existing.clone();
         }
 
         let node_id = generate_output_node_id(self.statement_index);
-        // Include statement index in label for disambiguation in multi-statement analysis
-        let label = if self.statement_index == 0 {
-            "Output".to_string()
-        } else {
-            format!("Output ({})", self.statement_index + 1)
+        // Use model name for label if provided, otherwise use generic Output label
+        let label = match model_name {
+            Some(name) => name.to_string(),
+            None if self.statement_index == 0 => "Output".to_string(),
+            None => format!("Output ({})", self.statement_index + 1),
         };
+        let qualified_name = model_name.map(Arc::<str>::from);
         let output_node = Node {
             id: node_id.clone(),
             node_type: NodeType::Output,
             label: label.into(),
-            qualified_name: None,
+            qualified_name,
             expression: None,
             span: None,
             metadata: None,

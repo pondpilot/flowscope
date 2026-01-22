@@ -190,7 +190,7 @@ fn dbt_ref_two_args() {
     assert!(
         has_table(&result, "analytics.users"),
         "Should detect 'analytics.users' table from ref(): {:?}",
-        result.statements.get(0).map(|s| &s.nodes)
+        result.statements.first().map(|s| &s.nodes)
     );
 }
 
@@ -211,7 +211,7 @@ fn dbt_source_macro() {
     assert!(
         has_table(&result, "raw.events"),
         "Should detect 'raw.events' table from source(): {:?}",
-        result.statements.get(0).map(|s| &s.nodes)
+        result.statements.first().map(|s| &s.nodes)
     );
 }
 
@@ -248,7 +248,7 @@ fn dbt_var_with_default() {
     assert!(
         has_table(&result, "public.users"),
         "Should detect 'public.users' table: {:?}",
-        result.statements.get(0).map(|s| &s.nodes)
+        result.statements.first().map(|s| &s.nodes)
     );
 }
 
@@ -273,7 +273,7 @@ fn dbt_var_from_context() {
     assert!(
         has_table(&result, "analytics.users"),
         "Should detect 'analytics.users' table: {:?}",
-        result.statements.get(0).map(|s| &s.nodes)
+        result.statements.first().map(|s| &s.nodes)
     );
 }
 
@@ -911,5 +911,680 @@ fn dbt_snapshot_block_content_preserved() {
     assert!(
         has_table(&result, "raw.orders"),
         "Should detect 'raw.orders' from snapshot content"
+    );
+}
+
+// ============================================================================
+// dbt Lineage Tests (Jaffle Shop based)
+// ============================================================================
+// These tests verify column-level lineage through dbt-templated SQL files.
+// Based on the Jaffle Shop demo project structure:
+//   - staging models: stg_customers, stg_orders, stg_payments
+//   - intermediate: int_orders_payments
+//   - marts: customers, orders, daily_revenue
+
+#[cfg(feature = "templating")]
+use flowscope_core::{EdgeType, FileSource};
+
+/// Helper to run multi-file dbt analysis.
+#[cfg(feature = "templating")]
+fn analyze_dbt_files(files: Vec<FileSource>) -> flowscope_core::AnalyzeResult {
+    let request = AnalyzeRequest {
+        sql: String::new(),
+        files: Some(files),
+        dialect: Dialect::Postgres,
+        source_name: None,
+        options: None,
+        schema: None,
+        template_config: Some(TemplateConfig {
+            mode: TemplateMode::Dbt,
+            context: HashMap::new(),
+        }),
+    };
+
+    analyze(&request)
+}
+
+/// Helper to count derivation edges in a statement.
+#[cfg(feature = "templating")]
+fn count_derivation_edges(result: &flowscope_core::AnalyzeResult) -> usize {
+    result
+        .statements
+        .iter()
+        .flat_map(|stmt| &stmt.edges)
+        .filter(|edge| edge.edge_type == EdgeType::Derivation)
+        .count()
+}
+
+#[test]
+#[cfg(feature = "templating")]
+fn dbt_lineage_staging_to_intermediate() {
+    // Test lineage from staging models through intermediate model
+    // stg_orders + stg_payments -> int_orders_payments
+    let stg_orders = r#"
+{{ config(materialized='view') }}
+SELECT
+    id AS order_id,
+    user_id AS customer_id,
+    order_date,
+    status
+FROM {{ source('jaffle_shop', 'raw_orders') }}
+"#;
+
+    let stg_payments = r#"
+{{ config(materialized='view') }}
+SELECT
+    id AS payment_id,
+    order_id,
+    amount / 100.0 AS amount
+FROM {{ source('stripe', 'payments') }}
+"#;
+
+    let int_orders_payments = r#"
+{{ config(materialized='table') }}
+WITH orders AS (
+    SELECT * FROM {{ ref('stg_orders') }}
+),
+payments AS (
+    SELECT * FROM {{ ref('stg_payments') }}
+)
+SELECT
+    orders.order_id,
+    orders.customer_id,
+    orders.order_date,
+    COALESCE(SUM(payments.amount), 0) AS total_amount,
+    COUNT(payments.payment_id) AS payment_count
+FROM orders
+LEFT JOIN payments ON orders.order_id = payments.order_id
+GROUP BY 1, 2, 3
+"#;
+
+    let result = analyze_dbt_files(vec![
+        FileSource {
+            name: "stg_orders.sql".to_string(),
+            content: stg_orders.to_string(),
+        },
+        FileSource {
+            name: "stg_payments.sql".to_string(),
+            content: stg_payments.to_string(),
+        },
+        FileSource {
+            name: "int_orders_payments.sql".to_string(),
+            content: int_orders_payments.to_string(),
+        },
+    ]);
+
+    assert!(
+        !result.summary.has_errors,
+        "Analysis should succeed: {:?}",
+        result.issues
+    );
+
+    // Verify source tables are detected
+    assert!(
+        has_table(&result, "jaffle_shop.raw_orders"),
+        "Should detect source table 'jaffle_shop.raw_orders'"
+    );
+    assert!(
+        has_table(&result, "stripe.payments"),
+        "Should detect source table 'stripe.payments'"
+    );
+
+    // Verify ref() tables are detected
+    assert!(
+        has_table(&result, "stg_orders"),
+        "Should detect ref'd table 'stg_orders'"
+    );
+    assert!(
+        has_table(&result, "stg_payments"),
+        "Should detect ref'd table 'stg_payments'"
+    );
+
+    // Verify cross-statement edges exist (table->CTE and column DataFlow edges)
+    let cross_edges = &result.global_lineage.edges;
+    assert!(!cross_edges.is_empty(), "Should have cross-statement edges");
+
+    // Verify DataFlow edges exist (column lineage across files)
+    let dataflow_edges: Vec<_> = cross_edges
+        .iter()
+        .filter(|e| e.edge_type == EdgeType::DataFlow)
+        .collect();
+    assert!(
+        !dataflow_edges.is_empty(),
+        "Should have DataFlow edges for cross-file column lineage"
+    );
+
+    // Verify derivation edges are present (column lineage)
+    let derivation_count = count_derivation_edges(&result);
+    assert!(
+        derivation_count > 0,
+        "Should have derivation edges for column lineage, got {}",
+        derivation_count
+    );
+}
+
+#[test]
+#[cfg(feature = "templating")]
+fn dbt_lineage_full_dag() {
+    // Test full DAG: sources -> staging -> intermediate -> mart
+    let stg_customers = r#"
+{{ config(materialized='view') }}
+SELECT
+    id AS customer_id,
+    first_name,
+    last_name,
+    first_name || ' ' || last_name AS full_name
+FROM {{ source('jaffle_shop', 'raw_customers') }}
+"#;
+
+    let stg_orders = r#"
+{{ config(materialized='view') }}
+SELECT
+    id AS order_id,
+    user_id AS customer_id,
+    order_date,
+    status
+FROM {{ source('jaffle_shop', 'raw_orders') }}
+"#;
+
+    let stg_payments = r#"
+{{ config(materialized='view') }}
+SELECT
+    id AS payment_id,
+    order_id,
+    amount / 100.0 AS amount
+FROM {{ source('stripe', 'payments') }}
+"#;
+
+    let int_orders_payments = r#"
+{{ config(materialized='table') }}
+WITH orders AS (
+    SELECT * FROM {{ ref('stg_orders') }}
+),
+payments AS (
+    SELECT * FROM {{ ref('stg_payments') }}
+)
+SELECT
+    orders.order_id,
+    orders.customer_id,
+    orders.order_date,
+    COALESCE(SUM(payments.amount), 0) AS total_amount
+FROM orders
+LEFT JOIN payments ON orders.order_id = payments.order_id
+GROUP BY 1, 2, 3
+"#;
+
+    let customers_mart = r#"
+{{ config(materialized='table') }}
+WITH customers AS (
+    SELECT * FROM {{ ref('stg_customers') }}
+),
+orders AS (
+    SELECT * FROM {{ ref('int_orders_payments') }}
+),
+customer_orders AS (
+    SELECT
+        customer_id,
+        MIN(order_date) AS first_order_date,
+        MAX(order_date) AS most_recent_order_date,
+        COUNT(order_id) AS number_of_orders,
+        SUM(total_amount) AS lifetime_value
+    FROM orders
+    GROUP BY customer_id
+)
+SELECT
+    customers.customer_id,
+    customers.first_name,
+    customers.last_name,
+    customers.full_name,
+    customer_orders.first_order_date,
+    customer_orders.most_recent_order_date,
+    COALESCE(customer_orders.number_of_orders, 0) AS number_of_orders,
+    COALESCE(customer_orders.lifetime_value, 0) AS lifetime_value
+FROM customers
+LEFT JOIN customer_orders USING (customer_id)
+"#;
+
+    let result = analyze_dbt_files(vec![
+        FileSource {
+            name: "stg_customers.sql".to_string(),
+            content: stg_customers.to_string(),
+        },
+        FileSource {
+            name: "stg_orders.sql".to_string(),
+            content: stg_orders.to_string(),
+        },
+        FileSource {
+            name: "stg_payments.sql".to_string(),
+            content: stg_payments.to_string(),
+        },
+        FileSource {
+            name: "int_orders_payments.sql".to_string(),
+            content: int_orders_payments.to_string(),
+        },
+        FileSource {
+            name: "customers.sql".to_string(),
+            content: customers_mart.to_string(),
+        },
+    ]);
+
+    assert!(
+        !result.summary.has_errors,
+        "Full DAG analysis should succeed: {:?}",
+        result.issues
+    );
+
+    // Verify all source tables
+    assert!(has_table(&result, "jaffle_shop.raw_customers"));
+    assert!(has_table(&result, "jaffle_shop.raw_orders"));
+    assert!(has_table(&result, "stripe.payments"));
+
+    // Verify all staging tables via ref()
+    assert!(has_table(&result, "stg_customers"));
+    assert!(has_table(&result, "stg_orders"));
+    assert!(has_table(&result, "stg_payments"));
+
+    // Verify intermediate table
+    assert!(has_table(&result, "int_orders_payments"));
+
+    // Verify cross-statement lineage exists
+    let cross_edges = &result.global_lineage.edges;
+    assert!(
+        !cross_edges.is_empty(),
+        "Should have cross-statement edges in full DAG"
+    );
+
+    // Verify derivation edges for column lineage
+    let derivation_count = count_derivation_edges(&result);
+    assert!(
+        derivation_count >= 5,
+        "Full DAG should have multiple derivation edges, got {}",
+        derivation_count
+    );
+}
+
+#[test]
+#[cfg(feature = "templating")]
+fn dbt_lineage_column_derivation_through_ref() {
+    // Test that column derivation is tracked through ref() calls
+    let stg_orders = r#"
+SELECT
+    id AS order_id,
+    user_id AS customer_id,
+    total_amount
+FROM {{ source('shop', 'orders') }}
+"#;
+
+    let orders_mart = r#"
+SELECT
+    order_id,
+    customer_id,
+    total_amount,
+    total_amount * 0.1 AS tax_amount
+FROM {{ ref('stg_orders') }}
+"#;
+
+    let result = analyze_dbt_files(vec![
+        FileSource {
+            name: "stg_orders.sql".to_string(),
+            content: stg_orders.to_string(),
+        },
+        FileSource {
+            name: "orders_mart.sql".to_string(),
+            content: orders_mart.to_string(),
+        },
+    ]);
+
+    assert!(
+        !result.summary.has_errors,
+        "Column derivation analysis should succeed: {:?}",
+        result.issues
+    );
+
+    // Find the orders_mart statement (second file)
+    let mart_stmt = result
+        .statements
+        .iter()
+        .find(|s| s.source_name.as_deref() == Some("orders_mart.sql"))
+        .expect("Should find orders_mart statement");
+
+    // Check for output columns
+    let output_columns: Vec<_> = mart_stmt
+        .nodes
+        .iter()
+        .filter(|n| n.node_type == NodeType::Column)
+        .map(|n| n.label.as_ref())
+        .collect();
+
+    assert!(
+        output_columns.contains(&"order_id"),
+        "Should have order_id column"
+    );
+    assert!(
+        output_columns.contains(&"tax_amount"),
+        "Should have derived tax_amount column"
+    );
+
+    // Verify derivation edges exist for the derived column
+    let derivations: Vec<_> = mart_stmt
+        .edges
+        .iter()
+        .filter(|e| e.edge_type == EdgeType::Derivation)
+        .collect();
+
+    assert!(
+        !derivations.is_empty(),
+        "Should have derivation edges for tax_amount calculation"
+    );
+}
+
+#[test]
+#[cfg(feature = "templating")]
+fn dbt_lineage_with_var_substitution() {
+    // Test that var() substitution doesn't break lineage
+    let model = r#"
+SELECT
+    order_id,
+    customer_id,
+    order_date
+FROM {{ source('shop', 'orders') }}
+WHERE order_date >= '{{ var("min_date", "2020-01-01") }}'
+"#;
+
+    let result = analyze_dbt_files(vec![FileSource {
+        name: "filtered_orders.sql".to_string(),
+        content: model.to_string(),
+    }]);
+
+    assert!(
+        !result.summary.has_errors,
+        "var() substitution should not break analysis: {:?}",
+        result.issues
+    );
+
+    assert!(
+        has_table(&result, "shop.orders"),
+        "Should detect source table through var() usage"
+    );
+
+    // Verify output columns are captured
+    let stmt = result.statements.first().expect("Should have statement");
+    let columns: Vec<_> = stmt
+        .nodes
+        .iter()
+        .filter(|n| n.node_type == NodeType::Column)
+        .collect();
+
+    assert!(
+        columns.len() >= 3,
+        "Should capture output columns: order_id, customer_id, order_date"
+    );
+}
+
+#[test]
+#[cfg(feature = "templating")]
+fn dbt_lineage_window_functions_through_ref() {
+    // Test window function lineage through ref()
+    let orders = r#"
+SELECT
+    order_id,
+    customer_id,
+    total_amount,
+    order_date
+FROM {{ source('shop', 'orders') }}
+"#;
+
+    let orders_ranked = r#"
+SELECT
+    order_id,
+    customer_id,
+    total_amount,
+    ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY order_date) AS order_seq,
+    SUM(total_amount) OVER (PARTITION BY customer_id ORDER BY order_date) AS running_total
+FROM {{ ref('orders') }}
+"#;
+
+    let result = analyze_dbt_files(vec![
+        FileSource {
+            name: "orders.sql".to_string(),
+            content: orders.to_string(),
+        },
+        FileSource {
+            name: "orders_ranked.sql".to_string(),
+            content: orders_ranked.to_string(),
+        },
+    ]);
+
+    assert!(
+        !result.summary.has_errors,
+        "Window function analysis should succeed: {:?}",
+        result.issues
+    );
+
+    // Find the orders_ranked statement
+    let ranked_stmt = result
+        .statements
+        .iter()
+        .find(|s| s.source_name.as_deref() == Some("orders_ranked.sql"))
+        .expect("Should find orders_ranked statement");
+
+    // Check for window function derived columns
+    let columns: Vec<_> = ranked_stmt
+        .nodes
+        .iter()
+        .filter(|n| n.node_type == NodeType::Column)
+        .map(|n| n.label.as_ref())
+        .collect();
+
+    assert!(
+        columns.contains(&"order_seq"),
+        "Should have ROW_NUMBER() derived column"
+    );
+    assert!(
+        columns.contains(&"running_total"),
+        "Should have SUM() window function column"
+    );
+
+    // Verify derivation edges for window functions
+    // Window functions produce derivation edges when they transform columns
+    let derivations: Vec<_> = ranked_stmt
+        .edges
+        .iter()
+        .filter(|e| e.edge_type == EdgeType::Derivation)
+        .collect();
+
+    assert!(
+        !derivations.is_empty(),
+        "Should have derivation edges for window function columns, got {}",
+        derivations.len()
+    );
+}
+
+#[test]
+#[cfg(feature = "templating")]
+fn dbt_lineage_aggregation_through_ref() {
+    // Test aggregation lineage through ref()
+    let orders = r#"
+SELECT order_id, customer_id, total_amount, order_date
+FROM {{ source('shop', 'orders') }}
+"#;
+
+    let daily_revenue = r#"
+SELECT
+    order_date,
+    COUNT(DISTINCT order_id) AS total_orders,
+    COUNT(DISTINCT customer_id) AS unique_customers,
+    SUM(total_amount) AS revenue,
+    AVG(total_amount) AS avg_order_value
+FROM {{ ref('orders') }}
+GROUP BY order_date
+"#;
+
+    let result = analyze_dbt_files(vec![
+        FileSource {
+            name: "orders.sql".to_string(),
+            content: orders.to_string(),
+        },
+        FileSource {
+            name: "daily_revenue.sql".to_string(),
+            content: daily_revenue.to_string(),
+        },
+    ]);
+
+    assert!(
+        !result.summary.has_errors,
+        "Aggregation analysis should succeed: {:?}",
+        result.issues
+    );
+
+    // Find the daily_revenue statement
+    let revenue_stmt = result
+        .statements
+        .iter()
+        .find(|s| s.source_name.as_deref() == Some("daily_revenue.sql"))
+        .expect("Should find daily_revenue statement");
+
+    // Check for aggregated columns
+    let columns: Vec<_> = revenue_stmt
+        .nodes
+        .iter()
+        .filter(|n| n.node_type == NodeType::Column)
+        .map(|n| n.label.as_ref())
+        .collect();
+
+    assert!(
+        columns.contains(&"total_orders"),
+        "Should have COUNT column"
+    );
+    assert!(columns.contains(&"revenue"), "Should have SUM column");
+    assert!(
+        columns.contains(&"avg_order_value"),
+        "Should have AVG column"
+    );
+
+    // Verify aggregation creates derivation edges
+    let derivations: Vec<_> = revenue_stmt
+        .edges
+        .iter()
+        .filter(|e| e.edge_type == EdgeType::Derivation)
+        .collect();
+
+    assert!(
+        derivations.len() >= 3,
+        "Should have derivation edges for aggregated columns, got {}",
+        derivations.len()
+    );
+}
+
+#[test]
+#[cfg(feature = "templating")]
+fn dbt_model_cross_statement_linking() {
+    // Test that dbt models are registered as produced tables for cross-statement linking.
+    // When file stg_orders.sql produces a bare SELECT, the model name "stg_orders"
+    // should be registered so that later files can resolve {{ ref('stg_orders') }}.
+    let stg_orders = r#"
+{{ config(materialized='view') }}
+SELECT
+    id AS order_id,
+    user_id AS customer_id,
+    order_date
+FROM raw_orders
+"#;
+
+    let orders_summary = r#"
+SELECT
+    customer_id,
+    COUNT(*) AS order_count
+FROM {{ ref('stg_orders') }}
+GROUP BY customer_id
+"#;
+
+    let result = analyze_dbt_files(vec![
+        FileSource {
+            name: "models/staging/stg_orders.sql".to_string(),
+            content: stg_orders.to_string(),
+        },
+        FileSource {
+            name: "models/marts/orders_summary.sql".to_string(),
+            content: orders_summary.to_string(),
+        },
+    ]);
+
+    // Check for UNRESOLVED_REFERENCE warnings - there should be none for stg_orders
+    let unresolved_warnings: Vec<_> = result
+        .issues
+        .iter()
+        .filter(|i| i.code == "UNRESOLVED_REFERENCE" && i.message.contains("stg_orders"))
+        .collect();
+
+    assert!(
+        unresolved_warnings.is_empty(),
+        "Should NOT have unresolved reference warnings for stg_orders (model should be registered): {:?}",
+        unresolved_warnings
+    );
+
+    // Verify cross-statement edges exist
+    let cross_edges: Vec<_> = result
+        .global_lineage
+        .edges
+        .iter()
+        .filter(|e| e.edge_type == EdgeType::CrossStatement)
+        .collect();
+
+    assert!(
+        !cross_edges.is_empty(),
+        "Should have cross-statement edges linking stg_orders to orders_summary"
+    );
+
+    // The first statement's output should be labeled with the model name
+    let first_stmt = result
+        .statements
+        .first()
+        .expect("Should have first statement");
+    let output_node = first_stmt
+        .nodes
+        .iter()
+        .find(|n| n.node_type == NodeType::Output);
+
+    assert!(
+        output_node.is_some(),
+        "First statement should have an output node"
+    );
+
+    let output = output_node.unwrap();
+    assert_eq!(
+        output.label.as_ref(),
+        "stg_orders",
+        "Output node label should be the model name"
+    );
+    assert_eq!(
+        output.qualified_name.as_ref().map(|s| s.as_ref()),
+        Some("stg_orders"),
+        "Output node qualified_name should be the model name"
+    );
+}
+
+#[test]
+#[cfg(feature = "templating")]
+fn dbt_model_name_extraction_from_path() {
+    // Test that model names are correctly extracted from various path formats
+    let model = r#"SELECT 1 AS id"#;
+
+    // Test with nested path
+    let result = analyze_dbt_files(vec![FileSource {
+        name: "models/staging/stg_customers.sql".to_string(),
+        content: model.to_string(),
+    }]);
+
+    let output_node = result
+        .statements
+        .first()
+        .and_then(|s| s.nodes.iter().find(|n| n.node_type == NodeType::Output));
+
+    assert!(output_node.is_some(), "Should have output node");
+    assert_eq!(
+        output_node.unwrap().label.as_ref(),
+        "stg_customers",
+        "Should extract 'stg_customers' from 'models/staging/stg_customers.sql'"
     );
 }

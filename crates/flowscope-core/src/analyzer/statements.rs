@@ -28,6 +28,9 @@ use std::sync::Arc;
 #[cfg(feature = "tracing")]
 use tracing::{info, info_span};
 
+#[cfg(feature = "templating")]
+use crate::templater::TemplateMode;
+
 /// Information about a join node for dependency edge construction.
 struct JoinNodeInfo {
     /// Node ID of the joined table
@@ -51,7 +54,24 @@ impl<'a> Analyzer<'a> {
 
         let statement_type = match statement {
             Statement::Query(query) => {
-                ctx.ensure_output_node();
+                // In dbt mode, a bare SELECT represents a model that should be registered
+                // with the model name derived from the source file path.
+                let model_name = if self.is_dbt_mode() {
+                    source_name.as_ref().map(|path| extract_model_name(path))
+                } else {
+                    None
+                };
+
+                // Normalize the model name to match how table references are normalized
+                // (e.g., Snowflake normalizes to uppercase)
+                let normalized_model_name = model_name.map(|n| self.normalize_table_name(n));
+                ctx.ensure_output_node_with_model(normalized_model_name.as_deref());
+
+                // Register the model as a produced table for cross-statement linking
+                if let Some(ref name) = normalized_model_name {
+                    self.tracker.record_produced(name, index);
+                }
+
                 self.analyze_query(&mut ctx, query, None);
                 classify_query_type(query)
             }
@@ -836,4 +856,37 @@ impl<'a> Analyzer<'a> {
             }
         }
     }
+
+    /// Checks if the analyzer is running in dbt template mode.
+    #[cfg(feature = "templating")]
+    fn is_dbt_mode(&self) -> bool {
+        self.request
+            .template_config
+            .as_ref()
+            .map(|c| c.mode == TemplateMode::Dbt)
+            .unwrap_or(false)
+    }
+
+    /// Checks if the analyzer is running in dbt template mode.
+    #[cfg(not(feature = "templating"))]
+    fn is_dbt_mode(&self) -> bool {
+        false
+    }
+}
+
+/// Extracts the model name from a dbt source path.
+///
+/// Given a path like `models/staging/stg_customers.sql`, extracts `stg_customers`.
+/// Supports both `.sql` and `.sql.jinja` file extensions used by dbt.
+/// This is used to register dbt model outputs for cross-statement linking.
+fn extract_model_name(path: &str) -> &str {
+    // Get the filename from the path
+    let filename = path.rsplit('/').next().unwrap_or(path);
+    // Also handle Windows-style paths
+    let filename = filename.rsplit('\\').next().unwrap_or(filename);
+    // Strip the .sql or .sql.jinja extension
+    filename
+        .strip_suffix(".sql")
+        .or_else(|| filename.strip_suffix(".sql.jinja"))
+        .unwrap_or(filename)
 }
