@@ -19,7 +19,7 @@ use super::AppState;
 /// The embedded-app directory is generated from `app/dist` during development
 /// and shipped with the published crate so serve mode works out of the box.
 #[derive(Embed)]
-#[folder = "../../embedded-app/"]
+#[folder = "embedded-app/"]
 #[include = "*.html"]
 #[include = "*.js"]
 #[include = "*.css"]

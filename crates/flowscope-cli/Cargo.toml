@@ -18,7 +18,7 @@ name = "flowscope"
 path = "src/main.rs"
 
 [features]
-default = ["templating", "metadata-provider"]
+default = ["templating", "metadata-provider", "serve"]
 templating = ["flowscope-core/templating"]
 metadata-provider = ["sqlx", "tokio"]
 # Integration tests require database connectivity
