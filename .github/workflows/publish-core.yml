@@ -72,6 +72,28 @@ jobs:
           print(f"workspace_version={match.group(1)}")
           PY
 
+      - name: Build embedded app assets for CLI publish
+        run: |
+          set -euo pipefail
+          yarn --cwd app build
+          rm -rf crates/flowscope-cli/embedded-app
+          mkdir -p crates/flowscope-cli/embedded-app
+          cp -R app/dist/. crates/flowscope-cli/embedded-app/
+
+      - name: Verify embedded assets
+        run: |
+          set -euo pipefail
+          test -d crates/flowscope-cli/embedded-app
+          test -f crates/flowscope-cli/embedded-app/index.html
+          test -d crates/flowscope-cli/embedded-app/assets
+          file_count=$(find crates/flowscope-cli/embedded-app -type f | wc -l)
+          if [ "$file_count" -lt 3 ]; then
+            echo "Error: Too few files in embedded-app ($file_count)"
+            exit 1
+          fi
+          echo "Embedded assets verified ($file_count files):"
+          ls -la crates/flowscope-cli/embedded-app/
+
       - name: Dry-run publish crates
         if: ${{ env.DRY_RUN == 'true' }}
         run: |

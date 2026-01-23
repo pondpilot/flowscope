@@ -12,6 +12,13 @@ keywords = ["sql", "lineage", "cli", "analysis", "database"]
 categories = ["command-line-utilities", "database"]
 description = "Command-line interface for FlowScope SQL lineage analyzer"
 build = "build.rs"
+include = [
+    "src/**/*",
+    "tests/**/*",
+    "build.rs",
+    "README.md",
+    "embedded-app/**/*",
+]
 
 [[bin]]
 name = "flowscope"
