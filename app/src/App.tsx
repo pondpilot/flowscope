@@ -26,7 +26,7 @@ function AppContent() {
       <ShareImportHandler />
       <LineageProvider defaultLayoutAlgorithm="dagre">
         <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
-          <Workspace wasmReady={ready} error={error} onRetry={retry} isRetrying={isRetrying} />
+          <Workspace backendReady={ready} error={error} onRetry={retry} isRetrying={isRetrying} />
         </div>
         <Toaster position="bottom-right" />
         <WelcomeModal />

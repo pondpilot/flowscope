@@ -31,7 +31,11 @@ fn has_mtime_changed(
     }
 }
 
-/// Debounce duration for file changes.
+/// Debounce duration for file system events (100ms).
+///
+/// Groups rapid file changes (e.g., save + format + lint) into a single reload.
+/// 100ms is short enough to feel responsive while filtering editor noise.
+/// Increase if seeing duplicate reloads; decrease for faster feedback.
 const DEBOUNCE_DURATION: Duration = Duration::from_millis(100);
 
 /// Start watching directories for SQL file changes.

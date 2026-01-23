@@ -34,7 +34,7 @@ export interface UseAnalysisOptions {
 /**
  * Hook for running lineage analysis.
  *
- * @param backendReady - Whether the backend is ready (wasmReady for backwards compatibility)
+ * @param backendReady - Whether the backend (REST or WASM) is initialized and ready
  * @param options - Optional configuration including the backend adapter
  */
 export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions) {

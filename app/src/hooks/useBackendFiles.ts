@@ -39,10 +39,69 @@ export interface BackendFilesState {
   refresh: () => Promise<void>;
 }
 
+// =============================================================================
+// Polling Configuration
+// =============================================================================
+// These values control how the frontend polls the backend for file changes.
+// The file watcher on the server side handles actual change detection; this
+// polling ensures the UI stays in sync.
+
+/** Polling interval when backend is healthy (2 seconds). */
 const BACKEND_REFRESH_INTERVAL_MS = 2000;
+
+/** Initial backoff delay after an error (2 seconds). */
 const BACKOFF_INITIAL_MS = 2000;
+
+/** Maximum backoff delay (30 seconds). Caps exponential growth. */
 const BACKOFF_MAX_MS = 30000;
+
+/** Backoff multiplier. Delay doubles on each consecutive error. */
 const BACKOFF_MULTIPLIER = 2;
+
+/**
+ * Number of consecutive errors before clearing stale state.
+ * Prevents showing outdated data when the backend has persistent issues.
+ */
+const MAX_CONSECUTIVE_ERRORS = 3;
+
+/** HTTP status codes that indicate fatal (non-transient) errors. */
+const FATAL_STATUS_CODES = [401, 403, 404, 422] as const;
+
+/**
+ * Structured error for backend fetch failures.
+ * Carries HTTP status when available for reliable error classification.
+ */
+class BackendError extends Error {
+  constructor(
+    message: string,
+    public readonly status?: number
+  ) {
+    super(message);
+    this.name = 'BackendError';
+  }
+
+  /** Whether this error is fatal (non-transient). */
+  get isFatal(): boolean {
+    return this.status !== undefined && FATAL_STATUS_CODES.includes(this.status as 401 | 403 | 404 | 422);
+  }
+}
+
+/**
+ * Sanitizes error messages for user display.
+ * Removes potentially sensitive details like stack traces, paths, or internal info.
+ */
+function sanitizeErrorMessage(message: string): string {
+  // Remove stack traces
+  const withoutStack = message.split('\n')[0];
+  // Remove file paths (Unix and Windows)
+  const withoutPaths = withoutStack.replace(/(?:\/[\w.-]+)+|(?:[A-Z]:\\[\w\\.-]+)/g, '[path]');
+  // Truncate overly long messages
+  const maxLength = 200;
+  if (withoutPaths.length > maxLength) {
+    return withoutPaths.slice(0, maxLength) + '...';
+  }
+  return withoutPaths;
+}
 
 /**
  * Fetches files and schema from the backend REST API.
@@ -64,6 +123,8 @@ export function useBackendFiles(enabled: boolean, baseUrl = ''): BackendFilesSta
   // Backoff state for error recovery
   const backoffMsRef = useRef(BACKOFF_INITIAL_MS);
   const lastErrorTimeRef = useRef<number | null>(null);
+  // Track consecutive errors to clear stale state after threshold
+  const consecutiveErrorsRef = useRef(0);
 
   const fetchFiles = useCallback(async () => {
     if (!enabled) {
@@ -95,7 +156,10 @@ export function useBackendFiles(enabled: boolean, baseUrl = ''): BackendFilesSta
         ]);
 
         if (!filesResponse.ok) {
-          throw new Error(`Failed to fetch files: ${filesResponse.status} ${filesResponse.statusText}`);
+          throw new BackendError(
+            `Failed to fetch files: ${filesResponse.status} ${filesResponse.statusText}`,
+            filesResponse.status
+          );
         }
 
         const filesData = (await filesResponse.json()) as FileSource[];
@@ -126,17 +190,31 @@ export function useBackendFiles(enabled: boolean, baseUrl = ''): BackendFilesSta
           setTemplateMode('raw');
         }
 
-        // Reset backoff on success
+        // Reset error tracking on success
         backoffMsRef.current = BACKOFF_INITIAL_MS;
         lastErrorTimeRef.current = null;
+        consecutiveErrorsRef.current = 0;
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        setError(message);
-        setFiles(null);
-        setSchema(null);
-        setDialect('generic');
-        setWatchDirs([]);
-        setTemplateMode('raw');
+        consecutiveErrorsRef.current += 1;
+        const rawMessage = err instanceof Error ? err.message : String(err);
+        const displayMessage = sanitizeErrorMessage(rawMessage);
+        setError(displayMessage);
+
+        // Determine if this is a fatal error that should clear state immediately.
+        // Use structured BackendError for reliable status detection instead of
+        // fragile string matching (e.g., "User 4012" would incorrectly match "401").
+        const isFatalError = err instanceof BackendError && err.isFatal;
+
+        // Clear state on fatal errors or after too many consecutive failures
+        // to avoid showing stale data that may mislead the user
+        if (isFatalError || consecutiveErrorsRef.current >= MAX_CONSECUTIVE_ERRORS) {
+          setFiles(null);
+          setSchema(null);
+          setDialect('generic');
+          setWatchDirs([]);
+          setTemplateMode('raw');
+        }
+        // Otherwise preserve last-known-good state on transient errors to avoid UI flicker
 
         // Track error time for backoff
         lastErrorTimeRef.current = Date.now();

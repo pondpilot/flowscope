@@ -59,9 +59,10 @@ impl AppState {
         } else {
             // Scan watch directories in a blocking thread pool
             let watch_dirs = config.watch_dirs.clone();
-            tokio::task::spawn_blocking(move || super::scan_sql_files(&watch_dirs))
+            let scan_result = tokio::task::spawn_blocking(move || super::scan_sql_files(&watch_dirs))
                 .await
-                .context("File scan task was cancelled")??
+                .context("File scan task was cancelled")?;
+            scan_result.context("Failed to scan SQL files")?
         };
         let file_count = files.len();
 
@@ -81,11 +82,21 @@ impl AppState {
     }
 
     /// Load schema metadata from database connection.
+    ///
+    /// Uses `spawn_blocking` because `fetch_metadata_from_database` internally creates
+    /// a tokio runtime and blocks. Running blocking code on the async executor would
+    /// stall other tasks.
     #[cfg(feature = "metadata-provider")]
     async fn load_schema(config: &ServerConfig) -> Result<Option<SchemaMetadata>> {
         if let Some(ref url) = config.metadata_url {
-            let schema =
-                crate::metadata::fetch_metadata_from_database(url, config.metadata_schema.clone())?;
+            let url = url.clone();
+            let schema_filter = config.metadata_schema.clone();
+            let fetch_result = tokio::task::spawn_blocking(move || {
+                crate::metadata::fetch_metadata_from_database(&url, schema_filter)
+            })
+            .await
+            .context("Metadata fetch task was cancelled")?;
+            let schema = fetch_result.context("Failed to fetch database metadata")?;
             println!("flowscope: loaded schema from database");
             return Ok(Some(schema));
         }
@@ -121,10 +132,11 @@ impl AppState {
         let watch_dirs = self.config.watch_dirs.clone();
 
         // Run file scanning in a blocking thread pool since it does I/O
-        let (files, mtimes) =
+        let scan_result =
             tokio::task::spawn_blocking(move || super::scan_sql_files(&watch_dirs))
                 .await
-                .context("File scan task was cancelled")??;
+                .context("File scan task was cancelled")?;
+        let (files, mtimes) = scan_result.context("Failed to scan SQL files")?;
 
         let count = files.len();
         *self.files.write().await = files;

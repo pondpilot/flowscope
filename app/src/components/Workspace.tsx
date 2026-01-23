@@ -26,7 +26,7 @@ import { useViewStateStore } from '@/lib/view-state-store';
 import { getShortcutDisplay } from '@/lib/shortcuts';
 
 interface WorkspaceProps {
-  wasmReady: boolean;
+  backendReady: boolean;
   error: string | null;
   onRetry?: () => void;
   isRetrying?: boolean;
@@ -39,7 +39,7 @@ interface WorkspaceProps {
  */
 const EDITOR_PANEL_DEFAULT_SIZE = 33;
 
-export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspaceProps) {
+export function Workspace({ backendReady, error, onRetry, isRetrying }: WorkspaceProps) {
   const { currentProject, selectFile, activeProjectId, isBackendMode } = useProject();
   const lineageActions = useLineageActions();
   const {
@@ -446,7 +446,7 @@ export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspacePr
                 data-testid="editor-panel"
               >
                 <EditorArea
-                  wasmReady={wasmReady}
+                  backendReady={backendReady}
                   fileSelectorOpen={fileSelectorOpen}
                   onFileSelectorOpenChange={setFileSelectorOpen}
                 />

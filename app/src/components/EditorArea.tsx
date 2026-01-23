@@ -26,14 +26,14 @@ function SqlViewFallback() {
 }
 
 interface EditorAreaProps {
-  wasmReady: boolean;
+  backendReady: boolean;
   className?: string;
   fileSelectorOpen: boolean;
   onFileSelectorOpenChange: (open: boolean) => void;
 }
 
 export function EditorArea({
-  wasmReady,
+  backendReady,
   className,
   fileSelectorOpen,
   onFileSelectorOpenChange,
@@ -62,7 +62,7 @@ export function EditorArea({
 
   // Use backend adapter for analysis when available
   const { adapter } = useBackend();
-  const { isAnalyzing, error, runAnalysis, setError } = useAnalysis(wasmReady, { adapter });
+  const { isAnalyzing, error, runAnalysis, setError } = useAnalysis(backendReady, { adapter });
 
   // Show error toast when error occurs
   useEffect(() => {
@@ -81,10 +81,14 @@ export function EditorArea({
   useFileNavigation();
 
   useEffect(() => {
+    if (isReadOnly) {
+      return;
+    }
+
     if (currentProject && currentProject.files.length === 0) {
       createFile(DEFAULT_FILE_NAMES.SCRATCHPAD);
     }
-  }, [currentProject, createFile]);
+  }, [currentProject, createFile, isReadOnly]);
 
   // Focus the editor when active file changes (e.g., new file created)
   useEffect(() => {
@@ -100,7 +104,7 @@ export function EditorArea({
   // Consolidated into a single effect to prevent duplicate analyses when both change.
   // activeFile.content is intentionally omitted to prevent re-analysis on keystrokes.
   useEffect(() => {
-    if (!wasmReady || !currentProject || !activeFile) {
+    if (!backendReady || !currentProject || !activeFile) {
       return;
     }
 
@@ -122,7 +126,7 @@ export function EditorArea({
     // Note: currentProject is used in the guard but excluded from deps because activeFile
     // (derived from currentProject) already captures project changes via activeFile.id
   }, [
-    wasmReady,
+    backendReady,
     debouncedSchemaSQL,
     hideCTEs,
     activeFile?.id,
@@ -221,7 +225,7 @@ export function EditorArea({
         runMode={currentProject.runMode}
         onRunModeChange={(mode: RunMode) => setRunMode(currentProject.id, mode)}
         isAnalyzing={isAnalyzing}
-        wasmReady={wasmReady}
+        backendReady={backendReady}
         onAnalyze={handleAnalyze}
         allFileCount={allFileCount}
         selectedCount={selectedCount}

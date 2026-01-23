@@ -63,8 +63,17 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
     Ok(())
 }
 
-/// Maximum request body size (100MB). Prevents denial-of-service via large payloads while
-/// accommodating multi-file analyses sent from the frontend.
+// =============================================================================
+// Server Configuration Constants
+// =============================================================================
+// These limits are chosen to balance usability with resource protection.
+// Adjust based on expected workload and available system resources.
+
+/// Maximum request body size (100MB).
+///
+/// This limit accommodates multi-file analysis requests while preventing
+/// denial-of-service attacks via large payloads. 100MB allows ~10,000 files
+/// at 10KB average, matching MAX_TOTAL_FILES.
 const MAX_REQUEST_BODY_SIZE: usize = 100 * 1024 * 1024;
 
 /// Build the main router with all routes.
@@ -94,17 +103,57 @@ pub fn build_router(state: Arc<AppState>, port: u16) -> Router {
         .layer(RequestBodyLimitLayer::new(MAX_REQUEST_BODY_SIZE))
 }
 
-/// Wait for shutdown signal (Ctrl+C).
+/// Wait for shutdown signal (Ctrl+C or SIGTERM on Unix).
+///
+/// Handles both SIGINT (Ctrl+C) and SIGTERM for graceful shutdown.
+/// SIGTERM is important for containerized/managed environments (Docker, systemd, Kubernetes).
+///
+/// Signal handler registration failures are logged but don't crash the server,
+/// allowing operation in restricted environments where some signals may be unavailable.
 async fn shutdown_signal() {
-    tokio::signal::ctrl_c()
-        .await
-        .expect("Failed to install Ctrl+C handler");
+    let ctrl_c = async {
+        if let Err(e) = tokio::signal::ctrl_c().await {
+            eprintln!("flowscope: warning: failed to install Ctrl+C handler: {e}");
+            // Fall back to pending - server will need to be killed externally
+            std::future::pending::<()>().await;
+        }
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut signal) => {
+                signal.recv().await;
+            }
+            Err(e) => {
+                eprintln!("flowscope: warning: failed to install SIGTERM handler: {e}");
+                // Fall back to pending - Ctrl+C will still work
+                std::future::pending::<()>().await;
+            }
+        }
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
 }
 
-/// Maximum file size to read (10MB). Larger files are skipped with a warning.
+/// Maximum file size to read (10MB).
+///
+/// SQL files larger than this are skipped with a warning. 10MB is generous
+/// for SQL (most files are under 100KB) while preventing accidental inclusion
+/// of large data dumps or generated files.
 const MAX_FILE_SIZE: u64 = 10 * 1024 * 1024;
 
-/// Maximum number of SQL files to load. Prevents memory exhaustion.
+/// Maximum number of SQL files to load (10,000).
+///
+/// Prevents memory exhaustion in very large monorepos. At 10KB average per file,
+/// this allows ~100MB of SQL content in memory. Increase if working with larger
+/// projects, but monitor memory usage.
 const MAX_TOTAL_FILES: usize = 10_000;
 
 /// Scan directories for SQL files, returning both file contents and modification times.
