@@ -5,6 +5,7 @@
 
 #![cfg(feature = "serve")]
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -24,6 +25,7 @@ fn test_state(config: ServerConfig, files: Vec<FileSource>) -> Arc<AppState> {
         config,
         files: RwLock::new(files),
         schema: RwLock::new(None),
+        mtimes: RwLock::new(HashMap::new()),
     })
 }
 
@@ -31,10 +33,14 @@ fn default_config() -> ServerConfig {
     ServerConfig {
         dialect: Dialect::Generic,
         watch_dirs: vec![],
+        static_files: None,
         metadata_url: None,
         metadata_schema: None,
         port: 3000,
         open_browser: false,
+        schema_path: None,
+        #[cfg(feature = "templating")]
+        template_config: None,
     }
 }
 
@@ -282,10 +288,14 @@ async fn config_returns_server_configuration() {
     let config = ServerConfig {
         dialect: Dialect::Postgres,
         watch_dirs: vec![PathBuf::from("/tmp/sql")],
+        static_files: None,
         metadata_url: None,
         metadata_schema: None,
         port: 8080,
         open_browser: false,
+        schema_path: None,
+        #[cfg(feature = "templating")]
+        template_config: None,
     };
 
     let state = test_state(config, vec![]);

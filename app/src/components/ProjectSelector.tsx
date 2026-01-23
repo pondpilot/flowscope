@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, Plus, FolderOpen, Trash } from 'lucide-react';
+import { ChevronDown, Plus, FolderOpen, Trash, Server } from 'lucide-react';
 import { toast } from 'sonner';
 import { clearAnalysisWorkerCache } from '@/lib/analysis-worker';
 import { useProject, isValidDialect, DIALECT_OPTIONS } from '@/lib/project-store';
@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { ProjectMenuItem } from './ProjectMenuItem';
 import { isValidTemplateMode, TEMPLATE_MODE_OPTIONS } from '@/types';
 
@@ -57,6 +57,8 @@ export function ProjectSelector({ open: controlledOpen, onOpenChange }: ProjectS
     renameProject,
     setProjectDialect,
     setTemplateMode,
+    isBackendMode,
+    backendWatchDirs,
   } = useProject();
 
   const [isCreating, setIsCreating] = useState(false);
@@ -93,6 +95,44 @@ export function ProjectSelector({ open: controlledOpen, onOpenChange }: ProjectS
     selectProject(projectId);
     setOpen(false);
   };
+
+  // In serve mode, show a simple indicator with the watched folder path
+  if (isBackendMode) {
+    const displayName =
+      backendWatchDirs.length === 1
+        ? backendWatchDirs[0]
+        : backendWatchDirs.length > 1
+          ? `${backendWatchDirs.length} folders`
+          : 'Static Files';
+
+    const tooltipContent =
+      backendWatchDirs.length > 1
+        ? backendWatchDirs.join('\n')
+        : backendWatchDirs.length === 1
+          ? backendWatchDirs[0]
+          : 'Serving static files (no file watching)';
+
+    return (
+      <TooltipProvider delayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div
+              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm"
+              data-testid="serve-mode-indicator"
+            >
+              <div className="flex size-6 items-center justify-center rounded-md border bg-background">
+                <Server className="size-3.5" />
+              </div>
+              <span className="font-medium truncate max-w-[300px]">{displayName}</span>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" align="start" className="max-w-md">
+            <p className="text-xs whitespace-pre-wrap break-all">{tooltipContent}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
 
   return (
     <DropdownMenu open={open} onOpenChange={handleOpenChange}>

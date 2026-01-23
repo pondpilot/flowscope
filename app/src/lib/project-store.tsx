@@ -160,6 +160,8 @@ interface ProjectContextType {
   isReadOnly: boolean;
   /** Schema metadata from backend (database introspection), null if not available */
   backendSchema: SchemaMetadata | null;
+  /** Directories being watched by the backend */
+  backendWatchDirs: string[];
   /** Refresh files from backend */
   refreshBackendFiles: () => Promise<void>;
 }
@@ -250,8 +252,56 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     files: backendFiles,
     schema: backendSchema,
     dialect: backendDialect,
+    watchDirs: backendWatchDirs,
+    templateMode: backendTemplateMode,
     refresh: refreshBackendFiles,
   } = useBackendFiles(isBackendMode);
+
+  // Track backend-specific state separately since it's derived, not persisted.
+  const [backendActiveFileId, setBackendActiveFileId] = useState<string | null>(null);
+  const [backendRunMode, setBackendRunMode] = useState<RunMode>('all');
+  const [backendSelectedFileIds, setBackendSelectedFileIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!backendFiles || backendFiles.length === 0) {
+      setBackendActiveFileId(null);
+      return;
+    }
+
+    if (!backendActiveFileId || !backendFiles.some((file) => file.name === backendActiveFileId)) {
+      setBackendActiveFileId(backendFiles[0].name);
+    }
+  }, [backendFiles, backendActiveFileId]);
+
+  // Sync selected file IDs when backend files change (files may be removed)
+  useEffect(() => {
+    if (!backendFiles) {
+      setBackendSelectedFileIds([]);
+      setBackendRunMode('all');
+      return;
+    }
+
+    setBackendSelectedFileIds((prev) => {
+      const validIds = prev.filter((id) => backendFiles.some((file) => file.name === id));
+      // Only update if something changed
+      return validIds.length === prev.length ? prev : validIds;
+    });
+  }, [backendFiles]);
+
+  // Reset run mode to 'all' when all selected files are removed
+  useEffect(() => {
+    if (backendSelectedFileIds.length === 0 && backendRunMode === 'custom') {
+      setBackendRunMode('all');
+    }
+  }, [backendSelectedFileIds, backendRunMode]);
+
+  useEffect(() => {
+    if (!isBackendMode) {
+      setBackendActiveFileId(null);
+      setBackendSelectedFileIds([]);
+      setBackendRunMode('all');
+    }
+  }, [isBackendMode]);
 
   // Create a virtual project from backend files
   const backendProject: Project | null = useMemo(() => {
@@ -261,14 +311,22 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       id: BACKEND_PROJECT_ID,
       name: 'Server Files',
       files: backendFiles.map(fileSourceToProjectFile),
-      activeFileId: backendFiles.length > 0 ? backendFiles[0].name : null,
+      activeFileId: backendActiveFileId,
       dialect: backendDialect,
-      runMode: 'all' as const,
-      selectedFileIds: [],
+      runMode: backendRunMode,
+      selectedFileIds: backendSelectedFileIds,
       schemaSQL: '', // Schema comes from backend
-      templateMode: 'raw' as const,
+      templateMode: backendTemplateMode,
     };
-  }, [isBackendMode, backendFiles, backendDialect]);
+  }, [
+    isBackendMode,
+    backendFiles,
+    backendDialect,
+    backendTemplateMode,
+    backendActiveFileId,
+    backendRunMode,
+    backendSelectedFileIds,
+  ]);
 
   useEffect(() => {
     saveProjectsToStorage(projects);
@@ -359,6 +417,11 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const setRunMode = useCallback((projectId: string, mode: RunMode) => {
+    if (projectId === BACKEND_PROJECT_ID) {
+      setBackendRunMode(mode);
+      return;
+    }
+
     setProjects((prev) =>
       prev.map((p) => {
         if (p.id !== projectId) return p;
@@ -377,6 +440,16 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const toggleFileSelection = useCallback((projectId: string, fileId: string) => {
+    if (projectId === BACKEND_PROJECT_ID) {
+      setBackendSelectedFileIds((prev) => {
+        const exists = prev.includes(fileId);
+        const updated = exists ? prev.filter((id) => id !== fileId) : [...prev, fileId];
+        setBackendRunMode(updated.length > 0 ? 'custom' : 'all');
+        return updated;
+      });
+      return;
+    }
+
     setProjects((prev) =>
       prev.map((p) => {
         if (p.id !== projectId) return p;
@@ -498,6 +571,12 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
   const selectFile = useCallback(
     (fileId: string) => {
+      // In backend mode, update the backend-specific active file state
+      if (isBackendMode) {
+        setBackendActiveFileId(fileId);
+        return;
+      }
+
       if (!activeProjectId) return;
 
       setProjects((prev) =>
@@ -507,7 +586,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         })
       );
     },
-    [activeProjectId]
+    [activeProjectId, isBackendMode]
   );
 
   const updateSchemaSQL = useCallback((projectId: string, schemaSQL: string) => {
@@ -629,6 +708,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     isBackendMode,
     isReadOnly,
     backendSchema,
+    backendWatchDirs,
     refreshBackendFiles,
   };
 

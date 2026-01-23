@@ -3,9 +3,13 @@
 //! This module defines the `AppState` struct that holds the server configuration,
 //! watched files, and schema metadata. State is shared across handlers via `Arc`.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
+use std::time::SystemTime;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
+#[cfg(feature = "templating")]
+use flowscope_core::TemplateConfig;
 use flowscope_core::{Dialect, FileSource, SchemaMetadata};
 use tokio::sync::RwLock;
 
@@ -16,6 +20,8 @@ pub struct ServerConfig {
     pub dialect: Dialect,
     /// Directories to watch for SQL files
     pub watch_dirs: Vec<PathBuf>,
+    /// Static files to serve (when not using watch directories)
+    pub static_files: Option<Vec<FileSource>>,
     /// Database connection URL for live schema introspection
     pub metadata_url: Option<String>,
     /// Schema name filter for metadata provider
@@ -24,6 +30,11 @@ pub struct ServerConfig {
     pub port: u16,
     /// Whether to open browser on startup
     pub open_browser: bool,
+    /// Optional schema DDL file path
+    pub schema_path: Option<PathBuf>,
+    /// Default template configuration (from CLI flags)
+    #[cfg(feature = "templating")]
+    pub template_config: Option<TemplateConfig>,
 }
 
 /// Shared application state.
@@ -34,13 +45,24 @@ pub struct AppState {
     pub files: RwLock<Vec<FileSource>>,
     /// Schema metadata from DDL or database
     pub schema: RwLock<Option<SchemaMetadata>>,
+    /// File modification times for change detection
+    pub mtimes: RwLock<HashMap<PathBuf, SystemTime>>,
 }
 
 impl AppState {
     /// Create new application state, loading initial files and schema.
     pub async fn new(config: ServerConfig) -> Result<Self> {
-        // Load initial files from watch directories
-        let files = super::scan_sql_files(&config.watch_dirs)?;
+        // Load files either from static_files or by scanning watch directories
+        let (files, mtimes) = if let Some(ref static_files) = config.static_files {
+            // Use static files directly, no mtimes needed (no watching)
+            (static_files.clone(), HashMap::new())
+        } else {
+            // Scan watch directories in a blocking thread pool
+            let watch_dirs = config.watch_dirs.clone();
+            tokio::task::spawn_blocking(move || super::scan_sql_files(&watch_dirs))
+                .await
+                .context("File scan task was cancelled")??
+        };
         let file_count = files.len();
 
         // Load schema from database if URL provided
@@ -54,6 +76,7 @@ impl AppState {
             config,
             files: RwLock::new(files),
             schema: RwLock::new(schema),
+            mtimes: RwLock::new(mtimes),
         })
     }
 
@@ -66,19 +89,46 @@ impl AppState {
             println!("flowscope: loaded schema from database");
             return Ok(Some(schema));
         }
-        Ok(None)
+        Self::load_schema_from_file(config)
     }
 
     #[cfg(not(feature = "metadata-provider"))]
-    async fn load_schema(_config: &ServerConfig) -> Result<Option<SchemaMetadata>> {
+    async fn load_schema(config: &ServerConfig) -> Result<Option<SchemaMetadata>> {
+        Self::load_schema_from_file(config)
+    }
+
+    fn load_schema_from_file(config: &ServerConfig) -> Result<Option<SchemaMetadata>> {
+        if let Some(ref path) = config.schema_path {
+            let schema = crate::schema::load_schema_from_ddl(path, config.dialect)?;
+            println!("flowscope: loaded schema from DDL file: {}", path.display());
+            return Ok(Some(schema));
+        }
         Ok(None)
     }
 
     /// Reload files from watch directories.
+    ///
+    /// File scanning is performed in a blocking thread pool to avoid blocking
+    /// the async executor, which could delay other requests.
+    ///
+    /// Returns early for static files mode since there's nothing to reload.
     pub async fn reload_files(&self) -> Result<()> {
-        let files = super::scan_sql_files(&self.config.watch_dirs)?;
+        // Static files don't reload - they were provided at startup
+        if self.config.static_files.is_some() {
+            return Ok(());
+        }
+
+        let watch_dirs = self.config.watch_dirs.clone();
+
+        // Run file scanning in a blocking thread pool since it does I/O
+        let (files, mtimes) =
+            tokio::task::spawn_blocking(move || super::scan_sql_files(&watch_dirs))
+                .await
+                .context("File scan task was cancelled")??;
+
         let count = files.len();
         *self.files.write().await = files;
+        *self.mtimes.write().await = mtimes;
         println!("flowscope: reloaded {} SQL file(s)", count);
         Ok(())
     }

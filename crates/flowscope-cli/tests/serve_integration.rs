@@ -5,6 +5,7 @@
 
 #![cfg(feature = "serve")]
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -26,6 +27,7 @@ fn test_state_from_files(config: ServerConfig, files: Vec<FileSource>) -> Arc<Ap
         config,
         files: RwLock::new(files),
         schema: RwLock::new(None),
+        mtimes: RwLock::new(HashMap::new()),
     })
 }
 
@@ -59,10 +61,14 @@ async fn server_starts_and_responds_to_health() {
     let config = ServerConfig {
         dialect: Dialect::Generic,
         watch_dirs: vec![],
+        static_files: None,
         metadata_url: None,
         metadata_schema: None,
         port,
         open_browser: false,
+        schema_path: None,
+        #[cfg(feature = "templating")]
+        template_config: None,
     };
 
     let (base_url, server_handle) = spawn_test_server(config, vec![]).await;
@@ -91,10 +97,14 @@ async fn analyze_endpoint_processes_complex_query() {
     let config = ServerConfig {
         dialect: Dialect::Generic,
         watch_dirs: vec![],
+        static_files: None,
         metadata_url: None,
         metadata_schema: None,
         port,
         open_browser: false,
+        schema_path: None,
+        #[cfg(feature = "templating")]
+        template_config: None,
     };
 
     let (base_url, server_handle) = spawn_test_server(config, vec![]).await;
@@ -147,10 +157,14 @@ async fn analyze_endpoint_with_multiple_files() {
     let config = ServerConfig {
         dialect: Dialect::Generic,
         watch_dirs: vec![],
+        static_files: None,
         metadata_url: None,
         metadata_schema: None,
         port,
         open_browser: false,
+        schema_path: None,
+        #[cfg(feature = "templating")]
+        template_config: None,
     };
 
     let files = vec![
@@ -197,7 +211,7 @@ async fn file_watcher_detects_sql_files() {
     std::fs::write(&sql_file, "SELECT 1").unwrap();
 
     // Verify scan_sql_files works
-    let files = scan_sql_files(&[temp_dir.path().to_path_buf()]).unwrap();
+    let (files, _mtimes) = scan_sql_files(&[temp_dir.path().to_path_buf()]).unwrap();
     assert_eq!(files.len(), 1);
     assert_eq!(files[0].name, "test.sql");
     assert_eq!(files[0].content, "SELECT 1");
@@ -212,7 +226,7 @@ async fn file_watcher_filters_non_sql_files() {
     std::fs::write(temp_dir.path().join("readme.md"), "# Docs").unwrap();
     std::fs::write(temp_dir.path().join("config.json"), "{}").unwrap();
 
-    let files = scan_sql_files(&[temp_dir.path().to_path_buf()]).unwrap();
+    let (files, _mtimes) = scan_sql_files(&[temp_dir.path().to_path_buf()]).unwrap();
 
     // Only SQL files should be included
     assert_eq!(files.len(), 1);
@@ -230,13 +244,65 @@ async fn file_watcher_handles_nested_directories() {
     std::fs::write(temp_dir.path().join("main.sql"), "SELECT 1").unwrap();
     std::fs::write(subdir.join("user_view.sql"), "SELECT 2").unwrap();
 
-    let files = scan_sql_files(&[temp_dir.path().to_path_buf()]).unwrap();
+    let (files, _mtimes) = scan_sql_files(&[temp_dir.path().to_path_buf()]).unwrap();
 
     assert_eq!(files.len(), 2);
 
     let names: Vec<&str> = files.iter().map(|f| f.name.as_str()).collect();
     assert!(names.contains(&"main.sql"));
     assert!(names.contains(&"views/user_view.sql"));
+}
+
+#[tokio::test]
+async fn scan_sql_files_prefixes_multiple_watch_dirs() {
+    let temp_dir = TempDir::new().unwrap();
+    let first_dir = temp_dir.path().join("alpha_project");
+    let second_dir = temp_dir.path().join("beta_project");
+    std::fs::create_dir_all(first_dir.join("models")).unwrap();
+    std::fs::create_dir_all(second_dir.join("models")).unwrap();
+
+    std::fs::write(first_dir.join("models/foo.sql"), "SELECT 1").unwrap();
+    std::fs::write(second_dir.join("models/foo.sql"), "SELECT 2").unwrap();
+
+    let (files, _mtimes) = scan_sql_files(&[first_dir.clone(), second_dir.clone()]).unwrap();
+
+    assert_eq!(files.len(), 2);
+    let mut names: Vec<String> = files.iter().map(|f| f.name.clone()).collect();
+    names.sort();
+
+    let mut expected = vec![
+        "alpha_project/models/foo.sql".to_string(),
+        "beta_project/models/foo.sql".to_string(),
+    ];
+    expected.sort();
+
+    assert_eq!(names, expected);
+}
+
+#[tokio::test]
+async fn scan_sql_files_disambiguates_duplicate_watch_names() {
+    let temp_dir = TempDir::new().unwrap();
+    let first_dir = temp_dir.path().join("shared");
+    let second_dir = temp_dir.path().join("nested").join("shared");
+    std::fs::create_dir_all(first_dir.join("models")).unwrap();
+    std::fs::create_dir_all(second_dir.join("models")).unwrap();
+
+    std::fs::write(first_dir.join("models/foo.sql"), "SELECT 1").unwrap();
+    std::fs::write(second_dir.join("models/foo.sql"), "SELECT 2").unwrap();
+
+    let (files, _mtimes) = scan_sql_files(&[first_dir.clone(), second_dir.clone()]).unwrap();
+
+    assert_eq!(files.len(), 2);
+    let mut names: Vec<String> = files.iter().map(|f| f.name.clone()).collect();
+    names.sort();
+
+    let mut expected = vec![
+        "shared/models/foo.sql".to_string(),
+        "shared#2/models/foo.sql".to_string(),
+    ];
+    expected.sort();
+
+    assert_eq!(names, expected);
 }
 
 #[tokio::test]
@@ -247,18 +313,23 @@ async fn app_state_reload_updates_files() {
     let config = ServerConfig {
         dialect: Dialect::Generic,
         watch_dirs: vec![temp_dir.path().to_path_buf()],
+        static_files: None,
         metadata_url: None,
         metadata_schema: None,
         port: 3000,
         open_browser: false,
+        schema_path: None,
+        #[cfg(feature = "templating")]
+        template_config: None,
     };
 
     // Create state with initial files
-    let files = scan_sql_files(&config.watch_dirs).unwrap();
+    let (files, mtimes) = scan_sql_files(&config.watch_dirs).unwrap();
     let state = Arc::new(AppState {
         config,
         files: RwLock::new(files),
         schema: RwLock::new(None),
+        mtimes: RwLock::new(mtimes),
     });
 
     // Verify initial state
@@ -289,10 +360,14 @@ async fn export_html_returns_valid_html() {
     let config = ServerConfig {
         dialect: Dialect::Generic,
         watch_dirs: vec![],
+        static_files: None,
         metadata_url: None,
         metadata_schema: None,
         port,
         open_browser: false,
+        schema_path: None,
+        #[cfg(feature = "templating")]
+        template_config: None,
     };
 
     let (base_url, server_handle) = spawn_test_server(config, vec![]).await;
@@ -322,10 +397,14 @@ async fn export_csv_returns_zip() {
     let config = ServerConfig {
         dialect: Dialect::Generic,
         watch_dirs: vec![],
+        static_files: None,
         metadata_url: None,
         metadata_schema: None,
         port,
         open_browser: false,
+        schema_path: None,
+        #[cfg(feature = "templating")]
+        template_config: None,
     };
 
     let (base_url, server_handle) = spawn_test_server(config, vec![]).await;

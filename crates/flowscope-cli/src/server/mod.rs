@@ -15,6 +15,7 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use axum::Router;
 use tower_http::cors::CorsLayer;
+use tower_http::limit::RequestBodyLimitLayer;
 
 pub use state::{AppState, ServerConfig};
 
@@ -62,6 +63,10 @@ pub async fn run_server(config: ServerConfig) -> Result<()> {
     Ok(())
 }
 
+/// Maximum request body size (100MB). Prevents denial-of-service via large payloads while
+/// accommodating multi-file analyses sent from the frontend.
+const MAX_REQUEST_BODY_SIZE: usize = 100 * 1024 * 1024;
+
 /// Build the main router with all routes.
 pub fn build_router(state: Arc<AppState>, port: u16) -> Router {
     // Restrict CORS to same-origin to prevent cross-site requests from reading local files.
@@ -86,6 +91,7 @@ pub fn build_router(state: Arc<AppState>, port: u16) -> Router {
         .fallback(assets::static_handler)
         .with_state(state)
         .layer(cors)
+        .layer(RequestBodyLimitLayer::new(MAX_REQUEST_BODY_SIZE))
 }
 
 /// Wait for shutdown signal (Ctrl+C).
@@ -95,13 +101,65 @@ async fn shutdown_signal() {
         .expect("Failed to install Ctrl+C handler");
 }
 
-/// Scan directories for SQL files.
-pub fn scan_sql_files(dirs: &[PathBuf]) -> Result<Vec<flowscope_core::FileSource>> {
+/// Maximum file size to read (10MB). Larger files are skipped with a warning.
+const MAX_FILE_SIZE: u64 = 10 * 1024 * 1024;
+
+/// Maximum number of SQL files to load. Prevents memory exhaustion.
+const MAX_TOTAL_FILES: usize = 10_000;
+
+/// Scan directories for SQL files, returning both file contents and modification times.
+pub fn scan_sql_files(
+    dirs: &[PathBuf],
+) -> Result<(
+    Vec<flowscope_core::FileSource>,
+    std::collections::HashMap<PathBuf, std::time::SystemTime>,
+)> {
     use std::fs;
 
     let mut sources = Vec::new();
+    let mut mtimes = std::collections::HashMap::new();
 
+    // Pre-compute readable prefixes for each watch directory so files with the same
+    // relative path coming from different roots stay unique in the UI.
+    let mut base_labels = Vec::with_capacity(dirs.len());
     for dir in dirs {
+        let base = dir
+            .file_name()
+            .map(|name| name.to_string_lossy().to_string())
+            .unwrap_or_else(|| dir.display().to_string());
+        base_labels.push(base);
+    }
+
+    let mut label_counts = std::collections::HashMap::new();
+    for base in &base_labels {
+        *label_counts.entry(base.clone()).or_insert(0) += 1;
+    }
+
+    let multi_root = dirs.len() > 1;
+    let mut seen_counts = std::collections::HashMap::new();
+    let dir_prefixes: Vec<Option<String>> = base_labels
+        .iter()
+        .map(|base| {
+            if !multi_root {
+                return None;
+            }
+
+            let total = label_counts.get(base).copied().unwrap_or(1);
+            if total == 1 {
+                return Some(base.clone());
+            }
+
+            let entry = seen_counts.entry(base.clone()).or_insert(0);
+            *entry += 1;
+            if *entry == 1 {
+                Some(base.clone())
+            } else {
+                Some(format!("{base}#{}", *entry))
+            }
+        })
+        .collect();
+
+    for (dir, prefix) in dirs.iter().zip(dir_prefixes.iter()) {
         if !dir.exists() {
             eprintln!(
                 "flowscope: warning: watch directory does not exist: {}",
@@ -119,17 +177,51 @@ pub fn scan_sql_files(dirs: &[PathBuf]) -> Result<Vec<flowscope_core::FileSource
         {
             let path = entry.path();
             if path.is_file() && path.extension().is_some_and(|ext| ext == "sql") {
+                // Check file size before reading to prevent memory exhaustion
+                let metadata = fs::metadata(path)
+                    .with_context(|| format!("Failed to read metadata for {}", path.display()))?;
+
+                if metadata.len() > MAX_FILE_SIZE {
+                    eprintln!(
+                        "flowscope: warning: skipping large file (>10MB): {}",
+                        path.display()
+                    );
+                    continue;
+                }
+
                 let content = fs::read_to_string(path)
                     .with_context(|| format!("Failed to read {}", path.display()))?;
-                let name = path
+
+                // Ensure path is within watch directory - error instead of falling back
+                // to prevent exposing absolute paths via the API
+                let relative_path = path
                     .strip_prefix(dir)
-                    .unwrap_or(path)
-                    .to_string_lossy()
-                    .to_string();
+                    .with_context(|| format!("File outside watch directory: {}", path.display()))?;
+
+                let relative_str = relative_path.to_string_lossy();
+                let name = if let Some(prefix) = prefix {
+                    format!("{prefix}/{}", relative_str)
+                } else {
+                    relative_str.to_string()
+                };
                 sources.push(flowscope_core::FileSource { name, content });
+
+                // Store mtime for change detection
+                if let Ok(mtime) = metadata.modified() {
+                    mtimes.insert(path.to_path_buf(), mtime);
+                }
+
+                // Limit total files to prevent memory exhaustion
+                if sources.len() >= MAX_TOTAL_FILES {
+                    eprintln!(
+                        "flowscope: warning: reached file limit ({}), skipping remaining files",
+                        MAX_TOTAL_FILES
+                    );
+                    return Ok((sources, mtimes));
+                }
             }
         }
     }
 
-    Ok(sources)
+    Ok((sources, mtimes))
 }

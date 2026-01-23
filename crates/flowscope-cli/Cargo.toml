@@ -41,7 +41,7 @@ tokio = { version = "1", features = ["rt-multi-thread"], optional = true }
 
 # Serve mode dependencies (optional, enabled by "serve" feature)
 axum = { version = "0.8", optional = true }
-tower-http = { version = "0.6", features = ["fs", "cors"], optional = true }
+tower-http = { version = "0.6", features = ["fs", "cors", "limit"], optional = true }
 rust-embed = { version = "8", features = ["include-exclude"], optional = true }
 chrono = { version = "0.4", optional = true }
 notify-debouncer-mini = { version = "0.5", optional = true }

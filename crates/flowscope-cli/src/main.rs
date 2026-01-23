@@ -53,9 +53,41 @@ fn main() -> ExitCode {
 fn run_serve_mode(args: Args) -> ExitCode {
     use server::ServerConfig;
 
+    #[cfg(feature = "templating")]
+    let template_config = args.template.map(|mode| {
+        let context = parse_template_vars(&args.template_vars);
+        flowscope_core::TemplateConfig {
+            mode: mode.into(),
+            context,
+        }
+    });
+
+    // Determine input source: watch directories or static files
+    let (watch_dirs, static_files) = if !args.watch.is_empty() {
+        // Watch mode takes precedence
+        if !args.files.is_empty() {
+            eprintln!("flowscope: warning: ignoring positional files when --watch is provided");
+        }
+        (args.watch.clone(), None)
+    } else {
+        // Try to read from positional files or stdin
+        match input::read_input(&args.files) {
+            Ok(files) if !files.is_empty() => (vec![], Some(files)),
+            Ok(_) => {
+                eprintln!("flowscope: error: no files to serve (use --watch or provide files)");
+                return ExitCode::from(1);
+            }
+            Err(e) => {
+                eprintln!("flowscope: error: {e:#}");
+                return ExitCode::from(1);
+            }
+        }
+    };
+
     let config = ServerConfig {
         dialect: args.dialect.into(),
-        watch_dirs: args.watch.clone(),
+        watch_dirs,
+        static_files,
         #[cfg(feature = "metadata-provider")]
         metadata_url: args.metadata_url.clone(),
         #[cfg(not(feature = "metadata-provider"))]
@@ -64,8 +96,11 @@ fn run_serve_mode(args: Args) -> ExitCode {
         metadata_schema: args.metadata_schema.clone(),
         #[cfg(not(feature = "metadata-provider"))]
         metadata_schema: None,
+        schema_path: args.schema.clone(),
         port: args.port,
         open_browser: args.open,
+        #[cfg(feature = "templating")]
+        template_config,
     };
 
     // Create tokio runtime and run server

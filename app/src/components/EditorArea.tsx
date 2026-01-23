@@ -248,6 +248,11 @@ export function EditorArea({
             highlightedSpan={sqlViewMode === 'template' ? highlightedSpan : null}
           />
         </ErrorBoundary>
+        {isReadOnly && (
+          <div className="absolute top-2 right-5 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider bg-muted/80 text-muted-foreground rounded border">
+            Read Only
+          </div>
+        )}
       </div>
     </div>
   );

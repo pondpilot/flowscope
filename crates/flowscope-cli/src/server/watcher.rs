@@ -11,6 +11,26 @@ use notify_debouncer_mini::{new_debouncer, notify::RecursiveMode, DebouncedEvent
 
 use super::AppState;
 
+/// Check if a file's mtime has actually changed compared to stored value.
+fn has_mtime_changed(
+    path: &std::path::Path,
+    stored_mtimes: &std::collections::HashMap<std::path::PathBuf, std::time::SystemTime>,
+) -> bool {
+    match std::fs::metadata(path) {
+        Ok(meta) => match meta.modified() {
+            Ok(current_mtime) => {
+                // File changed if we don't have a stored mtime or it differs
+                stored_mtimes
+                    .get(path)
+                    .map(|&stored| stored != current_mtime)
+                    .unwrap_or(true)
+            }
+            Err(_) => true, // Can't read mtime, assume changed
+        },
+        Err(_) => true, // Can't read metadata, assume changed (file might be deleted)
+    }
+}
+
 /// Debounce duration for file changes.
 const DEBOUNCE_DURATION: Duration = Duration::from_millis(100);
 
@@ -51,22 +71,24 @@ pub async fn start_watcher(state: Arc<AppState>) -> Result<()> {
     while let Some(result) = rx.recv().await {
         match result {
             Ok(events) => {
-                // Check if any SQL files changed
-                let sql_changed = events.iter().any(|event| {
-                    event.path.extension().is_some_and(|ext| ext == "sql")
-                        && matches!(
-                            event.kind,
-                            DebouncedEventKind::Any | DebouncedEventKind::AnyContinuous
-                        )
-                });
+                // Get stored mtimes for comparison
+                let stored_mtimes = state.mtimes.read().await.clone();
 
-                if sql_changed {
-                    // Log which files changed
-                    let changed_files: Vec<_> = events
-                        .iter()
-                        .filter(|e| e.path.extension().is_some_and(|ext| ext == "sql"))
-                        .map(|e| e.path.display().to_string())
-                        .collect();
+                // Filter to SQL files with actual mtime changes
+                let changed_files: Vec<_> = events
+                    .iter()
+                    .filter(|event| {
+                        event.path.extension().is_some_and(|ext| ext == "sql")
+                            && matches!(
+                                event.kind,
+                                DebouncedEventKind::Any | DebouncedEventKind::AnyContinuous
+                            )
+                    })
+                    .filter(|event| has_mtime_changed(&event.path, &stored_mtimes))
+                    .map(|e| e.path.display().to_string())
+                    .collect();
+
+                if !changed_files.is_empty() {
                     for file in &changed_files {
                         println!("flowscope: file changed: {file}");
                     }

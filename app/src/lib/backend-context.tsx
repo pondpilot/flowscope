@@ -37,14 +37,43 @@ export function BackendProvider({ children, preferWasm = false }: BackendProvide
   });
   const [adapter, setAdapter] = useState<BackendAdapter | null>(null);
 
-  const initializeBackend = useCallback(
-    async (isRetry = false) => {
-      if (isRetry) {
-        setState((prev) => ({ ...prev, error: null, isRetrying: true }));
-      }
+  // Retry function for manual retries. Unlike the initialization effect,
+  // this doesn't need cancellation handling because:
+  // 1. It's only called via user interaction (button click), so component is mounted
+  // 2. React 18+ batches setState calls and ignores updates to unmounted components
+  // 3. The operation is intentionally fire-and-forget from the user's perspective
+  const retryBackend = useCallback(async () => {
+    setState((prev) => ({ ...prev, error: null, isRetrying: true }));
 
+    try {
+      const result: BackendDetectionResult = await createBackendAdapter(preferWasm);
+      setAdapter(result.adapter);
+      setState({
+        ready: true,
+        error: null,
+        isRetrying: false,
+        backendType: result.detectedType,
+      });
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setState({
+        ready: false,
+        error: `Failed to initialize backend: ${errorMessage}`,
+        isRetrying: false,
+        backendType: null,
+      });
+      setAdapter(null);
+    }
+  }, [preferWasm]);
+
+  // Initial backend detection with proper cancellation handling
+  useEffect(() => {
+    let cancelled = false;
+
+    const initializeBackend = async () => {
       try {
         const result: BackendDetectionResult = await createBackendAdapter(preferWasm);
+        if (cancelled) return;
         setAdapter(result.adapter);
         setState({
           ready: true,
@@ -53,6 +82,7 @@ export function BackendProvider({ children, preferWasm = false }: BackendProvide
           backendType: result.detectedType,
         });
       } catch (error: unknown) {
+        if (cancelled) return;
         const errorMessage = error instanceof Error ? error.message : String(error);
         setState({
           ready: false,
@@ -62,31 +92,22 @@ export function BackendProvider({ children, preferWasm = false }: BackendProvide
         });
         setAdapter(null);
       }
-    },
-    [preferWasm]
-  );
+    };
 
-  useEffect(() => {
-    let cancelled = false;
-
-    initializeBackend().then(() => {
-      if (cancelled) {
-        // Component unmounted during init
-      }
-    });
+    initializeBackend();
 
     return () => {
       cancelled = true;
     };
-  }, [initializeBackend]);
+  }, [preferWasm]);
 
   const value = useMemo(
     () => ({
       ...state,
       adapter,
-      retry: () => initializeBackend(true),
+      retry: retryBackend,
     }),
-    [state, adapter, initializeBackend]
+    [state, adapter, retryBackend]
   );
 
   return <BackendContext.Provider value={value}>{children}</BackendContext.Provider>;

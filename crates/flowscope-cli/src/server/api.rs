@@ -67,6 +67,8 @@ struct ConfigResponse {
     dialect: String,
     watch_dirs: Vec<String>,
     has_schema: bool,
+    #[cfg(feature = "templating")]
+    template_mode: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -106,19 +108,7 @@ async fn analyze(
 
     // Build template config if template mode is specified
     #[cfg(feature = "templating")]
-    let template_config = payload.template_mode.as_ref().and_then(|mode| {
-        match mode.as_str() {
-            "jinja" => Some(flowscope_core::TemplateConfig {
-                mode: flowscope_core::TemplateMode::Jinja,
-                ..Default::default()
-            }),
-            "dbt" => Some(flowscope_core::TemplateConfig {
-                mode: flowscope_core::TemplateMode::Dbt,
-                ..Default::default()
-            }),
-            _ => None,
-        }
-    });
+    let template_config = resolve_template_config(payload.template_mode.as_deref(), state.as_ref());
 
     let request = flowscope_core::AnalyzeRequest {
         sql: payload.sql,
@@ -195,7 +185,7 @@ async fn export(
         options: None,
         schema,
         #[cfg(feature = "templating")]
-        template_config: None,
+        template_config: state.config.template_config.clone(),
     };
 
     let result = flowscope_core::analyze(&request);
@@ -262,5 +252,58 @@ async fn config(State(state): State<Arc<AppState>>) -> impl IntoResponse {
             .map(|p| p.display().to_string())
             .collect(),
         has_schema,
+        #[cfg(feature = "templating")]
+        template_mode: state
+            .config
+            .template_config
+            .as_ref()
+            .map(|cfg| template_mode_to_str(cfg.mode).to_string()),
     })
+}
+
+#[cfg(feature = "templating")]
+fn resolve_template_config(
+    mode: Option<&str>,
+    state: &AppState,
+) -> Option<flowscope_core::TemplateConfig> {
+    match mode {
+        Some("raw") => None,
+        Some("jinja") => Some(build_template_config(
+            flowscope_core::TemplateMode::Jinja,
+            state,
+        )),
+        Some("dbt") => Some(build_template_config(
+            flowscope_core::TemplateMode::Dbt,
+            state,
+        )),
+        Some(_) => state.config.template_config.clone(),
+        None => state.config.template_config.clone(),
+    }
+}
+
+#[cfg(feature = "templating")]
+fn build_template_config(
+    template_mode: flowscope_core::TemplateMode,
+    state: &AppState,
+) -> flowscope_core::TemplateConfig {
+    let context = state
+        .config
+        .template_config
+        .as_ref()
+        .map(|cfg| cfg.context.clone())
+        .unwrap_or_default();
+
+    flowscope_core::TemplateConfig {
+        mode: template_mode,
+        context,
+    }
+}
+
+#[cfg(feature = "templating")]
+fn template_mode_to_str(mode: flowscope_core::TemplateMode) -> &'static str {
+    match mode {
+        flowscope_core::TemplateMode::Raw => "raw",
+        flowscope_core::TemplateMode::Jinja => "jinja",
+        flowscope_core::TemplateMode::Dbt => "dbt",
+    }
 }
