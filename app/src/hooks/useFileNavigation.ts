@@ -12,7 +12,11 @@ export function useFileNavigation() {
   useEffect(() => {
     const request = lineageState.navigationRequest;
     if (request && currentProject) {
-      const targetFile = currentProject.files.find((f) => f.name === request.sourceName);
+      // Match by path first (analysis uses paths as sourceName to avoid basename collisions),
+      // then fall back to name for backwards compatibility with files that have no path.
+      const targetFile = currentProject.files.find(
+        (f) => f.path === request.sourceName || f.name === request.sourceName
+      );
       if (targetFile && targetFile.id !== currentProject.activeFileId) {
         selectFile(targetFile.id);
       }

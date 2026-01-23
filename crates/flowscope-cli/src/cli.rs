@@ -70,6 +70,26 @@ pub struct Args {
     #[cfg(feature = "templating")]
     #[arg(long = "template-var", value_name = "KEY=VALUE")]
     pub template_vars: Vec<String>,
+
+    /// Start HTTP server with embedded web UI
+    #[cfg(feature = "serve")]
+    #[arg(long)]
+    pub serve: bool,
+
+    /// Port for HTTP server (default: 3000)
+    #[cfg(feature = "serve")]
+    #[arg(long, default_value = "3000")]
+    pub port: u16,
+
+    /// Directories to watch for SQL files (can be repeated)
+    #[cfg(feature = "serve")]
+    #[arg(long, value_name = "DIR")]
+    pub watch: Vec<PathBuf>,
+
+    /// Open browser automatically when server starts
+    #[cfg(feature = "serve")]
+    #[arg(long)]
+    pub open: bool,
 }
 
 /// SQL dialect options
@@ -217,5 +237,69 @@ mod tests {
         assert!(args.quiet);
         assert!(args.compact);
         assert_eq!(args.files.len(), 2);
+    }
+
+    #[cfg(feature = "serve")]
+    #[test]
+    fn test_serve_args_defaults() {
+        let args = Args::parse_from(["flowscope", "--serve"]);
+        assert!(args.serve);
+        assert_eq!(args.port, 3000);
+        assert!(args.watch.is_empty());
+        assert!(!args.open);
+    }
+
+    #[cfg(feature = "serve")]
+    #[test]
+    fn test_serve_args_custom_port() {
+        let args = Args::parse_from(["flowscope", "--serve", "--port", "8080"]);
+        assert!(args.serve);
+        assert_eq!(args.port, 8080);
+    }
+
+    #[cfg(feature = "serve")]
+    #[test]
+    fn test_serve_args_watch_dirs() {
+        let args = Args::parse_from([
+            "flowscope",
+            "--serve",
+            "--watch",
+            "./sql",
+            "--watch",
+            "./queries",
+        ]);
+        assert!(args.serve);
+        assert_eq!(args.watch.len(), 2);
+        assert_eq!(args.watch[0].to_str().unwrap(), "./sql");
+        assert_eq!(args.watch[1].to_str().unwrap(), "./queries");
+    }
+
+    #[cfg(feature = "serve")]
+    #[test]
+    fn test_serve_args_open_browser() {
+        let args = Args::parse_from(["flowscope", "--serve", "--open"]);
+        assert!(args.serve);
+        assert!(args.open);
+    }
+
+    #[cfg(feature = "serve")]
+    #[test]
+    fn test_serve_args_full() {
+        let args = Args::parse_from([
+            "flowscope",
+            "--serve",
+            "--port",
+            "9000",
+            "--watch",
+            "./examples",
+            "--open",
+            "-d",
+            "postgres",
+        ]);
+        assert!(args.serve);
+        assert_eq!(args.port, 9000);
+        assert_eq!(args.watch.len(), 1);
+        assert!(args.open);
+        assert_eq!(args.dialect, DialectArg::Postgres);
     }
 }

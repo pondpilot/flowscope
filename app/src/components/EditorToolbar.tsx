@@ -19,7 +19,7 @@ interface EditorToolbarProps {
   runMode: RunMode;
   onRunModeChange: (mode: RunMode) => void;
   isAnalyzing: boolean;
-  wasmReady: boolean;
+  backendReady: boolean;
   onAnalyze: () => void;
   allFileCount: number;
   selectedCount: number;
@@ -35,7 +35,7 @@ export function EditorToolbar({
   runMode,
   onRunModeChange,
   isAnalyzing,
-  wasmReady,
+  backendReady,
   onAnalyze,
   allFileCount,
   selectedCount,
@@ -95,7 +95,7 @@ export function EditorToolbar({
         <div className="flex items-center rounded-full overflow-hidden shadow-xs">
           <Button
             onClick={onAnalyze}
-            disabled={!wasmReady || isAnalyzing}
+            disabled={!backendReady || isAnalyzing}
             size="sm"
             className="h-[34px] gap-1.5 bg-brand-blue-500 hover:bg-brand-blue-700 text-white font-medium rounded-none rounded-l-full border-r border-brand-blue-400/30 px-3"
           >
@@ -111,7 +111,7 @@ export function EditorToolbar({
               <Button
                 size="sm"
                 className="h-[34px] px-3 bg-brand-blue-500 hover:bg-brand-blue-700 text-white rounded-none rounded-r-full border-l border-brand-blue-700/30"
-                disabled={!wasmReady || isAnalyzing}
+                disabled={!backendReady || isAnalyzing}
               >
                 <ChevronDown className="size-3.5" />
               </Button>

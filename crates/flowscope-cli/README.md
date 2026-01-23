@@ -159,3 +159,96 @@ flowscope --template jinja --template-var env=production query.sql
 - `is_incremental()` - always returns false for static analysis
 
 Variables passed via `--template-var` are accessible in dbt mode through `var()` and in Jinja mode directly as template variables.
+
+### Serve Mode (Embedded Web UI)
+
+FlowScope can run as a local HTTP server serving the full web UI with a REST API backend. This provides a single-binary deployment where all analysis happens locally.
+
+```bash
+# Start server with watched SQL directories
+flowscope --serve --watch ./sql --watch ./queries
+
+# Use a custom port (default: 3000)
+flowscope --serve --port 8080 --watch ./models
+
+# Auto-open browser on startup
+flowscope --serve --watch ./sql --open
+
+# Combine with dialect and database schema
+flowscope --serve --watch ./sql -d postgres --metadata-url postgres://user@localhost/db
+```
+
+**Server options:**
+
+| Option | Description |
+|--------|-------------|
+| `--serve` | Start HTTP server with embedded web UI |
+| `--port <PORT>` | Server port (default: 3000) |
+| `--watch <DIR>` | Directory to watch for SQL files (repeatable) |
+| `--open` | Open browser automatically on startup |
+
+**REST API endpoints:**
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/health` | GET | Health check with version |
+| `/api/analyze` | POST | Run lineage analysis |
+| `/api/completion` | POST | Get code completion items |
+| `/api/split` | POST | Split SQL into statements |
+| `/api/files` | GET | List watched files with content |
+| `/api/schema` | GET | Get schema metadata |
+| `/api/export/:format` | POST | Export to json/mermaid/html/csv/xlsx |
+| `/api/config` | GET | Server configuration |
+
+The file watcher monitors directories for `.sql` file changes with 100ms debouncing, automatically updating the available files in the UI.
+
+**Building with serve mode:**
+
+The serve feature requires the web app to be built first, as it embeds the frontend assets at compile time:
+
+```bash
+# Build with serve feature (justfile handles dependencies)
+just build-cli-serve
+
+# Or manually:
+cd app && yarn build
+cargo build -p flowscope-cli --features serve --release
+```
+
+### Troubleshooting
+
+**Port already in use:**
+
+If you see "Failed to bind to address" or "Address already in use":
+
+```bash
+# Check what's using the port
+lsof -i :3000
+
+# Use a different port
+flowscope --serve --port 8080 --watch ./sql
+```
+
+**Watch directory permissions:**
+
+If files aren't being detected:
+
+- Ensure the watch directory exists and is readable
+- Check for symlinks that may require `--follow` (enabled by default)
+- Verify `.sql` file extension is lowercase
+
+**Browser doesn't open:**
+
+If `--open` doesn't work:
+
+- Check your system's default browser configuration
+- Manually navigate to the URL shown in the console
+- On headless servers, `--open` will show a warning but continue running
+
+**Schema not loading:**
+
+If `--metadata-url` isn't providing schema:
+
+- Verify database connectivity: `psql $DATABASE_URL -c '\dt'`
+- Check schema permissions for the database user
+- Use `--metadata-schema` to filter to a specific schema

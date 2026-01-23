@@ -159,6 +159,44 @@ jobs:
       - name: Run Prettier check
         run: yarn prettier --check . || true
 
+  cli-serve:
+    name: CLI Serve Mode
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'yarn'
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-serve-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install JS dependencies
+        run: yarn install
+
+      - name: Build app for embedding
+        run: cd app && yarn build
+
+      - name: Build CLI with serve feature
+        run: cargo build -p flowscope-cli --features serve --release
+
+      - name: Run CLI serve tests
+        run: cargo test -p flowscope-cli --features serve
+
   coverage:
     name: Code Coverage
     runs-on: ubuntu-latest

@@ -26,6 +26,7 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
     importFiles,
     toggleFileSelection,
     renameFile,
+    isReadOnly,
   } = useProject();
 
   const [internalOpen, setInternalOpen] = useState(false);
@@ -110,6 +111,7 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
   const handleDeleteClick = (e: React.MouseEvent, fileId: string) => {
     e.preventDefault();
     e.stopPropagation();
+    if (isReadOnly) return;
     if (deletingFileId === fileId) {
       deleteFile(fileId);
       setDeletingFileId(null);
@@ -123,6 +125,7 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
   };
 
   const handleCreateFile = () => {
+    if (isReadOnly) return;
     createFile(DEFAULT_FILE_NAMES.NEW_QUERY);
     setOpen(false);
   };
@@ -163,6 +166,7 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
   };
 
   const handleStartRename = (fileId: string, currentName: string) => {
+    if (isReadOnly) return;
     setRenamingFileId(fileId);
     setRenameValue(currentName);
   };
@@ -402,17 +406,19 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
           onCloseAutoFocus={(e) => e.preventDefault()}
           onKeyDown={(e) => {
             handleKeyDown(e);
-            if ((e.key === 'n' || e.key === 'N') && !renamingFileId) {
-              e.preventDefault();
-              handleCreateFile();
-            }
-            if ((e.key === 'u' || e.key === 'U') && !renamingFileId) {
-              e.preventDefault();
-              fileInputRef.current?.click();
-            }
-            if ((e.key === 'f' || e.key === 'F') && !renamingFileId) {
-              e.preventDefault();
-              folderInputRef.current?.click();
+            if (!isReadOnly) {
+              if ((e.key === 'n' || e.key === 'N') && !renamingFileId) {
+                e.preventDefault();
+                handleCreateFile();
+              }
+              if ((e.key === 'u' || e.key === 'U') && !renamingFileId) {
+                e.preventDefault();
+                fileInputRef.current?.click();
+              }
+              if ((e.key === 'f' || e.key === 'F') && !renamingFileId) {
+                e.preventDefault();
+                folderInputRef.current?.click();
+              }
             }
           }}
         >
@@ -473,6 +479,7 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
                 isFileIncludedInAnalysis={isFileIncludedInAnalysis}
                 canDeleteFiles={currentProject ? currentProject.files.length > 1 : false}
                 renameInputRef={renameInputRef}
+                isReadOnly={isReadOnly}
               />
             ) : (
               <div className="py-6 text-center text-sm text-muted-foreground">
@@ -481,51 +488,55 @@ export function FileSelector({ open: controlledOpen, onOpenChange }: FileSelecto
             )}
           </div>
 
-          {/* Actions */}
-          <DropdownMenuSeparator className="my-0" />
-          <div ref={footerRef} className="p-1 flex flex-col gap-1">
-            <div className="flex gap-1">
-              <DropdownMenuItem
-                onClick={handleCreateFile}
-                className="flex-1 gap-2 p-2 cursor-pointer justify-between"
-                data-testid="new-file-btn"
-              >
-                <div className="flex items-center gap-2">
-                  <Plus className="size-4" />
-                  <span>New</span>
+          {/* Actions - hidden in read-only mode */}
+          {!isReadOnly && (
+            <>
+              <DropdownMenuSeparator className="my-0" />
+              <div ref={footerRef} className="p-1 flex flex-col gap-1">
+                <div className="flex gap-1">
+                  <DropdownMenuItem
+                    onClick={handleCreateFile}
+                    className="flex-1 gap-2 p-2 cursor-pointer justify-between"
+                    data-testid="new-file-btn"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Plus className="size-4" />
+                      <span>New</span>
+                    </div>
+                    <kbd className="rounded bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">
+                      N
+                    </kbd>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex-1 gap-2 p-2 cursor-pointer justify-between"
+                    data-testid="upload-files-btn"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Upload className="size-4" />
+                      <span>Files</span>
+                    </div>
+                    <kbd className="rounded bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">
+                      U
+                    </kbd>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => folderInputRef.current?.click()}
+                    className="flex-1 gap-2 p-2 cursor-pointer justify-between"
+                    data-testid="upload-folder-btn"
+                  >
+                    <div className="flex items-center gap-2">
+                      <FolderUp className="size-4" />
+                      <span>Folder</span>
+                    </div>
+                    <kbd className="rounded bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">
+                      F
+                    </kbd>
+                  </DropdownMenuItem>
                 </div>
-                <kbd className="rounded bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">
-                  N
-                </kbd>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => fileInputRef.current?.click()}
-                className="flex-1 gap-2 p-2 cursor-pointer justify-between"
-                data-testid="upload-files-btn"
-              >
-                <div className="flex items-center gap-2">
-                  <Upload className="size-4" />
-                  <span>Files</span>
-                </div>
-                <kbd className="rounded bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">
-                  U
-                </kbd>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => folderInputRef.current?.click()}
-                className="flex-1 gap-2 p-2 cursor-pointer justify-between"
-                data-testid="upload-folder-btn"
-              >
-                <div className="flex items-center gap-2">
-                  <FolderUp className="size-4" />
-                  <span>Folder</span>
-                </div>
-                <kbd className="rounded bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">
-                  F
-                </kbd>
-              </DropdownMenuItem>
-            </div>
-          </div>
+              </div>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 

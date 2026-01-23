@@ -37,6 +37,8 @@ interface FileTreeProps {
   isFileIncludedInAnalysis: (fileId: string) => boolean;
   canDeleteFiles: boolean;
   renameInputRef: React.RefObject<HTMLInputElement | null>;
+  /** When true, hides rename/delete buttons (backend mode) */
+  isReadOnly?: boolean;
 }
 
 interface TreeNode {
@@ -203,6 +205,7 @@ function FileNode({ node, depth, props }: FileNodeProps) {
     isFileIncludedInAnalysis,
     canDeleteFiles,
     renameInputRef,
+    isReadOnly,
   } = props;
 
   const isActive = activeFileId === file.id;
@@ -292,68 +295,73 @@ function FileNode({ node, depth, props }: FileNodeProps) {
       <span className={cn('flex-1 truncate text-sm', isActive && 'font-semibold italic')}>
         {file.name}
       </span>
-      {isDeleting ? (
-        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          <span className="text-xs text-destructive">Delete?</span>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 text-destructive hover:bg-destructive/10"
-            onClick={(e) => onDeleteClick(e, file.id)}
-            data-testid={`confirm-delete-${file.id}`}
-          >
-            <Trash2 className="h-3 w-3" />
-          </Button>
-        </div>
-      ) : (
-        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
-          <TooltipProvider delayDuration={300}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 hover:bg-background/50"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onStartRename(file.id, file.name);
-                  }}
-                  data-testid={`rename-file-${file.id}`}
-                >
-                  <Pencil className="h-3 w-3" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                <p>
-                  Rename <kbd className="ml-1 rounded bg-muted px-1 font-mono text-xs">R</kbd>
-                </p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          {canDeleteFiles && (
-            <TooltipProvider delayDuration={300}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 hover:bg-background/50 hover:text-destructive"
-                    onClick={(e) => onDeleteClick(e, file.id)}
-                    data-testid={`delete-file-${file.id}`}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  <p>
-                    Delete <kbd className="ml-1 rounded bg-muted px-1 font-mono text-xs">D</kbd>
-                  </p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+      {/* Hide rename/delete actions in read-only mode */}
+      {!isReadOnly && (
+        <>
+          {isDeleting ? (
+            <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+              <span className="text-xs text-destructive">Delete?</span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-destructive hover:bg-destructive/10"
+                onClick={(e) => onDeleteClick(e, file.id)}
+                data-testid={`confirm-delete-${file.id}`}
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
+              <TooltipProvider delayDuration={300}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 hover:bg-background/50"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onStartRename(file.id, file.name);
+                      }}
+                      data-testid={`rename-file-${file.id}`}
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    <p>
+                      Rename <kbd className="ml-1 rounded bg-muted px-1 font-mono text-xs">R</kbd>
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              {canDeleteFiles && (
+                <TooltipProvider delayDuration={300}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 hover:bg-background/50 hover:text-destructive"
+                        onClick={(e) => onDeleteClick(e, file.id)}
+                        data-testid={`delete-file-${file.id}`}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      <p>
+                        Delete <kbd className="ml-1 rounded bg-muted px-1 font-mono text-xs">D</kbd>
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+            </div>
           )}
-        </div>
+        </>
       )}
     </div>
   );

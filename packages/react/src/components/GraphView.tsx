@@ -57,6 +57,14 @@ const MINIMAP_NODE_LIMIT = 2000;
 const ELK_NODE_LIMIT = 2000;
 
 /**
+ * Threshold for determining when to treat a graph as "new" vs "evolved".
+ * If fewer than this fraction of nodes have existing positions, we use
+ * fast layout for all nodes instead of preserving positions.
+ * 0.5 means: if less than half the nodes match, treat as new graph.
+ */
+const NODE_OVERLAP_THRESHOLD = 0.5;
+
+/**
  * Helper component to handle node focusing.
  * Must be rendered inside ReactFlow to access useReactFlow hook.
  */
@@ -609,6 +617,9 @@ export function GraphView({
 
     setIsLayouting(true);
 
+    // Capture renderGraph snapshot for this layout cycle. Using a ref ensures we get
+    // a consistent snapshot even if renderGraph updates during async layout computation.
+    // This prevents race conditions where node counts/IDs change mid-computation.
     const renderGraphSnapshot = renderGraphRef.current;
 
     if (GRAPH_DEBUG) console.time('[Layout] Stage 1: preserve positions');
@@ -621,10 +632,45 @@ export function GraphView({
         if (GRAPH_DEBUG) console.timeEnd('[Layout] getFastLayoutedNodes');
         return fastResult;
       }
+
       const positionMap = new Map(currentNodes.map((node) => [node.id, node.position]));
+
+      // Count how many new nodes don't have existing positions
+      const nodesWithoutPosition = renderGraphSnapshot.nodes.filter(
+        (node) => !positionMap.has(node.id)
+      );
+      const matchCount = renderGraphSnapshot.nodes.length - nodesWithoutPosition.length;
+
+      // If less than threshold of nodes have existing positions, treat as new graph.
+      // This handles project switch where node IDs completely change.
+      if (matchCount < renderGraphSnapshot.nodes.length * NODE_OVERLAP_THRESHOLD) {
+        if (GRAPH_DEBUG) console.log('[Layout] Low node overlap, using fast layout');
+        return getFastLayoutedNodes(renderGraphSnapshot.nodes, direction);
+      }
+
+      // If all nodes have existing positions, just preserve them (no fast layout needed)
+      if (nodesWithoutPosition.length === 0) {
+        if (GRAPH_DEBUG) console.log('[Layout] All nodes have positions, preserving');
+        return renderGraphSnapshot.nodes.map((node) => ({
+          ...node,
+          position: positionMap.get(node.id)!,
+        }));
+      }
+
+      // Only compute fast layout when there are actually new nodes that need positions
+      if (GRAPH_DEBUG)
+        console.log(`[Layout] ${nodesWithoutPosition.length} new nodes need positions`);
+      const fastLayoutNodes = getFastLayoutedNodes(renderGraphSnapshot.nodes, direction);
+      const fastPositionMap = new Map(fastLayoutNodes.map((node) => [node.id, node.position]));
+
       return renderGraphSnapshot.nodes.map((node) => {
-        const position = positionMap.get(node.id);
-        return position ? { ...node, position } : node;
+        const existingPosition = positionMap.get(node.id);
+        if (existingPosition) {
+          return { ...node, position: existingPosition };
+        }
+        // Use fast layout position for new nodes instead of (0,0)
+        const fastPosition = fastPositionMap.get(node.id);
+        return { ...node, position: fastPosition ?? { x: 0, y: 0 } };
       });
     });
     setEdges(renderGraphSnapshot.edges);

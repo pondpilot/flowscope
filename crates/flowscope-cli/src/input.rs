@@ -25,7 +25,8 @@ fn read_from_stdin() -> Result<Vec<FileSource>> {
         .context("Failed to read from stdin")?;
 
     Ok(vec![FileSource {
-        name: "<stdin>".to_string(),
+        // Use .sql extension so frontend filters include stdin content
+        name: "<stdin>.sql".to_string(),
         content,
     }])
 }

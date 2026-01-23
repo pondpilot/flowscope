@@ -18,9 +18,17 @@ interface SchemaEditorProps {
   schemaSQL: string;
   dialect: Dialect;
   onSave: (schemaSQL: string) => void;
+  /** When true, schema is from backend and cannot be edited */
+  isReadOnly?: boolean;
 }
 
-export function SchemaEditor({ open, onOpenChange, schemaSQL, onSave }: SchemaEditorProps) {
+export function SchemaEditor({
+  open,
+  onOpenChange,
+  schemaSQL,
+  onSave,
+  isReadOnly = false,
+}: SchemaEditorProps) {
   const [editedSQL, setEditedSQL] = useState(schemaSQL);
   const theme = useThemeStore((state) => state.theme);
   const isDark = resolveTheme(theme) === 'dark';
@@ -37,11 +45,12 @@ export function SchemaEditor({ open, onOpenChange, schemaSQL, onSave }: SchemaEd
   );
 
   const handleSave = useCallback(() => {
+    if (isReadOnly) return;
     onSave(editedSQL);
     onOpenChange(false);
-  }, [editedSQL, onSave, onOpenChange]);
+  }, [editedSQL, onSave, onOpenChange, isReadOnly]);
 
-  const handleCancel = useCallback(() => {
+  const handleClose = useCallback(() => {
     setEditedSQL(schemaSQL); // Reset to original
     onOpenChange(false);
   }, [schemaSQL, onOpenChange]);
@@ -50,28 +59,35 @@ export function SchemaEditor({ open, onOpenChange, schemaSQL, onSave }: SchemaEd
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Edit Schema</DialogTitle>
+          <DialogTitle>{isReadOnly ? 'View Schema' : 'Edit Schema'}</DialogTitle>
           <DialogDescription>
-            Define your database schema using CREATE TABLE statements. This schema will be used to
-            augment the lineage analysis without appearing in the graph.
+            {isReadOnly
+              ? 'This schema was loaded from the server (database introspection). It cannot be edited in serve mode.'
+              : 'Define your database schema using CREATE TABLE statements. This schema will be used to augment the lineage analysis without appearing in the graph.'}
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex-1 min-h-0 border rounded-md overflow-hidden">
           <SqlView
             value={editedSQL}
-            onChange={setEditedSQL}
+            onChange={isReadOnly ? undefined : setEditedSQL}
             className="h-full"
-            editable={true}
+            editable={!isReadOnly}
             isDark={isDark}
           />
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={handleCancel}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave}>Save Schema</Button>
+          {isReadOnly ? (
+            <Button onClick={handleClose}>Close</Button>
+          ) : (
+            <>
+              <Button variant="outline" onClick={handleClose}>
+                Cancel
+              </Button>
+              <Button onClick={handleSave}>Save Schema</Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

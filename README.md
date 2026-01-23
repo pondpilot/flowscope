@@ -63,6 +63,23 @@ cat query.sql | flowscope -d postgres
 
 Output formats: `table` (default), `json`, `mermaid`, `html`, `sql`, `csv`, `xlsx`, `duckdb`
 
+### Serve Mode (Local Web UI)
+
+Run FlowScope as a local HTTP server with the full web UI embedded in a single binary:
+
+```bash
+# Start server watching SQL directories
+flowscope --serve --watch ./sql
+
+# With database schema and custom port
+flowscope --serve --watch ./models -d postgres --metadata-url postgres://user@localhost/db --port 8080
+
+# Open browser automatically
+flowscope --serve --watch ./sql --open
+```
+
+The serve mode watches directories for `.sql` file changes and provides the same interactive experience as the hosted web app, with all processing happening locally. Requires building with the `serve` feature.
+
 See [CLI documentation](crates/flowscope-cli/README.md) for all options.
 
 ## Key Features

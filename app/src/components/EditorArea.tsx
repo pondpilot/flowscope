@@ -5,6 +5,7 @@ import { SqlView, useLineageState } from '@pondpilot/flowscope-react';
 import { cn } from '@/lib/utils';
 import { useProject } from '@/lib/project-store';
 import { useThemeStore, resolveTheme } from '@/lib/theme-store';
+import { useBackend } from '@/lib/backend-context';
 import { useAnalysis, useDebounce, useFileNavigation, useGlobalShortcuts } from '@/hooks';
 import type { GlobalShortcut } from '@/hooks';
 import { EditorToolbar } from './EditorToolbar';
@@ -25,19 +26,19 @@ function SqlViewFallback() {
 }
 
 interface EditorAreaProps {
-  wasmReady: boolean;
+  backendReady: boolean;
   className?: string;
   fileSelectorOpen: boolean;
   onFileSelectorOpenChange: (open: boolean) => void;
 }
 
 export function EditorArea({
-  wasmReady,
+  backendReady,
   className,
   fileSelectorOpen,
   onFileSelectorOpenChange,
 }: EditorAreaProps) {
-  const { currentProject, updateFile, createFile, setRunMode } = useProject();
+  const { currentProject, updateFile, createFile, setRunMode, isReadOnly } = useProject();
 
   const theme = useThemeStore((state) => state.theme);
   const isDark = resolveTheme(theme) === 'dark';
@@ -59,7 +60,9 @@ export function EditorArea({
     setSqlViewMode('template');
   }, [currentProject?.activeFileId]);
 
-  const { isAnalyzing, error, runAnalysis, setError } = useAnalysis(wasmReady);
+  // Use backend adapter for analysis when available
+  const { adapter } = useBackend();
+  const { isAnalyzing, error, runAnalysis, setError } = useAnalysis(backendReady, { adapter });
 
   // Show error toast when error occurs
   useEffect(() => {
@@ -78,10 +81,14 @@ export function EditorArea({
   useFileNavigation();
 
   useEffect(() => {
+    if (isReadOnly) {
+      return;
+    }
+
     if (currentProject && currentProject.files.length === 0) {
       createFile(DEFAULT_FILE_NAMES.SCRATCHPAD);
     }
-  }, [currentProject, createFile]);
+  }, [currentProject, createFile, isReadOnly]);
 
   // Focus the editor when active file changes (e.g., new file created)
   useEffect(() => {
@@ -97,7 +104,7 @@ export function EditorArea({
   // Consolidated into a single effect to prevent duplicate analyses when both change.
   // activeFile.content is intentionally omitted to prevent re-analysis on keystrokes.
   useEffect(() => {
-    if (!wasmReady || !currentProject || !activeFile) {
+    if (!backendReady || !currentProject || !activeFile) {
       return;
     }
 
@@ -110,7 +117,7 @@ export function EditorArea({
     previousHideCTEs.current = hideCTEs;
 
     if (schemaChanged || hideCTEsChanged) {
-      runAnalysis(activeFile.content, activeFile.name).catch((err) => {
+      runAnalysis(activeFile.content, activeFile.path).catch((err) => {
         const reason = schemaChanged ? 'schema change' : 'CTE toggle';
         console.error(`Auto-analysis after ${reason} failed:`, err);
         setError(err instanceof Error ? err.message : `Failed to re-run analysis after ${reason}`);
@@ -119,7 +126,7 @@ export function EditorArea({
     // Note: currentProject is used in the guard but excluded from deps because activeFile
     // (derived from currentProject) already captures project changes via activeFile.id
   }, [
-    wasmReady,
+    backendReady,
     debouncedSchemaSQL,
     hideCTEs,
     activeFile?.id,
@@ -133,12 +140,14 @@ export function EditorArea({
   // Size limit prevents browser crashes with very large results
   const MAX_RESOLVED_SQL_SIZE = 10 * 1024 * 1024; // 10MB
 
+  // Use path for matching since analysis uses paths as sourceName to avoid basename collisions.
+  // For files without a path (e.g., scratchpad), fall back to name.
   const resolvedSql = useMemo(() => {
-    const fileName = activeFile?.name;
-    if (!result?.statements || !fileName) return null;
+    const filePath = activeFile?.path || activeFile?.name;
+    if (!result?.statements || !filePath) return null;
 
     const resolvedParts = result.statements
-      .filter((stmt) => stmt.sourceName === fileName && stmt.resolvedSql)
+      .filter((stmt) => stmt.sourceName === filePath && stmt.resolvedSql)
       .map((stmt) => stmt.resolvedSql!);
 
     if (resolvedParts.length === 0) return null;
@@ -148,7 +157,7 @@ export function EditorArea({
       return joined.slice(0, MAX_RESOLVED_SQL_SIZE) + '\n\n-- [Truncated: resolved SQL exceeds 10MB]';
     }
     return joined;
-  }, [result, activeFile?.name]);
+  }, [result, activeFile?.path, activeFile?.name]);
 
   // Determine if we should show the toggle (only in dbt/jinja mode)
   const showSqlViewToggle = currentProject?.templateMode !== 'raw';
@@ -163,7 +172,7 @@ export function EditorArea({
 
   const handleAnalyze = useCallback(() => {
     if (activeFile) {
-      runAnalysis(activeFile.content, activeFile.name);
+      runAnalysis(activeFile.content, activeFile.path);
     }
   }, [activeFile, runAnalysis]);
 
@@ -172,7 +181,7 @@ export function EditorArea({
       // Temporarily switch to 'current' mode for this run
       const originalMode = currentProject.runMode;
       setRunMode(currentProject.id, 'current');
-      runAnalysis(activeFile.content, activeFile.name).finally(() => {
+      runAnalysis(activeFile.content, activeFile.path).finally(() => {
         // Restore original mode after analysis
         setRunMode(currentProject.id, originalMode);
       });
@@ -216,7 +225,7 @@ export function EditorArea({
         runMode={currentProject.runMode}
         onRunModeChange={(mode: RunMode) => setRunMode(currentProject.id, mode)}
         isAnalyzing={isAnalyzing}
-        wasmReady={wasmReady}
+        backendReady={backendReady}
         onAnalyze={handleAnalyze}
         allFileCount={allFileCount}
         selectedCount={selectedCount}
@@ -238,11 +247,16 @@ export function EditorArea({
             value={displayContent}
             onChange={(val) => updateFile(activeFile.id, val)}
             className="h-full text-sm"
-            editable={sqlViewMode === 'template'}
+            editable={sqlViewMode === 'template' && !isReadOnly}
             isDark={isDark}
             highlightedSpan={sqlViewMode === 'template' ? highlightedSpan : null}
           />
         </ErrorBoundary>
+        {isReadOnly && (
+          <div className="absolute top-2 right-5 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider bg-muted/80 text-muted-foreground rounded border">
+            Read Only
+          </div>
+        )}
       </div>
     </div>
   );

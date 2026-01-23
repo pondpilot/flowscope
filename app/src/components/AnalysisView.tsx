@@ -22,6 +22,7 @@ import { usePersistedSchemaState } from '@/hooks/usePersistedSchemaState';
 import { isValidTab, useNavigation } from '@/lib/navigation-context';
 import { useViewStateStore, getNamespaceFilterStateWithDefaults } from '@/lib/view-state-store';
 import { useProject } from '@/lib/project-store';
+import { schemaMetadataToSQL } from '@/lib/schema-parser';
 import { HierarchyView, type HierarchyViewRef } from './HierarchyView';
 import { StatsPopover } from './StatsPopover';
 import { NamespaceFilterBar } from './NamespaceFilterBar';
@@ -75,7 +76,8 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
     actionsRef.current = actions;
     stateRef.current = state;
   }, [actions, state]);
-  const { currentProject, updateSchemaSQL, activeProjectId } = useProject();
+  const { currentProject, updateSchemaSQL, activeProjectId, isBackendMode, backendSchema } =
+    useProject();
   const [schemaEditorOpen, setSchemaEditorOpen] = useState(false);
   const { activeTab, setActiveTab, navigationTarget, clearNavigationTarget } = useNavigation();
   const [lineageFocusNodeId, setLineageFocusNodeId] = useState<string | undefined>(undefined);
@@ -216,12 +218,16 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
           if (hasIssues) handleTabChangeRef.current('issues');
         },
       },
-      // Schema editor shortcut
+      // Schema editor shortcut (disabled in serve mode)
       {
         key: 'k',
         cmdOrCtrl: true,
         shift: true,
-        handler: () => setSchemaEditorOpen(true),
+        handler: () => {
+          if (!isBackendMode) {
+            setSchemaEditorOpen(true);
+          }
+        },
       },
       // Lineage view shortcuts (only active when on lineage tab)
       {
@@ -311,7 +317,7 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
         },
       },
     ],
-    [hasIssues, focusSearchInput]
+    [hasIssues, focusSearchInput, isBackendMode]
   );
 
   useGlobalShortcuts(tabShortcuts);
@@ -365,29 +371,32 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
               joinCount={summary.joinCount}
               complexityScore={summary.complexityScore}
             />
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setSchemaEditorOpen(true)}
-                    className="h-7 text-xs"
-                  >
-                    <Settings className="h-3 w-3 mr-1" />
-                    Schema
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p className="flex items-center gap-2">
-                    Edit schema
-                    <kbd className="px-1.5 py-0.5 text-xs bg-muted rounded border font-mono">
-                      {getShortcutDisplay('edit-schema')}
-                    </kbd>
-                  </p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            {/* Hide Schema editor button in serve mode - schema comes from CLI */}
+            {!isBackendMode && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSchemaEditorOpen(true)}
+                      className="h-7 text-xs"
+                    >
+                      <Settings className="h-3 w-3 mr-1" />
+                      Schema
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="flex items-center gap-2">
+                      Edit schema
+                      <kbd className="px-1.5 py-0.5 text-xs bg-muted rounded border font-mono">
+                        {getShortcutDisplay('edit-schema')}
+                      </kbd>
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
           </div>
         </div>
 
@@ -489,9 +498,12 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
         <SchemaEditor
           open={schemaEditorOpen}
           onOpenChange={setSchemaEditorOpen}
-          schemaSQL={currentProject.schemaSQL}
+          schemaSQL={
+            isBackendMode ? schemaMetadataToSQL(backendSchema) : currentProject.schemaSQL
+          }
           dialect={currentProject.dialect}
           onSave={handleSaveSchema}
+          isReadOnly={isBackendMode}
         />
       )}
     </div>

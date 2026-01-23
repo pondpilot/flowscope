@@ -1,4 +1,7 @@
 export { useAnalysis } from './useAnalysis';
+export type { UseAnalysisOptions } from './useAnalysis';
+export { useBackendFiles } from './useBackendFiles';
+export type { BackendFilesState } from './useBackendFiles';
 export { useDebounce } from './useDebounce';
 export { useFileNavigation } from './useFileNavigation';
 export { useIssueLocations } from './useIssueLocations';

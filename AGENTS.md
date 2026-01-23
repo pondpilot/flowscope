@@ -30,9 +30,20 @@ Key areas:
 - `just build-rust` (Rust workspace debug build).
 - `just build-rust-release` (Rust workspace release build).
 - `just build-cli` (CLI release build).
+- `just build-cli-serve` (CLI with embedded web UI, release build).
+- `just build-cli-serve-debug` (CLI with embedded web UI, debug build).
 - `just build-wasm` (runs `./scripts/build-rust.sh`).
 - `just build-ts` (runs `yarn build:ts`).
 - `just run` (build + dev server).
+
+### CLI Serve Mode Build Order
+
+The CLI serve feature embeds the web app using rust-embed at compile time. This requires the app to be built first:
+
+1. `cd app && yarn build` - Build frontend assets to `app/dist/`
+2. `cargo build -p flowscope-cli --features serve` - Compile CLI with embedded assets
+
+The `just build-cli-serve` target handles this dependency automatically.
 
 ## Dev Commands
 
@@ -61,6 +72,7 @@ Key areas:
 - `just test-ts` (`yarn workspaces run test`).
 - `just test-core` (`cargo test -p flowscope-core`).
 - `just test-cli` (`cargo test -p flowscope-cli`).
+- `just test-cli-serve` (CLI tests with serve feature, builds app first).
 - `just test-lineage` (`cargo test -p flowscope-core --test lineage_engine`).
 - `just test-lineage-verbose` (same test with `--nocapture`).
 - `just check-schema` (Rust schema guard + TS schema compatibility).

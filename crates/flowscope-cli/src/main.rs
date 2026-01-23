@@ -1,11 +1,13 @@
 //! FlowScope CLI - SQL lineage analyzer
 
-mod cli;
-mod input;
+use flowscope_cli::cli;
+use flowscope_cli::input;
 #[cfg(feature = "metadata-provider")]
-mod metadata;
-mod output;
-mod schema;
+use flowscope_cli::metadata;
+use flowscope_cli::output;
+use flowscope_cli::schema;
+#[cfg(feature = "serve")]
+use flowscope_cli::server;
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -22,6 +24,15 @@ use cli::{Args, OutputFormat, ViewMode};
 use output::format_table;
 
 fn main() -> ExitCode {
+    // Check for serve mode first (requires tokio runtime)
+    #[cfg(feature = "serve")]
+    {
+        let args = Args::parse();
+        if args.serve {
+            return run_serve_mode(args);
+        }
+    }
+
     match run() {
         Ok(has_errors) => {
             if has_errors {
@@ -33,6 +44,73 @@ fn main() -> ExitCode {
         Err(e) => {
             eprintln!("flowscope: error: {e:#}");
             ExitCode::from(66)
+        }
+    }
+}
+
+/// Run the CLI in serve mode with embedded web UI.
+#[cfg(feature = "serve")]
+fn run_serve_mode(args: Args) -> ExitCode {
+    use server::ServerConfig;
+
+    #[cfg(feature = "templating")]
+    let template_config = args.template.map(|mode| {
+        let context = parse_template_vars(&args.template_vars);
+        flowscope_core::TemplateConfig {
+            mode: mode.into(),
+            context,
+        }
+    });
+
+    // Determine input source: watch directories or static files
+    let (watch_dirs, static_files) = if !args.watch.is_empty() {
+        // Watch mode takes precedence
+        if !args.files.is_empty() {
+            eprintln!("flowscope: warning: ignoring positional files when --watch is provided");
+        }
+        (args.watch.clone(), None)
+    } else {
+        // Try to read from positional files or stdin
+        match input::read_input(&args.files) {
+            Ok(files) if !files.is_empty() => (vec![], Some(files)),
+            Ok(_) => {
+                eprintln!("flowscope: error: no files to serve (use --watch or provide files)");
+                return ExitCode::from(1);
+            }
+            Err(e) => {
+                eprintln!("flowscope: error: {e:#}");
+                return ExitCode::from(1);
+            }
+        }
+    };
+
+    let config = ServerConfig {
+        dialect: args.dialect.into(),
+        watch_dirs,
+        static_files,
+        #[cfg(feature = "metadata-provider")]
+        metadata_url: args.metadata_url.clone(),
+        #[cfg(not(feature = "metadata-provider"))]
+        metadata_url: None,
+        #[cfg(feature = "metadata-provider")]
+        metadata_schema: args.metadata_schema.clone(),
+        #[cfg(not(feature = "metadata-provider"))]
+        metadata_schema: None,
+        schema_path: args.schema.clone(),
+        port: args.port,
+        open_browser: args.open,
+        #[cfg(feature = "templating")]
+        template_config,
+    };
+
+    // Create tokio runtime and run server
+    let runtime = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
+
+    match runtime.block_on(server::run_server(config)) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("flowscope: server error: {e:#}");
+            ExitCode::from(1)
         }
     }
 }

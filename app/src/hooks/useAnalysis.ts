@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef, startTransition } from 'react';
 import { useLineage } from '@pondpilot/flowscope-react';
 import { analyzeWithWorker, getCachedAnalysis, syncAnalysisFiles } from '@/lib/analysis-worker';
+import type { BackendAdapter, AnalysisPayload } from '@/lib/backend-adapter';
 import { useProject } from '@/lib/project-store';
 import type { Project } from '@/lib/project-store';
 import { useAnalysisStore } from '@/lib/analysis-store';
@@ -22,7 +23,22 @@ function nowMs(): number {
   return Date.now();
 }
 
-export function useAnalysis(wasmReady: boolean) {
+/**
+ * Options for the useAnalysis hook.
+ */
+export interface UseAnalysisOptions {
+  /** Backend adapter to use for analysis (optional, falls back to direct worker calls) */
+  adapter?: BackendAdapter | null;
+}
+
+/**
+ * Hook for running lineage analysis.
+ *
+ * @param backendReady - Whether the backend (REST or WASM) is initialized and ready
+ * @param options - Optional configuration including the backend adapter
+ */
+export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions) {
+  const adapter = options?.adapter;
   const { currentProject, activeProjectId } = useProject();
   const { actions, state: lineageState } = useLineage();
   const { hideCTEs } = lineageState;
@@ -84,7 +100,9 @@ export function useAnalysis(wasmReady: boolean) {
     (
       project: Project | null,
       activeFileContent?: string,
-      activeFileName?: string
+      // Use path (not just basename) for consistency with custom/all modes.
+      // This ensures sourceName matches across all run modes.
+      activeFilePath?: string
     ): AnalysisContext | null => {
       if (!project) return null;
 
@@ -92,19 +110,23 @@ export function useAnalysis(wasmReady: boolean) {
       let filesToAnalyze: Array<{ name: string; content: string }> = [];
       const runMode = project.runMode;
 
-      if (runMode === 'current' && activeFileContent && activeFileName) {
-        filesToAnalyze = [{ name: activeFileName, content: activeFileContent }];
-        contextDescription = `Analyzing file: ${activeFileName}`;
+      if (runMode === 'current' && activeFileContent && activeFilePath) {
+        filesToAnalyze = [{ name: activeFilePath, content: activeFileContent }];
+        contextDescription = `Analyzing file: ${activeFilePath}`;
       } else if (runMode === 'custom') {
         const selectedIds = project.selectedFileIds || [];
         const selectedFiles = project.files.filter(
           (f) => selectedIds.includes(f.id) && f.name.endsWith('.sql')
         );
-        filesToAnalyze = selectedFiles.map((f) => ({ name: f.name, content: f.content }));
+        // Use path instead of name to avoid collisions when files in different
+        // directories have the same basename (e.g., "dir1/query.sql" and "dir2/query.sql")
+        filesToAnalyze = selectedFiles.map((f) => ({ name: f.path, content: f.content }));
         contextDescription = `Analyzing selected: ${filesToAnalyze.length} files`;
       } else {
         const sqlFiles = project.files.filter((f) => f.name.endsWith('.sql'));
-        filesToAnalyze = sqlFiles.map((f) => ({ name: f.name, content: f.content }));
+        // Use path instead of name to avoid collisions when files in different
+        // directories have the same basename (e.g., "dir1/query.sql" and "dir2/query.sql")
+        filesToAnalyze = sqlFiles.map((f) => ({ name: f.path, content: f.content }));
         contextDescription = `Analyzing project: ${sqlFiles.length} files`;
       }
 
@@ -118,18 +140,24 @@ export function useAnalysis(wasmReady: boolean) {
   );
 
   useEffect(() => {
-    if (!wasmReady || !currentProject) {
+    if (!backendReady || !currentProject) {
       return;
     }
 
     let cancelled = false;
-    const sqlFiles = currentProject.files.filter((file) => file.name.endsWith('.sql'));
+    // Use file.path as name to match how buildAnalysisContext keys files.
+    // This ensures the worker cache uses consistent keys (paths) across sync and analysis.
+    const sqlFiles = currentProject.files
+      .filter((file) => file.name.endsWith('.sql'))
+      .map((f) => ({ name: f.path, content: f.content }));
 
     if (ANALYSIS_DEBUG)
       console.log(`[useAnalysis] File sync effect triggered (${sqlFiles.length} SQL files)`);
     const syncEffectStart = nowMs();
 
-    syncAnalysisFiles(sqlFiles)
+    const syncFiles = adapter ? adapter.syncFiles(sqlFiles) : syncAnalysisFiles(sqlFiles);
+
+    syncFiles
       .then(() => {
         if (!cancelled && ANALYSIS_DEBUG) {
           console.log(
@@ -146,7 +174,7 @@ export function useAnalysis(wasmReady: boolean) {
     return () => {
       cancelled = true;
     };
-  }, [currentProject, wasmReady]);
+  }, [currentProject, backendReady, adapter]);
 
   // Restore cached analysis result from memory when project or hideCTEs changes.
   // Cache validation is built into getResult - it returns null if the cached
@@ -174,10 +202,10 @@ export function useAnalysis(wasmReady: boolean) {
       actionsRef.current.setResult(cachedResult);
     });
 
-    if (cachedResult || !wasmReady) {
+    if (cachedResult || !backendReady) {
       return;
     }
-  }, [activeProjectId, hideCTEs, getResult, wasmReady]);
+  }, [activeProjectId, hideCTEs, getResult, backendReady]);
 
   // Check worker's IndexedDB cache for persisted analysis results.
   // This runs after the memory cache effect and may update the result
@@ -188,7 +216,7 @@ export function useAnalysis(wasmReady: boolean) {
         `[useAnalysis] IndexedDB cache effect triggered (projectId: ${activeProjectId?.slice(0, 8) ?? 'null'})`
       );
 
-    if (!wasmReady || !activeProjectId) {
+    if (!backendReady || !activeProjectId) {
       return;
     }
 
@@ -204,7 +232,7 @@ export function useAnalysis(wasmReady: boolean) {
     }
 
     const activeFile = project.files.find((file) => file.id === project.activeFileId);
-    const context = buildAnalysisContext(project, activeFile?.content, activeFile?.name);
+    const context = buildAnalysisContext(project, activeFile?.content, activeFile?.path);
     if (!context || context.files.length === 0) {
       return;
     }
@@ -214,18 +242,33 @@ export function useAnalysis(wasmReady: boolean) {
     if (ANALYSIS_DEBUG)
       console.log(`[useAnalysis] Checking IndexedDB cache for ${context.files.length} files`);
 
-    syncAnalysisFiles(context.files)
-      .then(() => {
-        if (ANALYSIS_DEBUG) console.log(`[useAnalysis] Files synced, checking IndexedDB cache...`);
-        return getCachedAnalysis({
-          fileNames: context.files.map((file) => file.name),
-          dialect: project.dialect,
-          schemaSQL: project.schemaSQL ?? '',
-          hideCTEs,
-          enableColumnLineage: true,
-          templateMode: project.templateMode,
+    const cachePayload: AnalysisPayload = {
+      files: context.files,
+      dialect: project.dialect,
+      schemaSQL: project.schemaSQL ?? '',
+      hideCTEs,
+      enableColumnLineage: true,
+      templateMode: project.templateMode,
+    };
+
+    const syncAndGetCache = adapter
+      ? adapter.syncFiles(context.files).then(() => {
+          if (ANALYSIS_DEBUG) console.log(`[useAnalysis] Files synced, checking cache...`);
+          return adapter.getCached(cachePayload);
+        })
+      : syncAnalysisFiles(context.files).then(() => {
+          if (ANALYSIS_DEBUG) console.log(`[useAnalysis] Files synced, checking IndexedDB cache...`);
+          return getCachedAnalysis({
+            fileNames: context.files.map((file) => file.name),
+            dialect: project.dialect,
+            schemaSQL: project.schemaSQL ?? '',
+            hideCTEs,
+            enableColumnLineage: true,
+            templateMode: project.templateMode,
+          });
         });
-      })
+
+    syncAndGetCache
       .then((cached) => {
         const durationMs = nowMs() - cacheStart;
         if (cancelled) {
@@ -271,13 +314,14 @@ export function useAnalysis(wasmReady: boolean) {
     getResult,
     storeResult,
     setMetrics,
-    wasmReady,
+    backendReady,
     buildAnalysisContext,
+    adapter,
   ]);
 
   const runAnalysis = useCallback(
-    async (activeFileContent?: string, activeFileName?: string) => {
-      if (!wasmReady || !currentProject) return;
+    async (activeFileContent?: string, activeFilePath?: string) => {
+      if (!backendReady || !currentProject) return;
 
       const requestId = analysisRequestRef.current + 1;
       analysisRequestRef.current = requestId;
@@ -289,7 +333,7 @@ export function useAnalysis(wasmReady: boolean) {
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
       try {
-        const context = buildAnalysisContext(currentProject, activeFileContent, activeFileName);
+        const context = buildAnalysisContext(currentProject, activeFileContent, activeFilePath);
 
         if (!context) {
           setError('No project context available');
@@ -333,8 +377,8 @@ export function useAnalysis(wasmReady: boolean) {
           actionsRef.current.setSql(activeFileContent);
         }
 
-        const analysisPayload = {
-          fileNames: context.files.map((file) => file.name),
+        const adapterPayload: AnalysisPayload = {
+          files: context.files,
           dialect: currentProject.dialect,
           schemaSQL: currentProject.schemaSQL ?? '',
           hideCTEs,
@@ -351,23 +395,53 @@ export function useAnalysis(wasmReady: boolean) {
         let analysisResponse: Awaited<ReturnType<typeof analyzeWithWorker>>;
         let fileSyncRetries = 0;
 
-        while (true) {
-          try {
-            analysisResponse = await analyzeWithWorker(analysisPayload, { knownCacheKey });
-            break;
-          } catch (error) {
-            // Handle missing file content by syncing files and retrying.
-            // Uses structured error codes instead of string matching for reliability.
-            // Limited retries prevent infinite loops if sync consistently fails.
-            if (
-              isAnalysisError(error, AnalysisErrorCode.MISSING_FILE_CONTENT) &&
-              fileSyncRetries < MAX_FILE_SYNC_RETRIES
-            ) {
-              fileSyncRetries++;
-              await syncAnalysisFiles(context.files);
-              continue;
+        // Use adapter if available, otherwise fall back to direct worker calls
+        if (adapter) {
+          while (true) {
+            try {
+              analysisResponse = await adapter.analyze(adapterPayload, { knownCacheKey });
+              break;
+            } catch (error) {
+              if (
+                isAnalysisError(error, AnalysisErrorCode.MISSING_FILE_CONTENT) &&
+                fileSyncRetries < MAX_FILE_SYNC_RETRIES
+              ) {
+                fileSyncRetries++;
+                await adapter.syncFiles(context.files);
+                continue;
+              }
+              throw error;
             }
-            throw error;
+          }
+        } else {
+          // Fallback to direct worker calls for backwards compatibility
+          const workerPayload = {
+            fileNames: context.files.map((file) => file.name),
+            dialect: currentProject.dialect,
+            schemaSQL: currentProject.schemaSQL ?? '',
+            hideCTEs,
+            enableColumnLineage: true,
+            templateMode: currentProject.templateMode,
+          };
+
+          while (true) {
+            try {
+              analysisResponse = await analyzeWithWorker(workerPayload, { knownCacheKey });
+              break;
+            } catch (error) {
+              // Handle missing file content by syncing files and retrying.
+              // Uses structured error codes instead of string matching for reliability.
+              // Limited retries prevent infinite loops if sync consistently fails.
+              if (
+                isAnalysisError(error, AnalysisErrorCode.MISSING_FILE_CONTENT) &&
+                fileSyncRetries < MAX_FILE_SYNC_RETRIES
+              ) {
+                fileSyncRetries++;
+                await syncAnalysisFiles(context.files);
+                continue;
+              }
+              throw error;
+            }
           }
         }
 
@@ -411,7 +485,7 @@ export function useAnalysis(wasmReady: boolean) {
       }
     },
     [
-      wasmReady,
+      backendReady,
       currentProject,
       activeProjectId,
       storeResult,
@@ -423,6 +497,7 @@ export function useAnalysis(wasmReady: boolean) {
       setAnalyzing,
       setError,
       hideCTEs,
+      adapter,
     ]
   );
 

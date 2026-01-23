@@ -26,7 +26,7 @@ import { useViewStateStore } from '@/lib/view-state-store';
 import { getShortcutDisplay } from '@/lib/shortcuts';
 
 interface WorkspaceProps {
-  wasmReady: boolean;
+  backendReady: boolean;
   error: string | null;
   onRetry?: () => void;
   isRetrying?: boolean;
@@ -39,8 +39,8 @@ interface WorkspaceProps {
  */
 const EDITOR_PANEL_DEFAULT_SIZE = 33;
 
-export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspaceProps) {
-  const { currentProject, selectFile, activeProjectId } = useProject();
+export function Workspace({ backendReady, error, onRetry, isRetrying }: WorkspaceProps) {
+  const { currentProject, selectFile, activeProjectId, isBackendMode } = useProject();
   const lineageActions = useLineageActions();
   const {
     highlightSpan,
@@ -180,13 +180,13 @@ export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspacePr
         key: '?',
         handler: () => setShortcutsDialogOpen(true),
       },
-      // Share dialog
+      // Share dialog (disabled in serve mode)
       {
         key: 's',
         cmdOrCtrl: true,
         shift: true,
         handler: () => {
-          if (currentProject) {
+          if (currentProject && !isBackendMode) {
             setShareDialogOpen(true);
           }
         },
@@ -204,7 +204,7 @@ export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspacePr
         handler: () => setCommandPaletteOpen(true),
       },
     ],
-    [toggleEditorPanel, currentProject, cycleTheme]
+    [toggleEditorPanel, currentProject, cycleTheme, isBackendMode]
   );
 
   useGlobalShortcuts(shortcuts);
@@ -254,7 +254,7 @@ export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspacePr
 
         // Actions
         case 'share':
-          if (currentProject) setShareDialogOpen(true);
+          if (currentProject && !isBackendMode) setShareDialogOpen(true);
           break;
 
         // Settings
@@ -303,6 +303,7 @@ export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspacePr
       toggleShowScriptTables,
       setLayoutAlgorithm,
       layoutAlgorithm,
+      isBackendMode,
     ]
   );
 
@@ -336,28 +337,31 @@ export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspacePr
                 projectName={currentProject.name}
                 graphRef={graphContainerRef}
               />
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => setShareDialogOpen(true)}
-                    >
-                      <Share2 className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p className="flex items-center gap-2">
-                      Share project
-                      <kbd className="px-1.5 py-0.5 text-xs bg-muted rounded border font-mono">
-                        {getShortcutDisplay('share')}
-                      </kbd>
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              {/* Hide Share button in serve mode - files come from CLI */}
+              {!isBackendMode && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => setShareDialogOpen(true)}
+                      >
+                        <Share2 className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="flex items-center gap-2">
+                        Share project
+                        <kbd className="px-1.5 py-0.5 text-xs bg-muted rounded border font-mono">
+                          {getShortcutDisplay('share')}
+                        </kbd>
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
             </>
           )}
           <TooltipProvider>
@@ -442,7 +446,7 @@ export function Workspace({ wasmReady, error, onRetry, isRetrying }: WorkspacePr
                 data-testid="editor-panel"
               >
                 <EditorArea
-                  wasmReady={wasmReady}
+                  backendReady={backendReady}
                   fileSelectorOpen={fileSelectorOpen}
                   onFileSelectorOpenChange={setFileSelectorOpen}
                 />
