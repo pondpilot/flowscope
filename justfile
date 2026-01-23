@@ -381,3 +381,23 @@ check-all:
 deploy: build-wasm build-ts
     cd app && yarn build
     wrangler pages deploy app/dist --project-name flowscope-app
+
+# Pre-release check: verify generated code is committed
+check-generated:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Building to regenerate code..."
+    cargo build -p flowscope-core --quiet
+    if ! git diff --quiet crates/flowscope-core/src/generated/; then
+        echo "ERROR: Generated code is out of sync!"
+        echo "The following files have uncommitted changes:"
+        git diff --name-only crates/flowscope-core/src/generated/
+        echo ""
+        echo "Run 'cargo build -p flowscope-core' and commit the changes."
+        exit 1
+    fi
+    echo "Generated code is up to date."
+
+# Pre-release validation: all checks needed before tagging a release
+pre-release: check-generated check-all
+    @echo "All pre-release checks passed!"
