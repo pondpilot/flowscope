@@ -7,23 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-#### CLI (flowscope-cli)
-- **Serve mode**: Run FlowScope as a local HTTP server with embedded web UI
-  - `--serve` flag to start HTTP server
-  - `--port <PORT>` to specify server port (default: 3000)
-  - `--watch <DIR>` for directories to watch for SQL files (repeatable)
-  - `--open` to auto-open browser on startup
-  - REST API endpoints for analysis, completion, file listing, and export
-  - File watcher with 100ms debounce for automatic reload on changes
-  - Assets embedded at compile time via rust-embed for single-binary deployment
-
-#### Web App (app/)
-- Backend adapter pattern for REST/WASM detection
-- Read-only mode for files loaded from backend
-- Schema display from database introspection in serve mode
-
 ## [0.3.0] - 2026-01-22
 
 ### Added
@@ -59,6 +42,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--template-var KEY=VALUE` for template variable injection
 - `--metadata-url` for live database schema introspection (PostgreSQL, MySQL, SQLite)
 - `--metadata-schema` for schema filtering during introspection
+- **Serve mode**: Run FlowScope as a local HTTP server with embedded web UI
+  - `--serve` flag to start HTTP server with embedded React app
+  - `--port <PORT>` to specify server port (default: 3000)
+  - `--watch <DIR>` for directories to watch for SQL files (repeatable)
+  - `--open` to auto-open browser on startup
+  - REST API endpoints: `/api/analyze`, `/api/completion`, `/api/files`, `/api/export/:format`
+  - File watcher with 100ms debounce for automatic reload on changes
+  - Assets embedded at compile time via rust-embed for single-binary deployment
 
 #### React Package (@pondpilot/flowscope-react)
 - Web workers for graph/matrix/layout computations (improved UI responsiveness)
@@ -72,6 +63,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stats popover: complexity dots trigger dropdown with table/column/join counts
 - Clear analysis cache option in project menu
 - Bundled "dbt Jaffle Shop" demo project showcasing ref/source/config/var
+- Backend adapter pattern for REST/WASM detection (supports serve mode)
+- Read-only mode for files loaded from CLI serve backend
+- Schema display from database introspection in serve mode
 
 ### Changed
 

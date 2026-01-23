@@ -59,9 +59,10 @@ impl AppState {
         } else {
             // Scan watch directories in a blocking thread pool
             let watch_dirs = config.watch_dirs.clone();
-            let scan_result = tokio::task::spawn_blocking(move || super::scan_sql_files(&watch_dirs))
-                .await
-                .context("File scan task was cancelled")?;
+            let scan_result =
+                tokio::task::spawn_blocking(move || super::scan_sql_files(&watch_dirs))
+                    .await
+                    .context("File scan task was cancelled")?;
             scan_result.context("Failed to scan SQL files")?
         };
         let file_count = files.len();
@@ -132,10 +133,9 @@ impl AppState {
         let watch_dirs = self.config.watch_dirs.clone();
 
         // Run file scanning in a blocking thread pool since it does I/O
-        let scan_result =
-            tokio::task::spawn_blocking(move || super::scan_sql_files(&watch_dirs))
-                .await
-                .context("File scan task was cancelled")?;
+        let scan_result = tokio::task::spawn_blocking(move || super::scan_sql_files(&watch_dirs))
+            .await
+            .context("File scan task was cancelled")?;
         let (files, mtimes) = scan_result.context("Failed to scan SQL files")?;
 
         let count = files.len();

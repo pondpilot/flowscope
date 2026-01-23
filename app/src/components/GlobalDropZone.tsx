@@ -115,38 +115,67 @@ async function processEntry(entry: FileSystemEntry, basePath: string = ''): Prom
 }
 
 export function GlobalDropZone() {
-  const { importFiles, currentProject } = useProject();
+  const { importFiles, currentProject, isReadOnly } = useProject();
   const [isDragOver, setIsDragOver] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [rejectedFiles, setRejectedFiles] = useState<RejectedFile[]>([]);
   const dragCounter = useRef(0);
 
-  const handleDragEnter = useCallback((e: DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const isDropDisabled = isReadOnly;
 
-    dragCounter.current++;
+  const handleDragEnter = useCallback(
+    (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
 
-    // Check if dragging files
-    if (e.dataTransfer?.types.includes('Files')) {
-      setIsDragOver(true);
-    }
-  }, []);
+      if (isDropDisabled) {
+        if (e.dataTransfer) {
+          e.dataTransfer.dropEffect = 'none';
+        }
+        return;
+      }
 
-  const handleDragLeave = useCallback((e: DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+      dragCounter.current++;
 
-    dragCounter.current--;
-    if (dragCounter.current === 0) {
-      setIsDragOver(false);
-    }
-  }, []);
+      // Check if dragging files
+      if (e.dataTransfer?.types.includes('Files')) {
+        setIsDragOver(true);
+      }
+    },
+    [isDropDisabled]
+  );
 
-  const handleDragOver = useCallback((e: DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  }, []);
+  const handleDragLeave = useCallback(
+    (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (isDropDisabled) {
+        if (e.dataTransfer) {
+          e.dataTransfer.dropEffect = 'none';
+        }
+        return;
+      }
+
+      dragCounter.current = Math.max(0, dragCounter.current - 1);
+      if (dragCounter.current === 0) {
+        setIsDragOver(false);
+      }
+    },
+    [isDropDisabled]
+  );
+
+  const handleDragOver = useCallback(
+    (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = isDropDisabled ? 'none' : 'copy';
+      }
+    },
+    [isDropDisabled]
+  );
 
   const handleDrop = useCallback(
     async (e: DragEvent) => {
@@ -156,7 +185,7 @@ export function GlobalDropZone() {
       dragCounter.current = 0;
       setRejectedFiles([]);
 
-      if (!currentProject || isProcessing) return;
+      if (!currentProject || isProcessing || isDropDisabled) return;
 
       const items = e.dataTransfer?.items;
       if (!items || items.length === 0) return;
@@ -216,7 +245,7 @@ export function GlobalDropZone() {
         setIsProcessing(false);
       }
     },
-    [currentProject, isProcessing, importFiles]
+    [currentProject, isProcessing, importFiles, isDropDisabled]
   );
 
   useEffect(() => {

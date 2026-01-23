@@ -154,7 +154,9 @@ export function EditorArea({
 
     const joined = resolvedParts.join('\n\n');
     if (joined.length > MAX_RESOLVED_SQL_SIZE) {
-      return joined.slice(0, MAX_RESOLVED_SQL_SIZE) + '\n\n-- [Truncated: resolved SQL exceeds 10MB]';
+      return (
+        joined.slice(0, MAX_RESOLVED_SQL_SIZE) + '\n\n-- [Truncated: resolved SQL exceeds 10MB]'
+      );
     }
     return joined;
   }, [result, activeFile?.path, activeFile?.name]);

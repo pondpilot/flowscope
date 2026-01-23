@@ -337,9 +337,8 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   }, [activeProjectId]);
 
   // In backend mode, use the backend project; otherwise use regular projects
-  const effectiveProjects = isBackendMode && backendProject
-    ? [backendProject, ...projects]
-    : projects;
+  const effectiveProjects =
+    isBackendMode && backendProject ? [backendProject, ...projects] : projects;
 
   // In backend mode, default to backend project
   const effectiveActiveProjectId = isBackendMode ? BACKEND_PROJECT_ID : activeProjectId;

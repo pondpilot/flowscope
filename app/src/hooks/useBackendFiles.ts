@@ -82,7 +82,9 @@ class BackendError extends Error {
 
   /** Whether this error is fatal (non-transient). */
   get isFatal(): boolean {
-    return this.status !== undefined && FATAL_STATUS_CODES.includes(this.status as 401 | 403 | 404 | 422);
+    return (
+      this.status !== undefined && FATAL_STATUS_CODES.includes(this.status as 401 | 403 | 404 | 422)
+    );
   }
 }
 

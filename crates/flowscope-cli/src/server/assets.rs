@@ -14,12 +14,12 @@ use rust_embed::Embed;
 
 use super::AppState;
 
-/// Embedded web UI assets from the app/dist directory.
+/// Embedded web UI assets from the embedded-app directory.
 ///
-/// Note: The app must be built (`cd app && yarn build`) before compiling
-/// the CLI with the `serve` feature.
+/// The embedded-app directory is generated from `app/dist` during development
+/// and shipped with the published crate so serve mode works out of the box.
 #[derive(Embed)]
-#[folder = "../../app/dist/"]
+#[folder = "../../embedded-app/"]
 #[include = "*.html"]
 #[include = "*.js"]
 #[include = "*.css"]

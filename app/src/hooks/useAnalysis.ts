@@ -257,7 +257,8 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
           return adapter.getCached(cachePayload);
         })
       : syncAnalysisFiles(context.files).then(() => {
-          if (ANALYSIS_DEBUG) console.log(`[useAnalysis] Files synced, checking IndexedDB cache...`);
+          if (ANALYSIS_DEBUG)
+            console.log(`[useAnalysis] Files synced, checking IndexedDB cache...`);
           return getCachedAnalysis({
             fileNames: context.files.map((file) => file.name),
             dialect: project.dialect,

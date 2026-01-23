@@ -11,6 +11,7 @@ readme = "README.md"
 keywords = ["sql", "lineage", "cli", "analysis", "database"]
 categories = ["command-line-utilities", "database"]
 description = "Command-line interface for FlowScope SQL lineage analyzer"
+build = "build.rs"
 
 [[bin]]
 name = "flowscope"

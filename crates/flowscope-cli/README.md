@@ -198,6 +198,16 @@ flowscope --serve --watch ./sql -d postgres --metadata-url postgres://user@local
 | `/api/files` | GET | List watched files with content |
 | `/api/schema` | GET | Get schema metadata |
 | `/api/export/:format` | POST | Export to json/mermaid/html/csv/xlsx |
+
+### Updating Embedded Assets
+
+Serve mode bundles the React app at compile time. Whenever you change files under `app/`, run:
+
+```bash
+just sync-cli-serve-assets
+```
+
+This command rebuilds `app/dist` and copies the output into `crates/flowscope-cli/embedded-app`, which is what gets embedded (and published) with the CLI. Regular `cargo install flowscope-cli --features serve` uses these prebuilt assets, so remember to commit the refreshed `embedded-app/` contents when releasing new UI changes.
 | `/api/config` | GET | Server configuration |
 
 The file watcher monitors directories for `.sql` file changes with 100ms debouncing, automatically updating the available files in the UI.

@@ -498,9 +498,7 @@ export function AnalysisView({ graphContainerRef: externalGraphRef }: AnalysisVi
         <SchemaEditor
           open={schemaEditorOpen}
           onOpenChange={setSchemaEditorOpen}
-          schemaSQL={
-            isBackendMode ? schemaMetadataToSQL(backendSchema) : currentProject.schemaSQL
-          }
+          schemaSQL={isBackendMode ? schemaMetadataToSQL(backendSchema) : currentProject.schemaSQL}
           dialect={currentProject.dialect}
           onSave={handleSaveSchema}
           isReadOnly={isBackendMode}

@@ -23,16 +23,22 @@ build-cli:
     cargo build -p flowscope-cli --release
 
 # Build CLI with serve feature (embeds web UI - requires app to be built first)
-build-cli-serve: _build-app-dist
+build-cli-serve: sync-cli-serve-assets
     cargo build -p flowscope-cli --features serve --release
 
 # Build CLI with serve feature in debug mode
-build-cli-serve-debug: _build-app-dist
+build-cli-serve-debug: sync-cli-serve-assets
     cargo build -p flowscope-cli --features serve
 
 # Internal: Build app dist for embedding into CLI
 _build-app-dist:
     cd app && yarn build
+
+# Internal: Sync compiled app assets into the CLI crate
+sync-cli-serve-assets: _build-app-dist
+    rm -rf crates/flowscope-cli/embedded-app
+    mkdir -p crates/flowscope-cli/embedded-app
+    cp -R app/dist/. crates/flowscope-cli/embedded-app/
 
 # Install CLI locally
 install-cli:
@@ -51,7 +57,7 @@ test-cli:
     cargo test -p flowscope-cli
 
 # Run CLI tests with serve feature
-test-cli-serve: _build-app-dist
+test-cli-serve: sync-cli-serve-assets
     cargo test -p flowscope-cli --features serve
 
 # Run CLI integration tests (SQLite + PostgreSQL + MySQL)
