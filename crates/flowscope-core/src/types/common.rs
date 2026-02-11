@@ -189,6 +189,24 @@ pub mod issue_codes {
     pub const SCHEMA_CONFLICT: &str = "SCHEMA_CONFLICT";
     pub const TEMPLATE_ERROR: &str = "TEMPLATE_ERROR";
     pub const TYPE_MISMATCH: &str = "TYPE_MISMATCH";
+
+    // Lint rules — ambiguity
+    pub const LINT_AM_001: &str = "LINT_AM_001";
+    pub const LINT_AM_002: &str = "LINT_AM_002";
+    pub const LINT_AM_003: &str = "LINT_AM_003";
+
+    // Lint rules — convention
+    pub const LINT_CV_001: &str = "LINT_CV_001";
+    pub const LINT_CV_002: &str = "LINT_CV_002";
+
+    // Lint rules — structure
+    pub const LINT_ST_001: &str = "LINT_ST_001";
+    pub const LINT_ST_002: &str = "LINT_ST_002";
+    pub const LINT_ST_003: &str = "LINT_ST_003";
+
+    // Lint rules — aliasing
+    pub const LINT_AL_001: &str = "LINT_AL_001";
+    pub const LINT_AL_002: &str = "LINT_AL_002";
 }
 
 #[cfg(test)]

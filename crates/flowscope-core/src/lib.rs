@@ -3,6 +3,7 @@ pub mod completion;
 pub mod error;
 pub mod extractors;
 pub mod generated;
+pub mod linter;
 pub mod parser;
 #[cfg(feature = "templating")]
 pub mod templater;
@@ -13,6 +14,7 @@ pub use analyzer::{analyze, split_statements};
 pub use completion::{completion_context, completion_items};
 pub use error::ParseError;
 pub use extractors::extract_tables;
+pub use linter::config::LintConfig;
 pub use parser::{parse_sql, parse_sql_with_dialect};
 
 // Re-export types explicitly

@@ -1,3 +1,4 @@
+use crate::linter::Linter;
 use crate::types::*;
 use sqlparser::ast::Statement;
 use std::borrow::Cow;
@@ -90,6 +91,8 @@ pub(crate) struct Analyzer<'a> {
     current_statement_source: Option<StatementSourceSlice<'a>>,
     /// Statements that already emitted a recursion-depth warning.
     depth_limit_statements: HashSet<usize>,
+    /// SQL linter (None if linting is disabled).
+    linter: Option<Linter>,
 }
 
 impl<'a> Analyzer<'a> {
@@ -103,6 +106,18 @@ impl<'a> Analyzer<'a> {
 
         let (schema, init_issues) = SchemaRegistry::new(request.schema.as_ref(), request.dialect);
 
+        // Initialize linter from config (default: enabled)
+        let lint_config = request
+            .options
+            .as_ref()
+            .and_then(|o| o.lint.clone())
+            .unwrap_or_default();
+        let linter = if lint_config.enabled {
+            Some(Linter::new(lint_config))
+        } else {
+            None
+        };
+
         Self {
             request,
             issues: init_issues,
@@ -112,6 +127,7 @@ impl<'a> Analyzer<'a> {
             column_lineage_enabled,
             current_statement_source: None,
             depth_limit_statements: HashSet::new(),
+            linter,
         }
     }
 
@@ -219,6 +235,17 @@ impl<'a> Analyzer<'a> {
             } else {
                 None
             };
+
+            // Run lint rules on the parsed statement
+            if let Some(ref linter) = self.linter {
+                let lint_ctx = crate::linter::rule::LintContext {
+                    sql: &source_sql,
+                    statement_range: source_range.clone(),
+                    statement_index: index,
+                };
+                self.issues
+                    .extend(linter.check_statement(&statement, &lint_ctx));
+            }
 
             self.current_statement_source = Some(StatementSourceSlice {
                 sql: source_sql,

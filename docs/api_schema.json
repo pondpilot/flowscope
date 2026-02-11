@@ -118,6 +118,17 @@
           "hideCtes": {
             "description": "Hide CTEs from output, creating bypass edges (A→CTE→B becomes A→B)",
             "type": ["boolean", "null"]
+          },
+          "lint": {
+            "description": "SQL lint configuration",
+            "anyOf": [
+              {
+                "$ref": "#/definitions/LintConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
       },
@@ -140,6 +151,24 @@
             "const": "column"
           }
         ]
+      },
+      "LintConfig": {
+        "description": "Configuration for the SQL linter.\n\nControls which lint rules are enabled/disabled. By default, all rules are enabled.",
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "description": "Master toggle for linting (default: true).",
+            "type": "boolean",
+            "default": true
+          },
+          "disabledRules": {
+            "description": "List of rule codes to disable (e.g., [\"LINT_AM_002\"]).",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
       },
       "SchemaMetadata": {
         "description": "Schema metadata for accurate column and table resolution.\n\nWhen provided, allows the analyzer to resolve ambiguous references and\nproduce more accurate lineage information.",
