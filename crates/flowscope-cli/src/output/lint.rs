@@ -240,7 +240,7 @@ mod tests {
                     line: 3,
                     col: 12,
                     code: "LINT_AM_001".to_string(),
-                    message: "Use UNION ALL instead of UNION.".to_string(),
+                    message: "Use UNION DISTINCT or UNION ALL instead of bare UNION.".to_string(),
                     severity: Severity::Info,
                 },
                 LintIssue {
@@ -299,7 +299,7 @@ mod tests {
                 line: 1,
                 col: 8,
                 code: "LINT_AM_001".to_string(),
-                message: "Use UNION ALL.".to_string(),
+                message: "Use UNION DISTINCT or UNION ALL.".to_string(),
                 severity: Severity::Info,
             }],
         }];

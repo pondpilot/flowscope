@@ -1036,11 +1036,20 @@ fn fix_join_condition_order(sql: &str) -> String {
 }
 
 fn fix_bare_union(sql: &str) -> String {
-    regex_replace_all_with(sql, r"(?i)\bUNION\b(\s+(ALL|DISTINCT)\b)?", |caps| {
-        if caps.get(1).is_some() {
+    regex_replace_all_with(sql, r"(?i)\b(UNION)\b(\s+(ALL|DISTINCT)\b)?", |caps| {
+        if caps.get(2).is_some() {
             caps[0].to_string()
         } else {
-            "UNION ALL".to_string()
+            let union = caps.get(1).map(|m| m.as_str()).unwrap_or("UNION");
+            let distinct = if union
+                .chars()
+                .all(|c| !c.is_ascii_alphabetic() || c.is_ascii_lowercase())
+            {
+                "distinct"
+            } else {
+                "DISTINCT"
+            };
+            format!("{union} {distinct}")
         }
     })
 }
@@ -1882,6 +1891,53 @@ mod tests {
     }
 
     #[test]
+    fn sqlfluff_am001_cases_are_fixed_or_unchanged() {
+        let cases = [
+            (
+                "SELECT a, b FROM tbl UNION SELECT c, d FROM tbl1",
+                1,
+                0,
+                1,
+                Some("UNION DISTINCT"),
+            ),
+            (
+                "SELECT a, b FROM tbl UNION ALL SELECT c, d FROM tbl1",
+                0,
+                0,
+                0,
+                None,
+            ),
+            (
+                "SELECT a, b FROM tbl UNION DISTINCT SELECT c, d FROM tbl1",
+                0,
+                0,
+                0,
+                None,
+            ),
+            (
+                "select a, b from tbl union select c, d from tbl1",
+                1,
+                0,
+                1,
+                Some("UNION DISTINCT"),
+            ),
+        ];
+
+        for (sql, before, after, fix_count, expected_text) in cases {
+            assert_rule_case(sql, issue_codes::LINT_AM_001, before, after, fix_count);
+
+            if let Some(expected) = expected_text {
+                let out = apply_lint_fixes(sql, Dialect::Generic, &[]).expect("fix result");
+                assert!(
+                    out.sql.to_ascii_uppercase().contains(expected),
+                    "expected {expected:?} in fixed SQL, got: {}",
+                    out.sql
+                );
+            }
+        }
+    }
+
+    #[test]
     fn sqlfluff_cv001_cases_are_fixed_or_unchanged() {
         let cases = [
             ("SELECT coalesce(foo, 0) AS bar FROM baz", 0, 0, 0),
@@ -2006,7 +2062,7 @@ mod tests {
         let sql = "SELECT 1; SELECT 2;";
         let out = apply_lint_fixes(sql, Dialect::Generic, &[]).expect("fix result");
         assert!(
-            !out.sql.to_ascii_uppercase().contains("UNION ALL"),
+            !out.sql.to_ascii_uppercase().contains("UNION DISTINCT"),
             "auto-fix must preserve statement boundaries: {}",
             out.sql
         );
@@ -2180,7 +2236,7 @@ mod tests {
             out.sql
         );
         assert!(
-            out.sql.to_ascii_uppercase().contains("UNION ALL"),
+            out.sql.to_ascii_uppercase().contains("UNION DISTINCT"),
             "expected another fix to persist output: {}",
             out.sql
         );
@@ -2196,7 +2252,7 @@ mod tests {
             out.sql
         );
         assert!(
-            out.sql.to_ascii_uppercase().contains("UNION ALL"),
+            out.sql.to_ascii_uppercase().contains("UNION DISTINCT"),
             "expected another fix to persist output: {}",
             out.sql
         );

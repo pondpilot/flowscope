@@ -1,7 +1,6 @@
-//! LINT_AM_001: Bare UNION (without ALL).
+//! LINT_AM_001: Bare UNION quantifier.
 //!
-//! `UNION` without `ALL` triggers implicit deduplication which is often unintended
-//! and has significant performance cost. Use `UNION ALL` when duplicates are acceptable.
+//! `UNION` should be explicit (`UNION DISTINCT` or `UNION ALL`) to avoid ambiguous implicit behavior.
 
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
@@ -15,11 +14,11 @@ impl LintRule for BareUnion {
     }
 
     fn name(&self) -> &'static str {
-        "Bare UNION"
+        "Ambiguous UNION quantifier"
     }
 
     fn description(&self) -> &'static str {
-        "UNION without ALL triggers implicit deduplication. Use UNION ALL if duplicates are acceptable."
+        "UNION should be explicit about DISTINCT or ALL."
     }
 
     fn check(&self, stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
@@ -87,7 +86,7 @@ fn check_query_body(
             if matches!(set_quantifier, SetQuantifier::None | SetQuantifier::ByName) {
                 let mut issue = Issue::warning(
                     issue_codes::LINT_AM_001,
-                    "Use UNION ALL instead of UNION to avoid implicit deduplication.",
+                    "Use UNION DISTINCT or UNION ALL instead of bare UNION.",
                 )
                 .with_statement(ctx.statement_index);
                 if let Some((s, _)) = union_span {
