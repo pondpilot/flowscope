@@ -298,9 +298,6 @@ fn apply_text_fixes(sql: &str, rule_filter: &RuleFilter) -> String {
     if rule_filter.allows(issue_codes::LINT_ST_006) {
         out = fix_subquery_to_cte(&out);
     }
-    if rule_filter.allows(issue_codes::LINT_ST_004) {
-        out = fix_using_join(&out);
-    }
     if rule_filter.allows(issue_codes::LINT_ST_009) {
         out = fix_join_condition_order(&out);
     }
@@ -937,49 +934,6 @@ fn fix_subquery_to_cte(sql: &str) -> String {
     format!("WITH {alias} AS ({subquery}) SELECT * FROM {alias}")
 }
 
-fn fix_using_join(sql: &str) -> String {
-    regex_replace_all_with(
-        sql,
-        r"(?i)\bfrom\s+([A-Za-z_][A-Za-z0-9_]*)(?:\s+(?:as\s+)?([A-Za-z_][A-Za-z0-9_]*))?\s+join\s+([A-Za-z_][A-Za-z0-9_]*)(?:\s+(?:as\s+)?([A-Za-z_][A-Za-z0-9_]*))?\s+using\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)",
-        |caps| {
-            let left_table = caps.get(1).map(|m| m.as_str()).unwrap_or_default();
-            let left_alias = caps.get(2).map(|m| m.as_str()).unwrap_or("");
-            let right_table = caps.get(3).map(|m| m.as_str()).unwrap_or_default();
-            let right_alias = caps.get(4).map(|m| m.as_str()).unwrap_or("");
-            let column = caps.get(5).map(|m| m.as_str()).unwrap_or("id");
-            let left_ref = if left_alias.is_empty() {
-                left_table
-            } else {
-                left_alias
-            };
-            let right_ref = if right_alias.is_empty() {
-                right_table
-            } else {
-                right_alias
-            };
-            format!(
-                "FROM {}{} JOIN {}{} ON {}.{} = {}.{}",
-                left_table,
-                if left_alias.is_empty() {
-                    String::new()
-                } else {
-                    format!(" AS {left_alias}")
-                },
-                right_table,
-                if right_alias.is_empty() {
-                    String::new()
-                } else {
-                    format!(" AS {right_alias}")
-                },
-                left_ref,
-                column,
-                right_ref,
-                column
-            )
-        },
-    )
-}
-
 fn fix_join_condition_order(sql: &str) -> String {
     regex_replace_all_with(
         sql,
@@ -1367,9 +1321,25 @@ fn fix_select(select: &mut Select, rule_filter: &RuleFilter) {
             rule_filter,
             has_where_clause,
         );
+
+        let mut left_ref = table_factor_reference_name(&table_with_joins.relation);
+
         for join in &mut table_with_joins.joins {
+            let right_ref = table_factor_reference_name(&join.relation);
+            if rule_filter.allows(issue_codes::LINT_ST_004) {
+                rewrite_using_join_constraint(
+                    &mut join.join_operator,
+                    left_ref.as_deref(),
+                    right_ref.as_deref(),
+                );
+            }
+
             fix_table_factor(&mut join.relation, rule_filter, has_where_clause);
             fix_join_operator(&mut join.join_operator, rule_filter, has_where_clause);
+
+            if right_ref.is_some() {
+                left_ref = right_ref;
+            }
         }
     }
 
@@ -1429,6 +1399,81 @@ fn has_distinct_and_group_by(select: &Select) -> bool {
         GroupByExpr::Expressions(exprs, _) => !exprs.is_empty(),
     };
     has_distinct && has_group_by
+}
+
+fn table_factor_reference_name(relation: &TableFactor) -> Option<String> {
+    match relation {
+        TableFactor::Table { name, alias, .. } => {
+            if let Some(alias) = alias {
+                Some(alias.name.value.clone())
+            } else {
+                name.0
+                    .last()
+                    .and_then(|part| part.as_ident())
+                    .map(|ident| ident.value.clone())
+            }
+        }
+        _ => None,
+    }
+}
+
+fn rewrite_using_join_constraint(
+    join_operator: &mut JoinOperator,
+    left_ref: Option<&str>,
+    right_ref: Option<&str>,
+) {
+    let (Some(left_ref), Some(right_ref)) = (left_ref, right_ref) else {
+        return;
+    };
+
+    let Some(constraint) = join_constraint_mut(join_operator) else {
+        return;
+    };
+
+    let JoinConstraint::Using(columns) = constraint else {
+        return;
+    };
+
+    if columns.is_empty() {
+        return;
+    }
+
+    let mut combined: Option<Expr> = None;
+    for object_name in columns.iter() {
+        let Some(column_ident) = object_name
+            .0
+            .last()
+            .and_then(|part| part.as_ident())
+            .cloned()
+        else {
+            continue;
+        };
+
+        let equality = Expr::BinaryOp {
+            left: Box::new(Expr::CompoundIdentifier(vec![
+                Ident::new(left_ref),
+                column_ident.clone(),
+            ])),
+            op: BinaryOperator::Eq,
+            right: Box::new(Expr::CompoundIdentifier(vec![
+                Ident::new(right_ref),
+                column_ident,
+            ])),
+        };
+
+        combined = Some(match combined {
+            Some(prev) => Expr::BinaryOp {
+                left: Box::new(prev),
+                op: BinaryOperator::And,
+                right: Box::new(equality),
+            },
+            None => equality,
+        });
+    }
+
+    if let Some(on_expr) = combined {
+        *constraint = JoinConstraint::On(on_expr);
+    }
 }
 
 fn fix_table_factor(relation: &mut TableFactor, rule_filter: &RuleFilter, has_where_clause: bool) {
@@ -1572,6 +1617,28 @@ fn join_constraint_is_explicit(join_operator: &JoinOperator) -> bool {
         constraint,
         JoinConstraint::On(_) | JoinConstraint::Using(_) | JoinConstraint::Natural
     )
+}
+
+fn join_constraint_mut(join_operator: &mut JoinOperator) -> Option<&mut JoinConstraint> {
+    match join_operator {
+        JoinOperator::Join(constraint)
+        | JoinOperator::Inner(constraint)
+        | JoinOperator::Left(constraint)
+        | JoinOperator::LeftOuter(constraint)
+        | JoinOperator::Right(constraint)
+        | JoinOperator::RightOuter(constraint)
+        | JoinOperator::FullOuter(constraint)
+        | JoinOperator::CrossJoin(constraint)
+        | JoinOperator::Semi(constraint)
+        | JoinOperator::LeftSemi(constraint)
+        | JoinOperator::RightSemi(constraint)
+        | JoinOperator::Anti(constraint)
+        | JoinOperator::LeftAnti(constraint)
+        | JoinOperator::RightAnti(constraint)
+        | JoinOperator::StraightJoin(constraint) => Some(constraint),
+        JoinOperator::AsOf { constraint, .. } => Some(constraint),
+        JoinOperator::CrossApply | JoinOperator::OuterApply => None,
+    }
 }
 
 fn join_constraint(join_operator: &JoinOperator) -> Option<&JoinConstraint> {
@@ -2200,6 +2267,47 @@ mod tests {
 
         for (sql, before, after, fix_count, expected_text) in cases {
             assert_rule_case(sql, issue_codes::LINT_AM_009, before, after, fix_count);
+
+            if let Some(expected) = expected_text {
+                let out = apply_lint_fixes(sql, Dialect::Generic, &[]).expect("fix result");
+                assert!(
+                    out.sql.to_ascii_uppercase().contains(expected),
+                    "expected {expected:?} in fixed SQL, got: {}",
+                    out.sql
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sqlfluff_st004_cases_are_fixed_or_unchanged() {
+        let cases = [
+            (
+                "SELECT * FROM a JOIN b USING (id)",
+                1,
+                0,
+                1,
+                Some("ON A.ID = B.ID"),
+            ),
+            (
+                "SELECT * FROM a AS x JOIN b AS y USING (id)",
+                1,
+                0,
+                1,
+                Some("ON X.ID = Y.ID"),
+            ),
+            (
+                "SELECT * FROM a JOIN b USING (id, tenant_id)",
+                1,
+                0,
+                1,
+                Some("ON A.ID = B.ID AND A.TENANT_ID = B.TENANT_ID"),
+            ),
+            ("SELECT * FROM a JOIN b ON a.id = b.id", 0, 0, 0, None),
+        ];
+
+        for (sql, before, after, fix_count, expected_text) in cases {
+            assert_rule_case(sql, issue_codes::LINT_ST_004, before, after, fix_count);
 
             if let Some(expected) = expected_text {
                 let out = apply_lint_fixes(sql, Dialect::Generic, &[]).expect("fix result");

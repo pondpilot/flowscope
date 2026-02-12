@@ -10,8 +10,8 @@ _Generated on 2026-02-12 from a local SQLFluff source snapshot (2026-01-20)._
 - Implemented (close): **12**
 - Implemented (partial): **60**
 - Implemented (divergent semantics): **0**
-- FlowScope fix coverage: **57 / 72**
-- FlowScope rules without fix support: **15**
+- FlowScope fix coverage: **58 / 72**
+- FlowScope rules without fix support: **14**
 
 Bundle counts (SQLFluff): Aliasing=9, Ambiguous=9, Capitalisation=5, Convention=12, Jinja=1, Layout=15, References=6, Structure=12, TSQL=3
 
@@ -93,7 +93,7 @@ FlowScope source-of-truth used for mapping:
 | Structure | `structure.nested_case` | `ST04` | No | Yes | Implemented (close) | `LINT_ST_003` | Yes | AST rule in `crates/flowscope-core/src/linter/rules/st_003.rs` now matches SQLFluff ST04 detection semantics by flagging flattenable nested CASE expressions in ELSE clauses, and fixer flattens eligible nested `ELSE CASE` branches into a single CASE. |
 | Structure | `structure.subquery` | `ST05` | No | Yes | Implemented (partial) | `LINT_ST_006` | No | Heuristic parity rule implemented in `crates/flowscope-core/src/linter/rules/parity.rs`; semantics are narrower than SQLFluff. |
 | Structure | `structure.column_order` | `ST06` | No | Yes | Implemented (partial) | `LINT_ST_007` | No | Heuristic parity rule implemented in `crates/flowscope-core/src/linter/rules/parity.rs`; semantics are narrower than SQLFluff. |
-| Structure | `structure.using` | `ST07` | No | Yes | Implemented (close) | `LINT_ST_004` | No | Flags `JOIN ... USING (...)` and recommends explicit `ON` conditions. |
+| Structure | `structure.using` | `ST07` | No | Yes | Implemented (close) | `LINT_ST_004` | Yes | Flags `JOIN ... USING (...)` and fixer rewrites USING constraints to explicit `ON` predicates (including multi-column USING lists). |
 | Structure | `structure.distinct` | `ST08` | Yes | Yes | Implemented (partial) | `LINT_ST_008` | No | Heuristic parity rule implemented in `crates/flowscope-core/src/linter/rules/parity.rs`; semantics are narrower than SQLFluff. |
 | Structure | `structure.join_condition_order` | `ST09` | No | Yes | Implemented (partial) | `LINT_ST_009` | No | Heuristic parity rule implemented in `crates/flowscope-core/src/linter/rules/parity.rs`; semantics are narrower than SQLFluff. |
 | Structure | `structure.constant_expression` | `ST10` | No | No | Implemented (partial) | `LINT_ST_010` | No | Heuristic parity rule implemented in `crates/flowscope-core/src/linter/rules/parity.rs`; semantics are narrower than SQLFluff. |
