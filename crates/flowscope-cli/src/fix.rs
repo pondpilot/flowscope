@@ -1539,8 +1539,25 @@ fn fix_join_constraint(constraint: &mut JoinConstraint, rule_filter: &RuleFilter
 
 fn fix_order_by(order_by: &mut OrderBy, rule_filter: &RuleFilter) {
     if let OrderByKind::Expressions(exprs) = &mut order_by.kind {
-        for order_expr in exprs {
+        for order_expr in exprs.iter_mut() {
             fix_expr(&mut order_expr.expr, rule_filter);
+        }
+
+        if rule_filter.allows(issue_codes::LINT_AM_005) {
+            let has_explicit = exprs
+                .iter()
+                .any(|order_expr| order_expr.options.asc.is_some());
+            let has_implicit = exprs
+                .iter()
+                .any(|order_expr| order_expr.options.asc.is_none());
+
+            if has_explicit && has_implicit {
+                for order_expr in exprs.iter_mut() {
+                    if order_expr.options.asc.is_none() {
+                        order_expr.options.asc = Some(true);
+                    }
+                }
+            }
         }
     }
 
@@ -1938,6 +1955,48 @@ mod tests {
     }
 
     #[test]
+    fn sqlfluff_am005_cases_are_fixed_or_unchanged() {
+        let cases = [
+            (
+                "SELECT * FROM t ORDER BY a, b DESC",
+                1,
+                0,
+                1,
+                Some("ORDER BY A ASC, B DESC"),
+            ),
+            (
+                "SELECT * FROM t ORDER BY a DESC, b",
+                1,
+                0,
+                1,
+                Some("ORDER BY A DESC, B ASC"),
+            ),
+            (
+                "SELECT * FROM t ORDER BY a DESC, b NULLS LAST",
+                1,
+                0,
+                1,
+                Some("ORDER BY A DESC, B ASC NULLS LAST"),
+            ),
+            ("SELECT * FROM t ORDER BY a, b", 0, 0, 0, None),
+            ("SELECT * FROM t ORDER BY a ASC, b DESC", 0, 0, 0, None),
+        ];
+
+        for (sql, before, after, fix_count, expected_text) in cases {
+            assert_rule_case(sql, issue_codes::LINT_AM_005, before, after, fix_count);
+
+            if let Some(expected) = expected_text {
+                let out = apply_lint_fixes(sql, Dialect::Generic, &[]).expect("fix result");
+                assert!(
+                    out.sql.to_ascii_uppercase().contains(expected),
+                    "expected {expected:?} in fixed SQL, got: {}",
+                    out.sql
+                );
+            }
+        }
+    }
+
+    #[test]
     fn sqlfluff_cv001_cases_are_fixed_or_unchanged() {
         let cases = [
             ("SELECT coalesce(foo, 0) AS bar FROM baz", 0, 0, 0),
@@ -2272,6 +2331,10 @@ mod tests {
             (issue_codes::LINT_AL_007, "SELECT * FROM users u"),
             (issue_codes::LINT_AL_009, "SELECT a AS a FROM t"),
             (issue_codes::LINT_AM_001, "SELECT 1 UNION SELECT 2"),
+            (
+                issue_codes::LINT_AM_005,
+                "SELECT * FROM t ORDER BY a, b DESC",
+            ),
             (issue_codes::LINT_CP_001, "SELECT a from t"),
             (issue_codes::LINT_CP_004, "SELECT NULL, true FROM t"),
             (
