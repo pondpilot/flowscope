@@ -304,9 +304,6 @@ fn apply_text_fixes(sql: &str, rule_filter: &RuleFilter) -> String {
     if rule_filter.allows(issue_codes::LINT_ST_009) {
         out = fix_join_condition_order(&out);
     }
-    if rule_filter.allows(issue_codes::LINT_AM_001) {
-        out = fix_bare_union(&out);
-    }
     if rule_filter.allows(issue_codes::LINT_ST_007) {
         out = fix_select_column_order(&out);
     }
@@ -1035,25 +1032,6 @@ fn fix_join_condition_order(sql: &str) -> String {
     )
 }
 
-fn fix_bare_union(sql: &str) -> String {
-    regex_replace_all_with(sql, r"(?i)\b(UNION)\b(\s+(ALL|DISTINCT)\b)?", |caps| {
-        if caps.get(2).is_some() {
-            caps[0].to_string()
-        } else {
-            let union = caps.get(1).map(|m| m.as_str()).unwrap_or("UNION");
-            let distinct = if union
-                .chars()
-                .all(|c| !c.is_ascii_alphabetic() || c.is_ascii_lowercase())
-            {
-                "distinct"
-            } else {
-                "DISTINCT"
-            };
-            format!("{union} {distinct}")
-        }
-    })
-}
-
 fn fix_mixed_reference_qualification(sql: &str) -> String {
     let from_re = Regex::new(
         r"(?i)\bfrom\s+([A-Za-z_][A-Za-z0-9_\.]*)(?:\s+(?:as\s+)?([A-Za-z_][A-Za-z0-9_]*))?",
@@ -1333,9 +1311,24 @@ fn fix_set_expr(body: &mut SetExpr, rule_filter: &RuleFilter) {
     match body {
         SetExpr::Select(select) => fix_select(select, rule_filter),
         SetExpr::Query(query) => fix_query(query, rule_filter),
-        SetExpr::SetOperation { left, right, .. } => {
+        SetExpr::SetOperation {
+            op,
+            set_quantifier,
+            left,
+            right,
+        } => {
             fix_set_expr(left, rule_filter);
             fix_set_expr(right, rule_filter);
+
+            if rule_filter.allows(issue_codes::LINT_AM_001) && matches!(op, SetOperator::Union) {
+                if matches!(set_quantifier, SetQuantifier::None | SetQuantifier::ByName) {
+                    *set_quantifier = if matches!(set_quantifier, SetQuantifier::ByName) {
+                        SetQuantifier::DistinctByName
+                    } else {
+                        SetQuantifier::Distinct
+                    };
+                }
+            }
         }
         SetExpr::Values(values) => {
             for row in &mut values.rows {
@@ -2055,7 +2048,7 @@ mod tests {
                 1,
                 0,
                 1,
-                Some("UNION DISTINCT"),
+                Some("DISTINCT SELECT"),
             ),
             (
                 "SELECT a, b FROM tbl UNION ALL SELECT c, d FROM tbl1",
@@ -2076,7 +2069,7 @@ mod tests {
                 1,
                 0,
                 1,
-                Some("UNION DISTINCT"),
+                Some("DISTINCT SELECT"),
             ),
         ];
 
@@ -2455,7 +2448,7 @@ mod tests {
         let sql = "SELECT 1; SELECT 2;";
         let out = apply_lint_fixes(sql, Dialect::Generic, &[]).expect("fix result");
         assert!(
-            !out.sql.to_ascii_uppercase().contains("UNION DISTINCT"),
+            !out.sql.to_ascii_uppercase().contains("DISTINCT SELECT"),
             "auto-fix must preserve statement boundaries: {}",
             out.sql
         );
@@ -2629,7 +2622,7 @@ mod tests {
             out.sql
         );
         assert!(
-            out.sql.to_ascii_uppercase().contains("UNION DISTINCT"),
+            out.sql.to_ascii_uppercase().contains("DISTINCT SELECT"),
             "expected another fix to persist output: {}",
             out.sql
         );
@@ -2645,7 +2638,7 @@ mod tests {
             out.sql
         );
         assert!(
-            out.sql.to_ascii_uppercase().contains("UNION DISTINCT"),
+            out.sql.to_ascii_uppercase().contains("DISTINCT SELECT"),
             "expected another fix to persist output: {}",
             out.sql
         );
