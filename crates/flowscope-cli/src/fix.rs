@@ -298,9 +298,6 @@ fn apply_text_fixes(sql: &str, rule_filter: &RuleFilter) -> String {
     if rule_filter.allows(issue_codes::LINT_ST_006) {
         out = fix_subquery_to_cte(&out);
     }
-    if rule_filter.allows(issue_codes::LINT_ST_009) {
-        out = fix_join_condition_order(&out);
-    }
     if rule_filter.allows(issue_codes::LINT_ST_007) {
         out = fix_select_column_order(&out);
     }
@@ -934,58 +931,6 @@ fn fix_subquery_to_cte(sql: &str) -> String {
     format!("WITH {alias} AS ({subquery}) SELECT * FROM {alias}")
 }
 
-fn fix_join_condition_order(sql: &str) -> String {
-    regex_replace_all_with(
-        sql,
-        r"(?i)\bfrom\s+([A-Za-z_][A-Za-z0-9_]*)(?:\s+(?:as\s+)?([A-Za-z_][A-Za-z0-9_]*))?\s+join\s+([A-Za-z_][A-Za-z0-9_]*)(?:\s+(?:as\s+)?([A-Za-z_][A-Za-z0-9_]*))?\s+on\s+([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)",
-        |caps| {
-            let left_table = caps.get(1).map(|m| m.as_str()).unwrap_or_default();
-            let left_alias = caps.get(2).map(|m| m.as_str()).unwrap_or("");
-            let right_table = caps.get(3).map(|m| m.as_str()).unwrap_or_default();
-            let right_alias = caps.get(4).map(|m| m.as_str()).unwrap_or("");
-            let lhs_ref = caps.get(5).map(|m| m.as_str()).unwrap_or_default();
-            let lhs_col = caps.get(6).map(|m| m.as_str()).unwrap_or_default();
-            let rhs_ref = caps.get(7).map(|m| m.as_str()).unwrap_or_default();
-            let rhs_col = caps.get(8).map(|m| m.as_str()).unwrap_or_default();
-
-            let left_ref = if left_alias.is_empty() {
-                left_table
-            } else {
-                left_alias
-            };
-            let right_ref = if right_alias.is_empty() {
-                right_table
-            } else {
-                right_alias
-            };
-
-            if lhs_ref.eq_ignore_ascii_case(right_ref) && rhs_ref.eq_ignore_ascii_case(left_ref) {
-                format!(
-                    "FROM {}{} JOIN {}{} ON {}.{} = {}.{}",
-                    left_table,
-                    if left_alias.is_empty() {
-                        String::new()
-                    } else {
-                        format!(" AS {left_alias}")
-                    },
-                    right_table,
-                    if right_alias.is_empty() {
-                        String::new()
-                    } else {
-                        format!(" AS {right_alias}")
-                    },
-                    rhs_ref,
-                    rhs_col,
-                    lhs_ref,
-                    lhs_col
-                )
-            } else {
-                caps[0].to_string()
-            }
-        },
-    )
-}
-
 fn fix_mixed_reference_qualification(sql: &str) -> String {
     let from_re = Regex::new(
         r"(?i)\bfrom\s+([A-Za-z_][A-Za-z0-9_\.]*)(?:\s+(?:as\s+)?([A-Za-z_][A-Za-z0-9_]*))?",
@@ -1333,6 +1278,13 @@ fn fix_select(select: &mut Select, rule_filter: &RuleFilter) {
                     right_ref.as_deref(),
                 );
             }
+            if rule_filter.allows(issue_codes::LINT_ST_009) {
+                rewrite_join_condition_order(
+                    &mut join.join_operator,
+                    right_ref.as_deref(),
+                    left_ref.as_deref(),
+                );
+            }
 
             fix_table_factor(&mut join.relation, rule_filter, has_where_clause);
             fix_join_operator(&mut join.join_operator, rule_filter, has_where_clause);
@@ -1476,6 +1428,113 @@ fn rewrite_using_join_constraint(
     }
 }
 
+fn rewrite_join_condition_order(
+    join_operator: &mut JoinOperator,
+    current_source: Option<&str>,
+    previous_source: Option<&str>,
+) {
+    let (Some(current_source), Some(previous_source)) = (current_source, previous_source) else {
+        return;
+    };
+
+    let current_source = current_source.to_ascii_uppercase();
+    let previous_source = previous_source.to_ascii_uppercase();
+
+    let Some(constraint) = join_constraint_mut(join_operator) else {
+        return;
+    };
+
+    let JoinConstraint::On(on_expr) = constraint else {
+        return;
+    };
+
+    rewrite_reversed_join_pairs(on_expr, &current_source, &previous_source);
+}
+
+fn rewrite_reversed_join_pairs(expr: &mut Expr, current_source: &str, previous_source: &str) {
+    match expr {
+        Expr::BinaryOp { left, op, right } => {
+            if *op == BinaryOperator::Eq {
+                let left_prefix = expr_qualified_prefix(left);
+                let right_prefix = expr_qualified_prefix(right);
+                if left_prefix.as_deref() == Some(current_source)
+                    && right_prefix.as_deref() == Some(previous_source)
+                {
+                    std::mem::swap(left, right);
+                }
+            }
+
+            rewrite_reversed_join_pairs(left, current_source, previous_source);
+            rewrite_reversed_join_pairs(right, current_source, previous_source);
+        }
+        Expr::UnaryOp { expr: inner, .. }
+        | Expr::Nested(inner)
+        | Expr::IsNull(inner)
+        | Expr::IsNotNull(inner)
+        | Expr::IsTrue(inner)
+        | Expr::IsNotTrue(inner)
+        | Expr::IsFalse(inner)
+        | Expr::IsNotFalse(inner)
+        | Expr::IsUnknown(inner)
+        | Expr::IsNotUnknown(inner)
+        | Expr::Cast { expr: inner, .. } => {
+            rewrite_reversed_join_pairs(inner, current_source, previous_source)
+        }
+        Expr::InList {
+            expr: target, list, ..
+        } => {
+            rewrite_reversed_join_pairs(target, current_source, previous_source);
+            for item in list {
+                rewrite_reversed_join_pairs(item, current_source, previous_source);
+            }
+        }
+        Expr::Between {
+            expr: target,
+            low,
+            high,
+            ..
+        } => {
+            rewrite_reversed_join_pairs(target, current_source, previous_source);
+            rewrite_reversed_join_pairs(low, current_source, previous_source);
+            rewrite_reversed_join_pairs(high, current_source, previous_source);
+        }
+        Expr::Case {
+            operand,
+            conditions,
+            else_result,
+            ..
+        } => {
+            if let Some(operand) = operand {
+                rewrite_reversed_join_pairs(operand, current_source, previous_source);
+            }
+            for case_when in conditions {
+                rewrite_reversed_join_pairs(
+                    &mut case_when.condition,
+                    current_source,
+                    previous_source,
+                );
+                rewrite_reversed_join_pairs(&mut case_when.result, current_source, previous_source);
+            }
+            if let Some(else_result) = else_result {
+                rewrite_reversed_join_pairs(else_result, current_source, previous_source);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn expr_qualified_prefix(expr: &Expr) -> Option<String> {
+    match expr {
+        Expr::CompoundIdentifier(parts) if parts.len() > 1 => {
+            parts.first().map(|ident| ident.value.to_ascii_uppercase())
+        }
+        Expr::Nested(inner)
+        | Expr::UnaryOp { expr: inner, .. }
+        | Expr::Cast { expr: inner, .. } => expr_qualified_prefix(inner),
+        _ => None,
+    }
+}
+
 fn fix_table_factor(relation: &mut TableFactor, rule_filter: &RuleFilter, has_where_clause: bool) {
     match relation {
         TableFactor::Table {
@@ -1510,9 +1569,32 @@ fn fix_table_factor(relation: &mut TableFactor, rule_filter: &RuleFilter, has_wh
                 rule_filter,
                 has_where_clause,
             );
+
+            let mut left_ref = table_factor_reference_name(&table_with_joins.relation);
+
             for join in &mut table_with_joins.joins {
+                let right_ref = table_factor_reference_name(&join.relation);
+                if rule_filter.allows(issue_codes::LINT_ST_004) {
+                    rewrite_using_join_constraint(
+                        &mut join.join_operator,
+                        left_ref.as_deref(),
+                        right_ref.as_deref(),
+                    );
+                }
+                if rule_filter.allows(issue_codes::LINT_ST_009) {
+                    rewrite_join_condition_order(
+                        &mut join.join_operator,
+                        right_ref.as_deref(),
+                        left_ref.as_deref(),
+                    );
+                }
+
                 fix_table_factor(&mut join.relation, rule_filter, has_where_clause);
                 fix_join_operator(&mut join.join_operator, rule_filter, has_where_clause);
+
+                if right_ref.is_some() {
+                    left_ref = right_ref;
+                }
             }
         }
         TableFactor::Pivot {
@@ -2267,6 +2349,60 @@ mod tests {
 
         for (sql, before, after, fix_count, expected_text) in cases {
             assert_rule_case(sql, issue_codes::LINT_AM_009, before, after, fix_count);
+
+            if let Some(expected) = expected_text {
+                let out = apply_lint_fixes(sql, Dialect::Generic, &[]).expect("fix result");
+                assert!(
+                    out.sql.to_ascii_uppercase().contains(expected),
+                    "expected {expected:?} in fixed SQL, got: {}",
+                    out.sql
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sqlfluff_st009_cases_are_fixed_or_unchanged() {
+        let cases = [
+            (
+                "SELECT foo.a, bar.b FROM foo LEFT JOIN bar ON bar.a = foo.a",
+                1,
+                0,
+                1,
+                Some("ON FOO.A = BAR.A"),
+            ),
+            (
+                "SELECT foo.a, foo.b, bar.c FROM foo LEFT JOIN bar ON bar.a = foo.a AND bar.b = foo.b",
+                1,
+                0,
+                1,
+                Some("ON FOO.A = BAR.A AND FOO.B = BAR.B"),
+            ),
+            (
+                "SELECT foo.a, bar.b FROM foo LEFT JOIN bar ON foo.a = bar.a",
+                0,
+                0,
+                0,
+                None,
+            ),
+            (
+                "SELECT foo.a, bar.b FROM foo LEFT JOIN bar ON bar.b = a",
+                0,
+                0,
+                0,
+                None,
+            ),
+            (
+                "SELECT foo.a, bar.b FROM foo AS x LEFT JOIN bar AS y ON y.a = x.a",
+                1,
+                0,
+                1,
+                Some("ON X.A = Y.A"),
+            ),
+        ];
+
+        for (sql, before, after, fix_count, expected_text) in cases {
+            assert_rule_case(sql, issue_codes::LINT_ST_009, before, after, fix_count);
 
             if let Some(expected) = expected_text {
                 let out = apply_lint_fixes(sql, Dialect::Generic, &[]).expect("fix result");
