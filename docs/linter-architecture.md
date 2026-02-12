@@ -1,6 +1,6 @@
 # Linter Architecture Design
 
-Status: Draft  
+Status: In progress  
 Owner: `flowscope-core`  
 Last updated: 2026-02-12
 
@@ -152,6 +152,17 @@ Move style-oriented checks to lexical engine:
 - Remove migrated rules from `parity.rs`.
 - Keep only temporary compatibility shims if needed.
 - Delete shims after equivalent rule quality gates are met.
+
+## Progress Snapshot (2026-02-12)
+
+- [x] Phase 0 foundation shipped: `LintDocument` model, tokenization pass, and document-level lint execution path are live.
+- [x] Engine split is active in linter orchestration: semantic + lexical + document passes run with deterministic sort/dedupe.
+- [x] Issue provenance metadata is implemented (`lint_engine`, `lint_confidence`, `lint_fallback_source`).
+- [x] Phase 1 AST migrations landed for: `AM_006`-`AM_009`, `CV_012`, `RF_001`-`RF_003`, `ST_009`-`ST_011`.
+- [x] `LINT_AM_007` now follows SQLFluff AM06 default (`consistent`) semantics via AST traversal of `GROUP BY` / `ORDER BY` clauses, including nested-query precedence and rollup-style references.
+- [~] Parity monolith decommission is in progress: migrated rule registrations and parity tests are removed from `parity.rs`; helper cleanup is still ongoing.
+- [~] SQLFluff fixture adoption is in progress for migrated rules; AM06 fixture cases were adopted for `LINT_AM_007` and additional rule-level coverage is still being expanded.
+- [ ] Phase 2 lexical/style migrations are pending (`CP_*`, `LT_*`, `JJ_001`, remaining `CV_*` style rules).
 
 ## Quality Gates
 

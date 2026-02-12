@@ -1,3 +1,4 @@
+use crate::linter::document::{LintDocument, LintStatement};
 use crate::linter::Linter;
 use crate::types::*;
 use sqlparser::ast::Statement;
@@ -204,6 +205,8 @@ impl<'a> Analyzer<'a> {
             return self.build_result();
         }
 
+        self.run_lint_documents(&all_statements);
+
         // Analyze all statements
         for (
             index,
@@ -231,18 +234,6 @@ impl<'a> Analyzer<'a> {
             } else {
                 None
             };
-
-            // Run lint rules on the parsed statement
-            if let Some(ref linter) = self.linter {
-                let lint_ctx = crate::linter::rule::LintContext {
-                    sql: &source_sql,
-                    statement_range: source_range.clone(),
-                    statement_index: index,
-                };
-                self.issues
-                    .extend(linter.check_statement(&statement, &lint_ctx));
-            }
-
             self.current_statement_source = Some(StatementSourceSlice {
                 sql: source_sql,
                 range: source_range.clone(),
@@ -280,6 +271,48 @@ struct StatementSourceSlice<'a> {
 }
 
 impl<'a> Analyzer<'a> {
+    fn run_lint_documents(&mut self, statements: &[StatementInput<'a>]) {
+        let Some(linter) = self.linter.as_ref() else {
+            return;
+        };
+
+        let mut start = 0usize;
+        while start < statements.len() {
+            let source_name_key = statements[start]
+                .source_name
+                .as_deref()
+                .map(|name| name.as_str());
+            let source_sql_key = statements[start].source_sql.as_ref();
+
+            let mut end = start + 1;
+            while end < statements.len()
+                && statements[end]
+                    .source_name
+                    .as_deref()
+                    .map(|name| name.as_str())
+                    == source_name_key
+                && statements[end].source_sql.as_ref() == source_sql_key
+            {
+                end += 1;
+            }
+
+            let lint_statements = statements[start..end]
+                .iter()
+                .enumerate()
+                .map(|(offset, statement_input)| LintStatement {
+                    statement: &statement_input.statement,
+                    statement_index: start + offset,
+                    statement_range: statement_input.source_range.clone(),
+                })
+                .collect();
+
+            let document = LintDocument::new(source_sql_key, self.request.dialect, lint_statements);
+            self.issues.extend(linter.check_document(&document));
+
+            start = end;
+        }
+    }
+
     /// Pre-registers CREATE TABLE/VIEW targets so earlier statements can resolve them.
     fn precollect_ddl(&mut self, statements: &[StatementInput]) {
         for (index, stmt_input) in statements.iter().enumerate() {

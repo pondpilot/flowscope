@@ -34,6 +34,33 @@ impl CaseSensitivity {
     }
 }
 
+/// Lint execution engine category.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum LintEngine {
+    Semantic,
+    Lexical,
+    Document,
+}
+
+/// Confidence level attached to lint findings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum LintConfidence {
+    High,
+    Medium,
+    Low,
+}
+
+/// Source of degraded lint confidence or fallback behavior.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum LintFallbackSource {
+    ParserFallback,
+    TokenizerFallback,
+    HeuristicRule,
+}
+
 /// An issue encountered during SQL analysis (error, warning, or info).
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -58,6 +85,18 @@ pub struct Issue {
     /// Optional: source file name where the issue occurred
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_name: Option<String>,
+
+    /// Optional: linter engine provenance (`semantic`, `lexical`, `document`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lint_engine: Option<LintEngine>,
+
+    /// Optional: confidence level for lint detection quality.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lint_confidence: Option<LintConfidence>,
+
+    /// Optional: fallback mode used while evaluating this lint.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lint_fallback_source: Option<LintFallbackSource>,
 }
 
 impl Issue {
@@ -69,6 +108,9 @@ impl Issue {
             span: None,
             statement_index: None,
             source_name: None,
+            lint_engine: None,
+            lint_confidence: None,
+            lint_fallback_source: None,
         }
     }
 
@@ -80,6 +122,9 @@ impl Issue {
             span: None,
             statement_index: None,
             source_name: None,
+            lint_engine: None,
+            lint_confidence: None,
+            lint_fallback_source: None,
         }
     }
 
@@ -91,6 +136,9 @@ impl Issue {
             span: None,
             statement_index: None,
             source_name: None,
+            lint_engine: None,
+            lint_confidence: None,
+            lint_fallback_source: None,
         }
     }
 
@@ -106,6 +154,21 @@ impl Issue {
 
     pub fn with_source_name(mut self, name: impl Into<String>) -> Self {
         self.source_name = Some(name.into());
+        self
+    }
+
+    pub fn with_lint_engine(mut self, engine: LintEngine) -> Self {
+        self.lint_engine = Some(engine);
+        self
+    }
+
+    pub fn with_lint_confidence(mut self, confidence: LintConfidence) -> Self {
+        self.lint_confidence = Some(confidence);
+        self
+    }
+
+    pub fn with_lint_fallback_source(mut self, source: LintFallbackSource) -> Self {
+        self.lint_fallback_source = Some(source);
         self
     }
 }
@@ -289,11 +352,14 @@ mod tests {
     fn test_issue_creation() {
         let issue = Issue::error("PARSE_ERROR", "Unexpected token")
             .with_span(Span::new(10, 20))
-            .with_statement(0);
+            .with_statement(0)
+            .with_lint_engine(LintEngine::Semantic)
+            .with_lint_confidence(LintConfidence::High);
 
         assert_eq!(issue.severity, Severity::Error);
         assert_eq!(issue.code, "PARSE_ERROR");
         assert_eq!(issue.span.unwrap().start, 10);
         assert_eq!(issue.statement_index, Some(0));
+        assert_eq!(issue.lint_engine, Some(LintEngine::Semantic));
     }
 }
