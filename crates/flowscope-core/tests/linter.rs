@@ -220,8 +220,8 @@ fn lint_st_002_else_null() {
 }
 
 #[test]
-fn lint_st_003_nested_case() {
-    let sql = "SELECT CASE WHEN a THEN CASE WHEN b THEN CASE WHEN c THEN CASE WHEN d THEN 1 END END END END FROM t";
+fn lint_st_003_flattenable_else_case() {
+    let sql = "SELECT CASE WHEN species = 'Rat' THEN 'Squeak' ELSE CASE WHEN species = 'Dog' THEN 'Woof' END END AS sound FROM mytable";
     let issues = run_lint(sql);
     assert!(issues.iter().any(|(code, _)| code == "LINT_ST_003"));
 }
@@ -587,6 +587,10 @@ fn lint_sqlfluff_parity_rule_smoke_cases() {
         (
             "LINT_ST_005",
             "SELECT CASE WHEN x = 1 THEN 'a' WHEN x = 2 THEN 'b' END FROM t",
+        ),
+        (
+            "LINT_ST_003",
+            "SELECT CASE WHEN species = 'Rat' THEN 'Squeak' ELSE CASE WHEN species = 'Dog' THEN 'Woof' END END FROM t",
         ),
         ("LINT_ST_006", "SELECT * FROM (SELECT * FROM t) sub"),
         ("LINT_ST_007", "SELECT a + 1, a FROM t"),

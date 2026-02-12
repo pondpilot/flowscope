@@ -55,7 +55,7 @@ pub fn all_rules() -> Vec<Box<dyn LintRule>> {
         Box::new(rf_003::ReferencesConsistent),
         Box::new(st_001::UnusedCte),
         Box::new(st_002::UnnecessaryElseNull),
-        Box::new(st_003::DeeplyNestedCase),
+        Box::new(st_003::FlattenableNestedCase),
         Box::new(st_004::AvoidUsingJoin),
         Box::new(st_009::StructureJoinConditionOrder),
         Box::new(st_010::StructureConstantExpression),

@@ -7,9 +7,9 @@ _Generated on 2026-02-12 from a local SQLFluff source snapshot (2026-01-20)._
 - SQLFluff lint rules indexed (excluding docs anchor `rule-index`): **72**
 - FlowScope mapped rules: **72**
 - Not implemented in FlowScope: **0**
-- Implemented (close): **8**
+- Implemented (close): **9**
 - Implemented (partial): **63**
-- Implemented (divergent semantics): **1**
+- Implemented (divergent semantics): **0**
 - FlowScope fix coverage: **52 / 72**
 - FlowScope rules without fix support: **20**
 
@@ -90,7 +90,7 @@ FlowScope source-of-truth used for mapping:
 | Structure | `structure.else_null` | `ST01` | No | Yes | Implemented (close) | `LINT_ST_002` | Yes | Equivalent redundant ELSE NULL detection/removal. |
 | Structure | `structure.simple_case` | `ST02` | No | Yes | Implemented (partial) | `LINT_ST_005` | No | Heuristic parity rule implemented in `crates/flowscope-core/src/linter/rules/parity.rs`; semantics are narrower than SQLFluff. |
 | Structure | `structure.unused_cte` | `ST03` | Yes | No | Implemented (close) | `LINT_ST_001` | No | Equivalent unused CTE detection. |
-| Structure | `structure.nested_case` | `ST04` | No | Yes | Implemented (divergent semantics) | `LINT_ST_003` | No | FlowScope flags deep CASE nesting depth (>3); SQLFluff ST04 targets flattenable ELSE CASE patterns. |
+| Structure | `structure.nested_case` | `ST04` | No | Yes | Implemented (close) | `LINT_ST_003` | No | AST rule in `crates/flowscope-core/src/linter/rules/st_003.rs` now matches SQLFluff ST04 detection semantics by flagging flattenable nested CASE expressions in ELSE clauses. |
 | Structure | `structure.subquery` | `ST05` | No | Yes | Implemented (partial) | `LINT_ST_006` | No | Heuristic parity rule implemented in `crates/flowscope-core/src/linter/rules/parity.rs`; semantics are narrower than SQLFluff. |
 | Structure | `structure.column_order` | `ST06` | No | Yes | Implemented (partial) | `LINT_ST_007` | No | Heuristic parity rule implemented in `crates/flowscope-core/src/linter/rules/parity.rs`; semantics are narrower than SQLFluff. |
 | Structure | `structure.using` | `ST07` | No | Yes | Implemented (close) | `LINT_ST_004` | No | Flags `JOIN ... USING (...)` and recommends explicit `ON` conditions. |

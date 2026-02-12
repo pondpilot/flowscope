@@ -1,86 +1,99 @@
-//! LINT_ST_003: Deeply nested CASE expressions.
+//! LINT_ST_003: Flattenable nested CASE in ELSE.
 //!
-//! CASE expressions nested more than 3 levels deep are hard to read
-//! and maintain. Consider refactoring into a CTE, lookup table, or
-//! using COALESCE/NULLIF where appropriate.
+//! SQLFluff ST04 parity: flag `CASE ... ELSE CASE ... END END` patterns where
+//! the nested ELSE-case can be flattened into the outer CASE.
 
 use crate::linter::rule::{LintContext, LintRule};
 use crate::linter::visit;
 use crate::types::{issue_codes, Issue};
-use sqlparser::ast::*;
+use sqlparser::ast::{Expr, Statement};
 
-/// Maximum nesting depth before triggering a warning.
-///
-/// SQLFluff uses 2, but real-world analytics queries commonly reach 3 levels
-/// (e.g., nested CASE for bucketing with a fallback). Set to 3 to reduce
-/// false positives while still catching genuinely hard-to-read nesting.
-const MAX_CASE_DEPTH: usize = 3;
+pub struct FlattenableNestedCase;
 
-pub struct DeeplyNestedCase;
-
-impl LintRule for DeeplyNestedCase {
+impl LintRule for FlattenableNestedCase {
     fn code(&self) -> &'static str {
         issue_codes::LINT_ST_003
     }
 
     fn name(&self) -> &'static str {
-        "Deeply nested CASE"
+        "Flattenable nested CASE"
     }
 
     fn description(&self) -> &'static str {
-        "CASE expressions nested more than 3 levels deep are hard to maintain."
+        "Nested CASE in ELSE can be flattened into a single CASE expression."
     }
 
     fn check(&self, stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
         let mut issues = Vec::new();
-        let mut reported = false;
+
         visit::visit_expressions(stmt, &mut |expr| {
-            if !reported {
-                let depth = case_nesting_depth(expr);
-                if depth > MAX_CASE_DEPTH {
-                    issues.push(
-                        Issue::warning(
-                            issue_codes::LINT_ST_003,
-                            format!(
-                                "CASE expression nested {} levels deep (max recommended: {}).",
-                                depth, MAX_CASE_DEPTH
-                            ),
-                        )
-                        .with_statement(ctx.statement_index),
-                    );
-                    reported = true;
-                }
+            if is_flattenable_nested_else_case(expr) {
+                issues.push(
+                    Issue::warning(
+                        issue_codes::LINT_ST_003,
+                        "Nested CASE in ELSE clause can be flattened.",
+                    )
+                    .with_statement(ctx.statement_index),
+                );
             }
         });
+
         issues
     }
 }
 
-/// Calculates the nesting depth of CASE expressions.
-fn case_nesting_depth(expr: &Expr) -> usize {
-    match expr {
+fn is_flattenable_nested_else_case(expr: &Expr) -> bool {
+    let Expr::Case {
+        operand: outer_operand,
+        conditions: outer_conditions,
+        else_result: Some(outer_else),
+        ..
+    } = expr
+    else {
+        return false;
+    };
+
+    // SQLFluff ST04 only applies when there is at least one WHEN in the outer CASE.
+    if outer_conditions.is_empty() {
+        return false;
+    }
+
+    let Some((inner_operand, _inner_conditions, _inner_else)) = case_parts(outer_else) else {
+        return false;
+    };
+
+    case_operands_match(outer_operand.as_deref(), inner_operand)
+}
+
+fn case_parts(
+    case_expr: &Expr,
+) -> Option<(Option<&Expr>, &[sqlparser::ast::CaseWhen], Option<&Expr>)> {
+    match case_expr {
         Expr::Case {
             operand,
             conditions,
             else_result,
             ..
-        } => {
-            let mut max_child = 0;
-            if let Some(op) = operand {
-                max_child = max_child.max(case_nesting_depth(op));
-            }
-            for case_when in conditions {
-                max_child = max_child.max(case_nesting_depth(&case_when.condition));
-                max_child = max_child.max(case_nesting_depth(&case_when.result));
-            }
-            if let Some(el) = else_result {
-                max_child = max_child.max(case_nesting_depth(el));
-            }
-            1 + max_child
-        }
-        Expr::Nested(inner) => case_nesting_depth(inner),
-        _ => 0,
+        } => Some((
+            operand.as_deref(),
+            conditions.as_slice(),
+            else_result.as_deref(),
+        )),
+        Expr::Nested(inner) => case_parts(inner),
+        _ => None,
     }
+}
+
+fn case_operands_match(outer: Option<&Expr>, inner: Option<&Expr>) -> bool {
+    match (outer, inner) {
+        (None, None) => true,
+        (Some(left), Some(right)) => exprs_equal(left, right),
+        _ => false,
+    }
+}
+
+fn exprs_equal(left: &Expr, right: &Expr) -> bool {
+    format!("{left}") == format!("{right}")
 }
 
 #[cfg(test)]
@@ -88,75 +101,67 @@ mod tests {
     use super::*;
     use crate::parser::parse_sql;
 
-    fn check_sql(sql: &str) -> Vec<Issue> {
-        let stmts = parse_sql(sql).unwrap();
-        let rule = DeeplyNestedCase;
-        let ctx = LintContext {
-            sql,
-            statement_range: 0..sql.len(),
-            statement_index: 0,
-        };
-        let mut issues = Vec::new();
-        for stmt in &stmts {
-            issues.extend(rule.check(stmt, &ctx));
-        }
-        issues
+    fn run(sql: &str) -> Vec<Issue> {
+        let statements = parse_sql(sql).expect("parse");
+        let rule = FlattenableNestedCase;
+        statements
+            .iter()
+            .enumerate()
+            .flat_map(|(index, statement)| {
+                rule.check(
+                    statement,
+                    &LintContext {
+                        sql,
+                        statement_range: 0..sql.len(),
+                        statement_index: index,
+                    },
+                )
+            })
+            .collect()
     }
 
-    #[test]
-    fn test_deeply_nested_case_detected() {
-        let sql = "SELECT CASE WHEN a THEN CASE WHEN b THEN CASE WHEN c THEN CASE WHEN d THEN 1 END END END END FROM t";
-        let issues = check_sql(sql);
-        assert_eq!(issues.len(), 1);
-        assert_eq!(issues[0].code, "LINT_ST_003");
-    }
+    // --- Edge cases adopted from sqlfluff ST04 ---
 
     #[test]
-    fn test_shallow_case_ok() {
-        let sql = "SELECT CASE WHEN a THEN 1 WHEN b THEN 2 ELSE 3 END FROM t";
-        let issues = check_sql(sql);
+    fn passes_nested_case_under_when_clause() {
+        let sql = "SELECT CASE WHEN species = 'Rat' THEN CASE WHEN colour = 'Black' THEN 'Growl' WHEN colour = 'Grey' THEN 'Squeak' END END AS sound FROM mytable";
+        let issues = run(sql);
         assert!(issues.is_empty());
     }
 
     #[test]
-    fn test_three_levels_ok() {
-        let sql = "SELECT CASE WHEN a THEN CASE WHEN b THEN CASE WHEN c THEN 1 END END END FROM t";
-        let issues = check_sql(sql);
-        assert!(issues.is_empty());
-    }
-
-    // --- Edge cases ---
-
-    #[test]
-    fn test_nested_in_else_branch() {
-        let sql = "SELECT CASE WHEN a THEN 1 ELSE CASE WHEN b THEN 2 ELSE CASE WHEN c THEN 3 ELSE CASE WHEN d THEN 4 END END END END FROM t";
-        let issues = check_sql(sql);
-        assert_eq!(issues.len(), 1);
-        assert!(issues[0].message.contains("4"));
-    }
-
-    #[test]
-    fn test_two_levels_ok() {
-        let sql = "SELECT CASE WHEN a THEN CASE WHEN b THEN 1 END END FROM t";
-        let issues = check_sql(sql);
+    fn passes_nested_case_inside_larger_else_expression() {
+        let sql = "SELECT CASE WHEN flag = 1 THEN TRUE ELSE score > 10 + CASE WHEN kind = 'b' THEN 8 WHEN kind = 'c' THEN 9 END END AS test FROM t";
+        let issues = run(sql);
         assert!(issues.is_empty());
     }
 
     #[test]
-    fn test_one_report_per_statement() {
-        // Even with multiple deeply nested CASEs, we only report once per statement
-        let sql = "SELECT \
-            CASE WHEN a THEN CASE WHEN b THEN CASE WHEN c THEN CASE WHEN d THEN 1 END END END END, \
-            CASE WHEN e THEN CASE WHEN f THEN CASE WHEN g THEN CASE WHEN h THEN 2 END END END END \
-            FROM t";
-        let issues = check_sql(sql);
+    fn flags_simple_flattenable_else_case() {
+        let sql = "SELECT CASE WHEN species = 'Rat' THEN 'Squeak' ELSE CASE WHEN species = 'Dog' THEN 'Woof' END END AS sound FROM mytable";
+        let issues = run(sql);
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_ST_003);
+    }
+
+    #[test]
+    fn flags_nested_else_case_with_multiple_when_clauses() {
+        let sql = "SELECT CASE WHEN species = 'Rat' THEN 'Squeak' ELSE CASE WHEN species = 'Dog' THEN 'Woof' WHEN species = 'Mouse' THEN 'Squeak' END END AS sound FROM mytable";
+        let issues = run(sql);
         assert_eq!(issues.len(), 1);
     }
 
     #[test]
-    fn test_deeply_nested_in_cte() {
-        let sql = "WITH cte AS (SELECT CASE WHEN a THEN CASE WHEN b THEN CASE WHEN c THEN CASE WHEN d THEN 1 END END END END AS val FROM t) SELECT * FROM cte";
-        let issues = check_sql(sql);
+    fn passes_when_outer_and_inner_case_operands_differ() {
+        let sql = "SELECT CASE WHEN day_of_month IN (11, 12, 13) THEN 'TH' ELSE CASE MOD(day_of_month, 10) WHEN 1 THEN 'ST' WHEN 2 THEN 'ND' WHEN 3 THEN 'RD' ELSE 'TH' END END AS ordinal_suffix FROM calendar";
+        let issues = run(sql);
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn flags_when_outer_and_inner_simple_case_operands_match() {
+        let sql = "SELECT CASE x WHEN 0 THEN 'zero' WHEN 5 THEN 'five' ELSE CASE x WHEN 10 THEN 'ten' WHEN 20 THEN 'twenty' ELSE 'other' END END FROM tab_a";
+        let issues = run(sql);
         assert_eq!(issues.len(), 1);
     }
 }
