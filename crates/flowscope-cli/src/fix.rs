@@ -1997,6 +1997,63 @@ mod tests {
     }
 
     #[test]
+    fn sqlfluff_cv003_cases_are_fixed_or_unchanged() {
+        let cases = [
+            ("SELECT a FROM foo WHERE a IS NULL", 0, 0, 0, None),
+            ("SELECT a FROM foo WHERE a IS NOT NULL", 0, 0, 0, None),
+            (
+                "SELECT a FROM foo WHERE a <> NULL",
+                1,
+                0,
+                1,
+                Some("WHERE A IS NOT NULL"),
+            ),
+            (
+                "SELECT a FROM foo WHERE a <> NULL AND b != NULL AND c = 'foo'",
+                2,
+                0,
+                2,
+                Some("A IS NOT NULL AND B IS NOT NULL"),
+            ),
+            (
+                "SELECT a FROM foo WHERE a = NULL",
+                1,
+                0,
+                1,
+                Some("WHERE A IS NULL"),
+            ),
+            (
+                "SELECT a FROM foo WHERE a=NULL",
+                1,
+                0,
+                1,
+                Some("WHERE A IS NULL"),
+            ),
+            (
+                "SELECT a FROM foo WHERE a = b OR (c > d OR e = NULL)",
+                1,
+                0,
+                1,
+                Some("OR E IS NULL"),
+            ),
+            ("UPDATE table1 SET col = NULL WHERE col = ''", 0, 0, 0, None),
+        ];
+
+        for (sql, before, after, fix_count, expected_text) in cases {
+            assert_rule_case(sql, issue_codes::LINT_CV_003, before, after, fix_count);
+
+            if let Some(expected) = expected_text {
+                let out = apply_lint_fixes(sql, Dialect::Generic, &[]).expect("fix result");
+                assert!(
+                    out.sql.to_ascii_uppercase().contains(expected),
+                    "expected {expected:?} in fixed SQL, got: {}",
+                    out.sql
+                );
+            }
+        }
+    }
+
+    #[test]
     fn sqlfluff_cv001_cases_are_fixed_or_unchanged() {
         let cases = [
             ("SELECT coalesce(foo, 0) AS bar FROM baz", 0, 0, 0),

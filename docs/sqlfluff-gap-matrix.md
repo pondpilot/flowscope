@@ -10,8 +10,8 @@ _Generated on 2026-02-12 from a local SQLFluff source snapshot (2026-01-20)._
 - Implemented (close): **12**
 - Implemented (partial): **60**
 - Implemented (divergent semantics): **0**
-- FlowScope fix coverage: **53 / 72**
-- FlowScope rules without fix support: **19**
+- FlowScope fix coverage: **54 / 72**
+- FlowScope rules without fix support: **18**
 
 Bundle counts (SQLFluff): Aliasing=9, Ambiguous=9, Capitalisation=5, Convention=12, Jinja=1, Layout=15, References=6, Structure=12, TSQL=3
 
@@ -57,7 +57,7 @@ FlowScope source-of-truth used for mapping:
 | Convention | `convention.coalesce` | `CV02` | No | Yes | Implemented (close) | `LINT_CV_001` | Yes | AST rule in `crates/flowscope-core/src/linter/rules/cv_001.rs` now matches SQLFluff CV02 by flagging IFNULL/NVL and fixer rewrites to COALESCE. |
 | Convention | `convention.select_trailing_comma` | `CV03` | Yes | Yes | Implemented (partial) | `LINT_CV_006` | No | Heuristic parity rule implemented in `crates/flowscope-core/src/linter/rules/parity.rs`; semantics are narrower than SQLFluff. |
 | Convention | `convention.count_rows` | `CV04` | Yes | Yes | Implemented (partial) | `LINT_CV_002` | Yes | Prefers COUNT(*); unlike SQLFluff, no preference config for COUNT(1)/COUNT(0). |
-| Convention | `convention.is_null` | `CV05` | Yes | Yes | Implemented (close) | `LINT_CV_003` | No | Flags `= NULL` / `<> NULL` comparisons and recommends `IS [NOT] NULL`. |
+| Convention | `convention.is_null` | `CV05` | Yes | Yes | Implemented (close) | `LINT_CV_003` | Yes | Flags `= NULL` / `<> NULL` comparisons and fixer rewrites to `IS [NOT] NULL`. |
 | Convention | `convention.terminator` | `CV06` | No | Yes | Implemented (partial) | `LINT_CV_007` | No | Heuristic parity rule implemented in `crates/flowscope-core/src/linter/rules/parity.rs`; semantics are narrower than SQLFluff. |
 | Convention | `convention.statement_brackets` | `CV07` | No | Yes | Implemented (partial) | `LINT_CV_008` | No | Heuristic parity rule implemented in `crates/flowscope-core/src/linter/rules/parity.rs`; semantics are narrower than SQLFluff. |
 | Convention | `convention.left_join` | `CV08` | No | No | Implemented (close) | `LINT_CV_004` | No | Flags RIGHT JOIN variants and recommends LEFT JOIN style. |
