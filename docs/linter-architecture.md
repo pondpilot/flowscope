@@ -1,0 +1,183 @@
+# Linter Architecture Design
+
+Status: Draft  
+Owner: `flowscope-core`  
+Last updated: 2026-02-12
+
+## Context
+
+FlowScope currently ships:
+
+- 14 core lint rules implemented as dedicated AST rules.
+- 58 SQLFluff parity rules, many implemented in a single parity module with regex or heuristic matching.
+
+This gave strong coverage quickly, but it is not the long-term architecture for an industry-standard linter.
+
+## Goals
+
+- Robust correctness across dialects and real-world SQL.
+- Sound architecture with explicit semantics and low false positives.
+- Maintainable implementation with clear rule ownership and minimal coupling.
+- Scalable rule engine that can grow without a monolith.
+- Deterministic outputs and stable spans suitable for editor and CI usage.
+
+## Non-Goals
+
+- One-shot rewrite of all existing rules.
+- "AST-only" implementation of purely lexical formatting rules.
+- Perfect SQLFluff behavior clone across every dialect from day one.
+
+## Architecture Principles
+
+1. AST-first semantics
+- Semantic rules must be driven by parsed AST plus scope/resolution context, not regex.
+- Examples: aliasing semantics, reference qualification, join logic, set operation checks.
+
+2. Token-aware style
+- Formatting and trivia rules must use token stream data, not AST-only approximations.
+- Examples: whitespace, newlines, comments, casing style, quoting style, Jinja padding.
+
+3. Parse once, tokenize once
+- Build a single lint document model per SQL input and reuse it across all rules.
+- Avoid repeated parsing and repeated ad hoc string scans in each rule.
+
+4. Stable rule contract
+- Each rule gets structured input from the engine, not direct access to ad hoc helpers.
+- Rule output must include deterministic code, message, severity, statement index, and span.
+
+5. Dialect-explicit behavior
+- Rule decisions must be dialect-aware and must not silently assume generic SQL semantics.
+- When parser fallback is used, confidence should degrade explicitly.
+
+6. Deterministic and testable
+- Same input and config must always produce the same ordered issue set.
+- Rules must be independently testable with focused fixtures.
+
+7. Regex is migration glue, not architecture
+- Existing regex heuristics can remain temporarily for parity continuity.
+- New semantic rules must not be implemented with regex.
+
+## Key Design Decisions
+
+## Decision 1: Introduce a `LintDocument` model
+
+The linter engine should construct a normalized input model once:
+
+- `sql` (full source text)
+- `dialect` and parser/fallback metadata
+- parsed statements with statement ranges
+- token stream with token spans and token kinds
+- optional scope/resolution metadata for semantic rules
+
+This becomes the only rule input surface.
+
+## Decision 2: Split rules into 3 engines
+
+1. Semantic engine
+- Input: AST + scope/resolution context.
+- Handles semantic correctness and structural SQL logic.
+
+2. Lexical engine
+- Input: token stream + token spans.
+- Handles formatting/casing/quoting/comment-aware style rules.
+
+3. Document engine
+- Input: whole file/document metadata.
+- Handles file-level checks (EOF newline, leading blank lines, batch separators).
+
+## Decision 3: Replace parity monolith with one-rule-per-file modules
+
+- Move from `parity.rs` monolith to `rules/<code>.rs` modules.
+- Keep shared traversal and token utilities in common helpers.
+- Preserve existing lint codes for API stability.
+
+## Decision 4: Standardize span generation
+
+- Primary span source: parser or tokenizer spans.
+- Secondary span source: scoped fallback search only when necessary.
+- No free-form "best guess" spans without explicit fallback path.
+
+## Decision 5: Add rule metadata and confidence
+
+Each issue should carry internal provenance metadata:
+
+- engine type (`semantic`, `lexical`, `document`)
+- confidence (`high`, `medium`, `low`)
+- fallback source (if parser fallback or heuristic logic was used)
+
+This supports telemetry, triage, and quality gates.
+
+## Decision 6: Define fixability as a rule capability
+
+Rule metadata should include whether a deterministic fix is supported.
+- No inferred fix logic from message text.
+- Fix support should be explicit and tested per rule.
+
+## Proposed Execution Pipeline
+
+1. Parse SQL into statements with selected dialect.
+2. Tokenize full source with token spans.
+3. Build `LintDocument` with statement ranges and shared metadata.
+4. Optionally build scope/resolution context once for semantic rules.
+5. Execute semantic, lexical, and document engines.
+6. Normalize, sort, and deduplicate issues.
+7. Emit final issues with deterministic ordering and stable spans.
+
+## Migration Plan
+
+## Phase 0: Foundation
+
+- Add `LintDocument` and engine scaffolding.
+- Add token stream provider in lint pipeline.
+- Keep current rules running unchanged via adapter layer.
+
+## Phase 1: High-risk semantic migrations
+
+Migrate semantic-heavy heuristic rules first:
+- references (`RF_001`, `RF_002`, `RF_003`)
+- structure join/constant/unused checks (`ST_009`, `ST_010`, `ST_011`)
+- ambiguous join/reference rules (`AM_006` to `AM_009`)
+- convention join condition (`CV_012`)
+
+## Phase 2: Lexical/style migrations
+
+Move style-oriented checks to lexical engine:
+- capitalization (`CP_*`)
+- layout (`LT_*`)
+- jinja padding (`JJ_001`)
+- selected convention style rules (`CV_007`, `CV_010`, `CV_011`)
+
+## Phase 3: Decommission parity monolith
+
+- Remove migrated rules from `parity.rs`.
+- Keep only temporary compatibility shims if needed.
+- Delete shims after equivalent rule quality gates are met.
+
+## Quality Gates
+
+Each migrated rule must pass:
+
+- correctness: fixture and regression coverage for trigger/non-trigger cases
+- span quality: stable and accurate primary highlight span
+- precision guardrails: false positive threshold on curated corpus
+- performance: no meaningful regression on representative workloads
+- parity continuity: no unintentional code/message regressions unless documented
+
+## Risks and Mitigations
+
+1. Parser limitations and missing AST locations
+- Mitigation: token spans become first-class; fallback span logic remains explicit.
+
+2. Dialect edge cases not fully supported upstream
+- Mitigation: dialect-specific behavior tables and confidence downgrade on fallback paths.
+
+3. Migration churn and temporary duplicate logic
+- Mitigation: phased rule-by-rule migration with adapter compatibility layer.
+
+## Success Criteria
+
+- All semantic rules run through AST/scope engine.
+- All style/layout rules run through lexical/document engines.
+- `parity.rs` no longer acts as a long-term rule home.
+- Rule additions are modular, testable, and engine-scoped by default.
+- Lint output quality and determinism improve while preserving stable public rule codes.

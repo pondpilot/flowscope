@@ -6,6 +6,7 @@
 //! existing analysis pipeline.
 
 pub mod config;
+pub mod helpers;
 pub mod rule;
 pub mod rules;
 pub(crate) mod visit;

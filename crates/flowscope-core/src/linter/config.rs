@@ -34,7 +34,12 @@ fn default_enabled() -> bool {
 impl LintConfig {
     /// Returns true if a specific rule is enabled.
     pub fn is_rule_enabled(&self, code: &str) -> bool {
-        self.enabled && !self.disabled_rules.iter().any(|r| r == code)
+        let requested = code.trim();
+        self.enabled
+            && !self
+                .disabled_rules
+                .iter()
+                .any(|rule| rule.trim().eq_ignore_ascii_case(requested))
     }
 }
 
@@ -57,6 +62,17 @@ mod tests {
         };
         assert!(!config.is_rule_enabled("LINT_AM_001"));
         assert!(config.is_rule_enabled("LINT_ST_001"));
+    }
+
+    #[test]
+    fn test_disabled_rule_matching_is_trimmed_and_case_insensitive() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![" lint_am_001 ".to_string(), " LINT_ST_001".to_string()],
+        };
+        assert!(!config.is_rule_enabled("LINT_AM_001"));
+        assert!(!config.is_rule_enabled("lint_st_001"));
+        assert!(config.is_rule_enabled("LINT_CV_001"));
     }
 
     #[test]

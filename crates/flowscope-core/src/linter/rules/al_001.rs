@@ -54,12 +54,18 @@ fn check_query(query: &Query, ctx: &LintContext, issues: &mut Vec<Issue>) {
             check_query(&cte.query, ctx, issues);
         }
     }
-    check_set_expr(&query.body, ctx, issues);
+    check_set_expr(&query.body, ctx, issues, false);
 }
 
-fn check_set_expr(body: &SetExpr, ctx: &LintContext, issues: &mut Vec<Issue>) {
+fn check_set_expr(body: &SetExpr, ctx: &LintContext, issues: &mut Vec<Issue>, in_set_rhs: bool) {
     match body {
         SetExpr::Select(select) => {
+            // In set-operation RHS branches, output column names come from the left side.
+            // Requiring aliases here creates noisy false positives on common UNION patterns.
+            if in_set_rhs {
+                return;
+            }
+
             for item in &select.projection {
                 if let SelectItem::UnnamedExpr(expr) = item {
                     if is_computed(expr) {
@@ -80,9 +86,13 @@ fn check_set_expr(body: &SetExpr, ctx: &LintContext, issues: &mut Vec<Issue>) {
         }
         SetExpr::Query(q) => check_query(q, ctx, issues),
         SetExpr::SetOperation { left, right, .. } => {
-            check_set_expr(left, ctx, issues);
-            check_set_expr(right, ctx, issues);
+            check_set_expr(left, ctx, issues, false);
+            check_set_expr(right, ctx, issues, true);
         }
+        SetExpr::Insert(stmt)
+        | SetExpr::Update(stmt)
+        | SetExpr::Delete(stmt)
+        | SetExpr::Merge(stmt) => check_statement(stmt, ctx, issues),
         _ => {}
     }
 }
@@ -214,6 +224,20 @@ mod tests {
         // One has alias, one doesn't
         let issues = check_sql("SELECT a + b AS total, c * d FROM t");
         assert_eq!(issues.len(), 1);
+    }
+
+    #[test]
+    fn test_union_rhs_expression_without_alias_ok() {
+        let issues = check_sql("SELECT a + b AS total FROM t UNION ALL SELECT 0::INT FROM t");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn test_with_insert_select_expression_without_alias_detected() {
+        let sql = "WITH params AS (SELECT 1) INSERT INTO t(a) SELECT COALESCE(x, 0) FROM src";
+        let issues = check_sql(sql);
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, "LINT_AL_001");
     }
 
     #[test]

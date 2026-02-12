@@ -6,8 +6,8 @@
 //! - Lint before/after comparison to report per-rule removed violations.
 
 use flowscope_core::{
-    analyze, issue_codes, parse_sql_with_dialect, AnalysisOptions, AnalyzeRequest, Dialect,
-    LintConfig, ParseError,
+    analyze, issue_codes, linter::helpers as lint_helpers, parse_sql_with_dialect, AnalysisOptions,
+    AnalyzeRequest, Dialect, LintConfig, ParseError,
 };
 use regex::{Captures, Regex};
 use sqlparser::ast::*;
@@ -292,7 +292,7 @@ fn apply_text_fixes(sql: &str, rule_filter: &RuleFilter) -> String {
     if rule_filter.allows(issue_codes::LINT_AL_002) {
         out = fix_unused_table_aliases(&out);
     }
-    if rule_filter.allows(issue_codes::LINT_AL_002) {
+    if rule_filter.allows(issue_codes::LINT_RF_004) {
         out = fix_table_alias_keywords(&out);
     }
     if rule_filter.allows(issue_codes::LINT_ST_006) {
@@ -445,6 +445,182 @@ where
     out
 }
 
+fn replace_outside_quoted_regions_and_comments<F>(sql: &str, mut transform: F) -> String
+where
+    F: FnMut(&str) -> String,
+{
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum Mode {
+        Outside,
+        SingleQuote,
+        DoubleQuote,
+        BacktickQuote,
+        BracketQuote,
+        LineComment,
+        BlockComment,
+    }
+
+    let mut out = String::with_capacity(sql.len());
+    let mut outside = String::new();
+    let chars: Vec<char> = sql.chars().collect();
+    let mut mode = Mode::Outside;
+    let mut i = 0;
+
+    while i < chars.len() {
+        let ch = chars[i];
+        let next = chars.get(i + 1).copied();
+
+        match mode {
+            Mode::Outside => {
+                if ch == '\'' {
+                    if !outside.is_empty() {
+                        out.push_str(&transform(&outside));
+                        outside.clear();
+                    }
+                    out.push(ch);
+                    mode = Mode::SingleQuote;
+                    i += 1;
+                    continue;
+                }
+                if ch == '"' {
+                    if !outside.is_empty() {
+                        out.push_str(&transform(&outside));
+                        outside.clear();
+                    }
+                    out.push(ch);
+                    mode = Mode::DoubleQuote;
+                    i += 1;
+                    continue;
+                }
+                if ch == '`' {
+                    if !outside.is_empty() {
+                        out.push_str(&transform(&outside));
+                        outside.clear();
+                    }
+                    out.push(ch);
+                    mode = Mode::BacktickQuote;
+                    i += 1;
+                    continue;
+                }
+                if ch == '[' {
+                    if !outside.is_empty() {
+                        out.push_str(&transform(&outside));
+                        outside.clear();
+                    }
+                    out.push(ch);
+                    mode = Mode::BracketQuote;
+                    i += 1;
+                    continue;
+                }
+                if ch == '-' && next == Some('-') {
+                    if !outside.is_empty() {
+                        out.push_str(&transform(&outside));
+                        outside.clear();
+                    }
+                    out.push('-');
+                    out.push('-');
+                    mode = Mode::LineComment;
+                    i += 2;
+                    continue;
+                }
+                if ch == '/' && next == Some('*') {
+                    if !outside.is_empty() {
+                        out.push_str(&transform(&outside));
+                        outside.clear();
+                    }
+                    out.push('/');
+                    out.push('*');
+                    mode = Mode::BlockComment;
+                    i += 2;
+                    continue;
+                }
+
+                outside.push(ch);
+                i += 1;
+            }
+            Mode::SingleQuote => {
+                out.push(ch);
+                if ch == '\'' {
+                    if next == Some('\'') {
+                        out.push('\'');
+                        i += 2;
+                    } else {
+                        mode = Mode::Outside;
+                        i += 1;
+                    }
+                } else {
+                    i += 1;
+                }
+            }
+            Mode::DoubleQuote => {
+                out.push(ch);
+                if ch == '"' {
+                    if next == Some('"') {
+                        out.push('"');
+                        i += 2;
+                    } else {
+                        mode = Mode::Outside;
+                        i += 1;
+                    }
+                } else {
+                    i += 1;
+                }
+            }
+            Mode::BacktickQuote => {
+                out.push(ch);
+                if ch == '`' {
+                    if next == Some('`') {
+                        out.push('`');
+                        i += 2;
+                    } else {
+                        mode = Mode::Outside;
+                        i += 1;
+                    }
+                } else {
+                    i += 1;
+                }
+            }
+            Mode::BracketQuote => {
+                out.push(ch);
+                if ch == ']' {
+                    if next == Some(']') {
+                        out.push(']');
+                        i += 2;
+                    } else {
+                        mode = Mode::Outside;
+                        i += 1;
+                    }
+                } else {
+                    i += 1;
+                }
+            }
+            Mode::LineComment => {
+                out.push(ch);
+                i += 1;
+                if ch == '\n' {
+                    mode = Mode::Outside;
+                }
+            }
+            Mode::BlockComment => {
+                out.push(ch);
+                if ch == '*' && next == Some('/') {
+                    out.push('/');
+                    mode = Mode::Outside;
+                    i += 2;
+                } else {
+                    i += 1;
+                }
+            }
+        }
+    }
+
+    if !outside.is_empty() {
+        out.push_str(&transform(&outside));
+    }
+
+    out
+}
+
 fn fix_leading_blank_lines(sql: &str) -> String {
     regex_replace_all(sql, r"^\s*\n+", "")
 }
@@ -454,17 +630,21 @@ fn fix_excessive_blank_lines(sql: &str) -> String {
 }
 
 fn fix_operator_spacing(sql: &str) -> String {
-    let out = regex_replace_all(sql, r"(?i)([A-Za-z0-9_])=([A-Za-z0-9_'])", "$1 = $2");
-    let out = regex_replace_all(&out, r"(?i)([A-Za-z0-9_])!=([A-Za-z0-9_'])", "$1 != $2");
-    let out = regex_replace_all(&out, r"(?i)([A-Za-z0-9_])<([A-Za-z0-9_'])", "$1 < $2");
-    let out = regex_replace_all(&out, r"(?i)([A-Za-z0-9_])>([A-Za-z0-9_'])", "$1 > $2");
-    let out = regex_replace_all(&out, r"(?i)([A-Za-z0-9_])\+([A-Za-z0-9_'])", "$1 + $2");
-    regex_replace_all(&out, r"(?i)([A-Za-z0-9_])-([A-Za-z0-9_'])", "$1 - $2")
+    replace_outside_single_quotes(sql, |segment| {
+        let out = regex_replace_all(segment, r"(?i)([A-Za-z0-9_])=([A-Za-z0-9_'])", "$1 = $2");
+        let out = regex_replace_all(&out, r"(?i)([A-Za-z0-9_])!=([A-Za-z0-9_'])", "$1 != $2");
+        let out = regex_replace_all(&out, r"(?i)([A-Za-z0-9_])<([A-Za-z0-9_'])", "$1 < $2");
+        let out = regex_replace_all(&out, r"(?i)([A-Za-z0-9_])>([A-Za-z0-9_'])", "$1 > $2");
+        let out = regex_replace_all(&out, r"(?i)([A-Za-z0-9_])\+([A-Za-z0-9_'])", "$1 + $2");
+        regex_replace_all(&out, r"(?i)([A-Za-z0-9_])-([A-Za-z0-9_'])", "$1 - $2")
+    })
 }
 
 fn fix_comma_spacing(sql: &str) -> String {
-    let out = regex_replace_all(sql, r"\s+,", ",");
-    regex_replace_all(&out, r",\s*", ", ")
+    replace_outside_single_quotes(sql, |segment| {
+        let out = regex_replace_all(segment, r"\s+,", ",");
+        regex_replace_all(&out, r",\s*", ", ")
+    })
 }
 
 fn fix_function_spacing(sql: &str) -> String {
@@ -550,10 +730,12 @@ fn fix_select_target_newline(sql: &str) -> String {
 }
 
 fn fix_keyword_newlines(sql: &str) -> String {
-    let out = regex_replace_all(sql, r"(?i)\s+(FROM)\b", "\n$1");
-    let out = regex_replace_all(&out, r"(?i)\s+(WHERE)\b", "\n$1");
-    let out = regex_replace_all(&out, r"(?i)\s+(GROUP BY)\b", "\n$1");
-    regex_replace_all(&out, r"(?i)\s+(ORDER BY)\b", "\n$1")
+    replace_outside_quoted_regions_and_comments(sql, |segment| {
+        let out = regex_replace_all(segment, r"(?i)\s+(FROM)\b", "\n$1");
+        let out = regex_replace_all(&out, r"(?i)\s+(WHERE)\b", "\n$1");
+        let out = regex_replace_all(&out, r"(?i)\s+(GROUP BY)\b", "\n$1");
+        regex_replace_all(&out, r"(?i)\s+(ORDER BY)\b", "\n$1")
+    })
 }
 
 fn fix_self_aliases(sql: &str) -> String {
@@ -1045,28 +1227,79 @@ fn fix_select_column_order(sql: &str) -> String {
 }
 
 fn fix_references_quoting(sql: &str) -> String {
-    regex_replace_all(sql, r#""([A-Za-z_][A-Za-z0-9_]*)""#, "$1")
+    replace_outside_single_quotes(sql, |segment| {
+        regex_replace_all_with(segment, r#""([A-Za-z_][A-Za-z0-9_]*)""#, |caps| {
+            let ident = caps.get(1).map(|m| m.as_str()).unwrap_or_default();
+            if can_unquote_identifier_safely(ident) {
+                ident.to_string()
+            } else {
+                caps[0].to_string()
+            }
+        })
+    })
+}
+
+fn can_unquote_identifier_safely(identifier: &str) -> bool {
+    let mut chars = identifier.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+
+    let starts_ok = first.is_ascii_lowercase() || first == '_';
+    let rest_ok = chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_');
+
+    starts_ok && rest_ok && !is_sql_keyword(identifier)
 }
 
 /// Lowercase SQL keywords while preserving identifiers and string literals.
 ///
 /// Only tokens that match `is_sql_keyword` are lowered; everything else is
-/// kept as-is. Content inside single-quoted strings is never touched.
+/// kept as-is. Content inside quoted literals/identifiers is never touched.
 fn fix_case_style_consistency(sql: &str) -> String {
     let mut out = String::with_capacity(sql.len());
     let mut in_single = false;
+    let mut in_double = false;
     let chars: Vec<char> = sql.chars().collect();
     let mut i = 0;
 
     while i < chars.len() {
+        if in_single {
+            out.push(chars[i]);
+            if chars[i] == '\'' {
+                if i + 1 < chars.len() && chars[i + 1] == '\'' {
+                    out.push(chars[i + 1]);
+                    i += 2;
+                    continue;
+                }
+                in_single = false;
+            }
+            i += 1;
+            continue;
+        }
+
+        if in_double {
+            out.push(chars[i]);
+            if chars[i] == '"' {
+                if i + 1 < chars.len() && chars[i + 1] == '"' {
+                    out.push(chars[i + 1]);
+                    i += 2;
+                    continue;
+                }
+                in_double = false;
+            }
+            i += 1;
+            continue;
+        }
+
         if chars[i] == '\'' {
-            in_single = !in_single;
+            in_single = true;
             out.push(chars[i]);
             i += 1;
             continue;
         }
 
-        if in_single {
+        if chars[i] == '"' {
+            in_double = true;
             out.push(chars[i]);
             i += 1;
             continue;
@@ -1514,7 +1747,7 @@ fn fix_expr(expr: &mut Expr, rule_filter: &RuleFilter) {
     }
 
     if rule_filter.allows(issue_codes::LINT_CV_001) {
-        if let Some((check_expr, fallback_expr)) = coalesce_replacement(expr) {
+        if let Some((check_expr, fallback_expr)) = lint_helpers::coalesce_replacement(expr) {
             *expr = build_coalesce_expr(check_expr, fallback_expr);
             return;
         }
@@ -1525,7 +1758,7 @@ fn fix_expr(expr: &mut Expr, rule_filter: &RuleFilter) {
         ..
     } = expr
     {
-        if rule_filter.allows(issue_codes::LINT_ST_002) && is_null_expr(else_result) {
+        if rule_filter.allows(issue_codes::LINT_ST_002) && lint_helpers::is_null_expr(else_result) {
             if let Expr::Case { else_result, .. } = expr {
                 *else_result = None;
             }
@@ -1604,27 +1837,6 @@ fn is_count_one(func: &Function) -> bool {
     )
 }
 
-fn coalesce_replacement(expr: &Expr) -> Option<(Expr, Expr)> {
-    if let Expr::Case {
-        operand: None,
-        conditions,
-        else_result: Some(else_expr),
-        ..
-    } = expr
-    {
-        if conditions.len() == 1 {
-            let case_when = &conditions[0];
-            if let Expr::IsNull(check_expr) = &case_when.condition {
-                if exprs_equal(check_expr, else_expr) {
-                    return Some(((*check_expr.clone()), case_when.result.clone()));
-                }
-            }
-        }
-    }
-
-    None
-}
-
 fn build_coalesce_expr(check_expr: Expr, fallback_expr: Expr) -> Expr {
     Expr::Function(Function {
         name: vec![Ident::new("COALESCE")].into(),
@@ -1645,28 +1857,14 @@ fn build_coalesce_expr(check_expr: Expr, fallback_expr: Expr) -> Expr {
     })
 }
 
-fn exprs_equal(a: &Expr, b: &Expr) -> bool {
-    format!("{a}") == format!("{b}")
-}
-
-fn is_null_expr(expr: &Expr) -> bool {
-    matches!(
-        expr,
-        Expr::Value(ValueWithSpan {
-            value: Value::Null,
-            ..
-        })
-    )
-}
-
 fn null_comparison_rewrite(expr: &Expr) -> Option<Expr> {
     let Expr::BinaryOp { left, op, right } = expr else {
         return None;
     };
 
-    let target = if is_null_expr(right) {
+    let target = if lint_helpers::is_null_expr(right) {
         left.as_ref().clone()
-    } else if is_null_expr(left) {
+    } else if lint_helpers::is_null_expr(left) {
         right.as_ref().clone()
     } else {
         return None;
@@ -2004,6 +2202,93 @@ mod tests {
     }
 
     #[test]
+    fn case_style_fix_does_not_rewrite_double_quoted_identifiers() {
+        let fixed = fix_case_style_consistency("SELECT \"FROM\", \"CamelCase\" FROM t");
+        assert!(
+            fixed.contains("\"FROM\""),
+            "keyword-like quoted identifier should remain unchanged: {fixed}"
+        );
+        assert!(
+            fixed.contains("\"CamelCase\""),
+            "case-sensitive quoted identifier should remain unchanged: {fixed}"
+        );
+    }
+
+    #[test]
+    fn spacing_fixes_do_not_rewrite_single_quoted_literals() {
+        let operator_fixed = fix_operator_spacing("SELECT a=1, 'x=y' FROM t");
+        assert!(
+            operator_fixed.contains("'x=y'"),
+            "operator spacing must not mutate literals: {operator_fixed}"
+        );
+        assert!(
+            operator_fixed.contains("a = 1"),
+            "operator spacing should still apply: {operator_fixed}"
+        );
+
+        let comma_fixed = fix_comma_spacing("SELECT a,b, 'x,y' FROM t");
+        assert!(
+            comma_fixed.contains("'x,y'"),
+            "comma spacing must not mutate literals: {comma_fixed}"
+        );
+        assert!(
+            comma_fixed.contains("a, b"),
+            "comma spacing should still apply: {comma_fixed}"
+        );
+    }
+
+    #[test]
+    fn keyword_newline_fix_does_not_rewrite_literals_or_quoted_identifiers() {
+        let sql = "SELECT COUNT(1), 'hello FROM world', \"x WHERE y\" FROM t WHERE a = 1";
+        let fixed = fix_keyword_newlines(sql);
+        assert!(
+            fixed.contains("'hello FROM world'"),
+            "single-quoted literal should remain unchanged: {fixed}"
+        );
+        assert!(
+            fixed.contains("\"x WHERE y\""),
+            "double-quoted identifier should remain unchanged: {fixed}"
+        );
+        assert!(
+            !fixed.contains("hello\nFROM world"),
+            "keyword newline fix must not inject newlines into literals: {fixed}"
+        );
+        assert!(
+            fixed.contains("\nFROM t"),
+            "FROM clause should still be normalized: {fixed}"
+        );
+        assert!(
+            fixed.contains("\nWHERE a = 1"),
+            "WHERE clause should still be normalized: {fixed}"
+        );
+    }
+
+    #[test]
+    fn alias_keyword_fix_respects_rf_004_rule_filter() {
+        let sql = "select a from users as select";
+
+        let rf_disabled = RuleFilter::new(&[
+            issue_codes::LINT_LT_014.to_string(),
+            issue_codes::LINT_RF_004.to_string(),
+        ]);
+        let out_rf_disabled = apply_text_fixes(sql, &rf_disabled);
+        assert_eq!(
+            out_rf_disabled, sql,
+            "excluding RF_004 should block alias-keyword rewrite"
+        );
+
+        let al_disabled = RuleFilter::new(&[
+            issue_codes::LINT_LT_014.to_string(),
+            issue_codes::LINT_AL_002.to_string(),
+        ]);
+        let out_al_disabled = apply_text_fixes(sql, &al_disabled);
+        assert!(
+            out_al_disabled.contains("alias_select"),
+            "excluding AL_002 must not block RF_004 rewrite: {out_al_disabled}"
+        );
+    }
+
+    #[test]
     fn excluded_rule_is_not_rewritten_when_other_rules_are_fixed() {
         let sql = "SELECT COUNT(1) FROM t WHERE a<>b";
         let disabled = vec![issue_codes::LINT_CV_005.to_string()];
@@ -2021,6 +2306,38 @@ mod tests {
         assert!(
             !out.sql.contains("!="),
             "excluded CV_005 should not be rewritten to '!=': {}",
+            out.sql
+        );
+    }
+
+    #[test]
+    fn references_quoting_fix_keeps_reserved_identifier_quotes() {
+        let sql = "SELECT \"FROM\" FROM t UNION SELECT 2";
+        let out = apply_lint_fixes(sql, Dialect::Generic, &[]).expect("fix result");
+        assert!(
+            out.sql.contains("\"FROM\""),
+            "reserved identifier must remain quoted: {}",
+            out.sql
+        );
+        assert!(
+            out.sql.to_ascii_uppercase().contains("UNION ALL"),
+            "expected another fix to persist output: {}",
+            out.sql
+        );
+    }
+
+    #[test]
+    fn references_quoting_fix_keeps_case_sensitive_identifier_quotes() {
+        let sql = "SELECT \"CamelCase\" FROM t UNION SELECT 2";
+        let out = apply_lint_fixes(sql, Dialect::Generic, &[]).expect("fix result");
+        assert!(
+            out.sql.contains("\"CamelCase\""),
+            "case-sensitive identifier must remain quoted: {}",
+            out.sql
+        );
+        assert!(
+            out.sql.to_ascii_uppercase().contains("UNION ALL"),
+            "expected another fix to persist output: {}",
             out.sql
         );
     }

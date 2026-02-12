@@ -1,5 +1,6 @@
 ---
 source: crates/flowscope-core/tests/snapshots.rs
+assertion_line: 50
 expression: clean_result
 ---
 {
@@ -200,32 +201,7 @@ expression: clean_result
       }
     ]
   },
-  "issues": [
-    {
-      "severity": "info",
-      "code": "LINT_AL_001",
-      "message": "Expression 'a[:]' has no explicit alias. Add AS <name>.",
-      "statementIndex": 0
-    },
-    {
-      "severity": "info",
-      "code": "LINT_AL_001",
-      "message": "Expression 'b[:1]' has no explicit alias. Add AS <name>.",
-      "statementIndex": 0
-    },
-    {
-      "severity": "info",
-      "code": "LINT_AL_001",
-      "message": "Expression 'c[2:]' has no explicit alias. Add AS <name>.",
-      "statementIndex": 0
-    },
-    {
-      "severity": "info",
-      "code": "LINT_AL_001",
-      "message": "Expression 'd[2:3]' has no explicit alias. Add AS <name>.",
-      "statementIndex": 0
-    }
-  ],
+  "issues": [],
   "summary": {
     "statementCount": 1,
     "tableCount": 1,
@@ -235,7 +211,7 @@ expression: clean_result
     "issueCount": {
       "errors": 0,
       "warnings": 0,
-      "infos": 4
+      "infos": 0
     },
     "hasErrors": false
   }

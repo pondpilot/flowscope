@@ -106,17 +106,13 @@ impl<'a> Analyzer<'a> {
 
         let (schema, init_issues) = SchemaRegistry::new(request.schema.as_ref(), request.dialect);
 
-        // Initialize linter from config (default: enabled)
-        let lint_config = request
+        // Initialize linter only when explicitly requested via options.lint
+        let linter = request
             .options
             .as_ref()
             .and_then(|o| o.lint.clone())
-            .unwrap_or_default();
-        let linter = if lint_config.enabled {
-            Some(Linter::new(lint_config))
-        } else {
-            None
-        };
+            .filter(|c| c.enabled)
+            .map(Linter::new);
 
         Self {
             request,

@@ -1,13 +1,37 @@
 use crate::error::ParseError;
 use crate::types::Dialect;
 use sqlparser::ast::Statement;
+use sqlparser::dialect::PostgreSqlDialect;
 use sqlparser::parser::Parser;
 
 /// Parse SQL using the specified dialect
 pub fn parse_sql_with_dialect(sql: &str, dialect: Dialect) -> Result<Vec<Statement>, ParseError> {
     let sqlparser_dialect = dialect.to_sqlparser_dialect();
-    let statements = Parser::parse_sql(sqlparser_dialect.as_ref(), sql)?;
-    Ok(statements)
+    match Parser::parse_sql(sqlparser_dialect.as_ref(), sql) {
+        Ok(statements) => Ok(statements),
+        Err(primary_err) => {
+            // Parity fallback: Generic dialect frequently fails on Postgres-specific
+            // operators (`?`, `->>`, `::`) commonly used in warehouse SQL.
+            if matches!(dialect, Dialect::Generic) && looks_like_postgres_syntax(sql) {
+                let postgres = PostgreSqlDialect {};
+                if let Ok(statements) = Parser::parse_sql(&postgres, sql) {
+                    return Ok(statements);
+                }
+            }
+            Err(primary_err.into())
+        }
+    }
+}
+
+fn looks_like_postgres_syntax(sql: &str) -> bool {
+    sql.contains("::")
+        || sql.contains("->")
+        || sql.contains("?|")
+        || sql.contains("?&")
+        || sql.contains(" ? ")
+        || sql.contains(" ?\n")
+        || sql.contains("? '")
+        || sql.contains("?	")
 }
 
 /// Parse SQL using the generic dialect (legacy compatibility)
@@ -94,6 +118,20 @@ mod tests {
     #[test]
     fn test_parse_union() {
         let sql = "SELECT id FROM users UNION ALL SELECT id FROM admins";
+        let result = parse_sql(sql);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_parse_generic_falls_back_for_postgres_json_operator() {
+        let sql = "SELECT usage_metadata ? 'pipeline_id' FROM ledger.usage_line_item";
+        let result = parse_sql(sql);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_parse_generic_falls_back_for_postgres_cast_operator() {
+        let sql = "SELECT workspace_id::text FROM ledger.usage_line_item";
         let result = parse_sql(sql);
         assert!(result.is_ok());
     }

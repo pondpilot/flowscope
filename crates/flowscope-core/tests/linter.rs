@@ -13,7 +13,10 @@ fn run_lint(sql: &str) -> Vec<(String, String)> {
         files: None,
         dialect: Dialect::Generic,
         source_name: None,
-        options: None,
+        options: Some(AnalysisOptions {
+            lint: Some(LintConfig::default()),
+            ..Default::default()
+        }),
         schema: None,
         #[cfg(feature = "templating")]
         template_config: None,
@@ -59,7 +62,10 @@ fn lint_issues_appear_in_analyze_result() {
         files: None,
         dialect: Dialect::Generic,
         source_name: None,
-        options: None,
+        options: Some(AnalysisOptions {
+            lint: Some(LintConfig::default()),
+            ..Default::default()
+        }),
         schema: None,
         #[cfg(feature = "templating")]
         template_config: None,
@@ -83,7 +89,10 @@ fn lint_issues_have_statement_index() {
         files: None,
         dialect: Dialect::Generic,
         source_name: None,
-        options: None,
+        options: Some(AnalysisOptions {
+            lint: Some(LintConfig::default()),
+            ..Default::default()
+        }),
         schema: None,
         #[cfg(feature = "templating")]
         template_config: None,
@@ -420,7 +429,8 @@ fn lint_st_004_on_join_ok() {
 
 #[test]
 fn lint_al_003_explicit_aliases_ok() {
-    let issues = run_lint("SELECT a.id, b.name FROM users a JOIN orders b ON a.id = b.user_id");
+    let issues =
+        run_lint("SELECT a.id, b.name FROM users AS a JOIN orders AS b ON a.id = b.user_id");
     assert!(
         !issues.iter().any(|(code, _)| code == "LINT_AL_003"),
         "explicit aliases should not trigger AL_003: {issues:?}"
@@ -485,8 +495,8 @@ fn lint_rf_004_keyword_identifier() {
 #[test]
 fn lint_sqlfluff_parity_rule_smoke_cases() {
     let cases = [
-        ("LINT_AL_003", "SELECT * FROM a JOIN b ON a.id = b.id"),
-        ("LINT_AL_004", "SELECT a + 1 AS x, b + 2 FROM t"),
+        ("LINT_AL_003", "SELECT * FROM a x JOIN b y ON x.id = y.id"),
+        ("LINT_AL_004", "SELECT a + 1 AS x, b + 2 y FROM t"),
         ("LINT_AL_005", "SELECT * FROM a t JOIN b t ON t.id = t.id"),
         (
             "LINT_AL_006",
@@ -496,25 +506,25 @@ fn lint_sqlfluff_parity_rule_smoke_cases() {
         ("LINT_AL_008", "SELECT a AS x, b AS x FROM t"),
         ("LINT_AL_009", "SELECT a AS a FROM t"),
         ("LINT_AM_005", "SELECT a FROM t ORDER BY 1"),
-        ("LINT_AM_006", "SELECT * FROM a, b"),
-        ("LINT_AM_007", "SELECT a.id, name FROM a"),
+        ("LINT_AM_006", "SELECT * FROM a JOIN b ON a.id = b.id"),
+        ("LINT_AM_007", "SELECT * FROM a JOIN b ON a.id = id"),
         ("LINT_AM_008", "SELECT * FROM a UNION SELECT * FROM b"),
         ("LINT_AM_009", "SELECT * FROM a JOIN b ON TRUE"),
         ("LINT_CP_001", "SELECT a from t"),
         ("LINT_CP_002", "SELECT Col, col FROM t"),
-        ("LINT_CP_003", "SELECT COUNT(*), lower(name) FROM t"),
+        ("LINT_CP_003", "SELECT COUNT(*), count(name) FROM t"),
         ("LINT_CP_004", "SELECT NULL, true FROM t"),
         ("LINT_CP_005", "CREATE TABLE t (a INT, b varchar(10))"),
-        ("LINT_CV_005", "SELECT * FROM t WHERE a <> b"),
+        ("LINT_CV_005", "SELECT * FROM t WHERE a <> b AND c != d"),
         ("LINT_CV_006", "SELECT a, FROM t"),
         ("LINT_CV_007", "SELECT 1; SELECT 2"),
         ("LINT_CV_008", "(SELECT 1)"),
         ("LINT_CV_009", "SELECT foo FROM t"),
         ("LINT_CV_010", "SELECT \"abc\" FROM t"),
-        ("LINT_CV_011", "SELECT a::INT FROM t"),
+        ("LINT_CV_011", "SELECT CAST(a AS INT)::TEXT FROM t"),
         ("LINT_CV_012", "SELECT * FROM a JOIN b ON b.id > 0"),
         ("LINT_JJ_001", "SELECT '{{foo}}' AS templated"),
-        ("LINT_LT_001", "SELECT * FROM t WHERE a=1"),
+        ("LINT_LT_001", "SELECT payload->>'id' FROM t"),
         ("LINT_LT_002", "SELECT a\n   , b\nFROM t"),
         ("LINT_LT_003", "SELECT a +\n b FROM t"),
         ("LINT_LT_004", "SELECT a,b FROM t"),
@@ -529,7 +539,8 @@ fn lint_sqlfluff_parity_rule_smoke_cases() {
         ("LINT_LT_011", "SELECT 1 UNION SELECT 2\nUNION SELECT 3"),
         ("LINT_LT_012", "SELECT 1\nFROM t"),
         ("LINT_LT_013", "\n\nSELECT 1"),
-        ("LINT_LT_014", "SELECT a FROM t\nWHERE a=1"),
+        ("LINT_LT_014", "SELECT a FROM t WHERE a = 1 ORDER BY a"),
+        ("LINT_LT_014", "SELECT a FROM t\nWHERE a = 1"),
         ("LINT_LT_015", "SELECT 1\n\n\nFROM t"),
         ("LINT_RF_001", "SELECT x.a FROM t"),
         ("LINT_RF_002", "SELECT id FROM a JOIN b ON a.id = b.id"),
@@ -540,7 +551,7 @@ fn lint_sqlfluff_parity_rule_smoke_cases() {
             "LINT_ST_005",
             "SELECT CASE WHEN x = 1 THEN 'a' WHEN x = 2 THEN 'b' END FROM t",
         ),
-        ("LINT_ST_006", "SELECT * FROM (SELECT 1) sub"),
+        ("LINT_ST_006", "SELECT * FROM (SELECT * FROM t) sub"),
         ("LINT_ST_007", "SELECT a + 1, a FROM t"),
         ("LINT_ST_008", "SELECT DISTINCT(a) FROM t"),
         ("LINT_ST_009", "SELECT * FROM a x JOIN b y ON y.id = x.id"),

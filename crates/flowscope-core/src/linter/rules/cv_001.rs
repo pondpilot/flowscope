@@ -3,6 +3,7 @@
 //! Detects `CASE WHEN x IS NULL THEN y ELSE x END` patterns that can be
 //! simplified to `COALESCE(x, y)`.
 
+use crate::linter::helpers;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::linter::visit;
 use crate::types::{issue_codes, Issue};
@@ -26,7 +27,7 @@ impl LintRule for CoalesceOverCase {
     fn check(&self, stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
         let mut issues = Vec::new();
         visit::visit_expressions(stmt, &mut |expr| {
-            if is_coalesce_pattern(expr) {
+            if helpers::is_coalesce_pattern(expr) {
                 issues.push(
                     Issue::info(
                         issue_codes::LINT_CV_001,
@@ -38,34 +39,6 @@ impl LintRule for CoalesceOverCase {
         });
         issues
     }
-}
-
-/// Checks if an expression matches the pattern:
-/// `CASE WHEN x IS NULL THEN y ELSE x END`
-fn is_coalesce_pattern(expr: &Expr) -> bool {
-    if let Expr::Case {
-        operand: None,
-        conditions,
-        else_result: Some(else_expr),
-        ..
-    } = expr
-    {
-        if conditions.len() == 1 {
-            // Check: condition is `x IS NULL`
-            if let Expr::IsNull(check_expr) = &conditions[0].condition {
-                // Check: else is the same `x`
-                if exprs_equal(check_expr, else_expr) {
-                    return true;
-                }
-            }
-        }
-    }
-    false
-}
-
-/// Simple structural equality check for expressions via Display.
-fn exprs_equal(a: &Expr, b: &Expr) -> bool {
-    format!("{a}") == format!("{b}")
 }
 
 #[cfg(test)]

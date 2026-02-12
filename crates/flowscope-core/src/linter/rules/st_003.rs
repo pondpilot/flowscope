@@ -10,6 +10,10 @@ use crate::types::{issue_codes, Issue};
 use sqlparser::ast::*;
 
 /// Maximum nesting depth before triggering a warning.
+///
+/// SQLFluff uses 2, but real-world analytics queries commonly reach 3 levels
+/// (e.g., nested CASE for bucketing with a fallback). Set to 3 to reduce
+/// false positives while still catching genuinely hard-to-read nesting.
 const MAX_CASE_DEPTH: usize = 3;
 
 pub struct DeeplyNestedCase;

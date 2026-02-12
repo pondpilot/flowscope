@@ -105,6 +105,24 @@ fn collect_query_refs(query: &Query, refs: &mut HashSet<String>) {
     }
 }
 
+fn collect_statement_refs(stmt: &Statement, refs: &mut HashSet<String>) {
+    match stmt {
+        Statement::Query(query) => collect_query_refs(query, refs),
+        Statement::Insert(insert) => {
+            if let Some(source) = &insert.source {
+                collect_query_refs(source, refs);
+            }
+        }
+        Statement::CreateView { query, .. } => collect_query_refs(query, refs),
+        Statement::CreateTable(create) => {
+            if let Some(query) = &create.query {
+                collect_query_refs(query, refs);
+            }
+        }
+        _ => {}
+    }
+}
+
 /// Recursively collects uppercase table/CTE names referenced in a set expression.
 fn collect_table_refs(expr: &SetExpr, refs: &mut HashSet<String>) {
     match expr {
@@ -156,6 +174,12 @@ fn collect_table_refs(expr: &SetExpr, refs: &mut HashSet<String>) {
         SetExpr::SetOperation { left, right, .. } => {
             collect_table_refs(left, refs);
             collect_table_refs(right, refs);
+        }
+        SetExpr::Insert(stmt)
+        | SetExpr::Update(stmt)
+        | SetExpr::Delete(stmt)
+        | SetExpr::Merge(stmt) => {
+            collect_statement_refs(stmt, refs);
         }
         _ => {}
     }
@@ -396,6 +420,17 @@ mod tests {
     fn test_cte_in_insert() {
         let issues = check_sql("INSERT INTO target WITH unused AS (SELECT 1) SELECT 2");
         assert_eq!(issues.len(), 1);
+    }
+    #[test]
+    fn test_with_insert_ctes_used_ok() {
+        let issues = check_sql(
+            "WITH a AS (SELECT 1), b AS (SELECT * FROM a) \
+             INSERT INTO target SELECT * FROM b",
+        );
+        assert!(
+            issues.is_empty(),
+            "expected no unused CTEs, got: {issues:#?}"
+        );
     }
 
     #[test]

@@ -283,7 +283,9 @@ fn collect_identifier_prefixes(expr: &Expr, prefixes: &mut HashSet<String>) {
 fn join_constraint(op: &JoinOperator) -> Option<&Expr> {
     let constraint = match op {
         JoinOperator::Join(c)
+        | JoinOperator::Left(c)
         | JoinOperator::Inner(c)
+        | JoinOperator::Right(c)
         | JoinOperator::LeftOuter(c)
         | JoinOperator::RightOuter(c)
         | JoinOperator::FullOuter(c)
@@ -434,6 +436,12 @@ mod tests {
              JOIN orders o ON users.id = orders.user_id \
              ORDER BY o.created_at",
         );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn test_left_join_alias_used_in_on_clause() {
+        let issues = check_sql("SELECT u.name FROM users u LEFT JOIN orders o ON u.id = o.user_id");
         assert!(issues.is_empty());
     }
 

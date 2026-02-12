@@ -138,4 +138,10 @@ mod tests {
         let issues = check_sql("WITH cte AS (SELECT COUNT(1) AS cnt FROM t) SELECT * FROM cte");
         assert_eq!(issues.len(), 1);
     }
+
+    #[test]
+    fn test_count_one_in_qualify() {
+        let issues = check_sql("SELECT a FROM t QUALIFY COUNT(1) > 0");
+        assert_eq!(issues.len(), 1);
+    }
 }

@@ -31,6 +31,15 @@ pub fn visit_query_expressions<F: FnMut(&Expr)>(query: &Query, visitor: &mut F) 
         }
     }
     visit_set_expr_expressions(&query.body, visitor);
+
+    // ORDER BY expressions
+    if let Some(ref order_by) = query.order_by {
+        if let OrderByKind::Expressions(exprs) = &order_by.kind {
+            for order_expr in exprs {
+                visit_expr(&order_expr.expr, visitor);
+            }
+        }
+    }
 }
 
 pub fn visit_set_expr_expressions<F: FnMut(&Expr)>(body: &SetExpr, visitor: &mut F) {
@@ -47,6 +56,32 @@ pub fn visit_set_expr_expressions<F: FnMut(&Expr)>(body: &SetExpr, visitor: &mut
             }
             if let Some(ref having) = select.having {
                 visit_expr(having, visitor);
+            }
+            if let Some(ref qualify) = select.qualify {
+                visit_expr(qualify, visitor);
+            }
+
+            // GROUP BY expressions
+            if let GroupByExpr::Expressions(exprs, _) = &select.group_by {
+                for expr in exprs {
+                    visit_expr(expr, visitor);
+                }
+            }
+
+            // JOIN ON expressions
+            for table_with_joins in &select.from {
+                for join in &table_with_joins.joins {
+                    visit_join_constraint(&join.join_operator, visitor);
+                }
+                // Derived table subqueries
+                if let TableFactor::Derived { subquery, .. } = &table_with_joins.relation {
+                    visit_query_expressions(subquery, visitor);
+                }
+                for join in &table_with_joins.joins {
+                    if let TableFactor::Derived { subquery, .. } = &join.relation {
+                        visit_query_expressions(subquery, visitor);
+                    }
+                }
             }
         }
         SetExpr::Query(q) => visit_query_expressions(q, visitor),
@@ -124,5 +159,31 @@ pub fn visit_expr<F: FnMut(&Expr)>(expr: &Expr, visitor: &mut F) {
             }
         }
         _ => {}
+    }
+}
+
+/// Visits the expression inside a JOIN constraint (ON clause).
+fn visit_join_constraint<F: FnMut(&Expr)>(op: &JoinOperator, visitor: &mut F) {
+    let constraint = match op {
+        JoinOperator::Join(c)
+        | JoinOperator::Inner(c)
+        | JoinOperator::Left(c)
+        | JoinOperator::LeftOuter(c)
+        | JoinOperator::Right(c)
+        | JoinOperator::RightOuter(c)
+        | JoinOperator::FullOuter(c)
+        | JoinOperator::CrossJoin(c)
+        | JoinOperator::Semi(c)
+        | JoinOperator::LeftSemi(c)
+        | JoinOperator::RightSemi(c)
+        | JoinOperator::Anti(c)
+        | JoinOperator::LeftAnti(c)
+        | JoinOperator::RightAnti(c)
+        | JoinOperator::StraightJoin(c) => c,
+        JoinOperator::AsOf { constraint, .. } => constraint,
+        JoinOperator::CrossApply | JoinOperator::OuterApply => return,
+    };
+    if let JoinConstraint::On(expr) = constraint {
+        visit_expr(expr, visitor);
     }
 }

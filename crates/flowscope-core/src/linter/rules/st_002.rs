@@ -3,6 +3,7 @@
 //! `CASE ... ELSE NULL END` is redundant because CASE already returns NULL
 //! when no branch matches. The ELSE NULL can be removed.
 
+use crate::linter::helpers;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::linter::visit;
 use crate::types::{issue_codes, Issue};
@@ -31,7 +32,7 @@ impl LintRule for UnnecessaryElseNull {
                 ..
             } = expr
             {
-                if is_null_expr(else_expr) {
+                if helpers::is_null_expr(else_expr) {
                     issues.push(
                         Issue::info(
                             issue_codes::LINT_ST_002,
@@ -44,16 +45,6 @@ impl LintRule for UnnecessaryElseNull {
         });
         issues
     }
-}
-
-fn is_null_expr(expr: &Expr) -> bool {
-    matches!(
-        expr,
-        Expr::Value(ValueWithSpan {
-            value: Value::Null,
-            ..
-        })
-    )
 }
 
 #[cfg(test)]
