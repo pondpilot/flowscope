@@ -8,10 +8,14 @@ use flowscope_core::{
 };
 
 fn run_lint(sql: &str) -> Vec<(String, String)> {
+    run_lint_in_dialect(sql, Dialect::Generic)
+}
+
+fn run_lint_in_dialect(sql: &str, dialect: Dialect) -> Vec<(String, String)> {
     let result = analyze(&AnalyzeRequest {
         sql: sql.to_string(),
         files: None,
-        dialect: Dialect::Generic,
+        dialect,
         source_name: None,
         options: Some(AnalysisOptions {
             lint: Some(LintConfig::default()),
@@ -160,6 +164,24 @@ fn lint_am_001_bare_union() {
 fn lint_am_001_union_all_ok() {
     let issues = run_lint("SELECT 1 UNION ALL SELECT 2");
     assert!(!issues.iter().any(|(code, _)| code == "LINT_AM_001"));
+}
+
+#[test]
+fn lint_am_001_disabled_for_postgres_dialect() {
+    let issues = run_lint_in_dialect("SELECT 1 UNION SELECT 2", Dialect::Postgres);
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_AM_001"),
+        "AM_001 should be disabled for postgres dialect: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_am_001_enabled_for_redshift_dialect() {
+    let issues = run_lint_in_dialect("SELECT 1 UNION SELECT 2", Dialect::Redshift);
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_AM_001"),
+        "AM_001 should be enabled for redshift dialect: {issues:?}"
+    );
 }
 
 #[test]

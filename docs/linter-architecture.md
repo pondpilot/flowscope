@@ -161,7 +161,7 @@ Move style-oriented checks to lexical engine:
 - [x] Phase 1 AST migrations landed for: `AM_002`, `AM_004`-`AM_009`, `CV_001`, `CV_012`, `RF_001`-`RF_003`, `ST_003`, `ST_009`-`ST_011`.
 - [x] `LINT_AM_002` now follows SQLFluff AM09 semantics via AST query-clause analysis, flagging LIMIT/OFFSET usage without ORDER BY across top-level and nested SELECTs.
 - [x] `LINT_AM_004` now follows SQLFluff AM04 semantics via AST output-width analysis, flagging queries whose result column count is unknown due to unresolved wildcard expansion (`*`/`alias.*`) across CTE/subquery/set-operation scopes.
-- [x] `LINT_AM_001` now follows SQLFluff AM02 core semantics by flagging bare `UNION` (without explicit `ALL`/`DISTINCT`), and CLI fixer behavior now inserts explicit `DISTINCT` for parity with SQLFluff defaults.
+- [x] `LINT_AM_001` now follows SQLFluff AM02 core semantics by flagging bare `UNION` (without explicit `ALL`/`DISTINCT`), with CLI fixer behavior inserting explicit `DISTINCT` and dialect-scoped execution aligned to SQLFluff-supported dialects available in FlowScope.
 - [x] `LINT_CV_001` now follows SQLFluff CV02 semantics and fixer behavior by flagging IFNULL/NVL function usage and rewriting to COALESCE.
 - [x] `LINT_ST_003` now follows SQLFluff ST04 semantics via AST CASE analysis, flagging flattenable nested CASE expressions in ELSE clauses (instead of depth-based heuristics).
 - [x] `LINT_AM_005` now follows SQLFluff AM03 semantics via AST `ORDER BY` analysis, flagging mixed implicit/explicit sort direction (including `NULLS` ordering cases) across nested query scopes; fixer parity now adds explicit `ASC` to implicit items in mixed clauses.

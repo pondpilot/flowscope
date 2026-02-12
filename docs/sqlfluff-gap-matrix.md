@@ -7,8 +7,8 @@ _Generated on 2026-02-12 from a local SQLFluff source snapshot (2026-01-20)._
 - SQLFluff lint rules indexed (excluding docs anchor `rule-index`): **72**
 - FlowScope mapped rules: **72**
 - Not implemented in FlowScope: **0**
-- Implemented (close): **11**
-- Implemented (partial): **61**
+- Implemented (close): **12**
+- Implemented (partial): **60**
 - Implemented (divergent semantics): **0**
 - FlowScope fix coverage: **53 / 72**
 - FlowScope rules without fix support: **19**
@@ -40,7 +40,7 @@ FlowScope source-of-truth used for mapping:
 | Aliasing | `aliasing.unique.column` | `AL08` | Yes | No | Implemented (partial) | `LINT_AL_008` | No | Heuristic parity rule implemented in `crates/flowscope-core/src/linter/rules/parity.rs`; semantics are narrower than SQLFluff. |
 | Aliasing | `aliasing.self_alias.column` | `AL09` | Yes | Yes | Implemented (partial) | `LINT_AL_009` | No | Heuristic parity rule implemented in `crates/flowscope-core/src/linter/rules/parity.rs`; semantics are narrower than SQLFluff. |
 | Ambiguous | `ambiguous.distinct` | `AM01` | Yes | No | Implemented (close) | `LINT_AM_003` | Yes | Detects DISTINCT + GROUP BY redundancy. |
-| Ambiguous | `ambiguous.union` | `AM02` | Yes | Yes | Implemented (partial) | `LINT_AM_001` | No | AST rule in `crates/flowscope-core/src/linter/rules/am_001.rs` now matches SQLFluff AM02 core detection semantics by flagging bare `UNION`; fixer now inserts explicit `DISTINCT` (SQLFluff-style), while dialect-scoped enablement parity is still pending. |
+| Ambiguous | `ambiguous.union` | `AM02` | Yes | Yes | Implemented (close) | `LINT_AM_001` | Yes | AST rule in `crates/flowscope-core/src/linter/rules/am_001.rs` matches SQLFluff AM02 bare-`UNION` detection semantics, fixer inserts explicit `DISTINCT` (SQLFluff-style), and rule execution is now dialect-scoped to SQLFluff-supported dialects available in FlowScope. |
 | Ambiguous | `ambiguous.order_by` | `AM03` | No | Yes | Implemented (close) | `LINT_AM_005` | Yes | AST rule in `crates/flowscope-core/src/linter/rules/am_005.rs` matches SQLFluff AM03 mixed-direction detection semantics; fixer now normalizes mixed clauses by adding explicit `ASC` to implicit items (including `NULLS` ordering cases). |
 | Ambiguous | `ambiguous.column_count` | `AM04` | No | No | Implemented (close) | `LINT_AM_004` | No | AST rule implemented in `crates/flowscope-core/src/linter/rules/am_004.rs`; now matches SQLFluff AM04 semantics by flagging queries with unknown output width from unresolved wildcard expansion (`*`/`alias.*`) across CTE/subquery/set-operation scopes. |
 | Ambiguous | `ambiguous.join` | `AM05` | No | Yes | Implemented (partial) | `LINT_AM_006` | No | AST rule implemented in `crates/flowscope-core/src/linter/rules/am_006.rs`; default SQLFluff behavior (flag bare `JOIN`) is covered, advanced config parity is pending. |

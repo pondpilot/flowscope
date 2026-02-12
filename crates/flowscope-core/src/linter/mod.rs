@@ -16,7 +16,10 @@ use document::{LintDocument, LintStatement};
 use rule::{LintContext, LintRule};
 use sqlparser::ast::Statement;
 
-use crate::types::{Issue, LintConfidence, LintEngine, LintFallbackSource, Severity};
+use crate::{
+    types::{Issue, LintConfidence, LintEngine, LintFallbackSource, Severity},
+    Dialect,
+};
 
 /// The SQL linter, holding a set of rules and configuration.
 pub struct Linter {
@@ -52,7 +55,10 @@ impl Linter {
             LintEngine::Document,
         ] {
             for rule in &self.rules {
-                if !self.config.is_rule_enabled(rule.code()) || rule_engine(rule.code()) != engine {
+                if !self.config.is_rule_enabled(rule.code())
+                    || rule_engine(rule.code()) != engine
+                    || !rule_supported_in_dialect(rule.code(), document.dialect)
+                {
                     continue;
                 }
 
@@ -150,6 +156,24 @@ fn rule_engine(code: &str) -> LintEngine {
             LintEngine::Lexical
         }
         _ => LintEngine::Semantic,
+    }
+}
+
+fn rule_supported_in_dialect(code: &str, dialect: Dialect) -> bool {
+    match code {
+        crate::types::issue_codes::LINT_AM_001 => matches!(
+            dialect,
+            Dialect::Generic
+                | Dialect::Ansi
+                | Dialect::Bigquery
+                | Dialect::Clickhouse
+                | Dialect::Databricks
+                | Dialect::Hive
+                | Dialect::Mysql
+                | Dialect::Redshift
+                | Dialect::Snowflake
+        ),
+        _ => true,
     }
 }
 
