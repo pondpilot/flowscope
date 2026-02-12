@@ -7,9 +7,9 @@ _Generated on 2026-02-12 from a local SQLFluff source snapshot (2026-01-20)._
 - SQLFluff lint rules indexed (excluding docs anchor `rule-index`): **72**
 - FlowScope mapped rules: **72**
 - Not implemented in FlowScope: **0**
-- Implemented (close): **6**
+- Implemented (close): **7**
 - Implemented (partial): **63**
-- Implemented (divergent semantics): **3**
+- Implemented (divergent semantics): **2**
 - FlowScope fix coverage: **52 / 72**
 - FlowScope rules without fix support: **20**
 
@@ -47,7 +47,7 @@ FlowScope source-of-truth used for mapping:
 | Ambiguous | `ambiguous.column_references` | `AM06` | Yes | No | Implemented (partial) | `LINT_AM_007` | No | AST rule implemented in `crates/flowscope-core/src/linter/rules/am_007.rs`; default `consistent` semantics and key fixture behavior now match SQLFluff AM06. |
 | Ambiguous | `ambiguous.set_columns` | `AM07` | No | No | Implemented (partial) | `LINT_AM_008` | No | AST rule implemented in `crates/flowscope-core/src/linter/rules/am_008.rs`; now checks set-branch width consistency with partial wildcard resolution (CTE/derived), but still lacks full SQLFluff source resolution parity. |
 | Ambiguous | `ambiguous.join_condition` | `AM08` | No | Yes | Implemented (partial) | `LINT_AM_009` | No | AST rule implemented in `crates/flowscope-core/src/linter/rules/am_009.rs`; now matches SQLFluff AM08 core behavior for implicit cross join detection. |
-| Ambiguous | `ambiguous.order_by_limit` | `AM09` | No | No | Implemented (divergent semantics) | `LINT_AM_002` | No | FlowScope checks ORDER BY without LIMIT in subqueries/CTEs; SQLFluff checks LIMIT/OFFSET without ORDER BY. |
+| Ambiguous | `ambiguous.order_by_limit` | `AM09` | No | No | Implemented (close) | `LINT_AM_002` | No | AST rule implemented in `crates/flowscope-core/src/linter/rules/am_002.rs`; now matches SQLFluff AM09 semantics by flagging LIMIT/OFFSET without ORDER BY across nested query scopes. |
 | Capitalisation | `capitalisation.keywords` | `CP01` | Yes | Yes | Implemented (partial) | `LINT_CP_001` | No | Heuristic parity rule implemented in `crates/flowscope-core/src/linter/rules/parity.rs`; semantics are narrower than SQLFluff. |
 | Capitalisation | `capitalisation.identifiers` | `CP02` | Yes | Yes | Implemented (partial) | `LINT_CP_002` | No | Heuristic parity rule implemented in `crates/flowscope-core/src/linter/rules/parity.rs`; semantics are narrower than SQLFluff. |
 | Capitalisation | `capitalisation.functions` | `CP03` | Yes | Yes | Implemented (partial) | `LINT_CP_003` | No | Heuristic parity rule implemented in `crates/flowscope-core/src/linter/rules/parity.rs`; semantics are narrower than SQLFluff. |

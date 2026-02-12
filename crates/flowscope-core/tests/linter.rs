@@ -163,9 +163,18 @@ fn lint_am_001_union_all_ok() {
 }
 
 #[test]
-fn lint_am_002_order_by_in_cte() {
-    let issues = run_lint("WITH cte AS (SELECT * FROM t ORDER BY id) SELECT * FROM cte");
+fn lint_am_002_limit_without_order_by() {
+    let issues = run_lint("SELECT * FROM t LIMIT 10");
     assert!(issues.iter().any(|(code, _)| code == "LINT_AM_002"));
+}
+
+#[test]
+fn lint_am_002_limit_with_order_by_ok() {
+    let issues = run_lint("SELECT * FROM t ORDER BY id LIMIT 10");
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_AM_002"),
+        "LIMIT with ORDER BY should not trigger AM_002: {issues:?}"
+    );
 }
 
 #[test]
@@ -337,8 +346,8 @@ fn lint_count_one_in_having() {
 }
 
 #[test]
-fn lint_order_by_in_subquery_no_limit() {
-    let issues = run_lint("SELECT * FROM (SELECT * FROM t ORDER BY id) AS sub");
+fn lint_limit_in_subquery_without_order_by() {
+    let issues = run_lint("SELECT * FROM (SELECT * FROM t LIMIT 10) AS sub");
     assert!(issues.iter().any(|(code, _)| code == "LINT_AM_002"));
 }
 
@@ -347,7 +356,7 @@ fn lint_clean_complex_query_no_issues() {
     // A well-written query should produce no lint issues once optional style-only
     // parity rules are disabled for this integration assertion.
     let issues = run_lint_with_config(
-        "WITH recent_orders AS (SELECT * FROM orders LIMIT 100) \
+        "WITH recent_orders AS (SELECT * FROM orders ORDER BY user_id LIMIT 100) \
          SELECT u.name, COUNT(*) AS order_count \
          FROM users u \
          JOIN recent_orders o ON u.id = o.user_id \
@@ -531,6 +540,7 @@ fn lint_sqlfluff_parity_rule_smoke_cases() {
         ("LINT_AL_007", "SELECT * FROM users u"),
         ("LINT_AL_008", "SELECT a AS x, b AS x FROM t"),
         ("LINT_AL_009", "SELECT a AS a FROM t"),
+        ("LINT_AM_002", "SELECT a FROM t LIMIT 10"),
         ("LINT_AM_005", "SELECT a, b FROM t ORDER BY a, b DESC"),
         ("LINT_AM_006", "SELECT * FROM a JOIN b ON a.id = b.id"),
         ("LINT_AM_007", "SELECT foo, bar FROM fake_table GROUP BY 1, bar"),

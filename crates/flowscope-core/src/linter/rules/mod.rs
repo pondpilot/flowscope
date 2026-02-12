@@ -35,7 +35,7 @@ pub mod st_011;
 pub fn all_rules() -> Vec<Box<dyn LintRule>> {
     let mut rules: Vec<Box<dyn LintRule>> = vec![
         Box::new(am_001::BareUnion),
-        Box::new(am_002::OrderByWithoutLimit),
+        Box::new(am_002::LimitOffsetWithoutOrderBy),
         Box::new(am_003::DistinctWithGroupBy),
         Box::new(am_004::SetOperationColumnCount),
         Box::new(am_005::AmbiguousOrderBy),

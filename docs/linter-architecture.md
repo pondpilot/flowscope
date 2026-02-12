@@ -158,7 +158,8 @@ Move style-oriented checks to lexical engine:
 - [x] Phase 0 foundation shipped: `LintDocument` model, tokenization pass, and document-level lint execution path are live.
 - [x] Engine split is active in linter orchestration: semantic + lexical + document passes run with deterministic sort/dedupe.
 - [x] Issue provenance metadata is implemented (`lint_engine`, `lint_confidence`, `lint_fallback_source`).
-- [x] Phase 1 AST migrations landed for: `AM_005`-`AM_009`, `CV_012`, `RF_001`-`RF_003`, `ST_009`-`ST_011`.
+- [x] Phase 1 AST migrations landed for: `AM_002`, `AM_005`-`AM_009`, `CV_012`, `RF_001`-`RF_003`, `ST_009`-`ST_011`.
+- [x] `LINT_AM_002` now follows SQLFluff AM09 semantics via AST query-clause analysis, flagging LIMIT/OFFSET usage without ORDER BY across top-level and nested SELECTs.
 - [x] `LINT_AM_005` now follows SQLFluff AM03 semantics via AST `ORDER BY` analysis, flagging mixed implicit/explicit sort direction (including `NULLS` ordering cases) across nested query scopes.
 - [x] `LINT_AM_007` now follows SQLFluff AM06 default (`consistent`) semantics via AST traversal of `GROUP BY` / `ORDER BY` clauses, including nested-query precedence and rollup-style references.
 - [x] `LINT_AM_009` now follows SQLFluff AM08 semantics via AST join-operator analysis (implicit cross join detection, with `WHERE` deferral to CV12 and UNNEST/CROSS/NATURAL/USING exclusions).
