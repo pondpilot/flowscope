@@ -298,9 +298,6 @@ fn apply_text_fixes(sql: &str, rule_filter: &RuleFilter) -> String {
     if rule_filter.allows(issue_codes::LINT_ST_006) {
         out = fix_subquery_to_cte(&out);
     }
-    if rule_filter.allows(issue_codes::LINT_ST_007) {
-        out = fix_select_column_order(&out);
-    }
     if rule_filter.allows(issue_codes::LINT_RF_003) {
         out = fix_mixed_reference_qualification(&out);
     }
@@ -992,42 +989,6 @@ fn fix_mixed_reference_qualification(sql: &str) -> String {
         .into_owned()
 }
 
-fn fix_select_column_order(sql: &str) -> String {
-    let select_re = Regex::new(r"(?is)\bselect\s+(.*?)\bfrom\b").expect("valid fix regex");
-    let Some(caps) = select_re.captures(sql) else {
-        return sql.to_string();
-    };
-    let select_clause = caps.get(1).map(|m| m.as_str()).unwrap_or_default();
-    let mut items: Vec<String> = select_clause
-        .split(',')
-        .map(|item| item.trim().to_string())
-        .collect();
-    if items.len() < 2 {
-        return sql.to_string();
-    }
-
-    let simple_re = Regex::new(r"(?i)^[A-Za-z_][A-Za-z0-9_\.]*$").expect("valid fix regex");
-    let mut simple = Vec::new();
-    let mut complex = Vec::new();
-    for item in items.drain(..) {
-        if simple_re.is_match(&item) {
-            simple.push(item);
-        } else {
-            complex.push(item);
-        }
-    }
-    if simple.is_empty() || complex.is_empty() {
-        return sql.to_string();
-    }
-
-    let mut reordered = simple;
-    reordered.extend(complex);
-    let rewritten_clause = reordered.join(", ");
-    select_re
-        .replace(sql, format!("SELECT {rewritten_clause} FROM"))
-        .into_owned()
-}
-
 fn fix_references_quoting(sql: &str) -> String {
     replace_outside_single_quotes(sql, |segment| {
         regex_replace_all_with(segment, r#""([A-Za-z_][A-Za-z0-9_]*)""#, |caps| {
@@ -1258,6 +1219,19 @@ fn fix_select(select: &mut Select, rule_filter: &RuleFilter) {
         }
     }
 
+    if rule_filter.allows(issue_codes::LINT_ST_007) {
+        if let Some(first_simple_idx) = select.projection.iter().position(is_simple_projection_item)
+        {
+            if first_simple_idx > 0 {
+                let mut prefix = select
+                    .projection
+                    .drain(0..first_simple_idx)
+                    .collect::<Vec<_>>();
+                select.projection.append(&mut prefix);
+            }
+        }
+    }
+
     let has_where_clause = select.selection.is_some();
 
     for table_with_joins in &mut select.from {
@@ -1351,6 +1325,17 @@ fn has_distinct_and_group_by(select: &Select) -> bool {
         GroupByExpr::Expressions(exprs, _) => !exprs.is_empty(),
     };
     has_distinct && has_group_by
+}
+
+fn is_simple_projection_item(item: &SelectItem) -> bool {
+    match item {
+        SelectItem::UnnamedExpr(Expr::Identifier(_))
+        | SelectItem::UnnamedExpr(Expr::CompoundIdentifier(_)) => true,
+        SelectItem::ExprWithAlias { expr, .. } => {
+            matches!(expr, Expr::Identifier(_) | Expr::CompoundIdentifier(_))
+        }
+        _ => false,
+    }
 }
 
 fn table_factor_reference_name(relation: &TableFactor) -> Option<String> {
@@ -2349,6 +2334,42 @@ mod tests {
 
         for (sql, before, after, fix_count, expected_text) in cases {
             assert_rule_case(sql, issue_codes::LINT_AM_009, before, after, fix_count);
+
+            if let Some(expected) = expected_text {
+                let out = apply_lint_fixes(sql, Dialect::Generic, &[]).expect("fix result");
+                assert!(
+                    out.sql.to_ascii_uppercase().contains(expected),
+                    "expected {expected:?} in fixed SQL, got: {}",
+                    out.sql
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sqlfluff_st007_cases_are_fixed_or_unchanged() {
+        let cases = [
+            ("SELECT a + 1, a FROM t", 1, 0, 1, Some("SELECT A, A + 1")),
+            (
+                "SELECT a + 1, b + 2, a FROM t",
+                1,
+                0,
+                1,
+                Some("SELECT A, A + 1, B + 2"),
+            ),
+            (
+                "SELECT a + 1, b AS b_alias FROM t",
+                1,
+                0,
+                1,
+                Some("SELECT B AS B_ALIAS, A + 1"),
+            ),
+            ("SELECT a, b + 1 FROM t", 0, 0, 0, None),
+            ("SELECT a + 1, b + 2 FROM t", 0, 0, 0, None),
+        ];
+
+        for (sql, before, after, fix_count, expected_text) in cases {
+            assert_rule_case(sql, issue_codes::LINT_ST_007, before, after, fix_count);
 
             if let Some(expected) = expected_text {
                 let out = apply_lint_fixes(sql, Dialect::Generic, &[]).expect("fix result");
