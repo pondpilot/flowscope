@@ -298,9 +298,6 @@ fn apply_text_fixes(sql: &str, rule_filter: &RuleFilter) -> String {
     if rule_filter.allows(issue_codes::LINT_ST_006) {
         out = fix_subquery_to_cte(&out);
     }
-    if rule_filter.allows(issue_codes::LINT_AM_005) {
-        out = fix_order_by_ordinal(&out);
-    }
     if rule_filter.allows(issue_codes::LINT_ST_004) {
         out = fix_using_join(&out);
     }
@@ -934,30 +931,6 @@ fn fix_table_alias_keywords(sql: &str) -> String {
             )
         },
     )
-}
-
-fn fix_order_by_ordinal(sql: &str) -> String {
-    let select_re = Regex::new(r"(?is)\bselect\s+(.*?)\bfrom\b").expect("valid fix regex");
-    let Some(caps) = select_re.captures(sql) else {
-        return sql.to_string();
-    };
-    let select_clause = caps.get(1).map(|m| m.as_str()).unwrap_or_default();
-    let first_item = select_clause
-        .split(',')
-        .next()
-        .map(str::trim)
-        .unwrap_or_default();
-    if first_item.is_empty() {
-        return sql.to_string();
-    }
-
-    regex_replace_all_with(sql, r"(?i)\border\s+by\s+(\d+)\b", |caps| {
-        if &caps[1] == "1" {
-            format!("ORDER BY {first_item}")
-        } else {
-            caps[0].to_string()
-        }
-    })
 }
 
 fn fix_subquery_to_cte(sql: &str) -> String {
@@ -1746,13 +1719,6 @@ fn fix_expr(expr: &mut Expr, rule_filter: &RuleFilter) {
         }
     }
 
-    if rule_filter.allows(issue_codes::LINT_CV_001) {
-        if let Some((check_expr, fallback_expr)) = lint_helpers::coalesce_replacement(expr) {
-            *expr = build_coalesce_expr(check_expr, fallback_expr);
-            return;
-        }
-    }
-
     if let Expr::Case {
         else_result: Some(else_result),
         ..
@@ -1790,6 +1756,13 @@ fn fix_function(func: &mut Function, rule_filter: &RuleFilter) {
 
     for order_expr in &mut func.within_group {
         fix_expr(&mut order_expr.expr, rule_filter);
+    }
+
+    if rule_filter.allows(issue_codes::LINT_CV_001) {
+        let function_name_upper = func.name.to_string().to_ascii_uppercase();
+        if function_name_upper == "IFNULL" || function_name_upper == "NVL" {
+            func.name = vec![Ident::new("COALESCE")].into();
+        }
     }
 
     if rule_filter.allows(issue_codes::LINT_CV_002) && is_count_one(func) {
@@ -1835,26 +1808,6 @@ fn is_count_one(func: &Function) -> bool {
             ..
         }))) if n == "1"
     )
-}
-
-fn build_coalesce_expr(check_expr: Expr, fallback_expr: Expr) -> Expr {
-    Expr::Function(Function {
-        name: vec![Ident::new("COALESCE")].into(),
-        uses_odbc_syntax: false,
-        parameters: FunctionArguments::None,
-        args: FunctionArguments::List(FunctionArgumentList {
-            duplicate_treatment: None,
-            args: vec![
-                FunctionArg::Unnamed(FunctionArgExpr::Expr(check_expr)),
-                FunctionArg::Unnamed(FunctionArgExpr::Expr(fallback_expr)),
-            ],
-            clauses: vec![],
-        }),
-        filter: None,
-        null_treatment: None,
-        over: None,
-        within_group: vec![],
-    })
 }
 
 fn null_comparison_rewrite(expr: &Expr) -> Option<Expr> {
@@ -2001,38 +1954,15 @@ mod tests {
     #[test]
     fn sqlfluff_cv001_cases_are_fixed_or_unchanged() {
         let cases = [
+            ("SELECT coalesce(foo, 0) AS bar FROM baz", 0, 0, 0),
+            ("SELECT ifnull(foo, 0) AS bar FROM baz", 1, 0, 1),
+            ("SELECT nvl(foo, 0) AS bar FROM baz", 1, 0, 1),
             (
                 "SELECT CASE WHEN x IS NULL THEN 'default' ELSE x END FROM t",
-                1,
-                0,
-                1,
-            ),
-            (
-                "SELECT * FROM t WHERE (CASE WHEN x IS NULL THEN 0 ELSE x END) > 5",
-                1,
-                0,
-                1,
-            ),
-            (
-                "WITH cte AS (SELECT CASE WHEN x IS NULL THEN 0 ELSE x END AS val FROM t) SELECT * FROM cte",
-                1,
-                0,
-                1,
-            ),
-            (
-                "SELECT CASE WHEN x IS NULL THEN 'a' WHEN y IS NULL THEN 'b' ELSE x END FROM t",
                 0,
                 0,
                 0,
             ),
-            ("SELECT COALESCE(x, 'default') FROM t", 0, 0, 0),
-            (
-                "SELECT CASE WHEN x IS NOT NULL THEN x ELSE 'default' END FROM t",
-                0,
-                0,
-                0,
-            ),
-            ("SELECT CASE x WHEN 1 THEN 'a' ELSE 'b' END FROM t", 0, 0, 0),
         ];
 
         for (sql, before, after, fix_count) in cases {
@@ -2359,7 +2289,6 @@ mod tests {
             (issue_codes::LINT_AL_007, "SELECT * FROM users u"),
             (issue_codes::LINT_AL_009, "SELECT a AS a FROM t"),
             (issue_codes::LINT_AM_001, "SELECT 1 UNION SELECT 2"),
-            (issue_codes::LINT_AM_005, "SELECT a FROM t ORDER BY 1"),
             (issue_codes::LINT_AM_006, "SELECT * FROM a, b"),
             (issue_codes::LINT_AM_009, "SELECT * FROM a JOIN b ON TRUE"),
             (issue_codes::LINT_CP_001, "SELECT a from t"),
@@ -2371,7 +2300,7 @@ mod tests {
             (issue_codes::LINT_CV_005, "SELECT * FROM t WHERE a <> b"),
             (
                 issue_codes::LINT_CV_001,
-                "SELECT CASE WHEN x IS NULL THEN 'default' ELSE x END FROM t",
+                "SELECT IFNULL(x, 'default') FROM t",
             ),
             (issue_codes::LINT_CV_006, "SELECT a, FROM t"),
             (issue_codes::LINT_CV_002, "SELECT COUNT(1) FROM t"),

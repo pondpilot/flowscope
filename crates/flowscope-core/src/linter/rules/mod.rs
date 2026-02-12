@@ -45,7 +45,7 @@ pub fn all_rules() -> Vec<Box<dyn LintRule>> {
         Box::new(am_009::AmbiguousJoinCondition),
         Box::new(al_001::ImplicitAlias),
         Box::new(al_002::UnusedTableAlias),
-        Box::new(cv_001::CoalesceOverCase),
+        Box::new(cv_001::CoalesceConvention),
         Box::new(cv_002::CountStyle),
         Box::new(cv_003::NullComparison),
         Box::new(cv_004::LeftJoinOverRightJoin),

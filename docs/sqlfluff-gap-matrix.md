@@ -7,9 +7,9 @@ _Generated on 2026-02-12 from a local SQLFluff source snapshot (2026-01-20)._
 - SQLFluff lint rules indexed (excluding docs anchor `rule-index`): **72**
 - FlowScope mapped rules: **72**
 - Not implemented in FlowScope: **0**
-- Implemented (close): **7**
+- Implemented (close): **8**
 - Implemented (partial): **63**
-- Implemented (divergent semantics): **2**
+- Implemented (divergent semantics): **1**
 - FlowScope fix coverage: **52 / 72**
 - FlowScope rules without fix support: **20**
 
@@ -54,7 +54,7 @@ FlowScope source-of-truth used for mapping:
 | Capitalisation | `capitalisation.literals` | `CP04` | Yes | Yes | Implemented (partial) | `LINT_CP_004` | No | Heuristic parity rule implemented in `crates/flowscope-core/src/linter/rules/parity.rs`; semantics are narrower than SQLFluff. |
 | Capitalisation | `capitalisation.types` | `CP05` | Yes | Yes | Implemented (partial) | `LINT_CP_005` | No | Heuristic parity rule implemented in `crates/flowscope-core/src/linter/rules/parity.rs`; semantics are narrower than SQLFluff. |
 | Convention | `convention.not_equal` | `CV01` | No | Yes | Implemented (partial) | `LINT_CV_005` | No | Heuristic parity rule implemented in `crates/flowscope-core/src/linter/rules/parity.rs`; semantics are narrower than SQLFluff. |
-| Convention | `convention.coalesce` | `CV02` | No | Yes | Implemented (divergent semantics) | `LINT_CV_001` | Yes | FlowScope rewrites CASE WHEN x IS NULL THEN y ELSE x; SQLFluff CV02 focuses on IFNULL/NVL -> COALESCE. |
+| Convention | `convention.coalesce` | `CV02` | No | Yes | Implemented (close) | `LINT_CV_001` | Yes | AST rule in `crates/flowscope-core/src/linter/rules/cv_001.rs` now matches SQLFluff CV02 by flagging IFNULL/NVL and fixer rewrites to COALESCE. |
 | Convention | `convention.select_trailing_comma` | `CV03` | Yes | Yes | Implemented (partial) | `LINT_CV_006` | No | Heuristic parity rule implemented in `crates/flowscope-core/src/linter/rules/parity.rs`; semantics are narrower than SQLFluff. |
 | Convention | `convention.count_rows` | `CV04` | Yes | Yes | Implemented (partial) | `LINT_CV_002` | Yes | Prefers COUNT(*); unlike SQLFluff, no preference config for COUNT(1)/COUNT(0). |
 | Convention | `convention.is_null` | `CV05` | Yes | Yes | Implemented (close) | `LINT_CV_003` | No | Flags `= NULL` / `<> NULL` comparisons and recommends `IS [NOT] NULL`. |

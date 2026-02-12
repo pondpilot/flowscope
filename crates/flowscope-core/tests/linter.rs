@@ -245,8 +245,8 @@ fn lint_al_001_explicit_alias_ok() {
 }
 
 #[test]
-fn lint_cv_001_coalesce_pattern() {
-    let issues = run_lint("SELECT CASE WHEN x IS NULL THEN 'default' ELSE x END FROM t");
+fn lint_cv_001_ifnull_usage() {
+    let issues = run_lint("SELECT IFNULL(x, 'default') FROM t");
     assert!(issues.iter().any(|(code, _)| code == "LINT_CV_001"));
 }
 
@@ -552,6 +552,7 @@ fn lint_sqlfluff_parity_rule_smoke_cases() {
         ("LINT_CP_004", "SELECT NULL, true FROM t"),
         ("LINT_CP_005", "CREATE TABLE t (a INT, b varchar(10))"),
         ("LINT_CV_005", "SELECT * FROM t WHERE a <> b AND c != d"),
+        ("LINT_CV_001", "SELECT IFNULL(a, 0) FROM t"),
         ("LINT_CV_006", "SELECT a, FROM t"),
         ("LINT_CV_007", "SELECT 1; SELECT 2"),
         ("LINT_CV_008", "(SELECT 1)"),
