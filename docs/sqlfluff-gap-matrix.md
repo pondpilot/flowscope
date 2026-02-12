@@ -7,8 +7,8 @@ _Generated on 2026-02-12 from a local SQLFluff source snapshot (2026-01-20)._
 - SQLFluff lint rules indexed (excluding docs anchor `rule-index`): **72**
 - FlowScope mapped rules: **72**
 - Not implemented in FlowScope: **0**
-- Implemented (close): **9**
-- Implemented (partial): **63**
+- Implemented (close): **10**
+- Implemented (partial): **62**
 - Implemented (divergent semantics): **0**
 - FlowScope fix coverage: **52 / 72**
 - FlowScope rules without fix support: **20**
@@ -42,7 +42,7 @@ FlowScope source-of-truth used for mapping:
 | Ambiguous | `ambiguous.distinct` | `AM01` | Yes | No | Implemented (close) | `LINT_AM_003` | Yes | Detects DISTINCT + GROUP BY redundancy. |
 | Ambiguous | `ambiguous.union` | `AM02` | Yes | Yes | Implemented (partial) | `LINT_AM_001` | No | Warns on bare UNION, recommending UNION ALL rather than explicit DISTINCT/ALL policy. |
 | Ambiguous | `ambiguous.order_by` | `AM03` | No | Yes | Implemented (partial) | `LINT_AM_005` | No | AST rule implemented in `crates/flowscope-core/src/linter/rules/am_005.rs`; default SQLFluff AM03 mixed-direction semantics are covered, while auto-fix parity is still pending. |
-| Ambiguous | `ambiguous.column_count` | `AM04` | No | No | Implemented (partial) | `LINT_AM_004` | No | Detects set-operation column-count mismatches when both branch projection widths are statically known (wildcards skip check). |
+| Ambiguous | `ambiguous.column_count` | `AM04` | No | No | Implemented (close) | `LINT_AM_004` | No | AST rule implemented in `crates/flowscope-core/src/linter/rules/am_004.rs`; now matches SQLFluff AM04 semantics by flagging queries with unknown output width from unresolved wildcard expansion (`*`/`alias.*`) across CTE/subquery/set-operation scopes. |
 | Ambiguous | `ambiguous.join` | `AM05` | No | Yes | Implemented (partial) | `LINT_AM_006` | No | AST rule implemented in `crates/flowscope-core/src/linter/rules/am_006.rs`; default SQLFluff behavior (flag bare `JOIN`) is covered, advanced config parity is pending. |
 | Ambiguous | `ambiguous.column_references` | `AM06` | Yes | No | Implemented (partial) | `LINT_AM_007` | No | AST rule implemented in `crates/flowscope-core/src/linter/rules/am_007.rs`; default `consistent` semantics and key fixture behavior now match SQLFluff AM06. |
 | Ambiguous | `ambiguous.set_columns` | `AM07` | No | No | Implemented (partial) | `LINT_AM_008` | No | AST rule implemented in `crates/flowscope-core/src/linter/rules/am_008.rs`; now checks set-branch width consistency with partial wildcard resolution (CTE/derived), but still lacks full SQLFluff source resolution parity. |

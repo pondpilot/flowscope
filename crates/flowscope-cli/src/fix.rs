@@ -2204,7 +2204,6 @@ mod tests {
 
     #[test]
     fn sqlfluff_fix_rule_smoke_cases_reduce_target_violations() {
-
         let cases = vec![
             (
                 issue_codes::LINT_AL_003,
@@ -2223,7 +2222,10 @@ mod tests {
                 issue_codes::LINT_CP_005,
                 "CREATE TABLE t (a INT, b varchar(10))",
             ),
-            (issue_codes::LINT_CV_005, "SELECT * FROM t WHERE a <> b AND c != d"),
+            (
+                issue_codes::LINT_CV_005,
+                "SELECT * FROM t WHERE a <> b AND c != d",
+            ),
             (
                 issue_codes::LINT_CV_001,
                 "SELECT IFNULL(x, 'default') FROM t",
@@ -2262,7 +2264,10 @@ mod tests {
                 issue_codes::LINT_ST_005,
                 "SELECT CASE WHEN x = 1 THEN 'a' WHEN x = 2 THEN 'b' END FROM t",
             ),
-            (issue_codes::LINT_ST_006, "SELECT * FROM (SELECT * FROM t) sub"),
+            (
+                issue_codes::LINT_ST_006,
+                "SELECT * FROM (SELECT * FROM t) sub",
+            ),
             (issue_codes::LINT_ST_007, "SELECT a + 1, a FROM t"),
             (
                 issue_codes::LINT_ST_004,

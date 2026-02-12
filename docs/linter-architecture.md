@@ -158,8 +158,9 @@ Move style-oriented checks to lexical engine:
 - [x] Phase 0 foundation shipped: `LintDocument` model, tokenization pass, and document-level lint execution path are live.
 - [x] Engine split is active in linter orchestration: semantic + lexical + document passes run with deterministic sort/dedupe.
 - [x] Issue provenance metadata is implemented (`lint_engine`, `lint_confidence`, `lint_fallback_source`).
-- [x] Phase 1 AST migrations landed for: `AM_002`, `AM_005`-`AM_009`, `CV_001`, `CV_012`, `RF_001`-`RF_003`, `ST_003`, `ST_009`-`ST_011`.
+- [x] Phase 1 AST migrations landed for: `AM_002`, `AM_004`-`AM_009`, `CV_001`, `CV_012`, `RF_001`-`RF_003`, `ST_003`, `ST_009`-`ST_011`.
 - [x] `LINT_AM_002` now follows SQLFluff AM09 semantics via AST query-clause analysis, flagging LIMIT/OFFSET usage without ORDER BY across top-level and nested SELECTs.
+- [x] `LINT_AM_004` now follows SQLFluff AM04 semantics via AST output-width analysis, flagging queries whose result column count is unknown due to unresolved wildcard expansion (`*`/`alias.*`) across CTE/subquery/set-operation scopes.
 - [x] `LINT_CV_001` now follows SQLFluff CV02 semantics and fixer behavior by flagging IFNULL/NVL function usage and rewriting to COALESCE.
 - [x] `LINT_ST_003` now follows SQLFluff ST04 semantics via AST CASE analysis, flagging flattenable nested CASE expressions in ELSE clauses (instead of depth-based heuristics).
 - [x] `LINT_AM_005` now follows SQLFluff AM03 semantics via AST `ORDER BY` analysis, flagging mixed implicit/explicit sort direction (including `NULLS` ordering cases) across nested query scopes.
@@ -167,7 +168,7 @@ Move style-oriented checks to lexical engine:
 - [x] `LINT_AM_009` now follows SQLFluff AM08 semantics via AST join-operator analysis (implicit cross join detection, with `WHERE` deferral to CV12 and UNNEST/CROSS/NATURAL/USING exclusions).
 - [x] `LINT_AM_008` now performs AST set-expression branch-width checks with deterministic wildcard resolution for CTE/derived sources, while unresolved wildcard expansions remain non-violating (SQLFluff-aligned behavior).
 - [~] Parity monolith decommission is in progress: migrated rule registrations and parity tests are removed from `parity.rs`; helper cleanup is still ongoing.
-- [~] SQLFluff fixture adoption is in progress for migrated rules; AM03/AM06/AM07/AM08/AM09, CV02, and ST04 fixture cases were adopted for `LINT_AM_005`/`LINT_AM_007`/`LINT_AM_008`/`LINT_AM_009`/`LINT_AM_002`/`LINT_CV_001`/`LINT_ST_003`, and additional rule-level coverage is still being expanded.
+- [~] SQLFluff fixture adoption is in progress for migrated rules; AM03/AM04/AM06/AM07/AM08/AM09, CV02, and ST04 fixture cases were adopted for `LINT_AM_005`/`LINT_AM_004`/`LINT_AM_007`/`LINT_AM_008`/`LINT_AM_009`/`LINT_AM_002`/`LINT_CV_001`/`LINT_ST_003`, and additional rule-level coverage is still being expanded.
 - [ ] Phase 2 lexical/style migrations are pending (`CP_*`, `LT_*`, `JJ_001`, remaining `CV_*` style rules).
 
 ## Quality Gates

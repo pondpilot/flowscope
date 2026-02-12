@@ -1,132 +1,58 @@
-//! LINT_AM_004: Set operation column count mismatch.
+//! LINT_AM_004: Ambiguous column count (SQLFluff AM04 parity).
 //!
-//! For set operations (e.g., UNION/INTERSECT/EXCEPT), each branch should expose
-//! the same number of result columns.
+//! Flags queries whose output width is not deterministically known, usually due
+//! to unresolved wildcard projections (`*` / `alias.*`).
 
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
-use sqlparser::ast::*;
+use sqlparser::ast::Statement;
+use std::collections::HashMap;
 
-pub struct SetOperationColumnCount;
+use super::column_count_helpers::{resolve_query_output_columns_strict, CteColumnCounts};
 
-impl LintRule for SetOperationColumnCount {
+pub struct AmbiguousColumnCount;
+
+impl LintRule for AmbiguousColumnCount {
     fn code(&self) -> &'static str {
         issue_codes::LINT_AM_004
     }
 
     fn name(&self) -> &'static str {
-        "Set operation column count"
+        "Ambiguous column count"
     }
 
     fn description(&self) -> &'static str {
-        "Set operation branches should return the same number of columns."
+        "Query should produce a known number of result columns."
     }
 
     fn check(&self, stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let mut issues = Vec::new();
-        check_statement(stmt, ctx, &mut issues);
-        issues
+        if statement_has_unknown_result_columns(stmt, &HashMap::new()) {
+            vec![Issue::warning(
+                issue_codes::LINT_AM_004,
+                "Query produces an unknown number of result columns.",
+            )
+            .with_statement(ctx.statement_index)]
+        } else {
+            Vec::new()
+        }
     }
 }
 
-fn check_statement(stmt: &Statement, ctx: &LintContext, issues: &mut Vec<Issue>) {
+fn statement_has_unknown_result_columns(stmt: &Statement, outer_ctes: &CteColumnCounts) -> bool {
     match stmt {
-        Statement::Query(q) => {
-            check_query(q, ctx, issues);
-        }
-        Statement::Insert(ins) => {
-            if let Some(ref source) = ins.source {
-                check_query(source, ctx, issues);
-            }
-        }
+        Statement::Query(query) => resolve_query_output_columns_strict(query, outer_ctes).is_none(),
+        Statement::Insert(insert) => insert.source.as_ref().is_some_and(|source| {
+            resolve_query_output_columns_strict(source, outer_ctes).is_none()
+        }),
         Statement::CreateView { query, .. } => {
-            check_query(query, ctx, issues);
+            resolve_query_output_columns_strict(query, outer_ctes).is_none()
         }
-        Statement::CreateTable(create) => {
-            if let Some(ref q) = create.query {
-                check_query(q, ctx, issues);
-            }
-        }
-        _ => {}
+        Statement::CreateTable(create) => create
+            .query
+            .as_ref()
+            .is_some_and(|query| resolve_query_output_columns_strict(query, outer_ctes).is_none()),
+        _ => false,
     }
-}
-
-fn check_query(query: &Query, ctx: &LintContext, issues: &mut Vec<Issue>) -> Option<usize> {
-    if let Some(ref with) = query.with {
-        for cte in &with.cte_tables {
-            check_query(&cte.query, ctx, issues);
-        }
-    }
-    check_set_expr(&query.body, ctx, issues)
-}
-
-fn check_set_expr(body: &SetExpr, ctx: &LintContext, issues: &mut Vec<Issue>) -> Option<usize> {
-    match body {
-        SetExpr::Select(select) => {
-            for from_item in &select.from {
-                check_table_factor(&from_item.relation, ctx, issues);
-                for join in &from_item.joins {
-                    check_table_factor(&join.relation, ctx, issues);
-                }
-            }
-            select_projection_count(select)
-        }
-        SetExpr::Query(q) => check_query(q, ctx, issues),
-        SetExpr::SetOperation { left, right, .. } => {
-            let left_count = check_set_expr(left, ctx, issues);
-            let right_count = check_set_expr(right, ctx, issues);
-
-            match (left_count, right_count) {
-                (Some(l), Some(r)) if l != r => {
-                    issues.push(
-                        Issue::warning(
-                            issue_codes::LINT_AM_004,
-                            format!(
-                                "Set operation has mismatched column counts: left has {}, right has {}.",
-                                l, r
-                            ),
-                        )
-                        .with_statement(ctx.statement_index),
-                    );
-                    None
-                }
-                (Some(l), Some(r)) => Some(l.min(r)),
-                _ => None,
-            }
-        }
-        SetExpr::Values(values) => values.rows.first().map(std::vec::Vec::len),
-        _ => None,
-    }
-}
-
-fn check_table_factor(relation: &TableFactor, ctx: &LintContext, issues: &mut Vec<Issue>) {
-    match relation {
-        TableFactor::Derived { subquery, .. } => {
-            check_query(subquery, ctx, issues);
-        }
-        TableFactor::NestedJoin {
-            table_with_joins, ..
-        } => {
-            check_table_factor(&table_with_joins.relation, ctx, issues);
-            for join in &table_with_joins.joins {
-                check_table_factor(&join.relation, ctx, issues);
-            }
-        }
-        _ => {}
-    }
-}
-
-fn select_projection_count(select: &Select) -> Option<usize> {
-    let mut count = 0usize;
-    for item in &select.projection {
-        match item {
-            SelectItem::Wildcard(_) | SelectItem::QualifiedWildcard(_, _) => return None,
-            _ => {
-                count += 1;
-            }
-        }
-    }
-    Some(count)
 }
 
 #[cfg(test)]
@@ -134,45 +60,109 @@ mod tests {
     use super::*;
     use crate::parser::parse_sql;
 
-    fn check_sql(sql: &str) -> Vec<Issue> {
-        let stmts = parse_sql(sql).unwrap();
-        let rule = SetOperationColumnCount;
-        let ctx = LintContext {
-            sql,
-            statement_range: 0..sql.len(),
-            statement_index: 0,
-        };
-        let mut issues = Vec::new();
-        for stmt in &stmts {
-            issues.extend(rule.check(stmt, &ctx));
-        }
-        issues
+    fn run(sql: &str) -> Vec<Issue> {
+        let statements = parse_sql(sql).expect("parse");
+        let rule = AmbiguousColumnCount;
+        statements
+            .iter()
+            .enumerate()
+            .flat_map(|(index, statement)| {
+                rule.check(
+                    statement,
+                    &LintContext {
+                        sql,
+                        statement_range: 0..sql.len(),
+                        statement_index: index,
+                    },
+                )
+            })
+            .collect()
     }
 
+    // --- Edge cases adopted from sqlfluff AM04 ---
+
     #[test]
-    fn test_mismatch_detected() {
-        let issues = check_sql("SELECT a FROM t UNION SELECT a, b FROM t2");
+    fn flags_unknown_result_columns_for_select_star_from_table() {
+        let issues = run("select * from t");
         assert_eq!(issues.len(), 1);
-        assert_eq!(issues[0].code, "LINT_AM_004");
+        assert_eq!(issues[0].code, issue_codes::LINT_AM_004);
     }
 
     #[test]
-    fn test_matching_counts_ok() {
-        let issues = check_sql("SELECT a FROM t UNION SELECT b FROM t2");
+    fn allows_known_result_columns_for_explicit_projection() {
+        let issues = run("select a, b from t");
         assert!(issues.is_empty());
     }
 
     #[test]
-    fn test_wildcard_skips_check() {
-        let issues = check_sql("SELECT * FROM t UNION SELECT a, b FROM t2");
+    fn allows_select_star_from_known_cte_columns() {
+        let issues = run("with cte as (select a, b from t) select * from cte");
         assert!(issues.is_empty());
     }
 
     #[test]
-    fn test_nested_set_operation_in_cte_detected() {
-        let issues =
-            check_sql("WITH cte AS (SELECT a FROM t UNION SELECT a, b FROM t2) SELECT * FROM cte");
+    fn flags_select_star_from_unknown_cte_columns() {
+        let issues = run("with cte as (select * from t) select * from cte");
         assert_eq!(issues.len(), 1);
-        assert_eq!(issues[0].code, "LINT_AM_004");
+    }
+
+    #[test]
+    fn allows_explicit_projection_even_if_cte_uses_wildcard() {
+        let issues = run("with cte as (select * from t) select a, b from cte");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn flags_qualified_wildcard_from_external_source() {
+        let issues = run("select t.* from t");
+        assert_eq!(issues.len(), 1);
+    }
+
+    #[test]
+    fn allows_qualified_wildcard_from_known_derived_alias() {
+        let issues = run("select t_alias.* from (select a from t) as t_alias");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn flags_qualified_wildcard_from_unknown_derived_alias() {
+        let issues = run("select t_alias.* from (select * from t) as t_alias");
+        assert_eq!(issues.len(), 1);
+    }
+
+    #[test]
+    fn flags_any_unknown_wildcard_in_projection() {
+        let issues = run("select *, t.*, t.a, b from t");
+        assert_eq!(issues.len(), 1);
+    }
+
+    #[test]
+    fn flags_set_operation_with_unknown_wildcard_branch() {
+        let issues = run("select a from t1 union all select * from t2");
+        assert_eq!(issues.len(), 1);
+    }
+
+    #[test]
+    fn allows_set_operation_with_known_columns() {
+        let issues = run("select a from t1 union all select b from t2");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn flags_nested_cte_unknown_column_chain() {
+        let issues = run("with a as (with b as (select * from c) select * from b) select * from a");
+        assert_eq!(issues.len(), 1);
+    }
+
+    #[test]
+    fn allows_non_select_statement_without_query_body() {
+        let issues = run("create table my_table (id integer)");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn flags_select_star_without_from_source() {
+        let issues = run("select *");
+        assert_eq!(issues.len(), 1);
     }
 }

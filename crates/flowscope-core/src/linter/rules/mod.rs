@@ -13,6 +13,7 @@ pub mod am_006;
 pub mod am_007;
 pub mod am_008;
 pub mod am_009;
+pub(crate) mod column_count_helpers;
 pub mod cv_001;
 pub mod cv_002;
 pub mod cv_003;
@@ -37,7 +38,7 @@ pub fn all_rules() -> Vec<Box<dyn LintRule>> {
         Box::new(am_001::BareUnion),
         Box::new(am_002::LimitOffsetWithoutOrderBy),
         Box::new(am_003::DistinctWithGroupBy),
-        Box::new(am_004::SetOperationColumnCount),
+        Box::new(am_004::AmbiguousColumnCount),
         Box::new(am_005::AmbiguousOrderBy),
         Box::new(am_006::AmbiguousJoinStyle),
         Box::new(am_007::AmbiguousColumnRefs),

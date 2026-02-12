@@ -184,8 +184,8 @@ fn lint_am_003_distinct_with_group_by() {
 }
 
 #[test]
-fn lint_am_004_set_column_count_mismatch() {
-    let issues = run_lint("SELECT a FROM t UNION SELECT a, b FROM t2");
+fn lint_am_004_unknown_result_columns() {
+    let issues = run_lint("SELECT * FROM t");
     assert!(issues.iter().any(|(code, _)| code == "LINT_AM_004"));
 }
 
@@ -418,11 +418,11 @@ fn lint_config_in_analyze_request() {
 // =============================================================================
 
 #[test]
-fn lint_am_004_matching_columns_ok() {
-    let issues = run_lint("SELECT a, b FROM t UNION SELECT c, d FROM t2");
+fn lint_am_004_known_columns_ok() {
+    let issues = run_lint("WITH cte AS (SELECT a, b FROM t) SELECT * FROM cte");
     assert!(
         !issues.iter().any(|(code, _)| code == "LINT_AM_004"),
-        "matching column counts should not trigger AM_004: {issues:?}"
+        "known output width should not trigger AM_004: {issues:?}"
     );
 }
 
