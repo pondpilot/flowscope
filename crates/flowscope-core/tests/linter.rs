@@ -166,9 +166,27 @@ fn lint_am_003_distinct_with_group_by() {
 }
 
 #[test]
+fn lint_am_004_set_column_count_mismatch() {
+    let issues = run_lint("SELECT a FROM t UNION SELECT a, b FROM t2");
+    assert!(issues.iter().any(|(code, _)| code == "LINT_AM_004"));
+}
+
+#[test]
 fn lint_cv_002_count_one() {
     let issues = run_lint("SELECT COUNT(1) FROM t");
     assert!(issues.iter().any(|(code, _)| code == "LINT_CV_002"));
+}
+
+#[test]
+fn lint_cv_003_null_comparison() {
+    let issues = run_lint("SELECT * FROM t WHERE a = NULL");
+    assert!(issues.iter().any(|(code, _)| code == "LINT_CV_003"));
+}
+
+#[test]
+fn lint_cv_004_right_join() {
+    let issues = run_lint("SELECT * FROM a RIGHT JOIN b ON a.id = b.id");
+    assert!(issues.iter().any(|(code, _)| code == "LINT_CV_004"));
 }
 
 #[test]
@@ -188,6 +206,12 @@ fn lint_st_003_nested_case() {
     let sql = "SELECT CASE WHEN a THEN CASE WHEN b THEN CASE WHEN c THEN CASE WHEN d THEN 1 END END END END FROM t";
     let issues = run_lint(sql);
     assert!(issues.iter().any(|(code, _)| code == "LINT_ST_003"));
+}
+
+#[test]
+fn lint_st_004_using_join() {
+    let issues = run_lint("SELECT * FROM a JOIN b USING (id)");
+    assert!(issues.iter().any(|(code, _)| code == "LINT_ST_004"));
 }
 
 #[test]
@@ -352,4 +376,187 @@ fn lint_config_in_analyze_request() {
     let lint = request.options.unwrap().lint.unwrap();
     assert!(lint.enabled);
     assert_eq!(lint.disabled_rules, vec!["LINT_AM_001"]);
+}
+
+// =============================================================================
+// Negative tests: rules should NOT fire on clean SQL
+// =============================================================================
+
+#[test]
+fn lint_am_004_matching_columns_ok() {
+    let issues = run_lint("SELECT a, b FROM t UNION SELECT c, d FROM t2");
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_AM_004"),
+        "matching column counts should not trigger AM_004: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_cv_003_is_null_ok() {
+    let issues = run_lint("SELECT * FROM t WHERE a IS NULL");
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_CV_003"),
+        "IS NULL should not trigger CV_003: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_cv_004_left_join_ok() {
+    let issues = run_lint("SELECT * FROM a LEFT JOIN b ON a.id = b.id");
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_CV_004"),
+        "LEFT JOIN should not trigger CV_004: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_st_004_on_join_ok() {
+    let issues = run_lint("SELECT * FROM a JOIN b ON a.id = b.id");
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_ST_004"),
+        "JOIN ON should not trigger ST_004: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_al_003_explicit_aliases_ok() {
+    let issues = run_lint("SELECT a.id, b.name FROM users a JOIN orders b ON a.id = b.user_id");
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_AL_003"),
+        "explicit aliases should not trigger AL_003: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_am_005_order_by_name_ok() {
+    let issues = run_lint("SELECT name FROM t ORDER BY name");
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_AM_005"),
+        "ORDER BY column name should not trigger AM_005: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_cp_001_consistent_case_ok() {
+    let issues = run_lint("SELECT id FROM users WHERE active = true");
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_CP_001"),
+        "consistent keyword case should not trigger CP_001: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_st_010_no_constant_expression_ok() {
+    let issues = run_lint("SELECT * FROM t WHERE status = 'active'");
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_ST_010"),
+        "normal WHERE should not trigger ST_010: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_lt_007_cte_bracket_missing() {
+    let issues = run_lint("SELECT 'WITH cte AS SELECT 1' AS sql_snippet");
+    assert!(
+        issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_LT_007),
+        "expected {}: {issues:?}",
+        issue_codes::LINT_LT_007,
+    );
+}
+
+#[test]
+fn lint_rf_004_keyword_identifier() {
+    let issues = run_lint("SELECT 'FROM tbl AS SELECT' AS sql_snippet");
+    assert!(
+        issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_RF_004),
+        "expected {}: {issues:?}",
+        issue_codes::LINT_RF_004,
+    );
+}
+
+// =============================================================================
+// SQLFluff parity smoke tests
+// =============================================================================
+
+#[test]
+fn lint_sqlfluff_parity_rule_smoke_cases() {
+    let cases = [
+        ("LINT_AL_003", "SELECT * FROM a JOIN b ON a.id = b.id"),
+        ("LINT_AL_004", "SELECT a + 1 AS x, b + 2 FROM t"),
+        ("LINT_AL_005", "SELECT * FROM a t JOIN b t ON t.id = t.id"),
+        (
+            "LINT_AL_006",
+            "SELECT * FROM a x JOIN b yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy ON x.id = yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.id",
+        ),
+        ("LINT_AL_007", "SELECT * FROM users u"),
+        ("LINT_AL_008", "SELECT a AS x, b AS x FROM t"),
+        ("LINT_AL_009", "SELECT a AS a FROM t"),
+        ("LINT_AM_005", "SELECT a FROM t ORDER BY 1"),
+        ("LINT_AM_006", "SELECT * FROM a, b"),
+        ("LINT_AM_007", "SELECT a.id, name FROM a"),
+        ("LINT_AM_008", "SELECT * FROM a UNION SELECT * FROM b"),
+        ("LINT_AM_009", "SELECT * FROM a JOIN b ON TRUE"),
+        ("LINT_CP_001", "SELECT a from t"),
+        ("LINT_CP_002", "SELECT Col, col FROM t"),
+        ("LINT_CP_003", "SELECT COUNT(*), lower(name) FROM t"),
+        ("LINT_CP_004", "SELECT NULL, true FROM t"),
+        ("LINT_CP_005", "CREATE TABLE t (a INT, b varchar(10))"),
+        ("LINT_CV_005", "SELECT * FROM t WHERE a <> b"),
+        ("LINT_CV_006", "SELECT a, FROM t"),
+        ("LINT_CV_007", "SELECT 1; SELECT 2"),
+        ("LINT_CV_008", "(SELECT 1)"),
+        ("LINT_CV_009", "SELECT foo FROM t"),
+        ("LINT_CV_010", "SELECT \"abc\" FROM t"),
+        ("LINT_CV_011", "SELECT a::INT FROM t"),
+        ("LINT_CV_012", "SELECT * FROM a JOIN b ON b.id > 0"),
+        ("LINT_JJ_001", "SELECT '{{foo}}' AS templated"),
+        ("LINT_LT_001", "SELECT * FROM t WHERE a=1"),
+        ("LINT_LT_002", "SELECT a\n   , b\nFROM t"),
+        ("LINT_LT_003", "SELECT a +\n b FROM t"),
+        ("LINT_LT_004", "SELECT a,b FROM t"),
+        (
+            "LINT_LT_005",
+            "SELECT this_is_a_very_long_column_name_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx FROM t",
+        ),
+        ("LINT_LT_006", "SELECT COUNT (1) FROM t"),
+        ("LINT_LT_008", "WITH cte AS (SELECT 1) SELECT * FROM cte"),
+        ("LINT_LT_009", "SELECT a,b,c,d,e FROM t"),
+        ("LINT_LT_010", "SELECT\nDISTINCT a\nFROM t"),
+        ("LINT_LT_011", "SELECT 1 UNION SELECT 2\nUNION SELECT 3"),
+        ("LINT_LT_012", "SELECT 1\nFROM t"),
+        ("LINT_LT_013", "\n\nSELECT 1"),
+        ("LINT_LT_014", "SELECT a FROM t\nWHERE a=1"),
+        ("LINT_LT_015", "SELECT 1\n\n\nFROM t"),
+        ("LINT_RF_001", "SELECT x.a FROM t"),
+        ("LINT_RF_002", "SELECT id FROM a JOIN b ON a.id = b.id"),
+        ("LINT_RF_003", "SELECT a.id, id2 FROM a"),
+        ("LINT_RF_005", "SELECT \"bad-name\" FROM t"),
+        ("LINT_RF_006", "SELECT \"good_name\" FROM t"),
+        (
+            "LINT_ST_005",
+            "SELECT CASE WHEN x = 1 THEN 'a' WHEN x = 2 THEN 'b' END FROM t",
+        ),
+        ("LINT_ST_006", "SELECT * FROM (SELECT 1) sub"),
+        ("LINT_ST_007", "SELECT a + 1, a FROM t"),
+        ("LINT_ST_008", "SELECT DISTINCT(a) FROM t"),
+        ("LINT_ST_009", "SELECT * FROM a x JOIN b y ON y.id = x.id"),
+        ("LINT_ST_010", "SELECT * FROM t WHERE 1 = 1"),
+        ("LINT_ST_011", "SELECT a.id FROM a JOIN b b1 ON 1 = 1"),
+        ("LINT_ST_012", "SELECT 1;;"),
+        ("LINT_TQ_001", "SELECT 'CREATE PROCEDURE sp_legacy' AS sql_snippet"),
+        ("LINT_TQ_002", "SELECT 'CREATE PROCEDURE p' AS sql_snippet"),
+        ("LINT_TQ_003", "SELECT '\nGO\nGO\n' AS sql_snippet"),
+    ];
+
+    for (code, sql) in cases {
+        let issues = run_lint(sql);
+        assert!(
+            issues.iter().any(|(c, _)| c == code),
+            "expected {code} for SQL: {sql}; got: {issues:?}"
+        );
+    }
 }

@@ -24,6 +24,8 @@ FlowScope code is released under Apache-2.0 unless stated otherwise. The `app/` 
   Column lineage semantics and edge types.
 - `dialect-coverage.md`
   Supported dialect list and high-level statement coverage.
+- `sqlfluff-gap-matrix.md`
+  Rule-by-rule SQLFluff vs FlowScope lint parity matrix.
 - `dialect_compliance_spec.md`
   Dialect normalization and scoping rules used by the analyzer.
 - `comprehensive_dialect_rules.md`

@@ -1,0 +1,176 @@
+---
+source: crates/flowscope-core/tests/golden.rs
+assertion_line: 199
+expression: cleaned
+---
+{
+  "statements": [
+    {
+      "statementIndex": 0,
+      "statementType": "CREATE_TABLE",
+      "nodes": [
+        {
+          "id": "column_a60e9184e00ef36f",
+          "type": "column",
+          "label": "imported_col",
+          "qualifiedName": "products.imported_col"
+        },
+        {
+          "id": "column_d2d29e8cbc95061a",
+          "type": "column",
+          "label": "product_id",
+          "qualifiedName": "products.product_id"
+        },
+        {
+          "id": "table_7253befe2c400508",
+          "type": "table",
+          "label": "products",
+          "qualifiedName": "products"
+        }
+      ],
+      "edges": [
+        {
+          "id": "edge_482576f33e20c7f7",
+          "from": "table_7253befe2c400508",
+          "to": "column_a60e9184e00ef36f",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_5c1c64b7a9ef59e5",
+          "from": "table_7253befe2c400508",
+          "to": "column_d2d29e8cbc95061a",
+          "type": "ownership"
+        }
+      ],
+      "joinCount": 0,
+      "complexityScore": 5
+    }
+  ],
+  "globalLineage": {
+    "nodes": [
+      {
+        "id": "column_a60e9184e00ef36f",
+        "type": "column",
+        "label": "imported_col",
+        "canonicalName": {
+          "schema": "products",
+          "name": "imported_col"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_a60e9184e00ef36f"
+          }
+        ]
+      },
+      {
+        "id": "column_d2d29e8cbc95061a",
+        "type": "column",
+        "label": "product_id",
+        "canonicalName": {
+          "schema": "products",
+          "name": "product_id"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_d2d29e8cbc95061a"
+          }
+        ]
+      },
+      {
+        "id": "table_7253befe2c400508",
+        "type": "table",
+        "label": "products",
+        "canonicalName": {
+          "name": "products"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "table_7253befe2c400508"
+          }
+        ]
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge_482576f33e20c7f7",
+        "from": "table_7253befe2c400508",
+        "to": "column_a60e9184e00ef36f",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_5c1c64b7a9ef59e5",
+        "from": "table_7253befe2c400508",
+        "to": "column_d2d29e8cbc95061a",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      }
+    ]
+  },
+  "issues": [
+    {
+      "severity": "info",
+      "code": "LINT_CP_002",
+      "message": "Identifiers use inconsistent capitalisation.",
+      "statementIndex": 0
+    },
+    {
+      "severity": "info",
+      "code": "LINT_CV_007",
+      "message": "Statement terminator style is inconsistent.",
+      "statementIndex": 0
+    },
+    {
+      "severity": "info",
+      "code": "LINT_LT_006",
+      "message": "Function call spacing appears inconsistent.",
+      "statementIndex": 0
+    },
+    {
+      "severity": "warning",
+      "code": "SCHEMA_CONFLICT",
+      "message": "DDL for 'products' conflicts with imported schema. Using imported schema (imported has 2 columns, DDL has 3 columns)",
+      "statementIndex": 0
+    }
+  ],
+  "summary": {
+    "statementCount": 1,
+    "tableCount": 1,
+    "columnCount": 2,
+    "joinCount": 0,
+    "complexityScore": 5,
+    "issueCount": {
+      "errors": 0,
+      "warnings": 1,
+      "infos": 3
+    },
+    "hasErrors": false
+  },
+  "resolvedSchema": {
+    "tables": [
+      {
+        "name": "products",
+        "columns": [
+          {
+            "name": "product_id",
+            "dataType": "BIGINT",
+            "origin": "imported"
+          },
+          {
+            "name": "imported_col",
+            "origin": "imported"
+          }
+        ],
+        "origin": "imported",
+        "updatedAt": "2024-01-01T00:00:00Z"
+      }
+    ]
+  }
+}

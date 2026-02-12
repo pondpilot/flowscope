@@ -1,0 +1,214 @@
+---
+source: crates/flowscope-core/tests/golden.rs
+assertion_line: 86
+expression: cleaned
+---
+{
+  "statements": [
+    {
+      "statementIndex": 0,
+      "statementType": "SELECT",
+      "nodes": [
+        {
+          "id": "column_208687717881053c",
+          "type": "column",
+          "label": "id",
+          "qualifiedName": "employees.id"
+        },
+        {
+          "id": "column_a4be1b20b5f604d9",
+          "type": "column",
+          "label": "rn",
+          "expression": "ROW_NUMBER() OVER (PARTITION BY dept)",
+          "metadata": {
+            "data_type": "INTEGER"
+          }
+        },
+        {
+          "id": "column_d8bba385e09d94a9",
+          "type": "column",
+          "label": "id"
+        },
+        {
+          "id": "output_b558dd754c71cfa6",
+          "type": "output",
+          "label": "Output"
+        },
+        {
+          "id": "table_1d63721b3610a67f",
+          "type": "table",
+          "label": "employees",
+          "qualifiedName": "employees"
+        }
+      ],
+      "edges": [
+        {
+          "id": "edge_0d4efff970b71ad2",
+          "from": "column_208687717881053c",
+          "to": "column_d8bba385e09d94a9",
+          "type": "data_flow"
+        },
+        {
+          "id": "edge_4c64818a03f23ebe",
+          "from": "output_b558dd754c71cfa6",
+          "to": "column_a4be1b20b5f604d9",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_b1adfd2ed7cda1e5",
+          "from": "output_b558dd754c71cfa6",
+          "to": "column_d8bba385e09d94a9",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_d0d8e0de8ab72937",
+          "from": "table_1d63721b3610a67f",
+          "to": "column_208687717881053c",
+          "type": "ownership"
+        }
+      ],
+      "joinCount": 0,
+      "complexityScore": 5
+    }
+  ],
+  "globalLineage": {
+    "nodes": [
+      {
+        "id": "column_208687717881053c",
+        "type": "column",
+        "label": "id",
+        "canonicalName": {
+          "schema": "employees",
+          "name": "id"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_208687717881053c"
+          }
+        ]
+      },
+      {
+        "id": "column_a4be1b20b5f604d9",
+        "type": "column",
+        "label": "rn",
+        "canonicalName": {
+          "name": "rn"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_a4be1b20b5f604d9"
+          }
+        ]
+      },
+      {
+        "id": "column_d8bba385e09d94a9",
+        "type": "column",
+        "label": "id",
+        "canonicalName": {
+          "name": "id"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_d8bba385e09d94a9"
+          }
+        ]
+      },
+      {
+        "id": "output_b558dd754c71cfa6",
+        "type": "output",
+        "label": "Output",
+        "canonicalName": {
+          "name": "Output"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "output_b558dd754c71cfa6"
+          }
+        ]
+      },
+      {
+        "id": "table_1d63721b3610a67f",
+        "type": "table",
+        "label": "employees",
+        "canonicalName": {
+          "name": "employees"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "table_1d63721b3610a67f"
+          }
+        ]
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge_0d4efff970b71ad2",
+        "from": "column_208687717881053c",
+        "to": "column_d8bba385e09d94a9",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_4c64818a03f23ebe",
+        "from": "output_b558dd754c71cfa6",
+        "to": "column_a4be1b20b5f604d9",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_b1adfd2ed7cda1e5",
+        "from": "output_b558dd754c71cfa6",
+        "to": "column_d8bba385e09d94a9",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_d0d8e0de8ab72937",
+        "from": "table_1d63721b3610a67f",
+        "to": "column_208687717881053c",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      }
+    ]
+  },
+  "issues": [
+    {
+      "severity": "info",
+      "code": "LINT_CP_002",
+      "message": "Identifiers use inconsistent capitalisation.",
+      "statementIndex": 0
+    },
+    {
+      "severity": "info",
+      "code": "LINT_LT_006",
+      "message": "Function call spacing appears inconsistent.",
+      "statementIndex": 0
+    }
+  ],
+  "summary": {
+    "statementCount": 1,
+    "tableCount": 1,
+    "columnCount": 3,
+    "joinCount": 0,
+    "complexityScore": 5,
+    "issueCount": {
+      "errors": 0,
+      "warnings": 0,
+      "infos": 2
+    },
+    "hasErrors": false
+  }
+}

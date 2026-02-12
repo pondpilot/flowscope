@@ -50,7 +50,7 @@ flowscope -f mermaid -v column query.sql > lineage.mmd
 Usage: flowscope [OPTIONS] [FILES]...
 
 Arguments:
-  [FILES]...  SQL files to analyze (reads from stdin if none provided)
+  [FILES]...  SQL files to analyze (reads from stdin if none provided; --lint also accepts directories)
 
 Options:
   -d, --dialect <DIALECT>  SQL dialect [default: generic]
@@ -90,6 +90,9 @@ Options:
 # Lint SQL files
 flowscope --lint queries/*.sql
 
+# Lint every .sql file under a directory (recursive)
+flowscope --lint ./queries
+
 # Apply supported auto-fixes, then report remaining violations
 flowscope --lint --fix queries/*.sql
 
@@ -97,7 +100,7 @@ flowscope --lint --fix queries/*.sql
 flowscope --lint --exclude-rules LINT_AM_001,LINT_ST_001 queries/*.sql
 ```
 
-`--fix` currently targets deterministic rewrites for a subset of lint rules. Files containing SQL comments are linted but skipped for auto-fix to avoid dropping comments during rewrite.
+`--fix` now applies deterministic rewrites across the full SQLFluff-mapped fix-rule set used by FlowScope parity checks, plus core deterministic fixes. Files containing SQL comments are linted but still skipped for auto-fix to avoid dropping comments during AST render.
 
 ### JSON Output
 

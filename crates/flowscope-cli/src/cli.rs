@@ -9,7 +9,7 @@ use std::path::PathBuf;
 #[command(about = "Analyze SQL files for data lineage", long_about = None)]
 #[command(version)]
 pub struct Args {
-    /// SQL files to analyze (reads from stdin if none provided)
+    /// SQL files to analyze (reads from stdin if none provided; --lint also accepts directories)
     #[arg(value_name = "FILES")]
     pub files: Vec<PathBuf>,
 

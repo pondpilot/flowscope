@@ -25,47 +25,46 @@ use std::process::ExitCode;
 use cli::{Args, OutputFormat, ViewMode};
 use output::{format_lint_json, format_lint_results, format_table, FileLintResult, LintIssue};
 
+/// Lint violations found or analysis errors.
+const EXIT_FAILURE: u8 = 1;
+/// Configuration error (e.g. unsupported format for the given mode).
+const EXIT_CONFIG_ERROR: u8 = 66;
+
 fn main() -> ExitCode {
-    // Check for serve mode first (requires tokio runtime)
+    let args = Args::parse();
+
     #[cfg(feature = "serve")]
-    {
-        let args = Args::parse();
-        if args.serve {
-            return run_serve_mode(args);
-        }
+    if args.serve {
+        return run_serve_mode(args);
     }
 
-    // Check for lint mode
-    {
-        let args = Args::parse();
-        if args.lint {
-            return match run_lint(args) {
-                Ok(has_violations) => {
-                    if has_violations {
-                        ExitCode::from(1)
-                    } else {
-                        ExitCode::SUCCESS
-                    }
+    if args.lint {
+        return match run_lint(args) {
+            Ok(has_violations) => {
+                if has_violations {
+                    ExitCode::from(EXIT_FAILURE)
+                } else {
+                    ExitCode::SUCCESS
                 }
-                Err(e) => {
-                    eprintln!("flowscope: error: {e:#}");
-                    ExitCode::from(66)
-                }
-            };
-        }
+            }
+            Err(e) => {
+                eprintln!("flowscope: error: {e:#}");
+                ExitCode::from(EXIT_CONFIG_ERROR)
+            }
+        };
     }
 
-    match run() {
+    match run(args) {
         Ok(has_errors) => {
             if has_errors {
-                ExitCode::from(1)
+                ExitCode::from(EXIT_FAILURE)
             } else {
                 ExitCode::SUCCESS
             }
         }
         Err(e) => {
             eprintln!("flowscope: error: {e:#}");
-            ExitCode::from(66)
+            ExitCode::from(EXIT_CONFIG_ERROR)
         }
     }
 }
@@ -97,11 +96,11 @@ fn run_serve_mode(args: Args) -> ExitCode {
             Ok(files) if !files.is_empty() => (vec![], Some(files)),
             Ok(_) => {
                 eprintln!("flowscope: error: no files to serve (use --watch or provide files)");
-                return ExitCode::from(1);
+                return ExitCode::from(EXIT_FAILURE);
             }
             Err(e) => {
                 eprintln!("flowscope: error: {e:#}");
-                return ExitCode::from(1);
+                return ExitCode::from(EXIT_FAILURE);
             }
         }
     };
@@ -132,7 +131,7 @@ fn run_serve_mode(args: Args) -> ExitCode {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("flowscope: server error: {e:#}");
-            ExitCode::from(1)
+            ExitCode::from(EXIT_FAILURE)
         }
     }
 }
@@ -144,33 +143,42 @@ fn run_serve_mode(args: Args) -> ExitCode {
 fn run_lint(args: Args) -> Result<bool> {
     use output::lint::offset_to_line_col;
 
-    let mut sources = input::read_input(&args.files)?;
+    validate_lint_output_format(args.format)?;
+
+    let mut lint_inputs = input::read_lint_input(&args.files)?;
     let dialect = args.dialect.into();
 
     if args.fix {
         let mut total_applied = 0usize;
         let mut files_modified = 0usize;
         let mut skipped_due_to_comments = 0usize;
+        let mut skipped_due_to_regression = 0usize;
         let mut skipped_due_to_parse_errors = 0usize;
         let mut stdin_modified = false;
 
-        for (idx, source) in sources.iter_mut().enumerate() {
-            let outcome = match apply_lint_fixes(&source.content, dialect) {
-                Ok(outcome) => outcome,
-                Err(err) => {
-                    skipped_due_to_parse_errors += 1;
-                    if !args.quiet {
-                        eprintln!(
-                            "flowscope: warning: unable to auto-fix {}: {err}",
-                            source.name
-                        );
+        for lint_input in &mut lint_inputs {
+            let outcome =
+                match apply_lint_fixes(&lint_input.source.content, dialect, &args.exclude_rules) {
+                    Ok(outcome) => outcome,
+                    Err(err) => {
+                        skipped_due_to_parse_errors += 1;
+                        if !args.quiet {
+                            eprintln!(
+                                "flowscope: warning: unable to auto-fix {}: {err}",
+                                lint_input.source.name
+                            );
+                        }
+                        continue;
                     }
-                    continue;
-                }
-            };
+                };
 
             if outcome.skipped_due_to_comments {
                 skipped_due_to_comments += 1;
+                continue;
+            }
+
+            if outcome.skipped_due_to_regression {
+                skipped_due_to_regression += 1;
                 continue;
             }
 
@@ -180,10 +188,10 @@ fn run_lint(args: Args) -> Result<bool> {
 
             total_applied += outcome.counts.total();
             files_modified += 1;
-            source.content = outcome.sql;
+            lint_input.source.content = outcome.sql;
 
-            if let Some(path) = args.files.get(idx) {
-                fs::write(path, &source.content)
+            if let Some(path) = &lint_input.path {
+                fs::write(path, &lint_input.source.content)
                     .with_context(|| format!("Failed to write fixed SQL to {}", path.display()))?;
             } else {
                 stdin_modified = true;
@@ -198,6 +206,11 @@ fn run_lint(args: Args) -> Result<bool> {
             if skipped_due_to_comments > 0 {
                 eprintln!(
                     "flowscope: skipped auto-fix for {skipped_due_to_comments} input(s) because comments are present"
+                );
+            }
+            if skipped_due_to_regression > 0 {
+                eprintln!(
+                    "flowscope: skipped auto-fix for {skipped_due_to_regression} input(s) because fixes increased total violations"
                 );
             }
             if skipped_due_to_parse_errors > 0 {
@@ -218,9 +231,11 @@ fn run_lint(args: Args) -> Result<bool> {
         disabled_rules: args.exclude_rules.clone(),
     };
 
-    let mut file_results = Vec::with_capacity(sources.len());
+    let mut file_results = Vec::with_capacity(lint_inputs.len());
+    let mut progress = LintProgressBar::new(lint_inputs.len(), args.quiet);
 
-    for source in &sources {
+    for lint_input in &lint_inputs {
+        let source = &lint_input.source;
         let request = AnalyzeRequest {
             sql: source.content.clone(),
             files: None,
@@ -263,14 +278,17 @@ fn run_lint(args: Args) -> Result<bool> {
             sql: source.content.clone(),
             issues,
         });
+        progress.tick();
     }
+    progress.finish();
 
     let has_violations = file_results.iter().any(|f| !f.issues.is_empty());
     let colored = args.output.is_none() && std::io::stdout().is_terminal();
 
     let output_str = match args.format {
         OutputFormat::Json => format_lint_json(&file_results, args.compact),
-        _ => format_lint_results(&file_results, colored),
+        OutputFormat::Table => format_lint_results(&file_results, colored),
+        _ => unreachable!("lint output format validated before processing"),
     };
 
     write_output(&args.output, &output_str)?;
@@ -278,9 +296,80 @@ fn run_lint(args: Args) -> Result<bool> {
     Ok(has_violations)
 }
 
-fn run() -> Result<bool> {
-    let args = Args::parse();
+struct LintProgressBar {
+    enabled: bool,
+    total: usize,
+    current: usize,
+}
 
+impl LintProgressBar {
+    const WIDTH: usize = 30;
+
+    fn new(total: usize, quiet: bool) -> Self {
+        let enabled = !quiet && total > 0 && io::stderr().is_terminal();
+        let progress = Self {
+            enabled,
+            total,
+            current: 0,
+        };
+
+        if progress.enabled {
+            progress.render();
+        }
+
+        progress
+    }
+
+    fn tick(&mut self) {
+        if !self.enabled {
+            return;
+        }
+
+        self.current = self.current.saturating_add(1).min(self.total);
+        self.render();
+    }
+
+    fn finish(&self) {
+        if self.enabled {
+            eprintln!();
+        }
+    }
+
+    fn render(&self) {
+        let filled = if self.total == 0 {
+            0
+        } else {
+            self.current * Self::WIDTH / self.total
+        };
+        let empty = Self::WIDTH - filled;
+
+        eprint!(
+            "\rLinting [{:=>filled$}{:empty$}] {}/{}",
+            "", "", self.current, self.total
+        );
+        let _ = io::stderr().flush();
+    }
+}
+
+fn validate_lint_output_format(format: OutputFormat) -> Result<()> {
+    match format {
+        OutputFormat::Json | OutputFormat::Table => Ok(()),
+        other => {
+            let name = match other {
+                OutputFormat::Mermaid => "mermaid",
+                OutputFormat::Html => "html",
+                OutputFormat::Sql => "sql",
+                OutputFormat::Csv => "csv",
+                OutputFormat::Xlsx => "xlsx",
+                OutputFormat::Duckdb => "duckdb",
+                _ => "unknown",
+            };
+            anyhow::bail!("--lint only supports 'table' and 'json' output formats, got '{name}'");
+        }
+    }
+}
+
+fn run(args: Args) -> Result<bool> {
     // Read input files
     let sources = input::read_input(&args.files)?;
 

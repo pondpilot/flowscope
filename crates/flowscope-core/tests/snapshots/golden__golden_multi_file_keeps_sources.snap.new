@@ -1,0 +1,186 @@
+---
+source: crates/flowscope-core/tests/golden.rs
+assertion_line: 50
+expression: cleaned
+---
+{
+  "statements": [
+    {
+      "statementIndex": 0,
+      "statementType": "SELECT",
+      "sourceName": "alpha.sql",
+      "nodes": [
+        {
+          "id": "output_b558dd754c71cfa6",
+          "type": "output",
+          "label": "Output"
+        },
+        {
+          "id": "table_b1180f6188cee2e2",
+          "type": "table",
+          "label": "alpha_table",
+          "qualifiedName": "alpha_table"
+        }
+      ],
+      "edges": [
+        {
+          "id": "edge_8da7ba8511ace3fa",
+          "from": "table_b1180f6188cee2e2",
+          "to": "output_b558dd754c71cfa6",
+          "type": "data_flow",
+          "approximate": true
+        }
+      ],
+      "joinCount": 0,
+      "complexityScore": 5
+    },
+    {
+      "statementIndex": 1,
+      "statementType": "SELECT",
+      "sourceName": "beta.sql",
+      "nodes": [
+        {
+          "id": "output_de579a76d9dbae52",
+          "type": "output",
+          "label": "Output (2)"
+        },
+        {
+          "id": "table_8d1cecbc26a50f36",
+          "type": "table",
+          "label": "beta_table",
+          "qualifiedName": "beta_table"
+        }
+      ],
+      "edges": [
+        {
+          "id": "edge_9671bebac1b861c0",
+          "from": "table_8d1cecbc26a50f36",
+          "to": "output_de579a76d9dbae52",
+          "type": "data_flow",
+          "approximate": true
+        }
+      ],
+      "joinCount": 0,
+      "complexityScore": 5
+    }
+  ],
+  "globalLineage": {
+    "nodes": [
+      {
+        "id": "output_b558dd754c71cfa6",
+        "type": "output",
+        "label": "Output",
+        "canonicalName": {
+          "name": "Output"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "output_b558dd754c71cfa6"
+          }
+        ]
+      },
+      {
+        "id": "output_de579a76d9dbae52",
+        "type": "output",
+        "label": "Output (2)",
+        "canonicalName": {
+          "name": "Output (2)"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 1,
+            "nodeId": "output_de579a76d9dbae52"
+          }
+        ]
+      },
+      {
+        "id": "table_8d1cecbc26a50f36",
+        "type": "table",
+        "label": "beta_table",
+        "canonicalName": {
+          "name": "beta_table"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 1,
+            "nodeId": "table_8d1cecbc26a50f36"
+          }
+        ]
+      },
+      {
+        "id": "table_b1180f6188cee2e2",
+        "type": "table",
+        "label": "alpha_table",
+        "canonicalName": {
+          "name": "alpha_table"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "table_b1180f6188cee2e2"
+          }
+        ]
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge_8da7ba8511ace3fa",
+        "from": "table_b1180f6188cee2e2",
+        "to": "output_b558dd754c71cfa6",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_9671bebac1b861c0",
+        "from": "table_8d1cecbc26a50f36",
+        "to": "output_de579a76d9dbae52",
+        "type": "data_flow",
+        "producerStatement": {
+          "statementIndex": 1
+        }
+      }
+    ]
+  },
+  "issues": [
+    {
+      "severity": "info",
+      "code": "APPROXIMATE_LINEAGE",
+      "message": "SELECT * from 'alpha_table' - column list unknown without schema metadata",
+      "statementIndex": 0
+    },
+    {
+      "severity": "info",
+      "code": "APPROXIMATE_LINEAGE",
+      "message": "SELECT * from 'beta_table' - column list unknown without schema metadata",
+      "statementIndex": 1
+    },
+    {
+      "severity": "info",
+      "code": "LINT_CV_007",
+      "message": "Statement terminator style is inconsistent.",
+      "statementIndex": 0
+    },
+    {
+      "severity": "info",
+      "code": "LINT_CV_007",
+      "message": "Statement terminator style is inconsistent.",
+      "statementIndex": 1
+    }
+  ],
+  "summary": {
+    "statementCount": 2,
+    "tableCount": 2,
+    "columnCount": 0,
+    "joinCount": 0,
+    "complexityScore": 10,
+    "issueCount": {
+      "errors": 0,
+      "warnings": 0,
+      "infos": 4
+    },
+    "hasErrors": false
+  }
+}

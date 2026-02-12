@@ -110,6 +110,75 @@ fn test_lint_exclude_rules() {
 }
 
 #[test]
+fn test_lint_fix_respects_exclude_rules() {
+    let dir = tempdir().expect("temp dir");
+    let sql_path = dir.path().join("excluded_fix.sql");
+    std::fs::write(&sql_path, SQL_WITH_VIOLATIONS).expect("write sql");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_flowscope"))
+        .args([
+            "--lint",
+            "--fix",
+            "--exclude-rules",
+            "LINT_AM_001",
+            sql_path.to_str().expect("sql path"),
+        ])
+        .output()
+        .expect("run CLI");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "Expected exit 0 when excluded rule is the only violation, got: {stdout}"
+    );
+
+    let after = std::fs::read_to_string(&sql_path).expect("read SQL after fix");
+    assert_eq!(
+        after, SQL_WITH_VIOLATIONS,
+        "Expected file to remain unchanged when fix rule is excluded"
+    );
+}
+
+#[test]
+fn test_lint_fix_excluded_rule_not_rewritten_when_other_fixes_apply() {
+    let dir = tempdir().expect("temp dir");
+    let sql_path = dir.path().join("excluded_mixed_fix.sql");
+    let sql = "SELECT COUNT(1) FROM t WHERE a<>b";
+    std::fs::write(&sql_path, sql).expect("write sql");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_flowscope"))
+        .args([
+            "--lint",
+            "--fix",
+            "--exclude-rules",
+            "LINT_CV_005",
+            sql_path.to_str().expect("sql path"),
+        ])
+        .output()
+        .expect("run CLI");
+
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "Expected exit 1 due remaining non-excluded violations"
+    );
+
+    let after = std::fs::read_to_string(&sql_path).expect("read SQL after fix");
+    assert!(
+        after.contains("COUNT(*)"),
+        "Expected non-excluded fix to apply: {after}"
+    );
+    assert!(
+        after.contains("<>"),
+        "Expected excluded CV_005 to remain '<>' (not '!='): {after}"
+    );
+    assert!(
+        !after.contains("!="),
+        "Expected excluded CV_005 to avoid not-equal rewrite: {after}"
+    );
+}
+
+#[test]
 fn test_lint_output_file_has_no_ansi_sequences() {
     let dir = tempdir().expect("temp dir");
     let sql_path = dir.path().join("bad.sql");
@@ -168,6 +237,71 @@ fn test_lint_json_format() {
     let arr = parsed.as_array().expect("Expected JSON array");
     assert_eq!(arr.len(), 1);
     assert!(!arr[0]["violations"].as_array().unwrap().is_empty());
+}
+
+#[test]
+fn test_lint_unsupported_format() {
+    let dir = tempdir().expect("temp dir");
+    let sql_path = dir.path().join("test.sql");
+    std::fs::write(&sql_path, SQL_CLEAN).expect("write sql");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_flowscope"))
+        .args([
+            "--lint",
+            "--format",
+            "html",
+            sql_path.to_str().expect("sql path"),
+        ])
+        .output()
+        .expect("run CLI");
+
+    assert_eq!(
+        output.status.code(),
+        Some(66),
+        "Expected exit 66 for unsupported format"
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("only supports"),
+        "Expected helpful error message: {stderr}"
+    );
+}
+
+#[test]
+fn test_lint_unsupported_format_fails_before_fix_mutation() {
+    let dir = tempdir().expect("temp dir");
+    let sql_path = dir.path().join("test.sql");
+    std::fs::write(&sql_path, SQL_WITH_VIOLATIONS).expect("write sql");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_flowscope"))
+        .args([
+            "--lint",
+            "--fix",
+            "--format",
+            "html",
+            sql_path.to_str().expect("sql path"),
+        ])
+        .output()
+        .expect("run CLI");
+
+    assert_eq!(
+        output.status.code(),
+        Some(66),
+        "Expected exit 66 for unsupported lint format"
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("only supports"),
+        "Expected helpful error message: {stderr}"
+    );
+
+    let after = std::fs::read_to_string(&sql_path).expect("read SQL after failed command");
+    assert_eq!(
+        after, SQL_WITH_VIOLATIONS,
+        "Expected file to remain unchanged for unsupported format"
+    );
 }
 
 #[test]
@@ -240,5 +374,48 @@ fn test_lint_multiple_files() {
     assert!(
         stdout.contains("1 file failed"),
         "Expected 1 file failed: {stdout}"
+    );
+}
+
+#[test]
+fn test_lint_directory_recursively() {
+    let dir = tempdir().expect("temp dir");
+    let nested = dir.path().join("nested");
+    std::fs::create_dir_all(&nested).expect("create nested directory");
+
+    let clean_path = dir.path().join("clean.sql");
+    let bad_path = nested.join("bad.sql");
+    let ignored = nested.join("notes.txt");
+
+    std::fs::write(&clean_path, SQL_CLEAN).expect("write clean sql");
+    std::fs::write(&bad_path, SQL_WITH_VIOLATIONS).expect("write bad sql");
+    std::fs::write(&ignored, SQL_WITH_VIOLATIONS).expect("write ignored file");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_flowscope"))
+        .args(["--lint", dir.path().to_str().expect("dir path")])
+        .output()
+        .expect("run CLI");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "Expected exit 1 when one discovered SQL file fails: {stdout}"
+    );
+    assert!(
+        stdout.contains("1 file passed"),
+        "Expected one clean SQL file in recursive lint output: {stdout}"
+    );
+    assert!(
+        stdout.contains("1 file failed"),
+        "Expected one failing SQL file in recursive lint output: {stdout}"
+    );
+    assert!(
+        stdout.contains("LINT_AM_001"),
+        "Expected lint violation from nested SQL file: {stdout}"
+    );
+    assert!(
+        !stdout.contains("notes.txt"),
+        "Expected non-sql files to be ignored: {stdout}"
     );
 }

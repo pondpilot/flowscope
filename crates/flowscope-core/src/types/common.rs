@@ -194,19 +194,91 @@ pub mod issue_codes {
     pub const LINT_AM_001: &str = "LINT_AM_001";
     pub const LINT_AM_002: &str = "LINT_AM_002";
     pub const LINT_AM_003: &str = "LINT_AM_003";
+    pub const LINT_AM_004: &str = "LINT_AM_004";
+    pub const LINT_AM_005: &str = "LINT_AM_005";
+    pub const LINT_AM_006: &str = "LINT_AM_006";
+    pub const LINT_AM_007: &str = "LINT_AM_007";
+    pub const LINT_AM_008: &str = "LINT_AM_008";
+    pub const LINT_AM_009: &str = "LINT_AM_009";
+
+    // Lint rules — capitalisation
+    pub const LINT_CP_001: &str = "LINT_CP_001";
+    pub const LINT_CP_002: &str = "LINT_CP_002";
+    pub const LINT_CP_003: &str = "LINT_CP_003";
+    pub const LINT_CP_004: &str = "LINT_CP_004";
+    pub const LINT_CP_005: &str = "LINT_CP_005";
 
     // Lint rules — convention
     pub const LINT_CV_001: &str = "LINT_CV_001";
     pub const LINT_CV_002: &str = "LINT_CV_002";
+    pub const LINT_CV_003: &str = "LINT_CV_003";
+    pub const LINT_CV_004: &str = "LINT_CV_004";
+    pub const LINT_CV_005: &str = "LINT_CV_005";
+    pub const LINT_CV_006: &str = "LINT_CV_006";
+    pub const LINT_CV_007: &str = "LINT_CV_007";
+    pub const LINT_CV_008: &str = "LINT_CV_008";
+    pub const LINT_CV_009: &str = "LINT_CV_009";
+    pub const LINT_CV_010: &str = "LINT_CV_010";
+    pub const LINT_CV_011: &str = "LINT_CV_011";
+    pub const LINT_CV_012: &str = "LINT_CV_012";
+
+    // Lint rules — jinja
+    pub const LINT_JJ_001: &str = "LINT_JJ_001";
+
+    // Lint rules — layout
+    pub const LINT_LT_001: &str = "LINT_LT_001";
+    pub const LINT_LT_002: &str = "LINT_LT_002";
+    pub const LINT_LT_003: &str = "LINT_LT_003";
+    pub const LINT_LT_004: &str = "LINT_LT_004";
+    pub const LINT_LT_005: &str = "LINT_LT_005";
+    pub const LINT_LT_006: &str = "LINT_LT_006";
+    pub const LINT_LT_007: &str = "LINT_LT_007";
+    pub const LINT_LT_008: &str = "LINT_LT_008";
+    pub const LINT_LT_009: &str = "LINT_LT_009";
+    pub const LINT_LT_010: &str = "LINT_LT_010";
+    pub const LINT_LT_011: &str = "LINT_LT_011";
+    pub const LINT_LT_012: &str = "LINT_LT_012";
+    pub const LINT_LT_013: &str = "LINT_LT_013";
+    pub const LINT_LT_014: &str = "LINT_LT_014";
+    pub const LINT_LT_015: &str = "LINT_LT_015";
+
+    // Lint rules — references
+    pub const LINT_RF_001: &str = "LINT_RF_001";
+    pub const LINT_RF_002: &str = "LINT_RF_002";
+    pub const LINT_RF_003: &str = "LINT_RF_003";
+    pub const LINT_RF_004: &str = "LINT_RF_004";
+    pub const LINT_RF_005: &str = "LINT_RF_005";
+    pub const LINT_RF_006: &str = "LINT_RF_006";
 
     // Lint rules — structure
     pub const LINT_ST_001: &str = "LINT_ST_001";
     pub const LINT_ST_002: &str = "LINT_ST_002";
     pub const LINT_ST_003: &str = "LINT_ST_003";
+    pub const LINT_ST_004: &str = "LINT_ST_004";
+    pub const LINT_ST_005: &str = "LINT_ST_005";
+    pub const LINT_ST_006: &str = "LINT_ST_006";
+    pub const LINT_ST_007: &str = "LINT_ST_007";
+    pub const LINT_ST_008: &str = "LINT_ST_008";
+    pub const LINT_ST_009: &str = "LINT_ST_009";
+    pub const LINT_ST_010: &str = "LINT_ST_010";
+    pub const LINT_ST_011: &str = "LINT_ST_011";
+    pub const LINT_ST_012: &str = "LINT_ST_012";
 
     // Lint rules — aliasing
     pub const LINT_AL_001: &str = "LINT_AL_001";
     pub const LINT_AL_002: &str = "LINT_AL_002";
+    pub const LINT_AL_003: &str = "LINT_AL_003";
+    pub const LINT_AL_004: &str = "LINT_AL_004";
+    pub const LINT_AL_005: &str = "LINT_AL_005";
+    pub const LINT_AL_006: &str = "LINT_AL_006";
+    pub const LINT_AL_007: &str = "LINT_AL_007";
+    pub const LINT_AL_008: &str = "LINT_AL_008";
+    pub const LINT_AL_009: &str = "LINT_AL_009";
+
+    // Lint rules — tsql
+    pub const LINT_TQ_001: &str = "LINT_TQ_001";
+    pub const LINT_TQ_002: &str = "LINT_TQ_002";
+    pub const LINT_TQ_003: &str = "LINT_TQ_003";
 }
 
 #[cfg(test)]
