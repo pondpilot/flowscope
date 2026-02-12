@@ -1680,6 +1680,12 @@ fn fix_expr(expr: &mut Expr, rule_filter: &RuleFilter) {
         }
     }
 
+    if rule_filter.allows(issue_codes::LINT_ST_003) {
+        if let Some(rewritten) = nested_case_rewrite(expr) {
+            *expr = rewritten;
+        }
+    }
+
     if let Expr::Case {
         else_result: Some(else_result),
         ..
@@ -1788,6 +1794,68 @@ fn null_comparison_rewrite(expr: &Expr) -> Option<Expr> {
         BinaryOperator::Eq => Some(Expr::IsNull(Box::new(target))),
         BinaryOperator::NotEq => Some(Expr::IsNotNull(Box::new(target))),
         _ => None,
+    }
+}
+
+fn nested_case_rewrite(expr: &Expr) -> Option<Expr> {
+    let Expr::Case {
+        case_token,
+        operand: outer_operand,
+        conditions: outer_conditions,
+        else_result: Some(outer_else),
+        end_token,
+    } = expr
+    else {
+        return None;
+    };
+
+    if outer_conditions.is_empty() {
+        return None;
+    }
+
+    let Expr::Case {
+        operand: inner_operand,
+        conditions: inner_conditions,
+        else_result: inner_else,
+        ..
+    } = nested_case_expr(outer_else.as_ref())?
+    else {
+        return None;
+    };
+
+    if inner_conditions.is_empty() {
+        return None;
+    }
+
+    if !case_operands_match(outer_operand.as_deref(), inner_operand.as_deref()) {
+        return None;
+    }
+
+    let mut merged_conditions = outer_conditions.clone();
+    merged_conditions.extend(inner_conditions.iter().cloned());
+
+    Some(Expr::Case {
+        case_token: case_token.clone(),
+        operand: outer_operand.clone(),
+        conditions: merged_conditions,
+        else_result: inner_else.clone(),
+        end_token: end_token.clone(),
+    })
+}
+
+fn nested_case_expr(expr: &Expr) -> Option<&Expr> {
+    match expr {
+        Expr::Case { .. } => Some(expr),
+        Expr::Nested(inner) => nested_case_expr(inner),
+        _ => None,
+    }
+}
+
+fn case_operands_match(outer: Option<&Expr>, inner: Option<&Expr>) -> bool {
+    match (outer, inner) {
+        (None, None) => true,
+        (Some(left), Some(right)) => format!("{left}") == format!("{right}"),
+        _ => false,
     }
 }
 
@@ -2024,6 +2092,60 @@ mod tests {
 
         for (sql, before, after, fix_count, expected_text) in cases {
             assert_rule_case(sql, issue_codes::LINT_AM_006, before, after, fix_count);
+
+            if let Some(expected) = expected_text {
+                let out = apply_lint_fixes(sql, Dialect::Generic, &[]).expect("fix result");
+                assert!(
+                    out.sql.to_ascii_uppercase().contains(expected),
+                    "expected {expected:?} in fixed SQL, got: {}",
+                    out.sql
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sqlfluff_st003_cases_are_fixed_or_unchanged() {
+        let cases = [
+            (
+                "SELECT CASE WHEN species = 'Rat' THEN 'Squeak' ELSE CASE WHEN species = 'Dog' THEN 'Woof' END END AS sound FROM mytable",
+                1,
+                0,
+                1,
+                Some("WHEN 'DOG' THEN 'WOOF'"),
+            ),
+            (
+                "SELECT CASE WHEN species = 'Rat' THEN 'Squeak' ELSE CASE WHEN species = 'Dog' THEN 'Woof' WHEN species = 'Mouse' THEN 'Squeak' ELSE 'Other' END END AS sound FROM mytable",
+                1,
+                0,
+                1,
+                Some("WHEN SPECIES = 'MOUSE' THEN 'SQUEAK' ELSE 'OTHER' END"),
+            ),
+            (
+                "SELECT CASE WHEN species = 'Rat' THEN CASE WHEN colour = 'Black' THEN 'Growl' WHEN colour = 'Grey' THEN 'Squeak' END END AS sound FROM mytable",
+                0,
+                0,
+                0,
+                None,
+            ),
+            (
+                "SELECT CASE WHEN day_of_month IN (11, 12, 13) THEN 'TH' ELSE CASE MOD(day_of_month, 10) WHEN 1 THEN 'ST' WHEN 2 THEN 'ND' WHEN 3 THEN 'RD' ELSE 'TH' END END AS ordinal_suffix FROM calendar",
+                0,
+                0,
+                0,
+                None,
+            ),
+            (
+                "SELECT CASE x WHEN 0 THEN 'zero' WHEN 5 THEN 'five' ELSE CASE x WHEN 10 THEN 'ten' WHEN 20 THEN 'twenty' ELSE 'other' END END FROM tab_a",
+                1,
+                0,
+                1,
+                Some("WHEN 20 THEN 'TWENTY' ELSE 'OTHER' END"),
+            ),
+        ];
+
+        for (sql, before, after, fix_count, expected_text) in cases {
+            assert_rule_case(sql, issue_codes::LINT_ST_003, before, after, fix_count);
 
             if let Some(expected) = expected_text {
                 let out = apply_lint_fixes(sql, Dialect::Generic, &[]).expect("fix result");
@@ -2479,6 +2601,10 @@ mod tests {
             (
                 issue_codes::LINT_ST_002,
                 "SELECT CASE WHEN x > 1 THEN 'a' ELSE NULL END FROM t",
+            ),
+            (
+                issue_codes::LINT_ST_003,
+                "SELECT CASE WHEN species = 'Rat' THEN 'Squeak' ELSE CASE WHEN species = 'Dog' THEN 'Woof' END END FROM mytable",
             ),
             (
                 issue_codes::LINT_ST_005,

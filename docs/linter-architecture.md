@@ -164,7 +164,7 @@ Move style-oriented checks to lexical engine:
 - [x] `LINT_AM_001` now follows SQLFluff AM02 core semantics by flagging bare `UNION` (without explicit `ALL`/`DISTINCT`), with CLI fixer behavior inserting explicit `DISTINCT` and dialect-scoped execution aligned to SQLFluff-supported dialects available in FlowScope.
 - [x] `LINT_CV_001` now follows SQLFluff CV02 semantics and fixer behavior by flagging IFNULL/NVL function usage and rewriting to COALESCE.
 - [x] `LINT_CV_003` now follows SQLFluff CV05 semantics and fixer behavior by flagging `= NULL`/`<> NULL` comparisons and rewriting to `IS [NOT] NULL`.
-- [x] `LINT_ST_003` now follows SQLFluff ST04 semantics via AST CASE analysis, flagging flattenable nested CASE expressions in ELSE clauses (instead of depth-based heuristics).
+- [x] `LINT_ST_003` now follows SQLFluff ST04 semantics via AST CASE analysis, flagging flattenable nested CASE expressions in ELSE clauses (instead of depth-based heuristics); fixer parity now flattens eligible nested `ELSE CASE` branches into a single CASE.
 - [x] `LINT_AM_005` now follows SQLFluff AM03 semantics via AST `ORDER BY` analysis, flagging mixed implicit/explicit sort direction (including `NULLS` ordering cases) across nested query scopes; fixer parity now adds explicit `ASC` to implicit items in mixed clauses.
 - [x] `LINT_AM_006` now supports SQLFluff AM05 fixer parity for default behavior by rewriting bare `JOIN` operators to explicit `INNER JOIN` via AST join-operator rewrites.
 - [x] `LINT_AM_007` now follows SQLFluff AM06 default (`consistent`) semantics via AST traversal of `GROUP BY` / `ORDER BY` clauses, including nested-query precedence and rollup-style references.
