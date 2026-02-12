@@ -307,9 +307,6 @@ fn apply_text_fixes(sql: &str, rule_filter: &RuleFilter) -> String {
     if rule_filter.allows(issue_codes::LINT_CP_001) {
         out = fix_case_style_consistency(&out);
     }
-    if rule_filter.allows(issue_codes::LINT_ST_005) {
-        out = fix_simple_case_rewrite(&out);
-    }
     if rule_filter.allows(issue_codes::LINT_TQ_002) {
         out = fix_tsql_procedure_begin_end(&out);
     }
@@ -1089,23 +1086,6 @@ fn fix_case_style_consistency(sql: &str) -> String {
     out
 }
 
-fn fix_simple_case_rewrite(sql: &str) -> String {
-    regex_replace_all_with(
-        sql,
-        r"(?is)\bcase\s+when\s+([A-Za-z_][A-Za-z0-9_\.]*)\s*=\s*([^ ]+)\s+then\s+([^ ]+)\s+when\s+([A-Za-z_][A-Za-z0-9_\.]*)\s*=\s*([^ ]+)\s+then\s+([^ ]+)\s+end",
-        |caps| {
-            if caps[1].eq_ignore_ascii_case(&caps[4]) {
-                format!(
-                    "CASE {} WHEN {} THEN {} WHEN {} THEN {} END",
-                    &caps[1], &caps[2], &caps[3], &caps[5], &caps[6]
-                )
-            } else {
-                caps[0].to_string()
-            }
-        },
-    )
-}
-
 fn fix_tsql_procedure_begin_end(sql: &str) -> String {
     regex_replace_all_with(
         sql,
@@ -1880,6 +1860,12 @@ fn fix_expr(expr: &mut Expr, rule_filter: &RuleFilter) {
         }
     }
 
+    if rule_filter.allows(issue_codes::LINT_ST_005) {
+        if let Some(rewritten) = simple_case_rewrite(expr) {
+            *expr = rewritten;
+        }
+    }
+
     if let Expr::Case {
         else_result: Some(else_result),
         ..
@@ -1989,6 +1975,88 @@ fn null_comparison_rewrite(expr: &Expr) -> Option<Expr> {
         BinaryOperator::NotEq => Some(Expr::IsNotNull(Box::new(target))),
         _ => None,
     }
+}
+
+fn simple_case_rewrite(expr: &Expr) -> Option<Expr> {
+    let Expr::Case {
+        case_token,
+        operand: None,
+        conditions,
+        else_result,
+        end_token,
+    } = expr
+    else {
+        return None;
+    };
+
+    if conditions.len() < 2 {
+        return None;
+    }
+
+    let mut common_operand: Option<Expr> = None;
+    let mut rewritten_conditions = Vec::with_capacity(conditions.len());
+
+    for case_when in conditions {
+        let (operand_expr, value_expr) =
+            split_case_when_equality(&case_when.condition, common_operand.as_ref())?;
+
+        if common_operand.is_none() {
+            common_operand = Some(operand_expr);
+        }
+
+        rewritten_conditions.push(CaseWhen {
+            condition: value_expr,
+            result: case_when.result.clone(),
+        });
+    }
+
+    Some(Expr::Case {
+        case_token: case_token.clone(),
+        operand: Some(Box::new(common_operand?)),
+        conditions: rewritten_conditions,
+        else_result: else_result.clone(),
+        end_token: end_token.clone(),
+    })
+}
+
+fn split_case_when_equality(
+    condition: &Expr,
+    expected_operand: Option<&Expr>,
+) -> Option<(Expr, Expr)> {
+    let Expr::BinaryOp { left, op, right } = condition else {
+        return None;
+    };
+
+    if *op != BinaryOperator::Eq {
+        return None;
+    }
+
+    if let Some(expected) = expected_operand {
+        if exprs_equivalent(left, expected) {
+            return Some((left.as_ref().clone(), right.as_ref().clone()));
+        }
+        if exprs_equivalent(right, expected) {
+            return Some((right.as_ref().clone(), left.as_ref().clone()));
+        }
+        return None;
+    }
+
+    if simple_case_operand_candidate(left) {
+        return Some((left.as_ref().clone(), right.as_ref().clone()));
+    }
+    if simple_case_operand_candidate(right) {
+        return Some((right.as_ref().clone(), left.as_ref().clone()));
+    }
+
+    None
+}
+
+fn simple_case_operand_candidate(expr: &Expr) -> bool {
+    matches!(expr, Expr::Identifier(_) | Expr::CompoundIdentifier(_))
+}
+
+fn exprs_equivalent(left: &Expr, right: &Expr) -> bool {
+    format!("{left}") == format!("{right}")
 }
 
 fn nested_case_rewrite(expr: &Expr) -> Option<Expr> {
@@ -2347,6 +2415,53 @@ mod tests {
     }
 
     #[test]
+    fn sqlfluff_st005_cases_are_fixed_or_unchanged() {
+        let cases = [
+            (
+                "SELECT CASE WHEN x = 1 THEN 'a' WHEN x = 2 THEN 'b' END FROM t",
+                1,
+                0,
+                1,
+                Some("CASE X WHEN 1 THEN 'A' WHEN 2 THEN 'B' END"),
+            ),
+            (
+                "SELECT CASE WHEN x = 1 THEN 'a' WHEN x = 2 THEN 'b' ELSE 'c' END FROM t",
+                1,
+                0,
+                1,
+                Some("CASE X WHEN 1 THEN 'A' WHEN 2 THEN 'B' ELSE 'C' END"),
+            ),
+            (
+                "SELECT CASE WHEN x = 1 THEN 'a' WHEN y = 2 THEN 'b' END FROM t",
+                0,
+                0,
+                0,
+                None,
+            ),
+            (
+                "SELECT CASE x WHEN 1 THEN 'a' WHEN 2 THEN 'b' END FROM t",
+                0,
+                0,
+                0,
+                None,
+            ),
+        ];
+
+        for (sql, before, after, fix_count, expected_text) in cases {
+            assert_rule_case(sql, issue_codes::LINT_ST_005, before, after, fix_count);
+
+            if let Some(expected) = expected_text {
+                let out = apply_lint_fixes(sql, Dialect::Generic, &[]).expect("fix result");
+                assert!(
+                    out.sql.to_ascii_uppercase().contains(expected),
+                    "expected {expected:?} in fixed SQL, got: {}",
+                    out.sql
+                );
+            }
+        }
+    }
+
+    #[test]
     fn sqlfluff_st007_cases_are_fixed_or_unchanged() {
         let cases = [
             ("SELECT a + 1, a FROM t", 1, 0, 1, Some("SELECT A, A + 1")),
@@ -2492,7 +2607,7 @@ mod tests {
                 1,
                 0,
                 1,
-                Some("WHEN SPECIES = 'MOUSE' THEN 'SQUEAK' ELSE 'OTHER' END"),
+                Some("WHEN 'MOUSE' THEN 'SQUEAK' ELSE 'OTHER' END"),
             ),
             (
                 "SELECT CASE WHEN species = 'Rat' THEN CASE WHEN colour = 'Black' THEN 'Growl' WHEN colour = 'Grey' THEN 'Squeak' END END AS sound FROM mytable",
