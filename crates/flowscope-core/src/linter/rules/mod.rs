@@ -8,6 +8,7 @@ pub mod am_001;
 pub mod am_002;
 pub mod am_003;
 pub mod am_004;
+pub mod am_005;
 pub mod am_006;
 pub mod am_007;
 pub mod am_008;
@@ -37,6 +38,7 @@ pub fn all_rules() -> Vec<Box<dyn LintRule>> {
         Box::new(am_002::OrderByWithoutLimit),
         Box::new(am_003::DistinctWithGroupBy),
         Box::new(am_004::SetOperationColumnCount),
+        Box::new(am_005::AmbiguousOrderBy),
         Box::new(am_006::AmbiguousJoinStyle),
         Box::new(am_007::AmbiguousColumnRefs),
         Box::new(am_008::AmbiguousSetColumns),

@@ -188,6 +188,7 @@ fn ast_rule_code(code: &str) -> bool {
             | crate::types::issue_codes::LINT_AM_002
             | crate::types::issue_codes::LINT_AM_003
             | crate::types::issue_codes::LINT_AM_004
+            | crate::types::issue_codes::LINT_AM_005
             | crate::types::issue_codes::LINT_AM_006
             | crate::types::issue_codes::LINT_AM_007
             | crate::types::issue_codes::LINT_AM_008

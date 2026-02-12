@@ -464,6 +464,15 @@ fn lint_am_005_order_by_name_ok() {
 }
 
 #[test]
+fn lint_am_005_mixed_order_by_direction() {
+    let issues = run_lint("SELECT a, b FROM t ORDER BY a, b DESC");
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_AM_005"),
+        "mixed ORDER BY direction should trigger AM_005: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_cp_001_consistent_case_ok() {
     let issues = run_lint("SELECT id FROM users WHERE active = true");
     assert!(
@@ -522,7 +531,7 @@ fn lint_sqlfluff_parity_rule_smoke_cases() {
         ("LINT_AL_007", "SELECT * FROM users u"),
         ("LINT_AL_008", "SELECT a AS x, b AS x FROM t"),
         ("LINT_AL_009", "SELECT a AS a FROM t"),
-        ("LINT_AM_005", "SELECT a FROM t ORDER BY 1"),
+        ("LINT_AM_005", "SELECT a, b FROM t ORDER BY a, b DESC"),
         ("LINT_AM_006", "SELECT * FROM a JOIN b ON a.id = b.id"),
         ("LINT_AM_007", "SELECT foo, bar FROM fake_table GROUP BY 1, bar"),
         ("LINT_AM_008", "WITH cte AS (SELECT a, b, c FROM t) SELECT * FROM cte UNION SELECT d, e FROM t2"),

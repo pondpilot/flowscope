@@ -1352,10 +1352,6 @@ fn self_alias_count(sql: &str) -> usize {
         .count()
 }
 
-fn rule_am_03(stmt: &Statement, ctx: &LintContext) -> bool {
-    issue_if_regex(stmt, ctx, r"(?i)\border\s+by\s+\d+\b")
-}
-
 fn rule_cp_01(stmt: &Statement, ctx: &LintContext) -> bool {
     let _ = stmt;
     let sql = mask_comments_and_single_quoted_strings(stmt_sql(ctx));
@@ -1910,15 +1906,6 @@ impl LintRule for AliasingSelfAliasColumn {
     }
 }
 
-define_predicate_rule!(
-    AmbiguousOrderByOrdinal,
-    issue_codes::LINT_AM_005,
-    "Ambiguous ORDER BY",
-    "Avoid positional ORDER BY references.",
-    warning,
-    rule_am_03,
-    "Avoid positional ORDER BY references (e.g., ORDER BY 1)."
-);
 define_predicate_rule!(
     CapitalisationKeywords,
     issue_codes::LINT_CP_001,
@@ -2714,7 +2701,6 @@ pub fn parity_rules() -> Vec<Box<dyn LintRule>> {
         Box::new(AliasingForbidSingleTable),
         Box::new(AliasingUniqueColumn),
         Box::new(AliasingSelfAliasColumn),
-        Box::new(AmbiguousOrderByOrdinal),
         Box::new(CapitalisationKeywords),
         Box::new(CapitalisationIdentifiers),
         Box::new(CapitalisationFunctions),
@@ -2846,12 +2832,6 @@ mod tests {
 
         assert_rule_triggers(&AliasingSelfAliasColumn, "SELECT a AS a FROM t");
         assert_rule_not_triggers(&AliasingSelfAliasColumn, "SELECT a AS b FROM t");
-    }
-
-    #[test]
-    fn ambiguous_rules_cover_fail_and_pass_cases() {
-        assert_rule_triggers(&AmbiguousOrderByOrdinal, "SELECT name FROM t ORDER BY 1");
-        assert_rule_not_triggers(&AmbiguousOrderByOrdinal, "SELECT name FROM t ORDER BY name");
     }
 
     #[test]
