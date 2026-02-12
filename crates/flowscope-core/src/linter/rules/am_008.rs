@@ -379,4 +379,30 @@ mod tests {
         );
         assert!(issues.is_empty());
     }
+
+    #[test]
+    fn resolves_nested_with_wildcard_for_set_comparison() {
+        let issues = run(
+            "SELECT * FROM (WITH cte2 AS (SELECT a, b FROM table2) SELECT * FROM cte2 as cte_al) UNION SELECT e, f FROM table3",
+        );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn flags_nested_with_wildcard_mismatch_for_set_comparison() {
+        let issues = run(
+            "SELECT * FROM (WITH cte2 AS (SELECT a FROM table2) SELECT * FROM cte2 as cte_al) UNION SELECT e, f FROM table3",
+        );
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_AM_008);
+    }
+
+    #[test]
+    fn resolves_nested_cte_chain_for_set_comparison() {
+        let issues = run(
+            "with a as (with b as (select 1 from c) select * from b) select * from a union all select k from t2",
+        );
+        assert!(issues.is_empty());
+    }
+
 }
