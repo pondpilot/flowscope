@@ -1366,11 +1366,17 @@ fn fix_select(select: &mut Select, rule_filter: &RuleFilter) {
         }
     }
 
+    let has_where_clause = select.selection.is_some();
+
     for table_with_joins in &mut select.from {
-        fix_table_factor(&mut table_with_joins.relation, rule_filter);
+        fix_table_factor(
+            &mut table_with_joins.relation,
+            rule_filter,
+            has_where_clause,
+        );
         for join in &mut table_with_joins.joins {
-            fix_table_factor(&mut join.relation, rule_filter);
-            fix_join_operator(&mut join.join_operator, rule_filter);
+            fix_table_factor(&mut join.relation, rule_filter, has_where_clause);
+            fix_join_operator(&mut join.join_operator, rule_filter, has_where_clause);
         }
     }
 
@@ -1432,7 +1438,7 @@ fn has_distinct_and_group_by(select: &Select) -> bool {
     has_distinct && has_group_by
 }
 
-fn fix_table_factor(relation: &mut TableFactor, rule_filter: &RuleFilter) {
+fn fix_table_factor(relation: &mut TableFactor, rule_filter: &RuleFilter, has_where_clause: bool) {
     match relation {
         TableFactor::Table {
             args, with_hints, ..
@@ -1461,10 +1467,14 @@ fn fix_table_factor(relation: &mut TableFactor, rule_filter: &RuleFilter) {
         TableFactor::NestedJoin {
             table_with_joins, ..
         } => {
-            fix_table_factor(&mut table_with_joins.relation, rule_filter);
+            fix_table_factor(
+                &mut table_with_joins.relation,
+                rule_filter,
+                has_where_clause,
+            );
             for join in &mut table_with_joins.joins {
-                fix_table_factor(&mut join.relation, rule_filter);
-                fix_join_operator(&mut join.join_operator, rule_filter);
+                fix_table_factor(&mut join.relation, rule_filter, has_where_clause);
+                fix_join_operator(&mut join.join_operator, rule_filter, has_where_clause);
             }
         }
         TableFactor::Pivot {
@@ -1474,7 +1484,7 @@ fn fix_table_factor(relation: &mut TableFactor, rule_filter: &RuleFilter) {
             default_on_null,
             ..
         } => {
-            fix_table_factor(table, rule_filter);
+            fix_table_factor(table, rule_filter, has_where_clause);
             for func in aggregate_functions {
                 fix_expr(&mut func.expr, rule_filter);
             }
@@ -1491,7 +1501,7 @@ fn fix_table_factor(relation: &mut TableFactor, rule_filter: &RuleFilter) {
             columns,
             ..
         } => {
-            fix_table_factor(table, rule_filter);
+            fix_table_factor(table, rule_filter, has_where_clause);
             fix_expr(value, rule_filter);
             for column in columns {
                 fix_expr(&mut column.expr, rule_filter);
@@ -1503,15 +1513,10 @@ fn fix_table_factor(relation: &mut TableFactor, rule_filter: &RuleFilter) {
     }
 }
 
-fn fix_join_operator(op: &mut JoinOperator, rule_filter: &RuleFilter) {
+fn fix_join_operator(op: &mut JoinOperator, rule_filter: &RuleFilter, has_where_clause: bool) {
     match op {
-        JoinOperator::Join(constraint) => {
-            fix_join_constraint(constraint, rule_filter);
-            if rule_filter.allows(issue_codes::LINT_AM_006) {
-                *op = JoinOperator::Inner(constraint.clone());
-            }
-        }
-        JoinOperator::Inner(constraint)
+        JoinOperator::Join(constraint)
+        | JoinOperator::Inner(constraint)
         | JoinOperator::Left(constraint)
         | JoinOperator::LeftOuter(constraint)
         | JoinOperator::Right(constraint)
@@ -1533,6 +1538,68 @@ fn fix_join_operator(op: &mut JoinOperator, rule_filter: &RuleFilter) {
             fix_join_constraint(constraint, rule_filter);
         }
         JoinOperator::CrossApply | JoinOperator::OuterApply => {}
+    }
+
+    if rule_filter.allows(issue_codes::LINT_AM_009)
+        && !has_where_clause
+        && operator_requires_join_condition(op)
+        && !join_constraint_is_explicit(op)
+    {
+        *op = JoinOperator::CrossJoin(JoinConstraint::None);
+        return;
+    }
+
+    if rule_filter.allows(issue_codes::LINT_AM_006) {
+        if let JoinOperator::Join(constraint) = op {
+            *op = JoinOperator::Inner(constraint.clone());
+        }
+    }
+}
+
+fn operator_requires_join_condition(join_operator: &JoinOperator) -> bool {
+    matches!(
+        join_operator,
+        JoinOperator::Join(_)
+            | JoinOperator::Inner(_)
+            | JoinOperator::Left(_)
+            | JoinOperator::LeftOuter(_)
+            | JoinOperator::Right(_)
+            | JoinOperator::RightOuter(_)
+            | JoinOperator::FullOuter(_)
+            | JoinOperator::StraightJoin(_)
+    )
+}
+
+fn join_constraint_is_explicit(join_operator: &JoinOperator) -> bool {
+    let Some(constraint) = join_constraint(join_operator) else {
+        return false;
+    };
+
+    matches!(
+        constraint,
+        JoinConstraint::On(_) | JoinConstraint::Using(_) | JoinConstraint::Natural
+    )
+}
+
+fn join_constraint(join_operator: &JoinOperator) -> Option<&JoinConstraint> {
+    match join_operator {
+        JoinOperator::Join(constraint)
+        | JoinOperator::Inner(constraint)
+        | JoinOperator::Left(constraint)
+        | JoinOperator::LeftOuter(constraint)
+        | JoinOperator::Right(constraint)
+        | JoinOperator::RightOuter(constraint)
+        | JoinOperator::FullOuter(constraint)
+        | JoinOperator::CrossJoin(constraint)
+        | JoinOperator::Semi(constraint)
+        | JoinOperator::LeftSemi(constraint)
+        | JoinOperator::RightSemi(constraint)
+        | JoinOperator::Anti(constraint)
+        | JoinOperator::LeftAnti(constraint)
+        | JoinOperator::RightAnti(constraint)
+        | JoinOperator::StraightJoin(constraint) => Some(constraint),
+        JoinOperator::AsOf { constraint, .. } => Some(constraint),
+        JoinOperator::CrossApply | JoinOperator::OuterApply => None,
     }
 }
 
@@ -2105,6 +2172,54 @@ mod tests {
     }
 
     #[test]
+    fn sqlfluff_am009_cases_are_fixed_or_unchanged() {
+        let cases = [
+            (
+                "SELECT foo.a, bar.b FROM foo INNER JOIN bar",
+                1,
+                0,
+                1,
+                Some("CROSS JOIN BAR"),
+            ),
+            (
+                "SELECT foo.a, bar.b FROM foo LEFT JOIN bar",
+                1,
+                0,
+                1,
+                Some("CROSS JOIN BAR"),
+            ),
+            (
+                "SELECT foo.a, bar.b FROM foo JOIN bar WHERE foo.a = bar.a OR foo.x = 3",
+                0,
+                0,
+                0,
+                None,
+            ),
+            ("SELECT foo.a, bar.b FROM foo CROSS JOIN bar", 0, 0, 0, None),
+            (
+                "SELECT foo.id, bar.id FROM foo LEFT JOIN bar USING (id)",
+                0,
+                0,
+                0,
+                None,
+            ),
+        ];
+
+        for (sql, before, after, fix_count, expected_text) in cases {
+            assert_rule_case(sql, issue_codes::LINT_AM_009, before, after, fix_count);
+
+            if let Some(expected) = expected_text {
+                let out = apply_lint_fixes(sql, Dialect::Generic, &[]).expect("fix result");
+                assert!(
+                    out.sql.to_ascii_uppercase().contains(expected),
+                    "expected {expected:?} in fixed SQL, got: {}",
+                    out.sql
+                );
+            }
+        }
+    }
+
+    #[test]
     fn sqlfluff_st003_cases_are_fixed_or_unchanged() {
         let cases = [
             (
@@ -2557,6 +2672,10 @@ mod tests {
             (
                 issue_codes::LINT_AM_006,
                 "SELECT * FROM a JOIN b ON a.id = b.id",
+            ),
+            (
+                issue_codes::LINT_AM_009,
+                "SELECT foo.a, bar.b FROM foo INNER JOIN bar",
             ),
             (issue_codes::LINT_CP_001, "SELECT a from t"),
             (issue_codes::LINT_CP_004, "SELECT NULL, true FROM t"),
