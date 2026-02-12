@@ -1505,8 +1505,13 @@ fn fix_table_factor(relation: &mut TableFactor, rule_filter: &RuleFilter) {
 
 fn fix_join_operator(op: &mut JoinOperator, rule_filter: &RuleFilter) {
     match op {
-        JoinOperator::Join(constraint)
-        | JoinOperator::Inner(constraint)
+        JoinOperator::Join(constraint) => {
+            fix_join_constraint(constraint, rule_filter);
+            if rule_filter.allows(issue_codes::LINT_AM_006) {
+                *op = JoinOperator::Inner(constraint.clone());
+            }
+        }
+        JoinOperator::Inner(constraint)
         | JoinOperator::Left(constraint)
         | JoinOperator::LeftOuter(constraint)
         | JoinOperator::Right(constraint)
@@ -1997,6 +2002,41 @@ mod tests {
     }
 
     #[test]
+    fn sqlfluff_am006_cases_are_fixed_or_unchanged() {
+        let cases = [
+            (
+                "SELECT a FROM t JOIN u ON t.id = u.id",
+                1,
+                0,
+                1,
+                Some("INNER JOIN"),
+            ),
+            (
+                "SELECT a FROM t JOIN u ON t.id = u.id JOIN v ON u.id = v.id",
+                2,
+                0,
+                2,
+                Some("INNER JOIN U"),
+            ),
+            ("SELECT a FROM t INNER JOIN u ON t.id = u.id", 0, 0, 0, None),
+            ("SELECT a FROM t LEFT JOIN u ON t.id = u.id", 0, 0, 0, None),
+        ];
+
+        for (sql, before, after, fix_count, expected_text) in cases {
+            assert_rule_case(sql, issue_codes::LINT_AM_006, before, after, fix_count);
+
+            if let Some(expected) = expected_text {
+                let out = apply_lint_fixes(sql, Dialect::Generic, &[]).expect("fix result");
+                assert!(
+                    out.sql.to_ascii_uppercase().contains(expected),
+                    "expected {expected:?} in fixed SQL, got: {}",
+                    out.sql
+                );
+            }
+        }
+    }
+
+    #[test]
     fn sqlfluff_cv003_cases_are_fixed_or_unchanged() {
         let cases = [
             ("SELECT a FROM foo WHERE a IS NULL", 0, 0, 0, None),
@@ -2391,6 +2431,10 @@ mod tests {
             (
                 issue_codes::LINT_AM_005,
                 "SELECT * FROM t ORDER BY a, b DESC",
+            ),
+            (
+                issue_codes::LINT_AM_006,
+                "SELECT * FROM a JOIN b ON a.id = b.id",
             ),
             (issue_codes::LINT_CP_001, "SELECT a from t"),
             (issue_codes::LINT_CP_004, "SELECT NULL, true FROM t"),
