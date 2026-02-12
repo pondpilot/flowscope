@@ -101,8 +101,47 @@ mod tests {
     }
 
     #[test]
+    fn allows_right_join() {
+        let issues = run("SELECT foo.a, bar.b FROM foo RIGHT JOIN bar");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn allows_full_join() {
+        let issues = run("SELECT foo.a, bar.b FROM foo FULL JOIN bar");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn allows_left_outer_join() {
+        let issues = run("SELECT foo.a, bar.b FROM foo LEFT OUTER JOIN bar");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn allows_right_outer_join() {
+        let issues = run("SELECT foo.a, bar.b FROM foo RIGHT OUTER JOIN bar");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn allows_full_outer_join() {
+        let issues = run("SELECT foo.a, bar.b FROM foo FULL OUTER JOIN bar");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
     fn allows_cross_join() {
         let issues = run("SELECT foo.a, bar.b FROM foo CROSS JOIN bar");
         assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn flags_each_plain_join_in_chain() {
+        let issues = run("SELECT * FROM a JOIN b ON a.id = b.id JOIN c ON b.id = c.id");
+        assert_eq!(issues.len(), 2);
+        assert!(issues
+            .iter()
+            .all(|issue| issue.code == issue_codes::LINT_AM_006));
     }
 }
