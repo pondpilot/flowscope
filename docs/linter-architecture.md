@@ -169,13 +169,14 @@ Move style-oriented checks to lexical engine:
 - [x] `LINT_ST_009` now includes SQLFluff ST09 fixer parity via AST expression rewrites, swapping reversed qualified equality sides in `JOIN ... ON` predicates.
 - [x] `LINT_ST_007` now includes SQLFluff ST06 fixer parity via AST SELECT projection reordering, moving leading complex expressions after simple column targets when required.
 - [x] `LINT_ST_005` now includes SQLFluff ST02 fixer parity via AST CASE rewrites, converting repeated `WHEN x = ...` clauses into simple CASE form.
+- [x] `LINT_ST_008` now includes SQLFluff ST08 fixer parity via AST SELECT rewrite, normalizing `SELECT DISTINCT(a)` into `SELECT DISTINCT a`.
 - [x] `LINT_AM_005` now follows SQLFluff AM03 semantics via AST `ORDER BY` analysis, flagging mixed implicit/explicit sort direction (including `NULLS` ordering cases) across nested query scopes; fixer parity now adds explicit `ASC` to implicit items in mixed clauses.
 - [x] `LINT_AM_006` now supports SQLFluff AM05 fixer parity for default behavior by rewriting bare `JOIN` operators to explicit `INNER JOIN` via AST join-operator rewrites.
 - [x] `LINT_AM_007` now follows SQLFluff AM06 default (`consistent`) semantics via AST traversal of `GROUP BY` / `ORDER BY` clauses, including nested-query precedence and rollup-style references.
 - [x] `LINT_AM_009` now follows SQLFluff AM08 semantics via AST join-operator analysis (implicit cross join detection, with `WHERE` deferral to CV12 and UNNEST/CROSS/NATURAL/USING exclusions); fixer parity now rewrites eligible implicit joins to explicit `CROSS JOIN`.
 - [x] `LINT_AM_008` now performs AST set-expression branch-width checks with deterministic wildcard resolution for CTE/derived sources, while unresolved wildcard expansions remain non-violating (SQLFluff-aligned behavior).
 - [~] Parity monolith decommission is in progress: migrated rule registrations and parity tests are removed from `parity.rs`; helper cleanup is still ongoing.
-- [~] SQLFluff fixture adoption is in progress for migrated rules; AM02/AM03/AM04/AM05/AM06/AM07/AM08/AM09, CV02, CV05, ST02, ST04, ST06, ST07, and ST09 fixture cases were adopted for `LINT_AM_001`/`LINT_AM_005`/`LINT_AM_004`/`LINT_AM_006`/`LINT_AM_007`/`LINT_AM_008`/`LINT_AM_009`/`LINT_AM_002`/`LINT_CV_001`/`LINT_CV_003`/`LINT_ST_005`/`LINT_ST_003`/`LINT_ST_004`/`LINT_ST_007`/`LINT_ST_009`, and additional rule-level coverage is still being expanded.
+- [~] SQLFluff fixture adoption is in progress for migrated rules; AM02/AM03/AM04/AM05/AM06/AM07/AM08/AM09, CV02, CV05, ST02, ST04, ST06, ST07, ST08, and ST09 fixture cases were adopted for `LINT_AM_001`/`LINT_AM_005`/`LINT_AM_004`/`LINT_AM_006`/`LINT_AM_007`/`LINT_AM_008`/`LINT_AM_009`/`LINT_AM_002`/`LINT_CV_001`/`LINT_CV_003`/`LINT_ST_005`/`LINT_ST_003`/`LINT_ST_004`/`LINT_ST_007`/`LINT_ST_008`/`LINT_ST_009`, and additional rule-level coverage is still being expanded.
 - [ ] Phase 2 lexical/style migrations are pending (`CP_*`, `LT_*`, `JJ_001`, remaining `CV_*` style rules).
 
 ## Quality Gates

@@ -244,9 +244,6 @@ fn apply_text_fixes(sql: &str, rule_filter: &RuleFilter) -> String {
     if rule_filter.allows(issue_codes::LINT_CV_006) {
         out = fix_trailing_select_comma(&out);
     }
-    if rule_filter.allows(issue_codes::LINT_ST_008) {
-        out = fix_distinct_parentheses(&out);
-    }
     if rule_filter.allows(issue_codes::LINT_LT_013) {
         out = fix_leading_blank_lines(&out);
     }
@@ -366,14 +363,6 @@ fn fix_not_equal_operator(sql: &str) -> String {
 
 fn fix_trailing_select_comma(sql: &str) -> String {
     regex_replace_all(sql, r"(?i),\s*(from\b)", " $1")
-}
-
-fn fix_distinct_parentheses(sql: &str) -> String {
-    regex_replace_all_with(
-        sql,
-        r"(?i)\bselect\s+distinct\s*\(\s*([^()]+?)\s*\)",
-        |caps| format!("SELECT DISTINCT {}", caps[1].trim()),
-    )
 }
 
 fn replace_outside_single_quotes<F>(sql: &str, mut transform: F) -> String
@@ -1190,6 +1179,10 @@ fn fix_select(select: &mut Select, rule_filter: &RuleFilter) {
         select.distinct = None;
     }
 
+    if rule_filter.allows(issue_codes::LINT_ST_008) {
+        rewrite_distinct_parenthesized_projection(select);
+    }
+
     for item in &mut select.projection {
         match item {
             SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => {
@@ -1291,6 +1284,22 @@ fn fix_select(select: &mut Select, rule_filter: &RuleFilter) {
         fix_expr(&mut connect_by.condition, rule_filter);
         for relationship in &mut connect_by.relationships {
             fix_expr(relationship, rule_filter);
+        }
+    }
+}
+
+fn rewrite_distinct_parenthesized_projection(select: &mut Select) {
+    if !matches!(select.distinct, Some(Distinct::Distinct)) {
+        return;
+    }
+
+    if select.projection.len() != 1 {
+        return;
+    }
+
+    if let SelectItem::UnnamedExpr(expr) = &mut select.projection[0] {
+        if let Expr::Nested(inner) = expr {
+            *expr = inner.as_ref().clone();
         }
     }
 }
@@ -2485,6 +2494,34 @@ mod tests {
 
         for (sql, before, after, fix_count, expected_text) in cases {
             assert_rule_case(sql, issue_codes::LINT_ST_007, before, after, fix_count);
+
+            if let Some(expected) = expected_text {
+                let out = apply_lint_fixes(sql, Dialect::Generic, &[]).expect("fix result");
+                assert!(
+                    out.sql.to_ascii_uppercase().contains(expected),
+                    "expected {expected:?} in fixed SQL, got: {}",
+                    out.sql
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sqlfluff_st008_cases_are_fixed_or_unchanged() {
+        let cases = [
+            (
+                "SELECT DISTINCT(a) FROM t",
+                1,
+                0,
+                1,
+                Some("SELECT DISTINCT A"),
+            ),
+            ("SELECT DISTINCT a FROM t", 0, 0, 0, None),
+            ("SELECT a FROM t", 0, 0, 0, None),
+        ];
+
+        for (sql, before, after, fix_count, expected_text) in cases {
+            assert_rule_case(sql, issue_codes::LINT_ST_008, before, after, fix_count);
 
             if let Some(expected) = expected_text {
                 let out = apply_lint_fixes(sql, Dialect::Generic, &[]).expect("fix result");

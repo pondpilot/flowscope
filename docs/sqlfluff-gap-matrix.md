@@ -10,8 +10,8 @@ _Generated on 2026-02-12 from a local SQLFluff source snapshot (2026-01-20)._
 - Implemented (close): **12**
 - Implemented (partial): **60**
 - Implemented (divergent semantics): **0**
-- FlowScope fix coverage: **61 / 72**
-- FlowScope rules without fix support: **11**
+- FlowScope fix coverage: **62 / 72**
+- FlowScope rules without fix support: **10**
 
 Bundle counts (SQLFluff): Aliasing=9, Ambiguous=9, Capitalisation=5, Convention=12, Jinja=1, Layout=15, References=6, Structure=12, TSQL=3
 
@@ -94,7 +94,7 @@ FlowScope source-of-truth used for mapping:
 | Structure | `structure.subquery` | `ST05` | No | Yes | Implemented (partial) | `LINT_ST_006` | No | Heuristic parity rule implemented in `crates/flowscope-core/src/linter/rules/parity.rs`; semantics are narrower than SQLFluff. |
 | Structure | `structure.column_order` | `ST06` | No | Yes | Implemented (partial) | `LINT_ST_007` | Yes | Heuristic parity rule implemented in `crates/flowscope-core/src/linter/rules/parity.rs`; fixer now uses AST projection reordering for SQLFluff-style simple-before-complex column ordering in SELECT targets. |
 | Structure | `structure.using` | `ST07` | No | Yes | Implemented (close) | `LINT_ST_004` | Yes | Flags `JOIN ... USING (...)` and fixer rewrites USING constraints to explicit `ON` predicates (including multi-column USING lists). |
-| Structure | `structure.distinct` | `ST08` | Yes | Yes | Implemented (partial) | `LINT_ST_008` | No | Heuristic parity rule implemented in `crates/flowscope-core/src/linter/rules/parity.rs`; semantics are narrower than SQLFluff. |
+| Structure | `structure.distinct` | `ST08` | Yes | Yes | Implemented (partial) | `LINT_ST_008` | Yes | Heuristic parity rule implemented in `crates/flowscope-core/src/linter/rules/parity.rs`; fixer now uses AST projection rewrite to normalize `SELECT DISTINCT(a)` into SQLFluff-style `SELECT DISTINCT a`. |
 | Structure | `structure.join_condition_order` | `ST09` | No | Yes | Implemented (partial) | `LINT_ST_009` | Yes | AST rule implemented in `crates/flowscope-core/src/linter/rules/st_009.rs`; fixer rewrites reversed qualified `ON` equality pairs to match SQLFluff ST09 join-condition ordering expectations. |
 | Structure | `structure.constant_expression` | `ST10` | No | No | Implemented (partial) | `LINT_ST_010` | No | Heuristic parity rule implemented in `crates/flowscope-core/src/linter/rules/parity.rs`; semantics are narrower than SQLFluff. |
 | Structure | `structure.unused_join` | `ST11` | No | No | Implemented (partial) | `LINT_ST_011` | No | Heuristic parity rule implemented in `crates/flowscope-core/src/linter/rules/parity.rs`; semantics are narrower than SQLFluff. |
