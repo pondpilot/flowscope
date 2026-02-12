@@ -53,6 +53,18 @@ pub struct Args {
     #[arg(short, long, default_value = "table", value_enum)]
     pub view: ViewMode,
 
+    /// Run SQL linter and report violations
+    #[arg(long)]
+    pub lint: bool,
+
+    /// Apply deterministic SQL lint auto-fixes in place (requires --lint)
+    #[arg(long, requires = "lint")]
+    pub fix: bool,
+
+    /// Comma-separated list of lint rule codes to exclude (e.g., LINT_AM_001,LINT_ST_001)
+    #[arg(long, value_delimiter = ',')]
+    pub exclude_rules: Vec<String>,
+
     /// Suppress warnings on stderr
     #[arg(short, long)]
     pub quiet: bool,
@@ -237,6 +249,54 @@ mod tests {
         assert!(args.quiet);
         assert!(args.compact);
         assert_eq!(args.files.len(), 2);
+    }
+
+    #[test]
+    fn test_lint_flag() {
+        let args = Args::parse_from(["flowscope", "--lint", "test.sql"]);
+        assert!(args.lint);
+        assert!(!args.fix);
+        assert!(args.exclude_rules.is_empty());
+    }
+
+    #[test]
+    fn test_lint_fix_flag() {
+        let args = Args::parse_from(["flowscope", "--lint", "--fix", "test.sql"]);
+        assert!(args.lint);
+        assert!(args.fix);
+    }
+
+    #[test]
+    fn test_fix_requires_lint() {
+        let result = Args::try_parse_from(["flowscope", "--fix", "test.sql"]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_lint_exclude_rules() {
+        let args = Args::parse_from([
+            "flowscope",
+            "--lint",
+            "--exclude-rules",
+            "LINT_AM_001,LINT_ST_001",
+            "test.sql",
+        ]);
+        assert!(args.lint);
+        assert_eq!(args.exclude_rules, vec!["LINT_AM_001", "LINT_ST_001"]);
+    }
+
+    #[test]
+    fn test_lint_exclude_rules_repeated() {
+        let args = Args::parse_from([
+            "flowscope",
+            "--lint",
+            "--exclude-rules",
+            "LINT_AM_001",
+            "--exclude-rules",
+            "LINT_ST_001",
+            "test.sql",
+        ]);
+        assert_eq!(args.exclude_rules, vec!["LINT_AM_001", "LINT_ST_001"]);
     }
 
     #[cfg(feature = "serve")]

@@ -1,6 +1,7 @@
 //! FlowScope CLI - SQL lineage analyzer
 
 use flowscope_cli::cli;
+use flowscope_cli::fix::apply_lint_fixes;
 use flowscope_cli::input;
 #[cfg(feature = "metadata-provider")]
 use flowscope_cli::metadata;
@@ -11,17 +12,18 @@ use flowscope_cli::server;
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use flowscope_core::{analyze, AnalyzeRequest, FileSource};
+use flowscope_core::{analyze, AnalysisOptions, AnalyzeRequest, FileSource, LintConfig, Severity};
 use flowscope_export::{
     export_csv_bundle, export_duckdb, export_html, export_json, export_mermaid, export_sql,
     export_xlsx, ExportFormat, ExportNaming, MermaidView,
 };
+use is_terminal::IsTerminal;
 use std::fs;
 use std::io::{self, Write};
 use std::process::ExitCode;
 
 use cli::{Args, OutputFormat, ViewMode};
-use output::format_table;
+use output::{format_lint_json, format_lint_results, format_table, FileLintResult, LintIssue};
 
 fn main() -> ExitCode {
     // Check for serve mode first (requires tokio runtime)
@@ -30,6 +32,26 @@ fn main() -> ExitCode {
         let args = Args::parse();
         if args.serve {
             return run_serve_mode(args);
+        }
+    }
+
+    // Check for lint mode
+    {
+        let args = Args::parse();
+        if args.lint {
+            return match run_lint(args) {
+                Ok(has_violations) => {
+                    if has_violations {
+                        ExitCode::from(1)
+                    } else {
+                        ExitCode::SUCCESS
+                    }
+                }
+                Err(e) => {
+                    eprintln!("flowscope: error: {e:#}");
+                    ExitCode::from(66)
+                }
+            };
         }
     }
 
@@ -113,6 +135,147 @@ fn run_serve_mode(args: Args) -> ExitCode {
             ExitCode::from(1)
         }
     }
+}
+
+/// Run the CLI in lint mode.
+///
+/// Analyzes each file individually with linting enabled, collects lint violations,
+/// and formats them in a sqlfluff-style report.
+fn run_lint(args: Args) -> Result<bool> {
+    use output::lint::offset_to_line_col;
+
+    let mut sources = input::read_input(&args.files)?;
+    let dialect = args.dialect.into();
+
+    if args.fix {
+        let mut total_applied = 0usize;
+        let mut files_modified = 0usize;
+        let mut skipped_due_to_comments = 0usize;
+        let mut skipped_due_to_parse_errors = 0usize;
+        let mut stdin_modified = false;
+
+        for (idx, source) in sources.iter_mut().enumerate() {
+            let outcome = match apply_lint_fixes(&source.content, dialect) {
+                Ok(outcome) => outcome,
+                Err(err) => {
+                    skipped_due_to_parse_errors += 1;
+                    if !args.quiet {
+                        eprintln!(
+                            "flowscope: warning: unable to auto-fix {}: {err}",
+                            source.name
+                        );
+                    }
+                    continue;
+                }
+            };
+
+            if outcome.skipped_due_to_comments {
+                skipped_due_to_comments += 1;
+                continue;
+            }
+
+            if !outcome.changed {
+                continue;
+            }
+
+            total_applied += outcome.counts.total();
+            files_modified += 1;
+            source.content = outcome.sql;
+
+            if let Some(path) = args.files.get(idx) {
+                fs::write(path, &source.content)
+                    .with_context(|| format!("Failed to write fixed SQL to {}", path.display()))?;
+            } else {
+                stdin_modified = true;
+            }
+        }
+
+        if !args.quiet {
+            eprintln!(
+                "flowscope: applied {total_applied} auto-fix(es) across {files_modified} input(s)"
+            );
+
+            if skipped_due_to_comments > 0 {
+                eprintln!(
+                    "flowscope: skipped auto-fix for {skipped_due_to_comments} input(s) because comments are present"
+                );
+            }
+            if skipped_due_to_parse_errors > 0 {
+                eprintln!(
+                    "flowscope: skipped auto-fix for {skipped_due_to_parse_errors} input(s) due to parse errors"
+                );
+            }
+            if stdin_modified {
+                eprintln!(
+                    "flowscope: auto-fixes were applied to stdin input for linting output only (no file was written)"
+                );
+            }
+        }
+    }
+
+    let lint_config = LintConfig {
+        enabled: true,
+        disabled_rules: args.exclude_rules.clone(),
+    };
+
+    let mut file_results = Vec::with_capacity(sources.len());
+
+    for source in &sources {
+        let request = AnalyzeRequest {
+            sql: source.content.clone(),
+            files: None,
+            dialect,
+            source_name: Some(source.name.clone()),
+            options: Some(AnalysisOptions {
+                lint: Some(lint_config.clone()),
+                ..Default::default()
+            }),
+            schema: None,
+            #[cfg(feature = "templating")]
+            template_config: None,
+        };
+
+        let result = analyze(&request);
+
+        let issues: Vec<LintIssue> = result
+            .issues
+            .iter()
+            .filter(|i| i.code.starts_with("LINT_") || i.severity == Severity::Error)
+            .map(|i| {
+                let (line, col) = i
+                    .span
+                    .as_ref()
+                    .map(|s| offset_to_line_col(&source.content, s.start))
+                    .unwrap_or((1, 1));
+
+                LintIssue {
+                    line,
+                    col,
+                    code: i.code.clone(),
+                    message: i.message.clone(),
+                    severity: i.severity,
+                }
+            })
+            .collect();
+
+        file_results.push(FileLintResult {
+            name: source.name.clone(),
+            sql: source.content.clone(),
+            issues,
+        });
+    }
+
+    let has_violations = file_results.iter().any(|f| !f.issues.is_empty());
+    let colored = args.output.is_none() && std::io::stdout().is_terminal();
+
+    let output_str = match args.format {
+        OutputFormat::Json => format_lint_json(&file_results, args.compact),
+        _ => format_lint_results(&file_results, colored),
+    };
+
+    write_output(&args.output, &output_str)?;
+
+    Ok(has_violations)
 }
 
 fn run() -> Result<bool> {

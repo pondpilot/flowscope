@@ -72,6 +72,10 @@ Options:
                            Schema name to prefix DuckDB SQL export
   -v, --view <VIEW>        Graph detail level for mermaid output [default: table]
                            [possible values: script, table, column, hybrid]
+      --lint               Run SQL linter and report violations
+      --fix                Apply deterministic SQL lint auto-fixes in place (requires --lint)
+      --exclude-rules <EXCLUDE_RULES>
+                           Comma-separated lint rule codes to exclude
   -q, --quiet              Suppress warnings on stderr
   -c, --compact            Compact JSON output (no pretty-printing)
   -h, --help               Print help
@@ -79,6 +83,21 @@ Options:
 ```
 
 ## Examples
+
+### Lint and Auto-fix
+
+```bash
+# Lint SQL files
+flowscope --lint queries/*.sql
+
+# Apply supported auto-fixes, then report remaining violations
+flowscope --lint --fix queries/*.sql
+
+# Exclude specific lint rules
+flowscope --lint --exclude-rules LINT_AM_001,LINT_ST_001 queries/*.sql
+```
+
+`--fix` currently targets deterministic rewrites for a subset of lint rules. Files containing SQL comments are linted but skipped for auto-fix to avoid dropping comments during rewrite.
 
 ### JSON Output
 

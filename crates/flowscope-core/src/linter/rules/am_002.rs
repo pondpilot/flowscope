@@ -63,7 +63,12 @@ fn has_order_by(query: &Query) -> bool {
 }
 
 fn has_limit(query: &Query) -> bool {
-    query.limit_clause.is_some() || query.fetch.is_some()
+    query.limit_clause.is_some()
+        || query.fetch.is_some()
+        || query
+            .body
+            .as_select()
+            .is_some_and(|select| select.top.is_some())
 }
 
 fn check_subquery(query: &Query, ctx: &LintContext, issues: &mut Vec<Issue>) {
@@ -94,8 +99,12 @@ fn check_set_expr_subqueries(body: &SetExpr, ctx: &LintContext, issues: &mut Vec
                 check_table_factor_subqueries(&item.relation, ctx, issues);
                 for join in &item.joins {
                     check_table_factor_subqueries(&join.relation, ctx, issues);
+                    if let Some(on_expr) = join_constraint_expr(&join.join_operator) {
+                        check_expr_subqueries(on_expr, ctx, issues);
+                    }
                 }
             }
+            check_select_expr_subqueries(select, ctx, issues);
         }
         SetExpr::Query(q) => {
             check_subquery(q, ctx, issues);
@@ -105,6 +114,120 @@ fn check_set_expr_subqueries(body: &SetExpr, ctx: &LintContext, issues: &mut Vec
             check_set_expr_subqueries(right, ctx, issues);
         }
         _ => {}
+    }
+}
+
+fn check_select_expr_subqueries(select: &Select, ctx: &LintContext, issues: &mut Vec<Issue>) {
+    for item in &select.projection {
+        match item {
+            SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => {
+                check_expr_subqueries(expr, ctx, issues);
+            }
+            _ => {}
+        }
+    }
+    if let Some(selection) = &select.selection {
+        check_expr_subqueries(selection, ctx, issues);
+    }
+    if let Some(having) = &select.having {
+        check_expr_subqueries(having, ctx, issues);
+    }
+    if let Some(qualify) = &select.qualify {
+        check_expr_subqueries(qualify, ctx, issues);
+    }
+    if let GroupByExpr::Expressions(exprs, _) = &select.group_by {
+        for expr in exprs {
+            check_expr_subqueries(expr, ctx, issues);
+        }
+    }
+    for sort_expr in &select.sort_by {
+        check_expr_subqueries(&sort_expr.expr, ctx, issues);
+    }
+}
+
+fn check_expr_subqueries(expr: &Expr, ctx: &LintContext, issues: &mut Vec<Issue>) {
+    match expr {
+        Expr::Subquery(subquery) | Expr::Exists { subquery, .. } => {
+            check_subquery(subquery, ctx, issues);
+        }
+        Expr::InSubquery {
+            expr: inner,
+            subquery,
+            ..
+        } => {
+            check_expr_subqueries(inner, ctx, issues);
+            check_subquery(subquery, ctx, issues);
+        }
+        Expr::BinaryOp { left, right, .. } => {
+            check_expr_subqueries(left, ctx, issues);
+            check_expr_subqueries(right, ctx, issues);
+        }
+        Expr::UnaryOp { expr: inner, .. }
+        | Expr::Nested(inner)
+        | Expr::IsNull(inner)
+        | Expr::IsNotNull(inner)
+        | Expr::Cast { expr: inner, .. } => {
+            check_expr_subqueries(inner, ctx, issues);
+        }
+        Expr::InList { expr, list, .. } => {
+            check_expr_subqueries(expr, ctx, issues);
+            for item in list {
+                check_expr_subqueries(item, ctx, issues);
+            }
+        }
+        Expr::Between {
+            expr, low, high, ..
+        } => {
+            check_expr_subqueries(expr, ctx, issues);
+            check_expr_subqueries(low, ctx, issues);
+            check_expr_subqueries(high, ctx, issues);
+        }
+        Expr::Case {
+            operand,
+            conditions,
+            else_result,
+            ..
+        } => {
+            if let Some(op) = operand {
+                check_expr_subqueries(op, ctx, issues);
+            }
+            for case_when in conditions {
+                check_expr_subqueries(&case_when.condition, ctx, issues);
+                check_expr_subqueries(&case_when.result, ctx, issues);
+            }
+            if let Some(el) = else_result {
+                check_expr_subqueries(el, ctx, issues);
+            }
+        }
+        Expr::Function(func) => {
+            if let FunctionArguments::List(arg_list) = &func.args {
+                for arg in &arg_list.args {
+                    if let FunctionArg::Unnamed(FunctionArgExpr::Expr(inner)) = arg {
+                        check_expr_subqueries(inner, ctx, issues);
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn join_constraint_expr(op: &JoinOperator) -> Option<&Expr> {
+    let constraint = match op {
+        JoinOperator::Join(c)
+        | JoinOperator::Inner(c)
+        | JoinOperator::LeftOuter(c)
+        | JoinOperator::RightOuter(c)
+        | JoinOperator::FullOuter(c)
+        | JoinOperator::LeftSemi(c)
+        | JoinOperator::RightSemi(c)
+        | JoinOperator::LeftAnti(c)
+        | JoinOperator::RightAnti(c) => c,
+        _ => return None,
+    };
+    match constraint {
+        JoinConstraint::On(expr) => Some(expr),
+        _ => None,
     }
 }
 
@@ -175,6 +298,13 @@ mod tests {
         assert_eq!(issues.len(), 1);
     }
 
+    #[test]
+    fn test_order_by_in_scalar_subquery_without_limit() {
+        let issues = check_sql("SELECT (SELECT x FROM t ORDER BY x) AS y");
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, "LINT_AM_002");
+    }
+
     // --- Edge cases adopted from sqlfluff ---
 
     #[test]
@@ -225,6 +355,13 @@ mod tests {
     #[test]
     fn test_no_order_by_anywhere_ok() {
         let issues = check_sql("WITH cte AS (SELECT * FROM t) SELECT * FROM cte");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn test_order_by_in_cte_with_top_ok() {
+        let issues =
+            check_sql("WITH cte AS (SELECT TOP 10 * FROM t ORDER BY id) SELECT * FROM cte");
         assert!(issues.is_empty());
     }
 }

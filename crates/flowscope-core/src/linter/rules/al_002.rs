@@ -50,13 +50,16 @@ fn check_query(query: &Query, ctx: &LintContext, issues: &mut Vec<Issue>) {
             check_query(&cte.query, ctx, issues);
         }
     }
-    check_set_expr(&query.body, ctx, issues);
+    match query.body.as_ref() {
+        SetExpr::Select(select) => check_select(select, query.order_by.as_ref(), ctx, issues),
+        _ => check_set_expr(&query.body, ctx, issues),
+    }
 }
 
 fn check_set_expr(body: &SetExpr, ctx: &LintContext, issues: &mut Vec<Issue>) {
     match body {
         SetExpr::Select(select) => {
-            check_select(select, ctx, issues);
+            check_select(select, None, ctx, issues);
         }
         SetExpr::Query(q) => check_query(q, ctx, issues),
         SetExpr::SetOperation { left, right, .. } => {
@@ -67,7 +70,12 @@ fn check_set_expr(body: &SetExpr, ctx: &LintContext, issues: &mut Vec<Issue>) {
     }
 }
 
-fn check_select(select: &Select, ctx: &LintContext, issues: &mut Vec<Issue>) {
+fn check_select(
+    select: &Select,
+    order_by: Option<&OrderBy>,
+    ctx: &LintContext,
+    issues: &mut Vec<Issue>,
+) {
     // Only flag when there are multiple tables (JOINs) — with a single table,
     // aliases are less important
     let table_count: usize = select.from.iter().map(|f| 1 + f.joins.len()).sum();
@@ -88,30 +96,8 @@ fn check_select(select: &Select, ctx: &LintContext, issues: &mut Vec<Issue>) {
         return;
     }
 
-    // Collect all identifier prefixes used in the query
     let mut used_prefixes: HashSet<String> = HashSet::new();
-    for item in &select.projection {
-        collect_identifier_prefixes_from_select_item(item, &mut used_prefixes);
-    }
-    if let Some(ref selection) = select.selection {
-        collect_identifier_prefixes(selection, &mut used_prefixes);
-    }
-    if let Some(ref having) = select.having {
-        collect_identifier_prefixes(having, &mut used_prefixes);
-    }
-    for from_item in &select.from {
-        for join in &from_item.joins {
-            if let Some(constraint) = join_constraint(&join.join_operator) {
-                collect_identifier_prefixes(constraint, &mut used_prefixes);
-            }
-        }
-    }
-    // Check GROUP BY
-    if let GroupByExpr::Expressions(exprs, _) = &select.group_by {
-        for expr in exprs {
-            collect_identifier_prefixes(expr, &mut used_prefixes);
-        }
-    }
+    collect_identifier_prefixes_from_select(select, order_by, &mut used_prefixes);
 
     for alias in aliases.keys() {
         if !used_prefixes.contains(&alias.to_uppercase()) {
@@ -123,6 +109,77 @@ fn check_select(select: &Select, ctx: &LintContext, issues: &mut Vec<Issue>) {
                 .with_statement(ctx.statement_index),
             );
         }
+    }
+}
+
+fn collect_identifier_prefixes_from_order_by(order_by: &OrderBy, prefixes: &mut HashSet<String>) {
+    if let OrderByKind::Expressions(order_by_exprs) = &order_by.kind {
+        for order_expr in order_by_exprs {
+            collect_identifier_prefixes(&order_expr.expr, prefixes);
+        }
+    }
+}
+
+fn collect_identifier_prefixes_from_query(query: &Query, prefixes: &mut HashSet<String>) {
+    if let Some(ref with) = query.with {
+        for cte in &with.cte_tables {
+            collect_identifier_prefixes_from_query(&cte.query, prefixes);
+        }
+    }
+
+    match query.body.as_ref() {
+        SetExpr::Select(select) => {
+            collect_identifier_prefixes_from_select(select, query.order_by.as_ref(), prefixes);
+        }
+        SetExpr::Query(q) => collect_identifier_prefixes_from_query(q, prefixes),
+        SetExpr::SetOperation { left, right, .. } => {
+            collect_identifier_prefixes_from_set_expr(left, prefixes);
+            collect_identifier_prefixes_from_set_expr(right, prefixes);
+        }
+        _ => {}
+    }
+}
+
+fn collect_identifier_prefixes_from_set_expr(body: &SetExpr, prefixes: &mut HashSet<String>) {
+    match body {
+        SetExpr::Select(select) => collect_identifier_prefixes_from_select(select, None, prefixes),
+        SetExpr::Query(q) => collect_identifier_prefixes_from_query(q, prefixes),
+        SetExpr::SetOperation { left, right, .. } => {
+            collect_identifier_prefixes_from_set_expr(left, prefixes);
+            collect_identifier_prefixes_from_set_expr(right, prefixes);
+        }
+        _ => {}
+    }
+}
+
+fn collect_identifier_prefixes_from_select(
+    select: &Select,
+    order_by: Option<&OrderBy>,
+    prefixes: &mut HashSet<String>,
+) {
+    for item in &select.projection {
+        collect_identifier_prefixes_from_select_item(item, prefixes);
+    }
+    if let Some(ref selection) = select.selection {
+        collect_identifier_prefixes(selection, prefixes);
+    }
+    if let Some(ref having) = select.having {
+        collect_identifier_prefixes(having, prefixes);
+    }
+    for from_item in &select.from {
+        for join in &from_item.joins {
+            if let Some(constraint) = join_constraint(&join.join_operator) {
+                collect_identifier_prefixes(constraint, prefixes);
+            }
+        }
+    }
+    if let GroupByExpr::Expressions(exprs, _) = &select.group_by {
+        for expr in exprs {
+            collect_identifier_prefixes(expr, prefixes);
+        }
+    }
+    if let Some(order_by) = order_by {
+        collect_identifier_prefixes_from_order_by(order_by, prefixes);
     }
 }
 
@@ -204,6 +261,13 @@ fn collect_identifier_prefixes(expr: &Expr, prefixes: &mut HashSet<String>) {
             for item in list {
                 collect_identifier_prefixes(item, prefixes);
             }
+        }
+        Expr::InSubquery { expr, subquery, .. } => {
+            collect_identifier_prefixes(expr, prefixes);
+            collect_identifier_prefixes_from_query(subquery, prefixes);
+        }
+        Expr::Subquery(subquery) | Expr::Exists { subquery, .. } => {
+            collect_identifier_prefixes_from_query(subquery, prefixes);
         }
         Expr::Between {
             expr, low, high, ..
@@ -359,6 +423,28 @@ mod tests {
              FROM users u JOIN orders o ON u.id = o.user_id",
         );
         // u is used in CASE, o is used in JOIN ON
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn test_alias_used_in_order_by() {
+        let issues = check_sql(
+            "SELECT u.name \
+             FROM users u \
+             JOIN orders o ON users.id = orders.user_id \
+             ORDER BY o.created_at",
+        );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn test_alias_used_only_in_correlated_exists_subquery() {
+        let issues = check_sql(
+            "SELECT 1 \
+             FROM users u \
+             JOIN orders o ON 1 = 1 \
+             WHERE EXISTS (SELECT 1 WHERE u.id = o.user_id)",
+        );
         assert!(issues.is_empty());
     }
 }

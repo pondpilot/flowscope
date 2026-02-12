@@ -96,10 +96,9 @@ fn is_computed(expr: &Expr) -> bool {
 }
 
 fn truncate(s: &str, max_len: usize) -> &str {
-    if s.len() <= max_len {
-        s
-    } else {
-        &s[..max_len]
+    match s.char_indices().nth(max_len) {
+        Some((idx, _)) => &s[..idx],
+        None => s,
     }
 }
 
@@ -239,5 +238,14 @@ mod tests {
     fn test_qualified_column_ok() {
         let issues = check_sql("SELECT t.a, t.b FROM t");
         assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn test_non_ascii_expression_truncation_is_utf8_safe() {
+        let sql = format!("SELECT \"{}é\" + 1 FROM t", "a".repeat(58));
+        let issues = check_sql(&sql);
+
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, "LINT_AL_001");
     }
 }

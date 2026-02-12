@@ -51,15 +51,15 @@ impl LintRule for UnusedCte {
 
         // Collect all table references from the query body and other CTEs
         let mut referenced = HashSet::new();
-        collect_table_refs(&query.body, &mut referenced);
+        collect_query_refs(query, &mut referenced);
 
         // Each CTE can reference earlier CTEs
         for (i, cte) in with.cte_tables.iter().enumerate() {
             let mut cte_refs = HashSet::new();
-            collect_table_refs(&cte.query.body, &mut cte_refs);
+            collect_query_refs(&cte.query, &mut cte_refs);
             // CTEs defined after this one can reference it
             for later_cte in &with.cte_tables[i + 1..] {
-                collect_table_refs(&later_cte.query.body, &mut cte_refs);
+                collect_query_refs(&later_cte.query, &mut cte_refs);
             }
             referenced.extend(cte_refs);
         }
@@ -71,7 +71,7 @@ impl LintRule for UnusedCte {
                 // Check if any later CTE references this one
                 let referenced_by_later = with.cte_tables[i + 1..].iter().any(|later| {
                     let mut refs = HashSet::new();
-                    collect_table_refs(&later.query.body, &mut refs);
+                    collect_query_refs(&later.query, &mut refs);
                     refs.contains(&name_upper)
                 });
                 if referenced_by_later {
@@ -98,6 +98,13 @@ impl LintRule for UnusedCte {
     }
 }
 
+fn collect_query_refs(query: &Query, refs: &mut HashSet<String>) {
+    collect_table_refs(&query.body, refs);
+    if let Some(order_by) = &query.order_by {
+        collect_order_by_refs(order_by, refs);
+    }
+}
+
 /// Recursively collects uppercase table/CTE names referenced in a set expression.
 fn collect_table_refs(expr: &SetExpr, refs: &mut HashSet<String>) {
     match expr {
@@ -106,14 +113,18 @@ fn collect_table_refs(expr: &SetExpr, refs: &mut HashSet<String>) {
                 collect_relation_refs(&item.relation, refs);
                 for join in &item.joins {
                     collect_relation_refs(&join.relation, refs);
+                    collect_join_constraint_refs(&join.join_operator, refs);
                 }
             }
-            // Check subqueries in WHERE, HAVING, and SELECT expressions
+            // Check subqueries in SELECT and predicate expressions.
             for item in &select.projection {
                 if let SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } = item
                 {
                     collect_expr_table_refs(expr, refs);
                 }
+            }
+            if let Some(prewhere) = &select.prewhere {
+                collect_expr_table_refs(prewhere, refs);
             }
             if let Some(ref selection) = select.selection {
                 collect_expr_table_refs(selection, refs);
@@ -121,13 +132,24 @@ fn collect_table_refs(expr: &SetExpr, refs: &mut HashSet<String>) {
             if let Some(ref having) = select.having {
                 collect_expr_table_refs(having, refs);
             }
+            if let Some(ref qualify) = select.qualify {
+                collect_expr_table_refs(qualify, refs);
+            }
+            if let GroupByExpr::Expressions(exprs, _) = &select.group_by {
+                for expr in exprs {
+                    collect_expr_table_refs(expr, refs);
+                }
+            }
+            for sort_expr in &select.sort_by {
+                collect_expr_table_refs(&sort_expr.expr, refs);
+            }
         }
         SetExpr::Query(q) => {
-            collect_table_refs(&q.body, refs);
+            collect_query_refs(q, refs);
             // Also check subquery CTEs
             if let Some(w) = &q.with {
                 for cte in &w.cte_tables {
-                    collect_table_refs(&cte.query.body, refs);
+                    collect_query_refs(&cte.query, refs);
                 }
             }
         }
@@ -143,19 +165,19 @@ fn collect_table_refs(expr: &SetExpr, refs: &mut HashSet<String>) {
 fn collect_expr_table_refs(expr: &Expr, refs: &mut HashSet<String>) {
     match expr {
         Expr::InSubquery { subquery, expr, .. } => {
-            collect_table_refs(&subquery.body, refs);
+            collect_query_refs(subquery, refs);
             if let Some(w) = &subquery.with {
                 for cte in &w.cte_tables {
-                    collect_table_refs(&cte.query.body, refs);
+                    collect_query_refs(&cte.query, refs);
                 }
             }
             collect_expr_table_refs(expr, refs);
         }
         Expr::Subquery(subquery) | Expr::Exists { subquery, .. } => {
-            collect_table_refs(&subquery.body, refs);
+            collect_query_refs(subquery, refs);
             if let Some(w) = &subquery.with {
                 for cte in &w.cte_tables {
-                    collect_table_refs(&cte.query.body, refs);
+                    collect_query_refs(&cte.query, refs);
                 }
             }
         }
@@ -175,6 +197,47 @@ fn collect_expr_table_refs(expr: &Expr, refs: &mut HashSet<String>) {
                 collect_expr_table_refs(item, refs);
             }
         }
+        Expr::Between {
+            expr, low, high, ..
+        } => {
+            collect_expr_table_refs(expr, refs);
+            collect_expr_table_refs(low, refs);
+            collect_expr_table_refs(high, refs);
+        }
+        Expr::Case {
+            operand,
+            conditions,
+            else_result,
+            ..
+        } => {
+            if let Some(op) = operand {
+                collect_expr_table_refs(op, refs);
+            }
+            for case_when in conditions {
+                collect_expr_table_refs(&case_when.condition, refs);
+                collect_expr_table_refs(&case_when.result, refs);
+            }
+            if let Some(el) = else_result {
+                collect_expr_table_refs(el, refs);
+            }
+        }
+        Expr::Cast { expr: inner, .. } => {
+            collect_expr_table_refs(inner, refs);
+        }
+        Expr::Function(func) => {
+            if let FunctionArguments::List(arg_list) = &func.args {
+                for arg in &arg_list.args {
+                    match arg {
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(e))
+                        | FunctionArg::Named {
+                            arg: FunctionArgExpr::Expr(e),
+                            ..
+                        } => collect_expr_table_refs(e, refs),
+                        _ => {}
+                    }
+                }
+            }
+        }
         _ => {}
     }
 }
@@ -192,7 +255,12 @@ fn collect_relation_refs(relation: &TableFactor, refs: &mut HashSet<String>) {
             }
         }
         TableFactor::Derived { subquery, .. } => {
-            collect_table_refs(&subquery.body, refs);
+            collect_query_refs(subquery, refs);
+            if let Some(w) = &subquery.with {
+                for cte in &w.cte_tables {
+                    collect_query_refs(&cte.query, refs);
+                }
+            }
         }
         TableFactor::NestedJoin {
             table_with_joins, ..
@@ -200,9 +268,36 @@ fn collect_relation_refs(relation: &TableFactor, refs: &mut HashSet<String>) {
             collect_relation_refs(&table_with_joins.relation, refs);
             for join in &table_with_joins.joins {
                 collect_relation_refs(&join.relation, refs);
+                collect_join_constraint_refs(&join.join_operator, refs);
             }
         }
         _ => {}
+    }
+}
+
+fn collect_order_by_refs(order_by: &OrderBy, refs: &mut HashSet<String>) {
+    if let OrderByKind::Expressions(order_exprs) = &order_by.kind {
+        for order_expr in order_exprs {
+            collect_expr_table_refs(&order_expr.expr, refs);
+        }
+    }
+}
+
+fn collect_join_constraint_refs(join_operator: &JoinOperator, refs: &mut HashSet<String>) {
+    let constraint = match join_operator {
+        JoinOperator::Join(c)
+        | JoinOperator::Inner(c)
+        | JoinOperator::LeftOuter(c)
+        | JoinOperator::RightOuter(c)
+        | JoinOperator::FullOuter(c)
+        | JoinOperator::LeftSemi(c)
+        | JoinOperator::RightSemi(c)
+        | JoinOperator::LeftAnti(c)
+        | JoinOperator::RightAnti(c) => c,
+        _ => return,
+    };
+    if let JoinConstraint::On(expr) = constraint {
+        collect_expr_table_refs(expr, refs);
     }
 }
 
@@ -284,6 +379,15 @@ mod tests {
         let issues = check_sql(
             "WITH cte AS (SELECT id FROM t) \
              SELECT * FROM t2 WHERE id IN (SELECT id FROM cte)",
+        );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn test_cte_used_in_exists_subquery() {
+        let issues = check_sql(
+            "WITH cte AS (SELECT id FROM t) \
+             SELECT 1 WHERE EXISTS (SELECT 1 FROM cte)",
         );
         assert!(issues.is_empty());
     }

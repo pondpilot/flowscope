@@ -36,6 +36,7 @@ serve = ["dep:axum", "dep:tower-http", "dep:rust-embed", "dep:notify-debouncer-m
 [dependencies]
 flowscope-core.workspace = true
 flowscope-export = { workspace = true, features = ["duckdb"] }
+sqlparser.workspace = true
 clap = { version = "4", features = ["derive"] }
 serde.workspace = true
 serde_json.workspace = true
