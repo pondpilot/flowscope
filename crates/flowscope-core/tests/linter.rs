@@ -525,7 +525,7 @@ fn lint_sqlfluff_parity_rule_smoke_cases() {
         ("LINT_AM_005", "SELECT a FROM t ORDER BY 1"),
         ("LINT_AM_006", "SELECT * FROM a JOIN b ON a.id = b.id"),
         ("LINT_AM_007", "SELECT foo, bar FROM fake_table GROUP BY 1, bar"),
-        ("LINT_AM_008", "SELECT * FROM a UNION SELECT * FROM b"),
+        ("LINT_AM_008", "WITH cte AS (SELECT a, b, c FROM t) SELECT * FROM cte UNION SELECT d, e FROM t2"),
         ("LINT_AM_009", "SELECT foo.a, bar.b FROM foo INNER JOIN bar"),
         ("LINT_CP_001", "SELECT a from t"),
         ("LINT_CP_002", "SELECT Col, col FROM t"),

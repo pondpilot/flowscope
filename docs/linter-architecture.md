@@ -161,8 +161,9 @@ Move style-oriented checks to lexical engine:
 - [x] Phase 1 AST migrations landed for: `AM_006`-`AM_009`, `CV_012`, `RF_001`-`RF_003`, `ST_009`-`ST_011`.
 - [x] `LINT_AM_007` now follows SQLFluff AM06 default (`consistent`) semantics via AST traversal of `GROUP BY` / `ORDER BY` clauses, including nested-query precedence and rollup-style references.
 - [x] `LINT_AM_009` now follows SQLFluff AM08 semantics via AST join-operator analysis (implicit cross join detection, with `WHERE` deferral to CV12 and UNNEST/CROSS/NATURAL/USING exclusions).
+- [x] `LINT_AM_008` now performs AST set-expression branch-width checks with deterministic wildcard resolution for CTE/derived sources, while unresolved wildcard expansions remain non-violating (SQLFluff-aligned behavior).
 - [~] Parity monolith decommission is in progress: migrated rule registrations and parity tests are removed from `parity.rs`; helper cleanup is still ongoing.
-- [~] SQLFluff fixture adoption is in progress for migrated rules; AM06 and AM08 fixture cases were adopted for `LINT_AM_007` and `LINT_AM_009`, and additional rule-level coverage is still being expanded.
+- [~] SQLFluff fixture adoption is in progress for migrated rules; AM06/AM07/AM08 fixture cases were adopted for `LINT_AM_007`/`LINT_AM_008`/`LINT_AM_009`, and additional rule-level coverage is still being expanded.
 - [ ] Phase 2 lexical/style migrations are pending (`CP_*`, `LT_*`, `JJ_001`, remaining `CV_*` style rules).
 
 ## Quality Gates
