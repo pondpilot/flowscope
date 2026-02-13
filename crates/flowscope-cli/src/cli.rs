@@ -116,6 +116,7 @@ pub enum DialectArg {
     Ansi,
     Bigquery,
     Clickhouse,
+    #[value(alias = "sparksql")]
     Databricks,
     Duckdb,
     Hive,
@@ -209,6 +210,14 @@ mod tests {
     fn test_dialect_conversion() {
         let dialect: flowscope_core::Dialect = DialectArg::Postgres.into();
         assert_eq!(dialect, flowscope_core::Dialect::Postgres);
+    }
+
+    #[test]
+    fn test_sparksql_dialect_alias_maps_to_databricks() {
+        let args = Args::parse_from(["flowscope", "-d", "sparksql", "test.sql"]);
+        assert_eq!(args.dialect, DialectArg::Databricks);
+        let core_dialect: flowscope_core::Dialect = args.dialect.into();
+        assert_eq!(core_dialect, flowscope_core::Dialect::Databricks);
     }
 
     #[test]
