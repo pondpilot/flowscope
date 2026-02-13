@@ -674,6 +674,25 @@ fn lint_rule_config_references_quoting_prefer_quoted_identifiers() {
 }
 
 #[test]
+fn lint_rule_config_references_keywords_quoted_policy_all() {
+    let issues = run_lint_with_config(
+        "SELECT \"select\".id FROM users AS \"select\"",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "references.keywords".to_string(),
+                serde_json::json!({"quoted_identifiers_policy": "all"}),
+            )]),
+        },
+    );
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_RF_004"),
+        "quoted_identifiers_policy=all should flag quoted keyword identifiers: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_rule_config_aliasing_forbid_force_enable_false() {
     let issues = run_lint_with_config(
         "SELECT * FROM users u",
@@ -1513,7 +1532,7 @@ fn lint_jj_001_missing_padding_before_statement_close_tag() {
 
 #[test]
 fn lint_rf_004_keyword_identifier() {
-    let issues = run_lint("SELECT \"select\".id FROM users AS \"select\"");
+    let issues = run_lint("SELECT sum.id FROM users AS sum");
     assert!(
         issues
             .iter()
@@ -1525,8 +1544,7 @@ fn lint_rf_004_keyword_identifier() {
 
 #[test]
 fn lint_rf_004_keyword_cte_identifier() {
-    let issues =
-        run_lint("WITH \"select\"(\"from\") AS (SELECT 1) SELECT \"from\" FROM \"select\"");
+    let issues = run_lint("WITH sum AS (SELECT 1 AS value) SELECT value FROM sum");
     assert!(
         issues
             .iter()

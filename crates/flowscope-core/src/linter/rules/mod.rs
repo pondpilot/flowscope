@@ -137,7 +137,7 @@ pub fn all_rules(config: &LintConfig) -> Vec<Box<dyn LintRule>> {
         Box::new(rf_001::ReferencesFrom::from_config(config)),
         Box::new(rf_002::ReferencesQualification::from_config(config)),
         Box::new(rf_003::ReferencesConsistent::from_config(config)),
-        Box::new(rf_004::ReferencesKeywords),
+        Box::new(rf_004::ReferencesKeywords::from_config(config)),
         Box::new(rf_005::ReferencesSpecialChars),
         Box::new(rf_006::ReferencesQuoting::from_config(config)),
         Box::new(st_003::UnusedCte),

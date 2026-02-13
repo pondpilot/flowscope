@@ -83,6 +83,7 @@ This plan covers three axes:
   - `AL_009` now supports `alias_case_check` through `lint.ruleConfigs` and applies quote-aware case matching for self-alias detection.
   - `RF_004` moved from parity handling to a dedicated core rule module (`rf_004.rs`).
   - `RF_004` was further upgraded to AST-driven identifier analysis (expression identifiers, projection aliases, CTE identifiers, and table/join aliases plus table-name parts), eliminating SQL-string false positives from non-SQL string literals.
+  - `RF_004` now supports SQLFluff-style `quoted_identifiers_policy` / `unquoted_identifiers_policy` and `ignore_words` / `ignore_words_regex` through `lint.ruleConfigs`.
   - `RF_001` now supports `force_enable` through `lint.ruleConfigs`.
   - `RF_002` now supports `force_enable` through `lint.ruleConfigs`.
   - `RF_003` now supports `single_table_references` (`consistent`/`qualified`/`unqualified`) and `force_enable` through `lint.ruleConfigs`, and now treats qualified wildcards (`alias.*`) as qualified references in consistency checks.
