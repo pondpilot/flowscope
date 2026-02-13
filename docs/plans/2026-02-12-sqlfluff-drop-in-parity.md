@@ -81,6 +81,7 @@ This plan covers three axes:
   - `RF_004` moved from parity handling to a dedicated core rule module (`rf_004.rs`).
   - `RF_004` was further upgraded to AST-driven table/join alias analysis, eliminating SQL-string false positives from non-SQL string literals.
   - `RF_001` now supports `force_enable` through `lint.ruleConfigs`.
+  - `RF_002` now supports `force_enable` through `lint.ruleConfigs`.
   - `RF_003` now supports `single_table_references` (`consistent`/`qualified`/`unqualified`) and `force_enable` through `lint.ruleConfigs`, and now treats qualified wildcards (`alias.*`) as qualified references in consistency checks.
   - `RF_005` moved from parity handling to a dedicated core rule module (`rf_005.rs`).
   - `RF_005` was further upgraded to AST-driven quoted-identifier traversal, replacing raw quote-regex scanning.

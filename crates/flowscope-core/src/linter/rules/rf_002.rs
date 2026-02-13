@@ -2,6 +2,7 @@
 //!
 //! In multi-table queries, require qualified column references.
 
+use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
 use sqlparser::ast::Statement;
@@ -11,7 +12,25 @@ use super::semantic_helpers::{
     select_source_count, visit_select_expressions, visit_selects_in_statement,
 };
 
-pub struct ReferencesQualification;
+pub struct ReferencesQualification {
+    force_enable: bool,
+}
+
+impl ReferencesQualification {
+    pub fn from_config(config: &LintConfig) -> Self {
+        Self {
+            force_enable: config
+                .rule_option_bool(issue_codes::LINT_RF_002, "force_enable")
+                .unwrap_or(true),
+        }
+    }
+}
+
+impl Default for ReferencesQualification {
+    fn default() -> Self {
+        Self { force_enable: true }
+    }
+}
 
 impl LintRule for ReferencesQualification {
     fn code(&self) -> &'static str {
@@ -27,6 +46,10 @@ impl LintRule for ReferencesQualification {
     }
 
     fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+        if !self.force_enable {
+            return Vec::new();
+        }
+
         let mut unqualified_count = 0usize;
 
         visit_selects_in_statement(statement, &mut |select| {
@@ -61,7 +84,7 @@ mod tests {
 
     fn run(sql: &str) -> Vec<Issue> {
         let statements = parse_sql(sql).expect("parse");
-        let rule = ReferencesQualification;
+        let rule = ReferencesQualification::default();
         statements
             .iter()
             .enumerate()
@@ -106,5 +129,29 @@ mod tests {
     fn flags_unqualified_multi_table_query_inside_subquery() {
         let issues = run("SELECT a FROM (SELECT a, b FROM foo LEFT JOIN vee ON vee.a = foo.a)");
         assert!(!issues.is_empty());
+    }
+
+    #[test]
+    fn force_enable_false_disables_rule() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "LINT_RF_002".to_string(),
+                serde_json::json!({"force_enable": false}),
+            )]),
+        };
+        let rule = ReferencesQualification::from_config(&config);
+        let sql = "SELECT a, b FROM foo LEFT JOIN vee ON vee.a = foo.a";
+        let statements = parse_sql(sql).expect("parse");
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert!(issues.is_empty());
     }
 }

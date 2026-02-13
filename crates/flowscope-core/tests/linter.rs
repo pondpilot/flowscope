@@ -457,6 +457,25 @@ fn lint_rule_config_references_from_force_enable_false() {
 }
 
 #[test]
+fn lint_rule_config_references_qualification_force_enable_false() {
+    let issues = run_lint_with_config(
+        "SELECT id FROM a JOIN b ON a.id = b.id",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "references.qualification".to_string(),
+                serde_json::json!({"force_enable": false}),
+            )]),
+        },
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_RF_002"),
+        "force_enable=false should disable RF_002 checks: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_rule_config_references_consistent_qualified_mode() {
     let issues = run_lint_with_config(
         "SELECT bar FROM my_tbl",
