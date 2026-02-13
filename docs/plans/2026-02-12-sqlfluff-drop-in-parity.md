@@ -132,8 +132,10 @@ This plan covers three axes:
   - `LT_002` moved from parity handling to a dedicated core rule module (`lt_002.rs`).
   - `LT_003` moved from parity handling to a dedicated core rule module (`lt_003.rs`).
   - `LT_003` was further upgraded from regex scanning to tokenizer line-aware trailing-operator checks.
+  - `LT_003` now supports operator line-position configuration through `lint.ruleConfigs` (`line_position=leading|trailing`) and legacy SQLFluff `operator_new_lines` compatibility.
   - `LT_004` moved from parity handling to a dedicated core rule module (`lt_004.rs`).
   - `LT_004` was further upgraded from regex scanning to tokenizer-driven comma-spacing checks.
+  - `LT_004` now supports comma line-position configuration through `lint.ruleConfigs` (`line_position=trailing|leading`) and legacy SQLFluff `comma_style` compatibility.
   - `LT_001` moved from parity handling to a dedicated core rule module (`lt_001.rs`).
   - `LT_001` was further upgraded from regex matching to deterministic layout-pattern scanners (JSON arrow/type/index/numeric-scale/EXISTS line form).
   - `LT_005` moved from parity handling to a dedicated core rule module (`lt_005.rs`).

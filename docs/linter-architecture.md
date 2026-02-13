@@ -191,6 +191,8 @@ Move style-oriented checks to lexical engine:
 - [x] `LINT_CV_011` now supports `preferred_type_casting_style` via `lint.ruleConfigs` (including `consistent`/`shorthand`/`cast`/`convert` preferences).
 - [x] `LINT_LT_005` now supports `max_line_length` via `lint.ruleConfigs`.
 - [x] `LINT_LT_009` now supports `wildcard_policy` (`single`/`multiple`) via `lint.ruleConfigs`.
+- [x] `LINT_LT_003` now supports operator line-placement configuration via `lint.ruleConfigs` (`line_position=leading|trailing`, plus legacy SQLFluff `operator_new_lines=after|before` mapping).
+- [x] `LINT_LT_004` now supports comma line-placement configuration via `lint.ruleConfigs` (`line_position=trailing|leading`, plus legacy SQLFluff `comma_style` mapping).
 - [x] `LINT_ST_005` now supports `forbid_subquery_in` (`both`/`join`/`from`) via `lint.ruleConfigs`.
 - [x] `LINT_ST_009` now supports `preferred_first_table_in_join_clause` (`earlier`/`later`) via `lint.ruleConfigs`.
 - [x] `LINT_RF_001` now supports `force_enable` via `lint.ruleConfigs`.

@@ -400,6 +400,44 @@ fn lint_rule_config_select_targets_wildcard_policy_multiple() {
 }
 
 #[test]
+fn lint_rule_config_layout_operators_trailing_line_position() {
+    let issues = run_lint_with_config(
+        "SELECT a\n + b FROM t",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "layout.operators".to_string(),
+                serde_json::json!({"line_position": "trailing"}),
+            )]),
+        },
+    );
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_LT_003"),
+        "line_position=trailing should flag leading operators: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_rule_config_layout_commas_leading_line_position() {
+    let issues = run_lint_with_config(
+        "SELECT a,\n b FROM t",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "layout.commas".to_string(),
+                serde_json::json!({"line_position": "leading"}),
+            )]),
+        },
+    );
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_LT_004"),
+        "line_position=leading should flag trailing commas: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_rule_config_structure_subquery_forbid_join_only() {
     let issues = run_lint_with_config(
         "SELECT * FROM (SELECT * FROM t) sub",
