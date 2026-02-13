@@ -122,6 +122,7 @@ This plan covers three axes:
   - `LT_001` moved from parity handling to a dedicated core rule module (`lt_001.rs`).
   - `LT_001` was further upgraded from regex matching to deterministic layout-pattern scanners (JSON arrow/type/index/numeric-scale/EXISTS line form).
   - `LT_005` moved from parity handling to a dedicated core rule module (`lt_005.rs`).
+  - `LT_005` now supports configurable `max_line_length` through `lint.ruleConfigs`.
   - `LT_006` moved from parity handling to a dedicated core rule module (`lt_006.rs`).
   - `LT_006` was further upgraded from regex masking to token-stream function-call spacing checks with context guards.
   - `LT_007` moved from parity handling to a dedicated core rule module (`lt_007.rs`).
@@ -129,6 +130,7 @@ This plan covers three axes:
   - `LT_008` moved from parity handling to a dedicated core rule module (`lt_008.rs`).
   - `LT_009` moved from parity handling to a dedicated core rule module (`lt_009.rs`).
   - `LT_009` was further upgraded from regex masking to tokenizer-located SELECT-line target counting.
+  - `LT_009` now supports `wildcard_policy` (`single`/`multiple`) through `lint.ruleConfigs`.
   - `LT_014` moved from parity handling to a dedicated core rule module (`lt_014.rs`).
   - `LT_014` was further upgraded from regex masking to token/line-aware major-clause placement checks.
   - `CP_001` moved from parity handling to a dedicated core rule module (`cp_001.rs`).
@@ -508,8 +510,6 @@ These rules work but lack SQLFluff config knobs that users depend on:
 | AM_006 (ambiguous.column_references) | `group_by_and_order_by_style` | `consistent` |
 | CP_001 (capitalisation.keywords) | `capitalisation_policy`, `ignore_words` | `consistent` |
 | CP_002–005 | `extended_capitalisation_policy` | `consistent` |
-| LT_005 (layout.long_lines) | `max_line_length` (configurable) | 80 |
-| LT_009 (layout.select_targets) | `wildcard_policy` | `single` |
 | RF_001 (references.from) | `force_enable` | `False` |
 | RF_003 (references.consistent) | `single_table_references`, `force_enable` | `consistent`, `False` |
 | RF_006 (references.quoting) | `prefer_quoted_identifiers`, `case_sensitive` | `False`, `False` |

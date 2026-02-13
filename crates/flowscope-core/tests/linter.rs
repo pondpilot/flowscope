@@ -342,6 +342,44 @@ fn lint_rule_config_casting_style_shorthand() {
     );
 }
 
+#[test]
+fn lint_rule_config_long_lines_max_line_length() {
+    let issues = run_lint_with_config(
+        "SELECT this_is_far_too_long FROM t",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "layout.long_lines".to_string(),
+                serde_json::json!({"max_line_length": 20}),
+            )]),
+        },
+    );
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_LT_005"),
+        "configured max_line_length should flag long lines: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_rule_config_select_targets_wildcard_policy_multiple() {
+    let issues = run_lint_with_config(
+        "SELECT * FROM t",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "LINT_LT_009".to_string(),
+                serde_json::json!({"wildcard_policy": "multiple"}),
+            )]),
+        },
+    );
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_LT_009"),
+        "wildcard_policy=multiple should flag single-line wildcard target: {issues:?}"
+    );
+}
+
 // =============================================================================
 // Rule-specific integration tests
 // =============================================================================

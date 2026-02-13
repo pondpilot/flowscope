@@ -2,11 +2,32 @@
 //!
 //! SQLFluff LT05 parity (current scope): flag overflow beyond 80 columns.
 
+use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue, Span};
 use sqlparser::ast::Statement;
 
-pub struct LayoutLongLines;
+pub struct LayoutLongLines {
+    max_line_length: usize,
+}
+
+impl LayoutLongLines {
+    pub fn from_config(config: &LintConfig) -> Self {
+        Self {
+            max_line_length: config
+                .rule_option_usize(issue_codes::LINT_LT_005, "max_line_length")
+                .unwrap_or(80),
+        }
+    }
+}
+
+impl Default for LayoutLongLines {
+    fn default() -> Self {
+        Self {
+            max_line_length: 80,
+        }
+    }
+}
 
 impl LintRule for LayoutLongLines {
     fn code(&self) -> &'static str {
@@ -26,7 +47,7 @@ impl LintRule for LayoutLongLines {
             return Vec::new();
         }
 
-        long_line_overflow_spans(ctx.sql, 80)
+        long_line_overflow_spans(ctx.sql, self.max_line_length)
             .into_iter()
             .map(|(start, end)| {
                 Issue::info(
@@ -88,7 +109,7 @@ mod tests {
 
     fn run(sql: &str) -> Vec<Issue> {
         let statements = parse_sql(sql).expect("parse");
-        let rule = LayoutLongLines;
+        let rule = LayoutLongLines::default();
         statements
             .iter()
             .enumerate()
@@ -133,5 +154,30 @@ mod tests {
                 .count(),
             2,
         );
+    }
+
+    #[test]
+    fn configured_max_line_length_is_respected() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "layout.long_lines".to_string(),
+                serde_json::json!({"max_line_length": 20}),
+            )]),
+        };
+        let rule = LayoutLongLines::from_config(&config);
+        let sql = "SELECT this_line_is_long FROM t";
+        let statements = parse_sql(sql).expect("parse");
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_LT_005);
     }
 }

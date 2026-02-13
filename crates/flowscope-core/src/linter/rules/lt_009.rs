@@ -3,13 +3,52 @@
 //! SQLFluff LT09 parity (current scope): require multi-target SELECT lists to
 //! be line-broken.
 
+use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
 use sqlparser::ast::Statement;
 use sqlparser::keywords::Keyword;
 use sqlparser::tokenizer::{Token, Tokenizer};
 
-pub struct LayoutSelectTargets;
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum WildcardPolicy {
+    Single,
+    Multiple,
+}
+
+impl WildcardPolicy {
+    fn from_config(config: &LintConfig) -> Self {
+        match config
+            .rule_option_str(issue_codes::LINT_LT_009, "wildcard_policy")
+            .unwrap_or("single")
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "multiple" => Self::Multiple,
+            _ => Self::Single,
+        }
+    }
+}
+
+pub struct LayoutSelectTargets {
+    wildcard_policy: WildcardPolicy,
+}
+
+impl LayoutSelectTargets {
+    pub fn from_config(config: &LintConfig) -> Self {
+        Self {
+            wildcard_policy: WildcardPolicy::from_config(config),
+        }
+    }
+}
+
+impl Default for LayoutSelectTargets {
+    fn default() -> Self {
+        Self {
+            wildcard_policy: WildcardPolicy::Single,
+        }
+    }
+}
 
 impl LintRule for LayoutSelectTargets {
     fn code(&self) -> &'static str {
@@ -25,7 +64,7 @@ impl LintRule for LayoutSelectTargets {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        lt09_violation_spans(ctx.statement_sql())
+        lt09_violation_spans(ctx.statement_sql(), self.wildcard_policy)
             .into_iter()
             .map(|(start, end)| {
                 Issue::info(
@@ -39,8 +78,9 @@ impl LintRule for LayoutSelectTargets {
     }
 }
 
-fn select_line_top_level_comma_count(segment: &str) -> usize {
+fn select_line_top_level_metrics(segment: &str) -> (usize, bool) {
     let mut count = 0usize;
+    let mut has_wildcard = false;
     let mut depth = 0usize;
     let mut in_single = false;
     let mut in_double = false;
@@ -86,16 +126,38 @@ fn select_line_top_level_comma_count(segment: &str) -> usize {
                 depth = depth.saturating_sub(1);
             }
             b',' if depth == 0 => count += 1,
+            b'*' if depth == 0 && is_top_level_wildcard(segment, idx) => has_wildcard = true,
             _ => {}
         }
 
         idx += 1;
     }
 
-    count
+    (count, has_wildcard)
 }
 
-fn lt09_violation_spans(sql: &str) -> Vec<(usize, usize)> {
+fn is_top_level_wildcard(segment: &str, star_idx: usize) -> bool {
+    let prev = segment[..star_idx]
+        .chars()
+        .rev()
+        .find(|ch| !ch.is_ascii_whitespace());
+    let next = segment[star_idx + 1..]
+        .chars()
+        .find(|ch| !ch.is_ascii_whitespace());
+
+    let operator_like = prev.is_some_and(is_operand_tail) && next.is_some_and(is_operand_head);
+    !operator_like
+}
+
+fn is_operand_tail(ch: char) -> bool {
+    ch.is_ascii_alphanumeric() || matches!(ch, '_' | ')' | ']' | '"' | '\'' | '`')
+}
+
+fn is_operand_head(ch: char) -> bool {
+    ch.is_ascii_alphanumeric() || matches!(ch, '_' | '(' | '[' | '"' | '\'' | '`')
+}
+
+fn lt09_violation_spans(sql: &str, wildcard_policy: WildcardPolicy) -> Vec<(usize, usize)> {
     let dialect = sqlparser::dialect::GenericDialect {};
     let mut tokenizer = Tokenizer::new(&dialect, sql);
     let Ok(tokens) = tokenizer.tokenize_with_location() else {
@@ -130,7 +192,11 @@ fn lt09_violation_spans(sql: &str) -> Vec<(usize, usize)> {
         let line_end = sql[end..].find('\n').map_or(sql.len(), |off| end + off);
         let select_tail = &sql[end..line_end];
 
-        if select_line_top_level_comma_count(select_tail) > 0 {
+        let (comma_count, has_wildcard) = select_line_top_level_metrics(select_tail);
+        let violation =
+            comma_count > 0 || matches!(wildcard_policy, WildcardPolicy::Multiple) && has_wildcard;
+
+        if violation {
             spans.push((start, end));
         }
     }
@@ -173,7 +239,7 @@ mod tests {
 
     fn run(sql: &str) -> Vec<Issue> {
         let statements = parse_sql(sql).expect("parse");
-        let rule = LayoutSelectTargets;
+        let rule = LayoutSelectTargets::default();
         statements
             .iter()
             .enumerate()
@@ -215,5 +281,54 @@ mod tests {
     #[test]
     fn does_not_flag_select_word_inside_single_quoted_string() {
         assert!(run("SELECT 'SELECT a, b' AS txt").is_empty());
+    }
+
+    #[test]
+    fn multiple_wildcard_policy_flags_single_wildcard_target() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "layout.select_targets".to_string(),
+                serde_json::json!({"wildcard_policy": "multiple"}),
+            )]),
+        };
+        let rule = LayoutSelectTargets::from_config(&config);
+        let sql = "SELECT * FROM t";
+        let statements = parse_sql(sql).expect("parse");
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_LT_009);
+    }
+
+    #[test]
+    fn multiple_wildcard_policy_does_not_treat_multiplication_as_wildcard() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "LINT_LT_009".to_string(),
+                serde_json::json!({"wildcard_policy": "multiple"}),
+            )]),
+        };
+        let rule = LayoutSelectTargets::from_config(&config);
+        let sql = "SELECT a * b FROM t";
+        let statements = parse_sql(sql).expect("parse");
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert!(issues.is_empty());
     }
 }
