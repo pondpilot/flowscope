@@ -1109,6 +1109,15 @@ fn lint_st_011_inner_join_not_checked() {
 }
 
 #[test]
+fn lint_st_011_unqualified_wildcard_counts_as_reference() {
+    let issues = run_lint("SELECT * FROM a LEFT JOIN b ON a.id = b.id");
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_ST_011"),
+        "unqualified wildcard should count as joined-source usage: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_lt_007_cte_bracket_missing() {
     let issues = run_lint("SELECT 'WITH cte AS SELECT 1' AS sql_snippet");
     assert!(

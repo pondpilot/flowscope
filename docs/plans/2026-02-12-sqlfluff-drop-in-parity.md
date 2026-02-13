@@ -69,7 +69,7 @@ This plan covers three axes:
   - `CV_006` moved from parity into a dedicated core rule module (`cv_006.rs`) and parity registration was removed.
   - `ST_010` constant-expression detection scope was broadened beyond SELECT traversal to also check `UPDATE`/`DELETE` predicates and `MERGE ... ON`.
   - `ST_010` now aligns closer with SQLFluff ST10 comparison semantics (`=`/`!=`/`<>` focus with operator-side guardrails and `1=1`/`1=0` literal allow-list handling).
-  - `ST_011` now aligns closer to SQLFluff ST11 by scoping checks to explicit OUTER joins, deferring when unqualified refs exist, and accounting for inter-join `ON`-clause references plus qualified wildcard usage (`alias.*`).
+  - `ST_011` now aligns closer to SQLFluff ST11 by scoping checks to explicit OUTER joins, deferring when unqualified refs exist, and accounting for inter-join `ON`-clause references plus wildcard usage (`alias.*` and `*`).
 - Additional AST-driven migration progress beyond Tier 1:
   - `AL_006` moved from parity regex handling to a dedicated core AST rule (`al_006.rs`).
   - `AL_006` now supports configurable `min_alias_length` / `max_alias_length` through `lint.ruleConfigs`.

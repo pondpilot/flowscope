@@ -61,6 +61,12 @@ fn unused_join_count_for_select(select: &Select) -> usize {
         return 0;
     }
 
+    // SQLFluff ST11 parity: unqualified wildcard projection references
+    // all available sources in the select scope.
+    if select_has_unqualified_wildcard(select) {
+        return 0;
+    }
+
     let aliases = select_projection_alias_set(select);
     let mut used_prefixes = HashSet::new();
     let mut unqualified_references = 0usize;
@@ -84,6 +90,13 @@ fn unused_join_count_for_select(select: &Select) -> usize {
         .iter()
         .filter(|source| !used_prefixes.contains(*source))
         .count()
+}
+
+fn select_has_unqualified_wildcard(select: &Select) -> bool {
+    select
+        .projection
+        .iter()
+        .any(|item| matches!(item, SelectItem::Wildcard(_)))
 }
 
 fn joined_sources(select: &Select) -> HashSet<String> {
@@ -254,6 +267,12 @@ mod tests {
     #[test]
     fn allows_outer_join_when_joined_source_is_referenced() {
         let issues = run("select widget.id, inventor.id from widget left join inventor on widget.inventor_id = inventor.id");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn allows_unqualified_wildcard_projection() {
+        let issues = run("select * from a left join b on a.id = b.id");
         assert!(issues.is_empty());
     }
 
