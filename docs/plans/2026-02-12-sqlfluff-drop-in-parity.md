@@ -95,7 +95,9 @@ This plan covers three axes:
   - `JJ_001` moved from parity handling to a dedicated core rule module (`jj_001.rs`).
   - `JJ_001` was further upgraded from regex matching to deterministic delimiter scanning for Jinja padding checks.
   - `LT_010` moved from parity handling to a dedicated core rule module (`lt_010.rs`).
+  - `LT_010` was further upgraded from regex scanning to tokenizer line-aware SELECT modifier checks.
   - `LT_011` moved from parity handling to a dedicated core rule module (`lt_011.rs`).
+  - `LT_011` was further upgraded from regex scanning to tokenizer line-aware set-operator placement checks.
   - `LT_012` moved from parity handling to a dedicated core rule module (`lt_012.rs`).
   - `LT_013` moved from parity handling to a dedicated core rule module (`lt_013.rs`).
   - `LT_015` moved from parity handling to a dedicated core rule module (`lt_015.rs`).
