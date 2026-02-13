@@ -85,12 +85,24 @@ impl LintConfig {
             .collect()
     }
 
+    /// Returns a boolean option from the top-level SQLFluff `core` config map.
+    pub fn core_option_bool(&self, key: &str) -> Option<bool> {
+        self.core_config_object()?.get(key)?.as_bool()
+    }
+
     fn matching_rule_config_value(&self, code: &str) -> Option<&serde_json::Value> {
         let canonical = canonicalize_rule_code(code)?;
         self.rule_configs.iter().find_map(|(rule_ref, value)| {
             (canonicalize_rule_code(rule_ref).as_deref() == Some(canonical.as_str()))
                 .then_some(value)
         })
+    }
+
+    fn core_config_object(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
+        self.rule_configs
+            .iter()
+            .find_map(|(rule_ref, value)| rule_ref.eq_ignore_ascii_case("core").then_some(value))
+            .and_then(serde_json::Value::as_object)
     }
 }
 
@@ -590,5 +602,19 @@ mod tests {
             config.rule_option_str("aliasing.column", "aliasing"),
             Some("explicit")
         );
+    }
+
+    #[test]
+    fn core_options_resolve_case_insensitively() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: BTreeMap::from([(
+                "CORE".to_string(),
+                serde_json::json!({"ignore_templated_areas": true}),
+            )]),
+        };
+
+        assert_eq!(config.core_option_bool("ignore_templated_areas"), Some(true));
     }
 }

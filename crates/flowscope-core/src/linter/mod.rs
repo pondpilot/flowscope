@@ -15,6 +15,7 @@ use config::LintConfig;
 use document::{LintDocument, LintStatement};
 use rule::{with_active_dialect, LintContext, LintRule};
 use sqlparser::ast::Statement;
+use std::borrow::Cow;
 
 use crate::{
     parser::parse_sql,
@@ -73,9 +74,11 @@ impl Linter {
                         continue;
                     };
 
+                    let document_scope_sql =
+                        document_scope_sql_for_rule(&self.config, rule.code(), document);
                     let ctx = LintContext {
-                        sql: document.sql,
-                        statement_range: 0..document.sql.len(),
+                        sql: document_scope_sql.as_ref(),
+                        statement_range: 0..document_scope_sql.len(),
                         statement_index: 0,
                     };
 
@@ -363,6 +366,64 @@ fn rule_supports_statementless_fallback(code: &str) -> bool {
     )
 }
 
+fn document_scope_sql_for_rule<'a>(
+    config: &LintConfig,
+    code: &str,
+    document: &LintDocument<'a>,
+) -> Cow<'a, str> {
+    if !rule_uses_document_scope(code) {
+        return Cow::Borrowed(document.sql);
+    }
+    if !config
+        .core_option_bool("ignore_templated_areas")
+        .unwrap_or(false)
+    {
+        return Cow::Borrowed(document.sql);
+    }
+    let Some(source_sql) = document.source_sql else {
+        return Cow::Borrowed(document.sql);
+    };
+    Cow::Owned(strip_templated_areas(source_sql))
+}
+
+fn strip_templated_areas(sql: &str) -> String {
+    let mut out = String::with_capacity(sql.len());
+    let mut index = 0usize;
+
+    while let Some((open_index, close_marker)) = find_next_template_open(sql, index) {
+        out.push_str(&sql[index..open_index]);
+        let marker_start = open_index + 2;
+        if let Some(close_offset) = sql[marker_start..].find(close_marker) {
+            let close_index = marker_start + close_offset + close_marker.len();
+            out.push_str(&mask_non_newlines(&sql[open_index..close_index]));
+            index = close_index;
+        } else {
+            out.push_str(&mask_non_newlines(&sql[open_index..]));
+            return out;
+        }
+    }
+
+    out.push_str(&sql[index..]);
+    out
+}
+
+fn find_next_template_open(sql: &str, from: usize) -> Option<(usize, &'static str)> {
+    let rest = sql.get(from..)?;
+    let candidates = [("{{", "}}"), ("{%", "%}"), ("{#", "#}")];
+
+    candidates
+        .into_iter()
+        .filter_map(|(open, close)| rest.find(open).map(|offset| (from + offset, close)))
+        .min_by_key(|(index, _)| *index)
+}
+
+fn mask_non_newlines(segment: &str) -> String {
+    segment
+        .chars()
+        .map(|ch| if ch == '\n' { '\n' } else { ' ' })
+        .collect()
+}
+
 fn suppress_noqa_issues(issues: Vec<Issue>, document: &LintDocument<'_>) -> Vec<Issue> {
     issues
         .into_iter()
@@ -398,4 +459,21 @@ fn offset_to_line(sql: &str, offset: usize) -> usize {
         .take(offset.min(sql.len()))
         .filter(|byte| **byte == b'\n')
         .count()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::strip_templated_areas;
+
+    #[test]
+    fn strip_templated_areas_preserves_lines_and_replaces_tag_content() {
+        let sql = "SELECT {{ \"x\" }} AS x\nFROM t\nWHERE {% if true %}1{% endif %} = 1";
+        let stripped = strip_templated_areas(sql);
+
+        assert_eq!(stripped.lines().count(), sql.lines().count());
+        assert!(!stripped.contains("{{"));
+        assert!(!stripped.contains("{%"));
+        assert!(stripped.contains("SELECT"));
+        assert!(stripped.contains("FROM t"));
+    }
 }

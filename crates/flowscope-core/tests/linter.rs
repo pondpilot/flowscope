@@ -67,13 +67,22 @@ fn run_lint_with_config_in_dialect(
 
 #[cfg(feature = "templating")]
 fn run_lint_in_dialect_with_jinja_template(sql: &str, dialect: Dialect) -> Vec<(String, String)> {
+    run_lint_with_config_in_dialect_with_jinja_template(sql, dialect, LintConfig::default())
+}
+
+#[cfg(feature = "templating")]
+fn run_lint_with_config_in_dialect_with_jinja_template(
+    sql: &str,
+    dialect: Dialect,
+    config: LintConfig,
+) -> Vec<(String, String)> {
     let result = analyze(&AnalyzeRequest {
         sql: sql.to_string(),
         files: None,
         dialect,
         source_name: None,
         options: Some(AnalysisOptions {
-            lint: Some(LintConfig::default()),
+            lint: Some(config),
             ..Default::default()
         }),
         schema: None,
@@ -1698,6 +1707,59 @@ fn lint_rule_config_capitalisation_keywords_ignore_words_regex() {
     assert!(
         !issues.iter().any(|(code, _)| code == "LINT_CP_001"),
         "ignore_words_regex should suppress configured keyword patterns: {issues:?}"
+    );
+}
+
+#[test]
+#[cfg(feature = "templating")]
+fn lint_rule_config_capitalisation_keywords_ignore_templated_areas_true() {
+    let sql = "{{ \"select\" }} a\nFROM foo\nWHERE 1";
+    let issues = run_lint_with_config_in_dialect_with_jinja_template(
+        sql,
+        Dialect::Ansi,
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([
+                (
+                    "capitalisation.keywords".to_string(),
+                    serde_json::json!({"capitalisation_policy": "upper"}),
+                ),
+                ("core".to_string(), serde_json::json!({"ignore_templated_areas": true})),
+            ]),
+        },
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_CP_001"),
+        "ignore_templated_areas=true should ignore templated keyword tokens: {issues:?}"
+    );
+}
+
+#[test]
+#[cfg(feature = "templating")]
+fn lint_rule_config_capitalisation_keywords_ignore_templated_areas_false() {
+    let sql = "{{ \"select\" }} a\nFROM foo\nWHERE 1";
+    let issues = run_lint_with_config_in_dialect_with_jinja_template(
+        sql,
+        Dialect::Ansi,
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([
+                (
+                    "capitalisation.keywords".to_string(),
+                    serde_json::json!({"capitalisation_policy": "upper"}),
+                ),
+                (
+                    "core".to_string(),
+                    serde_json::json!({"ignore_templated_areas": false}),
+                ),
+            ]),
+        },
+    );
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_CP_001"),
+        "ignore_templated_areas=false should include templated keyword tokens: {issues:?}"
     );
 }
 

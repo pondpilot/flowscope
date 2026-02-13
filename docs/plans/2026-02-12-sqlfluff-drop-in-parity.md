@@ -218,12 +218,13 @@ This plan covers three axes:
   - `CP_002` Pascal policy handling now aligns with SQLFluff fixture expectations for all-caps identifiers (for example `PASCALCASE` under `extended_capitalisation_policy=pascal`).
   - `CP_002` now includes Databricks/SparkSQL `SHOW TBLPROPERTIES ... (<property.path>)` identifier candidate extraction via AST `ShowVariable` handling, covering mixed-case property path violations (for example `created.BY.user`, `Created.By.User`).
   - `CP_001`/`CP_003`/`CP_004`/`CP_005` now run once per document with full-SQL lexical context and now also run in statementless parser-fallback mode, improving SQLFluff parity on parser-erroring fixture inputs while avoiding per-statement case-policy fragmentation.
+  - SQLFluff-style `core.ignore_templated_areas` is now supported through `lint.ruleConfigs.core.ignore_templated_areas` for lexical CP document-scope checks, masking Jinja tag regions from case-policy evaluation when enabled.
   - `CP_001` consistent-policy handling now treats single tracked mixed-case tokens (for example `SeLeCt`) as violations, matching SQLFluff fixture expectations.
   - `CP_003` now includes bare-function keyword forms (`CURRENT_TIMESTAMP`, `CURRENT_DATE`, `CURRENT_USER`, etc.) in token-stream function case checks.
   - `CP_005` now includes broader SQL dialect type keyword coverage (`STRING`, `INT64`, `FLOAT64`, `BYTES`, `TIME`, `INTERVAL`, `STRUCT`, `ARRAY`, `MAP`, `ENUM`, `WITH`, `ZONE`) and now tracks user-defined type names introduced by `CREATE TYPE` / `ALTER TYPE` for downstream type-case checks.
   - Supported-dialect SQLFluff fixture replay for CP keyword/function/literal/type rules now reports zero mismatches on supported cases:
-    - `CP01`: 25/25 checked, 0 mismatches (2 skipped for unsupported `core.ignore_templated_areas` config).
-    - `CP03`: 15/15 checked, 0 mismatches (2 skipped for unsupported `core.ignore_templated_areas` config).
+    - `CP01`: 27/27 checked, 0 mismatches.
+    - `CP03`: 17/17 checked, 0 mismatches.
     - `CP04`: 5/5 checked, 0 mismatches.
     - `CP05`: 21/21 checked, 0 mismatches (1 SparkSQL-only case skipped).
   - Shared AST traversal helpers (`visit_expressions`, `visit_selects_in_statement`) now include `UPDATE`/`DELETE`/`MERGE` statement expression paths plus richer function-argument traversal (`Named`, `ExprNamed`, subquery args, argument clauses), reducing non-SELECT blind spots for AST-driven lint rules.
