@@ -1716,6 +1716,19 @@ fn lint_st_010_non_equality_literal_comparison_ok() {
 }
 
 #[test]
+fn lint_st_010_flags_self_comparison_with_inequality_operators() {
+    let issues = run_lint("SELECT * FROM t WHERE a < a OR b >= b");
+    let st_010_count = issues
+        .iter()
+        .filter(|(code, _)| code == "LINT_ST_010")
+        .count();
+    assert_eq!(
+        st_010_count, 2,
+        "self-comparisons using inequality operators should trigger ST_010 per occurrence: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_st_010_reports_each_constant_expression_occurrence() {
     let issues = run_lint("SELECT * FROM t WHERE a = a AND b = b");
     let st_010_count = issues

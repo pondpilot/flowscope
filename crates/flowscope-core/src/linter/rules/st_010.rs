@@ -61,12 +61,13 @@ fn statement_constant_predicate_count(statement: &Statement) -> usize {
 fn constant_predicate_count(expr: &Expr) -> usize {
     match expr {
         Expr::BinaryOp { left, op, right } => {
-            let direct_match = is_supported_comparison_operator(op)
+            let direct_match = is_supported_expression_comparison_operator(op)
                 && !contains_operator_token(left)
                 && !contains_operator_token(right)
                 && match (literal_key(left), literal_key(right)) {
                     (Some(left_literal), Some(right_literal)) => {
-                        !is_allowed_literal_comparison(op, &left_literal, &right_literal)
+                        is_supported_literal_comparison_operator(op)
+                            && !is_allowed_literal_comparison(op, &left_literal, &right_literal)
                     }
                     _ => expressions_equivalent_for_constant_check(left, right),
                 };
@@ -116,7 +117,19 @@ fn constant_predicate_count(expr: &Expr) -> usize {
     }
 }
 
-fn is_supported_comparison_operator(op: &BinaryOperator) -> bool {
+fn is_supported_expression_comparison_operator(op: &BinaryOperator) -> bool {
+    matches!(
+        op,
+        BinaryOperator::Eq
+            | BinaryOperator::NotEq
+            | BinaryOperator::Lt
+            | BinaryOperator::Gt
+            | BinaryOperator::LtEq
+            | BinaryOperator::GtEq
+    )
+}
+
+fn is_supported_literal_comparison_operator(op: &BinaryOperator) -> bool {
     matches!(op, BinaryOperator::Eq | BinaryOperator::NotEq)
 }
 
@@ -269,6 +282,15 @@ mod tests {
         let issues = run("select * from foo where col = col");
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_ST_010);
+    }
+
+    #[test]
+    fn flags_self_comparison_with_inequality_operator() {
+        let issues = run("select * from foo where col < col");
+        assert_eq!(issues.len(), 1);
+
+        let issues = run("select * from foo where col >= col");
+        assert_eq!(issues.len(), 1);
     }
 
     #[test]
