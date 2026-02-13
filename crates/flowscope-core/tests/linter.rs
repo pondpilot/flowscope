@@ -609,6 +609,25 @@ fn lint_rule_config_aliasing_self_alias_case_sensitive() {
 }
 
 #[test]
+fn lint_rule_config_aliasing_unique_column_case_sensitive() {
+    let issues = run_lint_with_config(
+        "SELECT a, A FROM t",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "aliasing.unique.column".to_string(),
+                serde_json::json!({"alias_case_check": "case_sensitive"}),
+            )]),
+        },
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_AL_008"),
+        "alias_case_check=case_sensitive should allow case-mismatched projection aliases: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_rule_config_capitalisation_keywords_upper_policy() {
     let issues = run_lint_with_config(
         "select a from t",

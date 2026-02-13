@@ -99,7 +99,7 @@ pub fn all_rules(config: &LintConfig) -> Vec<Box<dyn LintRule>> {
         Box::new(al_005::UnusedTableAlias::from_config(config)),
         Box::new(al_006::AliasingLength::from_config(config)),
         Box::new(al_007::AliasingForbidSingleTable::from_config(config)),
-        Box::new(al_008::AliasingUniqueColumn),
+        Box::new(al_008::AliasingUniqueColumn::from_config(config)),
         Box::new(al_009::AliasingSelfAliasColumn::from_config(config)),
         Box::new(cp_001::CapitalisationKeywords::from_config(config)),
         Box::new(cp_002::CapitalisationIdentifiers::from_config(config)),
