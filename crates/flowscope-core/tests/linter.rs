@@ -571,6 +571,25 @@ fn lint_rule_config_aliasing_unused_case_sensitive() {
 }
 
 #[test]
+fn lint_rule_config_aliasing_self_alias_case_sensitive() {
+    let issues = run_lint_with_config(
+        "SELECT a AS A FROM t",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "aliasing.self_alias.column".to_string(),
+                serde_json::json!({"alias_case_check": "case_sensitive"}),
+            )]),
+        },
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_AL_009"),
+        "alias_case_check=case_sensitive should not flag case-mismatched self aliasing: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_rule_config_capitalisation_keywords_upper_policy() {
     let issues = run_lint_with_config(
         "select a from t",
