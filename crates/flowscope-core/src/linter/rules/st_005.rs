@@ -2,13 +2,62 @@
 //!
 //! SQLFluff ST05 parity: avoid subqueries in FROM/JOIN clauses; prefer CTEs.
 
+use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
 use sqlparser::ast::{Statement, TableFactor};
 
 use super::semantic_helpers::visit_selects_in_statement;
 
-pub struct StructureSubquery;
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ForbidSubqueryIn {
+    Both,
+    Join,
+    From,
+}
+
+impl ForbidSubqueryIn {
+    fn from_config(config: &LintConfig) -> Self {
+        match config
+            .rule_option_str(issue_codes::LINT_ST_005, "forbid_subquery_in")
+            .unwrap_or("both")
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "join" => Self::Join,
+            "from" => Self::From,
+            _ => Self::Both,
+        }
+    }
+
+    fn forbid_from(self) -> bool {
+        matches!(self, Self::Both | Self::From)
+    }
+
+    fn forbid_join(self) -> bool {
+        matches!(self, Self::Both | Self::Join)
+    }
+}
+
+pub struct StructureSubquery {
+    forbid_subquery_in: ForbidSubqueryIn,
+}
+
+impl StructureSubquery {
+    pub fn from_config(config: &LintConfig) -> Self {
+        Self {
+            forbid_subquery_in: ForbidSubqueryIn::from_config(config),
+        }
+    }
+}
+
+impl Default for StructureSubquery {
+    fn default() -> Self {
+        Self {
+            forbid_subquery_in: ForbidSubqueryIn::Both,
+        }
+    }
+}
 
 impl LintRule for StructureSubquery {
     fn code(&self) -> &'static str {
@@ -28,12 +77,16 @@ impl LintRule for StructureSubquery {
 
         visit_selects_in_statement(statement, &mut |select| {
             for table in &select.from {
-                if table_factor_contains_derived(&table.relation) {
+                if self.forbid_subquery_in.forbid_from()
+                    && table_factor_contains_derived(&table.relation)
+                {
                     violations += 1;
                 }
-                for join in &table.joins {
-                    if table_factor_contains_derived(&join.relation) {
-                        violations += 1;
+                if self.forbid_subquery_in.forbid_join() {
+                    for join in &table.joins {
+                        if table_factor_contains_derived(&join.relation) {
+                            violations += 1;
+                        }
                     }
                 }
             }
@@ -118,5 +171,51 @@ mod tests {
         assert!(!issues
             .iter()
             .any(|issue| issue.code == issue_codes::LINT_ST_005));
+    }
+
+    #[test]
+    fn forbid_subquery_in_join_does_not_flag_from_subquery() {
+        let sql = "SELECT * FROM (SELECT * FROM t) sub";
+        let statements = parse_sql(sql).expect("parse sql");
+        let rule = StructureSubquery::from_config(&LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "structure.subquery".to_string(),
+                serde_json::json!({"forbid_subquery_in": "join"}),
+            )]),
+        });
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn forbid_subquery_in_from_does_not_flag_join_subquery() {
+        let sql = "SELECT * FROM t JOIN (SELECT * FROM u) sub ON t.id = sub.id";
+        let statements = parse_sql(sql).expect("parse sql");
+        let rule = StructureSubquery::from_config(&LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "LINT_ST_005".to_string(),
+                serde_json::json!({"forbid_subquery_in": "from"}),
+            )]),
+        });
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert!(issues.is_empty());
     }
 }

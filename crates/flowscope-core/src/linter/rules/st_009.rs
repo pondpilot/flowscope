@@ -3,6 +3,7 @@
 //! Detect predicates where the newly joined relation appears on the left side
 //! and prior relation on the right side (e.g. `o.user_id = u.id`).
 
+use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
 use sqlparser::ast::{BinaryOperator, Expr, Statement};
@@ -11,7 +12,62 @@ use super::semantic_helpers::{
     join_on_expr, table_factor_reference_name, visit_selects_in_statement,
 };
 
-pub struct StructureJoinConditionOrder;
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PreferredFirstTableInJoinClause {
+    Earlier,
+    Later,
+}
+
+impl PreferredFirstTableInJoinClause {
+    fn from_config(config: &LintConfig) -> Self {
+        match config
+            .rule_option_str(
+                issue_codes::LINT_ST_009,
+                "preferred_first_table_in_join_clause",
+            )
+            .unwrap_or("earlier")
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "later" => Self::Later,
+            _ => Self::Earlier,
+        }
+    }
+
+    fn left_source<'a>(self, current: &'a str, previous: &'a str) -> &'a str {
+        match self {
+            Self::Earlier => current,
+            Self::Later => previous,
+        }
+    }
+
+    fn right_source<'a>(self, current: &'a str, previous: &'a str) -> &'a str {
+        match self {
+            Self::Earlier => previous,
+            Self::Later => current,
+        }
+    }
+}
+
+pub struct StructureJoinConditionOrder {
+    preferred_first_table: PreferredFirstTableInJoinClause,
+}
+
+impl StructureJoinConditionOrder {
+    pub fn from_config(config: &LintConfig) -> Self {
+        Self {
+            preferred_first_table: PreferredFirstTableInJoinClause::from_config(config),
+        }
+    }
+}
+
+impl Default for StructureJoinConditionOrder {
+    fn default() -> Self {
+        Self {
+            preferred_first_table: PreferredFirstTableInJoinClause::Earlier,
+        }
+    }
+}
 
 impl LintRule for StructureJoinConditionOrder {
     fn code(&self) -> &'static str {
@@ -46,7 +102,9 @@ impl LintRule for StructureJoinConditionOrder {
                         previous_source.as_ref(),
                         join_on_expr(&join.join_operator),
                     ) {
-                        if has_reversed_join_pair(on_expr, current, previous) {
+                        let left = self.preferred_first_table.left_source(current, previous);
+                        let right = self.preferred_first_table.right_source(current, previous);
+                        if has_join_pair(on_expr, left, right) {
                             violation_count += 1;
                         }
                     }
@@ -62,7 +120,7 @@ impl LintRule for StructureJoinConditionOrder {
             .map(|_| {
                 Issue::info(
                     issue_codes::LINT_ST_009,
-                    "Join condition ordering appears reversed.",
+                    "Join condition ordering appears inconsistent with configured preference.",
                 )
                 .with_statement(ctx.statement_index)
             })
@@ -70,14 +128,14 @@ impl LintRule for StructureJoinConditionOrder {
     }
 }
 
-fn has_reversed_join_pair(expr: &Expr, current_source: &str, previous_source: &str) -> bool {
+fn has_join_pair(expr: &Expr, left_source_name: &str, right_source_name: &str) -> bool {
     match expr {
         Expr::BinaryOp { left, op, right } => {
             let direct = if *op == BinaryOperator::Eq {
                 if let (Some(left_prefix), Some(right_prefix)) =
                     (expr_qualified_prefix(left), expr_qualified_prefix(right))
                 {
-                    left_prefix == current_source && right_prefix == previous_source
+                    left_prefix == left_source_name && right_prefix == right_source_name
                 } else {
                     false
                 }
@@ -86,28 +144,28 @@ fn has_reversed_join_pair(expr: &Expr, current_source: &str, previous_source: &s
             };
 
             direct
-                || has_reversed_join_pair(left, current_source, previous_source)
-                || has_reversed_join_pair(right, current_source, previous_source)
+                || has_join_pair(left, left_source_name, right_source_name)
+                || has_join_pair(right, left_source_name, right_source_name)
         }
         Expr::UnaryOp { expr: inner, .. }
         | Expr::Nested(inner)
         | Expr::IsNull(inner)
         | Expr::IsNotNull(inner)
         | Expr::Cast { expr: inner, .. } => {
-            has_reversed_join_pair(inner, current_source, previous_source)
+            has_join_pair(inner, left_source_name, right_source_name)
         }
         Expr::InList { expr, list, .. } => {
-            has_reversed_join_pair(expr, current_source, previous_source)
+            has_join_pair(expr, left_source_name, right_source_name)
                 || list
                     .iter()
-                    .any(|item| has_reversed_join_pair(item, current_source, previous_source))
+                    .any(|item| has_join_pair(item, left_source_name, right_source_name))
         }
         Expr::Between {
             expr, low, high, ..
         } => {
-            has_reversed_join_pair(expr, current_source, previous_source)
-                || has_reversed_join_pair(low, current_source, previous_source)
-                || has_reversed_join_pair(high, current_source, previous_source)
+            has_join_pair(expr, left_source_name, right_source_name)
+                || has_join_pair(low, left_source_name, right_source_name)
+                || has_join_pair(high, left_source_name, right_source_name)
         }
         Expr::Case {
             operand,
@@ -115,14 +173,16 @@ fn has_reversed_join_pair(expr: &Expr, current_source: &str, previous_source: &s
             else_result,
             ..
         } => {
-            operand.as_ref().is_some_and(|operand| {
-                has_reversed_join_pair(operand, current_source, previous_source)
-            }) || conditions.iter().any(|when| {
-                has_reversed_join_pair(&when.condition, current_source, previous_source)
-                    || has_reversed_join_pair(&when.result, current_source, previous_source)
-            }) || else_result.as_ref().is_some_and(|otherwise| {
-                has_reversed_join_pair(otherwise, current_source, previous_source)
-            })
+            operand
+                .as_ref()
+                .is_some_and(|operand| has_join_pair(operand, left_source_name, right_source_name))
+                || conditions.iter().any(|when| {
+                    has_join_pair(&when.condition, left_source_name, right_source_name)
+                        || has_join_pair(&when.result, left_source_name, right_source_name)
+                })
+                || else_result.as_ref().is_some_and(|otherwise| {
+                    has_join_pair(otherwise, left_source_name, right_source_name)
+                })
         }
         _ => false,
     }
@@ -147,7 +207,7 @@ mod tests {
 
     fn run(sql: &str) -> Vec<Issue> {
         let statements = parse_sql(sql).expect("parse");
-        let rule = StructureJoinConditionOrder;
+        let rule = StructureJoinConditionOrder::default();
         statements
             .iter()
             .enumerate()
@@ -197,5 +257,30 @@ mod tests {
             "select foo.a, foo.b, bar.c from foo left join bar on bar.a = foo.a and bar.b = foo.b",
         );
         assert_eq!(issues.len(), 1);
+    }
+
+    #[test]
+    fn later_preference_flags_earlier_on_left_side() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "structure.join_condition_order".to_string(),
+                serde_json::json!({"preferred_first_table_in_join_clause": "later"}),
+            )]),
+        };
+        let rule = StructureJoinConditionOrder::from_config(&config);
+        let sql = "select foo.a, bar.b from foo left join bar on foo.a = bar.a";
+        let statements = parse_sql(sql).expect("parse");
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_ST_009);
     }
 }

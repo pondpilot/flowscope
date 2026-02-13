@@ -51,6 +51,7 @@ This plan covers three axes:
   - `docs/sqlfluff-gap-matrix.md` mapping rows now use canonical SQLFluff-aligned FlowScope rule codes and updated module references.
 - Phase 3 Tier 1 progress:
   - `ST_005` moved from parity regex handling to a dedicated core AST rule implementation.
+  - `ST_005` now supports `forbid_subquery_in` (`both`/`join`/`from`) through `lint.ruleConfigs`.
   - `AL_004` moved from parity into a dedicated core AST rule (`al_004.rs`) and parity registration was removed.
   - `AL_001` moved from parity into a dedicated core rule module (`al_001.rs`) and parity registration was removed.
   - `AL_001` was further upgraded to AST-driven table-factor alias traversal with token-aware `AS` detection.
@@ -79,6 +80,7 @@ This plan covers three axes:
   - `ST_002` moved from parity regex handling to a dedicated core AST rule (`st_002.rs`).
   - `ST_006` moved from parity regex handling to a dedicated core AST rule (`st_006.rs`).
   - `ST_008` moved from parity regex handling to a dedicated core AST rule (`st_008.rs`).
+  - `ST_009` now supports `preferred_first_table_in_join_clause` (`earlier`/`later`) through `lint.ruleConfigs`.
   - `ST_012` moved from parity handling to a dedicated core rule module (`st_012.rs`).
   - `ST_012` was further upgraded from regex scanning to tokenizer-level semicolon sequencing, eliminating string-literal/comment false positives for consecutive-semicolon detection.
   - `TQ_001` moved from parity handling to a dedicated core rule module (`tq_001.rs`).
@@ -513,8 +515,6 @@ These rules work but lack SQLFluff config knobs that users depend on:
 | RF_001 (references.from) | `force_enable` | `False` |
 | RF_003 (references.consistent) | `single_table_references`, `force_enable` | `consistent`, `False` |
 | RF_006 (references.quoting) | `prefer_quoted_identifiers`, `case_sensitive` | `False`, `False` |
-| ST_005 (structure.subquery) | `forbid_subquery_in` | `both` |
-| ST_009 (structure.join_condition_order) | `preferred_first_table_in_join_clause` | `earlier` |
 
 ### Tier 3: Improve lexical/document rule accuracy (lower priority)
 

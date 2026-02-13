@@ -380,6 +380,44 @@ fn lint_rule_config_select_targets_wildcard_policy_multiple() {
     );
 }
 
+#[test]
+fn lint_rule_config_structure_subquery_forbid_join_only() {
+    let issues = run_lint_with_config(
+        "SELECT * FROM (SELECT * FROM t) sub",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "structure.subquery".to_string(),
+                serde_json::json!({"forbid_subquery_in": "join"}),
+            )]),
+        },
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_ST_005"),
+        "forbid_subquery_in=join should not flag FROM subqueries: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_rule_config_join_condition_order_later_preference() {
+    let issues = run_lint_with_config(
+        "SELECT * FROM foo JOIN bar ON foo.id = bar.id",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "LINT_ST_009".to_string(),
+                serde_json::json!({"preferred_first_table_in_join_clause": "later"}),
+            )]),
+        },
+    );
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_ST_009"),
+        "later join condition preference should flag earlier-first ordering: {issues:?}"
+    );
+}
+
 // =============================================================================
 // Rule-specific integration tests
 // =============================================================================
