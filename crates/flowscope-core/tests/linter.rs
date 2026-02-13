@@ -1769,6 +1769,26 @@ fn lint_st_011_query_order_by_reference_counts_as_usage() {
 }
 
 #[test]
+fn lint_st_011_named_window_reference_counts_as_usage() {
+    let issues =
+        run_lint("SELECT SUM(a.value) OVER w FROM a LEFT JOIN b ON a.id = b.id WINDOW w AS (PARTITION BY b.group_key)");
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_ST_011"),
+        "named WINDOW clause references should count as joined-source usage: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_st_011_named_window_unqualified_reference_defers_check() {
+    let issues =
+        run_lint("SELECT SUM(a.value) OVER w FROM a LEFT JOIN b ON a.id = b.id WINDOW w AS (PARTITION BY group_key)");
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_ST_011"),
+        "unqualified named WINDOW references should defer ST_011: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_st_011_does_not_flag_base_from_with_using_join() {
     let issues = run_lint("SELECT b.id FROM a LEFT JOIN b USING(id)");
     assert!(
