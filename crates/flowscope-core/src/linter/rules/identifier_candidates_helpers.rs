@@ -3,7 +3,10 @@
 
 use crate::linter::config::LintConfig;
 use crate::linter::visit::visit_expressions;
-use sqlparser::ast::{Expr, Ident, Query, SelectItem, SetExpr, Statement, TableAlias, TableFactor};
+use sqlparser::ast::{
+    Assignment, AssignmentTarget, Expr, Ident, ObjectName, Query, SelectItem, SetExpr, Statement,
+    TableAlias, TableFactor,
+};
 
 use super::semantic_helpers::visit_selects_in_statement;
 
@@ -75,6 +78,15 @@ pub(crate) fn collect_identifier_candidates(statement: &Statement) -> Vec<Identi
                 push_ident_candidate(part, IdentifierKind::Other, &mut candidates);
             }
         }
+        Expr::Function(function) => {
+            if let sqlparser::ast::FunctionArguments::List(arguments) = &function.args {
+                for arg in &arguments.args {
+                    if let sqlparser::ast::FunctionArg::Named { name, .. } = arg {
+                        push_ident_candidate(name, IdentifierKind::Other, &mut candidates);
+                    }
+                }
+            }
+        }
         _ => {}
     });
 
@@ -94,6 +106,8 @@ pub(crate) fn collect_identifier_candidates(statement: &Statement) -> Vec<Identi
     });
 
     collect_cte_identifiers_in_statement(statement, &mut candidates);
+    collect_show_statement_identifiers(statement, &mut candidates);
+    collect_assignment_target_identifiers(statement, &mut candidates);
     candidates
 }
 
@@ -151,6 +165,74 @@ fn collect_cte_identifiers_in_statement(
             }
         }
         _ => {}
+    }
+}
+
+fn collect_show_statement_identifiers(
+    statement: &Statement,
+    candidates: &mut Vec<IdentifierCandidate>,
+) {
+    let Statement::ShowVariable { variable } = statement else {
+        return;
+    };
+
+    // Databricks/SparkSQL `SHOW TBLPROPERTIES <table> (<property.path>)` is
+    // represented as a flat identifier list: `TBLPROPERTIES`, `<table>`,
+    // `<property>`, ...
+    let Some(first) = variable.first() else {
+        return;
+    };
+    if !first.value.eq_ignore_ascii_case("TBLPROPERTIES") {
+        return;
+    }
+
+    for ident in variable.iter().skip(1) {
+        push_ident_candidate(ident, IdentifierKind::Other, candidates);
+    }
+}
+
+fn collect_assignment_target_identifiers(
+    statement: &Statement,
+    candidates: &mut Vec<IdentifierCandidate>,
+) {
+    match statement {
+        Statement::Insert(insert) => collect_assignment_targets(&insert.assignments, candidates),
+        Statement::Update { assignments, .. } => collect_assignment_targets(assignments, candidates),
+        Statement::Merge { clauses, .. } => {
+            for clause in clauses {
+                if let sqlparser::ast::MergeAction::Update { assignments } = &clause.action {
+                    collect_assignment_targets(assignments, candidates);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn collect_assignment_targets(assignments: &[Assignment], candidates: &mut Vec<IdentifierCandidate>) {
+    for assignment in assignments {
+        match &assignment.target {
+            AssignmentTarget::ColumnName(name) => {
+                collect_object_name_idents(name, IdentifierKind::Other, candidates)
+            }
+            AssignmentTarget::Tuple(names) => {
+                for name in names {
+                    collect_object_name_idents(name, IdentifierKind::Other, candidates);
+                }
+            }
+        }
+    }
+}
+
+fn collect_object_name_idents(
+    name: &ObjectName,
+    kind: IdentifierKind,
+    candidates: &mut Vec<IdentifierCandidate>,
+) {
+    for part in &name.0 {
+        if let Some(ident) = part.as_ident() {
+            push_ident_candidate(ident, kind, candidates);
+        }
     }
 }
 

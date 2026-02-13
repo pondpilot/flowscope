@@ -13,6 +13,126 @@ pub fn visit_expressions<F: FnMut(&Expr)>(stmt: &Statement, visitor: &mut F) {
             if let Some(ref source) = ins.source {
                 visit_query_expressions(source, visitor);
             }
+            for assignment in &ins.assignments {
+                visit_expr(&assignment.value, visitor);
+            }
+            if let Some(partitioned) = &ins.partitioned {
+                for expr in partitioned {
+                    visit_expr(expr, visitor);
+                }
+            }
+            if let Some(returning) = &ins.returning {
+                for item in returning {
+                    visit_select_item_expressions(item, visitor);
+                }
+            }
+        }
+        Statement::Update {
+            table,
+            assignments,
+            from,
+            selection,
+            returning,
+            limit,
+            ..
+        } => {
+            visit_table_with_joins_expressions(table, visitor);
+            for assignment in assignments {
+                visit_expr(&assignment.value, visitor);
+            }
+            if let Some(from) = from {
+                match from {
+                    UpdateTableFromKind::BeforeSet(tables)
+                    | UpdateTableFromKind::AfterSet(tables) => {
+                        for table in tables {
+                            visit_table_with_joins_expressions(table, visitor);
+                        }
+                    }
+                }
+            }
+            if let Some(selection) = selection {
+                visit_expr(selection, visitor);
+            }
+            if let Some(returning) = returning {
+                for item in returning {
+                    visit_select_item_expressions(item, visitor);
+                }
+            }
+            if let Some(limit) = limit {
+                visit_expr(limit, visitor);
+            }
+        }
+        Statement::Delete(delete) => {
+            match &delete.from {
+                FromTable::WithFromKeyword(tables) | FromTable::WithoutKeyword(tables) => {
+                    for table in tables {
+                        visit_table_with_joins_expressions(table, visitor);
+                    }
+                }
+            }
+            if let Some(using) = &delete.using {
+                for table in using {
+                    visit_table_with_joins_expressions(table, visitor);
+                }
+            }
+            if let Some(selection) = &delete.selection {
+                visit_expr(selection, visitor);
+            }
+            if let Some(returning) = &delete.returning {
+                for item in returning {
+                    visit_select_item_expressions(item, visitor);
+                }
+            }
+            for order_by_expr in &delete.order_by {
+                visit_expr(&order_by_expr.expr, visitor);
+            }
+            if let Some(limit) = &delete.limit {
+                visit_expr(limit, visitor);
+            }
+        }
+        Statement::Merge {
+            table,
+            source,
+            on,
+            clauses,
+            output,
+            ..
+        } => {
+            visit_table_factor_expressions(table, visitor);
+            visit_table_factor_expressions(source, visitor);
+            visit_expr(on, visitor);
+            for clause in clauses {
+                if let Some(predicate) = &clause.predicate {
+                    visit_expr(predicate, visitor);
+                }
+                match &clause.action {
+                    MergeAction::Insert(insert) => {
+                        if let MergeInsertKind::Values(values) = &insert.kind {
+                            for row in &values.rows {
+                                for expr in row {
+                                    visit_expr(expr, visitor);
+                                }
+                            }
+                        }
+                    }
+                    MergeAction::Update { assignments } => {
+                        for assignment in assignments {
+                            visit_expr(&assignment.value, visitor);
+                        }
+                    }
+                    MergeAction::Delete => {}
+                }
+            }
+            if let Some(output) = output {
+                match output {
+                    OutputClause::Output { select_items, .. }
+                    | OutputClause::Returning { select_items } => {
+                        for item in select_items {
+                            visit_select_item_expressions(item, visitor);
+                        }
+                    }
+                }
+            }
         }
         Statement::CreateView { query, .. } => visit_query_expressions(query, visitor),
         Statement::CreateTable(create) => {
@@ -89,6 +209,17 @@ pub fn visit_set_expr_expressions<F: FnMut(&Expr)>(body: &SetExpr, visitor: &mut
             visit_set_expr_expressions(left, visitor);
             visit_set_expr_expressions(right, visitor);
         }
+        SetExpr::Values(values) => {
+            for row in &values.rows {
+                for expr in row {
+                    visit_expr(expr, visitor);
+                }
+            }
+        }
+        SetExpr::Insert(statement)
+        | SetExpr::Update(statement)
+        | SetExpr::Delete(statement)
+        | SetExpr::Merge(statement) => visit_expressions(statement, visitor),
         _ => {}
     }
 }
@@ -120,15 +251,42 @@ pub fn visit_expr<F: FnMut(&Expr)>(expr: &Expr, visitor: &mut F) {
                 visit_expr(el, visitor);
             }
         }
-        Expr::Function(func) => {
-            if let FunctionArguments::List(arg_list) = &func.args {
+        Expr::Function(func) => match &func.args {
+            FunctionArguments::Subquery(query) => visit_query_expressions(query, visitor),
+            FunctionArguments::List(arg_list) => {
                 for arg in &arg_list.args {
-                    if let FunctionArg::Unnamed(FunctionArgExpr::Expr(e)) = arg {
-                        visit_expr(e, visitor);
+                    match arg {
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(expr))
+                        | FunctionArg::Named {
+                            arg: FunctionArgExpr::Expr(expr),
+                            ..
+                        } => visit_expr(expr, visitor),
+                        FunctionArg::ExprNamed { name, arg, .. } => {
+                            visit_expr(name, visitor);
+                            if let FunctionArgExpr::Expr(expr) = arg {
+                                visit_expr(expr, visitor);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                for clause in &arg_list.clauses {
+                    match clause {
+                        FunctionArgumentClause::OrderBy(order_by_exprs) => {
+                            for order_by_expr in order_by_exprs {
+                                visit_expr(&order_by_expr.expr, visitor);
+                            }
+                        }
+                        FunctionArgumentClause::Limit(expr) => visit_expr(expr, visitor),
+                        FunctionArgumentClause::Having(HavingBound(_, expr)) => {
+                            visit_expr(expr, visitor)
+                        }
+                        _ => {}
                     }
                 }
             }
-        }
+            FunctionArguments::None => {}
+        },
         Expr::Cast { expr: inner, .. } => visit_expr(inner, visitor),
         Expr::InSubquery {
             expr: inner,
@@ -185,5 +343,34 @@ fn visit_join_constraint<F: FnMut(&Expr)>(op: &JoinOperator, visitor: &mut F) {
     };
     if let JoinConstraint::On(expr) = constraint {
         visit_expr(expr, visitor);
+    }
+}
+
+fn visit_select_item_expressions<F: FnMut(&Expr)>(item: &SelectItem, visitor: &mut F) {
+    if let SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } = item {
+        visit_expr(expr, visitor);
+    }
+}
+
+fn visit_table_with_joins_expressions<F: FnMut(&Expr)>(table: &TableWithJoins, visitor: &mut F) {
+    visit_table_factor_expressions(&table.relation, visitor);
+    for join in &table.joins {
+        visit_join_constraint(&join.join_operator, visitor);
+        visit_table_factor_expressions(&join.relation, visitor);
+    }
+}
+
+fn visit_table_factor_expressions<F: FnMut(&Expr)>(table_factor: &TableFactor, visitor: &mut F) {
+    match table_factor {
+        TableFactor::Derived { subquery, .. } => visit_query_expressions(subquery, visitor),
+        TableFactor::NestedJoin {
+            table_with_joins, ..
+        } => visit_table_with_joins_expressions(table_with_joins, visitor),
+        TableFactor::Pivot { table, .. }
+        | TableFactor::Unpivot { table, .. }
+        | TableFactor::MatchRecognize { table, .. } => {
+            visit_table_factor_expressions(table, visitor)
+        }
+        _ => {}
     }
 }

@@ -112,14 +112,19 @@ fn identifier_tokens(
 mod tests {
     use super::*;
     use crate::linter::config::LintConfig;
-    use crate::parser::parse_sql;
+    use crate::parser::parse_sql_with_dialect;
+    use crate::types::Dialect;
 
     fn run(sql: &str) -> Vec<Issue> {
         run_with_config(sql, LintConfig::default())
     }
 
     fn run_with_config(sql: &str, config: LintConfig) -> Vec<Issue> {
-        let statements = parse_sql(sql).expect("parse");
+        run_with_config_in_dialect(sql, Dialect::Generic, config)
+    }
+
+    fn run_with_config_in_dialect(sql: &str, dialect: Dialect, config: LintConfig) -> Vec<Issue> {
+        let statements = parse_sql_with_dialect(sql, dialect).expect("parse");
         let rule = CapitalisationIdentifiers::from_config(&config);
         statements
             .iter()
@@ -208,6 +213,72 @@ mod tests {
             )]),
         };
         let issues = run_with_config("SELECT amount AS Col, amount AS col FROM t", config);
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_CP_002);
+    }
+
+    #[test]
+    fn consistent_policy_allows_single_letter_upper_with_capitalised_identifier() {
+        let issues = run("SELECT A, Boo");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn pascal_policy_allows_all_caps_identifier() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "capitalisation.identifiers".to_string(),
+                serde_json::json!({"extended_capitalisation_policy": "pascal"}),
+            )]),
+        };
+        let issues = run_with_config("SELECT PASCALCASE", config);
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn databricks_tblproperties_mixed_case_property_is_flagged() {
+        let issues = run_with_config_in_dialect(
+            "SHOW TBLPROPERTIES customer (created.BY.user)",
+            Dialect::Databricks,
+            LintConfig::default(),
+        );
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_CP_002);
+    }
+
+    #[test]
+    fn databricks_tblproperties_lowercase_property_is_allowed() {
+        let issues = run_with_config_in_dialect(
+            "SHOW TBLPROPERTIES customer (created.by.user)",
+            Dialect::Databricks,
+            LintConfig::default(),
+        );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn databricks_tblproperties_capitalised_property_is_flagged() {
+        let issues = run_with_config_in_dialect(
+            "SHOW TBLPROPERTIES customer (Created.By.User)",
+            Dialect::Databricks,
+            LintConfig::default(),
+        );
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_CP_002);
+    }
+
+    #[test]
+    fn flags_mixed_identifier_case_in_delete_predicate() {
+        let issues = run("DELETE FROM t WHERE Col = col");
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_CP_002);
+    }
+
+    #[test]
+    fn flags_mixed_identifier_case_in_update_assignment() {
+        let issues = run("UPDATE t SET Col = col");
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_CP_002);
     }

@@ -37,7 +37,7 @@ impl CapitalisationPolicy {
 
 pub fn tokens_violate_policy(tokens: &[String], policy: CapitalisationPolicy) -> bool {
     match policy {
-        CapitalisationPolicy::Consistent => mixed_case_for_tokens(tokens),
+        CapitalisationPolicy::Consistent => !tokens_match_consistent_policy(tokens),
         _ => tokens
             .iter()
             .any(|token| !token_matches_policy(token, policy)),
@@ -122,7 +122,7 @@ fn token_matches_policy(token: &str, policy: CapitalisationPolicy) -> bool {
             let Some(first) = chars.next() else {
                 return false;
             };
-            first.is_ascii_uppercase() && token.chars().any(|ch| ch.is_ascii_lowercase())
+            first.is_ascii_uppercase()
         }
         CapitalisationPolicy::Camel => {
             if token.contains('_') {
@@ -140,26 +140,37 @@ fn token_matches_policy(token: &str, policy: CapitalisationPolicy) -> bool {
     }
 }
 
-fn mixed_case_for_tokens(tokens: &[String]) -> bool {
+fn tokens_match_consistent_policy(tokens: &[String]) -> bool {
     if tokens.len() < 2 {
-        return false;
+        return true;
     }
 
-    let mut saw_upper = false;
-    let mut saw_lower = false;
-    let mut saw_mixed = false;
+    const STYLE_UPPER: u8 = 0b001;
+    const STYLE_LOWER: u8 = 0b010;
+    const STYLE_CAPITALISE: u8 = 0b100;
 
+    let mut possible_styles = STYLE_UPPER | STYLE_LOWER | STYLE_CAPITALISE;
     for token in tokens {
-        let upper = token.to_ascii_uppercase();
-        let lower = token.to_ascii_lowercase();
-        if token == &upper {
-            saw_upper = true;
-        } else if token == &lower {
-            saw_lower = true;
-        } else {
-            saw_mixed = true;
+        let mut token_styles = 0u8;
+        if token_matches_policy(token, CapitalisationPolicy::Upper) {
+            token_styles |= STYLE_UPPER;
+        }
+        if token_matches_policy(token, CapitalisationPolicy::Lower) {
+            token_styles |= STYLE_LOWER;
+        }
+        if token_matches_policy(token, CapitalisationPolicy::Capitalise) {
+            token_styles |= STYLE_CAPITALISE;
+        }
+
+        if token_styles == 0 {
+            return false;
+        }
+
+        possible_styles &= token_styles;
+        if possible_styles == 0 {
+            return false;
         }
     }
 
-    saw_mixed || (saw_upper && saw_lower)
+    true
 }

@@ -214,6 +214,11 @@ This plan covers three axes:
   - `CP_005` was further upgraded from regex masking to tokenizer-driven type-keyword collection.
   - `CP_001` now supports `capitalisation_policy` / `ignore_words` / `ignore_words_regex` through `lint.ruleConfigs`.
   - `CP_002`-`CP_005` now support `extended_capitalisation_policy` / `ignore_words` / `ignore_words_regex` through `lint.ruleConfigs`; `CP_002` additionally supports SQLFluff-style `unquoted_identifiers_policy`.
+  - `CP_002` consistent-policy handling now aligns closer to SQLFluff ambiguity behavior by evaluating shared style compatibility (`upper`/`lower`/`capitalise`) across identifier tokens, allowing single-letter ambiguous forms like `A` to align with capitalised tokens.
+  - `CP_002` Pascal policy handling now aligns with SQLFluff fixture expectations for all-caps identifiers (for example `PASCALCASE` under `extended_capitalisation_policy=pascal`).
+  - `CP_002` now includes Databricks/SparkSQL `SHOW TBLPROPERTIES ... (<property.path>)` identifier candidate extraction via AST `ShowVariable` handling, covering mixed-case property path violations (for example `created.BY.user`, `Created.By.User`).
+  - Shared AST traversal helpers (`visit_expressions`, `visit_selects_in_statement`) now include `UPDATE`/`DELETE`/`MERGE` statement expression paths plus richer function-argument traversal (`Named`, `ExprNamed`, subquery args, argument clauses), reducing non-SELECT blind spots for AST-driven lint rules.
+  - Supported-dialect SQLFluff fixture replay for `CP02` now reports zero mismatches (44/44), and `CP02_LT01` now reports zero mismatches for CP02 expectations across supported templaters (4/4; one placeholder-templater case skipped).
   - `AM_005` now supports `fully_qualify_join_types` (`inner`/`outer`/`both`) through `lint.ruleConfigs`.
   - `AM_005` outer-mode qualification now uses AST join-operator variants for `LEFT`/`RIGHT` detection and keeps token-level fallback only for `FULL JOIN` vs `FULL OUTER JOIN` disambiguation.
   - `AM_005` fixer now honors `fully_qualify_join_types` modes: `inner` rewrites bare `JOIN` to `INNER JOIN`; `outer`/`both` also qualify `LEFT`/`RIGHT` joins and rewrite bare `FULL JOIN` keywords to `FULL OUTER JOIN` outside string literals.

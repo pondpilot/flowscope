@@ -11,6 +11,118 @@ pub fn visit_selects_in_statement<F: FnMut(&Select)>(statement: &Statement, visi
             if let Some(source) = &insert.source {
                 visit_selects_in_query(source, visitor);
             }
+            for assignment in &insert.assignments {
+                visit_selects_in_expr(&assignment.value, visitor);
+            }
+            if let Some(partitioned) = &insert.partitioned {
+                for expr in partitioned {
+                    visit_selects_in_expr(expr, visitor);
+                }
+            }
+            if let Some(returning) = &insert.returning {
+                visit_selects_in_select_items(returning, visitor);
+            }
+        }
+        Statement::Update {
+            table,
+            assignments,
+            from,
+            selection,
+            returning,
+            limit,
+            ..
+        } => {
+            visit_selects_in_table_with_joins(table, visitor);
+            for assignment in assignments {
+                visit_selects_in_expr(&assignment.value, visitor);
+            }
+            if let Some(from) = from {
+                match from {
+                    UpdateTableFromKind::BeforeSet(tables)
+                    | UpdateTableFromKind::AfterSet(tables) => {
+                        for table in tables {
+                            visit_selects_in_table_with_joins(table, visitor);
+                        }
+                    }
+                }
+            }
+            if let Some(selection) = selection {
+                visit_selects_in_expr(selection, visitor);
+            }
+            if let Some(returning) = returning {
+                visit_selects_in_select_items(returning, visitor);
+            }
+            if let Some(limit) = limit {
+                visit_selects_in_expr(limit, visitor);
+            }
+        }
+        Statement::Delete(delete) => {
+            match &delete.from {
+                FromTable::WithFromKeyword(tables) | FromTable::WithoutKeyword(tables) => {
+                    for table in tables {
+                        visit_selects_in_table_with_joins(table, visitor);
+                    }
+                }
+            }
+            if let Some(using) = &delete.using {
+                for table in using {
+                    visit_selects_in_table_with_joins(table, visitor);
+                }
+            }
+            if let Some(selection) = &delete.selection {
+                visit_selects_in_expr(selection, visitor);
+            }
+            if let Some(returning) = &delete.returning {
+                visit_selects_in_select_items(returning, visitor);
+            }
+            for order_by_expr in &delete.order_by {
+                visit_selects_in_expr(&order_by_expr.expr, visitor);
+            }
+            if let Some(limit) = &delete.limit {
+                visit_selects_in_expr(limit, visitor);
+            }
+        }
+        Statement::Merge {
+            table,
+            source,
+            on,
+            clauses,
+            output,
+            ..
+        } => {
+            visit_selects_in_table_factor(table, visitor);
+            visit_selects_in_table_factor(source, visitor);
+            visit_selects_in_expr(on, visitor);
+            for clause in clauses {
+                if let Some(predicate) = &clause.predicate {
+                    visit_selects_in_expr(predicate, visitor);
+                }
+                match &clause.action {
+                    MergeAction::Insert(insert) => {
+                        if let MergeInsertKind::Values(values) = &insert.kind {
+                            for row in &values.rows {
+                                for expr in row {
+                                    visit_selects_in_expr(expr, visitor);
+                                }
+                            }
+                        }
+                    }
+                    MergeAction::Update { assignments } => {
+                        for assignment in assignments {
+                            visit_selects_in_expr(&assignment.value, visitor);
+                        }
+                    }
+                    MergeAction::Delete => {}
+                }
+            }
+            if let Some(output) = output {
+                match output {
+                    OutputClause::Output { select_items, .. }
+                    | OutputClause::Returning { select_items } => {
+                        visit_selects_in_select_items(select_items, visitor);
+                    }
+                }
+            }
         }
         Statement::CreateView { query, .. } => visit_selects_in_query(query, visitor),
         Statement::CreateTable(create) => {
@@ -19,6 +131,14 @@ pub fn visit_selects_in_statement<F: FnMut(&Select)>(statement: &Statement, visi
             }
         }
         _ => {}
+    }
+}
+
+fn visit_selects_in_select_items<F: FnMut(&Select)>(items: &[SelectItem], visitor: &mut F) {
+    for item in items {
+        if let SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } = item {
+            visit_selects_in_expr(expr, visitor);
+        }
     }
 }
 
