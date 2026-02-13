@@ -137,15 +137,37 @@ fn names_match(left: NameRef<'_>, right: NameRef<'_>, alias_case_check: AliasCas
     match alias_case_check {
         AliasCaseCheck::CaseInsensitive => left.name.eq_ignore_ascii_case(right.name),
         AliasCaseCheck::CaseSensitive => left.name == right.name,
-        AliasCaseCheck::Dialect
-        | AliasCaseCheck::QuotedCsNakedUpper
-        | AliasCaseCheck::QuotedCsNakedLower => {
+        AliasCaseCheck::Dialect => {
             if left.quoted || right.quoted {
                 left.name == right.name
             } else {
                 left.name.eq_ignore_ascii_case(right.name)
             }
         }
+        AliasCaseCheck::QuotedCsNakedUpper | AliasCaseCheck::QuotedCsNakedLower => {
+            normalize_name_for_mode(left, alias_case_check)
+                == normalize_name_for_mode(right, alias_case_check)
+        }
+    }
+}
+
+fn normalize_name_for_mode(name_ref: NameRef<'_>, mode: AliasCaseCheck) -> String {
+    match mode {
+        AliasCaseCheck::QuotedCsNakedUpper => {
+            if name_ref.quoted {
+                name_ref.name.to_string()
+            } else {
+                name_ref.name.to_ascii_uppercase()
+            }
+        }
+        AliasCaseCheck::QuotedCsNakedLower => {
+            if name_ref.quoted {
+                name_ref.name.to_string()
+            } else {
+                name_ref.name.to_ascii_lowercase()
+            }
+        }
+        _ => name_ref.name.to_string(),
     }
 }
 
@@ -226,6 +248,98 @@ mod tests {
             rule_configs: std::collections::BTreeMap::from([(
                 "aliasing.self_alias.column".to_string(),
                 serde_json::json!({"alias_case_check": "case_sensitive"}),
+            )]),
+        });
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn alias_case_check_quoted_cs_naked_upper_flags_upper_fold_match() {
+        let sql = "SELECT \"FOO\" AS foo FROM t";
+        let statements = parse_sql(sql).expect("parse");
+        let rule = AliasingSelfAliasColumn::from_config(&LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "aliasing.self_alias.column".to_string(),
+                serde_json::json!({"alias_case_check": "quoted_cs_naked_upper"}),
+            )]),
+        });
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert_eq!(issues.len(), 1);
+    }
+
+    #[test]
+    fn alias_case_check_quoted_cs_naked_upper_allows_nonmatching_quoted_case() {
+        let sql = "SELECT \"foo\" AS foo FROM t";
+        let statements = parse_sql(sql).expect("parse");
+        let rule = AliasingSelfAliasColumn::from_config(&LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "aliasing.self_alias.column".to_string(),
+                serde_json::json!({"alias_case_check": "quoted_cs_naked_upper"}),
+            )]),
+        });
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn alias_case_check_quoted_cs_naked_lower_flags_lower_fold_match() {
+        let sql = "SELECT \"foo\" AS FOO FROM t";
+        let statements = parse_sql(sql).expect("parse");
+        let rule = AliasingSelfAliasColumn::from_config(&LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "aliasing.self_alias.column".to_string(),
+                serde_json::json!({"alias_case_check": "quoted_cs_naked_lower"}),
+            )]),
+        });
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert_eq!(issues.len(), 1);
+    }
+
+    #[test]
+    fn alias_case_check_quoted_cs_naked_lower_allows_nonmatching_quoted_case() {
+        let sql = "SELECT \"FOO\" AS FOO FROM t";
+        let statements = parse_sql(sql).expect("parse");
+        let rule = AliasingSelfAliasColumn::from_config(&LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "aliasing.self_alias.column".to_string(),
+                serde_json::json!({"alias_case_check": "quoted_cs_naked_lower"}),
             )]),
         });
         let issues = rule.check(

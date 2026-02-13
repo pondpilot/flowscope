@@ -90,6 +90,7 @@ This plan covers three axes:
   - `AL_007` now broadens AST scope beyond single-table SELECTs by flagging unnecessary base-table aliases across multi-source `FROM`/`JOIN` clauses while allowing aliases for repeated self-join table references.
   - `AL_009` moved from parity regex handling to a dedicated core AST rule (`al_009.rs`).
   - `AL_009` now supports `alias_case_check` through `lint.ruleConfigs` and applies quote-aware case matching for self-alias detection.
+  - `AL_009` `alias_case_check` now aligns closer to SQLFluff mode semantics for `quoted_cs_naked_upper` and `quoted_cs_naked_lower` (quoted aliases case-sensitive; naked aliases case-folded per configured mode).
   - `RF_004` moved from parity handling to a dedicated core rule module (`rf_004.rs`).
   - `RF_004` was further upgraded to AST-driven identifier analysis (expression identifiers, projection aliases, CTE identifiers, and table/join aliases plus table-name parts), eliminating SQL-string false positives from non-SQL string literals.
   - `RF_004` now supports SQLFluff-style `quoted_identifiers_policy` / `unquoted_identifiers_policy` and `ignore_words` / `ignore_words_regex` through `lint.ruleConfigs`.
