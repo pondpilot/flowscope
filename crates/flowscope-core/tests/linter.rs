@@ -797,6 +797,33 @@ fn lint_al_007_allows_self_join_aliases_but_flags_extra_unique_alias() {
 }
 
 #[test]
+fn lint_al_005_alias_used_in_qualify_clause() {
+    let issues = run_lint_in_dialect(
+        "SELECT u.id FROM users u JOIN orders o ON users.id = orders.user_id QUALIFY ROW_NUMBER() OVER (PARTITION BY o.user_id ORDER BY o.user_id) = 1",
+        Dialect::Snowflake,
+    );
+    assert!(
+        !issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_AL_005),
+        "alias usage in QUALIFY should satisfy AL_005: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_al_005_alias_used_in_named_window_clause() {
+    let issues = run_lint(
+        "SELECT SUM(u.id) OVER w FROM users u JOIN orders o ON users.id = orders.user_id WINDOW w AS (PARTITION BY o.user_id)",
+    );
+    assert!(
+        !issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_AL_005),
+        "alias usage in WINDOW clause should satisfy AL_005: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_rule_config_ambiguous_join_outer_mode() {
     let issues = run_lint_with_config(
         "SELECT * FROM foo LEFT JOIN bar ON foo.id = bar.id",

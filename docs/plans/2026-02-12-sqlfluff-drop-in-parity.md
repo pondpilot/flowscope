@@ -65,6 +65,7 @@ This plan covers three axes:
   - `AL_008` now supports quote-aware `alias_case_check` through `lint.ruleConfigs`.
   - `AL_005` was expanded to cover derived-table aliases while adding SQLFluff-compatible `LATERAL` and `VALUES` exceptions to reduce false positives.
   - `AL_005` now supports `alias_case_check` through `lint.ruleConfigs`.
+  - `AL_005` alias-reference traversal now also accounts for usage in `QUALIFY`, named `WINDOW`, `DISTINCT ON`, `PREWHERE`, `CLUSTER BY`/`DISTRIBUTE BY`/`SORT BY`, `LATERAL VIEW`, and `CONNECT BY` clauses.
   - `CV_003` moved from parity into a dedicated core rule module (`cv_003.rs`) and parity registration was removed.
   - `CV_003` was further upgraded from regex scanning to token/depth-aware trailing-comma detection in SELECT clauses.
   - `CV_003` now supports `select_clause_trailing_comma` (`forbid`/`require`) through `lint.ruleConfigs`.

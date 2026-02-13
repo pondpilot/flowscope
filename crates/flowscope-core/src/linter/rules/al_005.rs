@@ -245,22 +245,61 @@ fn collect_identifier_prefixes_from_select(
     for item in &select.projection {
         collect_identifier_prefixes_from_select_item(item, prefixes);
     }
+    if let Some(ref prewhere) = select.prewhere {
+        collect_identifier_prefixes(prewhere, prefixes);
+    }
     if let Some(ref selection) = select.selection {
         collect_identifier_prefixes(selection, prefixes);
     }
+    if let GroupByExpr::Expressions(exprs, _) = &select.group_by {
+        for expr in exprs {
+            collect_identifier_prefixes(expr, prefixes);
+        }
+    }
+    for expr in &select.cluster_by {
+        collect_identifier_prefixes(expr, prefixes);
+    }
+    for expr in &select.distribute_by {
+        collect_identifier_prefixes(expr, prefixes);
+    }
+    for sort_expr in &select.sort_by {
+        collect_identifier_prefixes(&sort_expr.expr, prefixes);
+    }
     if let Some(ref having) = select.having {
         collect_identifier_prefixes(having, prefixes);
+    }
+    if let Some(ref qualify) = select.qualify {
+        collect_identifier_prefixes(qualify, prefixes);
+    }
+    if let Some(Distinct::On(exprs)) = &select.distinct {
+        for expr in exprs {
+            collect_identifier_prefixes(expr, prefixes);
+        }
+    }
+    for named_window in &select.named_window {
+        if let NamedWindowExpr::WindowSpec(spec) = &named_window.1 {
+            for expr in &spec.partition_by {
+                collect_identifier_prefixes(expr, prefixes);
+            }
+            for order_expr in &spec.order_by {
+                collect_identifier_prefixes(&order_expr.expr, prefixes);
+            }
+        }
+    }
+    for lateral_view in &select.lateral_views {
+        collect_identifier_prefixes(&lateral_view.lateral_view, prefixes);
+    }
+    if let Some(connect_by) = &select.connect_by {
+        collect_identifier_prefixes(&connect_by.condition, prefixes);
+        for relationship in &connect_by.relationships {
+            collect_identifier_prefixes(relationship, prefixes);
+        }
     }
     for from_item in &select.from {
         for join in &from_item.joins {
             if let Some(constraint) = join_constraint(&join.join_operator) {
                 collect_identifier_prefixes(constraint, prefixes);
             }
-        }
-    }
-    if let GroupByExpr::Expressions(exprs, _) = &select.group_by {
-        for expr in exprs {
-            collect_identifier_prefixes(expr, prefixes);
         }
     }
     if let Some(order_by) = order_by {
@@ -367,9 +406,28 @@ fn collect_identifier_prefixes(expr: &Expr, prefixes: &mut HashSet<QualifierRef>
         Expr::Function(func) => {
             if let FunctionArguments::List(arg_list) = &func.args {
                 for arg in &arg_list.args {
-                    if let FunctionArg::Unnamed(FunctionArgExpr::Expr(e)) = arg {
-                        collect_identifier_prefixes(e, prefixes);
+                    match arg {
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(e))
+                        | FunctionArg::Named {
+                            arg: FunctionArgExpr::Expr(e),
+                            ..
+                        } => collect_identifier_prefixes(e, prefixes),
+                        _ => {}
                     }
+                }
+            }
+            if let Some(filter) = &func.filter {
+                collect_identifier_prefixes(filter, prefixes);
+            }
+            for order_expr in &func.within_group {
+                collect_identifier_prefixes(&order_expr.expr, prefixes);
+            }
+            if let Some(WindowType::WindowSpec(spec)) = &func.over {
+                for expr in &spec.partition_by {
+                    collect_identifier_prefixes(expr, prefixes);
+                }
+                for order_expr in &spec.order_by {
+                    collect_identifier_prefixes(&order_expr.expr, prefixes);
                 }
             }
         }
@@ -402,6 +460,10 @@ fn collect_identifier_prefixes(expr: &Expr, prefixes: &mut HashSet<QualifierRef>
         Expr::InSubquery { expr, subquery, .. } => {
             collect_identifier_prefixes(expr, prefixes);
             collect_identifier_prefixes_from_query(subquery, prefixes);
+        }
+        Expr::AnyOp { left, right, .. } | Expr::AllOp { left, right, .. } => {
+            collect_identifier_prefixes(left, prefixes);
+            collect_identifier_prefixes(right, prefixes);
         }
         Expr::Subquery(subquery) | Expr::Exists { subquery, .. } => {
             collect_identifier_prefixes_from_query(subquery, prefixes);
@@ -622,6 +684,28 @@ mod tests {
              FROM users u \
              JOIN orders o ON 1 = 1 \
              WHERE EXISTS (SELECT 1 WHERE u.id = o.user_id)",
+        );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn test_alias_used_in_qualify_clause() {
+        let issues = check_sql(
+            "SELECT u.id \
+             FROM users u \
+             JOIN orders o ON users.id = orders.user_id \
+             QUALIFY ROW_NUMBER() OVER (PARTITION BY o.user_id ORDER BY o.user_id) = 1",
+        );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn test_alias_used_in_named_window_clause() {
+        let issues = check_sql(
+            "SELECT SUM(u.id) OVER w \
+             FROM users u \
+             JOIN orders o ON users.id = orders.user_id \
+             WINDOW w AS (PARTITION BY o.user_id)",
         );
         assert!(issues.is_empty());
     }
