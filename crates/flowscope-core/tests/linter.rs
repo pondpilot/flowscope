@@ -927,6 +927,44 @@ fn lint_rule_config_aliasing_unused_case_sensitive() {
 }
 
 #[test]
+fn lint_rule_config_aliasing_unused_quoted_cs_naked_upper() {
+    let issues = run_lint_with_config(
+        "SELECT foo.id, b.id FROM users AS \"FOO\" JOIN books b ON foo.id = b.user_id",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "aliasing.unused".to_string(),
+                serde_json::json!({"alias_case_check": "quoted_cs_naked_upper"}),
+            )]),
+        },
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_AL_005"),
+        "alias_case_check=quoted_cs_naked_upper should upper-fold naked refs for quoted aliases: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_rule_config_aliasing_unused_quoted_cs_naked_lower() {
+    let issues = run_lint_with_config(
+        "SELECT FOO.id, b.id FROM users AS \"foo\" JOIN books b ON FOO.id = b.user_id",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "aliasing.unused".to_string(),
+                serde_json::json!({"alias_case_check": "quoted_cs_naked_lower"}),
+            )]),
+        },
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_AL_005"),
+        "alias_case_check=quoted_cs_naked_lower should lower-fold naked refs for quoted aliases: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_rule_config_aliasing_self_alias_case_sensitive() {
     let issues = run_lint_with_config(
         "SELECT a AS A FROM t",

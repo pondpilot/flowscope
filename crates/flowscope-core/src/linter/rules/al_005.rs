@@ -495,19 +495,53 @@ fn qualifier_matches_alias(
             }
         }
         AliasCaseCheck::QuotedCsNakedUpper => {
-            if qualifier.quoted || alias.quoted {
-                qualifier.name == alias.name
+            normalize_case_for_mode(qualifier, alias_case_check)
+                == normalize_case_for_mode_alias(alias, alias_case_check)
+        }
+        AliasCaseCheck::QuotedCsNakedLower => {
+            normalize_case_for_mode(qualifier, alias_case_check)
+                == normalize_case_for_mode_alias(alias, alias_case_check)
+        }
+    }
+}
+
+fn normalize_case_for_mode(reference: &QualifierRef, mode: AliasCaseCheck) -> String {
+    match mode {
+        AliasCaseCheck::QuotedCsNakedUpper => {
+            if reference.quoted {
+                reference.name.clone()
             } else {
-                qualifier.name.eq_ignore_ascii_case(&alias.name)
+                reference.name.to_ascii_uppercase()
             }
         }
         AliasCaseCheck::QuotedCsNakedLower => {
-            if qualifier.quoted || alias.quoted {
-                qualifier.name == alias.name
+            if reference.quoted {
+                reference.name.clone()
             } else {
-                qualifier.name.eq_ignore_ascii_case(&alias.name)
+                reference.name.to_ascii_lowercase()
             }
         }
+        _ => reference.name.clone(),
+    }
+}
+
+fn normalize_case_for_mode_alias(alias: &AliasRef, mode: AliasCaseCheck) -> String {
+    match mode {
+        AliasCaseCheck::QuotedCsNakedUpper => {
+            if alias.quoted {
+                alias.name.clone()
+            } else {
+                alias.name.to_ascii_uppercase()
+            }
+        }
+        AliasCaseCheck::QuotedCsNakedLower => {
+            if alias.quoted {
+                alias.name.clone()
+            } else {
+                alias.name.to_ascii_lowercase()
+            }
+        }
+        _ => alias.name.clone(),
     }
 }
 
@@ -764,6 +798,54 @@ mod tests {
         };
         let rule = UnusedTableAlias::from_config(&config);
         let sql = "SELECT zoo.id, b.id FROM users AS \"Zoo\" JOIN books b ON zoo.id = b.user_id";
+        let stmts = parse_sql(sql).expect("parse");
+        let issues = rule.check(
+            &stmts[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn alias_case_check_quoted_cs_naked_upper_allows_unquoted_upper_fold_for_quoted_alias() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "aliasing.unused".to_string(),
+                serde_json::json!({"alias_case_check": "quoted_cs_naked_upper"}),
+            )]),
+        };
+        let rule = UnusedTableAlias::from_config(&config);
+        let sql = "SELECT foo.id, b.id FROM users AS \"FOO\" JOIN books b ON foo.id = b.user_id";
+        let stmts = parse_sql(sql).expect("parse");
+        let issues = rule.check(
+            &stmts[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn alias_case_check_quoted_cs_naked_lower_allows_unquoted_lower_fold_for_quoted_alias() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "aliasing.unused".to_string(),
+                serde_json::json!({"alias_case_check": "quoted_cs_naked_lower"}),
+            )]),
+        };
+        let rule = UnusedTableAlias::from_config(&config);
+        let sql = "SELECT FOO.id, b.id FROM users AS \"foo\" JOIN books b ON FOO.id = b.user_id";
         let stmts = parse_sql(sql).expect("parse");
         let issues = rule.check(
             &stmts[0],
