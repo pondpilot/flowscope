@@ -39,16 +39,21 @@ pub mod cv_010;
 pub mod cv_011;
 pub mod cv_012;
 pub mod jj_001;
+pub mod lt_001;
 pub mod lt_002;
 pub mod lt_003;
 pub mod lt_004;
+pub mod lt_005;
+pub mod lt_006;
 pub mod lt_007;
+pub mod lt_008;
+pub mod lt_009;
 pub mod lt_010;
 pub mod lt_011;
 pub mod lt_012;
 pub mod lt_013;
+pub mod lt_014;
 pub mod lt_015;
-pub mod parity;
 pub mod rf_001;
 pub mod rf_002;
 pub mod rf_003;
@@ -74,7 +79,7 @@ pub mod tq_003;
 
 /// Returns all available lint rules.
 pub fn all_rules() -> Vec<Box<dyn LintRule>> {
-    let mut rules: Vec<Box<dyn LintRule>> = vec![
+    let rules: Vec<Box<dyn LintRule>> = vec![
         Box::new(am_002::BareUnion),
         Box::new(am_009::LimitOffsetWithoutOrderBy),
         Box::new(am_001::DistinctWithGroupBy),
@@ -111,14 +116,20 @@ pub fn all_rules() -> Vec<Box<dyn LintRule>> {
         Box::new(cv_011::ConventionCastingStyle),
         Box::new(cv_012::ConventionJoinCondition),
         Box::new(jj_001::JinjaPadding),
+        Box::new(lt_001::LayoutSpacing),
         Box::new(lt_002::LayoutIndent),
         Box::new(lt_003::LayoutOperators),
         Box::new(lt_004::LayoutCommas),
+        Box::new(lt_005::LayoutLongLines),
+        Box::new(lt_006::LayoutFunctions),
         Box::new(lt_007::LayoutCteBracket),
+        Box::new(lt_008::LayoutCteNewline),
+        Box::new(lt_009::LayoutSelectTargets),
         Box::new(lt_010::LayoutSelectModifiers),
         Box::new(lt_011::LayoutSetOperators),
         Box::new(lt_012::LayoutEndOfFile),
         Box::new(lt_013::LayoutStartOfFile),
+        Box::new(lt_014::LayoutKeywordNewline),
         Box::new(lt_015::LayoutNewlines),
         Box::new(rf_001::ReferencesFrom),
         Box::new(rf_002::ReferencesQualification),
@@ -142,6 +153,5 @@ pub fn all_rules() -> Vec<Box<dyn LintRule>> {
         Box::new(tq_002::TsqlProcedureBeginEnd),
         Box::new(tq_003::TsqlEmptyBatch),
     ];
-    rules.extend(parity::parity_rules());
     rules
 }

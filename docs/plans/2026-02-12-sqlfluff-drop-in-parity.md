@@ -88,12 +88,19 @@ This plan covers three axes:
   - `LT_002` moved from parity handling to a dedicated core rule module (`lt_002.rs`).
   - `LT_003` moved from parity handling to a dedicated core rule module (`lt_003.rs`).
   - `LT_004` moved from parity handling to a dedicated core rule module (`lt_004.rs`).
+  - `LT_001` moved from parity handling to a dedicated core rule module (`lt_001.rs`).
+  - `LT_005` moved from parity handling to a dedicated core rule module (`lt_005.rs`).
+  - `LT_006` moved from parity handling to a dedicated core rule module (`lt_006.rs`).
   - `LT_007` moved from parity handling to a dedicated core rule module (`lt_007.rs`).
+  - `LT_008` moved from parity handling to a dedicated core rule module (`lt_008.rs`).
+  - `LT_009` moved from parity handling to a dedicated core rule module (`lt_009.rs`).
+  - `LT_014` moved from parity handling to a dedicated core rule module (`lt_014.rs`).
   - `CP_001` moved from parity handling to a dedicated core rule module (`cp_001.rs`).
   - `CP_002` moved from parity handling to a dedicated core rule module (`cp_002.rs`).
   - `CP_003` moved from parity handling to a dedicated core rule module (`cp_003.rs`).
   - `CP_004` moved from parity handling to a dedicated core rule module (`cp_004.rs`).
   - `CP_005` moved from parity handling to a dedicated core rule module (`cp_005.rs`).
+  - Legacy `parity.rs` monolith was retired; rule registration now points only to dedicated `rules/<code>.rs` modules.
 
 ### Intentionally Removed
 
