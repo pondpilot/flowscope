@@ -427,6 +427,44 @@ fn lint_rule_config_long_lines_ignore_comment_clauses() {
 }
 
 #[test]
+fn lint_rule_config_layout_newlines_inside_limit() {
+    let issues = run_lint_with_config(
+        "SELECT 1\n\n\nFROM t",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "layout.newlines".to_string(),
+                serde_json::json!({"maximum_empty_lines_inside_statements": 2}),
+            )]),
+        },
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_LT_015"),
+        "inside limit=2 should allow two blank lines inside statements: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_rule_config_layout_newlines_between_limit() {
+    let issues = run_lint_with_config(
+        "SELECT 1;\n\n\nSELECT 2",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "LINT_LT_015".to_string(),
+                serde_json::json!({"maximum_empty_lines_between_statements": 1}),
+            )]),
+        },
+    );
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_LT_015"),
+        "between limit=1 should flag larger inter-statement gaps: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_rule_config_select_targets_wildcard_policy_multiple() {
     let issues = run_lint_with_config(
         "SELECT * FROM t",
