@@ -4,6 +4,7 @@
 
 use std::collections::HashSet;
 
+use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
 use sqlparser::ast::{Statement, TableFactor};
@@ -13,7 +14,25 @@ use super::semantic_helpers::{
     visit_selects_in_statement,
 };
 
-pub struct ReferencesFrom;
+pub struct ReferencesFrom {
+    force_enable: bool,
+}
+
+impl ReferencesFrom {
+    pub fn from_config(config: &LintConfig) -> Self {
+        Self {
+            force_enable: config
+                .rule_option_bool(issue_codes::LINT_RF_001, "force_enable")
+                .unwrap_or(true),
+        }
+    }
+}
+
+impl Default for ReferencesFrom {
+    fn default() -> Self {
+        Self { force_enable: true }
+    }
+}
 
 impl LintRule for ReferencesFrom {
     fn code(&self) -> &'static str {
@@ -29,6 +48,10 @@ impl LintRule for ReferencesFrom {
     }
 
     fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+        if !self.force_enable {
+            return Vec::new();
+        }
+
         let mut unresolved_count = 0usize;
 
         visit_selects_in_statement(statement, &mut |select| {
@@ -124,7 +147,7 @@ mod tests {
 
     fn run(sql: &str) -> Vec<Issue> {
         let statements = parse_sql(sql).expect("parse");
-        let rule = ReferencesFrom;
+        let rule = ReferencesFrom::default();
         statements
             .iter()
             .enumerate()
@@ -171,6 +194,30 @@ mod tests {
     #[test]
     fn allows_simple_delete_statement() {
         let issues = run("delete from table1 where 1 = 1");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn force_enable_false_disables_rule() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "references.from".to_string(),
+                serde_json::json!({"force_enable": false}),
+            )]),
+        };
+        let rule = ReferencesFrom::from_config(&config);
+        let sql = "SELECT * FROM my_tbl WHERE foo.bar > 0";
+        let statements = parse_sql(sql).expect("parse");
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
         assert!(issues.is_empty());
     }
 }

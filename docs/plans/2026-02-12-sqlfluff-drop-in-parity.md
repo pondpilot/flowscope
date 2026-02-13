@@ -73,10 +73,13 @@ This plan covers three axes:
   - `AL_009` moved from parity regex handling to a dedicated core AST rule (`al_009.rs`).
   - `RF_004` moved from parity handling to a dedicated core rule module (`rf_004.rs`).
   - `RF_004` was further upgraded to AST-driven table/join alias analysis, eliminating SQL-string false positives from non-SQL string literals.
+  - `RF_001` now supports `force_enable` through `lint.ruleConfigs`.
+  - `RF_003` now supports `single_table_references` (`consistent`/`qualified`/`unqualified`) and `force_enable` through `lint.ruleConfigs`.
   - `RF_005` moved from parity handling to a dedicated core rule module (`rf_005.rs`).
   - `RF_005` was further upgraded to AST-driven quoted-identifier traversal, replacing raw quote-regex scanning.
   - `RF_006` moved from parity handling to a dedicated core rule module (`rf_006.rs`).
   - `RF_006` was further upgraded to AST-driven quoted-identifier traversal, replacing raw quote-regex scanning.
+  - `RF_006` now supports `prefer_quoted_identifiers` / `case_sensitive` through `lint.ruleConfigs`.
   - `ST_002` moved from parity regex handling to a dedicated core AST rule (`st_002.rs`).
   - `ST_006` moved from parity regex handling to a dedicated core AST rule (`st_006.rs`).
   - `ST_008` moved from parity regex handling to a dedicated core AST rule (`st_008.rs`).
@@ -512,9 +515,6 @@ These rules work but lack SQLFluff config knobs that users depend on:
 | AM_006 (ambiguous.column_references) | `group_by_and_order_by_style` | `consistent` |
 | CP_001 (capitalisation.keywords) | `capitalisation_policy`, `ignore_words` | `consistent` |
 | CP_002–005 | `extended_capitalisation_policy` | `consistent` |
-| RF_001 (references.from) | `force_enable` | `False` |
-| RF_003 (references.consistent) | `single_table_references`, `force_enable` | `consistent`, `False` |
-| RF_006 (references.quoting) | `prefer_quoted_identifiers`, `case_sensitive` | `False`, `False` |
 
 ### Tier 3: Improve lexical/document rule accuracy (lower priority)
 

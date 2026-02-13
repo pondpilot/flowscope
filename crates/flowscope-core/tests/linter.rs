@@ -418,6 +418,63 @@ fn lint_rule_config_join_condition_order_later_preference() {
     );
 }
 
+#[test]
+fn lint_rule_config_references_from_force_enable_false() {
+    let issues = run_lint_with_config(
+        "SELECT * FROM my_tbl WHERE foo.bar > 0",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "references.from".to_string(),
+                serde_json::json!({"force_enable": false}),
+            )]),
+        },
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_RF_001"),
+        "force_enable=false should disable RF_001 checks: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_rule_config_references_consistent_qualified_mode() {
+    let issues = run_lint_with_config(
+        "SELECT bar FROM my_tbl",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "references.consistent".to_string(),
+                serde_json::json!({"single_table_references": "qualified"}),
+            )]),
+        },
+    );
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_RF_003"),
+        "single_table_references=qualified should flag unqualified refs: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_rule_config_references_quoting_prefer_quoted_identifiers() {
+    let issues = run_lint_with_config(
+        "SELECT \"good_name\" FROM t",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "LINT_RF_006".to_string(),
+                serde_json::json!({"prefer_quoted_identifiers": true}),
+            )]),
+        },
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_RF_006"),
+        "prefer_quoted_identifiers=true should suppress unnecessary-quote warnings: {issues:?}"
+    );
+}
+
 // =============================================================================
 // Rule-specific integration tests
 // =============================================================================
