@@ -378,4 +378,52 @@ mod tests {
         );
         assert!(issues.is_empty());
     }
+
+    #[test]
+    fn outer_mode_flags_full_join_without_outer_keyword() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "ambiguous.join".to_string(),
+                serde_json::json!({"fully_qualify_join_types": "outer"}),
+            )]),
+        };
+        let rule = AmbiguousJoinStyle::from_config(&config);
+        let sql = "SELECT foo.a, bar.b FROM foo FULL JOIN bar ON foo.id = bar.id";
+        let statements = parse_sql(sql).expect("parse");
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert_eq!(issues.len(), 1);
+    }
+
+    #[test]
+    fn outer_mode_allows_full_outer_join() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "ambiguous.join".to_string(),
+                serde_json::json!({"fully_qualify_join_types": "outer"}),
+            )]),
+        };
+        let rule = AmbiguousJoinStyle::from_config(&config);
+        let sql = "SELECT foo.a, bar.b FROM foo FULL OUTER JOIN bar ON foo.id = bar.id";
+        let statements = parse_sql(sql).expect("parse");
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert!(issues.is_empty());
+    }
 }
