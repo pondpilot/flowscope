@@ -52,6 +52,7 @@ impl LintRule for ConventionJoinCondition {
 fn select_has_implicit_where_join(select: &Select) -> bool {
     for table in &select.from {
         let mut seen_sources = Vec::new();
+        let mut bare_join_match_flags = Vec::new();
         if let Some(base) = table_factor_reference_name(&table.relation) {
             seen_sources.push(base);
         }
@@ -76,15 +77,20 @@ fn select_has_implicit_where_join(select: &Select) -> bool {
                 continue;
             }
 
-            if select.selection.as_ref().is_some_and(|where_expr| {
+            let matched_where_predicate = select.selection.as_ref().is_some_and(|where_expr| {
                 where_contains_join_predicate(where_expr, current_source.as_ref(), &seen_sources)
-            }) {
-                return true;
-            }
+            });
+            bare_join_match_flags.push(matched_where_predicate);
 
             if let Some(source) = current_source {
                 seen_sources.push(source);
             }
+        }
+
+        // SQLFluff CV12 parity: only flag when all plain/naked joins in a
+        // chain appear to be expressed via WHERE predicates.
+        if !bare_join_match_flags.is_empty() && bare_join_match_flags.iter().all(|flag| *flag) {
+            return true;
         }
     }
 
@@ -271,6 +277,20 @@ mod tests {
     #[test]
     fn flags_inner_join_without_on_with_where_predicate() {
         let issues = run("SELECT foo.a, bar.b FROM foo INNER JOIN bar WHERE foo.x = bar.y");
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_CV_012);
+    }
+
+    #[test]
+    fn does_not_flag_multi_join_chain_when_not_all_plain_joins_are_where_joined() {
+        let sql = "select a.id from a join b join c where a.a = b.a and b.b > 1";
+        assert!(run(sql).is_empty());
+    }
+
+    #[test]
+    fn flags_multi_join_chain_when_all_plain_joins_are_where_joined() {
+        let sql = "select a.id from a join b join c where a.a = b.a and b.b = c.b";
+        let issues = run(sql);
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_CV_012);
     }

@@ -122,7 +122,7 @@ This plan covers three axes:
   - `CV_011` moved from parity handling to a dedicated core rule module (`cv_011.rs`).
   - `CV_011` was further upgraded to AST-driven cast-kind traversal (`CastKind::{Cast, TryCast, SafeCast, DoubleColon}`), replacing raw SQL `::`/`CAST(` regex scanning and reducing string-literal false positives.
   - `CV_011` now supports `preferred_type_casting_style` through `lint.ruleConfigs`.
-  - `CV_012` now broadens AST join-operator handling to include `INNER JOIN` forms represented as `JoinOperator::Inner` without `ON/USING`, improving SQLFluff CV12 parity for implicit join-via-WHERE detection.
+  - `CV_012` now broadens AST join-operator handling to include `INNER JOIN` forms represented as `JoinOperator::Inner` without `ON/USING`, and now aligns closer to SQLFluff CV12 chain semantics by flagging only when all naked joins in a join chain are represented via WHERE join predicates.
   - `JJ_001` moved from parity handling to a dedicated core rule module (`jj_001.rs`).
   - `JJ_001` was further upgraded from regex matching to deterministic delimiter scanning for Jinja padding checks.
   - `JJ_001` now also checks statement/comment closing tags (`%}`/`#}`) and supports trim-marker-safe padding detection for tags like `{{- ... -}}`.

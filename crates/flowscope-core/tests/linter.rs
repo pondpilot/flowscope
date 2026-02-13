@@ -1196,6 +1196,15 @@ fn lint_cv_012_inner_join_without_on_with_where_predicate() {
 }
 
 #[test]
+fn lint_cv_012_multi_join_not_all_references_is_not_flagged() {
+    let issues = run_lint("SELECT a.id FROM a JOIN b JOIN c WHERE a.a = b.a AND b.b > 1");
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_CV_012"),
+        "CV_012 should not fire when not all naked joins are represented by WHERE join predicates: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_st_001_unused_cte() {
     let issues = run_lint("WITH unused AS (SELECT 1) SELECT 2");
     assert!(issues.iter().any(|(code, _)| code == "LINT_ST_003"));
