@@ -84,7 +84,7 @@ This plan covers three axes:
 - Additional AST-driven migration progress beyond Tier 1:
   - `AL_006` moved from parity regex handling to a dedicated core AST rule (`al_006.rs`).
   - `AL_006` now supports configurable `min_alias_length` / `max_alias_length` through `lint.ruleConfigs`, with SQLFluff-aligned default behavior leaving `max_alias_length` unset unless configured.
-  - `AL_003` now supports configurable `allow_scalar` through `lint.ruleConfigs`.
+  - `AL_003` now supports configurable `allow_scalar` through `lint.ruleConfigs`, with SQLFluff-aligned default `allow_scalar=true`.
   - `AL_007` moved from parity regex handling to a dedicated core AST rule (`al_007.rs`).
   - `AL_007` now supports `force_enable` through `lint.ruleConfigs` and is now disabled by default to align with SQLFluff behavior.
   - `AL_007` now broadens AST scope beyond single-table SELECTs by flagging unnecessary base-table aliases across multi-source `FROM`/`JOIN` clauses while allowing aliases for repeated self-join table references.
