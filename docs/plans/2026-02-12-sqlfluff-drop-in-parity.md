@@ -79,6 +79,7 @@ This plan covers three axes:
   - `TQ_003` moved from parity handling to a dedicated core rule module (`tq_003.rs`).
   - `CV_001` moved from parity handling to a dedicated core rule module (`cv_001.rs`).
   - `CV_007` moved from parity handling to a dedicated core rule module (`cv_007.rs`).
+  - `CV_007` was further upgraded to AST-driven statement-shape detection (`Statement::Query` + wrapper `SetExpr::Query`), replacing SQL text `starts_with('(')/ends_with(')')` heuristics.
   - `CV_009` moved from parity handling to a dedicated core rule module (`cv_009.rs`).
   - `CV_009` was further upgraded to AST-driven traversal (table names, aliases, expression identifiers), replacing raw regex scanning and reducing string/comment false positives.
   - `CV_010` moved from parity handling to a dedicated core rule module (`cv_010.rs`).

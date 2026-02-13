@@ -5,7 +5,7 @@
 
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
-use sqlparser::ast::Statement;
+use sqlparser::ast::{SetExpr, Statement};
 
 pub struct ConventionStatementBrackets;
 
@@ -22,9 +22,8 @@ impl LintRule for ConventionStatementBrackets {
         "Avoid unnecessary wrapping brackets around full statements."
     }
 
-    fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let sql = ctx.statement_sql().trim();
-        if sql.starts_with('(') && sql.ends_with(')') {
+    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+        if statement_is_wrapped_in_outer_brackets(statement) {
             vec![Issue::info(
                 issue_codes::LINT_CV_007,
                 "Avoid wrapping the full statement in unnecessary brackets.",
@@ -33,6 +32,13 @@ impl LintRule for ConventionStatementBrackets {
         } else {
             Vec::new()
         }
+    }
+}
+
+fn statement_is_wrapped_in_outer_brackets(statement: &Statement) -> bool {
+    match statement {
+        Statement::Query(query) => matches!(&*query.body, SetExpr::Query(_)),
+        _ => false,
     }
 }
 
@@ -70,5 +76,10 @@ mod tests {
     #[test]
     fn does_not_flag_normal_statement() {
         assert!(run("SELECT 1").is_empty());
+    }
+
+    #[test]
+    fn does_not_flag_parenthesized_subquery_in_from_clause() {
+        assert!(run("SELECT * FROM (SELECT 1) AS t").is_empty());
     }
 }
