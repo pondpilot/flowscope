@@ -107,6 +107,7 @@ This plan covers three axes:
   - `LT_001` moved from parity handling to a dedicated core rule module (`lt_001.rs`).
   - `LT_005` moved from parity handling to a dedicated core rule module (`lt_005.rs`).
   - `LT_006` moved from parity handling to a dedicated core rule module (`lt_006.rs`).
+  - `LT_006` was further upgraded from regex masking to token-stream function-call spacing checks with context guards.
   - `LT_007` moved from parity handling to a dedicated core rule module (`lt_007.rs`).
   - `LT_008` moved from parity handling to a dedicated core rule module (`lt_008.rs`).
   - `LT_009` moved from parity handling to a dedicated core rule module (`lt_009.rs`).
