@@ -39,6 +39,10 @@ pub mod cv_010;
 pub mod cv_011;
 pub mod cv_012;
 pub mod jj_001;
+pub mod lt_002;
+pub mod lt_003;
+pub mod lt_004;
+pub mod lt_007;
 pub mod lt_010;
 pub mod lt_011;
 pub mod lt_012;
@@ -107,6 +111,10 @@ pub fn all_rules() -> Vec<Box<dyn LintRule>> {
         Box::new(cv_011::ConventionCastingStyle),
         Box::new(cv_012::ConventionJoinCondition),
         Box::new(jj_001::JinjaPadding),
+        Box::new(lt_002::LayoutIndent),
+        Box::new(lt_003::LayoutOperators),
+        Box::new(lt_004::LayoutCommas),
+        Box::new(lt_007::LayoutCteBracket),
         Box::new(lt_010::LayoutSelectModifiers),
         Box::new(lt_011::LayoutSetOperators),
         Box::new(lt_012::LayoutEndOfFile),

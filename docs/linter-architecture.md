@@ -177,6 +177,7 @@ Move style-oriented checks to lexical engine:
 - [x] `LINT_ST_012` and `LINT_TQ_001`-`LINT_TQ_003` are now split out of `parity.rs` into dedicated core modules (`st_012.rs`, `tq_001.rs`-`tq_003.rs`) while preserving current heuristic behavior.
 - [x] `LINT_CV_001`, `LINT_CV_007`, and `LINT_CV_009`-`LINT_CV_011` are now split out of `parity.rs` into dedicated core modules (`cv_001.rs`, `cv_007.rs`, `cv_009.rs`-`cv_011.rs`) while preserving current heuristic behavior.
 - [x] `LINT_JJ_001` and `LINT_LT_010`/`LINT_LT_011`/`LINT_LT_012`/`LINT_LT_013`/`LINT_LT_015` are now split out of `parity.rs` into dedicated core modules (`jj_001.rs`, `lt_010.rs`, `lt_011.rs`, `lt_012.rs`, `lt_013.rs`, `lt_015.rs`) while preserving current heuristic behavior.
+- [x] `LINT_LT_002`/`LINT_LT_003`/`LINT_LT_004`/`LINT_LT_007` are now split out of `parity.rs` into dedicated core modules (`lt_002.rs`, `lt_003.rs`, `lt_004.rs`, `lt_007.rs`) while preserving current heuristic behavior.
 - [x] `LINT_CP_001`-`LINT_CP_005` are now split out of `parity.rs` into dedicated core modules (`cp_001.rs`-`cp_005.rs`) while preserving current heuristic behavior.
 - [x] `LINT_AM_003` now follows SQLFluff AM03 semantics via AST `ORDER BY` analysis, flagging mixed implicit/explicit sort direction (including `NULLS` ordering cases) across nested query scopes; fixer parity now adds explicit `ASC` to implicit items in mixed clauses.
 - [x] `LINT_AM_005` now supports SQLFluff AM05 fixer parity for default behavior by rewriting bare `JOIN` operators to explicit `INNER JOIN` via AST join-operator rewrites.
@@ -185,7 +186,7 @@ Move style-oriented checks to lexical engine:
 - [x] `LINT_AM_007` now performs AST set-expression branch-width checks with deterministic wildcard resolution for CTE/derived sources, while unresolved wildcard expansions remain non-violating (SQLFluff-aligned behavior).
 - [~] Parity monolith decommission is in progress: migrated rule registrations and parity tests are removed from `parity.rs`; helper cleanup is still ongoing.
 - [~] SQLFluff fixture adoption is in progress for migrated rules; AM02/AM03/AM04/AM05/AM06/AM07/AM08/AM09, CV02, CV05, ST02, ST04, ST06, ST07, ST08, and ST09 fixture cases were adopted for `LINT_AM_002`/`LINT_AM_003`/`LINT_AM_004`/`LINT_AM_005`/`LINT_AM_006`/`LINT_AM_007`/`LINT_AM_008`/`LINT_AM_009`/`LINT_CV_002`/`LINT_CV_005`/`LINT_ST_002`/`LINT_ST_004`/`LINT_ST_007`/`LINT_ST_006`/`LINT_ST_008`/`LINT_ST_009`, and additional rule-level coverage is still being expanded.
-- [ ] Phase 2 lexical/style migrations are pending (`CP_*`, `LT_*`, `JJ_001`, remaining `CV_*` style rules).
+- [ ] Phase 2 lexical/style migrations are pending for remaining parity-held style rules (`LT_001`, `LT_005`, `LT_006`, `LT_008`, `LT_009`, `LT_014`) and remaining convention style parity (`CV_012`).
 
 ## Quality Gates
 

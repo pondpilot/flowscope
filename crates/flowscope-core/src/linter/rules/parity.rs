@@ -1370,32 +1370,6 @@ fn rule_lt_01(stmt: &Statement, ctx: &LintContext) -> bool {
     issue_if_regex(stmt, ctx, r"(?i)\w(?:=|<>|!=|<|>|<=|>=|\+|-|\*|/)\w")
 }
 
-fn rule_lt_02(stmt: &Statement, ctx: &LintContext) -> bool {
-    let _ = stmt;
-    let sql = stmt_sql(ctx);
-    if !sql.contains('\n') {
-        return false;
-    }
-    sql.lines().skip(1).any(|line| {
-        let trimmed = line.trim_start();
-        if trimmed.is_empty() {
-            return false;
-        }
-        let indent = line.len() - trimmed.len();
-        indent % 2 != 0
-    })
-}
-
-fn rule_lt_03(stmt: &Statement, ctx: &LintContext) -> bool {
-    issue_if_regex(stmt, ctx, r"(?m)(\+|-|\*|/|=|<>|!=|<|>)\s*$")
-}
-
-fn rule_lt_04(stmt: &Statement, ctx: &LintContext) -> bool {
-    let _ = stmt;
-    let sql = stmt_sql(ctx);
-    has_re(sql, r"\s+,") || has_re(sql, r",[^\s\n]")
-}
-
 fn long_line_overflow_spans(sql: &str, max_len: usize) -> Vec<(usize, usize)> {
     let bytes = sql.as_bytes();
     let mut spans = Vec::new();
@@ -1447,14 +1421,6 @@ fn rule_lt_06(stmt: &Statement, ctx: &LintContext) -> bool {
         !is_keyword(token)
     });
     has_violation
-}
-
-fn rule_lt_07(stmt: &Statement, ctx: &LintContext) -> bool {
-    issue_if_regex(
-        stmt,
-        ctx,
-        r"(?is)\bwith\b\s+[A-Za-z_][A-Za-z0-9_]*\s+as\s+select\b",
-    )
 }
 
 fn select_line_top_level_comma_count(segment: &str) -> usize {
@@ -1823,33 +1789,6 @@ impl LintRule for LayoutSpacing {
         issues
     }
 }
-define_predicate_rule!(
-    LayoutIndent,
-    issue_codes::LINT_LT_002,
-    "Layout indent",
-    "Indentation should use consistent step sizes.",
-    info,
-    rule_lt_02,
-    "Indentation appears inconsistent."
-);
-define_predicate_rule!(
-    LayoutOperators,
-    issue_codes::LINT_LT_003,
-    "Layout operators",
-    "Operator line placement should be consistent.",
-    info,
-    rule_lt_03,
-    "Operator line placement appears inconsistent."
-);
-define_predicate_rule!(
-    LayoutCommas,
-    issue_codes::LINT_LT_004,
-    "Layout commas",
-    "Comma spacing should be consistent.",
-    info,
-    rule_lt_04,
-    "Comma spacing appears inconsistent."
-);
 pub struct LayoutLongLines;
 
 impl LintRule for LayoutLongLines {
@@ -1939,15 +1878,6 @@ impl LintRule for LayoutFunctions {
         Vec::new()
     }
 }
-define_predicate_rule!(
-    LayoutCteBracket,
-    issue_codes::LINT_LT_007,
-    "Layout CTE bracket",
-    "CTE bodies should be wrapped in brackets.",
-    warning,
-    rule_lt_07,
-    "CTE AS clause appears to be missing surrounding brackets."
-);
 pub struct LayoutCteNewline;
 
 impl LintRule for LayoutCteNewline {
@@ -2098,12 +2028,8 @@ impl LintRule for StructureSubquery {
 pub fn parity_rules() -> Vec<Box<dyn LintRule>> {
     vec![
         Box::new(LayoutSpacing),
-        Box::new(LayoutIndent),
-        Box::new(LayoutOperators),
-        Box::new(LayoutCommas),
         Box::new(LayoutLongLines),
         Box::new(LayoutFunctions),
-        Box::new(LayoutCteBracket),
         Box::new(LayoutCteNewline),
         Box::new(LayoutSelectTargets),
         Box::new(LayoutKeywordNewline),
@@ -2218,15 +2144,6 @@ mod tests {
     ) AS has_row",
         );
 
-        assert_rule_triggers(&LayoutIndent, "SELECT a\n   , b\nFROM t");
-        assert_rule_not_triggers(&LayoutIndent, "SELECT a\n    , b\nFROM t");
-
-        assert_rule_triggers(&LayoutOperators, "SELECT a +\n b FROM t");
-        assert_rule_not_triggers(&LayoutOperators, "SELECT a\n + b FROM t");
-
-        assert_rule_triggers(&LayoutCommas, "SELECT a,b FROM t");
-        assert_rule_not_triggers(&LayoutCommas, "SELECT a, b FROM t");
-
         let long_line = format!("SELECT {} FROM t", "x".repeat(320));
         assert_rule_triggers(&LayoutLongLines, &long_line);
         assert_rule_not_triggers(&LayoutLongLines, "SELECT x FROM t");
@@ -2251,21 +2168,6 @@ mod tests {
 
         assert_rule_triggers(&LayoutFunctions, "SELECT COUNT (1) FROM t");
         assert_rule_not_triggers(&LayoutFunctions, "SELECT COUNT(1) FROM t");
-
-        let lt07 = run_rule(
-            &LayoutCteBracket,
-            "SELECT 'WITH cte AS SELECT 1' AS sql_snippet",
-        );
-        assert!(
-            lt07.iter()
-                .any(|issue| issue.code == issue_codes::LINT_LT_007),
-            "expected {} to trigger; got: {lt07:?}",
-            issue_codes::LINT_LT_007,
-        );
-        assert_rule_not_triggers(
-            &LayoutCteBracket,
-            "WITH cte AS (SELECT 1) SELECT * FROM cte",
-        );
 
         assert_rule_triggers(
             &LayoutCteNewline,
