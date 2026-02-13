@@ -39,6 +39,7 @@ impl AliasCaseCheck {
 struct AliasRef {
     name: String,
     quoted: bool,
+    relation_key: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -175,22 +176,52 @@ fn check_select(
     let mut used_prefixes: HashSet<QualifierRef> = HashSet::new();
     collect_identifier_prefixes_from_select(select, order_by, ctx.dialect(), &mut used_prefixes);
 
+    let mut used_alias_names: HashSet<String> = HashSet::new();
     for alias in aliases.values() {
         let used = used_prefixes
             .iter()
             .any(|prefix| qualifier_matches_alias(prefix, alias, alias_case_check));
-        if !used {
-            issues.push(
-                Issue::warning(
-                    issue_codes::LINT_AL_005,
-                    format!(
-                        "Table alias '{}' is defined but never referenced.",
-                        alias.name
-                    ),
-                )
-                .with_statement(ctx.statement_index),
-            );
+        if used {
+            used_alias_names.insert(alias.name.clone());
         }
+    }
+
+    let mut relation_alias_counts: HashMap<String, usize> = HashMap::new();
+    let mut relations_with_used_alias: HashSet<String> = HashSet::new();
+    for alias in aliases.values() {
+        let Some(relation_key) = &alias.relation_key else {
+            continue;
+        };
+        *relation_alias_counts.entry(relation_key.clone()).or_insert(0) += 1;
+        if used_alias_names.contains(&alias.name) {
+            relations_with_used_alias.insert(relation_key.clone());
+        }
+    }
+
+    for alias in aliases.values() {
+        if used_alias_names.contains(&alias.name) {
+            continue;
+        }
+
+        let repeated_self_join_alias_exempt = alias.relation_key.as_ref().is_some_and(|key| {
+            relation_alias_counts.get(key).copied().unwrap_or_default() > 1
+                && relations_with_used_alias.contains(key)
+        });
+
+        if repeated_self_join_alias_exempt {
+            continue;
+        }
+
+        issues.push(
+            Issue::warning(
+                issue_codes::LINT_AL_005,
+                format!(
+                    "Table alias '{}' is defined but never referenced.",
+                    alias.name
+                ),
+            )
+            .with_statement(ctx.statement_index),
+        );
     }
 }
 
@@ -351,6 +382,7 @@ fn collect_aliases(relation: &TableFactor, dialect: Dialect, aliases: &mut HashM
                     AliasRef {
                         name: alias_name,
                         quoted: alias.name.quote_style.is_some(),
+                        relation_key: Some(table_name.to_ascii_uppercase()),
                     },
                 );
             }
@@ -366,6 +398,7 @@ fn collect_aliases(relation: &TableFactor, dialect: Dialect, aliases: &mut HashM
                 AliasRef {
                     name: alias.name.value.clone(),
                     quoted: alias.name.quote_style.is_some(),
+                    relation_key: None,
                 },
             );
         }
@@ -1244,6 +1277,17 @@ mod tests {
             "SELECT my_column, my_array_value \
              FROM my_schema.my_table AS t, t.super_array AS my_array_value",
             Dialect::Redshift,
+        );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn allows_repeat_referenced_table_aliases() {
+        let issues = check_sql(
+            "SELECT ROW_NUMBER() OVER(PARTITION BY a.object_id ORDER BY a.object_id) \
+             FROM sys.objects a \
+             CROSS JOIN sys.objects b \
+             CROSS JOIN sys.objects c",
         );
         assert!(issues.is_empty());
     }

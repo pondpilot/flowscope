@@ -1081,6 +1081,22 @@ fn lint_al_005_allows_redshift_super_array_relation_reference() {
 }
 
 #[test]
+fn lint_al_005_allows_repeat_referenced_table_aliases() {
+    let issues = run_lint(
+        "SELECT ROW_NUMBER() OVER(PARTITION BY a.object_id ORDER BY a.object_id) \
+         FROM sys.objects a \
+         CROSS JOIN sys.objects b \
+         CROSS JOIN sys.objects c",
+    );
+    assert!(
+        !issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_AL_005),
+        "repeat-referenced table aliases should not trigger AL_005: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_rule_config_ambiguous_join_outer_mode() {
     let issues = run_lint_with_config(
         "SELECT * FROM foo LEFT JOIN bar ON foo.id = bar.id",
