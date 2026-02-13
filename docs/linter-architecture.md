@@ -187,7 +187,7 @@ Move style-oriented checks to lexical engine:
 - [x] `LINT_AM_007` now performs AST set-expression branch-width checks with deterministic wildcard resolution for CTE/derived sources, while unresolved wildcard expansions remain non-violating (SQLFluff-aligned behavior).
 - [x] Parity monolith decommission is complete: migrated rule registrations and parity tests are removed, and `crates/flowscope-core/src/linter/rules/parity.rs` has been retired.
 - [~] SQLFluff fixture adoption is in progress for migrated rules; AM02/AM03/AM04/AM05/AM06/AM07/AM08/AM09, CV02, CV05, ST02, ST04, ST06, ST07, ST08, and ST09 fixture cases were adopted for `LINT_AM_002`/`LINT_AM_003`/`LINT_AM_004`/`LINT_AM_005`/`LINT_AM_006`/`LINT_AM_007`/`LINT_AM_008`/`LINT_AM_009`/`LINT_CV_002`/`LINT_CV_005`/`LINT_ST_002`/`LINT_ST_004`/`LINT_ST_007`/`LINT_ST_006`/`LINT_ST_008`/`LINT_ST_009`, and additional rule-level coverage is still being expanded.
-- [ ] Phase 2 lexical/style migrations remain open for semantic-depth parity improvements (token-aware behavior/configuration parity), with `CV_012` still heuristic in dedicated-module form.
+- [ ] Phase 2 lexical/style migrations remain open for semantic-depth parity improvements (token-aware behavior/configuration parity), with remaining major lexical work centered on CP/LT/JJ and `TQ_003`.
 
 ## Quality Gates
 

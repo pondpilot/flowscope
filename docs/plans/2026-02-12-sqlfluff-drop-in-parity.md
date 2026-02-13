@@ -498,7 +498,9 @@ These rules work but lack SQLFluff config knobs that users depend on:
 
 ### Tier 3: Improve lexical/document rule accuracy (lower priority)
 
-Remaining parity rules (CP, LT, JJ, TQ, RF_004-006) use regex heuristics.
+Remaining parity work in this tier is primarily lexical/style coverage
+(`CP`, `LT`, `JJ`, and `TQ_003`) where behavior still relies on regex and/or
+lightweight token heuristics.
 These should be migrated to token-stream analysis per the linter architecture
 plan (Phase 2 of `linter-architecture.md`), but are lower priority because:
 
