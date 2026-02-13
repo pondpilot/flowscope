@@ -190,6 +190,25 @@ fn lint_rule_config_aliasing_column_implicit_policy() {
     );
 }
 
+#[test]
+fn lint_rule_config_aliasing_length_max() {
+    let issues = run_lint_with_config(
+        "SELECT * FROM users eleven_chars",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "LINT_AL_006".to_string(),
+                serde_json::json!({"max_alias_length": 10}),
+            )]),
+        },
+    );
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_AL_006"),
+        "configured max alias length should flag long alias: {issues:?}"
+    );
+}
+
 // =============================================================================
 // Rule-specific integration tests
 // =============================================================================
