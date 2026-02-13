@@ -78,6 +78,8 @@ This plan covers three axes:
   - `AL_005` now includes SQLFluff BigQuery/Redshift implicit array-relation parity by counting alias usage from table-factor forms like `FROM t, t.arr` and applying alias exceptions for relation aliases on those array/super-array factors (for example `FROM t, t.super_array AS x`).
   - `AL_005` now includes SQLFluff repeated-self-join alias parity by exempting sibling aliases on the same base relation when one alias for that repeated relation is referenced.
   - `AL_005` now also checks `DELETE ... USING` source scopes, including nested `WITH` subqueries, matching SQLFluff AL05 behavior for unused aliases inside Snowflake delete-derived CTEs.
+  - `AL_005` now includes dialect-aware quoted/unquoted identifier normalization in default (`dialect`) mode, aligning SQLFluff AL05 alias usage matching across dialect-specific casefold behavior (for example Postgres/Redshift lower-folding, Snowflake upper-folding, and case-insensitive quoted identifiers for DuckDB/Hive/SQLite).
+  - `AL_005` now includes SQLFluff Redshift QUALIFY parity for unqualified alias-prefixed identifiers (for example `ss_sold_date` / `ss_sales_price` counting as `ss` usage when QUALIFY follows FROM/JOIN directly).
   - `CV_003` moved from parity into a dedicated core rule module (`cv_003.rs`) and parity registration was removed.
   - `CV_003` was further upgraded from regex scanning to token/depth-aware trailing-comma detection in SELECT clauses.
   - `CV_003` now supports `select_clause_trailing_comma` (`forbid`/`require`) through `lint.ruleConfigs`.
@@ -545,7 +547,7 @@ Migrate them to proper AST implementations.
 | AL_001 (aliasing.table) | Lexical | Needs to distinguish implicit vs explicit `AS`; handle dialect-specific aliasing |
 | AL_002 (aliasing.column) | Lexical | Same as AL_001 for column aliases |
 | AL_004 (aliasing.unique.table) | Lexical | Needs AST-level alias tracking across FROM/JOIN |
-| AL_005 (aliasing.unused) | Core (partial) | Remaining advanced dialect/scope edges beyond current `LATERAL`/`VALUES`, BigQuery `TO_JSON_STRING(<table_alias>)`, and `DELETE ... USING` parity |
+| AL_005 (aliasing.unused) | Core (partial) | Remaining advanced dialect/scope edges beyond current `LATERAL`/`VALUES`, BigQuery `TO_JSON_STRING(<table_alias>)`, `DELETE ... USING`, and Redshift QUALIFY alias-prefix parity |
 | AL_008 (aliasing.unique.column) | Lexical | Needs AST-level SELECT projection alias tracking |
 | CV_003 (convention.select_trailing_comma) | Lexical | Needs token-aware trailing comma detection |
 | CV_006 (convention.terminator) | Lexical | Needs statement boundary awareness |

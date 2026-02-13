@@ -179,10 +179,26 @@ fn check_select(
     let mut used_prefixes: HashSet<QualifierRef> = HashSet::new();
     collect_identifier_prefixes_from_select(select, order_by, ctx.dialect(), &mut used_prefixes);
 
+    if matches!(ctx.dialect(), Dialect::Redshift) {
+        if let Some(qualify) = &select.qualify {
+            if include_qualify_alias_references(ctx.dialect(), select) {
+                for alias in aliases.values() {
+                    if redshift_qualify_uses_alias_prefixed_identifier(qualify, &alias.name) {
+                        used_prefixes.insert(QualifierRef {
+                            name: alias.name.clone(),
+                            quoted: alias.quoted,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
     emit_unused_alias_issues(
         &aliases,
         &used_prefixes,
         alias_case_check,
+        ctx.dialect(),
         ctx.statement_index,
         issues,
     );
@@ -239,6 +255,7 @@ fn check_delete(
         &aliases,
         &used_prefixes,
         alias_case_check,
+        ctx.dialect(),
         ctx.statement_index,
         issues,
     );
@@ -264,6 +281,7 @@ fn emit_unused_alias_issues(
     aliases: &HashMap<String, AliasRef>,
     used_prefixes: &HashSet<QualifierRef>,
     alias_case_check: AliasCaseCheck,
+    dialect: Dialect,
     statement_index: usize,
     issues: &mut Vec<Issue>,
 ) {
@@ -275,7 +293,7 @@ fn emit_unused_alias_issues(
     for alias in aliases.values() {
         let used = used_prefixes
             .iter()
-            .any(|prefix| qualifier_matches_alias(prefix, alias, alias_case_check));
+            .any(|prefix| qualifier_matches_alias(prefix, alias, alias_case_check, dialect));
         if used {
             used_alias_names.insert(alias.name.clone());
         }
@@ -796,6 +814,98 @@ fn include_qualify_alias_references(dialect: Dialect, select: &Select) -> bool {
     !matches!(dialect, Dialect::Redshift) || select.selection.is_none()
 }
 
+fn redshift_qualify_uses_alias_prefixed_identifier(expr: &Expr, alias: &str) -> bool {
+    match expr {
+        Expr::Identifier(identifier) => {
+            let value = identifier.value.as_str();
+            value
+                .strip_prefix(alias)
+                .is_some_and(|suffix| suffix.starts_with('_'))
+                || value
+                    .to_ascii_uppercase()
+                    .strip_prefix(&alias.to_ascii_uppercase())
+                    .is_some_and(|suffix| suffix.starts_with('_'))
+        }
+        Expr::CompoundIdentifier(_) => false,
+        Expr::BinaryOp { left, right, .. }
+        | Expr::AnyOp { left, right, .. }
+        | Expr::AllOp { left, right, .. } => {
+            redshift_qualify_uses_alias_prefixed_identifier(left, alias)
+                || redshift_qualify_uses_alias_prefixed_identifier(right, alias)
+        }
+        Expr::UnaryOp { expr: inner, .. }
+        | Expr::Nested(inner)
+        | Expr::IsNull(inner)
+        | Expr::IsNotNull(inner)
+        | Expr::Cast { expr: inner, .. } => {
+            redshift_qualify_uses_alias_prefixed_identifier(inner, alias)
+        }
+        Expr::InList { expr, list, .. } => {
+            redshift_qualify_uses_alias_prefixed_identifier(expr, alias)
+                || list
+                    .iter()
+                    .any(|item| redshift_qualify_uses_alias_prefixed_identifier(item, alias))
+        }
+        Expr::Between {
+            expr, low, high, ..
+        } => {
+            redshift_qualify_uses_alias_prefixed_identifier(expr, alias)
+                || redshift_qualify_uses_alias_prefixed_identifier(low, alias)
+                || redshift_qualify_uses_alias_prefixed_identifier(high, alias)
+        }
+        Expr::Case {
+            operand,
+            conditions,
+            else_result,
+            ..
+        } => {
+            operand
+                .as_ref()
+                .is_some_and(|inner| redshift_qualify_uses_alias_prefixed_identifier(inner, alias))
+                || conditions.iter().any(|when| {
+                    redshift_qualify_uses_alias_prefixed_identifier(&when.condition, alias)
+                        || redshift_qualify_uses_alias_prefixed_identifier(&when.result, alias)
+                })
+                || else_result.as_ref().is_some_and(|inner| {
+                    redshift_qualify_uses_alias_prefixed_identifier(inner, alias)
+                })
+        }
+        Expr::Function(function) => {
+            let args_match = if let FunctionArguments::List(arguments) = &function.args {
+                arguments.args.iter().any(|arg| match arg {
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(expr))
+                    | FunctionArg::Named {
+                        arg: FunctionArgExpr::Expr(expr),
+                        ..
+                    } => redshift_qualify_uses_alias_prefixed_identifier(expr, alias),
+                    _ => false,
+                })
+            } else {
+                false
+            };
+            let filter_match = function.filter.as_ref().is_some_and(|filter| {
+                redshift_qualify_uses_alias_prefixed_identifier(filter, alias)
+            });
+            let within_group_match = function.within_group.iter().any(|order_expr| {
+                redshift_qualify_uses_alias_prefixed_identifier(&order_expr.expr, alias)
+            });
+            let over_match = match &function.over {
+                Some(WindowType::WindowSpec(spec)) => {
+                    spec.partition_by
+                        .iter()
+                        .any(|expr| redshift_qualify_uses_alias_prefixed_identifier(expr, alias))
+                        || spec.order_by.iter().any(|order_expr| {
+                            redshift_qualify_uses_alias_prefixed_identifier(&order_expr.expr, alias)
+                        })
+                }
+                _ => false,
+            };
+            args_match || filter_match || within_group_match || over_match
+        }
+        _ => false,
+    }
+}
+
 fn implicit_array_relation_prefix(dialect: Dialect, name: &ObjectName) -> Option<QualifierRef> {
     if !matches!(dialect, Dialect::Bigquery | Dialect::Redshift) {
         return None;
@@ -827,16 +937,14 @@ fn qualifier_matches_alias(
     qualifier: &QualifierRef,
     alias: &AliasRef,
     alias_case_check: AliasCaseCheck,
+    dialect: Dialect,
 ) -> bool {
     match alias_case_check {
         AliasCaseCheck::CaseInsensitive => qualifier.name.eq_ignore_ascii_case(&alias.name),
         AliasCaseCheck::CaseSensitive => qualifier.name == alias.name,
         AliasCaseCheck::Dialect => {
-            if qualifier.quoted || alias.quoted {
-                qualifier.name == alias.name
-            } else {
-                qualifier.name.eq_ignore_ascii_case(&alias.name)
-            }
+            normalize_identifier_for_dialect(&qualifier.name, qualifier.quoted, dialect)
+                == normalize_identifier_for_dialect(&alias.name, alias.quoted, dialect)
         }
         AliasCaseCheck::QuotedCsNakedUpper => {
             normalize_case_for_mode(qualifier, alias_case_check)
@@ -847,6 +955,34 @@ fn qualifier_matches_alias(
                 == normalize_case_for_mode_alias(alias, alias_case_check)
         }
     }
+}
+
+fn normalize_identifier_for_dialect(identifier: &str, quoted: bool, dialect: Dialect) -> String {
+    if quoted && !quoted_identifiers_case_insensitive_for_dialect(dialect) {
+        identifier.to_string()
+    } else {
+        normalize_naked_identifier_for_dialect(identifier, dialect)
+    }
+}
+
+fn normalize_naked_identifier_for_dialect(identifier: &str, dialect: Dialect) -> String {
+    if matches!(
+        dialect,
+        Dialect::Postgres
+            | Dialect::Redshift
+            | Dialect::Mysql
+            | Dialect::Sqlite
+            | Dialect::Mssql
+            | Dialect::Clickhouse
+    ) {
+        identifier.to_ascii_lowercase()
+    } else {
+        identifier.to_ascii_uppercase()
+    }
+}
+
+fn quoted_identifiers_case_insensitive_for_dialect(dialect: Dialect) -> bool {
+    matches!(dialect, Dialect::Duckdb | Dialect::Hive | Dialect::Sqlite)
 }
 
 fn normalize_case_for_mode(reference: &QualifierRef, mode: AliasCaseCheck) -> String {
@@ -1279,6 +1415,82 @@ mod tests {
     }
 
     #[test]
+    fn dialect_mode_generic_allows_quoted_unquoted_fold_match() {
+        let issues = check_sql("SELECT a.col1 FROM tab1 AS \"A\"");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn dialect_mode_generic_allows_quoted_prefix_against_unquoted_alias() {
+        let issues = check_sql("SELECT \"A\".col1 FROM tab1 AS a");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn dialect_mode_generic_flags_single_quoted_alias_case_mismatch() {
+        let issues = check_sql("SELECT a.col1 FROM tab1 AS 'a'");
+        assert_eq!(issues.len(), 1);
+        assert!(issues[0].message.contains("a"));
+    }
+
+    #[test]
+    fn dialect_mode_postgres_allows_lower_fold_for_quoted_alias() {
+        let issues =
+            check_sql_in_dialect("SELECT A.col_1 FROM table_a AS \"a\"", Dialect::Postgres);
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn dialect_mode_snowflake_flags_mixed_quoted_case_mismatch() {
+        let issues =
+            check_sql_in_dialect("SELECT a.col_1 FROM table_a AS \"a\"", Dialect::Snowflake);
+        assert_eq!(issues.len(), 1);
+        assert!(issues[0].message.contains("a"));
+    }
+
+    #[test]
+    fn dialect_mode_bigquery_allows_backtick_quoted_alias_fold_match() {
+        let issues = check_sql_in_dialect("SELECT a.col1 FROM tab1 AS `A`", Dialect::Bigquery);
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn dialect_mode_redshift_allows_lower_fold_for_quoted_alias() {
+        let issues =
+            check_sql_in_dialect("SELECT A.col_1 FROM table_a AS \"a\"", Dialect::Redshift);
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn dialect_mode_redshift_flags_mixed_quoted_case_mismatch() {
+        let issues =
+            check_sql_in_dialect("SELECT a.col_1 FROM table_a AS \"A\"", Dialect::Redshift);
+        assert_eq!(issues.len(), 1);
+        assert!(issues[0].message.contains("A"));
+    }
+
+    #[test]
+    fn dialect_mode_mysql_allows_backtick_qualified_reference_against_unquoted_alias() {
+        let issues = check_sql_in_dialect(
+            "SELECT `nih`.`userID` FROM `flight_notification_item_history` AS nih",
+            Dialect::Mysql,
+        );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn dialect_mode_duckdb_allows_case_insensitive_quoted_reference() {
+        let issues = check_sql_in_dialect("SELECT \"a\".col_1 FROM table_a AS A", Dialect::Duckdb);
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn dialect_mode_hive_allows_case_insensitive_quoted_reference() {
+        let issues = check_sql_in_dialect("SELECT `a`.col1 FROM tab1 AS A", Dialect::Hive);
+        assert!(issues.is_empty());
+    }
+
+    #[test]
     fn flags_inner_subquery_unused_alias() {
         let issues = check_sql("SELECT * FROM (SELECT * FROM my_tbl AS foo)");
         assert_eq!(issues.len(), 1);
@@ -1374,6 +1586,17 @@ mod tests {
         assert_eq!(issues.len(), 2);
         assert!(issues.iter().any(|issue| issue.message.contains("s")));
         assert!(issues.iter().any(|issue| issue.message.contains("ss")));
+    }
+
+    #[test]
+    fn redshift_qualify_unqualified_alias_prefixed_identifier_counts_alias_usage() {
+        let issues = check_sql_in_dialect(
+            "SELECT * \
+             FROM #store_sales AS ss \
+             QUALIFY row_number() OVER (PARTITION BY ss_sold_date ORDER BY ss_sales_price DESC) <= 2",
+            Dialect::Redshift,
+        );
+        assert!(issues.is_empty());
     }
 
     #[test]

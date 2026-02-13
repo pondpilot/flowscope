@@ -874,6 +874,86 @@ fn lint_al_005_allows_used_alias_in_single_table_query() {
 }
 
 #[test]
+fn lint_al_005_dialect_mode_generic_allows_quoted_alias_fold_match() {
+    let issues = run_lint("SELECT a.col1 FROM tab1 AS \"A\"");
+    assert!(
+        !issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_AL_005),
+        "generic dialect should treat naked/quoted casefold matches as alias usage in AL_005: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_al_005_dialect_mode_snowflake_flags_quoted_case_mismatch() {
+    let issues = run_lint_in_dialect("SELECT a.col_1 FROM table_a AS \"a\"", Dialect::Snowflake);
+    assert!(
+        issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_AL_005),
+        "Snowflake naked/quoted case mismatch should be treated as unused alias in AL_005: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_al_005_dialect_mode_redshift_allows_lower_fold_for_quoted_alias() {
+    let issues = run_lint_in_dialect("SELECT A.col_1 FROM table_a AS \"a\"", Dialect::Redshift);
+    assert!(
+        !issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_AL_005),
+        "Redshift should fold naked identifiers to lower-case for quoted/naked alias matching in AL_005: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_al_005_dialect_mode_redshift_flags_mixed_quoted_case_mismatch() {
+    let issues = run_lint_in_dialect("SELECT a.col_1 FROM table_a AS \"A\"", Dialect::Redshift);
+    assert!(
+        issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_AL_005),
+        "Redshift quoted/naked mismatched-case aliases should still trigger AL_005: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_al_005_dialect_mode_mysql_allows_backtick_reference_with_unquoted_alias() {
+    let issues = run_lint_in_dialect(
+        "SELECT `nih`.`userID` FROM `flight_notification_item_history` AS nih",
+        Dialect::Mysql,
+    );
+    assert!(
+        !issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_AL_005),
+        "MySQL backtick-qualified references should count as usage for unquoted aliases in AL_005: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_al_005_dialect_mode_duckdb_allows_case_insensitive_quoted_reference() {
+    let issues = run_lint_in_dialect("SELECT \"a\".col_1 FROM table_a AS A", Dialect::Duckdb);
+    assert!(
+        !issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_AL_005),
+        "DuckDB quoted identifier references should match unquoted aliases case-insensitively in AL_005: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_al_005_dialect_mode_hive_allows_case_insensitive_quoted_reference() {
+    let issues = run_lint_in_dialect("SELECT `a`.col1 FROM tab1 AS A", Dialect::Hive);
+    assert!(
+        !issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_AL_005),
+        "Hive quoted identifier references should match unquoted aliases case-insensitively in AL_005: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_al_005_alias_used_in_qualify_clause() {
     let issues = run_lint_in_dialect(
         "SELECT u.id FROM users u JOIN orders o ON users.id = orders.user_id QUALIFY ROW_NUMBER() OVER (PARTITION BY o.user_id ORDER BY o.user_id) = 1",
@@ -1067,6 +1147,22 @@ fn lint_al_005_redshift_qualify_after_where_does_not_count_alias_usage() {
     assert_eq!(
         al05_count, 2,
         "Redshift QUALIFY after WHERE should not preserve alias references for AL_005: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_al_005_redshift_qualify_unqualified_alias_prefixed_identifier_counts_usage() {
+    let issues = run_lint_in_dialect(
+        "SELECT * \
+         FROM #store_sales AS ss \
+         QUALIFY ROW_NUMBER() OVER (PARTITION BY ss_sold_date ORDER BY ss_sales_price DESC) <= 2",
+        Dialect::Redshift,
+    );
+    assert!(
+        !issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_AL_005),
+        "Redshift QUALIFY unqualified alias-prefixed identifiers should count as usage in AL_005: {issues:?}"
     );
 }
 
