@@ -138,6 +138,7 @@ This plan covers three axes:
   - `LT_015` was further upgraded from regex matching to direct blank-line run detection.
   - `LT_015` now supports `maximum_empty_lines_inside_statements` / `maximum_empty_lines_between_statements` through `lint.ruleConfigs`.
   - `LT_002` moved from parity handling to a dedicated core rule module (`lt_002.rs`).
+  - `LT_002` now supports configurable `indent_unit` / `tab_space_size` and flags mixed tab/space indentation in leading whitespace.
   - `LT_003` moved from parity handling to a dedicated core rule module (`lt_003.rs`).
   - `LT_003` was further upgraded from regex scanning to tokenizer line-aware trailing-operator checks.
   - `LT_003` now supports operator line-position configuration through `lint.ruleConfigs` (`line_position=leading|trailing`) and legacy SQLFluff `operator_new_lines` compatibility.

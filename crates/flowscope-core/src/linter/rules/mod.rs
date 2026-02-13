@@ -120,7 +120,7 @@ pub fn all_rules(config: &LintConfig) -> Vec<Box<dyn LintRule>> {
         Box::new(cv_012::ConventionJoinCondition),
         Box::new(jj_001::JinjaPadding),
         Box::new(lt_001::LayoutSpacing),
-        Box::new(lt_002::LayoutIndent),
+        Box::new(lt_002::LayoutIndent::from_config(config)),
         Box::new(lt_003::LayoutOperators::from_config(config)),
         Box::new(lt_004::LayoutCommas::from_config(config)),
         Box::new(lt_005::LayoutLongLines::from_config(config)),

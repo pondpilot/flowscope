@@ -560,6 +560,25 @@ fn lint_rule_config_layout_commas_leading_line_position() {
 }
 
 #[test]
+fn lint_rule_config_layout_indent_custom_unit() {
+    let issues = run_lint_with_config(
+        "SELECT a\n  , b\nFROM t",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "layout.indent".to_string(),
+                serde_json::json!({"indent_unit": 4}),
+            )]),
+        },
+    );
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_LT_002"),
+        "indent_unit=4 should flag two-space indentation: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_rule_config_structure_subquery_forbid_join_only() {
     let issues = run_lint_with_config(
         "SELECT * FROM (SELECT * FROM t) sub",
