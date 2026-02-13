@@ -24,47 +24,41 @@ impl LintRule for StructureConstantExpression {
     }
 
     fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let mut found = statement_contains_constant_predicate(statement);
+        let mut violation_count = statement_constant_predicate_count(statement);
 
         visit_selects_in_statement(statement, &mut |select| {
-            if found {
-                return;
-            }
-
             visit_select_expressions(select, &mut |expr| {
-                if contains_constant_predicate(expr) {
-                    found = true;
-                }
+                violation_count += constant_predicate_count(expr);
             });
         });
 
-        if found {
-            vec![Issue::warning(
-                issue_codes::LINT_ST_010,
-                "Constant boolean expression detected in predicate.",
-            )
-            .with_statement(ctx.statement_index)]
-        } else {
-            Vec::new()
-        }
+        (0..violation_count)
+            .map(|_| {
+                Issue::warning(
+                    issue_codes::LINT_ST_010,
+                    "Constant boolean expression detected in predicate.",
+                )
+                .with_statement(ctx.statement_index)
+            })
+            .collect()
     }
 }
 
-fn statement_contains_constant_predicate(statement: &Statement) -> bool {
+fn statement_constant_predicate_count(statement: &Statement) -> usize {
     match statement {
         Statement::Update { selection, .. } => {
-            selection.as_ref().is_some_and(contains_constant_predicate)
+            selection.as_ref().map_or(0, constant_predicate_count)
         }
         Statement::Delete(delete) => delete
             .selection
             .as_ref()
-            .is_some_and(contains_constant_predicate),
-        Statement::Merge { on, .. } => contains_constant_predicate(on),
-        _ => false,
+            .map_or(0, constant_predicate_count),
+        Statement::Merge { on, .. } => constant_predicate_count(on),
+        _ => 0,
     }
 }
 
-fn contains_constant_predicate(expr: &Expr) -> bool {
+fn constant_predicate_count(expr: &Expr) -> usize {
     match expr {
         Expr::BinaryOp { left, op, right } => {
             let direct_match = is_supported_comparison_operator(op)
@@ -77,22 +71,25 @@ fn contains_constant_predicate(expr: &Expr) -> bool {
                     _ => expressions_equivalent_for_constant_check(left, right),
                 };
 
-            direct_match || contains_constant_predicate(left) || contains_constant_predicate(right)
+            usize::from(direct_match)
+                + constant_predicate_count(left)
+                + constant_predicate_count(right)
         }
         Expr::UnaryOp { expr: inner, .. }
         | Expr::Nested(inner)
         | Expr::IsNull(inner)
         | Expr::IsNotNull(inner)
-        | Expr::Cast { expr: inner, .. } => contains_constant_predicate(inner),
+        | Expr::Cast { expr: inner, .. } => constant_predicate_count(inner),
         Expr::InList { expr, list, .. } => {
-            contains_constant_predicate(expr) || list.iter().any(contains_constant_predicate)
+            constant_predicate_count(expr)
+                + list.iter().map(constant_predicate_count).sum::<usize>()
         }
         Expr::Between {
             expr, low, high, ..
         } => {
-            contains_constant_predicate(expr)
-                || contains_constant_predicate(low)
-                || contains_constant_predicate(high)
+            constant_predicate_count(expr)
+                + constant_predicate_count(low)
+                + constant_predicate_count(high)
         }
         Expr::Case {
             operand,
@@ -100,18 +97,22 @@ fn contains_constant_predicate(expr: &Expr) -> bool {
             else_result,
             ..
         } => {
-            operand
+            let operand_count = operand
                 .as_ref()
-                .is_some_and(|expr| contains_constant_predicate(expr))
-                || conditions.iter().any(|when| {
-                    contains_constant_predicate(&when.condition)
-                        || contains_constant_predicate(&when.result)
+                .map_or(0, |expr| constant_predicate_count(expr));
+            let condition_count = conditions
+                .iter()
+                .map(|when| {
+                    constant_predicate_count(&when.condition)
+                        + constant_predicate_count(&when.result)
                 })
-                || else_result
-                    .as_ref()
-                    .is_some_and(|expr| contains_constant_predicate(expr))
+                .sum::<usize>();
+            let else_count = else_result
+                .as_ref()
+                .map_or(0, |expr| constant_predicate_count(expr));
+            operand_count + condition_count + else_count
         }
-        _ => false,
+        _ => 0,
     }
 }
 
@@ -307,6 +308,12 @@ mod tests {
     fn finds_nested_constant_predicates() {
         let issues = run("select col from foo where cond=1 and (score=score or avg_score >= 3)");
         assert_eq!(issues.len(), 1);
+    }
+
+    #[test]
+    fn counts_multiple_constant_predicates_in_single_expression_tree() {
+        let issues = run("select * from foo where col = col and score = score");
+        assert_eq!(issues.len(), 2);
     }
 
     #[test]

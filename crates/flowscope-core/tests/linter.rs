@@ -1605,6 +1605,19 @@ fn lint_st_010_non_equality_literal_comparison_ok() {
 }
 
 #[test]
+fn lint_st_010_reports_each_constant_expression_occurrence() {
+    let issues = run_lint("SELECT * FROM t WHERE a = a AND b = b");
+    let st_010_count = issues
+        .iter()
+        .filter(|(code, _)| code == "LINT_ST_010")
+        .count();
+    assert_eq!(
+        st_010_count, 2,
+        "expected two ST_010 violations: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_st_011_inner_join_not_checked() {
     let issues = run_lint("SELECT a.id FROM a INNER JOIN b ON a.id = b.id");
     assert!(
