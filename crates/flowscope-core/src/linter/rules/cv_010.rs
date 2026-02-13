@@ -5,8 +5,9 @@
 
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
-use regex::Regex;
 use sqlparser::ast::Statement;
+
+use super::references_quoted_helpers::double_quoted_identifiers_in_statement;
 
 pub struct ConventionQuotedLiterals;
 
@@ -23,8 +24,8 @@ impl LintRule for ConventionQuotedLiterals {
         "Quoted literal style is inconsistent with SQL convention."
     }
 
-    fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        if has_re(ctx.statement_sql(), r#""[^"]+""#) {
+    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+        if !double_quoted_identifiers_in_statement(statement).is_empty() {
             vec![Issue::info(
                 issue_codes::LINT_CV_010,
                 "Quoted literal style appears inconsistent.",
@@ -34,10 +35,6 @@ impl LintRule for ConventionQuotedLiterals {
             Vec::new()
         }
     }
-}
-
-fn has_re(haystack: &str, pattern: &str) -> bool {
-    Regex::new(pattern).expect("valid regex").is_match(haystack)
 }
 
 #[cfg(test)]
@@ -74,5 +71,10 @@ mod tests {
     #[test]
     fn does_not_flag_single_quoted_literal() {
         assert!(run("SELECT 'abc' FROM t").is_empty());
+    }
+
+    #[test]
+    fn does_not_flag_double_quotes_inside_single_quoted_literal() {
+        assert!(run("SELECT '\"abc\"' FROM t").is_empty());
     }
 }

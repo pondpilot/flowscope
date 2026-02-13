@@ -82,6 +82,7 @@ This plan covers three axes:
   - `CV_009` moved from parity handling to a dedicated core rule module (`cv_009.rs`).
   - `CV_009` was further upgraded to AST-driven traversal (table names, aliases, expression identifiers), replacing raw regex scanning and reducing string/comment false positives.
   - `CV_010` moved from parity handling to a dedicated core rule module (`cv_010.rs`).
+  - `CV_010` was further upgraded to AST-driven double-quoted identifier traversal, replacing raw quote-regex scanning.
   - `CV_011` moved from parity handling to a dedicated core rule module (`cv_011.rs`).
   - `JJ_001` moved from parity handling to a dedicated core rule module (`jj_001.rs`).
   - `LT_010` moved from parity handling to a dedicated core rule module (`lt_010.rs`).
