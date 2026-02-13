@@ -187,7 +187,7 @@ Move style-oriented checks to lexical engine:
 - [x] `LINT_CV_004` now supports SQLFluff-style COUNT preference knobs (`prefer_count_1` / `prefer_count_0`) via `lint.ruleConfigs` while keeping AST expression traversal for detection.
 - [x] `LINT_CV_006` now supports `multiline_newline` / `require_final_semicolon` via `lint.ruleConfigs` while keeping statement-boundary aware terminator checks.
 - [x] `LINT_CV_009` now supports configurable `blocked_words` / `blocked_regex` via `lint.ruleConfigs` (AST traversal scope unchanged).
-- [x] `LINT_CV_010` now supports `preferred_quoted_literal_style` via `lint.ruleConfigs` (current behavior remains narrower than full SQLFluff literal semantics).
+- [x] `LINT_CV_010` now supports `preferred_quoted_literal_style` via `lint.ruleConfigs` and uses mixed-style (`single` + `double`) detection for `consistent` mode (current behavior remains narrower than full SQLFluff literal semantics).
 - [x] `LINT_CV_011` now supports `preferred_type_casting_style` via `lint.ruleConfigs` (including `consistent`/`shorthand`/`cast`/`convert` preferences).
 - [x] `LINT_LT_005` now supports `max_line_length`, `ignore_comment_lines`, and `ignore_comment_clauses` via `lint.ruleConfigs`.
 - [x] `LINT_LT_009` now supports `wildcard_policy` (`single`/`multiple`) via `lint.ruleConfigs`.

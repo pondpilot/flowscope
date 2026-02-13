@@ -118,6 +118,7 @@ This plan covers three axes:
   - `CV_010` moved from parity handling to a dedicated core rule module (`cv_010.rs`).
   - `CV_010` was further upgraded to AST-driven double-quoted identifier traversal, replacing raw quote-regex scanning.
   - `CV_010` now supports `preferred_quoted_literal_style` through `lint.ruleConfigs`.
+  - `CV_010` `consistent` mode now triggers only when mixed single-quoted and double-quoted literal-like styles coexist in the same statement.
   - `CV_011` moved from parity handling to a dedicated core rule module (`cv_011.rs`).
   - `CV_011` was further upgraded to AST-driven cast-kind traversal (`CastKind::{Cast, TryCast, SafeCast, DoubleColon}`), replacing raw SQL `::`/`CAST(` regex scanning and reducing string-literal false positives.
   - `CV_011` now supports `preferred_type_casting_style` through `lint.ruleConfigs`.
