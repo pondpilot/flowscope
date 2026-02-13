@@ -475,6 +475,63 @@ fn lint_rule_config_references_quoting_prefer_quoted_identifiers() {
     );
 }
 
+#[test]
+fn lint_rule_config_aliasing_forbid_force_enable_false() {
+    let issues = run_lint_with_config(
+        "SELECT * FROM users u",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "aliasing.forbid".to_string(),
+                serde_json::json!({"force_enable": false}),
+            )]),
+        },
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_AL_007"),
+        "force_enable=false should disable AL_007 checks: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_rule_config_ambiguous_join_outer_mode() {
+    let issues = run_lint_with_config(
+        "SELECT * FROM foo LEFT JOIN bar ON foo.id = bar.id",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "ambiguous.join".to_string(),
+                serde_json::json!({"fully_qualify_join_types": "outer"}),
+            )]),
+        },
+    );
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_AM_005"),
+        "outer join qualification mode should flag LEFT JOIN without OUTER: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_rule_config_ambiguous_column_refs_explicit_mode() {
+    let issues = run_lint_with_config(
+        "SELECT foo, bar FROM fake_table GROUP BY 1, 2",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "LINT_AM_006".to_string(),
+                serde_json::json!({"group_by_and_order_by_style": "explicit"}),
+            )]),
+        },
+    );
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_AM_006"),
+        "explicit mode should flag implicit GROUP BY positions: {issues:?}"
+    );
+}
+
 // =============================================================================
 // Rule-specific integration tests
 // =============================================================================

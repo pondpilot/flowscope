@@ -70,6 +70,7 @@ This plan covers three axes:
   - `AL_006` now supports configurable `min_alias_length` / `max_alias_length` through `lint.ruleConfigs`.
   - `AL_003` now supports configurable `allow_scalar` through `lint.ruleConfigs`.
   - `AL_007` moved from parity regex handling to a dedicated core AST rule (`al_007.rs`).
+  - `AL_007` now supports `force_enable` through `lint.ruleConfigs`.
   - `AL_009` moved from parity regex handling to a dedicated core AST rule (`al_009.rs`).
   - `RF_004` moved from parity handling to a dedicated core rule module (`rf_004.rs`).
   - `RF_004` was further upgraded to AST-driven table/join alias analysis, eliminating SQL-string false positives from non-SQL string literals.
@@ -148,6 +149,8 @@ This plan covers three axes:
   - `CP_002` was further upgraded from regex masking to token-stream identifier/function classification.
   - `CP_003` was further upgraded from regex scanning to token-stream function-call detection.
   - `CP_005` was further upgraded from regex masking to tokenizer-driven type-keyword collection.
+  - `AM_005` now supports `fully_qualify_join_types` (`inner`/`outer`/`both`) through `lint.ruleConfigs`.
+  - `AM_006` now supports `group_by_and_order_by_style` (`consistent`/`explicit`/`implicit`) through `lint.ruleConfigs`.
   - Legacy `parity.rs` monolith was retired; rule registration now points only to dedicated `rules/<code>.rs` modules.
 
 ### Intentionally Removed
@@ -510,9 +513,6 @@ These rules work but lack SQLFluff config knobs that users depend on:
 | Rule | Missing Config | SQLFluff Default |
 |---|---|---|
 | AL_005 (aliasing.unused) | `alias_case_check` | dialect-dependent |
-| AL_007 (aliasing.forbid) | `force_enable` | `False` (disabled by default) |
-| AM_005 (ambiguous.join) | `fully_qualify_join_types` | `inner` |
-| AM_006 (ambiguous.column_references) | `group_by_and_order_by_style` | `consistent` |
 | CP_001 (capitalisation.keywords) | `capitalisation_policy`, `ignore_words` | `consistent` |
 | CP_002–005 | `extended_capitalisation_policy` | `consistent` |
 

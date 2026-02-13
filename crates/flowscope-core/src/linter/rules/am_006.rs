@@ -3,6 +3,7 @@
 //! SQLFluff AM06 parity: enforce consistent `GROUP BY` / `ORDER BY` reference
 //! styles (implicit numeric position vs explicit expressions/identifiers).
 
+use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
 use sqlparser::ast::{
@@ -12,12 +13,52 @@ use sqlparser::ast::{
 
 use super::semantic_helpers::join_on_expr;
 
-pub struct AmbiguousColumnRefs;
+pub struct AmbiguousColumnRefs {
+    style_policy: GroupByAndOrderByStylePolicy,
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ReferenceStyle {
     Explicit,
     Implicit,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum GroupByAndOrderByStylePolicy {
+    Consistent,
+    Explicit,
+    Implicit,
+}
+
+impl GroupByAndOrderByStylePolicy {
+    fn from_config(config: &LintConfig) -> Self {
+        match config
+            .rule_option_str(issue_codes::LINT_AM_006, "group_by_and_order_by_style")
+            .unwrap_or("consistent")
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "explicit" => Self::Explicit,
+            "implicit" => Self::Implicit,
+            _ => Self::Consistent,
+        }
+    }
+}
+
+impl AmbiguousColumnRefs {
+    pub fn from_config(config: &LintConfig) -> Self {
+        Self {
+            style_policy: GroupByAndOrderByStylePolicy::from_config(config),
+        }
+    }
+}
+
+impl Default for AmbiguousColumnRefs {
+    fn default() -> Self {
+        Self {
+            style_policy: GroupByAndOrderByStylePolicy::Consistent,
+        }
+    }
 }
 
 impl LintRule for AmbiguousColumnRefs {
@@ -39,6 +80,7 @@ impl LintRule for AmbiguousColumnRefs {
         check_statement(
             statement,
             ctx.statement_index,
+            self.style_policy,
             &mut prior_style,
             &mut issues,
         );
@@ -49,22 +91,25 @@ impl LintRule for AmbiguousColumnRefs {
 fn check_statement(
     statement: &Statement,
     statement_index: usize,
+    style_policy: GroupByAndOrderByStylePolicy,
     prior_style: &mut Option<ReferenceStyle>,
     issues: &mut Vec<Issue>,
 ) {
     match statement {
-        Statement::Query(query) => check_query(query, statement_index, prior_style, issues),
+        Statement::Query(query) => {
+            check_query(query, statement_index, style_policy, prior_style, issues)
+        }
         Statement::Insert(insert) => {
             if let Some(source) = &insert.source {
-                check_query(source, statement_index, prior_style, issues);
+                check_query(source, statement_index, style_policy, prior_style, issues);
             }
         }
         Statement::CreateView { query, .. } => {
-            check_query(query, statement_index, prior_style, issues);
+            check_query(query, statement_index, style_policy, prior_style, issues);
         }
         Statement::CreateTable(create) => {
             if let Some(query) = &create.query {
-                check_query(query, statement_index, prior_style, issues);
+                check_query(query, statement_index, style_policy, prior_style, issues);
             }
         }
         _ => {}
@@ -74,16 +119,29 @@ fn check_statement(
 fn check_query(
     query: &Query,
     statement_index: usize,
+    style_policy: GroupByAndOrderByStylePolicy,
     prior_style: &mut Option<ReferenceStyle>,
     issues: &mut Vec<Issue>,
 ) {
     if let Some(with) = &query.with {
         for cte in &with.cte_tables {
-            check_query(&cte.query, statement_index, prior_style, issues);
+            check_query(
+                &cte.query,
+                statement_index,
+                style_policy,
+                prior_style,
+                issues,
+            );
         }
     }
 
-    check_set_expr(&query.body, statement_index, prior_style, issues);
+    check_set_expr(
+        &query.body,
+        statement_index,
+        style_policy,
+        prior_style,
+        issues,
+    );
 
     if let Some(order_by) = &query.order_by {
         let mut has_explicit = false;
@@ -103,6 +161,7 @@ fn check_query(
             has_explicit,
             has_implicit,
             statement_index,
+            style_policy,
             prior_style,
             issues,
         );
@@ -112,21 +171,32 @@ fn check_query(
 fn check_set_expr(
     set_expr: &SetExpr,
     statement_index: usize,
+    style_policy: GroupByAndOrderByStylePolicy,
     prior_style: &mut Option<ReferenceStyle>,
     issues: &mut Vec<Issue>,
 ) {
     match set_expr {
-        SetExpr::Select(select) => check_select(select, statement_index, prior_style, issues),
-        SetExpr::Query(query) => check_query(query, statement_index, prior_style, issues),
+        SetExpr::Select(select) => {
+            check_select(select, statement_index, style_policy, prior_style, issues)
+        }
+        SetExpr::Query(query) => {
+            check_query(query, statement_index, style_policy, prior_style, issues)
+        }
         SetExpr::SetOperation { left, right, .. } => {
-            check_set_expr(left, statement_index, prior_style, issues);
-            check_set_expr(right, statement_index, prior_style, issues);
+            check_set_expr(left, statement_index, style_policy, prior_style, issues);
+            check_set_expr(right, statement_index, style_policy, prior_style, issues);
         }
         SetExpr::Insert(statement)
         | SetExpr::Update(statement)
         | SetExpr::Delete(statement)
         | SetExpr::Merge(statement) => {
-            check_statement(statement, statement_index, prior_style, issues);
+            check_statement(
+                statement,
+                statement_index,
+                style_policy,
+                prior_style,
+                issues,
+            );
         }
         _ => {}
     }
@@ -135,6 +205,7 @@ fn check_set_expr(
 fn check_select(
     select: &Select,
     statement_index: usize,
+    style_policy: GroupByAndOrderByStylePolicy,
     prior_style: &mut Option<ReferenceStyle>,
     issues: &mut Vec<Issue>,
 ) {
@@ -142,26 +213,50 @@ fn check_select(
     // SELECT's GROUP BY clause, matching SQLFluff's clause-order precedence.
     for item in &select.projection {
         if let SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } = item {
-            visit_subqueries_in_expr(expr, statement_index, prior_style, issues);
+            visit_subqueries_in_expr(expr, statement_index, style_policy, prior_style, issues);
         }
     }
 
     if let Some(prewhere) = &select.prewhere {
-        visit_subqueries_in_expr(prewhere, statement_index, prior_style, issues);
+        visit_subqueries_in_expr(prewhere, statement_index, style_policy, prior_style, issues);
     }
 
     for table in &select.from {
-        check_table_factor(&table.relation, statement_index, prior_style, issues);
+        check_table_factor(
+            &table.relation,
+            statement_index,
+            style_policy,
+            prior_style,
+            issues,
+        );
         for join in &table.joins {
-            check_table_factor(&join.relation, statement_index, prior_style, issues);
+            check_table_factor(
+                &join.relation,
+                statement_index,
+                style_policy,
+                prior_style,
+                issues,
+            );
             if let Some(on_expr) = join_on_expr(&join.join_operator) {
-                visit_subqueries_in_expr(on_expr, statement_index, prior_style, issues);
+                visit_subqueries_in_expr(
+                    on_expr,
+                    statement_index,
+                    style_policy,
+                    prior_style,
+                    issues,
+                );
             }
         }
     }
 
     if let Some(selection) = &select.selection {
-        visit_subqueries_in_expr(selection, statement_index, prior_style, issues);
+        visit_subqueries_in_expr(
+            selection,
+            statement_index,
+            style_policy,
+            prior_style,
+            issues,
+        );
     }
 
     let mut has_explicit = false;
@@ -183,31 +278,39 @@ fn check_select(
         has_explicit,
         has_implicit,
         statement_index,
+        style_policy,
         prior_style,
         issues,
     );
 
     if let Some(having) = &select.having {
-        visit_subqueries_in_expr(having, statement_index, prior_style, issues);
+        visit_subqueries_in_expr(having, statement_index, style_policy, prior_style, issues);
     }
     if let Some(qualify) = &select.qualify {
-        visit_subqueries_in_expr(qualify, statement_index, prior_style, issues);
+        visit_subqueries_in_expr(qualify, statement_index, style_policy, prior_style, issues);
     }
 
     for sort_expr in &select.sort_by {
-        visit_subqueries_in_expr(&sort_expr.expr, statement_index, prior_style, issues);
+        visit_subqueries_in_expr(
+            &sort_expr.expr,
+            statement_index,
+            style_policy,
+            prior_style,
+            issues,
+        );
     }
 }
 
 fn check_table_factor(
     table_factor: &TableFactor,
     statement_index: usize,
+    style_policy: GroupByAndOrderByStylePolicy,
     prior_style: &mut Option<ReferenceStyle>,
     issues: &mut Vec<Issue>,
 ) {
     match table_factor {
         TableFactor::Derived { subquery, .. } => {
-            check_query(subquery, statement_index, prior_style, issues);
+            check_query(subquery, statement_index, style_policy, prior_style, issues);
         }
         TableFactor::NestedJoin {
             table_with_joins, ..
@@ -215,20 +318,33 @@ fn check_table_factor(
             check_table_factor(
                 &table_with_joins.relation,
                 statement_index,
+                style_policy,
                 prior_style,
                 issues,
             );
             for join in &table_with_joins.joins {
-                check_table_factor(&join.relation, statement_index, prior_style, issues);
+                check_table_factor(
+                    &join.relation,
+                    statement_index,
+                    style_policy,
+                    prior_style,
+                    issues,
+                );
                 if let Some(on_expr) = join_on_expr(&join.join_operator) {
-                    visit_subqueries_in_expr(on_expr, statement_index, prior_style, issues);
+                    visit_subqueries_in_expr(
+                        on_expr,
+                        statement_index,
+                        style_policy,
+                        prior_style,
+                        issues,
+                    );
                 }
             }
         }
         TableFactor::Pivot { table, .. }
         | TableFactor::Unpivot { table, .. }
         | TableFactor::MatchRecognize { table, .. } => {
-            check_table_factor(table, statement_index, prior_style, issues)
+            check_table_factor(table, statement_index, style_policy, prior_style, issues)
         }
         _ => {}
     }
@@ -237,6 +353,7 @@ fn check_table_factor(
 fn visit_subqueries_in_expr(
     expr: &Expr,
     statement_index: usize,
+    style_policy: GroupByAndOrderByStylePolicy,
     prior_style: &mut Option<ReferenceStyle>,
     issues: &mut Vec<Issue>,
 ) {
@@ -244,40 +361,40 @@ fn visit_subqueries_in_expr(
         Expr::Subquery(query)
         | Expr::Exists {
             subquery: query, ..
-        } => check_query(query, statement_index, prior_style, issues),
+        } => check_query(query, statement_index, style_policy, prior_style, issues),
         Expr::InSubquery {
             expr: inner,
             subquery,
             ..
         } => {
-            visit_subqueries_in_expr(inner, statement_index, prior_style, issues);
-            check_query(subquery, statement_index, prior_style, issues);
+            visit_subqueries_in_expr(inner, statement_index, style_policy, prior_style, issues);
+            check_query(subquery, statement_index, style_policy, prior_style, issues);
         }
         Expr::BinaryOp { left, right, .. }
         | Expr::AnyOp { left, right, .. }
         | Expr::AllOp { left, right, .. } => {
-            visit_subqueries_in_expr(left, statement_index, prior_style, issues);
-            visit_subqueries_in_expr(right, statement_index, prior_style, issues);
+            visit_subqueries_in_expr(left, statement_index, style_policy, prior_style, issues);
+            visit_subqueries_in_expr(right, statement_index, style_policy, prior_style, issues);
         }
         Expr::UnaryOp { expr: inner, .. }
         | Expr::Nested(inner)
         | Expr::IsNull(inner)
         | Expr::IsNotNull(inner)
         | Expr::Cast { expr: inner, .. } => {
-            visit_subqueries_in_expr(inner, statement_index, prior_style, issues);
+            visit_subqueries_in_expr(inner, statement_index, style_policy, prior_style, issues);
         }
         Expr::InList { expr, list, .. } => {
-            visit_subqueries_in_expr(expr, statement_index, prior_style, issues);
+            visit_subqueries_in_expr(expr, statement_index, style_policy, prior_style, issues);
             for item in list {
-                visit_subqueries_in_expr(item, statement_index, prior_style, issues);
+                visit_subqueries_in_expr(item, statement_index, style_policy, prior_style, issues);
             }
         }
         Expr::Between {
             expr, low, high, ..
         } => {
-            visit_subqueries_in_expr(expr, statement_index, prior_style, issues);
-            visit_subqueries_in_expr(low, statement_index, prior_style, issues);
-            visit_subqueries_in_expr(high, statement_index, prior_style, issues);
+            visit_subqueries_in_expr(expr, statement_index, style_policy, prior_style, issues);
+            visit_subqueries_in_expr(low, statement_index, style_policy, prior_style, issues);
+            visit_subqueries_in_expr(high, statement_index, style_policy, prior_style, issues);
         }
         Expr::Case {
             operand,
@@ -286,14 +403,38 @@ fn visit_subqueries_in_expr(
             ..
         } => {
             if let Some(operand) = operand {
-                visit_subqueries_in_expr(operand, statement_index, prior_style, issues);
+                visit_subqueries_in_expr(
+                    operand,
+                    statement_index,
+                    style_policy,
+                    prior_style,
+                    issues,
+                );
             }
             for when in conditions {
-                visit_subqueries_in_expr(&when.condition, statement_index, prior_style, issues);
-                visit_subqueries_in_expr(&when.result, statement_index, prior_style, issues);
+                visit_subqueries_in_expr(
+                    &when.condition,
+                    statement_index,
+                    style_policy,
+                    prior_style,
+                    issues,
+                );
+                visit_subqueries_in_expr(
+                    &when.result,
+                    statement_index,
+                    style_policy,
+                    prior_style,
+                    issues,
+                );
             }
             if let Some(otherwise) = else_result {
-                visit_subqueries_in_expr(otherwise, statement_index, prior_style, issues);
+                visit_subqueries_in_expr(
+                    otherwise,
+                    statement_index,
+                    style_policy,
+                    prior_style,
+                    issues,
+                );
             }
         }
         Expr::Function(function) => {
@@ -304,28 +445,53 @@ fn visit_subqueries_in_expr(
                         | FunctionArg::Named {
                             arg: FunctionArgExpr::Expr(expr),
                             ..
-                        } => visit_subqueries_in_expr(expr, statement_index, prior_style, issues),
+                        } => visit_subqueries_in_expr(
+                            expr,
+                            statement_index,
+                            style_policy,
+                            prior_style,
+                            issues,
+                        ),
                         _ => {}
                     }
                 }
             }
 
             if let Some(filter) = &function.filter {
-                visit_subqueries_in_expr(filter, statement_index, prior_style, issues);
+                visit_subqueries_in_expr(
+                    filter,
+                    statement_index,
+                    style_policy,
+                    prior_style,
+                    issues,
+                );
             }
 
             for order_expr in &function.within_group {
-                visit_subqueries_in_expr(&order_expr.expr, statement_index, prior_style, issues);
+                visit_subqueries_in_expr(
+                    &order_expr.expr,
+                    statement_index,
+                    style_policy,
+                    prior_style,
+                    issues,
+                );
             }
 
             if let Some(WindowType::WindowSpec(spec)) = &function.over {
                 for expr in &spec.partition_by {
-                    visit_subqueries_in_expr(expr, statement_index, prior_style, issues);
+                    visit_subqueries_in_expr(
+                        expr,
+                        statement_index,
+                        style_policy,
+                        prior_style,
+                        issues,
+                    );
                 }
                 for order_expr in &spec.order_by {
                     visit_subqueries_in_expr(
                         &order_expr.expr,
                         statement_index,
+                        style_policy,
                         prior_style,
                         issues,
                     );
@@ -364,6 +530,7 @@ fn apply_consistent_style_policy(
     has_explicit: bool,
     has_implicit: bool,
     statement_index: usize,
+    style_policy: GroupByAndOrderByStylePolicy,
     prior_style: &mut Option<ReferenceStyle>,
     issues: &mut Vec<Issue>,
 ) {
@@ -379,6 +546,32 @@ fn apply_consistent_style_policy(
             )
             .with_statement(statement_index),
         );
+        return;
+    }
+
+    if matches!(style_policy, GroupByAndOrderByStylePolicy::Explicit) && has_implicit {
+        issues.push(
+            Issue::warning(
+                issue_codes::LINT_AM_006,
+                "Inconsistent column references in 'GROUP BY/ORDER BY' clauses.",
+            )
+            .with_statement(statement_index),
+        );
+        return;
+    }
+
+    if matches!(style_policy, GroupByAndOrderByStylePolicy::Implicit) && has_explicit {
+        issues.push(
+            Issue::warning(
+                issue_codes::LINT_AM_006,
+                "Inconsistent column references in 'GROUP BY/ORDER BY' clauses.",
+            )
+            .with_statement(statement_index),
+        );
+        return;
+    }
+
+    if !matches!(style_policy, GroupByAndOrderByStylePolicy::Consistent) {
         return;
     }
 
@@ -407,11 +600,12 @@ fn apply_consistent_style_policy(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::linter::config::LintConfig;
     use crate::parser::parse_sql;
 
     fn run(sql: &str) -> Vec<Issue> {
         let statements = parse_sql(sql).expect("parse");
-        let rule = AmbiguousColumnRefs;
+        let rule = AmbiguousColumnRefs::default();
         statements
             .iter()
             .enumerate()
@@ -529,5 +723,53 @@ mod tests {
     fn ignores_statements_without_group_or_order_references() {
         let issues = run("SELECT a.id, name FROM a");
         assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn explicit_policy_flags_implicit_group_by_position() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "ambiguous.column_references".to_string(),
+                serde_json::json!({"group_by_and_order_by_style": "explicit"}),
+            )]),
+        };
+        let rule = AmbiguousColumnRefs::from_config(&config);
+        let sql = "SELECT foo, bar FROM fake_table GROUP BY 1, 2";
+        let statements = parse_sql(sql).expect("parse");
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert_eq!(issues.len(), 1);
+    }
+
+    #[test]
+    fn implicit_policy_flags_explicit_group_by_reference() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "LINT_AM_006".to_string(),
+                serde_json::json!({"group_by_and_order_by_style": "implicit"}),
+            )]),
+        };
+        let rule = AmbiguousColumnRefs::from_config(&config);
+        let sql = "SELECT foo, bar FROM fake_table GROUP BY foo, bar";
+        let statements = parse_sql(sql).expect("parse");
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert_eq!(issues.len(), 1);
     }
 }

@@ -3,13 +3,32 @@
 //! SQLFluff AL07 parity (current scope): single-source SELECT queries should
 //! not alias base tables unnecessarily.
 
+use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
 use sqlparser::ast::{Select, Statement, TableFactor};
 
 use super::semantic_helpers::{select_source_count, visit_selects_in_statement};
 
-pub struct AliasingForbidSingleTable;
+pub struct AliasingForbidSingleTable {
+    force_enable: bool,
+}
+
+impl AliasingForbidSingleTable {
+    pub fn from_config(config: &LintConfig) -> Self {
+        Self {
+            force_enable: config
+                .rule_option_bool(issue_codes::LINT_AL_007, "force_enable")
+                .unwrap_or(true),
+        }
+    }
+}
+
+impl Default for AliasingForbidSingleTable {
+    fn default() -> Self {
+        Self { force_enable: true }
+    }
+}
 
 impl LintRule for AliasingForbidSingleTable {
     fn code(&self) -> &'static str {
@@ -25,6 +44,10 @@ impl LintRule for AliasingForbidSingleTable {
     }
 
     fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+        if !self.force_enable {
+            return Vec::new();
+        }
+
         let mut violations = 0usize;
 
         visit_selects_in_statement(statement, &mut |select| {
@@ -63,7 +86,7 @@ mod tests {
 
     fn run(sql: &str) -> Vec<Issue> {
         let statements = parse_sql(sql).expect("parse");
-        let rule = AliasingForbidSingleTable;
+        let rule = AliasingForbidSingleTable::default();
         statements
             .iter()
             .enumerate()
@@ -109,5 +132,29 @@ mod tests {
     fn flags_nested_single_table_alias() {
         let issues = run("SELECT * FROM (SELECT * FROM users u) sub");
         assert_eq!(issues.len(), 1);
+    }
+
+    #[test]
+    fn force_enable_false_disables_rule() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "aliasing.forbid".to_string(),
+                serde_json::json!({"force_enable": false}),
+            )]),
+        };
+        let rule = AliasingForbidSingleTable::from_config(&config);
+        let sql = "SELECT * FROM users u";
+        let statements = parse_sql(sql).expect("parse");
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert!(issues.is_empty());
     }
 }
