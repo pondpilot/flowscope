@@ -10,6 +10,7 @@ use sqlparser::ast::Statement;
 pub struct LayoutLongLines {
     max_line_length: usize,
     ignore_comment_lines: bool,
+    ignore_comment_clauses: bool,
 }
 
 impl LayoutLongLines {
@@ -21,6 +22,9 @@ impl LayoutLongLines {
             ignore_comment_lines: config
                 .rule_option_bool(issue_codes::LINT_LT_005, "ignore_comment_lines")
                 .unwrap_or(false),
+            ignore_comment_clauses: config
+                .rule_option_bool(issue_codes::LINT_LT_005, "ignore_comment_clauses")
+                .unwrap_or(false),
         }
     }
 }
@@ -30,6 +34,7 @@ impl Default for LayoutLongLines {
         Self {
             max_line_length: 80,
             ignore_comment_lines: false,
+            ignore_comment_clauses: false,
         }
     }
 }
@@ -52,17 +57,22 @@ impl LintRule for LayoutLongLines {
             return Vec::new();
         }
 
-        long_line_overflow_spans(ctx.sql, self.max_line_length, self.ignore_comment_lines)
-            .into_iter()
-            .map(|(start, end)| {
-                Issue::info(
-                    issue_codes::LINT_LT_005,
-                    "SQL contains excessively long lines.",
-                )
-                .with_statement(ctx.statement_index)
-                .with_span(Span::new(start, end))
-            })
-            .collect()
+        long_line_overflow_spans(
+            ctx.sql,
+            self.max_line_length,
+            self.ignore_comment_lines,
+            self.ignore_comment_clauses,
+        )
+        .into_iter()
+        .map(|(start, end)| {
+            Issue::info(
+                issue_codes::LINT_LT_005,
+                "SQL contains excessively long lines.",
+            )
+            .with_statement(ctx.statement_index)
+            .with_span(Span::new(start, end))
+        })
+        .collect()
     }
 }
 
@@ -70,6 +80,7 @@ fn long_line_overflow_spans(
     sql: &str,
     max_len: usize,
     ignore_comment_lines: bool,
+    ignore_comment_clauses: bool,
 ) -> Vec<(usize, usize)> {
     let bytes = sql.as_bytes();
     let mut spans = Vec::new();
@@ -92,9 +103,18 @@ fn long_line_overflow_spans(
             continue;
         }
 
-        if line.chars().count() > max_len {
+        let effective_line = if ignore_comment_clauses {
+            match comment_clause_start_offset(line) {
+                Some(offset) => &line[..offset],
+                None => line,
+            }
+        } else {
+            line
+        };
+
+        if effective_line.chars().count() > max_len {
             let mut overflow_start = line_end;
-            for (char_idx, (byte_off, _)) in line.char_indices().enumerate() {
+            for (char_idx, (byte_off, _)) in effective_line.char_indices().enumerate() {
                 if char_idx == max_len {
                     overflow_start = line_start + byte_off;
                     break;
@@ -141,6 +161,81 @@ fn line_is_comment_only(line: &str, in_block_comment: &mut bool) -> bool {
     }
 
     false
+}
+
+fn comment_clause_start_offset(line: &str) -> Option<usize> {
+    let bytes = line.as_bytes();
+    let mut idx = 0usize;
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+
+    while idx < bytes.len() {
+        let byte = bytes[idx];
+
+        if in_single_quote {
+            if byte == b'\'' {
+                if idx + 1 < bytes.len() && bytes[idx + 1] == b'\'' {
+                    idx += 2;
+                } else {
+                    in_single_quote = false;
+                    idx += 1;
+                }
+            } else {
+                idx += 1;
+            }
+            continue;
+        }
+
+        if in_double_quote {
+            if byte == b'"' {
+                if idx + 1 < bytes.len() && bytes[idx + 1] == b'"' {
+                    idx += 2;
+                } else {
+                    in_double_quote = false;
+                    idx += 1;
+                }
+            } else {
+                idx += 1;
+            }
+            continue;
+        }
+
+        if byte == b'\'' {
+            in_single_quote = true;
+            idx += 1;
+            continue;
+        }
+
+        if byte == b'"' {
+            in_double_quote = true;
+            idx += 1;
+            continue;
+        }
+
+        if byte == b'#' {
+            return Some(idx);
+        }
+
+        if idx + 1 < bytes.len() && bytes[idx] == b'-' && bytes[idx + 1] == b'-' {
+            return Some(idx);
+        }
+
+        if idx + 1 < bytes.len() && bytes[idx] == b'/' && bytes[idx + 1] == b'*' {
+            if let Some(close_rel) = line[idx + 2..].find("*/") {
+                let close_idx = idx + 2 + close_rel;
+                let remainder = &line[close_idx + 2..];
+                if remainder.trim().is_empty() {
+                    return Some(idx);
+                }
+                idx = close_idx + 2;
+                continue;
+            }
+        }
+
+        idx += 1;
+    }
+
+    None
 }
 
 #[cfg(test)]
@@ -244,5 +339,45 @@ mod tests {
             issues.is_empty(),
             "ignore_comment_lines should suppress long comment-only lines: {issues:?}",
         );
+    }
+
+    #[test]
+    fn ignore_comment_clauses_skips_long_trailing_comment_text() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "layout.long_lines".to_string(),
+                serde_json::json!({
+                    "max_line_length": 20,
+                    "ignore_comment_clauses": true
+                }),
+            )]),
+        };
+        let sql = format!("SELECT 1 -- {}", "x".repeat(120));
+        let issues = run_with_rule(&sql, &LayoutLongLines::from_config(&config));
+        assert!(
+            issues.is_empty(),
+            "ignore_comment_clauses should suppress trailing-comment overflow: {issues:?}",
+        );
+    }
+
+    #[test]
+    fn ignore_comment_clauses_still_flags_long_sql_prefix() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "LINT_LT_005".to_string(),
+                serde_json::json!({
+                    "max_line_length": 20,
+                    "ignore_comment_clauses": true
+                }),
+            )]),
+        };
+        let sql = format!("SELECT {} -- short", "x".repeat(40));
+        let issues = run_with_rule(&sql, &LayoutLongLines::from_config(&config));
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_LT_005);
     }
 }
