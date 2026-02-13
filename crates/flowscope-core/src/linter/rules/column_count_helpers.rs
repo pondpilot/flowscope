@@ -22,7 +22,8 @@ pub(crate) fn build_query_cte_map(query: &Query, outer_ctes: &CteColumnCounts) -
         for cte in &with.cte_tables {
             let cte_name = cte.alias.name.value.to_ascii_uppercase();
             ctes.insert(cte_name.clone(), None);
-            let count = resolve_query_output_columns(&cte.query, &ctes);
+            let count = declared_cte_column_count(cte.alias.columns.len())
+                .or_else(|| resolve_query_output_columns(&cte.query, &ctes));
             ctes.insert(cte_name, count);
         }
     }
@@ -40,12 +41,17 @@ pub(crate) fn build_query_cte_map_strict(
         for cte in &with.cte_tables {
             let cte_name = cte.alias.name.value.to_ascii_uppercase();
             ctes.insert(cte_name.clone(), None);
-            let count = resolve_query_output_columns_strict(&cte.query, &ctes);
+            let count = declared_cte_column_count(cte.alias.columns.len())
+                .or_else(|| resolve_query_output_columns_strict(&cte.query, &ctes));
             ctes.insert(cte_name, count);
         }
     }
 
     ctes
+}
+
+fn declared_cte_column_count(count: usize) -> Option<usize> {
+    (count > 0).then_some(count)
 }
 
 pub(crate) fn resolve_query_output_columns(

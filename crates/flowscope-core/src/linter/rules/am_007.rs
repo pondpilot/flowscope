@@ -209,9 +209,24 @@ mod tests {
     }
 
     #[test]
+    fn resolves_declared_cte_columns_for_set_comparison() {
+        let issues =
+            run("with cte(a, b) as (select * from t) select * from cte union select c, d from t2");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
     fn flags_resolved_cte_wildcard_mismatch() {
         let issues =
             run("with cte as (select a, b, c from t) select * from cte union select d, e from t2");
+        assert_eq!(issues.len(), 1);
+    }
+
+    #[test]
+    fn flags_declared_cte_width_mismatch_for_set_comparison() {
+        let issues = run(
+            "with cte(a, b, c) as (select * from t) select * from cte union select d, e from t2",
+        );
         assert_eq!(issues.len(), 1);
     }
 

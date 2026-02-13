@@ -101,6 +101,12 @@ mod tests {
     }
 
     #[test]
+    fn allows_select_star_from_declared_cte_columns_even_if_query_uses_wildcard() {
+        let issues = run("with cte(a, b) as (select * from t) select * from cte");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
     fn flags_select_star_from_unknown_cte_columns() {
         let issues = run("with cte as (select * from t) select * from cte");
         assert_eq!(issues.len(), 1);

@@ -1180,6 +1180,16 @@ fn lint_am_007_nested_join_alias_wildcard_set_mismatch() {
 }
 
 #[test]
+fn lint_am_007_declared_cte_columns_resolve_set_width() {
+    let issues =
+        run_lint("WITH cte(a, b) AS (SELECT * FROM t) SELECT * FROM cte UNION SELECT c, d FROM t2");
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_AM_007"),
+        "declared CTE column list should resolve set-branch width for AM_007: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_cv_002_count_one() {
     let issues = run_lint("SELECT COUNT(1) FROM t");
     assert!(issues.iter().any(|(code, _)| code == "LINT_CV_004"));
@@ -1444,6 +1454,15 @@ fn lint_am_004_nested_join_alias_known_columns_ok() {
     assert!(
         !issues.iter().any(|(code, _)| code == "LINT_AM_004"),
         "resolved nested-join alias wildcard should not trigger AM_004: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_am_004_declared_cte_columns_known_width_ok() {
+    let issues = run_lint("WITH cte(a, b) AS (SELECT * FROM t) SELECT * FROM cte");
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_AM_004"),
+        "declared CTE column list should resolve wildcard width for AM_004: {issues:?}"
     );
 }
 
