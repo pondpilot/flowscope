@@ -118,6 +118,7 @@ This plan covers three axes:
   - `CV_001` was further upgraded from regex checks to lexer-style operator scanning that ignores comments/quoted strings for mixed `<>`/`!=` detection.
   - `CV_001` now supports `preferred_not_equal_style` (`consistent`/`c_style`/`ansi`) through `lint.ruleConfigs`.
   - `CV_004` now supports `prefer_count_1` / `prefer_count_0` through `lint.ruleConfigs`.
+  - `CV_004` fixer now rewrites both `COUNT(1)` and `COUNT(0)` to `COUNT(*)` under default preference, aligning fix behavior with current violation detection.
   - `CV_006` now supports `multiline_newline` / `require_final_semicolon` through `lint.ruleConfigs`.
   - `CV_007` moved from parity handling to a dedicated core rule module (`cv_007.rs`).
   - `CV_007` was further upgraded to AST-driven statement-shape detection (`Statement::Query` + wrapper `SetExpr::Query`), replacing SQL text `starts_with('(')/ends_with(')')` heuristics.

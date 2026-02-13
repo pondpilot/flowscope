@@ -1964,7 +1964,7 @@ fn fix_function(func: &mut Function, rule_filter: &RuleFilter) {
         }
     }
 
-    if rule_filter.allows(issue_codes::LINT_CV_004) && is_count_one(func) {
+    if rule_filter.allows(issue_codes::LINT_CV_004) && is_count_rowcount_numeric_literal(func) {
         if let FunctionArguments::List(arg_list) = &mut func.args {
             arg_list.args[0] = FunctionArg::Unnamed(FunctionArgExpr::Wildcard);
         }
@@ -1983,7 +1983,7 @@ fn fix_function_arg(arg: &mut FunctionArg, rule_filter: &RuleFilter) {
     }
 }
 
-fn is_count_one(func: &Function) -> bool {
+fn is_count_rowcount_numeric_literal(func: &Function) -> bool {
     if !func.name.to_string().eq_ignore_ascii_case("COUNT") {
         return false;
     }
@@ -2005,7 +2005,7 @@ fn is_count_one(func: &Function) -> bool {
         FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(ValueWithSpan {
             value: Value::Number(n, _),
             ..
-        }))) if n == "1"
+        }))) if n == "1" || n == "0"
     )
 }
 
@@ -2877,8 +2877,7 @@ mod tests {
             ),
             ("SELECT COUNT(*) FROM t", 0, 0, 0),
             ("SELECT COUNT(id) FROM t", 0, 0, 0),
-            // CV_004 now flags COUNT(0), but the fixer only rewrites COUNT(1).
-            ("SELECT COUNT(0) FROM t", 1, 1, 0),
+            ("SELECT COUNT(0) FROM t", 1, 0, 1),
             ("SELECT COUNT(DISTINCT id) FROM t", 0, 0, 0),
         ];
 
