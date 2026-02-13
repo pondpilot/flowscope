@@ -51,7 +51,7 @@ fn unused_join_count_for_select(select: &Select) -> usize {
     }
 
     let mut joined_sources = joined_sources(select);
-    if joined_sources.len() <= 1 {
+    if joined_sources.is_empty() {
         return 0;
     }
 
@@ -103,10 +103,6 @@ fn joined_sources(select: &Select) -> HashSet<String> {
     let mut joined_sources = HashSet::new();
 
     for table in &select.from {
-        if let Some(name) = table_factor_reference_name(&table.relation) {
-            joined_sources.insert(name);
-        }
-
         for join in &table.joins {
             if !is_tracked_join(&join.join_operator) {
                 continue;
@@ -267,6 +263,12 @@ mod tests {
     #[test]
     fn allows_outer_join_when_joined_source_is_referenced() {
         let issues = run("select widget.id, inventor.id from widget left join inventor on widget.inventor_id = inventor.id");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn does_not_flag_base_from_source_as_unused_with_using_join() {
+        let issues = run("select c.id from b left join c using(id)");
         assert!(issues.is_empty());
     }
 

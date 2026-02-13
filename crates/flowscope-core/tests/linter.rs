@@ -1118,6 +1118,15 @@ fn lint_st_011_unqualified_wildcard_counts_as_reference() {
 }
 
 #[test]
+fn lint_st_011_does_not_flag_base_from_with_using_join() {
+    let issues = run_lint("SELECT b.id FROM a LEFT JOIN b USING(id)");
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_ST_011"),
+        "base FROM source should not be considered an unused joined source: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_lt_007_cte_bracket_missing() {
     let issues = run_lint("SELECT 'WITH cte AS SELECT 1' AS sql_snippet");
     assert!(
