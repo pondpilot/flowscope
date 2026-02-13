@@ -171,6 +171,7 @@ Move style-oriented checks to lexical engine:
 - [x] `LINT_ST_002` now follows SQLFluff ST02 detection semantics via AST CASE analysis (repeated equality checks on a common operand) and includes fixer parity via AST CASE rewrites.
 - [x] `LINT_ST_008` now follows SQLFluff ST08 detection semantics via AST SELECT analysis for `DISTINCT(<expr>)` and includes fixer parity via AST SELECT rewrite to `SELECT DISTINCT <expr>`.
 - [x] `LINT_AL_009` now follows SQLFluff AL09 core detection semantics via AST projection analysis for identifier/qualified-identifier self-alias patterns (`col AS col`).
+- [x] `LINT_AL_001` now uses token-stream relation parsing (`FROM`/`JOIN` table factors) for implicit table-alias detection, replacing regex-based matching.
 - [x] `LINT_AL_002` now uses token-located SELECT-clause item analysis for implicit alias detection, replacing regex-based clause extraction.
 - [x] `LINT_AL_006` now runs as a dedicated AST rule via table-factor alias traversal (current behavior preserves the existing max-length heuristic; SQLFluff config parity is pending).
 - [x] `LINT_AL_007` now runs as a dedicated AST rule via single-source SELECT analysis for unnecessary base-table aliases (current scope remains intentionally conservative).

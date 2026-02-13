@@ -29,7 +29,7 @@ FlowScope source-of-truth used for mapping:
 
 | Bundle | SQLFluff Rule | Code | Core | SQLFluff Fix | FlowScope Status | FlowScope Rule | FlowScope Fix | Notes |
 |---|---|---|---|---|---|---|---|---|
-| Aliasing | `aliasing.table` | `AL01` | No | Yes | Implemented (partial) | `LINT_AL_001` | No | Dedicated core heuristic rule in `crates/flowscope-core/src/linter/rules/al_001.rs`; semantics remain narrower than SQLFluff in edge cases (configuration parity still pending). |
+| Aliasing | `aliasing.table` | `AL01` | No | Yes | Implemented (partial) | `LINT_AL_001` | No | Dedicated core rule in `crates/flowscope-core/src/linter/rules/al_001.rs`; now uses token-stream relation parsing (`FROM`/`JOIN` table factors) for implicit-alias detection instead of regex matching, while semantics remain narrower than SQLFluff in edge cases (configuration parity still pending). |
 | Aliasing | `aliasing.column` | `AL02` | Yes | No | Implemented (partial) | `LINT_AL_002` | No | Dedicated core rule in `crates/flowscope-core/src/linter/rules/al_002.rs`; now uses token-located SELECT-clause item analysis (instead of regex extraction) while semantics remain narrower than SQLFluff in edge cases (configuration parity still pending). |
 | Aliasing | `aliasing.expression` | `AL03` | Yes | No | Implemented (partial) | `LINT_AL_003` | No | Covers implicit expression aliasing; no allow_scalar configuration. |
 | Aliasing | `aliasing.unique.table` | `AL04` | Yes | No | Implemented (partial) | `LINT_AL_004` | No | AST rule implemented in `crates/flowscope-core/src/linter/rules/al_004.rs`; semantics are narrower than SQLFluff for some advanced clause scopes. |

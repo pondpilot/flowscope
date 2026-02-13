@@ -56,7 +56,20 @@ fn keyword_newline_violation_span(sql: &str) -> Option<(usize, usize)> {
         let Token::Word(word) = &token.token else {
             return None;
         };
-        (word.keyword == Keyword::SELECT).then_some(token.span.start.line)
+        if word.keyword != Keyword::SELECT {
+            return None;
+        }
+
+        let select_start = line_col_to_offset(
+            sql,
+            token.span.start.line as usize,
+            token.span.start.column as usize,
+        )?;
+        let line_start = sql[..select_start].rfind('\n').map_or(0, |idx| idx + 1);
+        sql[line_start..select_start]
+            .trim()
+            .is_empty()
+            .then_some(token.span.start.line)
     })?;
 
     let clauses = major_clause_occurrences(sql, &tokens)?;
