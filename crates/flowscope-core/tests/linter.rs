@@ -769,6 +769,34 @@ fn lint_rule_config_aliasing_forbid_force_enable_false() {
 }
 
 #[test]
+fn lint_al_007_flags_unnecessary_aliases_in_multi_source_non_self_join_query() {
+    let issues = run_lint("SELECT * FROM users u JOIN orders o ON u.id = o.user_id");
+    let al07_count = issues
+        .iter()
+        .filter(|(code, _)| code == "LINT_AL_007")
+        .count();
+    assert_eq!(
+        al07_count, 2,
+        "both non-self-join table aliases should trigger AL_007: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_al_007_allows_self_join_aliases_but_flags_extra_unique_alias() {
+    let issues = run_lint(
+        "SELECT * FROM users u1 JOIN users u2 ON u1.id = u2.id JOIN orders o ON o.user_id = u1.id",
+    );
+    let al07_count = issues
+        .iter()
+        .filter(|(code, _)| code == "LINT_AL_007")
+        .count();
+    assert_eq!(
+        al07_count, 1,
+        "self-join aliases should be allowed while unrelated unique aliases are still flagged: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_rule_config_ambiguous_join_outer_mode() {
     let issues = run_lint_with_config(
         "SELECT * FROM foo LEFT JOIN bar ON foo.id = bar.id",
@@ -1446,6 +1474,7 @@ fn lint_clean_complex_query_no_issues() {
                 "LINT_LT_008".to_string(),
                 "LINT_LT_005".to_string(),
                 "LINT_AL_001".to_string(),
+                "LINT_AL_007".to_string(),
                 "LINT_AM_005".to_string(),
                 "LINT_ST_011".to_string(),
             ],

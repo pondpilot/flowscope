@@ -1,14 +1,15 @@
 //! LINT_AL_007: Forbid unnecessary alias.
 //!
-//! SQLFluff AL07 parity (current scope): single-source SELECT queries should
-//! not alias base tables unnecessarily.
+//! SQLFluff AL07 parity: base-table aliases are unnecessary unless they are
+//! needed to disambiguate repeated references to the same table (self-joins).
 
 use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
-use sqlparser::ast::{Select, Statement, TableFactor};
+use sqlparser::ast::{Select, Statement, TableFactor, TableWithJoins};
+use std::collections::HashMap;
 
-use super::semantic_helpers::{select_source_count, visit_selects_in_statement};
+use super::semantic_helpers::visit_selects_in_statement;
 
 pub struct AliasingForbidSingleTable {
     force_enable: bool,
@@ -51,9 +52,7 @@ impl LintRule for AliasingForbidSingleTable {
         let mut violations = 0usize;
 
         visit_selects_in_statement(statement, &mut |select| {
-            if has_unnecessary_single_table_alias(select) {
-                violations += 1;
-            }
+            violations += unnecessary_table_alias_count(select);
         });
 
         (0..violations)
@@ -68,15 +67,76 @@ impl LintRule for AliasingForbidSingleTable {
     }
 }
 
-fn has_unnecessary_single_table_alias(select: &Select) -> bool {
-    if select_source_count(select) != 1 || select.from.len() != 1 {
-        return false;
+#[derive(Clone)]
+struct TableAliasCandidate {
+    canonical_name: String,
+    has_alias: bool,
+}
+
+fn unnecessary_table_alias_count(select: &Select) -> usize {
+    let mut candidates = Vec::new();
+    for table in &select.from {
+        collect_table_alias_candidates_from_table_with_joins(table, &mut candidates);
     }
 
-    matches!(
-        &select.from[0].relation,
-        TableFactor::Table { alias: Some(_), .. }
-    )
+    if candidates.is_empty() {
+        return 0;
+    }
+
+    let mut table_occurrence_counts: HashMap<String, usize> = HashMap::new();
+    for candidate in &candidates {
+        *table_occurrence_counts
+            .entry(candidate.canonical_name.clone())
+            .or_insert(0) += 1;
+    }
+
+    let is_multi_source_scope = candidates.len() > 1;
+
+    candidates
+        .iter()
+        .filter(|candidate| {
+            candidate.has_alias
+                && (!is_multi_source_scope
+                    || table_occurrence_counts
+                        .get(&candidate.canonical_name)
+                        .copied()
+                        .unwrap_or(0)
+                        == 1)
+        })
+        .count()
+}
+
+fn collect_table_alias_candidates_from_table_with_joins(
+    table: &TableWithJoins,
+    candidates: &mut Vec<TableAliasCandidate>,
+) {
+    collect_table_alias_candidates_from_table_factor(&table.relation, candidates);
+    for join in &table.joins {
+        collect_table_alias_candidates_from_table_factor(&join.relation, candidates);
+    }
+}
+
+fn collect_table_alias_candidates_from_table_factor(
+    table_factor: &TableFactor,
+    candidates: &mut Vec<TableAliasCandidate>,
+) {
+    match table_factor {
+        TableFactor::Table { name, alias, .. } => candidates.push(TableAliasCandidate {
+            canonical_name: name.to_string().to_ascii_uppercase(),
+            has_alias: alias.is_some(),
+        }),
+        TableFactor::NestedJoin {
+            table_with_joins, ..
+        } => {
+            collect_table_alias_candidates_from_table_with_joins(table_with_joins, candidates);
+        }
+        TableFactor::Pivot { table, .. }
+        | TableFactor::Unpivot { table, .. }
+        | TableFactor::MatchRecognize { table, .. } => {
+            collect_table_alias_candidates_from_table_factor(table, candidates);
+        }
+        _ => {}
+    }
 }
 
 #[cfg(test)]
@@ -119,7 +179,21 @@ mod tests {
     #[test]
     fn does_not_flag_multi_source_query() {
         let issues = run("SELECT * FROM users u JOIN orders o ON u.id = o.user_id");
+        assert_eq!(issues.len(), 2);
+    }
+
+    #[test]
+    fn allows_self_join_aliases() {
+        let issues = run("SELECT * FROM users u1 JOIN users u2 ON u1.id = u2.id");
         assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn flags_non_self_join_alias_in_self_join_scope() {
+        let issues = run(
+            "SELECT * FROM users u1 JOIN users u2 ON u1.id = u2.id JOIN orders o ON o.user_id = u1.id",
+        );
+        assert_eq!(issues.len(), 1);
     }
 
     #[test]
