@@ -5,7 +5,6 @@
 
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
-use regex::Regex;
 use sqlparser::ast::Statement;
 
 pub struct ConventionNotEqual;
@@ -24,8 +23,7 @@ impl LintRule for ConventionNotEqual {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let sql = ctx.statement_sql();
-        if has_re(sql, r"<>") && has_re(sql, r"!=") {
+        if statement_mixes_not_equal_styles(ctx.statement_sql()) {
             vec![Issue::info(
                 issue_codes::LINT_CV_001,
                 "Use consistent not-equal style (prefer !=).",
@@ -37,8 +35,87 @@ impl LintRule for ConventionNotEqual {
     }
 }
 
-fn has_re(haystack: &str, pattern: &str) -> bool {
-    Regex::new(pattern).expect("valid regex").is_match(haystack)
+fn statement_mixes_not_equal_styles(sql: &str) -> bool {
+    let mut chars = sql.char_indices().peekable();
+    let mut saw_angle_style = false;
+    let mut saw_bang_style = false;
+
+    enum ScanState {
+        Normal,
+        SingleQuote,
+        DoubleQuote,
+        LineComment,
+        BlockComment,
+    }
+
+    let mut state = ScanState::Normal;
+
+    while let Some((idx, ch)) = chars.next() {
+        match state {
+            ScanState::Normal => match ch {
+                '\'' => state = ScanState::SingleQuote,
+                '"' => state = ScanState::DoubleQuote,
+                '-' => {
+                    if sql[idx + ch.len_utf8()..].starts_with('-') {
+                        chars.next();
+                        state = ScanState::LineComment;
+                    }
+                }
+                '/' => {
+                    if sql[idx + ch.len_utf8()..].starts_with('*') {
+                        chars.next();
+                        state = ScanState::BlockComment;
+                    }
+                }
+                '<' => {
+                    if sql[idx + ch.len_utf8()..].starts_with('>') {
+                        saw_angle_style = true;
+                    }
+                }
+                '!' => {
+                    if sql[idx + ch.len_utf8()..].starts_with('=') {
+                        saw_bang_style = true;
+                    }
+                }
+                _ => {}
+            },
+            ScanState::SingleQuote => {
+                if ch == '\'' {
+                    if sql[idx + ch.len_utf8()..].starts_with('\'') {
+                        chars.next();
+                    } else {
+                        state = ScanState::Normal;
+                    }
+                }
+            }
+            ScanState::DoubleQuote => {
+                if ch == '"' {
+                    if sql[idx + ch.len_utf8()..].starts_with('"') {
+                        chars.next();
+                    } else {
+                        state = ScanState::Normal;
+                    }
+                }
+            }
+            ScanState::LineComment => {
+                if ch == '\n' {
+                    state = ScanState::Normal;
+                }
+            }
+            ScanState::BlockComment => {
+                if ch == '*' && sql[idx + ch.len_utf8()..].starts_with('/') {
+                    chars.next();
+                    state = ScanState::Normal;
+                }
+            }
+        }
+
+        if saw_angle_style && saw_bang_style {
+            return true;
+        }
+    }
+
+    false
 }
 
 #[cfg(test)]
@@ -76,5 +153,15 @@ mod tests {
     fn does_not_flag_single_not_equal_style() {
         assert!(run("SELECT * FROM t WHERE a <> b").is_empty());
         assert!(run("SELECT * FROM t WHERE a != b").is_empty());
+    }
+
+    #[test]
+    fn does_not_flag_not_equal_tokens_inside_string_literal() {
+        assert!(run("SELECT 'a <> b and c != d' AS txt FROM t").is_empty());
+    }
+
+    #[test]
+    fn does_not_flag_not_equal_tokens_inside_comments() {
+        assert!(run("SELECT * FROM t -- a <> b and c != d").is_empty());
     }
 }
