@@ -693,6 +693,25 @@ fn lint_rule_config_references_keywords_quoted_policy_all() {
 }
 
 #[test]
+fn lint_rule_config_references_special_chars_additional_allowed() {
+    let issues = run_lint_with_config(
+        "SELECT \"bad-name\" FROM t",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "references.special_chars".to_string(),
+                serde_json::json!({"additional_allowed_characters": "-"}),
+            )]),
+        },
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_RF_005"),
+        "additional_allowed_characters should suppress RF_005 for configured chars: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_rule_config_aliasing_forbid_force_enable_false() {
     let issues = run_lint_with_config(
         "SELECT * FROM users u",
@@ -1551,6 +1570,18 @@ fn lint_rf_004_keyword_cte_identifier() {
             .any(|(code, _)| code == issue_codes::LINT_RF_004),
         "expected {} for keyword CTE identifiers: {issues:?}",
         issue_codes::LINT_RF_004,
+    );
+}
+
+#[test]
+fn lint_rf_005_special_chars() {
+    let issues = run_lint("SELECT \"bad-name\" FROM t");
+    assert!(
+        issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_RF_005),
+        "expected {} for quoted identifier special chars: {issues:?}",
+        issue_codes::LINT_RF_005,
     );
 }
 

@@ -89,6 +89,7 @@ This plan covers three axes:
   - `RF_003` now supports `single_table_references` (`consistent`/`qualified`/`unqualified`) and `force_enable` through `lint.ruleConfigs`, and now treats qualified wildcards (`alias.*`) as qualified references in consistency checks.
   - `RF_005` moved from parity handling to a dedicated core rule module (`rf_005.rs`).
   - `RF_005` was further upgraded to AST-driven quoted-identifier traversal, replacing raw quote-regex scanning.
+  - `RF_005` now supports `quoted_identifiers_policy` / `unquoted_identifiers_policy`, `additional_allowed_characters`, and `ignore_words` / `ignore_words_regex` through `lint.ruleConfigs`.
   - `RF_006` moved from parity handling to a dedicated core rule module (`rf_006.rs`).
   - `RF_006` was further upgraded to AST-driven quoted-identifier traversal, replacing raw quote-regex scanning.
   - `RF_006` now supports `prefer_quoted_identifiers` / `case_sensitive` through `lint.ruleConfigs`.
