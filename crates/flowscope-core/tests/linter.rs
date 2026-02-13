@@ -2386,7 +2386,7 @@ fn lint_sqlfluff_parity_rule_smoke_cases() {
             "LINT_ST_004",
             "SELECT CASE WHEN species = 'Rat' THEN 'Squeak' ELSE CASE WHEN species = 'Dog' THEN 'Woof' END END FROM t",
         ),
-        ("LINT_ST_005", "SELECT * FROM (SELECT * FROM t) sub"),
+        ("LINT_ST_005", "SELECT * FROM t JOIN (SELECT * FROM u) sub ON t.id = sub.id"),
         ("LINT_ST_006", "SELECT a + 1, a FROM t"),
         ("LINT_ST_008", "SELECT DISTINCT(a) FROM t"),
         ("LINT_ST_009", "SELECT * FROM a x JOIN b y ON y.id = x.id"),

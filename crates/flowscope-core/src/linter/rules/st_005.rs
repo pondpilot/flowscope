@@ -20,7 +20,7 @@ impl ForbidSubqueryIn {
     fn from_config(config: &LintConfig) -> Self {
         match config
             .rule_option_str(issue_codes::LINT_ST_005, "forbid_subquery_in")
-            .unwrap_or("both")
+            .unwrap_or("join")
             .to_ascii_lowercase()
             .as_str()
         {
@@ -54,7 +54,7 @@ impl StructureSubquery {
 impl Default for StructureSubquery {
     fn default() -> Self {
         Self {
-            forbid_subquery_in: ForbidSubqueryIn::Both,
+            forbid_subquery_in: ForbidSubqueryIn::Join,
         }
     }
 }
@@ -142,15 +142,15 @@ mod tests {
     }
 
     #[test]
-    fn flags_subquery_in_from() {
+    fn default_does_not_flag_subquery_in_from() {
         let issues = run("SELECT * FROM (SELECT * FROM t) sub");
-        assert!(issues
+        assert!(!issues
             .iter()
             .any(|issue| issue.code == issue_codes::LINT_ST_005));
     }
 
     #[test]
-    fn flags_subquery_in_join() {
+    fn default_flags_subquery_in_join() {
         let issues = run("SELECT * FROM t JOIN (SELECT * FROM u) sub ON t.id = sub.id");
         assert!(issues
             .iter()

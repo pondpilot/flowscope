@@ -3184,7 +3184,7 @@ mod tests {
             ),
             (
                 issue_codes::LINT_ST_005,
-                "SELECT * FROM (SELECT * FROM t) sub",
+                "SELECT * FROM t JOIN (SELECT * FROM u) sub ON t.id = sub.id",
             ),
             (issue_codes::LINT_ST_006, "SELECT a + 1, a FROM t"),
             (
