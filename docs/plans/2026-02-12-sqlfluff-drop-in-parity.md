@@ -109,6 +109,7 @@ This plan covers three axes:
   - `LT_004` moved from parity handling to a dedicated core rule module (`lt_004.rs`).
   - `LT_004` was further upgraded from regex scanning to tokenizer-driven comma-spacing checks.
   - `LT_001` moved from parity handling to a dedicated core rule module (`lt_001.rs`).
+  - `LT_001` was further upgraded from regex matching to deterministic layout-pattern scanners (JSON arrow/type/index/numeric-scale/EXISTS line form).
   - `LT_005` moved from parity handling to a dedicated core rule module (`lt_005.rs`).
   - `LT_006` moved from parity handling to a dedicated core rule module (`lt_006.rs`).
   - `LT_006` was further upgraded from regex masking to token-stream function-call spacing checks with context guards.

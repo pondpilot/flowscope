@@ -5,7 +5,6 @@
 
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
-use regex::Regex;
 use sqlparser::ast::Statement;
 
 pub struct LayoutSpacing;
@@ -24,108 +23,183 @@ impl LintRule for LayoutSpacing {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let sql = ctx.statement_sql();
-        let mut issues = Vec::new();
-
-        for (matched, start, end) in
-            capture_group_with_spans(sql, r"(?i)\b[A-Za-z_][A-Za-z0-9_\.]*->>'[^']*'", 0)
-        {
-            if let Some(op_idx) = matched.find("->>") {
-                let left_start = start + op_idx;
-                let right_start = left_start + 3;
-                let left_end = (left_start + 1).min(end);
-                let right_end = (right_start + 1).min(end);
-
-                if left_start < left_end {
-                    issues.push(
-                        Issue::info(
-                            issue_codes::LINT_LT_001,
-                            "Operator spacing appears inconsistent.",
-                        )
-                        .with_statement(ctx.statement_index)
-                        .with_span(ctx.span_from_statement_offset(left_start, left_end)),
-                    );
-                }
-                if right_start < right_end {
-                    issues.push(
-                        Issue::info(
-                            issue_codes::LINT_LT_001,
-                            "Operator spacing appears inconsistent.",
-                        )
-                        .with_statement(ctx.statement_index)
-                        .with_span(ctx.span_from_statement_offset(right_start, right_end)),
-                    );
-                }
-            }
-        }
-
-        for (_matched, _start, end) in capture_group_with_spans(sql, r"(?i)\btext\[", 0) {
-            let bracket_start = end.saturating_sub(1);
-            if bracket_start < end {
-                issues.push(
-                    Issue::info(
-                        issue_codes::LINT_LT_001,
-                        "Operator spacing appears inconsistent.",
-                    )
-                    .with_statement(ctx.statement_index)
-                    .with_span(ctx.span_from_statement_offset(bracket_start, end)),
-                );
-            }
-        }
-
-        for (_matched, start, _end) in capture_group_with_spans(sql, r",\d", 0) {
-            let number_start = start + 1;
-            issues.push(
+        spacing_violation_spans(ctx.statement_sql())
+            .into_iter()
+            .map(|(start, end)| {
                 Issue::info(
                     issue_codes::LINT_LT_001,
                     "Operator spacing appears inconsistent.",
                 )
                 .with_statement(ctx.statement_index)
-                .with_span(ctx.span_from_statement_offset(number_start, number_start + 1)),
-            );
-        }
-
-        for (matched, start, end) in capture_group_with_spans(sql, r"(?im)^\s*exists\s+\(", 0) {
-            let line_start = sql[..start].rfind('\n').map_or(0, |idx| idx + 1);
-            let prev_token = sql[..line_start]
-                .lines()
-                .rev()
-                .map(str::trim)
-                .find(|line| !line.is_empty() && !line.starts_with("--"));
-            if matches!(prev_token, Some("OR") | Some("AND") | Some("NOT")) {
-                continue;
-            }
-
-            if let Some(paren_off) = matched.rfind('(') {
-                let paren_start = start + paren_off;
-                if paren_start < end {
-                    issues.push(
-                        Issue::info(
-                            issue_codes::LINT_LT_001,
-                            "Operator spacing appears inconsistent.",
-                        )
-                        .with_statement(ctx.statement_index)
-                        .with_span(ctx.span_from_statement_offset(paren_start, paren_start + 1)),
-                    );
-                }
-            }
-        }
-
-        issues
+                .with_span(ctx.span_from_statement_offset(start, end))
+            })
+            .collect()
     }
 }
 
-fn capture_group_with_spans(
-    sql: &str,
-    pattern: &str,
-    group_idx: usize,
-) -> Vec<(String, usize, usize)> {
-    Regex::new(pattern)
-        .expect("valid regex")
-        .captures_iter(sql)
-        .filter_map(|caps| caps.get(group_idx))
-        .map(|m| (m.as_str().to_string(), m.start(), m.end()))
-        .collect()
+fn spacing_violation_spans(sql: &str) -> Vec<(usize, usize)> {
+    let mut spans = Vec::new();
+    let bytes = sql.as_bytes();
+
+    // Pattern group 1: compact JSON arrow expression like payload->>'id'.
+    for index in 0..bytes.len().saturating_sub(2) {
+        if &bytes[index..index + 3] != b"->>" {
+            continue;
+        }
+        if !matches_compact_json_arrow(sql, index) {
+            continue;
+        }
+
+        spans.push((index, (index + 1).min(bytes.len())));
+        if index + 3 < bytes.len() {
+            spans.push((index + 3, (index + 4).min(bytes.len())));
+        }
+    }
+
+    // Pattern group 2: compact `text[` cast/index form.
+    for index in find_ascii_case_insensitive(sql, "text[") {
+        if index > 0 && is_word_char(bytes[index - 1]) {
+            continue;
+        }
+        let bracket_start = index + 4;
+        if bracket_start < bytes.len() {
+            spans.push((bracket_start, bracket_start + 1));
+        }
+    }
+
+    // Pattern group 3: compact numeric precision form like `,2`.
+    for index in 0..bytes.len().saturating_sub(1) {
+        if bytes[index] == b',' && bytes[index + 1].is_ascii_digit() {
+            spans.push((index + 1, index + 2));
+        }
+    }
+
+    // Pattern group 4: `EXISTS (` layout at line start.
+    let lines = collect_lines_with_offsets(sql);
+    for (line_index, (line_start, line)) in lines.iter().enumerate() {
+        let Some(paren_offset) = exists_line_paren_offset(line) else {
+            continue;
+        };
+
+        let prev_token = lines[..line_index]
+            .iter()
+            .rev()
+            .map(|(_, prev_line)| prev_line.trim())
+            .find(|prev_line| !prev_line.is_empty() && !prev_line.starts_with("--"));
+        if matches!(prev_token, Some("OR") | Some("AND") | Some("NOT")) {
+            continue;
+        }
+
+        let start = line_start + paren_offset;
+        spans.push((start, start + 1));
+    }
+
+    spans
+}
+
+fn matches_compact_json_arrow(sql: &str, arrow_index: usize) -> bool {
+    let bytes = sql.as_bytes();
+
+    // Left side must be an identifier/path token.
+    let mut start = arrow_index;
+    while start > 0 && is_ident_or_dot(bytes[start - 1]) {
+        start -= 1;
+    }
+    if start == arrow_index {
+        return false;
+    }
+
+    let left = &bytes[start..arrow_index];
+    if !left.first().copied().is_some_and(is_identifier_start) {
+        return false;
+    }
+
+    // Right side must be a single-quoted literal (`'[^']*'`).
+    let mut pos = arrow_index + 3;
+    if pos >= bytes.len() || bytes[pos] != b'\'' {
+        return false;
+    }
+    pos += 1;
+    while pos < bytes.len() && bytes[pos] != b'\'' {
+        pos += 1;
+    }
+    pos < bytes.len()
+}
+
+fn find_ascii_case_insensitive(haystack: &str, needle: &str) -> Vec<usize> {
+    let h = haystack.as_bytes();
+    let n = needle.as_bytes();
+    if n.is_empty() || h.len() < n.len() {
+        return Vec::new();
+    }
+
+    let mut out = Vec::new();
+    for index in 0..=h.len() - n.len() {
+        if h[index..index + n.len()].eq_ignore_ascii_case(n) {
+            out.push(index);
+        }
+    }
+    out
+}
+
+fn collect_lines_with_offsets(sql: &str) -> Vec<(usize, &str)> {
+    let mut out = Vec::new();
+    let mut offset = 0usize;
+
+    for line in sql.split_inclusive('\n') {
+        let line = line.strip_suffix('\n').unwrap_or(line);
+        out.push((offset, line));
+        offset += line.len();
+        if sql.as_bytes().get(offset) == Some(&b'\n') {
+            offset += 1;
+        }
+    }
+
+    if out.is_empty() {
+        out.push((0, sql));
+    }
+
+    out
+}
+
+fn exists_line_paren_offset(line: &str) -> Option<usize> {
+    let bytes = line.as_bytes();
+    let mut index = 0usize;
+
+    while index < bytes.len() && bytes[index].is_ascii_whitespace() {
+        index += 1;
+    }
+
+    let exists = b"exists";
+    if index + exists.len() > bytes.len() {
+        return None;
+    }
+    if !bytes[index..index + exists.len()].eq_ignore_ascii_case(exists) {
+        return None;
+    }
+    index += exists.len();
+
+    let ws_start = index;
+    while index < bytes.len() && bytes[index].is_ascii_whitespace() {
+        index += 1;
+    }
+    if index == ws_start {
+        return None;
+    }
+
+    (index < bytes.len() && bytes[index] == b'(').then_some(index)
+}
+
+fn is_identifier_start(byte: u8) -> bool {
+    byte.is_ascii_alphabetic() || byte == b'_'
+}
+
+fn is_ident_or_dot(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'.'
+}
+
+fn is_word_char(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_'
 }
 
 #[cfg(test)]
@@ -177,10 +251,7 @@ mod tests {
 
     #[test]
     fn flags_exists_parenthesis_layout_case() {
-        let issues = run("SELECT
-    EXISTS (
-        SELECT 1
-    ) AS has_row");
+        let issues = run("SELECT\n    EXISTS (\n        SELECT 1\n    ) AS has_row");
         assert!(!issues.is_empty());
     }
 }
