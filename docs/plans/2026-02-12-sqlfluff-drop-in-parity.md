@@ -86,6 +86,7 @@ This plan covers three axes:
   - `RF_004` now supports SQLFluff-style `quoted_identifiers_policy` / `unquoted_identifiers_policy` and `ignore_words` / `ignore_words_regex` through `lint.ruleConfigs`.
   - `RF_001` now supports `force_enable` through `lint.ruleConfigs`.
   - `RF_002` now supports `force_enable` through `lint.ruleConfigs`.
+  - `RF_002` now aligns closer to SQLFluff projection-alias semantics: self-alias projections (`foo AS foo`) in multi-source scopes are flagged, while later references to earlier projection aliases remain allowed.
   - `RF_003` now supports `single_table_references` (`consistent`/`qualified`/`unqualified`) and `force_enable` through `lint.ruleConfigs`, and now treats qualified wildcards (`alias.*`) as qualified references in consistency checks.
   - `RF_005` moved from parity handling to a dedicated core rule module (`rf_005.rs`).
   - `RF_005` was further upgraded to AST-driven quoted-identifier traversal, replacing raw quote-regex scanning.

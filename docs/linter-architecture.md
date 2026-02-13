@@ -198,7 +198,7 @@ Move style-oriented checks to lexical engine:
 - [x] `LINT_ST_005` now supports `forbid_subquery_in` (`both`/`join`/`from`) via `lint.ruleConfigs`.
 - [x] `LINT_ST_009` now supports `preferred_first_table_in_join_clause` (`earlier`/`later`) via `lint.ruleConfigs`.
 - [x] `LINT_RF_001` now supports `force_enable` via `lint.ruleConfigs`.
-- [x] `LINT_RF_002` now supports `force_enable` via `lint.ruleConfigs`.
+- [x] `LINT_RF_002` now supports `force_enable` via `lint.ruleConfigs`, and now aligns closer to SQLFluff projection-alias semantics (self-alias projections are flagged while later references to earlier aliases remain allowed).
 - [x] `LINT_RF_003` now supports `single_table_references` (`consistent`/`qualified`/`unqualified`) and `force_enable` via `lint.ruleConfigs`, and treats qualified wildcards (`alias.*`) as qualified references for mixed-style detection.
 - [x] `LINT_RF_006` now supports `prefer_quoted_identifiers` / `case_sensitive` via `lint.ruleConfigs`.
 - [x] `LINT_AL_007` now supports `force_enable` via `lint.ruleConfigs`.

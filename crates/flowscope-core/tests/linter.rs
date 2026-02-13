@@ -1657,6 +1657,30 @@ fn lint_rf_005_special_chars() {
     );
 }
 
+#[test]
+fn lint_rf_002_flags_projection_self_alias_in_multi_source_query() {
+    let issues = run_lint("SELECT foo AS foo FROM a LEFT JOIN b ON a.id = b.id");
+    assert!(
+        issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_RF_002),
+        "expected {} for self-alias projection in multi-source query: {issues:?}",
+        issue_codes::LINT_RF_002,
+    );
+}
+
+#[test]
+fn lint_rf_002_allows_later_projection_reference_to_previous_alias() {
+    let issues = run_lint("SELECT a.bar AS baz, baz FROM a LEFT JOIN b ON a.id = b.id");
+    assert!(
+        !issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_RF_002),
+        "did not expect {} for valid later alias reference: {issues:?}",
+        issue_codes::LINT_RF_002,
+    );
+}
+
 // =============================================================================
 // SQLFluff parity smoke tests
 // =============================================================================

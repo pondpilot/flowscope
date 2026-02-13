@@ -5,7 +5,7 @@
 use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
-use sqlparser::ast::Statement;
+use sqlparser::ast::{Select, SelectItem, Statement};
 
 use super::semantic_helpers::{
     count_reference_qualification_in_expr_excluding_aliases, select_projection_alias_set,
@@ -58,11 +58,21 @@ impl LintRule for ReferencesQualification {
             }
 
             let aliases = select_projection_alias_set(select);
+            let projection_unqualified_full =
+                projection_unqualified_count_with_aliases(select, &aliases);
+            let projection_unqualified_sequential = projection_unqualified_count_sequential(select);
+
+            let mut unqualified_in_select = 0usize;
             visit_select_expressions(select, &mut |expr| {
                 let (_, unqualified) =
                     count_reference_qualification_in_expr_excluding_aliases(expr, &aliases);
-                unqualified_count += unqualified;
+                unqualified_in_select += unqualified;
             });
+
+            let adjusted_unqualified = unqualified_in_select
+                .saturating_sub(projection_unqualified_full)
+                + projection_unqualified_sequential;
+            unqualified_count += adjusted_unqualified;
         });
 
         (0..unqualified_count)
@@ -75,6 +85,48 @@ impl LintRule for ReferencesQualification {
             })
             .collect()
     }
+}
+
+fn projection_unqualified_count_with_aliases(
+    select: &Select,
+    aliases: &std::collections::HashSet<String>,
+) -> usize {
+    select
+        .projection
+        .iter()
+        .map(|item| match item {
+            SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => {
+                let (_, unqualified) =
+                    count_reference_qualification_in_expr_excluding_aliases(expr, aliases);
+                unqualified
+            }
+            _ => 0,
+        })
+        .sum()
+}
+
+fn projection_unqualified_count_sequential(select: &Select) -> usize {
+    let mut aliases_before = std::collections::HashSet::new();
+    let mut unqualified = 0usize;
+
+    for item in &select.projection {
+        match item {
+            SelectItem::UnnamedExpr(expr) => {
+                let (_, count) =
+                    count_reference_qualification_in_expr_excluding_aliases(expr, &aliases_before);
+                unqualified += count;
+            }
+            SelectItem::ExprWithAlias { expr, alias } => {
+                let (_, count) =
+                    count_reference_qualification_in_expr_excluding_aliases(expr, &aliases_before);
+                unqualified += count;
+                aliases_before.insert(alias.value.to_ascii_uppercase());
+            }
+            _ => {}
+        }
+    }
+
+    unqualified
 }
 
 #[cfg(test)]
@@ -152,6 +204,21 @@ mod tests {
                 statement_index: 0,
             },
         );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn flags_projection_self_alias_in_multi_source_query() {
+        let issues = run("SELECT foo AS foo FROM a LEFT JOIN b ON a.id = b.id");
+        assert!(!issues.is_empty());
+        assert!(issues
+            .iter()
+            .all(|issue| issue.code == issue_codes::LINT_RF_002));
+    }
+
+    #[test]
+    fn allows_later_projection_reference_to_previous_alias() {
+        let issues = run("SELECT a.bar AS baz, baz FROM a LEFT JOIN b ON a.id = b.id");
         assert!(issues.is_empty());
     }
 }
