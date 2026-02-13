@@ -150,6 +150,8 @@ export interface LintConfig {
   enabled?: boolean;
   /** List of rule codes to disable (e.g., ["LINT_AM_008"]) */
   disabledRules?: string[];
+  /** Per-rule option objects keyed by rule ref (e.g., "LINT_AL_001" or "aliasing.table") */
+  ruleConfigs?: Record<string, Record<string, unknown>>;
 }
 
 /**

@@ -31,7 +31,7 @@ impl Linter {
     /// Creates a new linter with the given configuration.
     pub fn new(config: LintConfig) -> Self {
         Self {
-            rules: rules::all_rules(),
+            rules: rules::all_rules(&config),
             config,
         }
     }

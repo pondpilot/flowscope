@@ -127,6 +127,7 @@ fn lint_disabled_rule_not_reported() {
         LintConfig {
             enabled: true,
             disabled_rules: vec!["LINT_AM_002".to_string()],
+            rule_configs: std::collections::BTreeMap::new(),
         },
     );
     assert!(
@@ -142,11 +143,50 @@ fn lint_disabled_globally() {
         LintConfig {
             enabled: false,
             disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::new(),
         },
     );
     assert!(
         issues.is_empty(),
         "globally disabled linter should produce no issues"
+    );
+}
+
+#[test]
+fn lint_rule_config_aliasing_table_implicit_policy() {
+    let issues = run_lint_with_config(
+        "SELECT * FROM users AS u",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "aliasing.table".to_string(),
+                serde_json::json!({"aliasing": "implicit"}),
+            )]),
+        },
+    );
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_AL_001"),
+        "implicit aliasing policy should flag explicit AS: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_rule_config_aliasing_column_implicit_policy() {
+    let issues = run_lint_with_config(
+        "SELECT a + 1 AS value FROM t",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "LINT_AL_002".to_string(),
+                serde_json::json!({"aliasing": "implicit"}),
+            )]),
+        },
+    );
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_AL_002"),
+        "implicit aliasing policy should flag explicit AS: {issues:?}"
     );
 }
 
@@ -279,6 +319,7 @@ fn lint_clean_query_no_issues() {
         LintConfig {
             enabled: true,
             disabled_rules: vec!["LINT_LT_009".to_string(), "LINT_LT_014".to_string()],
+            rule_configs: std::collections::BTreeMap::new(),
         },
     );
     assert!(
@@ -351,6 +392,7 @@ fn lint_disable_multiple_rules() {
         LintConfig {
             enabled: true,
             disabled_rules: vec!["LINT_AM_002".to_string(), "LINT_AL_003".to_string()],
+            rule_configs: std::collections::BTreeMap::new(),
         },
     );
     assert!(
@@ -394,6 +436,7 @@ fn lint_clean_complex_query_no_issues() {
                 "LINT_AM_005".to_string(),
                 "LINT_ST_011".to_string(),
             ],
+            rule_configs: std::collections::BTreeMap::new(),
         },
     );
     assert!(
@@ -411,6 +454,7 @@ fn lint_config_serialization() {
     let config = LintConfig {
         enabled: true,
         disabled_rules: vec!["LINT_AM_002".to_string()],
+        rule_configs: std::collections::BTreeMap::new(),
     };
     let json = serde_json::to_string(&config).unwrap();
     assert!(json.contains("\"disabledRules\""));

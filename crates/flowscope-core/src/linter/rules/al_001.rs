@@ -1,14 +1,68 @@
 //! LINT_AL_001: Table alias style.
 //!
-//! Require explicit `AS` when aliasing tables.
+//! SQLFluff parity: configurable table aliasing style (`explicit`/`implicit`).
 
+use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
-use sqlparser::ast::Statement;
+use sqlparser::ast::{Ident, Query, SetExpr, Statement, TableFactor, TableWithJoins};
 use sqlparser::keywords::Keyword;
 use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
+use std::collections::HashMap;
 
-pub struct AliasingTableStyle;
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum AliasingPreference {
+    Explicit,
+    Implicit,
+}
+
+impl AliasingPreference {
+    fn from_config(config: &LintConfig, rule_code: &str) -> Self {
+        match config
+            .rule_option_str(rule_code, "aliasing")
+            .unwrap_or("explicit")
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "implicit" => Self::Implicit,
+            _ => Self::Explicit,
+        }
+    }
+
+    fn message(self) -> &'static str {
+        match self {
+            Self::Explicit => "Use explicit AS when aliasing tables.",
+            Self::Implicit => "Use implicit aliasing when aliasing tables (omit AS).",
+        }
+    }
+
+    fn violation(self, explicit_as: bool) -> bool {
+        match self {
+            Self::Explicit => !explicit_as,
+            Self::Implicit => explicit_as,
+        }
+    }
+}
+
+pub struct AliasingTableStyle {
+    aliasing: AliasingPreference,
+}
+
+impl AliasingTableStyle {
+    pub fn from_config(config: &LintConfig) -> Self {
+        Self {
+            aliasing: AliasingPreference::from_config(config, issue_codes::LINT_AL_001),
+        }
+    }
+}
+
+impl Default for AliasingTableStyle {
+    fn default() -> Self {
+        Self {
+            aliasing: AliasingPreference::Explicit,
+        }
+    }
+}
 
 impl LintRule for AliasingTableStyle {
     fn code(&self) -> &'static str {
@@ -23,26 +77,69 @@ impl LintRule for AliasingTableStyle {
         "Implicit/explicit aliasing of table."
     }
 
-    fn check(&self, _stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        implicit_table_alias_spans(ctx.statement_sql())
-            .into_iter()
-            .map(|(start, end)| {
-                Issue::warning(
-                    issue_codes::LINT_AL_001,
-                    "Use explicit AS when aliasing tables.",
-                )
-                .with_statement(ctx.statement_index)
-                .with_span(ctx.span_from_statement_offset(start, end))
-            })
-            .collect()
+    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+        let alias_style = alias_style_index(ctx.statement_sql());
+        let mut issues = Vec::new();
+
+        collect_table_aliases_in_statement(statement, &mut |alias| {
+            let Some(occurrence) = alias_occurrence_in_statement(alias, ctx, &alias_style) else {
+                return;
+            };
+
+            if !self.aliasing.violation(occurrence.explicit_as) {
+                return;
+            }
+
+            issues.push(
+                Issue::warning(issue_codes::LINT_AL_001, self.aliasing.message())
+                    .with_statement(ctx.statement_index)
+                    .with_span(ctx.span_from_statement_offset(occurrence.start, occurrence.end)),
+            );
+        });
+
+        issues
     }
 }
 
-fn implicit_table_alias_spans(sql: &str) -> Vec<(usize, usize)> {
+#[derive(Clone, Copy)]
+struct AliasOccurrence {
+    start: usize,
+    end: usize,
+    explicit_as: bool,
+}
+
+fn alias_occurrence_in_statement(
+    alias: &Ident,
+    ctx: &LintContext,
+    style_index: &HashMap<usize, AliasOccurrence>,
+) -> Option<AliasOccurrence> {
+    let abs_start = line_col_to_offset(
+        ctx.sql,
+        alias.span.start.line as usize,
+        alias.span.start.column as usize,
+    )?;
+    let abs_end = line_col_to_offset(
+        ctx.sql,
+        alias.span.end.line as usize,
+        alias.span.end.column as usize,
+    )?;
+
+    if abs_start < ctx.statement_range.start || abs_end > ctx.statement_range.end {
+        return None;
+    }
+
+    let rel_start = abs_start - ctx.statement_range.start;
+    let rel_end = abs_end - ctx.statement_range.start;
+
+    let occurrence = style_index.get(&rel_start)?;
+    (occurrence.end == rel_end).then_some(*occurrence)
+}
+
+fn alias_style_index(sql: &str) -> HashMap<usize, AliasOccurrence> {
     let dialect = sqlparser::dialect::GenericDialect {};
     let mut tokenizer = Tokenizer::new(&dialect, sql);
     let Ok(tokens) = tokenizer.tokenize_with_location() else {
-        return Vec::new();
+        return HashMap::new();
     };
 
     let significant: Vec<&TokenWithSpan> = tokens
@@ -50,156 +147,137 @@ fn implicit_table_alias_spans(sql: &str) -> Vec<(usize, usize)> {
         .filter(|token| !is_trivia_token(&token.token))
         .collect();
 
-    let mut spans = Vec::new();
+    let mut styles = HashMap::new();
 
     for (index, token) in significant.iter().enumerate() {
-        if !is_from_or_join_keyword(&token.token) {
-            continue;
-        }
-
-        let mut relation_start = index + 1;
-        while relation_start < significant.len()
-            && is_relation_prefix(&significant[relation_start].token)
-        {
-            relation_start += 1;
-        }
-        if relation_start >= significant.len() {
-            continue;
-        }
-
-        let relation_end = consume_relation(&significant, relation_start);
-        if relation_end >= significant.len() {
-            continue;
-        }
-
-        let alias_token = significant[relation_end];
-        if matches!(alias_token.token, Token::Word(ref word) if word.keyword == Keyword::AS) {
-            continue;
-        }
-
-        if !is_alias_candidate(&alias_token.token) {
-            continue;
-        }
-
-        let Some(start) = token_start_offset(sql, alias_token) else {
+        let Token::Word(_) = token.token else {
             continue;
         };
-        let Some(end) = token_end_offset(sql, alias_token) else {
+
+        let Some(start) = token_start_offset(sql, token) else {
             continue;
         };
-        spans.push((start, end));
+        let Some(end) = token_end_offset(sql, token) else {
+            continue;
+        };
+
+        let explicit_as = index > 0
+            && matches!(
+                significant[index - 1].token,
+                Token::Word(ref word) if word.keyword == Keyword::AS
+            );
+
+        styles.insert(
+            start,
+            AliasOccurrence {
+                start,
+                end,
+                explicit_as,
+            },
+        );
     }
 
-    spans
+    styles
 }
 
-fn consume_relation(tokens: &[&TokenWithSpan], start: usize) -> usize {
-    if start >= tokens.len() {
-        return start;
-    }
-
-    match tokens[start].token {
-        Token::LParen => {
-            let mut depth = 1usize;
-            let mut index = start + 1;
-            while index < tokens.len() {
-                match tokens[index].token {
-                    Token::LParen => depth += 1,
-                    Token::RParen => {
-                        depth -= 1;
-                        if depth == 0 {
-                            return index + 1;
-                        }
-                    }
-                    _ => {}
-                }
-                index += 1;
+fn collect_table_aliases_in_statement<F: FnMut(&Ident)>(statement: &Statement, visitor: &mut F) {
+    match statement {
+        Statement::Query(query) => collect_table_aliases_in_query(query, visitor),
+        Statement::Insert(insert) => {
+            if let Some(source) = &insert.source {
+                collect_table_aliases_in_query(source, visitor);
             }
-            tokens.len()
         }
-        Token::Word(_) => {
-            let mut index = start + 1;
-
-            while index + 1 < tokens.len() {
-                let dot_then_word = matches!(tokens[index].token, Token::Period)
-                    && matches!(tokens[index + 1].token, Token::Word(_));
-                if !dot_then_word {
-                    break;
-                }
-                index += 2;
+        Statement::CreateView { query, .. } => collect_table_aliases_in_query(query, visitor),
+        Statement::CreateTable(create) => {
+            if let Some(query) = &create.query {
+                collect_table_aliases_in_query(query, visitor);
             }
-
-            if index < tokens.len() && matches!(tokens[index].token, Token::LParen) {
-                let mut depth = 1usize;
-                index += 1;
-                while index < tokens.len() {
-                    match tokens[index].token {
-                        Token::LParen => depth += 1,
-                        Token::RParen => {
-                            depth -= 1;
-                            if depth == 0 {
-                                index += 1;
-                                break;
-                            }
-                        }
-                        _ => {}
-                    }
-                    index += 1;
-                }
-            }
-
-            index
         }
-        _ => start + 1,
+        _ => {}
     }
 }
 
-fn is_from_or_join_keyword(token: &Token) -> bool {
-    matches!(token, Token::Word(word) if matches!(word.keyword, Keyword::FROM | Keyword::JOIN))
+fn collect_table_aliases_in_query<F: FnMut(&Ident)>(query: &Query, visitor: &mut F) {
+    if let Some(with) = &query.with {
+        for cte in &with.cte_tables {
+            collect_table_aliases_in_query(&cte.query, visitor);
+        }
+    }
+
+    collect_table_aliases_in_set_expr(&query.body, visitor);
 }
 
-fn is_relation_prefix(token: &Token) -> bool {
-    matches!(token, Token::Word(word) if matches!(word.keyword, Keyword::LATERAL | Keyword::ONLY))
+fn collect_table_aliases_in_set_expr<F: FnMut(&Ident)>(set_expr: &SetExpr, visitor: &mut F) {
+    match set_expr {
+        SetExpr::Select(select) => {
+            for table in &select.from {
+                collect_table_aliases_in_table_with_joins(table, visitor);
+            }
+        }
+        SetExpr::Query(query) => collect_table_aliases_in_query(query, visitor),
+        SetExpr::SetOperation { left, right, .. } => {
+            collect_table_aliases_in_set_expr(left, visitor);
+            collect_table_aliases_in_set_expr(right, visitor);
+        }
+        SetExpr::Insert(statement)
+        | SetExpr::Update(statement)
+        | SetExpr::Delete(statement)
+        | SetExpr::Merge(statement) => collect_table_aliases_in_statement(statement, visitor),
+        _ => {}
+    }
 }
 
-fn is_alias_candidate(token: &Token) -> bool {
-    let Token::Word(word) = token else {
-        return false;
-    };
-
-    word.quote_style.is_none() && !is_keyword(word.value.as_str())
+fn collect_table_aliases_in_table_with_joins<F: FnMut(&Ident)>(
+    table_with_joins: &TableWithJoins,
+    visitor: &mut F,
+) {
+    collect_table_aliases_in_table_factor(&table_with_joins.relation, visitor);
+    for join in &table_with_joins.joins {
+        collect_table_aliases_in_table_factor(&join.relation, visitor);
+    }
 }
 
-fn is_keyword(token: &str) -> bool {
-    matches!(
-        token.to_ascii_uppercase().as_str(),
-        "SELECT"
-            | "FROM"
-            | "WHERE"
-            | "JOIN"
-            | "LEFT"
-            | "RIGHT"
-            | "FULL"
-            | "OUTER"
-            | "INNER"
-            | "CROSS"
-            | "ON"
-            | "USING"
-            | "AS"
-            | "GROUP"
-            | "ORDER"
-            | "HAVING"
-            | "LIMIT"
-            | "OFFSET"
-            | "UNION"
-            | "ALL"
-            | "DISTINCT"
-            | "BY"
-            | "WHEN"
-            | "THEN"
-            | "ELSE"
-            | "END"
-    )
+fn collect_table_aliases_in_table_factor<F: FnMut(&Ident)>(
+    table_factor: &TableFactor,
+    visitor: &mut F,
+) {
+    if let Some(alias) = table_factor_alias_ident(table_factor) {
+        visitor(alias);
+    }
+
+    match table_factor {
+        TableFactor::Derived { subquery, .. } => collect_table_aliases_in_query(subquery, visitor),
+        TableFactor::NestedJoin {
+            table_with_joins, ..
+        } => collect_table_aliases_in_table_with_joins(table_with_joins, visitor),
+        TableFactor::Pivot { table, .. }
+        | TableFactor::Unpivot { table, .. }
+        | TableFactor::MatchRecognize { table, .. } => {
+            collect_table_aliases_in_table_factor(table, visitor)
+        }
+        _ => {}
+    }
+}
+
+fn table_factor_alias_ident(table_factor: &TableFactor) -> Option<&Ident> {
+    let alias = match table_factor {
+        TableFactor::Table { alias, .. }
+        | TableFactor::Derived { alias, .. }
+        | TableFactor::TableFunction { alias, .. }
+        | TableFactor::Function { alias, .. }
+        | TableFactor::UNNEST { alias, .. }
+        | TableFactor::JsonTable { alias, .. }
+        | TableFactor::OpenJsonTable { alias, .. }
+        | TableFactor::NestedJoin { alias, .. }
+        | TableFactor::Pivot { alias, .. }
+        | TableFactor::Unpivot { alias, .. }
+        | TableFactor::MatchRecognize { alias, .. }
+        | TableFactor::XmlTable { alias, .. }
+        | TableFactor::SemanticView { alias, .. } => alias.as_ref(),
+    }?;
+
+    Some(&alias.name)
 }
 
 fn is_trivia_token(token: &Token) -> bool {
@@ -260,9 +338,8 @@ mod tests {
     use super::*;
     use crate::parser::parse_sql;
 
-    fn run(sql: &str) -> Vec<Issue> {
+    fn run_with_rule(sql: &str, rule: AliasingTableStyle) -> Vec<Issue> {
         let stmts = parse_sql(sql).expect("parse");
-        let rule = AliasingTableStyle;
         stmts
             .iter()
             .enumerate()
@@ -279,6 +356,10 @@ mod tests {
             .collect()
     }
 
+    fn run(sql: &str) -> Vec<Issue> {
+        run_with_rule(sql, AliasingTableStyle::default())
+    }
+
     #[test]
     fn flags_implicit_table_aliases() {
         let issues = run("select * from users u join orders o on u.id = o.user_id");
@@ -290,6 +371,23 @@ mod tests {
     fn allows_explicit_as_table_aliases() {
         let issues = run("select * from users as u join orders as o on u.id = o.user_id");
         assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn flags_explicit_aliases_when_implicit_policy_requested() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "LINT_AL_001".to_string(),
+                serde_json::json!({"aliasing": "implicit"}),
+            )]),
+        };
+        let issues = run_with_rule(
+            "select * from users as u join orders as o on u.id = o.user_id",
+            AliasingTableStyle::from_config(&config),
+        );
+        assert_eq!(issues.len(), 2);
     }
 
     #[test]

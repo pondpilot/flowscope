@@ -229,6 +229,7 @@ fn run_lint(args: Args) -> Result<bool> {
     let lint_config = LintConfig {
         enabled: true,
         disabled_rules: args.exclude_rules.clone(),
+        rule_configs: std::collections::BTreeMap::new(),
     };
 
     let mut file_results = Vec::with_capacity(lint_inputs.len());

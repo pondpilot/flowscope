@@ -2,7 +2,7 @@
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 
 /// Configuration for the SQL linter.
 ///
@@ -17,6 +17,11 @@ pub struct LintConfig {
     /// List of rule codes to disable (e.g., ["LINT_AM_008"]).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub disabled_rules: Vec<String>,
+
+    /// Per-rule option objects keyed by rule reference (`LINT_*`, `AL01`,
+    /// `aliasing.table`, etc).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub rule_configs: BTreeMap<String, serde_json::Value>,
 }
 
 impl Default for LintConfig {
@@ -24,6 +29,7 @@ impl Default for LintConfig {
         Self {
             enabled: true,
             disabled_rules: Vec::new(),
+            rule_configs: BTreeMap::new(),
         }
     }
 }
@@ -44,6 +50,47 @@ impl LintConfig {
             .collect();
 
         self.enabled && !disabled.contains(&requested)
+    }
+
+    /// Returns a rule-level config object, if present.
+    pub fn rule_config_object(
+        &self,
+        code: &str,
+    ) -> Option<&serde_json::Map<String, serde_json::Value>> {
+        self.matching_rule_config_value(code)?.as_object()
+    }
+
+    /// Returns a string option for a rule config.
+    pub fn rule_option_str(&self, code: &str, key: &str) -> Option<&str> {
+        self.rule_config_object(code)?.get(key)?.as_str()
+    }
+
+    /// Returns a boolean option for a rule config.
+    pub fn rule_option_bool(&self, code: &str, key: &str) -> Option<bool> {
+        self.rule_config_object(code)?.get(key)?.as_bool()
+    }
+
+    /// Returns an unsigned integer option for a rule config.
+    pub fn rule_option_usize(&self, code: &str, key: &str) -> Option<usize> {
+        let value = self.rule_config_object(code)?.get(key)?.as_u64()?;
+        usize::try_from(value).ok()
+    }
+
+    /// Returns a list-of-string option for a rule config.
+    pub fn rule_option_string_list(&self, code: &str, key: &str) -> Option<Vec<String>> {
+        let values = self.rule_config_object(code)?.get(key)?.as_array()?;
+        values
+            .iter()
+            .map(|value| value.as_str().map(str::to_string))
+            .collect()
+    }
+
+    fn matching_rule_config_value(&self, code: &str) -> Option<&serde_json::Value> {
+        let canonical = canonicalize_rule_code(code)?;
+        self.rule_configs.iter().find_map(|(rule_ref, value)| {
+            (canonicalize_rule_code(rule_ref).as_deref() == Some(canonical.as_str()))
+                .then_some(value)
+        })
     }
 }
 
@@ -450,6 +497,7 @@ mod tests {
         let config = LintConfig {
             enabled: true,
             disabled_rules: vec![" lint_am_009 ".to_string(), " LINT_ST_006".to_string()],
+            rule_configs: BTreeMap::new(),
         };
         assert!(!config.is_rule_enabled("LINT_AM_009"));
         assert!(!config.is_rule_enabled("lint_st_006"));
@@ -464,6 +512,7 @@ mod tests {
                 " ambiguous.join ".to_string(),
                 "AMBIGUOUS.UNION".to_string(),
             ],
+            rule_configs: BTreeMap::new(),
         };
         assert!(!config.is_rule_enabled("LINT_AM_005"));
         assert!(!config.is_rule_enabled("LINT_AM_002"));
@@ -502,6 +551,7 @@ mod tests {
         let config = LintConfig {
             enabled: false,
             disabled_rules: vec![],
+            rule_configs: BTreeMap::new(),
         };
         assert!(!config.is_rule_enabled("LINT_AM_008"));
     }
@@ -512,5 +562,33 @@ mod tests {
         let config: LintConfig = serde_json::from_str(json).expect("valid lint config json");
         assert!(config.enabled);
         assert!(config.disabled_rules.is_empty());
+        assert!(config.rule_configs.is_empty());
+    }
+
+    #[test]
+    fn rule_config_options_resolve_by_dotted_or_code() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: BTreeMap::from([
+                (
+                    "aliasing.table".to_string(),
+                    serde_json::json!({"aliasing": "implicit"}),
+                ),
+                (
+                    "LINT_AL_002".to_string(),
+                    serde_json::json!({"aliasing": "explicit"}),
+                ),
+            ]),
+        };
+
+        assert_eq!(
+            config.rule_option_str("LINT_AL_001", "aliasing"),
+            Some("implicit")
+        );
+        assert_eq!(
+            config.rule_option_str("aliasing.column", "aliasing"),
+            Some("explicit")
+        );
     }
 }

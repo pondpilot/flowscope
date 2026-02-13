@@ -218,6 +218,7 @@ fn lint_rule_counts(
             lint: Some(LintConfig {
                 enabled: true,
                 disabled_rules: disabled_rules.to_vec(),
+                rule_configs: std::collections::BTreeMap::new(),
             }),
             ..Default::default()
         }),
@@ -2187,6 +2188,7 @@ mod tests {
                 lint: Some(LintConfig {
                     enabled: true,
                     disabled_rules: vec![],
+                    rule_configs: std::collections::BTreeMap::new(),
                 }),
                 ..Default::default()
             }),

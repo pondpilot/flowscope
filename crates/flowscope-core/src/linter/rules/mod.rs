@@ -1,5 +1,6 @@
 //! Lint rule implementations and registry.
 
+use super::config::LintConfig;
 use super::rule::LintRule;
 
 pub mod al_001;
@@ -79,7 +80,7 @@ pub mod tq_002;
 pub mod tq_003;
 
 /// Returns all available lint rules.
-pub fn all_rules() -> Vec<Box<dyn LintRule>> {
+pub fn all_rules(config: &LintConfig) -> Vec<Box<dyn LintRule>> {
     let rules: Vec<Box<dyn LintRule>> = vec![
         Box::new(am_002::BareUnion),
         Box::new(am_009::LimitOffsetWithoutOrderBy),
@@ -90,8 +91,8 @@ pub fn all_rules() -> Vec<Box<dyn LintRule>> {
         Box::new(am_006::AmbiguousColumnRefs),
         Box::new(am_007::AmbiguousSetColumns),
         Box::new(am_008::AmbiguousJoinCondition),
-        Box::new(al_001::AliasingTableStyle),
-        Box::new(al_002::AliasingColumnStyle),
+        Box::new(al_001::AliasingTableStyle::from_config(config)),
+        Box::new(al_002::AliasingColumnStyle::from_config(config)),
         Box::new(al_003::ImplicitAlias),
         Box::new(al_004::AliasingUniqueTable),
         Box::new(al_005::UnusedTableAlias),

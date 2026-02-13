@@ -1,14 +1,70 @@
 //! LINT_AL_002: Column alias style.
 //!
-//! Require explicit `AS` when aliasing SELECT expressions.
+//! SQLFluff parity: configurable column aliasing style (`explicit`/`implicit`).
 
+use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
-use sqlparser::ast::Statement;
+use sqlparser::ast::{Ident, SelectItem, Statement};
 use sqlparser::keywords::Keyword;
-use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer};
+use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
+use std::collections::HashMap;
 
-pub struct AliasingColumnStyle;
+use super::semantic_helpers::visit_selects_in_statement;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum AliasingPreference {
+    Explicit,
+    Implicit,
+}
+
+impl AliasingPreference {
+    fn from_config(config: &LintConfig, rule_code: &str) -> Self {
+        match config
+            .rule_option_str(rule_code, "aliasing")
+            .unwrap_or("explicit")
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "implicit" => Self::Implicit,
+            _ => Self::Explicit,
+        }
+    }
+
+    fn message(self) -> &'static str {
+        match self {
+            Self::Explicit => "Use explicit AS when aliasing columns.",
+            Self::Implicit => "Use implicit aliasing when aliasing columns (omit AS).",
+        }
+    }
+
+    fn violation(self, explicit_as: bool) -> bool {
+        match self {
+            Self::Explicit => !explicit_as,
+            Self::Implicit => explicit_as,
+        }
+    }
+}
+
+pub struct AliasingColumnStyle {
+    aliasing: AliasingPreference,
+}
+
+impl AliasingColumnStyle {
+    pub fn from_config(config: &LintConfig) -> Self {
+        Self {
+            aliasing: AliasingPreference::from_config(config, issue_codes::LINT_AL_002),
+        }
+    }
+}
+
+impl Default for AliasingColumnStyle {
+    fn default() -> Self {
+        Self {
+            aliasing: AliasingPreference::Explicit,
+        }
+    }
+}
 
 impl LintRule for AliasingColumnStyle {
     fn code(&self) -> &'static str {
@@ -23,88 +79,125 @@ impl LintRule for AliasingColumnStyle {
         "Implicit/explicit aliasing of columns."
     }
 
-    fn check(&self, _stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let sql = ctx.statement_sql();
+    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+        let alias_style = alias_style_index(ctx.statement_sql());
         let mut issues = Vec::new();
 
-        for (clause, clause_start) in select_clauses_with_spans(sql) {
-            for (item, item_start) in split_top_level_commas_with_offsets(&clause) {
-                if item_has_implicit_alias(&item) {
-                    let start = clause_start + item_start;
-                    let end = start + item.len();
-                    issues.push(
-                        Issue::info(
-                            issue_codes::LINT_AL_002,
-                            "Use explicit AS when aliasing columns.",
-                        )
-                        .with_statement(ctx.statement_index)
-                        .with_span(ctx.span_from_statement_offset(start, end)),
-                    );
+        visit_selects_in_statement(statement, &mut |select| {
+            for item in &select.projection {
+                let SelectItem::ExprWithAlias { alias, .. } = item else {
+                    continue;
+                };
+
+                let Some(occurrence) = alias_occurrence_in_statement(alias, ctx, &alias_style)
+                else {
+                    continue;
+                };
+
+                if !self.aliasing.violation(occurrence.explicit_as) {
+                    continue;
                 }
+
+                issues.push(
+                    Issue::info(issue_codes::LINT_AL_002, self.aliasing.message())
+                        .with_statement(ctx.statement_index)
+                        .with_span(
+                            ctx.span_from_statement_offset(occurrence.start, occurrence.end),
+                        ),
+                );
             }
-        }
+        });
 
         issues
     }
 }
 
-fn select_clauses_with_spans(sql: &str) -> Vec<(String, usize)> {
+#[derive(Clone, Copy)]
+struct AliasOccurrence {
+    start: usize,
+    end: usize,
+    explicit_as: bool,
+}
+
+fn alias_occurrence_in_statement(
+    alias: &Ident,
+    ctx: &LintContext,
+    style_index: &HashMap<usize, AliasOccurrence>,
+) -> Option<AliasOccurrence> {
+    let abs_start = line_col_to_offset(
+        ctx.sql,
+        alias.span.start.line as usize,
+        alias.span.start.column as usize,
+    )?;
+    let abs_end = line_col_to_offset(
+        ctx.sql,
+        alias.span.end.line as usize,
+        alias.span.end.column as usize,
+    )?;
+
+    if abs_start < ctx.statement_range.start || abs_end > ctx.statement_range.end {
+        return None;
+    }
+
+    let rel_start = abs_start - ctx.statement_range.start;
+    let rel_end = abs_end - ctx.statement_range.start;
+
+    let occurrence = style_index.get(&rel_start)?;
+    (occurrence.end == rel_end).then_some(*occurrence)
+}
+
+fn alias_style_index(sql: &str) -> HashMap<usize, AliasOccurrence> {
     let dialect = sqlparser::dialect::GenericDialect {};
     let mut tokenizer = Tokenizer::new(&dialect, sql);
     let Ok(tokens) = tokenizer.tokenize_with_location() else {
-        return Vec::new();
+        return HashMap::new();
     };
 
-    let mut clauses = Vec::new();
-    let mut depth = 0usize;
+    let significant: Vec<&TokenWithSpan> = tokens
+        .iter()
+        .filter(|token| !is_trivia_token(&token.token))
+        .collect();
 
-    for (index, token) in tokens.iter().enumerate() {
-        if is_select_keyword(token) {
-            let select_depth = depth;
-            let Some(clause_start) = token_end_offset(sql, token) else {
-                continue;
-            };
+    let mut styles = HashMap::new();
 
-            let mut local_depth = depth;
-            let mut from_start = None;
+    for (index, token) in significant.iter().enumerate() {
+        let Token::Word(_) = token.token else {
+            continue;
+        };
 
-            for candidate in tokens.iter().skip(index + 1) {
-                match candidate.token {
-                    Token::LParen => local_depth += 1,
-                    Token::RParen => local_depth = local_depth.saturating_sub(1),
-                    Token::SemiColon if local_depth == select_depth => break,
-                    _ => {}
-                }
+        let Some(start) = token_start_offset(sql, token) else {
+            continue;
+        };
+        let Some(end) = token_end_offset(sql, token) else {
+            continue;
+        };
 
-                if is_from_keyword(candidate) && local_depth == select_depth {
-                    from_start = token_start_offset(sql, candidate);
-                    break;
-                }
-            }
+        let explicit_as = index > 0
+            && matches!(
+                significant[index - 1].token,
+                Token::Word(ref word) if word.keyword == Keyword::AS
+            );
 
-            if let Some(from_start) = from_start {
-                if from_start >= clause_start {
-                    clauses.push((sql[clause_start..from_start].to_string(), clause_start));
-                }
-            }
-        }
-
-        match token.token {
-            Token::LParen => depth += 1,
-            Token::RParen => depth = depth.saturating_sub(1),
-            _ => {}
-        }
+        styles.insert(
+            start,
+            AliasOccurrence {
+                start,
+                end,
+                explicit_as,
+            },
+        );
     }
 
-    clauses
+    styles
 }
 
-fn is_select_keyword(token: &TokenWithSpan) -> bool {
-    matches!(token.token, Token::Word(ref word) if word.keyword == Keyword::SELECT)
-}
-
-fn is_from_keyword(token: &TokenWithSpan) -> bool {
-    matches!(token.token, Token::Word(ref word) if word.keyword == Keyword::FROM)
+fn is_trivia_token(token: &Token) -> bool {
+    matches!(
+        token,
+        Token::Whitespace(Whitespace::Space | Whitespace::Newline | Whitespace::Tab)
+            | Token::Whitespace(Whitespace::SingleLineComment { .. })
+            | Token::Whitespace(Whitespace::MultiLineComment(_))
+    )
 }
 
 fn token_start_offset(sql: &str, token: &TokenWithSpan) -> Option<usize> {
@@ -151,204 +244,13 @@ fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
     None
 }
 
-fn split_top_level_commas_with_offsets(input: &str) -> Vec<(String, usize)> {
-    let mut parts = Vec::new();
-    let mut current = String::new();
-    let mut depth = 0i32;
-    let mut in_single = false;
-    let mut in_double = false;
-    let mut part_start = 0usize;
-
-    for (idx, ch) in input.char_indices() {
-        match ch {
-            '\'' if !in_double => {
-                in_single = !in_single;
-                current.push(ch);
-            }
-            '"' if !in_single => {
-                in_double = !in_double;
-                current.push(ch);
-            }
-            '(' if !in_single && !in_double => {
-                depth += 1;
-                current.push(ch);
-            }
-            ')' if !in_single && !in_double && depth > 0 => {
-                depth -= 1;
-                current.push(ch);
-            }
-            ',' if !in_single && !in_double && depth == 0 => {
-                let trimmed = current.trim().to_string();
-                if !trimmed.is_empty() {
-                    let trim_offset = current.find(trimmed.as_str()).unwrap_or(0);
-                    parts.push((trimmed, part_start + trim_offset));
-                }
-                current.clear();
-                part_start = idx + ch.len_utf8();
-            }
-            _ => current.push(ch),
-        }
-    }
-
-    let trimmed = current.trim().to_string();
-    if !trimmed.is_empty() {
-        let trim_offset = current.find(trimmed.as_str()).unwrap_or(0);
-        parts.push((trimmed, part_start + trim_offset));
-    }
-
-    parts
-}
-
-fn item_has_as_alias(item: &str) -> bool {
-    let Some((alias_start, alias)) = trailing_identifier(item) else {
-        return false;
-    };
-    if !is_simple_identifier(alias) {
-        return false;
-    }
-
-    let before_alias = item[..alias_start].trim_end();
-    let Some((_, last_word)) = trailing_word(before_alias) else {
-        return false;
-    };
-
-    last_word.eq_ignore_ascii_case("AS")
-}
-
-fn trailing_word(input: &str) -> Option<(usize, &str)> {
-    let trimmed = input.trim_end();
-    if trimmed.is_empty() {
-        return None;
-    }
-
-    let bytes = trimmed.as_bytes();
-    let mut end = bytes.len();
-    while end > 0 && bytes[end - 1].is_ascii_whitespace() {
-        end -= 1;
-    }
-    if end == 0 {
-        return None;
-    }
-
-    let mut start = end;
-    while start > 0 && is_identifier_char(bytes[start - 1]) {
-        start -= 1;
-    }
-    if start == end {
-        return None;
-    }
-
-    Some((start, &trimmed[start..end]))
-}
-
-fn trailing_identifier(input: &str) -> Option<(usize, &str)> {
-    let (start, word) = trailing_word(input)?;
-    is_simple_identifier(word).then_some((start, word))
-}
-
-fn is_simple_identifier(token: &str) -> bool {
-    let mut chars = token.chars();
-    let Some(first) = chars.next() else {
-        return false;
-    };
-    if !(first.is_ascii_alphabetic() || first == '_') {
-        return false;
-    }
-    chars.all(is_identifier_char_char)
-}
-
-fn is_identifier_char(byte: u8) -> bool {
-    byte.is_ascii_alphanumeric() || byte == b'_'
-}
-
-fn is_identifier_char_char(ch: char) -> bool {
-    ch.is_ascii_alphanumeric() || ch == '_'
-}
-
-fn is_keyword(token: &str) -> bool {
-    matches!(
-        token.to_ascii_uppercase().as_str(),
-        "SELECT"
-            | "FROM"
-            | "WHERE"
-            | "JOIN"
-            | "LEFT"
-            | "RIGHT"
-            | "FULL"
-            | "OUTER"
-            | "INNER"
-            | "CROSS"
-            | "ON"
-            | "USING"
-            | "AS"
-            | "GROUP"
-            | "ORDER"
-            | "HAVING"
-            | "LIMIT"
-            | "OFFSET"
-            | "UNION"
-            | "ALL"
-            | "DISTINCT"
-            | "BY"
-            | "WHEN"
-            | "THEN"
-            | "ELSE"
-            | "END"
-    )
-}
-
-fn item_has_implicit_alias(item: &str) -> bool {
-    let trimmed = item.trim();
-    if trimmed.is_empty() || trimmed == "*" || trimmed.ends_with(".*") || item_has_as_alias(trimmed)
-    {
-        return false;
-    }
-
-    let mut depth = 0i32;
-    let mut in_single = false;
-    let mut in_double = false;
-    let mut split_at: Option<usize> = None;
-
-    for (idx, ch) in trimmed.char_indices() {
-        match ch {
-            '\'' if !in_double => in_single = !in_single,
-            '"' if !in_single => in_double = !in_double,
-            '(' if !in_single && !in_double => depth += 1,
-            ')' if !in_single && !in_double && depth > 0 => depth -= 1,
-            c if c.is_whitespace() && !in_single && !in_double && depth == 0 => {
-                split_at = Some(idx)
-            }
-            _ => {}
-        }
-    }
-
-    let Some(split_idx) = split_at else {
-        return false;
-    };
-
-    let expr = trimmed[..split_idx].trim_end();
-    let alias = trimmed[split_idx..].trim_start();
-    if expr.is_empty() || alias.is_empty() || !is_simple_identifier(alias) || is_keyword(alias) {
-        return false;
-    }
-
-    let expr_ends_with_operator = [
-        '+', '-', '*', '/', '%', '^', '|', '&', '=', '<', '>', ',', '(',
-    ]
-    .iter()
-    .any(|ch| expr.ends_with(*ch));
-
-    !expr_ends_with_operator
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::parser::parse_sql;
 
-    fn run(sql: &str) -> Vec<Issue> {
+    fn run_with_rule(sql: &str, rule: AliasingColumnStyle) -> Vec<Issue> {
         let stmts = parse_sql(sql).expect("parse");
-        let rule = AliasingColumnStyle;
         stmts
             .iter()
             .enumerate()
@@ -365,6 +267,10 @@ mod tests {
             .collect()
     }
 
+    fn run(sql: &str) -> Vec<Issue> {
+        run_with_rule(sql, AliasingColumnStyle::default())
+    }
+
     #[test]
     fn flags_implicit_column_alias() {
         let issues = run("select a + 1 total from t");
@@ -375,6 +281,30 @@ mod tests {
     #[test]
     fn allows_explicit_column_alias() {
         let issues = run("select a + 1 as total from t");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn flags_explicit_aliases_when_implicit_policy_requested() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "aliasing.column".to_string(),
+                serde_json::json!({"aliasing": "implicit"}),
+            )]),
+        };
+        let issues = run_with_rule(
+            "select a + 1 as total, b + 1 value from t",
+            AliasingColumnStyle::from_config(&config),
+        );
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_AL_002);
+    }
+
+    #[test]
+    fn does_not_flag_alias_text_in_string_literal() {
+        let issues = run("select 'a as label' as value from t");
         assert!(issues.is_empty());
     }
 }

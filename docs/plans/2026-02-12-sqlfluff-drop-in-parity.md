@@ -53,9 +53,10 @@ This plan covers three axes:
   - `ST_005` moved from parity regex handling to a dedicated core AST rule implementation.
   - `AL_004` moved from parity into a dedicated core AST rule (`al_004.rs`) and parity registration was removed.
   - `AL_001` moved from parity into a dedicated core rule module (`al_001.rs`) and parity registration was removed.
-  - `AL_001` was further upgraded from regex matching to token-stream relation parsing (`FROM`/`JOIN` table factors) for implicit alias detection.
+  - `AL_001` was further upgraded to AST-driven table-factor alias traversal with token-aware `AS` detection.
   - `AL_002` moved from parity into a dedicated core rule module (`al_002.rs`) and parity registration was removed.
-  - `AL_002` was further upgraded from regex extraction to token-located SELECT-clause item analysis for implicit alias detection.
+  - `AL_002` was further upgraded to AST-driven SELECT projection alias traversal with token-aware `AS` detection.
+  - `AL_001`/`AL_002` now support SQLFluff-style `aliasing` mode (`explicit`/`implicit`) via `lint.ruleConfigs`.
   - `AL_008` moved from parity into a dedicated core AST rule (`al_008.rs`) and parity registration was removed.
   - `AL_005` was expanded to cover derived-table aliases while adding SQLFluff-compatible `LATERAL` and `VALUES` exceptions to reduce false positives.
   - `CV_003` moved from parity into a dedicated core rule module (`cv_003.rs`) and parity registration was removed.
@@ -493,8 +494,6 @@ These rules work but lack SQLFluff config knobs that users depend on:
 
 | Rule | Missing Config | SQLFluff Default |
 |---|---|---|
-| AL_001 (aliasing.table) | `aliasing` (implicit/explicit) | `explicit` |
-| AL_002 (aliasing.column) | `aliasing` (implicit/explicit) | `explicit` |
 | AL_003 (aliasing.expression) | `allow_scalar` | `False` |
 | AL_005 (aliasing.unused) | `alias_case_check` | dialect-dependent |
 | AL_006 (aliasing.length) | `min_alias_length`, `max_alias_length` | 0, unlimited |
