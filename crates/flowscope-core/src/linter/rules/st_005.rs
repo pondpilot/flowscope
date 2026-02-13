@@ -218,4 +218,50 @@ mod tests {
         );
         assert!(issues.is_empty());
     }
+
+    #[test]
+    fn forbid_both_flags_subquery_inside_cte_body() {
+        let sql = "WITH b AS (SELECT x, z FROM (SELECT x, z FROM p_cte)) SELECT b.z FROM b";
+        let statements = parse_sql(sql).expect("parse sql");
+        let rule = StructureSubquery::from_config(&LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "structure.subquery".to_string(),
+                serde_json::json!({"forbid_subquery_in": "both"}),
+            )]),
+        });
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert_eq!(issues.len(), 1);
+    }
+
+    #[test]
+    fn forbid_both_flags_subqueries_in_set_operation_second_branch() {
+        let sql = "SELECT 1 AS value_name UNION SELECT value FROM (SELECT 2 AS value_name) CROSS JOIN (SELECT 1 AS v2)";
+        let statements = parse_sql(sql).expect("parse sql");
+        let rule = StructureSubquery::from_config(&LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "structure.subquery".to_string(),
+                serde_json::json!({"forbid_subquery_in": "both"}),
+            )]),
+        });
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert_eq!(issues.len(), 2);
+    }
 }
