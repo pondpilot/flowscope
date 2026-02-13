@@ -985,6 +985,45 @@ fn lint_al_005_flags_ansi_to_json_string_table_alias_argument() {
 }
 
 #[test]
+fn lint_al_005_redshift_qualify_after_from_counts_alias_usage() {
+    let issues = run_lint_in_dialect(
+        "SELECT * \
+         FROM store AS s \
+         INNER JOIN store_sales AS ss \
+         QUALIFY ROW_NUMBER() OVER (PARTITION BY ss.sold_date ORDER BY ss.sales_price DESC) <= 2",
+        Dialect::Redshift,
+    );
+    let al05_count = issues
+        .iter()
+        .filter(|(code, _)| code == issue_codes::LINT_AL_005)
+        .count();
+    assert_eq!(
+        al05_count, 1,
+        "Redshift QUALIFY after FROM should only preserve aliases referenced from QUALIFY: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_al_005_redshift_qualify_after_where_does_not_count_alias_usage() {
+    let issues = run_lint_in_dialect(
+        "SELECT * \
+         FROM store AS s \
+         INNER JOIN store_sales AS ss \
+         WHERE col = 1 \
+         QUALIFY ROW_NUMBER() OVER (PARTITION BY ss.sold_date ORDER BY ss.sales_price DESC) <= 2",
+        Dialect::Redshift,
+    );
+    let al05_count = issues
+        .iter()
+        .filter(|(code, _)| code == issue_codes::LINT_AL_005)
+        .count();
+    assert_eq!(
+        al05_count, 2,
+        "Redshift QUALIFY after WHERE should not preserve alias references for AL_005: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_rule_config_ambiguous_join_outer_mode() {
     let issues = run_lint_with_config(
         "SELECT * FROM foo LEFT JOIN bar ON foo.id = bar.id",

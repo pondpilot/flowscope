@@ -73,6 +73,7 @@ This plan covers three axes:
   - `AL_005` now also counts alias usage from join relation table-factor expressions (for example `LATERAL (SELECT u.id)` and `UNNEST(u.tags)`), reducing false positives where aliases are only referenced by later join sources.
   - `AL_005` now aligns closer to SQLFluff scope handling by ignoring derived-subquery wrapper aliases and value-table-function aliases, while recursively analyzing nested derived-query bodies for inner alias violations (e.g. `SELECT * FROM (SELECT * FROM my_tbl AS foo)` now flags `foo`).
   - `AL_005` now includes dialect-aware function-argument alias handling for BigQuery `TO_JSON_STRING(<table_alias>)`, while keeping ANSI behavior that still flags that alias form as unused.
+  - `AL_005` now includes SQLFluff Redshift `QUALIFY` ordering parity: `QUALIFY` alias references are counted only when `QUALIFY` directly follows FROM/JOIN (and are ignored for alias-usage counting when a `WHERE` clause appears before `QUALIFY`).
   - `CV_003` moved from parity into a dedicated core rule module (`cv_003.rs`) and parity registration was removed.
   - `CV_003` was further upgraded from regex scanning to token/depth-aware trailing-comma detection in SELECT clauses.
   - `CV_003` now supports `select_clause_trailing_comma` (`forbid`/`require`) through `lint.ruleConfigs`.

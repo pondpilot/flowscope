@@ -286,7 +286,9 @@ fn collect_identifier_prefixes_from_select(
         collect_identifier_prefixes(having, dialect, prefixes);
     }
     if let Some(ref qualify) = select.qualify {
-        collect_identifier_prefixes(qualify, dialect, prefixes);
+        if include_qualify_alias_references(dialect, select) {
+            collect_identifier_prefixes(qualify, dialect, prefixes);
+        }
     }
     if let Some(Distinct::On(exprs)) = &select.distinct {
         for expr in exprs {
@@ -644,6 +646,12 @@ fn function_arg_is_table_alias_reference(
     arg_index: usize,
 ) -> bool {
     matches!(dialect, Dialect::Bigquery) && arg_index == 0 && function_name == "TO_JSON_STRING"
+}
+
+fn include_qualify_alias_references(dialect: Dialect, select: &Select) -> bool {
+    // SQLFluff AL05 Redshift parity: QUALIFY references only count for alias usage
+    // when QUALIFY immediately follows the FROM/JOIN section (no WHERE clause).
+    !matches!(dialect, Dialect::Redshift) || select.selection.is_none()
 }
 
 fn qualifier_matches_alias(
@@ -1154,5 +1162,33 @@ mod tests {
             check_sql_in_dialect("SELECT TO_JSON_STRING(t) FROM my_table AS t", Dialect::Ansi);
         assert_eq!(issues.len(), 1);
         assert!(issues[0].message.contains("t"));
+    }
+
+    #[test]
+    fn redshift_qualify_after_from_counts_alias_usage() {
+        let issues = check_sql_in_dialect(
+            "SELECT * \
+             FROM store AS s \
+             INNER JOIN store_sales AS ss \
+             QUALIFY ROW_NUMBER() OVER (PARTITION BY ss.sold_date ORDER BY ss.sales_price DESC) <= 2",
+            Dialect::Redshift,
+        );
+        assert_eq!(issues.len(), 1);
+        assert!(issues[0].message.contains("s"));
+    }
+
+    #[test]
+    fn redshift_qualify_after_where_does_not_count_alias_usage() {
+        let issues = check_sql_in_dialect(
+            "SELECT * \
+             FROM store AS s \
+             INNER JOIN store_sales AS ss \
+             WHERE col = 1 \
+             QUALIFY ROW_NUMBER() OVER (PARTITION BY ss.sold_date ORDER BY ss.sales_price DESC) <= 2",
+            Dialect::Redshift,
+        );
+        assert_eq!(issues.len(), 2);
+        assert!(issues.iter().any(|issue| issue.message.contains("s")));
+        assert!(issues.iter().any(|issue| issue.message.contains("ss")));
     }
 }
