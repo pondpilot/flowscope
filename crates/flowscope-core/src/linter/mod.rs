@@ -213,7 +213,10 @@ fn ast_rule_code(code: &str) -> bool {
         crate::types::issue_codes::LINT_AL_003
             | crate::types::issue_codes::LINT_AL_004
             | crate::types::issue_codes::LINT_AL_005
+            | crate::types::issue_codes::LINT_AL_006
+            | crate::types::issue_codes::LINT_AL_007
             | crate::types::issue_codes::LINT_AL_008
+            | crate::types::issue_codes::LINT_AL_009
             | crate::types::issue_codes::LINT_AM_001
             | crate::types::issue_codes::LINT_AM_002
             | crate::types::issue_codes::LINT_AM_003
@@ -231,9 +234,13 @@ fn ast_rule_code(code: &str) -> bool {
             | crate::types::issue_codes::LINT_RF_002
             | crate::types::issue_codes::LINT_RF_003
             | crate::types::issue_codes::LINT_ST_001
+            | crate::types::issue_codes::LINT_ST_002
             | crate::types::issue_codes::LINT_ST_003
             | crate::types::issue_codes::LINT_ST_004
+            | crate::types::issue_codes::LINT_ST_005
+            | crate::types::issue_codes::LINT_ST_006
             | crate::types::issue_codes::LINT_ST_007
+            | crate::types::issue_codes::LINT_ST_008
             | crate::types::issue_codes::LINT_ST_009
             | crate::types::issue_codes::LINT_ST_010
             | crate::types::issue_codes::LINT_ST_011

@@ -623,13 +623,6 @@ fn second_occurrence_case_insensitive_span(
     None
 }
 
-fn table_refs(sql: &str) -> Vec<String> {
-    capture_group(sql, r"(?i)\b(?:from|join)\s+([A-Za-z_][A-Za-z0-9_\.]*)", 1)
-        .into_iter()
-        .map(|name| name.rsplit('.').next().map(str::to_string).unwrap_or(name))
-        .collect()
-}
-
 fn table_aliases_raw(sql: &str) -> Vec<String> {
     capture_group(
         sql,
@@ -1318,19 +1311,6 @@ fn rule_al_04(stmt: &Statement, ctx: &LintContext) -> bool {
     duplicate_case_insensitive(&table_aliases(stmt_sql(ctx)))
 }
 
-fn rule_al_06(stmt: &Statement, ctx: &LintContext) -> bool {
-    let _ = stmt;
-    table_aliases(stmt_sql(ctx))
-        .iter()
-        .any(|alias| alias.len() > 30)
-}
-
-fn rule_al_07(stmt: &Statement, ctx: &LintContext) -> bool {
-    let _ = stmt;
-    let sql = stmt_sql(ctx);
-    table_refs(sql).len() == 1 && !table_aliases(sql).is_empty()
-}
-
 #[allow(dead_code)]
 fn rule_al_08(stmt: &Statement, ctx: &LintContext) -> bool {
     let _ = stmt;
@@ -1816,24 +1796,6 @@ impl LintRule for AliasingUniqueTable {
         vec![issue]
     }
 }
-define_predicate_rule!(
-    AliasingLength,
-    issue_codes::LINT_AL_006,
-    "Alias length",
-    "Alias names should be readable and not excessively long.",
-    info,
-    rule_al_06,
-    "Alias length should not exceed 30 characters."
-);
-define_predicate_rule!(
-    AliasingForbidSingleTable,
-    issue_codes::LINT_AL_007,
-    "Forbid unnecessary alias",
-    "Single-table queries should avoid unnecessary aliases.",
-    info,
-    rule_al_07,
-    "Avoid unnecessary aliases in single-table queries."
-);
 pub struct AliasingUniqueColumn;
 
 impl LintRule for AliasingUniqueColumn {
@@ -1870,40 +1832,6 @@ impl LintRule for AliasingUniqueColumn {
         vec![issue]
     }
 }
-pub struct AliasingSelfAliasColumn;
-
-impl LintRule for AliasingSelfAliasColumn {
-    fn code(&self) -> &'static str {
-        issue_codes::LINT_AL_009
-    }
-
-    fn name(&self) -> &'static str {
-        "Self alias column"
-    }
-
-    fn description(&self) -> &'static str {
-        "Avoid aliasing a column/expression to the same name."
-    }
-
-    fn check(&self, stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let _ = stmt;
-        let count = self_alias_count(stmt_sql(ctx));
-        if count == 0 {
-            return Vec::new();
-        }
-
-        (0..count)
-            .map(|_| {
-                Issue::info(
-                    issue_codes::LINT_AL_009,
-                    "Avoid self-aliasing columns or expressions.",
-                )
-                .with_statement(ctx.statement_index)
-            })
-            .collect()
-    }
-}
-
 define_predicate_rule!(
     CapitalisationKeywords,
     issue_codes::LINT_CP_001,
@@ -2537,15 +2465,6 @@ define_predicate_rule!(
     "Identifier quoting appears unnecessary."
 );
 
-define_predicate_rule!(
-    StructureSimpleCase,
-    issue_codes::LINT_ST_002,
-    "Structure simple case",
-    "Prefer simple CASE form where applicable.",
-    info,
-    rule_st_02,
-    "CASE expression may be simplified to simple CASE form."
-);
 pub struct StructureSubquery;
 
 impl LintRule for StructureSubquery {
@@ -2584,73 +2503,6 @@ impl LintRule for StructureSubquery {
         .with_span(ctx.span_from_statement_offset(from_start, from_end))]
     }
 }
-pub struct StructureColumnOrder;
-
-impl LintRule for StructureColumnOrder {
-    fn code(&self) -> &'static str {
-        issue_codes::LINT_ST_006
-    }
-
-    fn name(&self) -> &'static str {
-        "Structure column order"
-    }
-
-    fn description(&self) -> &'static str {
-        "Place simple columns before complex expressions."
-    }
-
-    fn check(&self, _stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let sql = stmt_sql(ctx);
-        let Some((clause, clause_start)) = select_clause_with_span(sql) else {
-            return Vec::new();
-        };
-        let items = split_top_level_commas(&clause);
-
-        let mut seen_expression = false;
-        let mut seen_simple = false;
-        let mut search_from = 0usize;
-        for item in items {
-            let raw = item.trim();
-            if raw.is_empty() {
-                continue;
-            }
-
-            let Some(found_rel) = clause[search_from..].find(raw) else {
-                continue;
-            };
-            let item_start = clause_start + search_from + found_rel;
-            let item_end = item_start + raw.len();
-            search_from += found_rel + raw.len();
-
-            if item_is_simple_identifier(raw) {
-                // Only flag when a SELECT list starts with complex expressions
-                // and then later switches to simple column references.
-                if seen_expression && !seen_simple {
-                    return vec![Issue::info(
-                        issue_codes::LINT_ST_006,
-                        "Prefer simple columns before complex expressions in SELECT.",
-                    )
-                    .with_statement(ctx.statement_index)
-                    .with_span(ctx.span_from_statement_offset(item_start, item_end))];
-                }
-                seen_simple = true;
-            } else {
-                seen_expression = true;
-            }
-        }
-
-        Vec::new()
-    }
-}
-define_predicate_rule!(
-    StructureDistinct,
-    issue_codes::LINT_ST_008,
-    "Structure distinct",
-    "DISTINCT usage appears structurally suboptimal.",
-    info,
-    rule_st_08,
-    "DISTINCT usage appears structurally suboptimal."
-);
 define_predicate_rule!(
     StructureConsecutiveSemicolons,
     issue_codes::LINT_ST_012,
@@ -2692,9 +2544,6 @@ define_predicate_rule!(
 /// Returns all parity rule implementations defined in this module.
 pub fn parity_rules() -> Vec<Box<dyn LintRule>> {
     vec![
-        Box::new(AliasingLength),
-        Box::new(AliasingForbidSingleTable),
-        Box::new(AliasingSelfAliasColumn),
         Box::new(CapitalisationKeywords),
         Box::new(CapitalisationIdentifiers),
         Box::new(CapitalisationFunctions),
@@ -2724,9 +2573,6 @@ pub fn parity_rules() -> Vec<Box<dyn LintRule>> {
         Box::new(ReferencesKeywords),
         Box::new(ReferencesSpecialChars),
         Box::new(ReferencesQuoting),
-        Box::new(StructureSimpleCase),
-        Box::new(StructureColumnOrder),
-        Box::new(StructureDistinct),
         Box::new(StructureConsecutiveSemicolons),
         Box::new(TsqlSpPrefix),
         Box::new(TsqlProcedureBeginEnd),
@@ -2798,18 +2644,6 @@ mod tests {
             "SELECT * FROM users u JOIN orders o ON u.id = o.user_id",
         );
 
-        assert_rule_triggers(
-            &AliasingLength,
-            "SELECT * FROM users this_alias_name_is_longer_than_thirty",
-        );
-        assert_rule_not_triggers(&AliasingLength, "SELECT * FROM users u");
-
-        assert_rule_triggers(&AliasingForbidSingleTable, "SELECT * FROM users u");
-        assert_rule_not_triggers(
-            &AliasingForbidSingleTable,
-            "SELECT * FROM users u JOIN orders o ON u.id = o.user_id",
-        );
-
         assert_rule_triggers(&AliasingUniqueColumn, "SELECT a AS x, b AS x FROM t");
         assert_rule_not_triggers(&AliasingUniqueColumn, "SELECT a AS x, b AS y FROM t");
         assert_rule_not_triggers(
@@ -2820,9 +2654,6 @@ mod tests {
             &AliasingUniqueColumn,
             "WITH left_side AS (SELECT id AS shared_name FROM users), right_side AS (SELECT id AS shared_name FROM orders) SELECT ls.shared_name, rs.shared_name FROM left_side ls JOIN right_side rs ON ls.shared_name = rs.shared_name",
         );
-
-        assert_rule_triggers(&AliasingSelfAliasColumn, "SELECT a AS a FROM t");
-        assert_rule_not_triggers(&AliasingSelfAliasColumn, "SELECT a AS b FROM t");
     }
 
     #[test]
@@ -3057,15 +2888,6 @@ SELECT * FROM b",
 
     #[test]
     fn structure_rules_cover_fail_and_pass_cases() {
-        assert_rule_triggers(
-            &StructureSimpleCase,
-            "SELECT CASE WHEN x = 1 THEN 'a' WHEN x = 2 THEN 'b' END FROM t",
-        );
-        assert_rule_not_triggers(
-            &StructureSimpleCase,
-            "SELECT CASE WHEN x = 1 THEN 'a' WHEN y = 2 THEN 'b' END FROM t",
-        );
-
         assert_rule_triggers(&StructureSubquery, "SELECT * FROM (SELECT * FROM t) sub");
         assert_rule_not_triggers(
             &StructureSubquery,
@@ -3075,14 +2897,6 @@ SELECT * FROM b",
             &StructureSubquery,
             "SELECT * FROM t WHERE id IN (SELECT id FROM t2)",
         );
-
-        assert_rule_triggers(&StructureColumnOrder, "SELECT a + 1, a FROM t");
-        assert_rule_not_triggers(&StructureColumnOrder, "SELECT a, a + 1 FROM t");
-        assert_rule_not_triggers(&StructureColumnOrder, "SELECT a, a + 1, b FROM t");
-        assert_rule_not_triggers(&StructureColumnOrder, "SELECT a AS first_a, b FROM t");
-
-        assert_rule_triggers(&StructureDistinct, "SELECT DISTINCT(a) FROM t");
-        assert_rule_not_triggers(&StructureDistinct, "SELECT DISTINCT a FROM t");
 
         assert_rule_triggers(&StructureConsecutiveSemicolons, "SELECT 1;;");
         assert_rule_not_triggers(&StructureConsecutiveSemicolons, "SELECT 1;");

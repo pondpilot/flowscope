@@ -7,7 +7,10 @@ pub mod al_002;
 pub mod al_003;
 pub mod al_004;
 pub mod al_005;
+pub mod al_006;
+pub mod al_007;
 pub mod al_008;
+pub mod al_009;
 pub mod am_001;
 pub mod am_002;
 pub mod am_003;
@@ -31,10 +34,13 @@ pub mod rf_002;
 pub mod rf_003;
 pub(crate) mod semantic_helpers;
 pub mod st_001;
+pub mod st_002;
 pub mod st_003;
 pub mod st_004;
 pub mod st_005;
+pub mod st_006;
 pub mod st_007;
+pub mod st_008;
 pub mod st_009;
 pub mod st_010;
 pub mod st_011;
@@ -56,7 +62,10 @@ pub fn all_rules() -> Vec<Box<dyn LintRule>> {
         Box::new(al_003::ImplicitAlias),
         Box::new(al_004::AliasingUniqueTable),
         Box::new(al_005::UnusedTableAlias),
+        Box::new(al_006::AliasingLength),
+        Box::new(al_007::AliasingForbidSingleTable),
         Box::new(al_008::AliasingUniqueColumn),
+        Box::new(al_009::AliasingSelfAliasColumn),
         Box::new(cv_002::CoalesceConvention),
         Box::new(cv_003::ConventionSelectTrailingComma),
         Box::new(cv_004::CountStyle),
@@ -69,9 +78,12 @@ pub fn all_rules() -> Vec<Box<dyn LintRule>> {
         Box::new(rf_003::ReferencesConsistent),
         Box::new(st_003::UnusedCte),
         Box::new(st_001::UnnecessaryElseNull),
+        Box::new(st_002::StructureSimpleCase),
         Box::new(st_004::FlattenableNestedCase),
         Box::new(st_005::StructureSubquery),
+        Box::new(st_006::StructureColumnOrder),
         Box::new(st_007::AvoidUsingJoin),
+        Box::new(st_008::StructureDistinct),
         Box::new(st_009::StructureJoinConditionOrder),
         Box::new(st_010::StructureConstantExpression),
         Box::new(st_011::StructureUnusedJoin),

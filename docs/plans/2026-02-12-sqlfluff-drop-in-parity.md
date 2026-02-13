@@ -60,6 +60,13 @@ This plan covers three axes:
   - `CV_006` moved from parity into a dedicated core rule module (`cv_006.rs`) and parity registration was removed.
   - `ST_010` constant-expression detection scope was broadened beyond SELECT traversal to also check `UPDATE`/`DELETE` predicates and `MERGE ... ON`.
   - `ST_011` semantic scope was expanded from outer joins to all join types (excluding apply joins).
+- Additional AST-driven migration progress beyond Tier 1:
+  - `AL_006` moved from parity regex handling to a dedicated core AST rule (`al_006.rs`).
+  - `AL_007` moved from parity regex handling to a dedicated core AST rule (`al_007.rs`).
+  - `AL_009` moved from parity regex handling to a dedicated core AST rule (`al_009.rs`).
+  - `ST_002` moved from parity regex handling to a dedicated core AST rule (`st_002.rs`).
+  - `ST_006` moved from parity regex handling to a dedicated core AST rule (`st_006.rs`).
+  - `ST_008` moved from parity regex handling to a dedicated core AST rule (`st_008.rs`).
 
 ### Intentionally Removed
 

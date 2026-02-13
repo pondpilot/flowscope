@@ -167,9 +167,12 @@ Move style-oriented checks to lexical engine:
 - [x] `LINT_ST_004` now follows SQLFluff ST04 semantics via AST CASE analysis, flagging flattenable nested CASE expressions in ELSE clauses (instead of depth-based heuristics); fixer parity now flattens eligible nested `ELSE CASE` branches into a single CASE.
 - [x] `LINT_ST_007` now includes SQLFluff ST07 fixer parity via AST join-constraint rewrites, converting `JOIN ... USING (...)` to explicit `ON` predicates (including multi-column USING lists).
 - [x] `LINT_ST_009` now includes SQLFluff ST09 fixer parity via AST expression rewrites, swapping reversed qualified equality sides in `JOIN ... ON` predicates.
-- [x] `LINT_ST_006` now includes SQLFluff ST06 fixer parity via AST SELECT projection reordering, moving leading complex expressions after simple column targets when required.
-- [x] `LINT_ST_002` now includes SQLFluff ST02 fixer parity via AST CASE rewrites, converting repeated `WHEN x = ...` clauses into simple CASE form.
-- [x] `LINT_ST_008` now includes SQLFluff ST08 fixer parity via AST SELECT rewrite, normalizing `SELECT DISTINCT(a)` into `SELECT DISTINCT a`.
+- [x] `LINT_ST_006` now follows SQLFluff ST06 detection semantics via AST SELECT projection analysis (simple targets after leading complex expressions) and includes fixer parity via AST reordering.
+- [x] `LINT_ST_002` now follows SQLFluff ST02 detection semantics via AST CASE analysis (repeated equality checks on a common operand) and includes fixer parity via AST CASE rewrites.
+- [x] `LINT_ST_008` now follows SQLFluff ST08 detection semantics via AST SELECT analysis for `DISTINCT(<expr>)` and includes fixer parity via AST SELECT rewrite to `SELECT DISTINCT <expr>`.
+- [x] `LINT_AL_009` now follows SQLFluff AL09 core detection semantics via AST projection analysis for identifier/qualified-identifier self-alias patterns (`col AS col`).
+- [x] `LINT_AL_006` now runs as a dedicated AST rule via table-factor alias traversal (current behavior preserves the existing max-length heuristic; SQLFluff config parity is pending).
+- [x] `LINT_AL_007` now runs as a dedicated AST rule via single-source SELECT analysis for unnecessary base-table aliases (current scope remains intentionally conservative).
 - [x] `LINT_AM_003` now follows SQLFluff AM03 semantics via AST `ORDER BY` analysis, flagging mixed implicit/explicit sort direction (including `NULLS` ordering cases) across nested query scopes; fixer parity now adds explicit `ASC` to implicit items in mixed clauses.
 - [x] `LINT_AM_005` now supports SQLFluff AM05 fixer parity for default behavior by rewriting bare `JOIN` operators to explicit `INNER JOIN` via AST join-operator rewrites.
 - [x] `LINT_AM_006` now follows SQLFluff AM06 default (`consistent`) semantics via AST traversal of `GROUP BY` / `ORDER BY` clauses, including nested-query precedence and rollup-style references.
