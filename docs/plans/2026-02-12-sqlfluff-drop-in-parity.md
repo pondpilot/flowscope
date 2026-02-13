@@ -57,6 +57,7 @@ This plan covers three axes:
   - `AL_008` moved from parity into a dedicated core AST rule (`al_008.rs`) and parity registration was removed.
   - `AL_005` was expanded to cover derived-table aliases while adding SQLFluff-compatible `LATERAL` and `VALUES` exceptions to reduce false positives.
   - `CV_003` moved from parity into a dedicated core rule module (`cv_003.rs`) and parity registration was removed.
+  - `CV_003` was further upgraded from regex scanning to token/depth-aware trailing-comma detection in SELECT clauses.
   - `CV_006` moved from parity into a dedicated core rule module (`cv_006.rs`) and parity registration was removed.
   - `ST_010` constant-expression detection scope was broadened beyond SELECT traversal to also check `UPDATE`/`DELETE` predicates and `MERGE ... ON`.
   - `ST_011` semantic scope was expanded from outer joins to all join types (excluding apply joins).
