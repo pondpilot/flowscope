@@ -657,7 +657,7 @@ fn lint_rule_config_references_consistent_qualified_mode() {
 #[test]
 fn lint_rule_config_references_quoting_prefer_quoted_identifiers() {
     let issues = run_lint_with_config(
-        "SELECT \"good_name\" FROM t",
+        "SELECT \"good_name\" FROM \"t\"",
         LintConfig {
             enabled: true,
             disabled_rules: vec![],
@@ -670,6 +670,25 @@ fn lint_rule_config_references_quoting_prefer_quoted_identifiers() {
     assert!(
         !issues.iter().any(|(code, _)| code == "LINT_RF_006"),
         "prefer_quoted_identifiers=true should suppress unnecessary-quote warnings: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_rule_config_references_quoting_prefer_quoted_identifiers_flags_unquoted() {
+    let issues = run_lint_with_config(
+        "SELECT good_name FROM t",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "LINT_RF_006".to_string(),
+                serde_json::json!({"prefer_quoted_identifiers": true}),
+            )]),
+        },
+    );
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_RF_006"),
+        "prefer_quoted_identifiers=true should flag unquoted identifiers: {issues:?}"
     );
 }
 

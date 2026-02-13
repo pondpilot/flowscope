@@ -92,7 +92,7 @@ This plan covers three axes:
   - `RF_005` now supports `quoted_identifiers_policy` / `unquoted_identifiers_policy`, `additional_allowed_characters`, and `ignore_words` / `ignore_words_regex` through `lint.ruleConfigs`.
   - `RF_006` moved from parity handling to a dedicated core rule module (`rf_006.rs`).
   - `RF_006` was further upgraded to AST-driven quoted-identifier traversal, replacing raw quote-regex scanning.
-  - `RF_006` now supports `prefer_quoted_identifiers` / `case_sensitive` through `lint.ruleConfigs`.
+  - `RF_006` now supports `prefer_quoted_identifiers`, `prefer_quoted_keywords`, `quoted_identifiers_policy` / `unquoted_identifiers_policy`, `ignore_words` / `ignore_words_regex`, and `case_sensitive` through `lint.ruleConfigs`.
   - `ST_002` moved from parity regex handling to a dedicated core AST rule (`st_002.rs`).
   - `ST_006` moved from parity regex handling to a dedicated core AST rule (`st_006.rs`).
   - `ST_008` moved from parity regex handling to a dedicated core AST rule (`st_008.rs`).

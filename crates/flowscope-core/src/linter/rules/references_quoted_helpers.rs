@@ -7,17 +7,12 @@ use sqlparser::ast::{Expr, SelectItem, Statement, TableAlias, TableFactor};
 
 use super::semantic_helpers::visit_selects_in_statement;
 
-pub(crate) fn quoted_identifiers_in_statement(statement: &Statement) -> Vec<String> {
-    collect_quoted_identifiers(statement, QuoteFilter::Any)
-}
-
 pub(crate) fn double_quoted_identifiers_in_statement(statement: &Statement) -> Vec<String> {
     collect_quoted_identifiers(statement, QuoteFilter::DoubleOnly)
 }
 
 #[derive(Clone, Copy)]
 enum QuoteFilter {
-    Any,
     DoubleOnly,
 }
 
@@ -141,7 +136,6 @@ fn strip_quoted_part(part: &str, filter: QuoteFilter) -> Option<&str> {
 
 fn matches_quote_style(style: Option<char>, filter: QuoteFilter) -> bool {
     match filter {
-        QuoteFilter::Any => style.is_some(),
         QuoteFilter::DoubleOnly => matches!(style, Some('"')),
     }
 }
