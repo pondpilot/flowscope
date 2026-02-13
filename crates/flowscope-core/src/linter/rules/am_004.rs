@@ -158,9 +158,17 @@ mod tests {
     }
 
     #[test]
-    fn flags_nested_join_wildcard_when_natural_join_width_is_unresolved() {
+    fn allows_nested_join_wildcard_when_natural_join_width_is_resolved() {
         let issues = run(
             "select j.* from ((select a from t1) as a1 natural join (select a from t2) as b1) as j",
+        );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn flags_nested_join_wildcard_when_natural_join_width_is_unknown() {
+        let issues = run(
+            "select j.* from ((select * from t1) as a1 natural join (select a from t2) as b1) as j",
         );
         assert_eq!(issues.len(), 1);
     }

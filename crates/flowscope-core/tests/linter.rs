@@ -1228,6 +1228,28 @@ fn lint_am_007_nested_join_using_width_resolves_for_set_comparison() {
 }
 
 #[test]
+fn lint_am_007_nested_join_natural_width_resolves_for_set_comparison() {
+    let issues = run_lint(
+        "SELECT j.* FROM ((SELECT a FROM t1) AS a1 NATURAL JOIN (SELECT a FROM t2) AS b1) AS j UNION ALL SELECT x FROM t3",
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_AM_007"),
+        "resolved NATURAL-join width should avoid AM_007 mismatch: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_am_007_nested_join_natural_width_unknown_does_not_trigger_for_set_comparison() {
+    let issues = run_lint(
+        "SELECT j.* FROM ((SELECT * FROM t1) AS a1 NATURAL JOIN (SELECT a FROM t2) AS b1) AS j UNION ALL SELECT x FROM t3",
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_AM_007"),
+        "unknown NATURAL-join width should defer AM_007 mismatch checks: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_cv_002_count_one() {
     let issues = run_lint("SELECT COUNT(1) FROM t");
     assert!(issues.iter().any(|(code, _)| code == "LINT_CV_004"));
@@ -1525,9 +1547,20 @@ fn lint_am_004_nested_join_using_width_known_columns_ok() {
 }
 
 #[test]
-fn lint_am_004_nested_join_natural_width_unresolved_flags() {
+fn lint_am_004_nested_join_natural_width_resolved_ok() {
     let issues = run_lint(
         "SELECT j.* FROM ((SELECT a FROM t1) AS a1 NATURAL JOIN (SELECT a FROM t2) AS b1) AS j",
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_AM_004"),
+        "known NATURAL-join output width should avoid AM_004 warning: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_am_004_nested_join_natural_width_unknown_flags() {
+    let issues = run_lint(
+        "SELECT j.* FROM ((SELECT * FROM t1) AS a1 NATURAL JOIN (SELECT a FROM t2) AS b1) AS j",
     );
     assert!(issues.iter().any(|(code, _)| code == "LINT_AM_004"));
 }

@@ -3,7 +3,7 @@
 use sqlparser::ast::{
     JoinConstraint, JoinOperator, Query, Select, SelectItem, SetExpr, TableFactor, TableWithJoins,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use super::semantic_helpers::{table_factor_alias_name, table_factor_reference_name};
 
@@ -13,6 +13,12 @@ pub(crate) type CteColumnCounts = HashMap<String, Option<usize>>;
 pub(crate) struct SourceColumns {
     pub(crate) names: Vec<String>,
     pub(crate) column_count: Option<usize>,
+    pub(crate) column_names: Option<Vec<String>>,
+}
+
+struct JoinOutputShape {
+    column_count: usize,
+    column_names: Option<Vec<String>>,
 }
 
 pub(crate) fn build_query_cte_map(query: &Query, outer_ctes: &CteColumnCounts) -> CteColumnCounts {
@@ -157,31 +163,45 @@ pub(crate) fn source_columns_for_table_factor(
         }
     }
 
-    let column_count =
-        table_factor_alias_column_count(table_factor).or_else(|| match table_factor {
-            TableFactor::Table { name, .. } => {
-                let key = normalize_identifier(name.to_string());
-                ctes.get(&key).copied().flatten()
+    let (column_count, column_names) =
+        if let Some(alias_columns) = table_factor_alias_column_names(table_factor) {
+            (Some(alias_columns.len()), Some(alias_columns))
+        } else {
+            match table_factor {
+                TableFactor::Table { name, .. } => {
+                    let key = normalize_identifier(name.to_string());
+                    (ctes.get(&key).copied().flatten(), None)
+                }
+                TableFactor::Derived { subquery, .. } => (
+                    resolve_query_output_columns(subquery, ctes),
+                    resolve_query_output_column_names(subquery),
+                ),
+                TableFactor::NestedJoin {
+                    table_with_joins, ..
+                } => resolve_nested_join_output_shape(table_with_joins, ctes)
+                    .map(|shape| (Some(shape.column_count), shape.column_names))
+                    .unwrap_or((None, None)),
+                TableFactor::Pivot { table, .. }
+                | TableFactor::Unpivot { table, .. }
+                | TableFactor::MatchRecognize { table, .. } => {
+                    let source = source_columns_for_table_factor(table, ctes);
+                    (source.column_count, source.column_names)
+                }
+                _ => (None, None),
             }
-            TableFactor::Derived { subquery, .. } => resolve_query_output_columns(subquery, ctes),
-            TableFactor::NestedJoin {
-                table_with_joins, ..
-            } => resolve_nested_join_output_columns(table_with_joins, ctes),
-            TableFactor::Pivot { table, .. }
-            | TableFactor::Unpivot { table, .. }
-            | TableFactor::MatchRecognize { table, .. } => {
-                source_columns_for_table_factor(table, ctes).column_count
-            }
-            _ => None,
-        });
+        };
+
+    let resolved_column_count =
+        column_count.or_else(|| column_names.as_ref().map(std::vec::Vec::len));
 
     SourceColumns {
         names,
-        column_count,
+        column_count: resolved_column_count,
+        column_names,
     }
 }
 
-fn table_factor_alias_column_count(table_factor: &TableFactor) -> Option<usize> {
+fn table_factor_alias_column_names(table_factor: &TableFactor) -> Option<Vec<String>> {
     let alias = match table_factor {
         TableFactor::Table { alias, .. }
         | TableFactor::Derived { alias, .. }
@@ -198,33 +218,71 @@ fn table_factor_alias_column_count(table_factor: &TableFactor) -> Option<usize> 
         | TableFactor::SemanticView { alias, .. } => alias.as_ref(),
     }?;
 
-    declared_cte_column_count(alias.columns.len())
+    if alias.columns.is_empty() {
+        return None;
+    }
+
+    Some(
+        alias
+            .columns
+            .iter()
+            .map(|column| normalize_identifier(column.name.value.clone()))
+            .collect(),
+    )
 }
 
-fn resolve_nested_join_output_columns(
+fn resolve_nested_join_output_shape(
     table_with_joins: &TableWithJoins,
     ctes: &CteColumnCounts,
-) -> Option<usize> {
-    let mut total =
-        source_columns_for_table_factor(&table_with_joins.relation, ctes).column_count?;
+) -> Option<JoinOutputShape> {
+    let mut total = source_columns_for_table_factor(&table_with_joins.relation, ctes)
+        .resolved_join_output_shape()?;
     for join in &table_with_joins.joins {
-        let right_count = source_columns_for_table_factor(&join.relation, ctes).column_count?;
-        total = combine_join_width(total, right_count, &join.join_operator)?;
+        let right =
+            source_columns_for_table_factor(&join.relation, ctes).resolved_join_output_shape()?;
+        total = combine_join_shape(total, right, &join.join_operator)?;
     }
     Some(total)
 }
 
-fn combine_join_width(
-    left_count: usize,
-    right_count: usize,
+fn combine_join_shape(
+    left: JoinOutputShape,
+    right: JoinOutputShape,
     operator: &JoinOperator,
-) -> Option<usize> {
+) -> Option<JoinOutputShape> {
     match join_constraint(operator) {
-        Some(JoinConstraint::Using(columns)) => left_count
-            .checked_add(right_count)?
-            .checked_sub(columns.len()),
-        Some(JoinConstraint::Natural) => None,
-        Some(JoinConstraint::None | JoinConstraint::On(_)) => left_count.checked_add(right_count),
+        Some(JoinConstraint::Using(columns)) => {
+            let count = left
+                .column_count
+                .checked_add(right.column_count)?
+                .checked_sub(columns.len())?;
+            let column_names =
+                combine_using_column_names(left.column_names, right.column_names, columns);
+            Some(JoinOutputShape {
+                column_count: count,
+                column_names,
+            })
+        }
+        Some(JoinConstraint::Natural) => {
+            let (column_names, overlap_count) =
+                combine_natural_column_names(left.column_names, right.column_names)?;
+            let count = left
+                .column_count
+                .checked_add(right.column_count)?
+                .checked_sub(overlap_count)?;
+            Some(JoinOutputShape {
+                column_count: count,
+                column_names: Some(column_names),
+            })
+        }
+        Some(JoinConstraint::None | JoinConstraint::On(_)) => {
+            let count = left.column_count.checked_add(right.column_count)?;
+            let column_names = combine_cross_column_names(left.column_names, right.column_names);
+            Some(JoinOutputShape {
+                column_count: count,
+                column_names,
+            })
+        }
         // APPLY joins are shape-dependent and not represented with explicit
         // join constraints here.
         None => None,
@@ -288,6 +346,118 @@ fn find_source_columns_by_name(name: &str, sources: &[SourceColumns]) -> Option<
         }
     }
     None
+}
+
+fn resolve_query_output_column_names(query: &Query) -> Option<Vec<String>> {
+    resolve_set_expr_output_column_names(&query.body)
+}
+
+fn resolve_set_expr_output_column_names(set_expr: &SetExpr) -> Option<Vec<String>> {
+    match set_expr {
+        SetExpr::Select(select) => resolve_select_output_column_names(select),
+        SetExpr::Query(query) => resolve_query_output_column_names(query),
+        // Follow SQLFluff AM07 behavior for set expressions by treating the
+        // first selectable as representative for output shape.
+        SetExpr::SetOperation { left, .. } => resolve_set_expr_output_column_names(left),
+        _ => None,
+    }
+}
+
+fn resolve_select_output_column_names(select: &Select) -> Option<Vec<String>> {
+    let mut names = Vec::new();
+
+    for item in &select.projection {
+        let name = projection_output_name(item)?;
+        names.push(name);
+    }
+
+    Some(names)
+}
+
+fn projection_output_name(item: &SelectItem) -> Option<String> {
+    match item {
+        SelectItem::ExprWithAlias { alias, .. } => Some(normalize_identifier(alias.value.clone())),
+        SelectItem::UnnamedExpr(expr) => Some(expr_output_name(expr)),
+        SelectItem::Wildcard(_) | SelectItem::QualifiedWildcard(_, _) => None,
+    }
+}
+
+fn expr_output_name(expr: &sqlparser::ast::Expr) -> String {
+    match expr {
+        sqlparser::ast::Expr::Identifier(identifier) => {
+            normalize_identifier(identifier.value.clone())
+        }
+        sqlparser::ast::Expr::CompoundIdentifier(parts) => parts
+            .last()
+            .map(|part| normalize_identifier(part.value.clone()))
+            .unwrap_or_else(|| normalize_identifier(expr.to_string())),
+        sqlparser::ast::Expr::Nested(inner)
+        | sqlparser::ast::Expr::UnaryOp { expr: inner, .. }
+        | sqlparser::ast::Expr::Cast { expr: inner, .. } => expr_output_name(inner),
+        _ => normalize_identifier(expr.to_string()),
+    }
+}
+
+fn combine_cross_column_names(
+    left: Option<Vec<String>>,
+    right: Option<Vec<String>>,
+) -> Option<Vec<String>> {
+    let mut left = left?;
+    let right = right?;
+    left.extend(right);
+    Some(left)
+}
+
+fn combine_using_column_names<T: std::fmt::Display>(
+    left: Option<Vec<String>>,
+    right: Option<Vec<String>>,
+    using_columns: &[T],
+) -> Option<Vec<String>> {
+    let mut left = left?;
+    let right = right?;
+    let using_names: HashSet<String> = using_columns
+        .iter()
+        .map(|column| normalize_identifier(column.to_string()))
+        .collect();
+
+    for column in right {
+        if using_names.contains(&column) {
+            continue;
+        }
+        left.push(column);
+    }
+
+    Some(left)
+}
+
+fn combine_natural_column_names(
+    left: Option<Vec<String>>,
+    right: Option<Vec<String>>,
+) -> Option<(Vec<String>, usize)> {
+    let mut left = left?;
+    let right = right?;
+    let mut left_names: HashSet<String> = left.iter().cloned().collect();
+    let right_names: HashSet<String> = right.iter().cloned().collect();
+    let overlap_count = left_names.intersection(&right_names).count();
+
+    for column in right {
+        if left_names.contains(&column) {
+            continue;
+        }
+        left_names.insert(column.clone());
+        left.push(column);
+    }
+
+    Some((left, overlap_count))
+}
+
+impl SourceColumns {
+    fn resolved_join_output_shape(self) -> Option<JoinOutputShape> {
+        Some(JoinOutputShape {
+            column_count: self.column_count?,
+            column_names: self.column_names,
+        })
+    }
 }
 
 pub(crate) fn normalize_identifier(raw: String) -> String {

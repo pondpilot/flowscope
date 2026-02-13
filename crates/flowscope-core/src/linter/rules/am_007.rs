@@ -311,9 +311,17 @@ mod tests {
     }
 
     #[test]
-    fn natural_join_nested_alias_width_remains_unresolved_for_set_comparison() {
+    fn resolves_natural_join_nested_alias_width_for_set_comparison() {
         let issues = run(
             "select j.* from ((select a from t1) as a1 natural join (select a from t2) as b1) as j union all select x from t3",
+        );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn natural_join_nested_alias_width_unknown_does_not_trigger_for_set_comparison() {
+        let issues = run(
+            "select j.* from ((select * from t1) as a1 natural join (select a from t2) as b1) as j union all select x from t3",
         );
         assert!(issues.is_empty());
     }
