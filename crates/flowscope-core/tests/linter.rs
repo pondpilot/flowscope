@@ -1070,6 +1070,15 @@ fn lint_st_010_non_equality_literal_comparison_ok() {
 }
 
 #[test]
+fn lint_st_011_inner_join_not_checked() {
+    let issues = run_lint("SELECT a.id FROM a INNER JOIN b ON a.id = b.id");
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_ST_011"),
+        "inner joins should not trigger ST_011 by default: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_lt_007_cte_bracket_missing() {
     let issues = run_lint("SELECT 'WITH cte AS SELECT 1' AS sql_snippet");
     assert!(
