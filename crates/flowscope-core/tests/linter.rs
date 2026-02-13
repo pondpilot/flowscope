@@ -1742,6 +1742,15 @@ fn lint_st_010_reports_each_constant_expression_occurrence() {
 }
 
 #[test]
+fn lint_st_010_flags_equal_string_concat_expression() {
+    let issues = run_lint("SELECT * FROM t WHERE 'A' || 'B' = 'A' || 'B'");
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_ST_010"),
+        "equivalent string-concat expressions should trigger ST_010: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_st_011_inner_join_not_checked() {
     let issues = run_lint("SELECT a.id FROM a INNER JOIN b ON a.id = b.id");
     assert!(

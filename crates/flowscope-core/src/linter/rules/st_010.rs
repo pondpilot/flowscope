@@ -62,8 +62,8 @@ fn constant_predicate_count(expr: &Expr) -> usize {
     match expr {
         Expr::BinaryOp { left, op, right } => {
             let direct_match = is_supported_expression_comparison_operator(op)
-                && !contains_operator_token(left)
-                && !contains_operator_token(right)
+                && !contains_comparison_operator_token(left)
+                && !contains_comparison_operator_token(right)
                 && match (literal_key(left), literal_key(right)) {
                     (Some(left_literal), Some(right_literal)) => {
                         is_supported_literal_comparison_operator(op)
@@ -133,23 +133,31 @@ fn is_supported_literal_comparison_operator(op: &BinaryOperator) -> bool {
     matches!(op, BinaryOperator::Eq | BinaryOperator::NotEq)
 }
 
-fn contains_operator_token(expr: &Expr) -> bool {
+fn contains_comparison_operator_token(expr: &Expr) -> bool {
     match expr {
-        Expr::BinaryOp { .. } | Expr::AnyOp { .. } | Expr::AllOp { .. } => true,
+        Expr::BinaryOp { left, op, right } => {
+            is_supported_expression_comparison_operator(op)
+                || contains_comparison_operator_token(left)
+                || contains_comparison_operator_token(right)
+        }
+        Expr::AnyOp { left, right, .. } | Expr::AllOp { left, right, .. } => {
+            contains_comparison_operator_token(left) || contains_comparison_operator_token(right)
+        }
         Expr::UnaryOp { expr: inner, .. }
         | Expr::Nested(inner)
         | Expr::IsNull(inner)
         | Expr::IsNotNull(inner)
-        | Expr::Cast { expr: inner, .. } => contains_operator_token(inner),
+        | Expr::Cast { expr: inner, .. } => contains_comparison_operator_token(inner),
         Expr::InList { expr, list, .. } => {
-            contains_operator_token(expr) || list.iter().any(contains_operator_token)
+            contains_comparison_operator_token(expr)
+                || list.iter().any(contains_comparison_operator_token)
         }
         Expr::Between {
             expr, low, high, ..
         } => {
-            contains_operator_token(expr)
-                || contains_operator_token(low)
-                || contains_operator_token(high)
+            contains_comparison_operator_token(expr)
+                || contains_comparison_operator_token(low)
+                || contains_comparison_operator_token(high)
         }
         Expr::Case {
             operand,
@@ -159,14 +167,14 @@ fn contains_operator_token(expr: &Expr) -> bool {
         } => {
             operand
                 .as_ref()
-                .is_some_and(|expr| contains_operator_token(expr))
+                .is_some_and(|expr| contains_comparison_operator_token(expr))
                 || conditions.iter().any(|when| {
-                    contains_operator_token(&when.condition)
-                        || contains_operator_token(&when.result)
+                    contains_comparison_operator_token(&when.condition)
+                        || contains_comparison_operator_token(&when.result)
                 })
                 || else_result
                     .as_ref()
-                    .is_some_and(|expr| contains_operator_token(expr))
+                    .is_some_and(|expr| contains_comparison_operator_token(expr))
         }
         _ => false,
     }
@@ -336,6 +344,24 @@ mod tests {
     fn counts_multiple_constant_predicates_in_single_expression_tree() {
         let issues = run("select * from foo where col = col and score = score");
         assert_eq!(issues.len(), 2);
+    }
+
+    #[test]
+    fn flags_equal_string_concat_expressions() {
+        let issues = run("select * from foo where 'A' || 'B' = 'A' || 'B'");
+        assert_eq!(issues.len(), 1);
+    }
+
+    #[test]
+    fn flags_equal_arithmetic_expressions() {
+        let issues = run("select * from foo where col + 1 = col + 1");
+        assert_eq!(issues.len(), 1);
+    }
+
+    #[test]
+    fn allows_non_equivalent_arithmetic_literal_comparison() {
+        let issues = run("select * from foo where 1 + 1 = 2");
+        assert!(issues.is_empty());
     }
 
     #[test]
