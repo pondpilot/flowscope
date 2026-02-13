@@ -1036,6 +1036,16 @@ fn lint_al_004_duplicate_implicit_table_name_aliases() {
 }
 
 #[test]
+fn lint_al_004_duplicate_alias_between_parent_and_subquery_scope() {
+    let issues =
+        run_lint("SELECT * FROM (SELECT * FROM users a) s JOIN orders a ON s.id = a.user_id");
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_AL_004"),
+        "parent/subquery alias collisions should trigger AL_004: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_al_008_duplicate_unaliased_column_reference() {
     let issues = run_lint("SELECT foo, foo FROM t");
     assert!(

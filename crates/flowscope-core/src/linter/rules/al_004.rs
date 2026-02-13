@@ -39,38 +39,55 @@ impl LintRule for AliasingUniqueTable {
 
 fn first_duplicate_table_alias_in_statement(statement: &Statement) -> Option<String> {
     match statement {
-        Statement::Query(query) => first_duplicate_table_alias_in_query(query),
+        Statement::Query(query) => first_duplicate_table_alias_in_query_with_parent(query, &[]),
         Statement::Insert(insert) => insert
             .source
             .as_deref()
-            .and_then(first_duplicate_table_alias_in_query),
-        Statement::CreateView { query, .. } => first_duplicate_table_alias_in_query(query),
+            .and_then(|query| first_duplicate_table_alias_in_query_with_parent(query, &[])),
+        Statement::CreateView { query, .. } => {
+            first_duplicate_table_alias_in_query_with_parent(query, &[])
+        }
         Statement::CreateTable(create) => create
             .query
             .as_deref()
-            .and_then(first_duplicate_table_alias_in_query),
+            .and_then(|query| first_duplicate_table_alias_in_query_with_parent(query, &[])),
         _ => None,
     }
 }
 
-fn first_duplicate_table_alias_in_query(query: &Query) -> Option<String> {
+fn first_duplicate_table_alias_in_query_with_parent(
+    query: &Query,
+    parent_aliases: &[String],
+) -> Option<String> {
     if let Some(with) = &query.with {
         for cte in &with.cte_tables {
-            if let Some(duplicate) = first_duplicate_table_alias_in_query(&cte.query) {
+            if let Some(duplicate) =
+                first_duplicate_table_alias_in_query_with_parent(&cte.query, &[])
+            {
                 return Some(duplicate);
             }
         }
     }
 
-    first_duplicate_table_alias_in_set_expr(&query.body)
+    first_duplicate_table_alias_in_set_expr_with_parent(&query.body, parent_aliases)
 }
 
-fn first_duplicate_table_alias_in_set_expr(set_expr: &SetExpr) -> Option<String> {
+fn first_duplicate_table_alias_in_set_expr_with_parent(
+    set_expr: &SetExpr,
+    parent_aliases: &[String],
+) -> Option<String> {
     match set_expr {
-        SetExpr::Select(select) => first_duplicate_table_alias_in_select(select),
-        SetExpr::Query(query) => first_duplicate_table_alias_in_query(query),
-        SetExpr::SetOperation { left, right, .. } => first_duplicate_table_alias_in_set_expr(left)
-            .or_else(|| first_duplicate_table_alias_in_set_expr(right)),
+        SetExpr::Select(select) => {
+            first_duplicate_table_alias_in_select_with_parent(select, parent_aliases)
+        }
+        SetExpr::Query(query) => {
+            first_duplicate_table_alias_in_query_with_parent(query, parent_aliases)
+        }
+        SetExpr::SetOperation { left, right, .. } => {
+            first_duplicate_table_alias_in_set_expr_with_parent(left, parent_aliases).or_else(
+                || first_duplicate_table_alias_in_set_expr_with_parent(right, parent_aliases),
+            )
+        }
         SetExpr::Insert(statement)
         | SetExpr::Update(statement)
         | SetExpr::Delete(statement)
@@ -79,20 +96,27 @@ fn first_duplicate_table_alias_in_set_expr(set_expr: &SetExpr) -> Option<String>
     }
 }
 
-fn first_duplicate_table_alias_in_select(select: &Select) -> Option<String> {
+fn first_duplicate_table_alias_in_select_with_parent(
+    select: &Select,
+    parent_aliases: &[String],
+) -> Option<String> {
     let mut aliases = Vec::new();
     for table_with_joins in &select.from {
         collect_scope_table_aliases(table_with_joins, &mut aliases);
     }
 
-    if let Some(duplicate) = first_duplicate_case_insensitive(&aliases) {
+    let mut aliases_with_parent = parent_aliases.to_vec();
+    aliases_with_parent.extend(aliases);
+
+    if let Some(duplicate) = first_duplicate_case_insensitive(&aliases_with_parent) {
         return Some(duplicate);
     }
 
     for table_with_joins in &select.from {
-        if let Some(duplicate) =
-            first_duplicate_table_alias_in_table_with_joins_children(table_with_joins)
-        {
+        if let Some(duplicate) = first_duplicate_table_alias_in_table_with_joins_children(
+            table_with_joins,
+            &aliases_with_parent,
+        ) {
             return Some(duplicate);
         }
     }
@@ -142,31 +166,52 @@ fn inferred_alias_name(table_factor: &TableFactor) -> Option<String> {
 
 fn first_duplicate_table_alias_in_table_with_joins_children(
     table_with_joins: &TableWithJoins,
+    parent_aliases: &[String],
 ) -> Option<String> {
-    first_duplicate_table_alias_in_table_factor_children(&table_with_joins.relation).or_else(|| {
-        for join in &table_with_joins.joins {
-            if let Some(duplicate) =
-                first_duplicate_table_alias_in_table_factor_children(&join.relation)
-            {
-                return Some(duplicate);
+    first_duplicate_table_alias_in_table_factor_children(&table_with_joins.relation, parent_aliases)
+        .or_else(|| {
+            for join in &table_with_joins.joins {
+                if let Some(duplicate) = first_duplicate_table_alias_in_table_factor_children(
+                    &join.relation,
+                    parent_aliases,
+                ) {
+                    return Some(duplicate);
+                }
             }
+            None
+        })
+}
+
+fn child_parent_aliases(parent_aliases: &[String], table_factor: &TableFactor) -> Vec<String> {
+    let mut next = parent_aliases.to_vec();
+    if let Some(alias) = inferred_alias_name(table_factor) {
+        if let Some(index) = next
+            .iter()
+            .position(|existing| existing.eq_ignore_ascii_case(&alias))
+        {
+            next.remove(index);
         }
-        None
-    })
+    }
+    next
 }
 
 fn first_duplicate_table_alias_in_table_factor_children(
     table_factor: &TableFactor,
+    parent_aliases: &[String],
 ) -> Option<String> {
+    let child_parent_aliases = child_parent_aliases(parent_aliases, table_factor);
+
     match table_factor {
-        TableFactor::Derived { subquery, .. } => first_duplicate_table_alias_in_query(subquery),
+        TableFactor::Derived { subquery, .. } => {
+            first_duplicate_table_alias_in_query_with_parent(subquery, &child_parent_aliases)
+        }
         TableFactor::NestedJoin {
             table_with_joins, ..
-        } => first_duplicate_table_alias_in_nested_scope(table_with_joins),
+        } => first_duplicate_table_alias_in_nested_scope(table_with_joins, &child_parent_aliases),
         TableFactor::Pivot { table, .. }
         | TableFactor::Unpivot { table, .. }
         | TableFactor::MatchRecognize { table, .. } => {
-            first_duplicate_table_alias_in_table_factor_children(table)
+            first_duplicate_table_alias_in_table_factor_children(table, &child_parent_aliases)
         }
         _ => None,
     }
@@ -174,14 +219,18 @@ fn first_duplicate_table_alias_in_table_factor_children(
 
 fn first_duplicate_table_alias_in_nested_scope(
     table_with_joins: &TableWithJoins,
+    parent_aliases: &[String],
 ) -> Option<String> {
     let mut aliases = Vec::new();
     collect_scope_table_aliases(table_with_joins, &mut aliases);
-    if let Some(duplicate) = first_duplicate_case_insensitive(&aliases) {
+    let mut aliases_with_parent = parent_aliases.to_vec();
+    aliases_with_parent.extend(aliases);
+
+    if let Some(duplicate) = first_duplicate_case_insensitive(&aliases_with_parent) {
         return Some(duplicate);
     }
 
-    first_duplicate_table_alias_in_table_with_joins_children(table_with_joins)
+    first_duplicate_table_alias_in_table_with_joins_children(table_with_joins, &aliases_with_parent)
 }
 
 fn first_duplicate_case_insensitive(values: &[String]) -> Option<String> {
@@ -253,5 +302,20 @@ mod tests {
         let issues = run(sql);
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_AL_004);
+    }
+
+    #[test]
+    fn flags_duplicate_alias_between_parent_and_subquery_scope() {
+        let sql = "select * from (select * from users a) s join orders a on s.id = a.user_id";
+        let issues = run(sql);
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_AL_004);
+    }
+
+    #[test]
+    fn does_not_treat_subquery_alias_as_parent_alias_conflict() {
+        let sql = "select * from (select * from users s) s";
+        let issues = run(sql);
+        assert!(issues.is_empty());
     }
 }
