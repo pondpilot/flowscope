@@ -46,7 +46,7 @@ impl LintRule for StructureUnusedJoin {
 }
 
 fn unused_join_count_for_select(select: &Select) -> usize {
-    if select.from.is_empty() || select.from.len() > 1 {
+    if select.from.is_empty() {
         return 0;
     }
 
@@ -300,5 +300,18 @@ mod tests {
             run("SELECT a.id FROM a LEFT JOIN b ON a.id = b.a_id LEFT JOIN c ON b.c_id = c.id");
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_ST_011);
+    }
+
+    #[test]
+    fn flags_unused_outer_join_in_multi_root_from_clause() {
+        let issues = run("SELECT a.id FROM a, b LEFT JOIN c ON b.id = c.id");
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_ST_011);
+    }
+
+    #[test]
+    fn allows_used_outer_join_in_multi_root_from_clause() {
+        let issues = run("SELECT c.id FROM a, b LEFT JOIN c ON b.id = c.id");
+        assert!(issues.is_empty());
     }
 }

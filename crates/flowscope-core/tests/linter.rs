@@ -1467,6 +1467,15 @@ fn lint_st_011_does_not_flag_base_from_with_using_join() {
 }
 
 #[test]
+fn lint_st_011_flags_multi_root_unused_outer_join_source() {
+    let issues = run_lint("SELECT a.id FROM a, b LEFT JOIN c ON b.id = c.id");
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_ST_011"),
+        "unused joined source in multi-root FROM should trigger ST_011: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_lt_007_cte_bracket_missing() {
     let issues = run_lint("SELECT 'WITH cte AS SELECT 1' AS sql_snippet");
     assert!(
