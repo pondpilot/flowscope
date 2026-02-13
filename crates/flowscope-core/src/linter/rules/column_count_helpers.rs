@@ -1,6 +1,8 @@
 //! Shared column-count resolution helpers for AM rules.
 
-use sqlparser::ast::{Query, Select, SelectItem, SetExpr, TableFactor};
+use sqlparser::ast::{
+    JoinConstraint, JoinOperator, Query, Select, SelectItem, SetExpr, TableFactor, TableWithJoins,
+};
 use std::collections::HashMap;
 
 use super::semantic_helpers::{table_factor_alias_name, table_factor_reference_name};
@@ -155,6 +157,9 @@ pub(crate) fn source_columns_for_table_factor(
             ctes.get(&key).copied().flatten()
         }
         TableFactor::Derived { subquery, .. } => resolve_query_output_columns(subquery, ctes),
+        TableFactor::NestedJoin {
+            table_with_joins, ..
+        } => resolve_nested_join_output_columns(table_with_joins, ctes),
         TableFactor::Pivot { table, .. }
         | TableFactor::Unpivot { table, .. }
         | TableFactor::MatchRecognize { table, .. } => {
@@ -166,6 +171,60 @@ pub(crate) fn source_columns_for_table_factor(
     SourceColumns {
         names,
         column_count,
+    }
+}
+
+fn resolve_nested_join_output_columns(
+    table_with_joins: &TableWithJoins,
+    ctes: &CteColumnCounts,
+) -> Option<usize> {
+    // USING/NATURAL joins collapse duplicate key columns, so additive counting
+    // is unsafe in those cases.
+    if table_with_joins
+        .joins
+        .iter()
+        .any(|join| has_non_additive_join_constraint(&join.join_operator))
+    {
+        return None;
+    }
+
+    let mut total =
+        source_columns_for_table_factor(&table_with_joins.relation, ctes).column_count?;
+    for join in &table_with_joins.joins {
+        total += source_columns_for_table_factor(&join.relation, ctes).column_count?;
+    }
+    Some(total)
+}
+
+fn has_non_additive_join_constraint(operator: &JoinOperator) -> bool {
+    match join_constraint(operator) {
+        Some(JoinConstraint::Using(_) | JoinConstraint::Natural) => true,
+        Some(JoinConstraint::None | JoinConstraint::On(_)) => false,
+        // APPLY joins are shape-dependent and not represented with explicit
+        // join constraints here.
+        None => true,
+    }
+}
+
+fn join_constraint(operator: &JoinOperator) -> Option<&JoinConstraint> {
+    match operator {
+        JoinOperator::Join(constraint)
+        | JoinOperator::Inner(constraint)
+        | JoinOperator::Left(constraint)
+        | JoinOperator::LeftOuter(constraint)
+        | JoinOperator::Right(constraint)
+        | JoinOperator::RightOuter(constraint)
+        | JoinOperator::FullOuter(constraint)
+        | JoinOperator::CrossJoin(constraint)
+        | JoinOperator::Semi(constraint)
+        | JoinOperator::LeftSemi(constraint)
+        | JoinOperator::RightSemi(constraint)
+        | JoinOperator::Anti(constraint)
+        | JoinOperator::LeftAnti(constraint)
+        | JoinOperator::RightAnti(constraint)
+        | JoinOperator::StraightJoin(constraint) => Some(constraint),
+        JoinOperator::AsOf { constraint, .. } => Some(constraint),
+        JoinOperator::CrossApply | JoinOperator::OuterApply => None,
     }
 }
 

@@ -73,6 +73,7 @@ This plan covers three axes:
   - `ST_010` now aligns closer with SQLFluff ST10 comparison semantics (`=`/`!=`/`<>` focus with operator-side guardrails and `1=1`/`1=0` literal allow-list handling).
   - `ST_011` now aligns closer to SQLFluff ST11 by scoping checks to explicit OUTER joins, tracking only joined relations (not base `FROM` sources), deferring when unqualified refs exist, accounting for inter-join `ON`-clause references plus wildcard usage (`alias.*` and `*`), and counting references from later join relation expressions (e.g. `UNNEST(g.nested_array)`).
   - `ST_011` now also evaluates multi-root `FROM` clauses (e.g., comma-joins combined with OUTER joins) instead of skipping analysis whenever more than one top-level `FROM` entry exists.
+  - `AM_004`/`AM_007` wildcard-width resolution now also handles aliased nested-join table factors when join width is additive (while conservatively deferring unresolved `USING`/`NATURAL` join width cases).
 - Additional AST-driven migration progress beyond Tier 1:
   - `AL_006` moved from parity regex handling to a dedicated core AST rule (`al_006.rs`).
   - `AL_006` now supports configurable `min_alias_length` / `max_alias_length` through `lint.ruleConfigs`.

@@ -253,4 +253,21 @@ mod tests {
         );
         assert!(issues.is_empty());
     }
+
+    #[test]
+    fn resolves_nested_join_alias_wildcard_for_set_comparison() {
+        let issues = run(
+            "select j.* from ((select a from t1) as a1 join (select b from t2) as b1 on a1.a = b1.b) as j union all select x, y from t3",
+        );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn flags_nested_join_alias_wildcard_set_mismatch_when_resolved() {
+        let issues = run(
+            "select j.* from ((select a from t1) as a1 join (select b from t2) as b1 on a1.a = b1.b) as j union all select x from t3",
+        );
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_AM_007);
+    }
 }

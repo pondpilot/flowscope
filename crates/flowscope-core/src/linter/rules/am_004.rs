@@ -125,8 +125,23 @@ mod tests {
     }
 
     #[test]
+    fn allows_qualified_wildcard_from_known_nested_join_alias() {
+        let issues = run(
+            "select j.* from ((select a from t1) as a1 join (select b from t2) as b1 on a1.a = b1.b) as j",
+        );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
     fn flags_qualified_wildcard_from_unknown_derived_alias() {
         let issues = run("select t_alias.* from (select * from t) as t_alias");
+        assert_eq!(issues.len(), 1);
+    }
+
+    #[test]
+    fn flags_nested_join_wildcard_when_using_makes_width_non_additive() {
+        let issues =
+            run("select j.* from ((select a from t1) as a1 join (select a from t2) as b1 using (a)) as j");
         assert_eq!(issues.len(), 1);
     }
 

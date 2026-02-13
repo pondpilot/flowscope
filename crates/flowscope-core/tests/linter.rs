@@ -1172,6 +1172,14 @@ fn lint_am_004_unknown_result_columns() {
 }
 
 #[test]
+fn lint_am_007_nested_join_alias_wildcard_set_mismatch() {
+    let issues = run_lint(
+        "SELECT j.* FROM ((SELECT a FROM t1) AS a1 JOIN (SELECT b FROM t2) AS b1 ON a1.a = b1.b) AS j UNION ALL SELECT x FROM t3",
+    );
+    assert!(issues.iter().any(|(code, _)| code == "LINT_AM_007"));
+}
+
+#[test]
 fn lint_cv_002_count_one() {
     let issues = run_lint("SELECT COUNT(1) FROM t");
     assert!(issues.iter().any(|(code, _)| code == "LINT_CV_004"));
@@ -1425,6 +1433,17 @@ fn lint_am_004_known_columns_ok() {
     assert!(
         !issues.iter().any(|(code, _)| code == "LINT_AM_004"),
         "known output width should not trigger AM_004: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_am_004_nested_join_alias_known_columns_ok() {
+    let issues = run_lint(
+        "SELECT j.* FROM ((SELECT a FROM t1) AS a1 JOIN (SELECT b FROM t2) AS b1 ON a1.a = b1.b) AS j",
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_AM_004"),
+        "resolved nested-join alias wildcard should not trigger AM_004: {issues:?}"
     );
 }
 
