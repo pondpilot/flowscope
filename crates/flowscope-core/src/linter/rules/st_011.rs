@@ -635,10 +635,14 @@ fn collect_function_arg_prefixes(arg: &FunctionArg, prefixes: &mut HashSet<Strin
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::parse_sql;
+    use crate::{parser::parse_sql_with_dialect, types::Dialect};
 
     fn run(sql: &str) -> Vec<Issue> {
-        let statements = parse_sql(sql).expect("parse");
+        run_in_dialect(sql, Dialect::Generic)
+    }
+
+    fn run_in_dialect(sql: &str, dialect: Dialect) -> Vec<Issue> {
+        let statements = parse_sql_with_dialect(sql, dialect).expect("parse");
         let rule = StructureUnusedJoin;
         statements
             .iter()
@@ -795,6 +799,24 @@ mod tests {
     #[test]
     fn allows_outer_join_source_referenced_in_distribute_by_clause() {
         let issues = run("SELECT a.id FROM a LEFT JOIN b ON a.id = b.id DISTRIBUTE BY b.id");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn allows_outer_join_source_referenced_with_mysql_backtick_quoted_table_name() {
+        let issues = run_in_dialect(
+            "SELECT `test`.one, `test-2`.two FROM `test` LEFT JOIN `test-2` ON `test`.id = `test-2`.id",
+            Dialect::Mysql,
+        );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn allows_outer_join_source_referenced_with_mssql_bracket_quoted_table_name() {
+        let issues = run_in_dialect(
+            "SELECT [test].one, [test-2].two FROM [test] LEFT JOIN [test-2] ON [test].id = [test-2].id",
+            Dialect::Mssql,
+        );
         assert!(issues.is_empty());
     }
 }

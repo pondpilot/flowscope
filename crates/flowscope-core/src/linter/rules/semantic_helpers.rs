@@ -278,9 +278,10 @@ pub fn table_factor_reference_name(table_factor: &TableFactor) -> Option<String>
     match table_factor {
         TableFactor::Table { name, .. } => {
             let full = name.to_string();
-            full.rsplit('.')
-                .next()
-                .map(|last| last.trim_matches('"').to_ascii_uppercase())
+            full.rsplit('.').next().map(|last| {
+                last.trim_matches(|ch| matches!(ch, '"' | '`' | '\'' | '[' | ']'))
+                    .to_ascii_uppercase()
+            })
         }
         _ => None,
     }

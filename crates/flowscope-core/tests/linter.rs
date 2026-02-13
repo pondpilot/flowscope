@@ -1825,6 +1825,30 @@ fn lint_st_011_distribute_by_reference_counts_as_usage() {
 }
 
 #[test]
+fn lint_st_011_mysql_backtick_quoted_joined_source_reference_counts_as_usage() {
+    let issues = run_lint_in_dialect(
+        "SELECT `test`.one, `test-2`.two FROM `test` LEFT JOIN `test-2` ON `test`.id = `test-2`.id",
+        Dialect::Mysql,
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_ST_011"),
+        "backtick-quoted joined-source references should count as usage: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_st_011_mssql_bracket_quoted_joined_source_reference_counts_as_usage() {
+    let issues = run_lint_in_dialect(
+        "SELECT [test].one, [test-2].two FROM [test] LEFT JOIN [test-2] ON [test].id = [test-2].id",
+        Dialect::Mssql,
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_ST_011"),
+        "bracket-quoted joined-source references should count as usage: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_st_011_does_not_flag_base_from_with_using_join() {
     let issues = run_lint("SELECT b.id FROM a LEFT JOIN b USING(id)");
     assert!(
