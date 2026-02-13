@@ -1025,6 +1025,17 @@ fn lint_al_003_explicit_aliases_ok() {
 }
 
 #[test]
+fn lint_al_004_duplicate_implicit_table_name_aliases() {
+    let issues = run_lint(
+        "SELECT * FROM analytics.foo JOIN reporting.foo ON analytics.foo.id = reporting.foo.id",
+    );
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_AL_004"),
+        "duplicate implicit table-name aliases should trigger AL_004: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_am_005_order_by_name_ok() {
     let issues = run_lint("SELECT name FROM t ORDER BY name");
     assert!(

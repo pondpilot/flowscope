@@ -53,6 +53,7 @@ This plan covers three axes:
   - `ST_005` moved from parity regex handling to a dedicated core AST rule implementation.
   - `ST_005` now supports `forbid_subquery_in` (`both`/`join`/`from`) through `lint.ruleConfigs`.
   - `AL_004` moved from parity into a dedicated core AST rule (`al_004.rs`) and parity registration was removed.
+  - `AL_004` now also checks duplicate implicit table-name aliases (e.g., same base table name across schemas without explicit aliases), matching SQLFluff AL04 coverage more closely.
   - `AL_001` moved from parity into a dedicated core rule module (`al_001.rs`) and parity registration was removed.
   - `AL_001` was further upgraded to AST-driven table-factor alias traversal with token-aware `AS` detection.
   - `AL_002` moved from parity into a dedicated core rule module (`al_002.rs`) and parity registration was removed.

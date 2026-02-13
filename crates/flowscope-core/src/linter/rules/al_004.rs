@@ -108,8 +108,8 @@ fn collect_scope_table_aliases(table_with_joins: &TableWithJoins, aliases: &mut 
 }
 
 fn collect_scope_table_aliases_from_factor(table_factor: &TableFactor, aliases: &mut Vec<String>) {
-    if let Some(alias) = table_factor_alias_name(table_factor) {
-        aliases.push(alias.to_string());
+    if let Some(alias) = inferred_alias_name(table_factor) {
+        aliases.push(alias);
     }
 
     match table_factor {
@@ -122,6 +122,21 @@ fn collect_scope_table_aliases_from_factor(table_factor: &TableFactor, aliases: 
             collect_scope_table_aliases_from_factor(table, aliases)
         }
         _ => {}
+    }
+}
+
+fn inferred_alias_name(table_factor: &TableFactor) -> Option<String> {
+    if let Some(alias) = table_factor_alias_name(table_factor) {
+        return Some(alias.to_string());
+    }
+
+    match table_factor {
+        TableFactor::Table { name, .. } => name.0.last().map(|part| {
+            part.as_ident()
+                .map(|ident| ident.value.clone())
+                .unwrap_or_else(|| part.to_string())
+        }),
+        _ => None,
     }
 }
 
@@ -229,5 +244,14 @@ mod tests {
         let sql = "select * from (select * from users u join orders u on u.id = u.user_id) t";
         let issues = run(sql);
         assert_eq!(issues.len(), 1);
+    }
+
+    #[test]
+    fn flags_duplicate_implicit_table_name_aliases() {
+        let sql =
+            "select * from analytics.foo join reporting.foo on analytics.foo.id = reporting.foo.id";
+        let issues = run(sql);
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_AL_004);
     }
 }
