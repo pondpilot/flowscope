@@ -1198,6 +1198,17 @@ fn lint_am_007_declared_derived_alias_columns_set_mismatch() {
 }
 
 #[test]
+fn lint_am_007_nested_join_using_width_resolves_for_set_comparison() {
+    let issues = run_lint(
+        "SELECT j.* FROM ((SELECT a FROM t1) AS a1 JOIN (SELECT a FROM t2) AS b1 USING(a)) AS j UNION ALL SELECT x FROM t3",
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_AM_007"),
+        "resolved USING-join width should avoid AM_007 mismatch: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_cv_002_count_one() {
     let issues = run_lint("SELECT COUNT(1) FROM t");
     assert!(issues.iter().any(|(code, _)| code == "LINT_CV_004"));
@@ -1481,6 +1492,25 @@ fn lint_am_004_declared_derived_alias_columns_known_width_ok() {
         !issues.iter().any(|(code, _)| code == "LINT_AM_004"),
         "declared derived alias columns should resolve wildcard width for AM_004: {issues:?}"
     );
+}
+
+#[test]
+fn lint_am_004_nested_join_using_width_known_columns_ok() {
+    let issues = run_lint(
+        "SELECT j.* FROM ((SELECT a FROM t1) AS a1 JOIN (SELECT a FROM t2) AS b1 USING(a)) AS j",
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_AM_004"),
+        "resolved USING-join width should avoid AM_004 unknown-width warning: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_am_004_nested_join_natural_width_unresolved_flags() {
+    let issues = run_lint(
+        "SELECT j.* FROM ((SELECT a FROM t1) AS a1 NATURAL JOIN (SELECT a FROM t2) AS b1) AS j",
+    );
+    assert!(issues.iter().any(|(code, _)| code == "LINT_AM_004"));
 }
 
 #[test]

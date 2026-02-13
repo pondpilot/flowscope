@@ -301,4 +301,20 @@ mod tests {
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_AM_007);
     }
+
+    #[test]
+    fn resolves_nested_join_alias_using_width_for_set_comparison() {
+        let issues = run(
+            "select j.* from ((select a from t1) as a1 join (select a from t2) as b1 using(a)) as j union all select x from t3",
+        );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn natural_join_nested_alias_width_remains_unresolved_for_set_comparison() {
+        let issues = run(
+            "select j.* from ((select a from t1) as a1 natural join (select a from t2) as b1) as j union all select x from t3",
+        );
+        assert!(issues.is_empty());
+    }
 }

@@ -205,31 +205,29 @@ fn resolve_nested_join_output_columns(
     table_with_joins: &TableWithJoins,
     ctes: &CteColumnCounts,
 ) -> Option<usize> {
-    // USING/NATURAL joins collapse duplicate key columns, so additive counting
-    // is unsafe in those cases.
-    if table_with_joins
-        .joins
-        .iter()
-        .any(|join| has_non_additive_join_constraint(&join.join_operator))
-    {
-        return None;
-    }
-
     let mut total =
         source_columns_for_table_factor(&table_with_joins.relation, ctes).column_count?;
     for join in &table_with_joins.joins {
-        total += source_columns_for_table_factor(&join.relation, ctes).column_count?;
+        let right_count = source_columns_for_table_factor(&join.relation, ctes).column_count?;
+        total = combine_join_width(total, right_count, &join.join_operator)?;
     }
     Some(total)
 }
 
-fn has_non_additive_join_constraint(operator: &JoinOperator) -> bool {
+fn combine_join_width(
+    left_count: usize,
+    right_count: usize,
+    operator: &JoinOperator,
+) -> Option<usize> {
     match join_constraint(operator) {
-        Some(JoinConstraint::Using(_) | JoinConstraint::Natural) => true,
-        Some(JoinConstraint::None | JoinConstraint::On(_)) => false,
+        Some(JoinConstraint::Using(columns)) => left_count
+            .checked_add(right_count)?
+            .checked_sub(columns.len()),
+        Some(JoinConstraint::Natural) => None,
+        Some(JoinConstraint::None | JoinConstraint::On(_)) => left_count.checked_add(right_count),
         // APPLY joins are shape-dependent and not represented with explicit
         // join constraints here.
-        None => true,
+        None => None,
     }
 }
 
