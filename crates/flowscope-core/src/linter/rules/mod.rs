@@ -21,6 +21,7 @@ pub mod am_006;
 pub mod am_007;
 pub mod am_008;
 pub mod am_009;
+pub(crate) mod capitalisation_policy_helpers;
 pub(crate) mod column_count_helpers;
 pub mod cp_001;
 pub mod cp_002;
@@ -100,11 +101,11 @@ pub fn all_rules(config: &LintConfig) -> Vec<Box<dyn LintRule>> {
         Box::new(al_007::AliasingForbidSingleTable::from_config(config)),
         Box::new(al_008::AliasingUniqueColumn),
         Box::new(al_009::AliasingSelfAliasColumn),
-        Box::new(cp_001::CapitalisationKeywords),
-        Box::new(cp_002::CapitalisationIdentifiers),
-        Box::new(cp_003::CapitalisationFunctions),
-        Box::new(cp_004::CapitalisationLiterals),
-        Box::new(cp_005::CapitalisationTypes),
+        Box::new(cp_001::CapitalisationKeywords::from_config(config)),
+        Box::new(cp_002::CapitalisationIdentifiers::from_config(config)),
+        Box::new(cp_003::CapitalisationFunctions::from_config(config)),
+        Box::new(cp_004::CapitalisationLiterals::from_config(config)),
+        Box::new(cp_005::CapitalisationTypes::from_config(config)),
         Box::new(cv_001::ConventionNotEqual::from_config(config)),
         Box::new(cv_002::CoalesceConvention),
         Box::new(cv_003::ConventionSelectTrailingComma),

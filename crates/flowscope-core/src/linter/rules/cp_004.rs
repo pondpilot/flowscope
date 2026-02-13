@@ -3,13 +3,38 @@
 //! SQLFluff CP04 parity (current scope): detect mixed-case usage for
 //! NULL/TRUE/FALSE literal keywords.
 
+use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
 use sqlparser::ast::Statement;
 use sqlparser::dialect::GenericDialect;
 use sqlparser::tokenizer::{Token, Tokenizer};
 
-pub struct CapitalisationLiterals;
+use super::capitalisation_policy_helpers::{tokens_violate_policy, CapitalisationPolicy};
+
+pub struct CapitalisationLiterals {
+    policy: CapitalisationPolicy,
+}
+
+impl CapitalisationLiterals {
+    pub fn from_config(config: &LintConfig) -> Self {
+        Self {
+            policy: CapitalisationPolicy::from_rule_config(
+                config,
+                issue_codes::LINT_CP_004,
+                "extended_capitalisation_policy",
+            ),
+        }
+    }
+}
+
+impl Default for CapitalisationLiterals {
+    fn default() -> Self {
+        Self {
+            policy: CapitalisationPolicy::Consistent,
+        }
+    }
+}
 
 impl LintRule for CapitalisationLiterals {
     fn code(&self) -> &'static str {
@@ -25,7 +50,7 @@ impl LintRule for CapitalisationLiterals {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        if mixed_case_for_tokens(&literal_tokens(ctx.statement_sql())) {
+        if tokens_violate_policy(&literal_tokens(ctx.statement_sql()), self.policy) {
             vec![Issue::info(
                 issue_codes::LINT_CP_004,
                 "Literal keywords (NULL/TRUE/FALSE) use inconsistent capitalisation.",
@@ -60,38 +85,15 @@ fn literal_tokens(sql: &str) -> Vec<String> {
         .collect()
 }
 
-fn mixed_case_for_tokens(tokens: &[String]) -> bool {
-    if tokens.len() < 2 {
-        return false;
-    }
-
-    let mut saw_upper = false;
-    let mut saw_lower = false;
-    let mut saw_mixed = false;
-
-    for token in tokens {
-        let upper = token.to_ascii_uppercase();
-        let lower = token.to_ascii_lowercase();
-        if token == &upper {
-            saw_upper = true;
-        } else if token == &lower {
-            saw_lower = true;
-        } else {
-            saw_mixed = true;
-        }
-    }
-
-    saw_mixed || (saw_upper && saw_lower)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::linter::config::LintConfig;
     use crate::parser::parse_sql;
 
     fn run(sql: &str) -> Vec<Issue> {
         let statements = parse_sql(sql).expect("parse");
-        let rule = CapitalisationLiterals;
+        let rule = CapitalisationLiterals::default();
         statements
             .iter()
             .enumerate()
@@ -124,5 +126,29 @@ mod tests {
     fn does_not_flag_literal_words_in_strings_or_comments() {
         let sql = "SELECT 'null true false' AS txt -- NULL true\nFROM t";
         assert!(run(sql).is_empty());
+    }
+
+    #[test]
+    fn upper_policy_flags_lowercase_literal() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "capitalisation.literals".to_string(),
+                serde_json::json!({"extended_capitalisation_policy": "upper"}),
+            )]),
+        };
+        let rule = CapitalisationLiterals::from_config(&config);
+        let sql = "SELECT true FROM t";
+        let statements = parse_sql(sql).expect("parse");
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert_eq!(issues.len(), 1);
     }
 }

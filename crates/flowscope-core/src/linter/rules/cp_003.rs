@@ -3,6 +3,7 @@
 //! SQLFluff CP03 parity (current scope): detect inconsistent function name
 //! capitalisation.
 
+use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
 use sqlparser::ast::Statement;
@@ -10,7 +11,31 @@ use sqlparser::dialect::GenericDialect;
 use sqlparser::keywords::Keyword;
 use sqlparser::tokenizer::{Token, Tokenizer, Whitespace};
 
-pub struct CapitalisationFunctions;
+use super::capitalisation_policy_helpers::{tokens_violate_policy, CapitalisationPolicy};
+
+pub struct CapitalisationFunctions {
+    policy: CapitalisationPolicy,
+}
+
+impl CapitalisationFunctions {
+    pub fn from_config(config: &LintConfig) -> Self {
+        Self {
+            policy: CapitalisationPolicy::from_rule_config(
+                config,
+                issue_codes::LINT_CP_003,
+                "extended_capitalisation_policy",
+            ),
+        }
+    }
+}
+
+impl Default for CapitalisationFunctions {
+    fn default() -> Self {
+        Self {
+            policy: CapitalisationPolicy::Consistent,
+        }
+    }
+}
 
 impl LintRule for CapitalisationFunctions {
     fn code(&self) -> &'static str {
@@ -31,18 +56,7 @@ impl LintRule for CapitalisationFunctions {
             return Vec::new();
         }
 
-        let preferred_style = functions
-            .iter()
-            .map(|name| case_style(name))
-            .find(|style| *style == "lower" || *style == "upper")
-            .unwrap_or("lower");
-
-        let has_mismatch = functions.iter().any(|name| {
-            let style = case_style(name);
-            (style == "lower" || style == "upper" || style == "mixed") && style != preferred_style
-        });
-
-        if has_mismatch {
+        if tokens_violate_policy(&functions, self.policy) {
             vec![Issue::info(
                 issue_codes::LINT_CP_003,
                 "Function names use inconsistent capitalisation.",
@@ -51,29 +65,6 @@ impl LintRule for CapitalisationFunctions {
         } else {
             Vec::new()
         }
-    }
-}
-
-fn case_style(token: &str) -> &'static str {
-    if token.is_empty() {
-        return "unknown";
-    }
-    if token == token.to_ascii_uppercase() {
-        "upper"
-    } else if token == token.to_ascii_lowercase() {
-        "lower"
-    } else if token
-        .chars()
-        .all(|ch| !ch.is_ascii_alphabetic() || ch.is_ascii_uppercase())
-    {
-        "upper"
-    } else if token
-        .chars()
-        .all(|ch| !ch.is_ascii_alphabetic() || ch.is_ascii_lowercase())
-    {
-        "lower"
-    } else {
-        "mixed"
     }
 }
 
@@ -202,11 +193,12 @@ fn is_trivia_token(token: &Token) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::linter::config::LintConfig;
     use crate::parser::parse_sql;
 
     fn run(sql: &str) -> Vec<Issue> {
         let statements = parse_sql(sql).expect("parse");
-        let rule = CapitalisationFunctions;
+        let rule = CapitalisationFunctions::default();
         statements
             .iter()
             .enumerate()
@@ -239,5 +231,29 @@ mod tests {
     fn does_not_flag_function_like_text_in_strings_or_comments() {
         let sql = "SELECT 'COUNT(x) count(y)' AS txt -- COUNT(x)\nFROM t";
         assert!(run(sql).is_empty());
+    }
+
+    #[test]
+    fn lower_policy_flags_uppercase_function_name() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "LINT_CP_003".to_string(),
+                serde_json::json!({"extended_capitalisation_policy": "lower"}),
+            )]),
+        };
+        let rule = CapitalisationFunctions::from_config(&config);
+        let sql = "SELECT COUNT(x) FROM t";
+        let statements = parse_sql(sql).expect("parse");
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert_eq!(issues.len(), 1);
     }
 }

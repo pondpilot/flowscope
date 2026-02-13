@@ -4,6 +4,7 @@
 
 use std::collections::HashSet;
 
+use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
 use sqlparser::ast::Statement;
@@ -11,7 +12,31 @@ use sqlparser::dialect::GenericDialect;
 use sqlparser::keywords::Keyword;
 use sqlparser::tokenizer::{Token, Tokenizer, Whitespace};
 
-pub struct CapitalisationIdentifiers;
+use super::capitalisation_policy_helpers::{tokens_violate_policy, CapitalisationPolicy};
+
+pub struct CapitalisationIdentifiers {
+    policy: CapitalisationPolicy,
+}
+
+impl CapitalisationIdentifiers {
+    pub fn from_config(config: &LintConfig) -> Self {
+        Self {
+            policy: CapitalisationPolicy::from_rule_config(
+                config,
+                issue_codes::LINT_CP_002,
+                "extended_capitalisation_policy",
+            ),
+        }
+    }
+}
+
+impl Default for CapitalisationIdentifiers {
+    fn default() -> Self {
+        Self {
+            policy: CapitalisationPolicy::Consistent,
+        }
+    }
+}
 
 impl LintRule for CapitalisationIdentifiers {
     fn code(&self) -> &'static str {
@@ -28,26 +53,7 @@ impl LintRule for CapitalisationIdentifiers {
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
         let identifiers = identifier_tokens(ctx.statement_sql());
-
-        let excluded_issues: Vec<Issue> = identifiers
-            .iter()
-            .filter(|ident| {
-                ident.eq_ignore_ascii_case("EXCLUDED") && *ident != &ident.to_ascii_lowercase()
-            })
-            .map(|_| {
-                Issue::info(
-                    issue_codes::LINT_CP_002,
-                    "Identifiers use inconsistent capitalisation.",
-                )
-                .with_statement(ctx.statement_index)
-            })
-            .collect();
-
-        if !excluded_issues.is_empty() {
-            return excluded_issues;
-        }
-
-        if !mixed_case_for_tokens(&identifiers) {
+        if !tokens_violate_policy(&identifiers, self.policy) {
             return Vec::new();
         }
 
@@ -209,45 +215,15 @@ fn is_trivia_token(token: &Token) -> bool {
     )
 }
 
-fn case_style(token: &str) -> &'static str {
-    if token.is_empty() {
-        return "unknown";
-    }
-    if token == token.to_ascii_uppercase() {
-        "upper"
-    } else if token == token.to_ascii_lowercase() {
-        "lower"
-    } else if token
-        .chars()
-        .all(|ch| !ch.is_ascii_alphabetic() || ch.is_ascii_uppercase())
-    {
-        "upper"
-    } else if token
-        .chars()
-        .all(|ch| !ch.is_ascii_alphabetic() || ch.is_ascii_lowercase())
-    {
-        "lower"
-    } else {
-        "mixed"
-    }
-}
-
-fn mixed_case_for_tokens(tokens: &[String]) -> bool {
-    let mut styles = HashSet::new();
-    for token in tokens {
-        styles.insert(case_style(token));
-    }
-    styles.len() > 1
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::linter::config::LintConfig;
     use crate::parser::parse_sql;
 
     fn run(sql: &str) -> Vec<Issue> {
         let statements = parse_sql(sql).expect("parse");
-        let rule = CapitalisationIdentifiers;
+        let rule = CapitalisationIdentifiers::default();
         statements
             .iter()
             .enumerate()
@@ -280,5 +256,29 @@ mod tests {
     fn does_not_flag_identifier_like_words_in_strings_or_comments() {
         let sql = "SELECT 'Col col' AS txt -- Col col\nFROM t";
         assert!(run(sql).is_empty());
+    }
+
+    #[test]
+    fn upper_policy_flags_lowercase_identifier() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "capitalisation.identifiers".to_string(),
+                serde_json::json!({"extended_capitalisation_policy": "upper"}),
+            )]),
+        };
+        let rule = CapitalisationIdentifiers::from_config(&config);
+        let sql = "SELECT col FROM t";
+        let statements = parse_sql(sql).expect("parse");
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert_eq!(issues.len(), 1);
     }
 }

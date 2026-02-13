@@ -2,13 +2,38 @@
 //!
 //! SQLFluff CP05 parity (current scope): detect mixed-case type names.
 
+use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
 use sqlparser::ast::Statement;
 use sqlparser::dialect::GenericDialect;
 use sqlparser::tokenizer::{Token, Tokenizer};
 
-pub struct CapitalisationTypes;
+use super::capitalisation_policy_helpers::{tokens_violate_policy, CapitalisationPolicy};
+
+pub struct CapitalisationTypes {
+    policy: CapitalisationPolicy,
+}
+
+impl CapitalisationTypes {
+    pub fn from_config(config: &LintConfig) -> Self {
+        Self {
+            policy: CapitalisationPolicy::from_rule_config(
+                config,
+                issue_codes::LINT_CP_005,
+                "extended_capitalisation_policy",
+            ),
+        }
+    }
+}
+
+impl Default for CapitalisationTypes {
+    fn default() -> Self {
+        Self {
+            policy: CapitalisationPolicy::Consistent,
+        }
+    }
+}
 
 impl LintRule for CapitalisationTypes {
     fn code(&self) -> &'static str {
@@ -24,7 +49,7 @@ impl LintRule for CapitalisationTypes {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        if mixed_case_for_tokens(&type_tokens(ctx.statement_sql())) {
+        if tokens_violate_policy(&type_tokens(ctx.statement_sql()), self.policy) {
             vec![Issue::info(
                 issue_codes::LINT_CP_005,
                 "Type names use inconsistent capitalisation.",
@@ -78,38 +103,15 @@ fn is_tracked_type_name(value: &str) -> bool {
     )
 }
 
-fn mixed_case_for_tokens(tokens: &[String]) -> bool {
-    if tokens.len() < 2 {
-        return false;
-    }
-
-    let mut saw_upper = false;
-    let mut saw_lower = false;
-    let mut saw_mixed = false;
-
-    for token in tokens {
-        let upper = token.to_ascii_uppercase();
-        let lower = token.to_ascii_lowercase();
-        if token == &upper {
-            saw_upper = true;
-        } else if token == &lower {
-            saw_lower = true;
-        } else {
-            saw_mixed = true;
-        }
-    }
-
-    saw_mixed || (saw_upper && saw_lower)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::linter::config::LintConfig;
     use crate::parser::parse_sql;
 
     fn run(sql: &str) -> Vec<Issue> {
         let statements = parse_sql(sql).expect("parse");
-        let rule = CapitalisationTypes;
+        let rule = CapitalisationTypes::default();
         statements
             .iter()
             .enumerate()
@@ -142,5 +144,29 @@ mod tests {
     fn does_not_flag_type_words_in_strings_or_comments() {
         let sql = "SELECT 'INT varchar BOOLEAN' AS txt -- INT varchar\nFROM t";
         assert!(run(sql).is_empty());
+    }
+
+    #[test]
+    fn upper_policy_flags_lowercase_type_name() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "LINT_CP_005".to_string(),
+                serde_json::json!({"extended_capitalisation_policy": "upper"}),
+            )]),
+        };
+        let rule = CapitalisationTypes::from_config(&config);
+        let sql = "CREATE TABLE t (a int)";
+        let statements = parse_sql(sql).expect("parse");
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert_eq!(issues.len(), 1);
     }
 }
