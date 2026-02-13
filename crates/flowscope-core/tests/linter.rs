@@ -1789,6 +1789,24 @@ fn lint_st_011_named_window_unqualified_reference_defers_check() {
 }
 
 #[test]
+fn lint_st_011_distinct_on_reference_counts_as_usage() {
+    let issues = run_lint("SELECT DISTINCT ON (b.id) a.id FROM a LEFT JOIN b ON a.id = b.id");
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_ST_011"),
+        "DISTINCT ON joined-source references should count as usage: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_st_011_distinct_on_unqualified_reference_defers_check() {
+    let issues = run_lint("SELECT DISTINCT ON (id) a.id FROM a LEFT JOIN b ON a.id = b.id");
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_ST_011"),
+        "unqualified DISTINCT ON references should defer ST_011: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_st_011_does_not_flag_base_from_with_using_join() {
     let issues = run_lint("SELECT b.id FROM a LEFT JOIN b USING(id)");
     assert!(

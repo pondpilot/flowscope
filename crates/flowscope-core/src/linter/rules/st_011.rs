@@ -87,6 +87,9 @@ fn unused_join_count_for_set_expr(set_expr: &SetExpr, query_order_by_exprs: &[&E
             visit_non_join_select_expressions(select, &mut |expr| {
                 total += unused_join_count_for_expr_subqueries(expr);
             });
+            visit_distinct_on_expressions(select, &mut |expr| {
+                total += unused_join_count_for_expr_subqueries(expr);
+            });
             visit_named_window_expressions(select, &mut |expr| {
                 total += unused_join_count_for_expr_subqueries(expr);
             });
@@ -145,6 +148,12 @@ fn unused_join_count_for_select(select: &Select, query_order_by_exprs: &[&Expr])
     let mut unqualified_references = 0usize;
 
     visit_non_join_select_expressions(select, &mut |expr| {
+        collect_qualifier_prefixes_in_expr(expr, &mut used_prefixes);
+        let (_, unqualified) =
+            count_reference_qualification_in_expr_excluding_aliases(expr, &aliases);
+        unqualified_references += unqualified;
+    });
+    visit_distinct_on_expressions(select, &mut |expr| {
         collect_qualifier_prefixes_in_expr(expr, &mut used_prefixes);
         let (_, unqualified) =
             count_reference_qualification_in_expr_excluding_aliases(expr, &aliases);
@@ -469,6 +478,17 @@ fn visit_non_join_select_expressions<F: FnMut(&sqlparser::ast::Expr)>(
     }
 }
 
+fn visit_distinct_on_expressions<F: FnMut(&sqlparser::ast::Expr)>(
+    select: &Select,
+    visitor: &mut F,
+) {
+    if let Some(sqlparser::ast::Distinct::On(expressions)) = &select.distinct {
+        for expr in expressions {
+            visitor(expr);
+        }
+    }
+}
+
 fn visit_named_window_expressions<F: FnMut(&sqlparser::ast::Expr)>(
     select: &Select,
     visitor: &mut F,
@@ -743,6 +763,18 @@ mod tests {
         let issues = run(
             "SELECT sum(a.value) OVER w FROM a LEFT JOIN b ON a.id = b.id WINDOW w AS (PARTITION BY group_key)",
         );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn allows_outer_join_source_referenced_in_distinct_on_clause() {
+        let issues = run("SELECT DISTINCT ON (b.id) a.id FROM a LEFT JOIN b ON a.id = b.id");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn defers_when_distinct_on_clause_has_unqualified_reference() {
+        let issues = run("SELECT DISTINCT ON (id) a.id FROM a LEFT JOIN b ON a.id = b.id");
         assert!(issues.is_empty());
     }
 }
