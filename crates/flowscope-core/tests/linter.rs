@@ -978,6 +978,25 @@ fn lint_rule_config_capitalisation_identifiers_ignore_words_regex() {
 }
 
 #[test]
+fn lint_rule_config_capitalisation_identifiers_aliases_policy() {
+    let issues = run_lint_with_config(
+        "SELECT Col AS alias FROM t",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "capitalisation.identifiers".to_string(),
+                serde_json::json!({"unquoted_identifiers_policy": "aliases"}),
+            )]),
+        },
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_CP_002"),
+        "identifier aliases policy should ignore non-alias identifier case mix: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_rule_config_capitalisation_functions_lower_policy() {
     let issues = run_lint_with_config(
         "SELECT COUNT(x) FROM t",

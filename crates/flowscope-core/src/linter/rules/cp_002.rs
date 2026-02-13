@@ -9,17 +9,16 @@ use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
 use regex::Regex;
 use sqlparser::ast::Statement;
-use sqlparser::dialect::GenericDialect;
-use sqlparser::keywords::Keyword;
-use sqlparser::tokenizer::{Token, Tokenizer, Whitespace};
 
 use super::capitalisation_policy_helpers::{
     ignored_words_from_config, ignored_words_regex_from_config, token_is_ignored,
     tokens_violate_policy, CapitalisationPolicy,
 };
+use super::identifier_candidates_helpers::{collect_identifier_candidates, IdentifierPolicy};
 
 pub struct CapitalisationIdentifiers {
     policy: CapitalisationPolicy,
+    unquoted_policy: IdentifierPolicy,
     ignore_words: HashSet<String>,
     ignore_words_regex: Option<Regex>,
 }
@@ -32,6 +31,12 @@ impl CapitalisationIdentifiers {
                 issue_codes::LINT_CP_002,
                 "extended_capitalisation_policy",
             ),
+            unquoted_policy: IdentifierPolicy::from_config(
+                config,
+                issue_codes::LINT_CP_002,
+                "unquoted_identifiers_policy",
+                "all",
+            ),
             ignore_words: ignored_words_from_config(config, issue_codes::LINT_CP_002),
             ignore_words_regex: ignored_words_regex_from_config(config, issue_codes::LINT_CP_002),
         }
@@ -42,6 +47,7 @@ impl Default for CapitalisationIdentifiers {
     fn default() -> Self {
         Self {
             policy: CapitalisationPolicy::Consistent,
+            unquoted_policy: IdentifierPolicy::All,
             ignore_words: HashSet::new(),
             ignore_words_regex: None,
         }
@@ -61,9 +67,10 @@ impl LintRule for CapitalisationIdentifiers {
         "Identifiers should use a consistent case style."
     }
 
-    fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
         let identifiers = identifier_tokens(
-            ctx.statement_sql(),
+            statement,
+            self.unquoted_policy,
             &self.ignore_words,
             self.ignore_words_regex.as_ref(),
         );
@@ -80,161 +87,25 @@ impl LintRule for CapitalisationIdentifiers {
 }
 
 fn identifier_tokens(
-    sql: &str,
+    statement: &Statement,
+    unquoted_policy: IdentifierPolicy,
     ignore_words: &HashSet<String>,
     ignore_words_regex: Option<&Regex>,
 ) -> Vec<String> {
-    let dialect = GenericDialect {};
-    let mut tokenizer = Tokenizer::new(&dialect, sql);
-    let Ok(tokens) = tokenizer.tokenize() else {
-        return Vec::new();
-    };
-
-    let function_indices = function_token_indices(&tokens);
-
-    tokens
-        .iter()
-        .enumerate()
-        .filter_map(|(index, token)| {
-            let Token::Word(word) = token else {
-                return None;
-            };
-
-            if function_indices.contains(&index) {
+    collect_identifier_candidates(statement)
+        .into_iter()
+        .filter_map(|candidate| {
+            if candidate.quoted || !unquoted_policy.allows(candidate.kind) {
                 return None;
             }
 
-            if word.quote_style.is_some() {
+            if token_is_ignored(candidate.value.as_str(), ignore_words, ignore_words_regex) {
                 return None;
             }
 
-            if word.keyword != Keyword::NoKeyword && !word.value.eq_ignore_ascii_case("EXCLUDED") {
-                return None;
-            }
-
-            if token_is_ignored(word.value.as_str(), ignore_words, ignore_words_regex) {
-                return None;
-            }
-
-            Some(word.value.clone())
+            Some(candidate.value)
         })
         .collect()
-}
-
-fn function_token_indices(tokens: &[Token]) -> HashSet<usize> {
-    let mut out = HashSet::new();
-
-    for (index, token) in tokens.iter().enumerate() {
-        let Token::Word(word) = token else {
-            continue;
-        };
-
-        if word.quote_style.is_some() {
-            continue;
-        }
-
-        if is_non_function_word(word.value.as_str()) {
-            continue;
-        }
-
-        let Some(next_index) = next_non_trivia_index(tokens, index + 1) else {
-            continue;
-        };
-        if !matches!(tokens[next_index], Token::LParen) {
-            continue;
-        }
-
-        if let Some(prev_index) = prev_non_trivia_index(tokens, index) {
-            match &tokens[prev_index] {
-                Token::Period => continue,
-                Token::Word(prev_word)
-                    if matches!(
-                        prev_word.keyword,
-                        Keyword::INTO
-                            | Keyword::FROM
-                            | Keyword::JOIN
-                            | Keyword::UPDATE
-                            | Keyword::TABLE
-                    ) =>
-                {
-                    continue;
-                }
-                _ => {}
-            }
-        }
-
-        out.insert(index);
-    }
-
-    out
-}
-
-fn next_non_trivia_index(tokens: &[Token], mut index: usize) -> Option<usize> {
-    while index < tokens.len() {
-        if !is_trivia_token(&tokens[index]) {
-            return Some(index);
-        }
-        index += 1;
-    }
-    None
-}
-
-fn is_non_function_word(word: &str) -> bool {
-    matches!(
-        word.to_ascii_uppercase().as_str(),
-        "ALL"
-            | "AND"
-            | "ANY"
-            | "AS"
-            | "BETWEEN"
-            | "BY"
-            | "CASE"
-            | "ELSE"
-            | "END"
-            | "EXISTS"
-            | "FROM"
-            | "GROUP"
-            | "HAVING"
-            | "IN"
-            | "INTERSECT"
-            | "IS"
-            | "JOIN"
-            | "LIKE"
-            | "ILIKE"
-            | "LIMIT"
-            | "NOT"
-            | "OFFSET"
-            | "ON"
-            | "OR"
-            | "ORDER"
-            | "OVER"
-            | "PARTITION"
-            | "SELECT"
-            | "THEN"
-            | "UNION"
-            | "WHEN"
-            | "WHERE"
-            | "WINDOW"
-    )
-}
-
-fn prev_non_trivia_index(tokens: &[Token], mut index: usize) -> Option<usize> {
-    while index > 0 {
-        index -= 1;
-        if !is_trivia_token(&tokens[index]) {
-            return Some(index);
-        }
-    }
-    None
-}
-
-fn is_trivia_token(token: &Token) -> bool {
-    matches!(
-        token,
-        Token::Whitespace(Whitespace::Space | Whitespace::Newline | Whitespace::Tab)
-            | Token::Whitespace(Whitespace::SingleLineComment { .. })
-            | Token::Whitespace(Whitespace::MultiLineComment(_))
-    )
 }
 
 #[cfg(test)]
@@ -244,8 +115,12 @@ mod tests {
     use crate::parser::parse_sql;
 
     fn run(sql: &str) -> Vec<Issue> {
+        run_with_config(sql, LintConfig::default())
+    }
+
+    fn run_with_config(sql: &str, config: LintConfig) -> Vec<Issue> {
         let statements = parse_sql(sql).expect("parse");
-        let rule = CapitalisationIdentifiers::default();
+        let rule = CapitalisationIdentifiers::from_config(&config);
         statements
             .iter()
             .enumerate()
@@ -290,17 +165,7 @@ mod tests {
                 serde_json::json!({"extended_capitalisation_policy": "upper"}),
             )]),
         };
-        let rule = CapitalisationIdentifiers::from_config(&config);
-        let sql = "SELECT col FROM t";
-        let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues = run_with_config("SELECT col FROM t", config);
         assert_eq!(issues.len(), 1);
     }
 
@@ -314,17 +179,36 @@ mod tests {
                 serde_json::json!({"ignore_words_regex": "^col$"}),
             )]),
         };
-        let rule = CapitalisationIdentifiers::from_config(&config);
-        let sql = "SELECT Col, col FROM t";
-        let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues = run_with_config("SELECT Col, col FROM t", config);
         assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn aliases_policy_ignores_non_alias_identifiers() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "capitalisation.identifiers".to_string(),
+                serde_json::json!({"unquoted_identifiers_policy": "aliases"}),
+            )]),
+        };
+        let issues = run_with_config("SELECT Col AS alias FROM t", config);
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn column_alias_policy_flags_mixed_column_alias_case() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "LINT_CP_002".to_string(),
+                serde_json::json!({"unquoted_identifiers_policy": "column_aliases"}),
+            )]),
+        };
+        let issues = run_with_config("SELECT amount AS Col, amount AS col FROM t", config);
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_CP_002);
     }
 }
