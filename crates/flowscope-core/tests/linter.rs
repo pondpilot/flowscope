@@ -960,6 +960,31 @@ fn lint_al_005_flags_unused_snowflake_lateral_flatten_alias() {
 }
 
 #[test]
+fn lint_al_005_allows_bigquery_to_json_string_table_alias_argument() {
+    let issues = run_lint_in_dialect(
+        "SELECT TO_JSON_STRING(t) FROM my_table AS t",
+        Dialect::Bigquery,
+    );
+    assert!(
+        !issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_AL_005),
+        "BigQuery TO_JSON_STRING(table_alias) should count as alias usage for AL_005: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_al_005_flags_ansi_to_json_string_table_alias_argument() {
+    let issues = run_lint_in_dialect("SELECT TO_JSON_STRING(t) FROM my_table AS t", Dialect::Ansi);
+    assert!(
+        issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_AL_005),
+        "ANSI TO_JSON_STRING(table_alias) should still be treated as unused alias in AL_005: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_rule_config_ambiguous_join_outer_mode() {
     let issues = run_lint_with_config(
         "SELECT * FROM foo LEFT JOIN bar ON foo.id = bar.id",

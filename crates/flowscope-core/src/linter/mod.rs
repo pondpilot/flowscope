@@ -13,7 +13,7 @@ pub(crate) mod visit;
 
 use config::LintConfig;
 use document::{LintDocument, LintStatement};
-use rule::{LintContext, LintRule};
+use rule::{with_active_dialect, LintContext, LintRule};
 use sqlparser::ast::Statement;
 
 use crate::{
@@ -71,22 +71,24 @@ impl Linter {
                         statement_index: statement.statement_index,
                     };
 
-                    for issue in rule.check(statement.statement, &ctx) {
-                        let mut issue = issue
-                            .with_lint_engine(engine)
-                            .with_lint_confidence(confidence);
+                    with_active_dialect(document.dialect, || {
+                        for issue in rule.check(statement.statement, &ctx) {
+                            let mut issue = issue
+                                .with_lint_engine(engine)
+                                .with_lint_confidence(confidence);
 
-                        if let Some(source) = fallback {
-                            issue = issue.with_lint_fallback_source(source);
+                            if let Some(source) = fallback {
+                                issue = issue.with_lint_fallback_source(source);
+                            }
+
+                            let sqlfluff_name = rule.sqlfluff_name();
+                            if !sqlfluff_name.is_empty() {
+                                issue = issue.with_sqlfluff_name(sqlfluff_name);
+                            }
+
+                            issues.push(issue);
                         }
-
-                        let sqlfluff_name = rule.sqlfluff_name();
-                        if !sqlfluff_name.is_empty() {
-                            issue = issue.with_sqlfluff_name(sqlfluff_name);
-                        }
-
-                        issues.push(issue);
-                    }
+                    });
                 }
             }
         }

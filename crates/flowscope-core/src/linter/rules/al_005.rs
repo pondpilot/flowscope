@@ -5,7 +5,7 @@
 
 use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
-use crate::types::{issue_codes, Issue};
+use crate::types::{issue_codes, Dialect, Issue};
 use sqlparser::ast::*;
 use std::collections::{HashMap, HashSet};
 
@@ -173,7 +173,7 @@ fn check_select(
     }
 
     let mut used_prefixes: HashSet<QualifierRef> = HashSet::new();
-    collect_identifier_prefixes_from_select(select, order_by, &mut used_prefixes);
+    collect_identifier_prefixes_from_select(select, order_by, ctx.dialect(), &mut used_prefixes);
 
     for alias in aliases.values() {
         let used = used_prefixes
@@ -196,42 +196,58 @@ fn check_select(
 
 fn collect_identifier_prefixes_from_order_by(
     order_by: &OrderBy,
+    dialect: Dialect,
     prefixes: &mut HashSet<QualifierRef>,
 ) {
     if let OrderByKind::Expressions(order_by_exprs) = &order_by.kind {
         for order_expr in order_by_exprs {
-            collect_identifier_prefixes(&order_expr.expr, prefixes);
+            collect_identifier_prefixes(&order_expr.expr, dialect, prefixes);
         }
     }
 }
 
-fn collect_identifier_prefixes_from_query(query: &Query, prefixes: &mut HashSet<QualifierRef>) {
+fn collect_identifier_prefixes_from_query(
+    query: &Query,
+    dialect: Dialect,
+    prefixes: &mut HashSet<QualifierRef>,
+) {
     if let Some(ref with) = query.with {
         for cte in &with.cte_tables {
-            collect_identifier_prefixes_from_query(&cte.query, prefixes);
+            collect_identifier_prefixes_from_query(&cte.query, dialect, prefixes);
         }
     }
 
     match query.body.as_ref() {
         SetExpr::Select(select) => {
-            collect_identifier_prefixes_from_select(select, query.order_by.as_ref(), prefixes);
+            collect_identifier_prefixes_from_select(
+                select,
+                query.order_by.as_ref(),
+                dialect,
+                prefixes,
+            );
         }
-        SetExpr::Query(q) => collect_identifier_prefixes_from_query(q, prefixes),
+        SetExpr::Query(q) => collect_identifier_prefixes_from_query(q, dialect, prefixes),
         SetExpr::SetOperation { left, right, .. } => {
-            collect_identifier_prefixes_from_set_expr(left, prefixes);
-            collect_identifier_prefixes_from_set_expr(right, prefixes);
+            collect_identifier_prefixes_from_set_expr(left, dialect, prefixes);
+            collect_identifier_prefixes_from_set_expr(right, dialect, prefixes);
         }
         _ => {}
     }
 }
 
-fn collect_identifier_prefixes_from_set_expr(body: &SetExpr, prefixes: &mut HashSet<QualifierRef>) {
+fn collect_identifier_prefixes_from_set_expr(
+    body: &SetExpr,
+    dialect: Dialect,
+    prefixes: &mut HashSet<QualifierRef>,
+) {
     match body {
-        SetExpr::Select(select) => collect_identifier_prefixes_from_select(select, None, prefixes),
-        SetExpr::Query(q) => collect_identifier_prefixes_from_query(q, prefixes),
+        SetExpr::Select(select) => {
+            collect_identifier_prefixes_from_select(select, None, dialect, prefixes)
+        }
+        SetExpr::Query(q) => collect_identifier_prefixes_from_query(q, dialect, prefixes),
         SetExpr::SetOperation { left, right, .. } => {
-            collect_identifier_prefixes_from_set_expr(left, prefixes);
-            collect_identifier_prefixes_from_set_expr(right, prefixes);
+            collect_identifier_prefixes_from_set_expr(left, dialect, prefixes);
+            collect_identifier_prefixes_from_set_expr(right, dialect, prefixes);
         }
         _ => {}
     }
@@ -240,72 +256,73 @@ fn collect_identifier_prefixes_from_set_expr(body: &SetExpr, prefixes: &mut Hash
 fn collect_identifier_prefixes_from_select(
     select: &Select,
     order_by: Option<&OrderBy>,
+    dialect: Dialect,
     prefixes: &mut HashSet<QualifierRef>,
 ) {
     for item in &select.projection {
-        collect_identifier_prefixes_from_select_item(item, prefixes);
+        collect_identifier_prefixes_from_select_item(item, dialect, prefixes);
     }
     if let Some(ref prewhere) = select.prewhere {
-        collect_identifier_prefixes(prewhere, prefixes);
+        collect_identifier_prefixes(prewhere, dialect, prefixes);
     }
     if let Some(ref selection) = select.selection {
-        collect_identifier_prefixes(selection, prefixes);
+        collect_identifier_prefixes(selection, dialect, prefixes);
     }
     if let GroupByExpr::Expressions(exprs, _) = &select.group_by {
         for expr in exprs {
-            collect_identifier_prefixes(expr, prefixes);
+            collect_identifier_prefixes(expr, dialect, prefixes);
         }
     }
     for expr in &select.cluster_by {
-        collect_identifier_prefixes(expr, prefixes);
+        collect_identifier_prefixes(expr, dialect, prefixes);
     }
     for expr in &select.distribute_by {
-        collect_identifier_prefixes(expr, prefixes);
+        collect_identifier_prefixes(expr, dialect, prefixes);
     }
     for sort_expr in &select.sort_by {
-        collect_identifier_prefixes(&sort_expr.expr, prefixes);
+        collect_identifier_prefixes(&sort_expr.expr, dialect, prefixes);
     }
     if let Some(ref having) = select.having {
-        collect_identifier_prefixes(having, prefixes);
+        collect_identifier_prefixes(having, dialect, prefixes);
     }
     if let Some(ref qualify) = select.qualify {
-        collect_identifier_prefixes(qualify, prefixes);
+        collect_identifier_prefixes(qualify, dialect, prefixes);
     }
     if let Some(Distinct::On(exprs)) = &select.distinct {
         for expr in exprs {
-            collect_identifier_prefixes(expr, prefixes);
+            collect_identifier_prefixes(expr, dialect, prefixes);
         }
     }
     for named_window in &select.named_window {
         if let NamedWindowExpr::WindowSpec(spec) = &named_window.1 {
             for expr in &spec.partition_by {
-                collect_identifier_prefixes(expr, prefixes);
+                collect_identifier_prefixes(expr, dialect, prefixes);
             }
             for order_expr in &spec.order_by {
-                collect_identifier_prefixes(&order_expr.expr, prefixes);
+                collect_identifier_prefixes(&order_expr.expr, dialect, prefixes);
             }
         }
     }
     for lateral_view in &select.lateral_views {
-        collect_identifier_prefixes(&lateral_view.lateral_view, prefixes);
+        collect_identifier_prefixes(&lateral_view.lateral_view, dialect, prefixes);
     }
     if let Some(connect_by) = &select.connect_by {
-        collect_identifier_prefixes(&connect_by.condition, prefixes);
+        collect_identifier_prefixes(&connect_by.condition, dialect, prefixes);
         for relationship in &connect_by.relationships {
-            collect_identifier_prefixes(relationship, prefixes);
+            collect_identifier_prefixes(relationship, dialect, prefixes);
         }
     }
     for from_item in &select.from {
-        collect_identifier_prefixes_from_table_factor(&from_item.relation, prefixes);
+        collect_identifier_prefixes_from_table_factor(&from_item.relation, dialect, prefixes);
         for join in &from_item.joins {
-            collect_identifier_prefixes_from_table_factor(&join.relation, prefixes);
+            collect_identifier_prefixes_from_table_factor(&join.relation, dialect, prefixes);
             if let Some(constraint) = join_constraint(&join.join_operator) {
-                collect_identifier_prefixes(constraint, prefixes);
+                collect_identifier_prefixes(constraint, dialect, prefixes);
             }
         }
     }
     if let Some(order_by) = order_by {
-        collect_identifier_prefixes_from_order_by(order_by, prefixes);
+        collect_identifier_prefixes_from_order_by(order_by, dialect, prefixes);
     }
 }
 
@@ -364,11 +381,12 @@ fn collect_aliases(relation: &TableFactor, aliases: &mut HashMap<String, AliasRe
 
 fn collect_identifier_prefixes_from_select_item(
     item: &SelectItem,
+    dialect: Dialect,
     prefixes: &mut HashSet<QualifierRef>,
 ) {
     match item {
         SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => {
-            collect_identifier_prefixes(expr, prefixes);
+            collect_identifier_prefixes(expr, dialect, prefixes);
         }
         SelectItem::QualifiedWildcard(name, _) => {
             let name_str = name.to_string();
@@ -387,7 +405,11 @@ fn collect_identifier_prefixes_from_select_item(
     }
 }
 
-fn collect_identifier_prefixes(expr: &Expr, prefixes: &mut HashSet<QualifierRef>) {
+fn collect_identifier_prefixes(
+    expr: &Expr,
+    dialect: Dialect,
+    prefixes: &mut HashSet<QualifierRef>,
+) {
     match expr {
         Expr::CompoundIdentifier(parts) => {
             if parts.len() >= 2 {
@@ -398,41 +420,56 @@ fn collect_identifier_prefixes(expr: &Expr, prefixes: &mut HashSet<QualifierRef>
             }
         }
         Expr::BinaryOp { left, right, .. } => {
-            collect_identifier_prefixes(left, prefixes);
-            collect_identifier_prefixes(right, prefixes);
+            collect_identifier_prefixes(left, dialect, prefixes);
+            collect_identifier_prefixes(right, dialect, prefixes);
         }
-        Expr::UnaryOp { expr: inner, .. } => collect_identifier_prefixes(inner, prefixes),
-        Expr::Nested(inner) => collect_identifier_prefixes(inner, prefixes),
+        Expr::UnaryOp { expr: inner, .. } => collect_identifier_prefixes(inner, dialect, prefixes),
+        Expr::Nested(inner) => collect_identifier_prefixes(inner, dialect, prefixes),
         Expr::Function(func) => {
+            let function_name = function_name(func);
             if let FunctionArguments::List(arg_list) = &func.args {
-                for arg in &arg_list.args {
+                for (index, arg) in arg_list.args.iter().enumerate() {
                     match arg {
                         FunctionArg::Unnamed(FunctionArgExpr::Expr(e))
                         | FunctionArg::Named {
                             arg: FunctionArgExpr::Expr(e),
                             ..
-                        } => collect_identifier_prefixes(e, prefixes),
+                        } => {
+                            collect_identifier_prefixes(e, dialect, prefixes);
+                            if function_arg_is_table_alias_reference(
+                                dialect,
+                                function_name.as_str(),
+                                index,
+                            ) {
+                                if let Expr::Identifier(ident) = e {
+                                    prefixes.insert(QualifierRef {
+                                        name: ident.value.clone(),
+                                        quoted: ident.quote_style.is_some(),
+                                    });
+                                }
+                            }
+                        }
                         _ => {}
                     }
                 }
             }
             if let Some(filter) = &func.filter {
-                collect_identifier_prefixes(filter, prefixes);
+                collect_identifier_prefixes(filter, dialect, prefixes);
             }
             for order_expr in &func.within_group {
-                collect_identifier_prefixes(&order_expr.expr, prefixes);
+                collect_identifier_prefixes(&order_expr.expr, dialect, prefixes);
             }
             if let Some(WindowType::WindowSpec(spec)) = &func.over {
                 for expr in &spec.partition_by {
-                    collect_identifier_prefixes(expr, prefixes);
+                    collect_identifier_prefixes(expr, dialect, prefixes);
                 }
                 for order_expr in &spec.order_by {
-                    collect_identifier_prefixes(&order_expr.expr, prefixes);
+                    collect_identifier_prefixes(&order_expr.expr, dialect, prefixes);
                 }
             }
         }
         Expr::IsNull(inner) | Expr::IsNotNull(inner) | Expr::Cast { expr: inner, .. } => {
-            collect_identifier_prefixes(inner, prefixes);
+            collect_identifier_prefixes(inner, dialect, prefixes);
         }
         Expr::Case {
             operand,
@@ -441,39 +478,39 @@ fn collect_identifier_prefixes(expr: &Expr, prefixes: &mut HashSet<QualifierRef>
             ..
         } => {
             if let Some(op) = operand {
-                collect_identifier_prefixes(op, prefixes);
+                collect_identifier_prefixes(op, dialect, prefixes);
             }
             for case_when in conditions {
-                collect_identifier_prefixes(&case_when.condition, prefixes);
-                collect_identifier_prefixes(&case_when.result, prefixes);
+                collect_identifier_prefixes(&case_when.condition, dialect, prefixes);
+                collect_identifier_prefixes(&case_when.result, dialect, prefixes);
             }
             if let Some(el) = else_result {
-                collect_identifier_prefixes(el, prefixes);
+                collect_identifier_prefixes(el, dialect, prefixes);
             }
         }
         Expr::InList { expr, list, .. } => {
-            collect_identifier_prefixes(expr, prefixes);
+            collect_identifier_prefixes(expr, dialect, prefixes);
             for item in list {
-                collect_identifier_prefixes(item, prefixes);
+                collect_identifier_prefixes(item, dialect, prefixes);
             }
         }
         Expr::InSubquery { expr, subquery, .. } => {
-            collect_identifier_prefixes(expr, prefixes);
-            collect_identifier_prefixes_from_query(subquery, prefixes);
+            collect_identifier_prefixes(expr, dialect, prefixes);
+            collect_identifier_prefixes_from_query(subquery, dialect, prefixes);
         }
         Expr::AnyOp { left, right, .. } | Expr::AllOp { left, right, .. } => {
-            collect_identifier_prefixes(left, prefixes);
-            collect_identifier_prefixes(right, prefixes);
+            collect_identifier_prefixes(left, dialect, prefixes);
+            collect_identifier_prefixes(right, dialect, prefixes);
         }
         Expr::Subquery(subquery) | Expr::Exists { subquery, .. } => {
-            collect_identifier_prefixes_from_query(subquery, prefixes);
+            collect_identifier_prefixes_from_query(subquery, dialect, prefixes);
         }
         Expr::Between {
             expr, low, high, ..
         } => {
-            collect_identifier_prefixes(expr, prefixes);
-            collect_identifier_prefixes(low, prefixes);
-            collect_identifier_prefixes(high, prefixes);
+            collect_identifier_prefixes(expr, dialect, prefixes);
+            collect_identifier_prefixes(low, dialect, prefixes);
+            collect_identifier_prefixes(high, dialect, prefixes);
         }
         _ => {}
     }
@@ -481,6 +518,7 @@ fn collect_identifier_prefixes(expr: &Expr, prefixes: &mut HashSet<QualifierRef>
 
 fn collect_identifier_prefixes_from_table_factor(
     table_factor: &TableFactor,
+    dialect: Dialect,
     prefixes: &mut HashSet<QualifierRef>,
 ) {
     match table_factor {
@@ -488,31 +526,35 @@ fn collect_identifier_prefixes_from_table_factor(
             lateral: true,
             subquery,
             ..
-        } => collect_identifier_prefixes_from_query(subquery, prefixes),
+        } => collect_identifier_prefixes_from_query(subquery, dialect, prefixes),
         TableFactor::TableFunction { expr, .. } => {
-            collect_identifier_prefixes(expr, prefixes);
+            collect_identifier_prefixes(expr, dialect, prefixes);
         }
         TableFactor::Function { args, .. } => {
             for arg in args {
-                collect_identifier_prefixes_from_function_arg(arg, prefixes);
+                collect_identifier_prefixes_from_function_arg(arg, dialect, prefixes);
             }
         }
         TableFactor::UNNEST { array_exprs, .. } => {
             for expr in array_exprs {
-                collect_identifier_prefixes(expr, prefixes);
+                collect_identifier_prefixes(expr, dialect, prefixes);
             }
         }
         TableFactor::JsonTable { json_expr, .. } | TableFactor::OpenJsonTable { json_expr, .. } => {
-            collect_identifier_prefixes(json_expr, prefixes);
+            collect_identifier_prefixes(json_expr, dialect, prefixes);
         }
         TableFactor::NestedJoin {
             table_with_joins, ..
         } => {
-            collect_identifier_prefixes_from_table_factor(&table_with_joins.relation, prefixes);
+            collect_identifier_prefixes_from_table_factor(
+                &table_with_joins.relation,
+                dialect,
+                prefixes,
+            );
             for join in &table_with_joins.joins {
-                collect_identifier_prefixes_from_table_factor(&join.relation, prefixes);
+                collect_identifier_prefixes_from_table_factor(&join.relation, dialect, prefixes);
                 if let Some(constraint) = join_constraint(&join.join_operator) {
-                    collect_identifier_prefixes(constraint, prefixes);
+                    collect_identifier_prefixes(constraint, dialect, prefixes);
                 }
             }
         }
@@ -523,15 +565,15 @@ fn collect_identifier_prefixes_from_table_factor(
             default_on_null,
             ..
         } => {
-            collect_identifier_prefixes_from_table_factor(table, prefixes);
+            collect_identifier_prefixes_from_table_factor(table, dialect, prefixes);
             for expr_with_alias in aggregate_functions {
-                collect_identifier_prefixes(&expr_with_alias.expr, prefixes);
+                collect_identifier_prefixes(&expr_with_alias.expr, dialect, prefixes);
             }
             for expr in value_column {
-                collect_identifier_prefixes(expr, prefixes);
+                collect_identifier_prefixes(expr, dialect, prefixes);
             }
             if let Some(expr) = default_on_null {
-                collect_identifier_prefixes(expr, prefixes);
+                collect_identifier_prefixes(expr, dialect, prefixes);
             }
         }
         TableFactor::Unpivot {
@@ -540,10 +582,10 @@ fn collect_identifier_prefixes_from_table_factor(
             columns,
             ..
         } => {
-            collect_identifier_prefixes_from_table_factor(table, prefixes);
-            collect_identifier_prefixes(value, prefixes);
+            collect_identifier_prefixes_from_table_factor(table, dialect, prefixes);
+            collect_identifier_prefixes(value, dialect, prefixes);
             for expr_with_alias in columns {
-                collect_identifier_prefixes(&expr_with_alias.expr, prefixes);
+                collect_identifier_prefixes(&expr_with_alias.expr, dialect, prefixes);
             }
         }
         TableFactor::MatchRecognize {
@@ -553,19 +595,19 @@ fn collect_identifier_prefixes_from_table_factor(
             measures,
             ..
         } => {
-            collect_identifier_prefixes_from_table_factor(table, prefixes);
+            collect_identifier_prefixes_from_table_factor(table, dialect, prefixes);
             for expr in partition_by {
-                collect_identifier_prefixes(expr, prefixes);
+                collect_identifier_prefixes(expr, dialect, prefixes);
             }
             for order in order_by {
-                collect_identifier_prefixes(&order.expr, prefixes);
+                collect_identifier_prefixes(&order.expr, dialect, prefixes);
             }
             for measure in measures {
-                collect_identifier_prefixes(&measure.expr, prefixes);
+                collect_identifier_prefixes(&measure.expr, dialect, prefixes);
             }
         }
         TableFactor::XmlTable { row_expression, .. } => {
-            collect_identifier_prefixes(row_expression, prefixes);
+            collect_identifier_prefixes(row_expression, dialect, prefixes);
         }
         _ => {}
     }
@@ -573,6 +615,7 @@ fn collect_identifier_prefixes_from_table_factor(
 
 fn collect_identifier_prefixes_from_function_arg(
     arg: &FunctionArg,
+    dialect: Dialect,
     prefixes: &mut HashSet<QualifierRef>,
 ) {
     match arg {
@@ -580,9 +623,27 @@ fn collect_identifier_prefixes_from_function_arg(
         | FunctionArg::Named {
             arg: FunctionArgExpr::Expr(expr),
             ..
-        } => collect_identifier_prefixes(expr, prefixes),
+        } => collect_identifier_prefixes(expr, dialect, prefixes),
         _ => {}
     }
+}
+
+fn function_name(function: &Function) -> String {
+    function
+        .name
+        .0
+        .last()
+        .and_then(ObjectNamePart::as_ident)
+        .map(|ident| ident.value.to_ascii_uppercase())
+        .unwrap_or_default()
+}
+
+fn function_arg_is_table_alias_reference(
+    dialect: Dialect,
+    function_name: &str,
+    arg_index: usize,
+) -> bool {
+    matches!(dialect, Dialect::Bigquery) && arg_index == 0 && function_name == "TO_JSON_STRING"
 }
 
 fn qualifier_matches_alias(
@@ -708,6 +769,7 @@ fn check_table_factor_subqueries(
 mod tests {
     use super::*;
     use crate::linter::config::LintConfig;
+    use crate::linter::rule::with_active_dialect;
     use crate::parser::{parse_sql, parse_sql_with_dialect};
     use crate::types::Dialect;
 
@@ -735,9 +797,11 @@ mod tests {
             statement_index: 0,
         };
         let mut issues = Vec::new();
-        for stmt in &stmts {
-            issues.extend(rule.check(stmt, &ctx));
-        }
+        with_active_dialect(dialect, || {
+            for stmt in &stmts {
+                issues.extend(rule.check(stmt, &ctx));
+            }
+        });
         issues
     }
 
@@ -1073,5 +1137,22 @@ mod tests {
         );
         assert_eq!(issues.len(), 1);
         assert!(issues[0].message.contains("f"));
+    }
+
+    #[test]
+    fn allows_bigquery_to_json_string_table_alias_argument() {
+        let issues = check_sql_in_dialect(
+            "SELECT TO_JSON_STRING(t) FROM my_table AS t",
+            Dialect::Bigquery,
+        );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn flags_ansi_to_json_string_table_alias_argument() {
+        let issues =
+            check_sql_in_dialect("SELECT TO_JSON_STRING(t) FROM my_table AS t", Dialect::Ansi);
+        assert_eq!(issues.len(), 1);
+        assert!(issues[0].message.contains("t"));
     }
 }

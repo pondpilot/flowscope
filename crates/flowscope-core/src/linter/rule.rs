@@ -1,9 +1,14 @@
 //! Lint rule trait and context for SQL linting.
 
 use super::config::sqlfluff_name_for_code;
-use crate::types::{Issue, Span};
+use crate::types::{Dialect, Issue, Span};
 use sqlparser::ast::Statement;
+use std::cell::Cell;
 use std::ops::Range;
+
+thread_local! {
+    static ACTIVE_DIALECT: Cell<Dialect> = const { Cell::new(Dialect::Generic) };
+}
 
 /// Context provided to lint rules during analysis.
 pub struct LintContext<'a> {
@@ -28,6 +33,34 @@ impl<'a> LintContext<'a> {
             self.statement_range.start + end,
         )
     }
+
+    /// Returns the dialect active for the current lint pass.
+    pub fn dialect(&self) -> Dialect {
+        ACTIVE_DIALECT.with(Cell::get)
+    }
+}
+
+pub(crate) fn with_active_dialect<T>(dialect: Dialect, f: impl FnOnce() -> T) -> T {
+    ACTIVE_DIALECT.with(|active| {
+        struct DialectReset<'a> {
+            cell: &'a Cell<Dialect>,
+            previous: Dialect,
+        }
+
+        impl Drop for DialectReset<'_> {
+            fn drop(&mut self) {
+                self.cell.set(self.previous);
+            }
+        }
+
+        let reset = DialectReset {
+            cell: active,
+            previous: active.replace(dialect),
+        };
+        let result = f();
+        drop(reset);
+        result
+    })
 }
 
 /// A single lint rule that checks a parsed SQL statement for anti-patterns.

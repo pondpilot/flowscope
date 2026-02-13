@@ -72,6 +72,7 @@ This plan covers three axes:
   - `AL_005` now also checks single-table scopes (not only multi-source `FROM`/`JOIN` clauses), matching SQLFluff AL05 behavior for unused aliases like `FROM users u` when `u` is never referenced.
   - `AL_005` now also counts alias usage from join relation table-factor expressions (for example `LATERAL (SELECT u.id)` and `UNNEST(u.tags)`), reducing false positives where aliases are only referenced by later join sources.
   - `AL_005` now aligns closer to SQLFluff scope handling by ignoring derived-subquery wrapper aliases and value-table-function aliases, while recursively analyzing nested derived-query bodies for inner alias violations (e.g. `SELECT * FROM (SELECT * FROM my_tbl AS foo)` now flags `foo`).
+  - `AL_005` now includes dialect-aware function-argument alias handling for BigQuery `TO_JSON_STRING(<table_alias>)`, while keeping ANSI behavior that still flags that alias form as unused.
   - `CV_003` moved from parity into a dedicated core rule module (`cv_003.rs`) and parity registration was removed.
   - `CV_003` was further upgraded from regex scanning to token/depth-aware trailing-comma detection in SELECT clauses.
   - `CV_003` now supports `select_clause_trailing_comma` (`forbid`/`require`) through `lint.ruleConfigs`.
@@ -204,7 +205,7 @@ This plan covers three axes:
 - Phase 2 metadata parity:
   - SQLFluff canonical description text is not fully normalized across all rules.
 - Phase 3 semantic-depth work remains open for Tier 2 and Tier 3.
-  - Tier 1 is functionally complete across planned rules: `AL_001`, `AL_002`, `AL_004`, `AL_005` (with LATERAL/VALUES exceptions), `AL_008`, `CV_003`, `CV_006`, `ST_005`, `ST_010` (broadened), and `ST_011` (SQLFluff-aligned outer-join scope).
+  - Tier 1 is functionally complete across planned rules: `AL_001`, `AL_002`, `AL_004`, `AL_005` (with `LATERAL`/`VALUES` exceptions and BigQuery `TO_JSON_STRING(<table_alias>)` handling), `AL_008`, `CV_003`, `CV_006`, `ST_005`, `ST_010` (broadened), and `ST_011` (SQLFluff-aligned outer-join scope).
 
 ---
 
@@ -538,7 +539,7 @@ Migrate them to proper AST implementations.
 | AL_001 (aliasing.table) | Lexical | Needs to distinguish implicit vs explicit `AS`; handle dialect-specific aliasing |
 | AL_002 (aliasing.column) | Lexical | Same as AL_001 for column aliases |
 | AL_004 (aliasing.unique.table) | Lexical | Needs AST-level alias tracking across FROM/JOIN |
-| AL_005 (aliasing.unused) | Core (partial) | Missing dialect-specific exceptions (VALUES, LATERAL) |
+| AL_005 (aliasing.unused) | Core (partial) | Remaining advanced dialect/scope edges beyond current `LATERAL`/`VALUES` and BigQuery `TO_JSON_STRING(<table_alias>)` parity |
 | AL_008 (aliasing.unique.column) | Lexical | Needs AST-level SELECT projection alias tracking |
 | CV_003 (convention.select_trailing_comma) | Lexical | Needs token-aware trailing comma detection |
 | CV_006 (convention.terminator) | Lexical | Needs statement boundary awareness |
