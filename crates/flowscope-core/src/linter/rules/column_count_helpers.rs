@@ -157,27 +157,48 @@ pub(crate) fn source_columns_for_table_factor(
         }
     }
 
-    let column_count = match table_factor {
-        TableFactor::Table { name, .. } => {
-            let key = normalize_identifier(name.to_string());
-            ctes.get(&key).copied().flatten()
-        }
-        TableFactor::Derived { subquery, .. } => resolve_query_output_columns(subquery, ctes),
-        TableFactor::NestedJoin {
-            table_with_joins, ..
-        } => resolve_nested_join_output_columns(table_with_joins, ctes),
-        TableFactor::Pivot { table, .. }
-        | TableFactor::Unpivot { table, .. }
-        | TableFactor::MatchRecognize { table, .. } => {
-            source_columns_for_table_factor(table, ctes).column_count
-        }
-        _ => None,
-    };
+    let column_count =
+        table_factor_alias_column_count(table_factor).or_else(|| match table_factor {
+            TableFactor::Table { name, .. } => {
+                let key = normalize_identifier(name.to_string());
+                ctes.get(&key).copied().flatten()
+            }
+            TableFactor::Derived { subquery, .. } => resolve_query_output_columns(subquery, ctes),
+            TableFactor::NestedJoin {
+                table_with_joins, ..
+            } => resolve_nested_join_output_columns(table_with_joins, ctes),
+            TableFactor::Pivot { table, .. }
+            | TableFactor::Unpivot { table, .. }
+            | TableFactor::MatchRecognize { table, .. } => {
+                source_columns_for_table_factor(table, ctes).column_count
+            }
+            _ => None,
+        });
 
     SourceColumns {
         names,
         column_count,
     }
+}
+
+fn table_factor_alias_column_count(table_factor: &TableFactor) -> Option<usize> {
+    let alias = match table_factor {
+        TableFactor::Table { alias, .. }
+        | TableFactor::Derived { alias, .. }
+        | TableFactor::TableFunction { alias, .. }
+        | TableFactor::Function { alias, .. }
+        | TableFactor::UNNEST { alias, .. }
+        | TableFactor::JsonTable { alias, .. }
+        | TableFactor::OpenJsonTable { alias, .. }
+        | TableFactor::NestedJoin { alias, .. }
+        | TableFactor::Pivot { alias, .. }
+        | TableFactor::Unpivot { alias, .. }
+        | TableFactor::MatchRecognize { alias, .. }
+        | TableFactor::XmlTable { alias, .. }
+        | TableFactor::SemanticView { alias, .. } => alias.as_ref(),
+    }?;
+
+    declared_cte_column_count(alias.columns.len())
 }
 
 fn resolve_nested_join_output_columns(

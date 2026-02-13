@@ -216,6 +216,14 @@ mod tests {
     }
 
     #[test]
+    fn resolves_declared_derived_alias_columns_for_set_comparison() {
+        let issues = run(
+            "select t_alias.* from (select * from t) as t_alias(a, b) union select c, d from t2",
+        );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
     fn flags_resolved_cte_wildcard_mismatch() {
         let issues =
             run("with cte as (select a, b, c from t) select * from cte union select d, e from t2");
@@ -226,6 +234,14 @@ mod tests {
     fn flags_declared_cte_width_mismatch_for_set_comparison() {
         let issues = run(
             "with cte(a, b, c) as (select * from t) select * from cte union select d, e from t2",
+        );
+        assert_eq!(issues.len(), 1);
+    }
+
+    #[test]
+    fn flags_declared_derived_alias_width_mismatch_for_set_comparison() {
+        let issues = run(
+            "select t_alias.* from (select * from t) as t_alias(a, b, c) union select d, e from t2",
         );
         assert_eq!(issues.len(), 1);
     }

@@ -1190,6 +1190,14 @@ fn lint_am_007_declared_cte_columns_resolve_set_width() {
 }
 
 #[test]
+fn lint_am_007_declared_derived_alias_columns_set_mismatch() {
+    let issues = run_lint(
+        "SELECT t_alias.* FROM (SELECT * FROM t) AS t_alias(a, b, c) UNION SELECT d, e FROM t2",
+    );
+    assert!(issues.iter().any(|(code, _)| code == "LINT_AM_007"));
+}
+
+#[test]
 fn lint_cv_002_count_one() {
     let issues = run_lint("SELECT COUNT(1) FROM t");
     assert!(issues.iter().any(|(code, _)| code == "LINT_CV_004"));
@@ -1463,6 +1471,15 @@ fn lint_am_004_declared_cte_columns_known_width_ok() {
     assert!(
         !issues.iter().any(|(code, _)| code == "LINT_AM_004"),
         "declared CTE column list should resolve wildcard width for AM_004: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_am_004_declared_derived_alias_columns_known_width_ok() {
+    let issues = run_lint("SELECT t_alias.* FROM (SELECT * FROM t) AS t_alias(a, b)");
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_AM_004"),
+        "declared derived alias columns should resolve wildcard width for AM_004: {issues:?}"
     );
 }
 

@@ -131,6 +131,12 @@ mod tests {
     }
 
     #[test]
+    fn allows_qualified_wildcard_from_declared_derived_alias_columns() {
+        let issues = run("select t_alias.* from (select * from t) as t_alias(a, b)");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
     fn allows_qualified_wildcard_from_known_nested_join_alias() {
         let issues = run(
             "select j.* from ((select a from t1) as a1 join (select b from t2) as b1 on a1.a = b1.b) as j",
