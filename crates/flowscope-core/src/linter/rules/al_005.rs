@@ -152,6 +152,13 @@ fn check_select(
     ctx: &LintContext,
     issues: &mut Vec<Issue>,
 ) {
+    for from_item in &select.from {
+        check_table_factor_subqueries(&from_item.relation, alias_case_check, ctx, issues);
+        for join in &from_item.joins {
+            check_table_factor_subqueries(&join.relation, alias_case_check, ctx, issues);
+        }
+    }
+
     // Collect aliases -> table names
     let mut aliases: HashMap<String, AliasRef> = HashMap::new();
     for from_item in &select.from {
@@ -307,8 +314,12 @@ fn collect_aliases(relation: &TableFactor, aliases: &mut HashMap<String, AliasRe
         TableFactor::Table {
             name,
             alias: Some(alias),
+            args,
             ..
         } => {
+            if args.is_some() {
+                return;
+            }
             let table_name = name.to_string();
             let alias_name = alias.name.value.clone();
             // Only count as alias if it differs from the table name.
@@ -322,25 +333,19 @@ fn collect_aliases(relation: &TableFactor, aliases: &mut HashMap<String, AliasRe
                 );
             }
         }
-        TableFactor::Derived {
-            lateral,
-            subquery,
+        TableFactor::Derived { alias: Some(_), .. } => {}
+        TableFactor::Function {
+            lateral: true,
             alias: Some(alias),
             ..
         } => {
-            // SQLFluff AL05 compatibility:
-            // - Do not enforce usage for LATERAL aliases.
-            // - Do not enforce usage for VALUES-derived aliases.
-            let is_values = matches!(subquery.body.as_ref(), SetExpr::Values(_));
-            if !*lateral && !is_values {
-                aliases.insert(
-                    alias.name.value.clone(),
-                    AliasRef {
-                        name: alias.name.value.clone(),
-                        quoted: alias.name.quote_style.is_some(),
-                    },
-                );
-            }
+            aliases.insert(
+                alias.name.value.clone(),
+                AliasRef {
+                    name: alias.name.value.clone(),
+                    quoted: alias.name.quote_style.is_some(),
+                },
+            );
         }
         TableFactor::NestedJoin {
             table_with_joins, ..
@@ -667,14 +672,62 @@ fn join_constraint(op: &JoinOperator) -> Option<&Expr> {
     }
 }
 
+fn check_table_factor_subqueries(
+    relation: &TableFactor,
+    alias_case_check: AliasCaseCheck,
+    ctx: &LintContext,
+    issues: &mut Vec<Issue>,
+) {
+    match relation {
+        TableFactor::Derived { subquery, .. } => {
+            check_query(subquery, alias_case_check, ctx, issues);
+        }
+        TableFactor::NestedJoin {
+            table_with_joins, ..
+        } => {
+            check_table_factor_subqueries(
+                &table_with_joins.relation,
+                alias_case_check,
+                ctx,
+                issues,
+            );
+            for join in &table_with_joins.joins {
+                check_table_factor_subqueries(&join.relation, alias_case_check, ctx, issues);
+            }
+        }
+        TableFactor::Pivot { table, .. }
+        | TableFactor::Unpivot { table, .. }
+        | TableFactor::MatchRecognize { table, .. } => {
+            check_table_factor_subqueries(table, alias_case_check, ctx, issues);
+        }
+        _ => {}
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::linter::config::LintConfig;
-    use crate::parser::parse_sql;
+    use crate::parser::{parse_sql, parse_sql_with_dialect};
+    use crate::types::Dialect;
 
     fn check_sql(sql: &str) -> Vec<Issue> {
         let stmts = parse_sql(sql).unwrap();
+        let rule = UnusedTableAlias::default();
+        let ctx = LintContext {
+            sql,
+            statement_range: 0..sql.len(),
+            statement_index: 0,
+        };
+        let mut issues = Vec::new();
+        for stmt in &stmts {
+            issues.extend(rule.check(stmt, &ctx));
+        }
+        issues
+    }
+
+    fn check_sql_in_dialect(sql: &str, dialect: Dialect) -> Vec<Issue> {
+        let stmts = parse_sql_with_dialect(sql, dialect).unwrap();
         let rule = UnusedTableAlias::default();
         let ctx = LintContext {
             sql,
@@ -858,8 +911,7 @@ mod tests {
              FROM users u \
              JOIN (SELECT id FROM orders) o2 ON u.id = u.id",
         );
-        assert_eq!(issues.len(), 1);
-        assert!(issues[0].message.contains("o2"));
+        assert!(issues.is_empty());
     }
 
     #[test]
@@ -983,5 +1035,43 @@ mod tests {
             },
         );
         assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn flags_inner_subquery_unused_alias() {
+        let issues = check_sql("SELECT * FROM (SELECT * FROM my_tbl AS foo)");
+        assert_eq!(issues.len(), 1);
+        assert!(issues[0].message.contains("foo"));
+    }
+
+    #[test]
+    fn allows_unreferenced_subquery_alias() {
+        let issues = check_sql("SELECT * FROM (SELECT 1 AS a) subquery");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn allows_postgres_generate_series_alias() {
+        let issues = check_sql_in_dialect(
+            "SELECT date_trunc('day', dd)::timestamp FROM generate_series('2022-02-01'::timestamp, NOW()::timestamp, '1 day'::interval) dd",
+            Dialect::Postgres,
+        );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn flags_unused_snowflake_lateral_flatten_alias() {
+        let issues = check_sql_in_dialect(
+            "SELECT a.test1, a.test2, b.test3 \
+             FROM table1 AS a, \
+             LATERAL flatten(input => some_field) AS b, \
+             LATERAL flatten(input => b.value) AS c, \
+             LATERAL flatten(input => c.value) AS d, \
+             LATERAL flatten(input => d.value) AS e, \
+             LATERAL flatten(input => e.value) AS f",
+            Dialect::Snowflake,
+        );
+        assert_eq!(issues.len(), 1);
+        assert!(issues[0].message.contains("f"));
     }
 }

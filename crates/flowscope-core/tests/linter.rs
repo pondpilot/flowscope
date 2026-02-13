@@ -903,6 +903,63 @@ fn lint_al_005_alias_used_only_in_unnest_join_relation() {
 }
 
 #[test]
+fn lint_al_005_allows_unreferenced_subquery_alias() {
+    let issues = run_lint("SELECT * FROM (SELECT 1 AS a) subquery");
+    assert!(
+        !issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_AL_005),
+        "derived-subquery aliases should not be treated as unused table aliases in AL_005: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_al_005_flags_inner_subquery_unused_alias() {
+    let issues = run_lint("SELECT * FROM (SELECT * FROM my_tbl AS foo)");
+    assert!(
+        issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_AL_005),
+        "inner subquery table aliases should still be checked by AL_005: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_al_005_allows_postgres_generate_series_alias() {
+    let issues = run_lint_in_dialect(
+        "SELECT date_trunc('day', dd)::timestamp \
+         FROM generate_series('2022-02-01'::timestamp, NOW()::timestamp, '1 day'::interval) dd",
+        Dialect::Postgres,
+    );
+    assert!(
+        !issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_AL_005),
+        "Postgres value-table-function aliases should be ignored for AL_005: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_al_005_flags_unused_snowflake_lateral_flatten_alias() {
+    let issues = run_lint_in_dialect(
+        "SELECT a.test1, a.test2, b.test3 \
+         FROM table1 AS a, \
+         LATERAL flatten(input => some_field) AS b, \
+         LATERAL flatten(input => b.value) AS c, \
+         LATERAL flatten(input => c.value) AS d, \
+         LATERAL flatten(input => d.value) AS e, \
+         LATERAL flatten(input => e.value) AS f",
+        Dialect::Snowflake,
+    );
+    assert!(
+        issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_AL_005),
+        "unused aliases in chained Snowflake LATERAL FLATTEN factors should be flagged by AL_005: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_rule_config_ambiguous_join_outer_mode() {
     let issues = run_lint_with_config(
         "SELECT * FROM foo LEFT JOIN bar ON foo.id = bar.id",
