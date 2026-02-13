@@ -93,6 +93,7 @@ This plan covers three axes:
   - `CV_011` moved from parity handling to a dedicated core rule module (`cv_011.rs`).
   - `CV_011` was further upgraded to AST-driven cast-kind traversal (`CastKind::{Cast, TryCast, SafeCast, DoubleColon}`), replacing raw SQL `::`/`CAST(` regex scanning and reducing string-literal false positives.
   - `JJ_001` moved from parity handling to a dedicated core rule module (`jj_001.rs`).
+  - `JJ_001` was further upgraded from regex matching to deterministic delimiter scanning for Jinja padding checks.
   - `LT_010` moved from parity handling to a dedicated core rule module (`lt_010.rs`).
   - `LT_011` moved from parity handling to a dedicated core rule module (`lt_011.rs`).
   - `LT_012` moved from parity handling to a dedicated core rule module (`lt_012.rs`).

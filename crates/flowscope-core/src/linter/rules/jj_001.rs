@@ -5,7 +5,6 @@
 
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
-use regex::Regex;
 use sqlparser::ast::Statement;
 
 pub struct JinjaPadding;
@@ -24,9 +23,7 @@ impl LintRule for JinjaPadding {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let sql = ctx.statement_sql();
-        let has_violation =
-            has_re(sql, r"\{\{[^ \n]") || has_re(sql, r"[^ \n]\}\}") || has_re(sql, r"\{%[^ \n]");
+        let has_violation = has_inconsistent_jinja_padding(ctx.statement_sql());
 
         if has_violation {
             vec![Issue::info(
@@ -40,8 +37,43 @@ impl LintRule for JinjaPadding {
     }
 }
 
-fn has_re(haystack: &str, pattern: &str) -> bool {
-    Regex::new(pattern).expect("valid regex").is_match(haystack)
+fn has_inconsistent_jinja_padding(sql: &str) -> bool {
+    let bytes = sql.as_bytes();
+
+    let mut i = 0usize;
+    while i + 2 <= bytes.len() {
+        if bytes[i] == b'{' && bytes[i + 1] == b'{' {
+            if i + 2 < bytes.len() && !is_padding_char(bytes[i + 2]) {
+                return true;
+            }
+            i += 2;
+            continue;
+        }
+
+        if bytes[i] == b'{' && bytes[i + 1] == b'%' {
+            if i + 2 < bytes.len() && !is_padding_char(bytes[i + 2]) {
+                return true;
+            }
+            i += 2;
+            continue;
+        }
+
+        if bytes[i] == b'}' && bytes[i + 1] == b'}' {
+            if i > 0 && !is_padding_char(bytes[i - 1]) {
+                return true;
+            }
+            i += 2;
+            continue;
+        }
+
+        i += 1;
+    }
+
+    false
+}
+
+fn is_padding_char(byte: u8) -> bool {
+    byte == b' ' || byte == b'\n'
 }
 
 #[cfg(test)]
@@ -78,5 +110,12 @@ mod tests {
     #[test]
     fn does_not_flag_padded_jinja_expression() {
         assert!(run("SELECT '{{ foo }}' AS templated").is_empty());
+    }
+
+    #[test]
+    fn flags_missing_padding_in_jinja_statement_tag() {
+        let issues = run("SELECT '{%for x in y %}' AS templated");
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_JJ_001);
     }
 }
