@@ -598,6 +598,32 @@ fn lint_rule_config_structure_subquery_forbid_join_only() {
 }
 
 #[test]
+fn lint_st_005_allows_correlated_join_subquery_with_outer_alias_reference() {
+    let issues = run_lint(
+        "SELECT pd.* \
+         FROM person_dates AS pd \
+         JOIN (SELECT * FROM events AS ce WHERE ce.name = pd.name)",
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == issue_codes::LINT_ST_005),
+        "correlated JOIN subqueries should not trigger ST_005: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_st_005_allows_correlated_join_subquery_with_outer_table_name_reference() {
+    let issues = run_lint(
+        "SELECT pd.* \
+         FROM person_dates AS pd \
+         JOIN (SELECT * FROM events AS ce WHERE ce.name = person_dates.name)",
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == issue_codes::LINT_ST_005),
+        "correlated JOIN subqueries referencing outer table names should not trigger ST_005: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_rule_config_join_condition_order_later_preference() {
     let issues = run_lint_with_config(
         "SELECT * FROM foo JOIN bar ON foo.id = bar.id",

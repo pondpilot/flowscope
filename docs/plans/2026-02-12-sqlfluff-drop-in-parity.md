@@ -52,6 +52,7 @@ This plan covers three axes:
 - Phase 3 Tier 1 progress:
   - `ST_005` moved from parity regex handling to a dedicated core AST rule implementation.
   - `ST_005` now supports `forbid_subquery_in` (`both`/`join`/`from`) through `lint.ruleConfigs`, with SQLFluff-aligned default behavior set to `join`.
+  - `ST_005` now includes SQLFluff correlated-subquery parity for JOIN-derived queries by exempting derived subqueries that reference outer query sources (for example correlated `WHERE ce.name = pd.name` cases).
   - `AL_004` moved from parity into a dedicated core AST rule (`al_004.rs`) and parity registration was removed.
   - `AL_004` now also checks duplicate implicit table-name aliases (e.g., same base table name across schemas without explicit aliases) and parent-scope alias collisions in nested subqueries (excluding the subquery wrapper alias), matching SQLFluff AL04 coverage more closely.
   - `AL_004` now supports quote-aware `alias_case_check` through `lint.ruleConfigs`.
