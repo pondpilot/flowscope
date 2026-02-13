@@ -62,11 +62,21 @@ pub struct FixOutcome {
 #[derive(Debug, Clone, Default)]
 struct RuleFilter {
     disabled: HashSet<String>,
+    am005_mode: Am005QualifyMode,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
+enum Am005QualifyMode {
+    #[default]
+    Inner,
+    Outer,
+    Both,
 }
 
 impl RuleFilter {
-    fn new(disabled_rules: &[String]) -> Self {
-        let disabled = disabled_rules
+    fn from_lint_config(lint_config: &LintConfig) -> Self {
+        let disabled = lint_config
+            .disabled_rules
             .iter()
             .filter_map(|rule| {
                 let trimmed = rule.trim();
@@ -78,7 +88,29 @@ impl RuleFilter {
                 )
             })
             .collect();
-        Self { disabled }
+        let am005_mode = match lint_config
+            .rule_option_str(issue_codes::LINT_AM_005, "fully_qualify_join_types")
+            .unwrap_or("inner")
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "outer" => Am005QualifyMode::Outer,
+            "both" => Am005QualifyMode::Both,
+            _ => Am005QualifyMode::Inner,
+        };
+        Self {
+            disabled,
+            am005_mode,
+        }
+    }
+
+    #[cfg(test)]
+    fn new(disabled_rules: &[String]) -> Self {
+        Self::from_lint_config(&LintConfig {
+            enabled: true,
+            disabled_rules: disabled_rules.to_vec(),
+            rule_configs: BTreeMap::new(),
+        })
     }
 
     fn allows(&self, code: &str) -> bool {
@@ -99,7 +131,23 @@ pub fn apply_lint_fixes(
     dialect: Dialect,
     disabled_rules: &[String],
 ) -> Result<FixOutcome, ParseError> {
-    let rule_filter = RuleFilter::new(disabled_rules);
+    apply_lint_fixes_with_lint_config(
+        sql,
+        dialect,
+        &LintConfig {
+            enabled: true,
+            disabled_rules: disabled_rules.to_vec(),
+            rule_configs: BTreeMap::new(),
+        },
+    )
+}
+
+pub fn apply_lint_fixes_with_lint_config(
+    sql: &str,
+    dialect: Dialect,
+    lint_config: &LintConfig,
+) -> Result<FixOutcome, ParseError> {
+    let rule_filter = RuleFilter::from_lint_config(lint_config);
 
     if contains_comment_markers(sql, dialect) {
         return Ok(FixOutcome {
@@ -111,7 +159,7 @@ pub fn apply_lint_fixes(
         });
     }
 
-    let before_counts = lint_rule_counts(sql, dialect, disabled_rules);
+    let before_counts = lint_rule_counts(sql, dialect, lint_config);
     let mut statements = parse_sql_with_dialect(sql, dialect)?;
     for stmt in &mut statements {
         fix_statement(stmt, &rule_filter);
@@ -119,8 +167,9 @@ pub fn apply_lint_fixes(
 
     let mut fixed_sql = render_statements(&statements, sql);
     fixed_sql = apply_text_fixes(&fixed_sql, &rule_filter);
+    fixed_sql = apply_am005_full_outer_keyword_fix(&fixed_sql, &rule_filter);
 
-    let after_counts = lint_rule_counts(&fixed_sql, dialect, disabled_rules);
+    let after_counts = lint_rule_counts(&fixed_sql, dialect, lint_config);
     let counts = FixCounts::from_removed(&before_counts, &after_counts);
 
     if counts.total() == 0 {
@@ -207,7 +256,7 @@ fn render_statements(statements: &[Statement], original: &str) -> String {
 fn lint_rule_counts(
     sql: &str,
     dialect: Dialect,
-    disabled_rules: &[String],
+    lint_config: &LintConfig,
 ) -> BTreeMap<String, usize> {
     let request = AnalyzeRequest {
         sql: sql.to_string(),
@@ -215,11 +264,7 @@ fn lint_rule_counts(
         dialect,
         source_name: None,
         options: Some(AnalysisOptions {
-            lint: Some(LintConfig {
-                enabled: true,
-                disabled_rules: disabled_rules.to_vec(),
-                rule_configs: std::collections::BTreeMap::new(),
-            }),
+            lint: Some(lint_config.clone()),
             ..Default::default()
         }),
         schema: None,
@@ -327,6 +372,77 @@ fn apply_text_fixes(sql: &str, rule_filter: &RuleFilter) -> String {
     }
 
     out
+}
+
+fn apply_am005_full_outer_keyword_fix(sql: &str, rule_filter: &RuleFilter) -> String {
+    if !rule_filter.allows(issue_codes::LINT_AM_005) {
+        return sql.to_string();
+    }
+
+    if !matches!(
+        rule_filter.am005_mode,
+        Am005QualifyMode::Outer | Am005QualifyMode::Both
+    ) {
+        return sql.to_string();
+    }
+
+    replace_full_join_outside_single_quotes(sql)
+}
+
+fn replace_full_join_outside_single_quotes(sql: &str) -> String {
+    const NEEDLE: &[u8] = b"FULL JOIN";
+    const REPLACEMENT: &str = "full outer join";
+
+    let bytes = sql.as_bytes();
+    let mut out = String::with_capacity(sql.len() + 16);
+    let mut idx = 0usize;
+    let mut in_single = false;
+
+    while idx < bytes.len() {
+        if bytes[idx] == b'\'' {
+            if in_single && idx + 1 < bytes.len() && bytes[idx + 1] == b'\'' {
+                out.push_str("''");
+                idx += 2;
+                continue;
+            }
+            in_single = !in_single;
+            out.push('\'');
+            idx += 1;
+            continue;
+        }
+
+        if !in_single
+            && idx + NEEDLE.len() <= bytes.len()
+            && equals_ignore_ascii_case(&bytes[idx..idx + NEEDLE.len()], NEEDLE)
+            && keyword_boundary(bytes, idx.saturating_sub(1), idx)
+            && keyword_boundary(bytes, idx + NEEDLE.len(), idx + NEEDLE.len())
+        {
+            out.push_str(REPLACEMENT);
+            idx += NEEDLE.len();
+            continue;
+        }
+
+        out.push(bytes[idx] as char);
+        idx += 1;
+    }
+
+    out
+}
+
+fn equals_ignore_ascii_case(left: &[u8], right_upper_ascii: &[u8]) -> bool {
+    left.len() == right_upper_ascii.len()
+        && left
+            .iter()
+            .zip(right_upper_ascii)
+            .all(|(l, r)| l.to_ascii_uppercase() == *r)
+}
+
+fn keyword_boundary(bytes: &[u8], check_idx: usize, idx: usize) -> bool {
+    if idx == 0 || idx >= bytes.len() {
+        return true;
+    }
+    let ch = bytes[check_idx] as char;
+    !(ch.is_ascii_alphanumeric() || ch == '_')
 }
 
 fn regex_replace_all(sql: &str, pattern: &str, replacement: &str) -> String {
@@ -1729,9 +1845,34 @@ fn fix_join_operator(op: &mut JoinOperator, rule_filter: &RuleFilter, has_where_
     }
 
     if rule_filter.allows(issue_codes::LINT_AM_005) {
-        if let JoinOperator::Join(constraint) = op {
-            *op = JoinOperator::Inner(constraint.clone());
+        match rule_filter.am005_mode {
+            Am005QualifyMode::Inner => {
+                if let JoinOperator::Join(constraint) = op {
+                    *op = JoinOperator::Inner(constraint.clone());
+                }
+            }
+            Am005QualifyMode::Outer => qualify_outer_join_keyword(op),
+            Am005QualifyMode::Both => {
+                if let JoinOperator::Join(constraint) = op {
+                    *op = JoinOperator::Inner(constraint.clone());
+                } else {
+                    qualify_outer_join_keyword(op);
+                }
+            }
         }
+    }
+}
+
+fn qualify_outer_join_keyword(op: &mut JoinOperator) {
+    match op {
+        JoinOperator::Left(constraint) => {
+            *op = JoinOperator::LeftOuter(constraint.clone());
+        }
+        JoinOperator::Right(constraint) => {
+            *op = JoinOperator::RightOuter(constraint.clone());
+        }
+        JoinOperator::FullOuter(_) => {}
+        _ => {}
     }
 }
 
@@ -2220,18 +2361,22 @@ mod tests {
     use super::*;
     use flowscope_core::{analyze, issue_codes, AnalysisOptions, AnalyzeRequest, LintConfig};
 
-    fn lint_rule_count(sql: &str, code: &str) -> usize {
+    fn default_lint_config() -> LintConfig {
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::new(),
+        }
+    }
+
+    fn lint_rule_count_with_config(sql: &str, code: &str, lint_config: &LintConfig) -> usize {
         let request = AnalyzeRequest {
             sql: sql.to_string(),
             files: None,
             dialect: Dialect::Generic,
             source_name: None,
             options: Some(AnalysisOptions {
-                lint: Some(LintConfig {
-                    enabled: true,
-                    disabled_rules: vec![],
-                    rule_configs: std::collections::BTreeMap::new(),
-                }),
+                lint: Some(lint_config.clone()),
                 ..Default::default()
             }),
             schema: None,
@@ -2244,6 +2389,66 @@ mod tests {
             .iter()
             .filter(|issue| issue.code == code)
             .count()
+    }
+
+    fn lint_rule_count(sql: &str, code: &str) -> usize {
+        lint_rule_count_with_config(sql, code, &default_lint_config())
+    }
+
+    fn apply_fix_with_config(sql: &str, lint_config: &LintConfig) -> FixOutcome {
+        apply_lint_fixes_with_lint_config(sql, Dialect::Generic, lint_config).expect("fix result")
+    }
+
+    #[test]
+    fn am005_mode_reads_from_lint_config() {
+        let lint_config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "ambiguous.join".to_string(),
+                serde_json::json!({"fully_qualify_join_types": "outer"}),
+            )]),
+        };
+        let filter = RuleFilter::from_lint_config(&lint_config);
+        assert_eq!(filter.am005_mode, Am005QualifyMode::Outer);
+    }
+
+    #[test]
+    fn am005_outer_mode_full_join_fix_output() {
+        let lint_config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![issue_codes::LINT_CV_008.to_string()],
+            rule_configs: std::collections::BTreeMap::from([(
+                "ambiguous.join".to_string(),
+                serde_json::json!({"fully_qualify_join_types": "outer"}),
+            )]),
+        };
+        let sql = "SELECT a FROM t FULL JOIN u ON t.id = u.id";
+        assert_eq!(
+            lint_rule_count_with_config(
+                "SELECT a FROM t FULL OUTER JOIN u ON t.id = u.id",
+                issue_codes::LINT_AM_005,
+                &lint_config,
+            ),
+            0
+        );
+        let out = apply_fix_with_config(sql, &lint_config);
+        assert!(
+            out.sql.to_ascii_uppercase().contains("FULL OUTER JOIN"),
+            "expected FULL OUTER JOIN in fixed SQL, got: {}",
+            out.sql
+        );
+        assert_eq!(fix_count_for_code(&out.counts, issue_codes::LINT_AM_005), 1);
+    }
+
+    #[test]
+    fn replace_full_join_outside_single_quotes_rewrites_keyword() {
+        let sql = "SELECT a FROM t FULL JOIN u ON t.id = u.id";
+        let rewritten = replace_full_join_outside_single_quotes(sql);
+        assert_eq!(
+            rewritten,
+            "SELECT a FROM t full outer join u ON t.id = u.id"
+        );
     }
 
     fn fix_count_for_code(counts: &FixCounts, code: &str) -> usize {
@@ -2288,6 +2493,50 @@ mod tests {
         let second_pass = apply_lint_fixes(&out.sql, Dialect::Generic, &[]).unwrap_or_else(|err| {
             panic!("second pass failed for SQL:\n{}\nerror: {err:?}", out.sql);
         });
+        assert_eq!(
+            fix_count_for_code(&second_pass.counts, code),
+            0,
+            "expected idempotent second pass for {code}"
+        );
+    }
+
+    fn assert_rule_case_with_config(
+        sql: &str,
+        code: &str,
+        expected_before: usize,
+        expected_after: usize,
+        expected_fix_count: usize,
+        lint_config: &LintConfig,
+    ) {
+        let before = lint_rule_count_with_config(sql, code, lint_config);
+        assert_eq!(
+            before, expected_before,
+            "unexpected initial lint count for {code} in SQL: {sql}"
+        );
+
+        let out = apply_fix_with_config(sql, lint_config);
+        assert!(
+            !out.skipped_due_to_comments,
+            "test SQL should not be skipped"
+        );
+        assert_eq!(
+            fix_count_for_code(&out.counts, code),
+            expected_fix_count,
+            "unexpected fix count for {code} in SQL: {sql}"
+        );
+
+        if expected_fix_count > 0 {
+            assert!(out.changed, "expected SQL to change for {code}: {sql}");
+        }
+
+        let after = lint_rule_count_with_config(&out.sql, code, lint_config);
+        assert_eq!(
+            after, expected_after,
+            "unexpected lint count after fix for {code}. SQL: {}",
+            out.sql
+        );
+
+        let second_pass = apply_fix_with_config(&out.sql, lint_config);
         assert_eq!(
             fix_count_for_code(&second_pass.counts, code),
             0,
@@ -2452,6 +2701,111 @@ mod tests {
 
             if let Some(expected) = expected_text {
                 let out = apply_lint_fixes(sql, Dialect::Generic, &[]).expect("fix result");
+                assert!(
+                    out.sql.to_ascii_uppercase().contains(expected),
+                    "expected {expected:?} in fixed SQL, got: {}",
+                    out.sql
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sqlfluff_am005_outer_and_both_configs_are_fixed() {
+        let outer_config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![issue_codes::LINT_CV_008.to_string()],
+            rule_configs: std::collections::BTreeMap::from([(
+                "ambiguous.join".to_string(),
+                serde_json::json!({"fully_qualify_join_types": "outer"}),
+            )]),
+        };
+        let both_config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![issue_codes::LINT_CV_008.to_string()],
+            rule_configs: std::collections::BTreeMap::from([(
+                "ambiguous.join".to_string(),
+                serde_json::json!({"fully_qualify_join_types": "both"}),
+            )]),
+        };
+
+        let outer_cases = [
+            (
+                "SELECT a FROM t LEFT JOIN u ON t.id = u.id",
+                1,
+                0,
+                1,
+                Some("LEFT OUTER JOIN"),
+            ),
+            (
+                "SELECT a FROM t RIGHT JOIN u ON t.id = u.id",
+                1,
+                0,
+                1,
+                Some("RIGHT OUTER JOIN"),
+            ),
+            (
+                "SELECT a FROM t FULL JOIN u ON t.id = u.id",
+                1,
+                0,
+                1,
+                Some("FULL OUTER JOIN"),
+            ),
+            ("SELECT a FROM t JOIN u ON t.id = u.id", 0, 0, 0, None),
+        ];
+        for (sql, before, after, fix_count, expected_text) in outer_cases {
+            assert_rule_case_with_config(
+                sql,
+                issue_codes::LINT_AM_005,
+                before,
+                after,
+                fix_count,
+                &outer_config,
+            );
+            if let Some(expected) = expected_text {
+                let out = apply_fix_with_config(sql, &outer_config);
+                assert!(
+                    out.sql.to_ascii_uppercase().contains(expected),
+                    "expected {expected:?} in fixed SQL, got: {}",
+                    out.sql
+                );
+            }
+        }
+
+        let both_cases = [
+            (
+                "SELECT a FROM t JOIN u ON t.id = u.id",
+                1,
+                0,
+                1,
+                Some("INNER JOIN"),
+            ),
+            (
+                "SELECT a FROM t LEFT JOIN u ON t.id = u.id",
+                1,
+                0,
+                1,
+                Some("LEFT OUTER JOIN"),
+            ),
+            (
+                "SELECT a FROM t FULL JOIN u ON t.id = u.id",
+                1,
+                0,
+                1,
+                Some("FULL OUTER JOIN"),
+            ),
+        ];
+        for (sql, before, after, fix_count, expected_text) in both_cases {
+            assert_rule_case_with_config(
+                sql,
+                issue_codes::LINT_AM_005,
+                before,
+                after,
+                fix_count,
+                &both_config,
+            );
+            if let Some(expected) = expected_text {
+                let out = apply_fix_with_config(sql, &both_config);
                 assert!(
                     out.sql.to_ascii_uppercase().contains(expected),
                     "expected {expected:?} in fixed SQL, got: {}",

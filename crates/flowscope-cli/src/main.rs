@@ -1,7 +1,7 @@
 //! FlowScope CLI - SQL lineage analyzer
 
 use flowscope_cli::cli;
-use flowscope_cli::fix::apply_lint_fixes;
+use flowscope_cli::fix::apply_lint_fixes_with_lint_config;
 use flowscope_cli::input;
 #[cfg(feature = "metadata-provider")]
 use flowscope_cli::metadata;
@@ -150,6 +150,11 @@ fn run_lint(args: Args) -> Result<bool> {
 
     let mut lint_inputs = input::read_lint_input(&args.files)?;
     let dialect = args.dialect.into();
+    let lint_config = LintConfig {
+        enabled: true,
+        disabled_rules: args.exclude_rules.clone(),
+        rule_configs: std::collections::BTreeMap::new(),
+    };
 
     if args.fix {
         let mut total_applied = 0usize;
@@ -160,20 +165,23 @@ fn run_lint(args: Args) -> Result<bool> {
         let mut stdin_modified = false;
 
         for lint_input in &mut lint_inputs {
-            let outcome =
-                match apply_lint_fixes(&lint_input.source.content, dialect, &args.exclude_rules) {
-                    Ok(outcome) => outcome,
-                    Err(err) => {
-                        skipped_due_to_parse_errors += 1;
-                        if !args.quiet {
-                            eprintln!(
-                                "flowscope: warning: unable to auto-fix {}: {err}",
-                                lint_input.source.name
-                            );
-                        }
-                        continue;
+            let outcome = match apply_lint_fixes_with_lint_config(
+                &lint_input.source.content,
+                dialect,
+                &lint_config,
+            ) {
+                Ok(outcome) => outcome,
+                Err(err) => {
+                    skipped_due_to_parse_errors += 1;
+                    if !args.quiet {
+                        eprintln!(
+                            "flowscope: warning: unable to auto-fix {}: {err}",
+                            lint_input.source.name
+                        );
                     }
-                };
+                    continue;
+                }
+            };
 
             if outcome.skipped_due_to_comments {
                 skipped_due_to_comments += 1;
@@ -228,12 +236,6 @@ fn run_lint(args: Args) -> Result<bool> {
             }
         }
     }
-
-    let lint_config = LintConfig {
-        enabled: true,
-        disabled_rules: args.exclude_rules.clone(),
-        rule_configs: std::collections::BTreeMap::new(),
-    };
 
     let mut file_results = Vec::with_capacity(lint_inputs.len());
     let mut progress = LintProgressBar::new(lint_inputs.len(), args.quiet);
