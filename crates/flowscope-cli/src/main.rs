@@ -21,6 +21,7 @@ use is_terminal::IsTerminal;
 use std::fs;
 use std::io::{self, Write};
 use std::process::ExitCode;
+use std::time::Instant;
 
 use cli::{Args, OutputFormat, ViewMode};
 use output::{format_lint_json, format_lint_results, format_table, FileLintResult, LintIssue};
@@ -142,6 +143,8 @@ fn run_serve_mode(args: Args) -> ExitCode {
 /// and formats them in a sqlfluff-style report.
 fn run_lint(args: Args) -> Result<bool> {
     use output::lint::offset_to_line_col;
+
+    let started_at = Instant::now();
 
     validate_lint_output_format(args.format)?;
 
@@ -285,10 +288,11 @@ fn run_lint(args: Args) -> Result<bool> {
 
     let has_violations = file_results.iter().any(|f| !f.issues.is_empty());
     let colored = args.output.is_none() && std::io::stdout().is_terminal();
+    let elapsed = started_at.elapsed();
 
     let output_str = match args.format {
         OutputFormat::Json => format_lint_json(&file_results, args.compact),
-        OutputFormat::Table => format_lint_results(&file_results, colored),
+        OutputFormat::Table => format_lint_results(&file_results, colored, elapsed),
         _ => unreachable!("lint output format validated before processing"),
     };
 

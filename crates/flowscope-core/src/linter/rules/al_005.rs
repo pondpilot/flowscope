@@ -289,7 +289,9 @@ fn collect_identifier_prefixes_from_select(
         }
     }
     for from_item in &select.from {
+        collect_identifier_prefixes_from_table_factor(&from_item.relation, prefixes);
         for join in &from_item.joins {
+            collect_identifier_prefixes_from_table_factor(&join.relation, prefixes);
             if let Some(constraint) = join_constraint(&join.join_operator) {
                 collect_identifier_prefixes(constraint, prefixes);
             }
@@ -468,6 +470,112 @@ fn collect_identifier_prefixes(expr: &Expr, prefixes: &mut HashSet<QualifierRef>
             collect_identifier_prefixes(low, prefixes);
             collect_identifier_prefixes(high, prefixes);
         }
+        _ => {}
+    }
+}
+
+fn collect_identifier_prefixes_from_table_factor(
+    table_factor: &TableFactor,
+    prefixes: &mut HashSet<QualifierRef>,
+) {
+    match table_factor {
+        TableFactor::Derived {
+            lateral: true,
+            subquery,
+            ..
+        } => collect_identifier_prefixes_from_query(subquery, prefixes),
+        TableFactor::TableFunction { expr, .. } => {
+            collect_identifier_prefixes(expr, prefixes);
+        }
+        TableFactor::Function { args, .. } => {
+            for arg in args {
+                collect_identifier_prefixes_from_function_arg(arg, prefixes);
+            }
+        }
+        TableFactor::UNNEST { array_exprs, .. } => {
+            for expr in array_exprs {
+                collect_identifier_prefixes(expr, prefixes);
+            }
+        }
+        TableFactor::JsonTable { json_expr, .. } | TableFactor::OpenJsonTable { json_expr, .. } => {
+            collect_identifier_prefixes(json_expr, prefixes);
+        }
+        TableFactor::NestedJoin {
+            table_with_joins, ..
+        } => {
+            collect_identifier_prefixes_from_table_factor(&table_with_joins.relation, prefixes);
+            for join in &table_with_joins.joins {
+                collect_identifier_prefixes_from_table_factor(&join.relation, prefixes);
+                if let Some(constraint) = join_constraint(&join.join_operator) {
+                    collect_identifier_prefixes(constraint, prefixes);
+                }
+            }
+        }
+        TableFactor::Pivot {
+            table,
+            aggregate_functions,
+            value_column,
+            default_on_null,
+            ..
+        } => {
+            collect_identifier_prefixes_from_table_factor(table, prefixes);
+            for expr_with_alias in aggregate_functions {
+                collect_identifier_prefixes(&expr_with_alias.expr, prefixes);
+            }
+            for expr in value_column {
+                collect_identifier_prefixes(expr, prefixes);
+            }
+            if let Some(expr) = default_on_null {
+                collect_identifier_prefixes(expr, prefixes);
+            }
+        }
+        TableFactor::Unpivot {
+            table,
+            value,
+            columns,
+            ..
+        } => {
+            collect_identifier_prefixes_from_table_factor(table, prefixes);
+            collect_identifier_prefixes(value, prefixes);
+            for expr_with_alias in columns {
+                collect_identifier_prefixes(&expr_with_alias.expr, prefixes);
+            }
+        }
+        TableFactor::MatchRecognize {
+            table,
+            partition_by,
+            order_by,
+            measures,
+            ..
+        } => {
+            collect_identifier_prefixes_from_table_factor(table, prefixes);
+            for expr in partition_by {
+                collect_identifier_prefixes(expr, prefixes);
+            }
+            for order in order_by {
+                collect_identifier_prefixes(&order.expr, prefixes);
+            }
+            for measure in measures {
+                collect_identifier_prefixes(&measure.expr, prefixes);
+            }
+        }
+        TableFactor::XmlTable { row_expression, .. } => {
+            collect_identifier_prefixes(row_expression, prefixes);
+        }
+        _ => {}
+    }
+}
+
+fn collect_identifier_prefixes_from_function_arg(
+    arg: &FunctionArg,
+    prefixes: &mut HashSet<QualifierRef>,
+) {
+    match arg {
+        FunctionArg::Unnamed(FunctionArgExpr::Expr(expr))
+        | FunctionArg::Named {
+            arg: FunctionArgExpr::Expr(expr),
+            ..
+        } => collect_identifier_prefixes(expr, prefixes),
         _ => {}
     }
 }
@@ -757,6 +865,26 @@ mod tests {
     #[test]
     fn test_lateral_alias_is_ignored() {
         let issues = check_sql("SELECT u.id FROM users u JOIN LATERAL (SELECT 1) lx ON TRUE");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn test_alias_used_only_in_lateral_subquery_relation() {
+        let issues = check_sql(
+            "SELECT 1 \
+             FROM users u \
+             JOIN LATERAL (SELECT u.id) lx ON TRUE",
+        );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn test_alias_used_only_in_unnest_join_relation() {
+        let issues = check_sql(
+            "SELECT 1 \
+             FROM users u \
+             LEFT JOIN UNNEST(u.tags) tag ON TRUE",
+        );
         assert!(issues.is_empty());
     }
 

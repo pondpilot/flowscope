@@ -375,6 +375,10 @@ fn test_lint_multiple_files() {
         stdout.contains("1 file failed"),
         "Expected 1 file failed: {stdout}"
     );
+    assert!(
+        stdout.contains("All Finished in "),
+        "Expected elapsed time in summary: {stdout}"
+    );
 }
 
 #[test]

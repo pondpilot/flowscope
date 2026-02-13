@@ -68,6 +68,7 @@ This plan covers three axes:
   - `AL_005` `alias_case_check` now aligns closer to SQLFluff mode semantics for `quoted_cs_naked_upper` and `quoted_cs_naked_lower` (quoted identifiers case-sensitive; naked identifiers case-folded per configured mode).
   - `AL_005` alias-reference traversal now also accounts for usage in `QUALIFY`, named `WINDOW`, `DISTINCT ON`, `PREWHERE`, `CLUSTER BY`/`DISTRIBUTE BY`/`SORT BY`, `LATERAL VIEW`, and `CONNECT BY` clauses.
   - `AL_005` now also checks single-table scopes (not only multi-source `FROM`/`JOIN` clauses), matching SQLFluff AL05 behavior for unused aliases like `FROM users u` when `u` is never referenced.
+  - `AL_005` now also counts alias usage from join relation table-factor expressions (for example `LATERAL (SELECT u.id)` and `UNNEST(u.tags)`), reducing false positives where aliases are only referenced by later join sources.
   - `CV_003` moved from parity into a dedicated core rule module (`cv_003.rs`) and parity registration was removed.
   - `CV_003` was further upgraded from regex scanning to token/depth-aware trailing-comma detection in SELECT clauses.
   - `CV_003` now supports `select_clause_trailing_comma` (`forbid`/`require`) through `lint.ruleConfigs`.

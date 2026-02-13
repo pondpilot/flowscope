@@ -873,6 +873,36 @@ fn lint_al_005_alias_used_in_named_window_clause() {
 }
 
 #[test]
+fn lint_al_005_alias_used_only_in_lateral_subquery_relation() {
+    let issues = run_lint(
+        "SELECT 1 \
+         FROM users u \
+         JOIN LATERAL (SELECT u.id) lx ON TRUE",
+    );
+    assert!(
+        !issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_AL_005),
+        "alias usage inside LATERAL subquery relation should satisfy AL_005: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_al_005_alias_used_only_in_unnest_join_relation() {
+    let issues = run_lint(
+        "SELECT 1 \
+         FROM users u \
+         LEFT JOIN UNNEST(u.tags) tag ON TRUE",
+    );
+    assert!(
+        !issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_AL_005),
+        "alias usage inside UNNEST join relation should satisfy AL_005: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_rule_config_ambiguous_join_outer_mode() {
     let issues = run_lint_with_config(
         "SELECT * FROM foo LEFT JOIN bar ON foo.id = bar.id",

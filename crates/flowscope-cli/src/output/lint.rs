@@ -3,6 +3,7 @@
 use flowscope_core::Severity;
 use owo_colors::OwoColorize;
 use std::fmt::Write;
+use std::time::Duration;
 
 /// Per-file lint result used by the formatter.
 pub struct FileLintResult {
@@ -42,7 +43,7 @@ pub fn offset_to_line_col(sql: &str, offset: usize) -> (usize, usize) {
 }
 
 /// Format lint results as human-readable sqlfluff-style text.
-pub fn format_lint_results(results: &[FileLintResult], colored: bool) -> String {
+pub fn format_lint_results(results: &[FileLintResult], colored: bool, elapsed: Duration) -> String {
     let mut out = String::new();
 
     let mut total_pass = 0usize;
@@ -62,7 +63,14 @@ pub fn format_lint_results(results: &[FileLintResult], colored: bool) -> String 
         write_file_section(&mut out, file, colored);
     }
 
-    write_summary(&mut out, total_pass, total_fail, total_violations, colored);
+    write_summary(
+        &mut out,
+        total_pass,
+        total_fail,
+        total_violations,
+        colored,
+        elapsed,
+    );
 
     out
 }
@@ -106,8 +114,15 @@ fn write_file_section(out: &mut String, file: &FileLintResult, colored: bool) {
     }
 }
 
-fn write_summary(out: &mut String, pass: usize, fail: usize, violations: usize, colored: bool) {
-    writeln!(out, "All Finished!").unwrap();
+fn write_summary(
+    out: &mut String,
+    pass: usize,
+    fail: usize,
+    violations: usize,
+    colored: bool,
+    elapsed: Duration,
+) {
+    writeln!(out, "All Finished in {}!", format_elapsed(elapsed)).unwrap();
 
     let summary = format!(
         "  {} passed. {} failed. {} violations found.",
@@ -116,6 +131,17 @@ fn write_summary(out: &mut String, pass: usize, fail: usize, violations: usize, 
         violations
     );
     writeln!(out, "{summary}").unwrap();
+}
+
+fn format_elapsed(elapsed: Duration) -> String {
+    let secs = elapsed.as_secs_f64();
+    if secs >= 1.0 {
+        format!("{secs:.2}s")
+    } else if elapsed.as_millis() >= 1 {
+        format!("{}ms", elapsed.as_millis())
+    } else {
+        format!("{}us", elapsed.as_micros())
+    }
 }
 
 fn pass_str(count: usize, colored: bool) -> String {
@@ -222,8 +248,9 @@ mod tests {
             issues: vec![],
         }];
 
-        let output = format_lint_results(&results, false);
+        let output = format_lint_results(&results, false, Duration::from_millis(250));
         assert!(output.contains("PASS"));
+        assert!(output.contains("All Finished in 250ms!"));
         assert!(output.contains("clean.sql"));
         assert!(output.contains("1 file passed"));
         assert!(output.contains("0 files failed"));
@@ -253,8 +280,9 @@ mod tests {
             ],
         }];
 
-        let output = format_lint_results(&results, false);
+        let output = format_lint_results(&results, false, Duration::from_secs_f64(1.5));
         assert!(output.contains("FAIL"));
+        assert!(output.contains("All Finished in 1.50s!"));
         assert!(output.contains("bad.sql"));
         assert!(output.contains("LINT_AM_007"));
         assert!(output.contains("LINT_ST_006"));
@@ -284,7 +312,8 @@ mod tests {
             },
         ];
 
-        let output = format_lint_results(&results, false);
+        let output = format_lint_results(&results, false, Duration::from_micros(700));
+        assert!(output.contains("All Finished in 700us!"));
         assert!(output.contains("1 file passed"));
         assert!(output.contains("1 file failed"));
         assert!(output.contains("1 violations"));

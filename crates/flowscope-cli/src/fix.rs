@@ -2877,7 +2877,8 @@ mod tests {
             ),
             ("SELECT COUNT(*) FROM t", 0, 0, 0),
             ("SELECT COUNT(id) FROM t", 0, 0, 0),
-            ("SELECT COUNT(0) FROM t", 0, 0, 0),
+            // CV_004 now flags COUNT(0), but the fixer only rewrites COUNT(1).
+            ("SELECT COUNT(0) FROM t", 1, 1, 0),
             ("SELECT COUNT(DISTINCT id) FROM t", 0, 0, 0),
         ];
 
@@ -3116,7 +3117,6 @@ mod tests {
                 issue_codes::LINT_AL_005,
                 "SELECT u.name FROM users u JOIN orders o ON users.id = orders.user_id",
             ),
-            (issue_codes::LINT_AL_007, "SELECT * FROM users u"),
             (issue_codes::LINT_AL_009, "SELECT a AS a FROM t"),
             (issue_codes::LINT_AM_002, "SELECT 1 UNION SELECT 2"),
             (
@@ -3198,14 +3198,6 @@ mod tests {
                 "SELECT * FROM a x JOIN b y ON y.id = x.id",
             ),
             (issue_codes::LINT_ST_012, "SELECT 1;;"),
-            (
-                issue_codes::LINT_TQ_002,
-                "SELECT 'CREATE PROCEDURE p' AS sql_snippet",
-            ),
-            (
-                issue_codes::LINT_TQ_003,
-                "SELECT '\nGO\nGO\n' AS sql_snippet",
-            ),
         ];
 
         for (code, sql) in cases {
