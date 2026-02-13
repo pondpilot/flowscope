@@ -1,6 +1,6 @@
 //! LINT_ST_011: Unused joined source.
 //!
-//! Outer-joined relations should be referenced outside of their own JOIN clause.
+//! Joined relations should be referenced outside of their own JOIN clause.
 
 use std::collections::HashSet;
 
@@ -32,7 +32,7 @@ impl LintRule for StructureUnusedJoin {
         let mut violations = 0usize;
 
         visit_selects_in_statement(statement, &mut |select| {
-            let joined_sources = outer_join_sources(select);
+            let joined_sources = joined_sources(select);
             if joined_sources.is_empty() {
                 return;
             }
@@ -71,12 +71,12 @@ impl LintRule for StructureUnusedJoin {
     }
 }
 
-fn outer_join_sources(select: &Select) -> HashSet<String> {
+fn joined_sources(select: &Select) -> HashSet<String> {
     let mut joined_sources = HashSet::new();
 
     for table in &select.from {
         for join in &table.joins {
-            if !is_outer_join(&join.join_operator) {
+            if !is_tracked_join(&join.join_operator) {
                 continue;
             }
 
@@ -89,14 +89,10 @@ fn outer_join_sources(select: &Select) -> HashSet<String> {
     joined_sources
 }
 
-fn is_outer_join(operator: &JoinOperator) -> bool {
-    matches!(
+fn is_tracked_join(operator: &JoinOperator) -> bool {
+    !matches!(
         operator,
-        JoinOperator::Left(_)
-            | JoinOperator::LeftOuter(_)
-            | JoinOperator::Right(_)
-            | JoinOperator::RightOuter(_)
-            | JoinOperator::FullOuter(_)
+        JoinOperator::CrossApply | JoinOperator::OuterApply
     )
 }
 
@@ -179,15 +175,15 @@ mod tests {
     }
 
     #[test]
-    fn allows_inner_join_when_joined_source_unreferenced() {
+    fn flags_inner_join_when_joined_source_unreferenced() {
         let issues = run("select a.* from a inner join b using(x)");
-        assert!(issues.is_empty());
+        assert_eq!(issues.len(), 1);
     }
 
     #[test]
-    fn allows_implicit_inner_join_when_joined_source_unreferenced() {
+    fn flags_implicit_inner_join_when_joined_source_unreferenced() {
         let issues = run("select a.* from a join b using(x)");
-        assert!(issues.is_empty());
+        assert_eq!(issues.len(), 1);
     }
 
     #[test]

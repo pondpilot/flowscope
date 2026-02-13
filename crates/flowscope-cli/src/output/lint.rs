@@ -239,14 +239,14 @@ mod tests {
                 LintIssue {
                     line: 3,
                     col: 12,
-                    code: "LINT_AM_001".to_string(),
+                    code: "LINT_AM_007".to_string(),
                     message: "Use UNION DISTINCT or UNION ALL instead of bare UNION.".to_string(),
                     severity: Severity::Info,
                 },
                 LintIssue {
                     line: 7,
                     col: 1,
-                    code: "LINT_ST_001".to_string(),
+                    code: "LINT_ST_006".to_string(),
                     message: "CTE 'unused' is defined but never referenced.".to_string(),
                     severity: Severity::Info,
                 },
@@ -256,8 +256,8 @@ mod tests {
         let output = format_lint_results(&results, false);
         assert!(output.contains("FAIL"));
         assert!(output.contains("bad.sql"));
-        assert!(output.contains("LINT_AM_001"));
-        assert!(output.contains("LINT_ST_001"));
+        assert!(output.contains("LINT_AM_007"));
+        assert!(output.contains("LINT_ST_006"));
         assert!(output.contains("L:   3 | P:  12"));
         assert!(output.contains("L:   7 | P:   1"));
         assert!(output.contains("2 violations"));
@@ -277,7 +277,7 @@ mod tests {
                 issues: vec![LintIssue {
                     line: 1,
                     col: 1,
-                    code: "LINT_AM_001".to_string(),
+                    code: "LINT_AM_007".to_string(),
                     message: "test".to_string(),
                     severity: Severity::Info,
                 }],
@@ -298,7 +298,7 @@ mod tests {
             issues: vec![LintIssue {
                 line: 1,
                 col: 8,
-                code: "LINT_AM_001".to_string(),
+                code: "LINT_AM_007".to_string(),
                 message: "Use UNION DISTINCT or UNION ALL.".to_string(),
                 severity: Severity::Info,
             }],
@@ -309,7 +309,7 @@ mod tests {
         let arr = parsed.as_array().unwrap();
         assert_eq!(arr.len(), 1);
         assert_eq!(arr[0]["file"], "test.sql");
-        assert_eq!(arr[0]["violations"][0]["code"], "LINT_AM_001");
+        assert_eq!(arr[0]["violations"][0]["code"], "LINT_AM_007");
         assert_eq!(arr[0]["violations"][0]["line"], 1);
         assert_eq!(arr[0]["violations"][0]["column"], 8);
     }

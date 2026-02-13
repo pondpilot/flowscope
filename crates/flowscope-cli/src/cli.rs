@@ -61,7 +61,7 @@ pub struct Args {
     #[arg(long, requires = "lint")]
     pub fix: bool,
 
-    /// Comma-separated list of lint rule codes to exclude (e.g., LINT_AM_001,LINT_ST_001)
+    /// Comma-separated list of lint rule codes to exclude (e.g., LINT_AM_008,LINT_ST_006)
     #[arg(long, value_delimiter = ',')]
     pub exclude_rules: Vec<String>,
 
@@ -278,11 +278,11 @@ mod tests {
             "flowscope",
             "--lint",
             "--exclude-rules",
-            "LINT_AM_001,LINT_ST_001",
+            "LINT_AM_008,LINT_ST_006",
             "test.sql",
         ]);
         assert!(args.lint);
-        assert_eq!(args.exclude_rules, vec!["LINT_AM_001", "LINT_ST_001"]);
+        assert_eq!(args.exclude_rules, vec!["LINT_AM_008", "LINT_ST_006"]);
     }
 
     #[test]
@@ -291,12 +291,12 @@ mod tests {
             "flowscope",
             "--lint",
             "--exclude-rules",
-            "LINT_AM_001",
+            "LINT_AM_008",
             "--exclude-rules",
-            "LINT_ST_001",
+            "LINT_ST_006",
             "test.sql",
         ]);
-        assert_eq!(args.exclude_rules, vec!["LINT_AM_001", "LINT_ST_001"]);
+        assert_eq!(args.exclude_rules, vec!["LINT_AM_008", "LINT_ST_006"]);
     }
 
     #[cfg(feature = "serve")]

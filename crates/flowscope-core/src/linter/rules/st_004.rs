@@ -1,137 +1,99 @@
-//! LINT_ST_004: Avoid JOIN ... USING (...).
+//! LINT_ST_004: Flattenable nested CASE in ELSE.
 //!
-//! USING can hide which side a column originates from and may create ambiguity
-//! in complex joins. Prefer explicit ON conditions.
+//! SQLFluff ST04 parity: flag `CASE ... ELSE CASE ... END END` patterns where
+//! the nested ELSE-case can be flattened into the outer CASE.
 
 use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::visit;
 use crate::types::{issue_codes, Issue};
-use sqlparser::ast::*;
+use sqlparser::ast::{Expr, Statement};
 
-pub struct AvoidUsingJoin;
+pub struct FlattenableNestedCase;
 
-impl LintRule for AvoidUsingJoin {
+impl LintRule for FlattenableNestedCase {
     fn code(&self) -> &'static str {
         issue_codes::LINT_ST_004
     }
 
     fn name(&self) -> &'static str {
-        "Avoid USING in JOIN"
+        "Flattenable nested CASE"
     }
 
     fn description(&self) -> &'static str {
-        "Prefer explicit ON conditions instead of JOIN ... USING (...)."
+        "Nested CASE in ELSE can be flattened into a single CASE expression."
     }
 
     fn check(&self, stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
         let mut issues = Vec::new();
-        check_statement(stmt, ctx, &mut issues);
+
+        visit::visit_expressions(stmt, &mut |expr| {
+            if is_flattenable_nested_else_case(expr) {
+                issues.push(
+                    Issue::warning(
+                        issue_codes::LINT_ST_004,
+                        "Nested CASE in ELSE clause can be flattened.",
+                    )
+                    .with_statement(ctx.statement_index),
+                );
+            }
+        });
+
         issues
     }
 }
 
-fn check_statement(stmt: &Statement, ctx: &LintContext, issues: &mut Vec<Issue>) {
-    match stmt {
-        Statement::Query(q) => check_query(q, ctx, issues),
-        Statement::Insert(ins) => {
-            if let Some(ref source) = ins.source {
-                check_query(source, ctx, issues);
-            }
-        }
-        Statement::CreateView { query, .. } => check_query(query, ctx, issues),
-        Statement::CreateTable(create) => {
-            if let Some(ref q) = create.query {
-                check_query(q, ctx, issues);
-            }
-        }
-        _ => {}
+fn is_flattenable_nested_else_case(expr: &Expr) -> bool {
+    let Expr::Case {
+        operand: outer_operand,
+        conditions: outer_conditions,
+        else_result: Some(outer_else),
+        ..
+    } = expr
+    else {
+        return false;
+    };
+
+    // SQLFluff ST04 only applies when there is at least one WHEN in the outer CASE.
+    if outer_conditions.is_empty() {
+        return false;
+    }
+
+    let Some((inner_operand, _inner_conditions, _inner_else)) = case_parts(outer_else) else {
+        return false;
+    };
+
+    case_operands_match(outer_operand.as_deref(), inner_operand)
+}
+
+fn case_parts(
+    case_expr: &Expr,
+) -> Option<(Option<&Expr>, &[sqlparser::ast::CaseWhen], Option<&Expr>)> {
+    match case_expr {
+        Expr::Case {
+            operand,
+            conditions,
+            else_result,
+            ..
+        } => Some((
+            operand.as_deref(),
+            conditions.as_slice(),
+            else_result.as_deref(),
+        )),
+        Expr::Nested(inner) => case_parts(inner),
+        _ => None,
     }
 }
 
-fn check_query(query: &Query, ctx: &LintContext, issues: &mut Vec<Issue>) {
-    if let Some(ref with) = query.with {
-        for cte in &with.cte_tables {
-            check_query(&cte.query, ctx, issues);
-        }
-    }
-    check_set_expr(&query.body, ctx, issues);
-}
-
-fn check_set_expr(body: &SetExpr, ctx: &LintContext, issues: &mut Vec<Issue>) {
-    match body {
-        SetExpr::Select(select) => {
-            for from_item in &select.from {
-                check_table_factor(&from_item.relation, ctx, issues);
-                for join in &from_item.joins {
-                    if has_using_constraint(&join.join_operator) {
-                        issues.push(
-                            Issue::warning(
-                                issue_codes::LINT_ST_004,
-                                "Avoid JOIN ... USING (...); prefer explicit ON conditions.",
-                            )
-                            .with_statement(ctx.statement_index),
-                        );
-                    }
-                    check_table_factor(&join.relation, ctx, issues);
-                }
-            }
-        }
-        SetExpr::Query(q) => check_query(q, ctx, issues),
-        SetExpr::SetOperation { left, right, .. } => {
-            check_set_expr(left, ctx, issues);
-            check_set_expr(right, ctx, issues);
-        }
-        _ => {}
+fn case_operands_match(outer: Option<&Expr>, inner: Option<&Expr>) -> bool {
+    match (outer, inner) {
+        (None, None) => true,
+        (Some(left), Some(right)) => exprs_equal(left, right),
+        _ => false,
     }
 }
 
-fn check_table_factor(relation: &TableFactor, ctx: &LintContext, issues: &mut Vec<Issue>) {
-    match relation {
-        TableFactor::Derived { subquery, .. } => check_query(subquery, ctx, issues),
-        TableFactor::NestedJoin {
-            table_with_joins, ..
-        } => {
-            check_table_factor(&table_with_joins.relation, ctx, issues);
-            for join in &table_with_joins.joins {
-                if has_using_constraint(&join.join_operator) {
-                    issues.push(
-                        Issue::warning(
-                            issue_codes::LINT_ST_004,
-                            "Avoid JOIN ... USING (...); prefer explicit ON conditions.",
-                        )
-                        .with_statement(ctx.statement_index),
-                    );
-                }
-                check_table_factor(&join.relation, ctx, issues);
-            }
-        }
-        _ => {}
-    }
-}
-
-fn has_using_constraint(op: &JoinOperator) -> bool {
-    join_constraint(op).is_some_and(|constraint| matches!(constraint, JoinConstraint::Using(_)))
-}
-
-fn join_constraint(op: &JoinOperator) -> Option<&JoinConstraint> {
-    match op {
-        JoinOperator::Join(constraint)
-        | JoinOperator::Inner(constraint)
-        | JoinOperator::Left(constraint)
-        | JoinOperator::LeftOuter(constraint)
-        | JoinOperator::Right(constraint)
-        | JoinOperator::RightOuter(constraint)
-        | JoinOperator::FullOuter(constraint)
-        | JoinOperator::CrossJoin(constraint)
-        | JoinOperator::Semi(constraint)
-        | JoinOperator::LeftSemi(constraint)
-        | JoinOperator::RightSemi(constraint)
-        | JoinOperator::Anti(constraint)
-        | JoinOperator::LeftAnti(constraint)
-        | JoinOperator::RightAnti(constraint)
-        | JoinOperator::StraightJoin(constraint) => Some(constraint),
-        JoinOperator::AsOf { constraint, .. } => Some(constraint),
-        JoinOperator::CrossApply | JoinOperator::OuterApply => None,
-    }
+fn exprs_equal(left: &Expr, right: &Expr) -> bool {
+    format!("{left}") == format!("{right}")
 }
 
 #[cfg(test)]
@@ -139,31 +101,67 @@ mod tests {
     use super::*;
     use crate::parser::parse_sql;
 
-    fn check_sql(sql: &str) -> Vec<Issue> {
-        let stmts = parse_sql(sql).unwrap();
-        let rule = AvoidUsingJoin;
-        let ctx = LintContext {
-            sql,
-            statement_range: 0..sql.len(),
-            statement_index: 0,
-        };
-        let mut issues = Vec::new();
-        for stmt in &stmts {
-            issues.extend(rule.check(stmt, &ctx));
-        }
-        issues
+    fn run(sql: &str) -> Vec<Issue> {
+        let statements = parse_sql(sql).expect("parse");
+        let rule = FlattenableNestedCase;
+        statements
+            .iter()
+            .enumerate()
+            .flat_map(|(index, statement)| {
+                rule.check(
+                    statement,
+                    &LintContext {
+                        sql,
+                        statement_range: 0..sql.len(),
+                        statement_index: index,
+                    },
+                )
+            })
+            .collect()
     }
 
-    #[test]
-    fn test_using_join_detected() {
-        let issues = check_sql("SELECT * FROM a JOIN b USING (id)");
-        assert_eq!(issues.len(), 1);
-        assert_eq!(issues[0].code, "LINT_ST_004");
-    }
+    // --- Edge cases adopted from sqlfluff ST04 ---
 
     #[test]
-    fn test_on_join_ok() {
-        let issues = check_sql("SELECT * FROM a JOIN b ON a.id = b.id");
+    fn passes_nested_case_under_when_clause() {
+        let sql = "SELECT CASE WHEN species = 'Rat' THEN CASE WHEN colour = 'Black' THEN 'Growl' WHEN colour = 'Grey' THEN 'Squeak' END END AS sound FROM mytable";
+        let issues = run(sql);
         assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn passes_nested_case_inside_larger_else_expression() {
+        let sql = "SELECT CASE WHEN flag = 1 THEN TRUE ELSE score > 10 + CASE WHEN kind = 'b' THEN 8 WHEN kind = 'c' THEN 9 END END AS test FROM t";
+        let issues = run(sql);
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn flags_simple_flattenable_else_case() {
+        let sql = "SELECT CASE WHEN species = 'Rat' THEN 'Squeak' ELSE CASE WHEN species = 'Dog' THEN 'Woof' END END AS sound FROM mytable";
+        let issues = run(sql);
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_ST_004);
+    }
+
+    #[test]
+    fn flags_nested_else_case_with_multiple_when_clauses() {
+        let sql = "SELECT CASE WHEN species = 'Rat' THEN 'Squeak' ELSE CASE WHEN species = 'Dog' THEN 'Woof' WHEN species = 'Mouse' THEN 'Squeak' END END AS sound FROM mytable";
+        let issues = run(sql);
+        assert_eq!(issues.len(), 1);
+    }
+
+    #[test]
+    fn passes_when_outer_and_inner_case_operands_differ() {
+        let sql = "SELECT CASE WHEN day_of_month IN (11, 12, 13) THEN 'TH' ELSE CASE MOD(day_of_month, 10) WHEN 1 THEN 'ST' WHEN 2 THEN 'ND' WHEN 3 THEN 'RD' ELSE 'TH' END END AS ordinal_suffix FROM calendar";
+        let issues = run(sql);
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn flags_when_outer_and_inner_simple_case_operands_match() {
+        let sql = "SELECT CASE x WHEN 0 THEN 'zero' WHEN 5 THEN 'five' ELSE CASE x WHEN 10 THEN 'ten' WHEN 20 THEN 'twenty' ELSE 'other' END END FROM tab_a";
+        let issues = run(sql);
+        assert_eq!(issues.len(), 1);
     }
 }

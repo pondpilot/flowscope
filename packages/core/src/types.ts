@@ -148,7 +148,7 @@ export interface AnalysisOptions {
 export interface LintConfig {
   /** Master toggle for linting (default: true) */
   enabled?: boolean;
-  /** List of rule codes to disable (e.g., ["LINT_AM_002"]) */
+  /** List of rule codes to disable (e.g., ["LINT_AM_008"]) */
   disabledRules?: string[];
 }
 

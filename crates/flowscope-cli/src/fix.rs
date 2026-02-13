@@ -5,6 +5,7 @@
 //! - Text rewrites for parity-style formatting/convention rules.
 //! - Lint before/after comparison to report per-rule removed violations.
 
+use flowscope_core::linter::config::canonicalize_rule_code;
 use flowscope_core::{
     analyze, issue_codes, linter::helpers as lint_helpers, parse_sql_with_dialect, AnalysisOptions,
     AnalyzeRequest, Dialect, LintConfig, ParseError,
@@ -67,13 +68,23 @@ impl RuleFilter {
     fn new(disabled_rules: &[String]) -> Self {
         let disabled = disabled_rules
             .iter()
-            .map(|rule| rule.trim().to_ascii_uppercase())
+            .filter_map(|rule| {
+                let trimmed = rule.trim();
+                if trimmed.is_empty() {
+                    return None;
+                }
+                Some(
+                    canonicalize_rule_code(trimmed).unwrap_or_else(|| trimmed.to_ascii_uppercase()),
+                )
+            })
             .collect();
         Self { disabled }
     }
 
     fn allows(&self, code: &str) -> bool {
-        !self.disabled.contains(&code.to_ascii_uppercase())
+        let canonical =
+            canonicalize_rule_code(code).unwrap_or_else(|| code.trim().to_ascii_uppercase());
+        !self.disabled.contains(&canonical)
     }
 }
 
@@ -235,13 +246,13 @@ fn apply_text_fixes(sql: &str, rule_filter: &RuleFilter) -> String {
     if rule_filter.allows(issue_codes::LINT_ST_012) {
         out = fix_consecutive_semicolons(&out);
     }
-    if rule_filter.allows(issue_codes::LINT_CV_008) {
+    if rule_filter.allows(issue_codes::LINT_CV_007) {
         out = fix_statement_brackets(&out);
     }
-    if rule_filter.allows(issue_codes::LINT_CV_005) {
+    if rule_filter.allows(issue_codes::LINT_CV_001) {
         out = fix_not_equal_operator(&out);
     }
-    if rule_filter.allows(issue_codes::LINT_CV_006) {
+    if rule_filter.allows(issue_codes::LINT_CV_003) {
         out = fix_trailing_select_comma(&out);
     }
     if rule_filter.allows(issue_codes::LINT_LT_013) {
@@ -277,7 +288,7 @@ fn apply_text_fixes(sql: &str, rule_filter: &RuleFilter) -> String {
     if rule_filter.allows(issue_codes::LINT_LT_014) {
         out = fix_keyword_newlines(&out);
     }
-    if rule_filter.allows(issue_codes::LINT_AL_003) {
+    if rule_filter.allows(issue_codes::LINT_AL_001) {
         out = fix_missing_table_aliases(&out);
     }
     if rule_filter.allows(issue_codes::LINT_AL_009) {
@@ -286,13 +297,13 @@ fn apply_text_fixes(sql: &str, rule_filter: &RuleFilter) -> String {
     if rule_filter.allows(issue_codes::LINT_AL_007) {
         out = fix_single_table_aliases(&out);
     }
-    if rule_filter.allows(issue_codes::LINT_AL_002) {
+    if rule_filter.allows(issue_codes::LINT_AL_005) {
         out = fix_unused_table_aliases(&out);
     }
     if rule_filter.allows(issue_codes::LINT_RF_004) {
         out = fix_table_alias_keywords(&out);
     }
-    if rule_filter.allows(issue_codes::LINT_ST_006) {
+    if rule_filter.allows(issue_codes::LINT_ST_005) {
         out = fix_subquery_to_cte(&out);
     }
     if rule_filter.allows(issue_codes::LINT_RF_003) {
@@ -1149,14 +1160,15 @@ fn fix_set_expr(body: &mut SetExpr, rule_filter: &RuleFilter) {
             fix_set_expr(left, rule_filter);
             fix_set_expr(right, rule_filter);
 
-            if rule_filter.allows(issue_codes::LINT_AM_001) && matches!(op, SetOperator::Union) {
-                if matches!(set_quantifier, SetQuantifier::None | SetQuantifier::ByName) {
-                    *set_quantifier = if matches!(set_quantifier, SetQuantifier::ByName) {
-                        SetQuantifier::DistinctByName
-                    } else {
-                        SetQuantifier::Distinct
-                    };
-                }
+            if rule_filter.allows(issue_codes::LINT_AM_002)
+                && matches!(op, SetOperator::Union)
+                && matches!(set_quantifier, SetQuantifier::None | SetQuantifier::ByName)
+            {
+                *set_quantifier = if matches!(set_quantifier, SetQuantifier::ByName) {
+                    SetQuantifier::DistinctByName
+                } else {
+                    SetQuantifier::Distinct
+                };
             }
         }
         SetExpr::Values(values) => {
@@ -1175,7 +1187,7 @@ fn fix_set_expr(body: &mut SetExpr, rule_filter: &RuleFilter) {
 }
 
 fn fix_select(select: &mut Select, rule_filter: &RuleFilter) {
-    if rule_filter.allows(issue_codes::LINT_AM_003) && has_distinct_and_group_by(select) {
+    if rule_filter.allows(issue_codes::LINT_AM_001) && has_distinct_and_group_by(select) {
         select.distinct = None;
     }
 
@@ -1192,7 +1204,7 @@ fn fix_select(select: &mut Select, rule_filter: &RuleFilter) {
         }
     }
 
-    if rule_filter.allows(issue_codes::LINT_ST_007) {
+    if rule_filter.allows(issue_codes::LINT_ST_006) {
         if let Some(first_simple_idx) = select.projection.iter().position(is_simple_projection_item)
         {
             if first_simple_idx > 0 {
@@ -1208,6 +1220,10 @@ fn fix_select(select: &mut Select, rule_filter: &RuleFilter) {
     let has_where_clause = select.selection.is_some();
 
     for table_with_joins in &mut select.from {
+        if rule_filter.allows(issue_codes::LINT_CV_008) {
+            rewrite_right_join_to_left(table_with_joins);
+        }
+
         fix_table_factor(
             &mut table_with_joins.relation,
             rule_filter,
@@ -1218,7 +1234,7 @@ fn fix_select(select: &mut Select, rule_filter: &RuleFilter) {
 
         for join in &mut table_with_joins.joins {
             let right_ref = table_factor_reference_name(&join.relation);
-            if rule_filter.allows(issue_codes::LINT_ST_004) {
+            if rule_filter.allows(issue_codes::LINT_ST_007) {
                 rewrite_using_join_constraint(
                     &mut join.join_operator,
                     left_ref.as_deref(),
@@ -1314,6 +1330,28 @@ fn has_distinct_and_group_by(select: &Select) -> bool {
         GroupByExpr::Expressions(exprs, _) => !exprs.is_empty(),
     };
     has_distinct && has_group_by
+}
+
+fn rewrite_right_join_to_left(table_with_joins: &mut TableWithJoins) {
+    if table_with_joins.joins.len() != 1 {
+        return;
+    }
+
+    let join = &mut table_with_joins.joins[0];
+    let new_operator = match std::mem::replace(
+        &mut join.join_operator,
+        JoinOperator::CrossJoin(JoinConstraint::None),
+    ) {
+        JoinOperator::Right(constraint) => JoinOperator::Left(constraint),
+        JoinOperator::RightOuter(constraint) => JoinOperator::LeftOuter(constraint),
+        other => {
+            join.join_operator = other;
+            return;
+        }
+    };
+
+    std::mem::swap(&mut table_with_joins.relation, &mut join.relation);
+    join.join_operator = new_operator;
 }
 
 fn is_simple_projection_item(item: &SelectItem) -> bool {
@@ -1538,6 +1576,10 @@ fn fix_table_factor(relation: &mut TableFactor, rule_filter: &RuleFilter, has_wh
         TableFactor::NestedJoin {
             table_with_joins, ..
         } => {
+            if rule_filter.allows(issue_codes::LINT_CV_008) {
+                rewrite_right_join_to_left(table_with_joins);
+            }
+
             fix_table_factor(
                 &mut table_with_joins.relation,
                 rule_filter,
@@ -1548,7 +1590,7 @@ fn fix_table_factor(relation: &mut TableFactor, rule_filter: &RuleFilter, has_wh
 
             for join in &mut table_with_joins.joins {
                 let right_ref = table_factor_reference_name(&join.relation);
-                if rule_filter.allows(issue_codes::LINT_ST_004) {
+                if rule_filter.allows(issue_codes::LINT_ST_007) {
                     rewrite_using_join_constraint(
                         &mut join.join_operator,
                         left_ref.as_deref(),
@@ -1634,7 +1676,7 @@ fn fix_join_operator(op: &mut JoinOperator, rule_filter: &RuleFilter, has_where_
         JoinOperator::CrossApply | JoinOperator::OuterApply => {}
     }
 
-    if rule_filter.allows(issue_codes::LINT_AM_009)
+    if rule_filter.allows(issue_codes::LINT_AM_008)
         && !has_where_clause
         && operator_requires_join_condition(op)
         && !join_constraint_is_explicit(op)
@@ -1643,7 +1685,7 @@ fn fix_join_operator(op: &mut JoinOperator, rule_filter: &RuleFilter, has_where_
         return;
     }
 
-    if rule_filter.allows(issue_codes::LINT_AM_006) {
+    if rule_filter.allows(issue_codes::LINT_AM_005) {
         if let JoinOperator::Join(constraint) = op {
             *op = JoinOperator::Inner(constraint.clone());
         }
@@ -1731,7 +1773,7 @@ fn fix_order_by(order_by: &mut OrderBy, rule_filter: &RuleFilter) {
             fix_expr(&mut order_expr.expr, rule_filter);
         }
 
-        if rule_filter.allows(issue_codes::LINT_AM_005) {
+        if rule_filter.allows(issue_codes::LINT_AM_003) {
             let has_explicit = exprs
                 .iter()
                 .any(|order_expr| order_expr.options.asc.is_some());
@@ -1856,20 +1898,20 @@ fn fix_expr(expr: &mut Expr, rule_filter: &RuleFilter) {
         _ => {}
     }
 
-    if rule_filter.allows(issue_codes::LINT_CV_003) {
+    if rule_filter.allows(issue_codes::LINT_CV_001) {
         if let Some(rewritten) = null_comparison_rewrite(expr) {
             *expr = rewritten;
             return;
         }
     }
 
-    if rule_filter.allows(issue_codes::LINT_ST_003) {
+    if rule_filter.allows(issue_codes::LINT_ST_004) {
         if let Some(rewritten) = nested_case_rewrite(expr) {
             *expr = rewritten;
         }
     }
 
-    if rule_filter.allows(issue_codes::LINT_ST_005) {
+    if rule_filter.allows(issue_codes::LINT_ST_002) {
         if let Some(rewritten) = simple_case_rewrite(expr) {
             *expr = rewritten;
         }
@@ -1880,7 +1922,7 @@ fn fix_expr(expr: &mut Expr, rule_filter: &RuleFilter) {
         ..
     } = expr
     {
-        if rule_filter.allows(issue_codes::LINT_ST_002) && lint_helpers::is_null_expr(else_result) {
+        if rule_filter.allows(issue_codes::LINT_ST_001) && lint_helpers::is_null_expr(else_result) {
             if let Expr::Case { else_result, .. } = expr {
                 *else_result = None;
             }
@@ -1914,14 +1956,14 @@ fn fix_function(func: &mut Function, rule_filter: &RuleFilter) {
         fix_expr(&mut order_expr.expr, rule_filter);
     }
 
-    if rule_filter.allows(issue_codes::LINT_CV_001) {
+    if rule_filter.allows(issue_codes::LINT_CV_002) {
         let function_name_upper = func.name.to_string().to_ascii_uppercase();
         if function_name_upper == "IFNULL" || function_name_upper == "NVL" {
             func.name = vec![Ident::new("COALESCE")].into();
         }
     }
 
-    if rule_filter.allows(issue_codes::LINT_CV_002) && is_count_one(func) {
+    if rule_filter.allows(issue_codes::LINT_CV_004) && is_count_one(func) {
         if let FunctionArguments::List(arg_list) = &mut func.args {
             arg_list.args[0] = FunctionArg::Unnamed(FunctionArgExpr::Wildcard);
         }
@@ -2247,7 +2289,7 @@ mod tests {
         ];
 
         for (sql, before, after, fix_count) in cases {
-            assert_rule_case(sql, issue_codes::LINT_AM_003, before, after, fix_count);
+            assert_rule_case(sql, issue_codes::LINT_AM_001, before, after, fix_count);
         }
     }
 
@@ -2285,7 +2327,7 @@ mod tests {
         ];
 
         for (sql, before, after, fix_count, expected_text) in cases {
-            assert_rule_case(sql, issue_codes::LINT_AM_001, before, after, fix_count);
+            assert_rule_case(sql, issue_codes::LINT_AM_002, before, after, fix_count);
 
             if let Some(expected) = expected_text {
                 let out = apply_lint_fixes(sql, Dialect::Generic, &[]).expect("fix result");
@@ -2327,7 +2369,7 @@ mod tests {
         ];
 
         for (sql, before, after, fix_count, expected_text) in cases {
-            assert_rule_case(sql, issue_codes::LINT_AM_005, before, after, fix_count);
+            assert_rule_case(sql, issue_codes::LINT_AM_003, before, after, fix_count);
 
             if let Some(expected) = expected_text {
                 let out = apply_lint_fixes(sql, Dialect::Generic, &[]).expect("fix result");
@@ -2362,7 +2404,7 @@ mod tests {
         ];
 
         for (sql, before, after, fix_count, expected_text) in cases {
-            assert_rule_case(sql, issue_codes::LINT_AM_006, before, after, fix_count);
+            assert_rule_case(sql, issue_codes::LINT_AM_005, before, after, fix_count);
 
             if let Some(expected) = expected_text {
                 let out = apply_lint_fixes(sql, Dialect::Generic, &[]).expect("fix result");
@@ -2410,7 +2452,7 @@ mod tests {
         ];
 
         for (sql, before, after, fix_count, expected_text) in cases {
-            assert_rule_case(sql, issue_codes::LINT_AM_009, before, after, fix_count);
+            assert_rule_case(sql, issue_codes::LINT_AM_008, before, after, fix_count);
 
             if let Some(expected) = expected_text {
                 let out = apply_lint_fixes(sql, Dialect::Generic, &[]).expect("fix result");
@@ -2457,7 +2499,7 @@ mod tests {
         ];
 
         for (sql, before, after, fix_count, expected_text) in cases {
-            assert_rule_case(sql, issue_codes::LINT_ST_005, before, after, fix_count);
+            assert_rule_case(sql, issue_codes::LINT_ST_002, before, after, fix_count);
 
             if let Some(expected) = expected_text {
                 let out = apply_lint_fixes(sql, Dialect::Generic, &[]).expect("fix result");
@@ -2471,7 +2513,7 @@ mod tests {
     }
 
     #[test]
-    fn sqlfluff_st007_cases_are_fixed_or_unchanged() {
+    fn sqlfluff_st006_cases_are_fixed_or_unchanged() {
         let cases = [
             ("SELECT a + 1, a FROM t", 1, 0, 1, Some("SELECT A, A + 1")),
             (
@@ -2493,7 +2535,7 @@ mod tests {
         ];
 
         for (sql, before, after, fix_count, expected_text) in cases {
-            assert_rule_case(sql, issue_codes::LINT_ST_007, before, after, fix_count);
+            assert_rule_case(sql, issue_codes::LINT_ST_006, before, after, fix_count);
 
             if let Some(expected) = expected_text {
                 let out = apply_lint_fixes(sql, Dialect::Generic, &[]).expect("fix result");
@@ -2589,7 +2631,7 @@ mod tests {
     }
 
     #[test]
-    fn sqlfluff_st004_cases_are_fixed_or_unchanged() {
+    fn sqlfluff_st007_cases_are_fixed_or_unchanged() {
         let cases = [
             (
                 "SELECT * FROM a JOIN b USING (id)",
@@ -2616,7 +2658,7 @@ mod tests {
         ];
 
         for (sql, before, after, fix_count, expected_text) in cases {
-            assert_rule_case(sql, issue_codes::LINT_ST_004, before, after, fix_count);
+            assert_rule_case(sql, issue_codes::LINT_ST_007, before, after, fix_count);
 
             if let Some(expected) = expected_text {
                 let out = apply_lint_fixes(sql, Dialect::Generic, &[]).expect("fix result");
@@ -2630,7 +2672,7 @@ mod tests {
     }
 
     #[test]
-    fn sqlfluff_st003_cases_are_fixed_or_unchanged() {
+    fn sqlfluff_st004_cases_are_fixed_or_unchanged() {
         let cases = [
             (
                 "SELECT CASE WHEN species = 'Rat' THEN 'Squeak' ELSE CASE WHEN species = 'Dog' THEN 'Woof' END END AS sound FROM mytable",
@@ -2670,7 +2712,7 @@ mod tests {
         ];
 
         for (sql, before, after, fix_count, expected_text) in cases {
-            assert_rule_case(sql, issue_codes::LINT_ST_003, before, after, fix_count);
+            assert_rule_case(sql, issue_codes::LINT_ST_004, before, after, fix_count);
 
             if let Some(expected) = expected_text {
                 let out = apply_lint_fixes(sql, Dialect::Generic, &[]).expect("fix result");
@@ -2727,7 +2769,7 @@ mod tests {
         ];
 
         for (sql, before, after, fix_count, expected_text) in cases {
-            assert_rule_case(sql, issue_codes::LINT_CV_003, before, after, fix_count);
+            assert_rule_case(sql, issue_codes::LINT_CV_005, before, after, fix_count);
 
             if let Some(expected) = expected_text {
                 let out = apply_lint_fixes(sql, Dialect::Generic, &[]).expect("fix result");
@@ -2755,7 +2797,7 @@ mod tests {
         ];
 
         for (sql, before, after, fix_count) in cases {
-            assert_rule_case(sql, issue_codes::LINT_CV_001, before, after, fix_count);
+            assert_rule_case(sql, issue_codes::LINT_CV_002, before, after, fix_count);
         }
     }
 
@@ -2804,7 +2846,7 @@ mod tests {
         ];
 
         for (sql, before, after, fix_count) in cases {
-            assert_rule_case(sql, issue_codes::LINT_ST_002, before, after, fix_count);
+            assert_rule_case(sql, issue_codes::LINT_ST_001, before, after, fix_count);
         }
     }
 
@@ -2838,7 +2880,7 @@ mod tests {
         ];
 
         for (sql, before, after, fix_count) in cases {
-            assert_rule_case(sql, issue_codes::LINT_CV_002, before, after, fix_count);
+            assert_rule_case(sql, issue_codes::LINT_CV_004, before, after, fix_count);
         }
     }
 
@@ -2998,19 +3040,19 @@ mod tests {
 
         let al_disabled = RuleFilter::new(&[
             issue_codes::LINT_LT_014.to_string(),
-            issue_codes::LINT_AL_002.to_string(),
+            issue_codes::LINT_AL_005.to_string(),
         ]);
         let out_al_disabled = apply_text_fixes(sql, &al_disabled);
         assert!(
             out_al_disabled.contains("alias_select"),
-            "excluding AL_002 must not block RF_004 rewrite: {out_al_disabled}"
+            "excluding AL_005 must not block RF_004 rewrite: {out_al_disabled}"
         );
     }
 
     #[test]
     fn excluded_rule_is_not_rewritten_when_other_rules_are_fixed() {
         let sql = "SELECT COUNT(1) FROM t WHERE a<>b";
-        let disabled = vec![issue_codes::LINT_CV_005.to_string()];
+        let disabled = vec![issue_codes::LINT_CV_001.to_string()];
         let out = apply_lint_fixes(sql, Dialect::Generic, &disabled).expect("fix result");
         assert!(
             out.sql.contains("COUNT(*)"),
@@ -3065,26 +3107,26 @@ mod tests {
     fn sqlfluff_fix_rule_smoke_cases_reduce_target_violations() {
         let cases = vec![
             (
-                issue_codes::LINT_AL_003,
+                issue_codes::LINT_AL_001,
                 "SELECT * FROM a x JOIN b y ON x.id = y.id",
             ),
             (
-                issue_codes::LINT_AL_002,
+                issue_codes::LINT_AL_005,
                 "SELECT u.name FROM users u JOIN orders o ON users.id = orders.user_id",
             ),
             (issue_codes::LINT_AL_007, "SELECT * FROM users u"),
             (issue_codes::LINT_AL_009, "SELECT a AS a FROM t"),
-            (issue_codes::LINT_AM_001, "SELECT 1 UNION SELECT 2"),
+            (issue_codes::LINT_AM_002, "SELECT 1 UNION SELECT 2"),
             (
-                issue_codes::LINT_AM_005,
+                issue_codes::LINT_AM_003,
                 "SELECT * FROM t ORDER BY a, b DESC",
             ),
             (
-                issue_codes::LINT_AM_006,
+                issue_codes::LINT_AM_005,
                 "SELECT * FROM a JOIN b ON a.id = b.id",
             ),
             (
-                issue_codes::LINT_AM_009,
+                issue_codes::LINT_AM_008,
                 "SELECT foo.a, bar.b FROM foo INNER JOIN bar",
             ),
             (issue_codes::LINT_CP_001, "SELECT a from t"),
@@ -3094,17 +3136,17 @@ mod tests {
                 "CREATE TABLE t (a INT, b varchar(10))",
             ),
             (
-                issue_codes::LINT_CV_005,
+                issue_codes::LINT_CV_001,
                 "SELECT * FROM t WHERE a <> b AND c != d",
             ),
             (
-                issue_codes::LINT_CV_001,
+                issue_codes::LINT_CV_002,
                 "SELECT IFNULL(x, 'default') FROM t",
             ),
-            (issue_codes::LINT_CV_006, "SELECT a, FROM t"),
-            (issue_codes::LINT_CV_002, "SELECT COUNT(1) FROM t"),
-            (issue_codes::LINT_CV_003, "SELECT * FROM t WHERE a = NULL"),
-            (issue_codes::LINT_CV_008, "(SELECT 1)"),
+            (issue_codes::LINT_CV_003, "SELECT a, FROM t"),
+            (issue_codes::LINT_CV_004, "SELECT COUNT(1) FROM t"),
+            (issue_codes::LINT_CV_005, "SELECT * FROM t WHERE a = NULL"),
+            (issue_codes::LINT_CV_007, "(SELECT 1)"),
             (issue_codes::LINT_JJ_001, "SELECT '{{foo}}' AS templated"),
             (issue_codes::LINT_LT_001, "SELECT payload->>'id' FROM t"),
             (issue_codes::LINT_LT_002, "SELECT a\n   , b\nFROM t"),
@@ -3128,24 +3170,24 @@ mod tests {
             (issue_codes::LINT_RF_003, "SELECT a.id, id2 FROM a"),
             (issue_codes::LINT_RF_006, "SELECT \"good_name\" FROM t"),
             (
-                issue_codes::LINT_ST_002,
+                issue_codes::LINT_ST_001,
                 "SELECT CASE WHEN x > 1 THEN 'a' ELSE NULL END FROM t",
             ),
             (
-                issue_codes::LINT_ST_003,
+                issue_codes::LINT_ST_004,
                 "SELECT CASE WHEN species = 'Rat' THEN 'Squeak' ELSE CASE WHEN species = 'Dog' THEN 'Woof' END END FROM mytable",
             ),
             (
-                issue_codes::LINT_ST_005,
+                issue_codes::LINT_ST_002,
                 "SELECT CASE WHEN x = 1 THEN 'a' WHEN x = 2 THEN 'b' END FROM t",
             ),
             (
-                issue_codes::LINT_ST_006,
+                issue_codes::LINT_ST_005,
                 "SELECT * FROM (SELECT * FROM t) sub",
             ),
-            (issue_codes::LINT_ST_007, "SELECT a + 1, a FROM t"),
+            (issue_codes::LINT_ST_006, "SELECT a + 1, a FROM t"),
             (
-                issue_codes::LINT_ST_004,
+                issue_codes::LINT_ST_007,
                 "SELECT * FROM a JOIN b USING (id)",
             ),
             (issue_codes::LINT_ST_008, "SELECT DISTINCT(a) FROM t"),

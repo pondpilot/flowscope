@@ -1,165 +1,123 @@
-//! LINT_AM_008: Ambiguous set-operation columns.
+//! LINT_AM_008: Ambiguous JOIN condition.
 //!
-//! SQLFluff AM07 parity: set-operation branches should resolve to the same
-//! number of output columns when wildcard expansion is deterministically known.
+//! SQLFluff AM08 parity: detect implicit cross joins where JOIN-like operators
+//! omit ON/USING/NATURAL conditions.
 
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
-use sqlparser::ast::{Query, Select, SetExpr, Statement, TableFactor};
-use std::collections::{HashMap, HashSet};
+use sqlparser::ast::{JoinConstraint, JoinOperator, Select, Statement, TableFactor};
 
-use super::column_count_helpers::{
-    build_query_cte_map, resolve_set_expr_output_columns, CteColumnCounts,
-};
+use super::semantic_helpers::visit_selects_in_statement;
 
-pub struct AmbiguousSetColumns;
+pub struct AmbiguousJoinCondition;
 
-#[derive(Default)]
-struct SetCountStats {
-    counts: HashSet<usize>,
-    fully_resolved: bool,
-}
-
-impl LintRule for AmbiguousSetColumns {
+impl LintRule for AmbiguousJoinCondition {
     fn code(&self) -> &'static str {
         issue_codes::LINT_AM_008
     }
 
     fn name(&self) -> &'static str {
-        "Ambiguous set columns"
+        "Ambiguous join condition"
     }
 
     fn description(&self) -> &'static str {
-        "Set operation branches should return the same number of columns."
+        "Implicit cross joins should be written as CROSS JOIN."
     }
 
     fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
         let mut violation_count = 0usize;
-        lint_statement_set_ops(statement, &HashMap::new(), &mut violation_count);
+
+        visit_selects_in_statement(statement, &mut |select| {
+            violation_count += count_implicit_cross_join_violations(select);
+        });
 
         (0..violation_count)
             .map(|_| {
-                Issue::warning(
-                    issue_codes::LINT_AM_008,
-                    "Set operation branches resolve to different column counts.",
-                )
-                .with_statement(ctx.statement_index)
+                Issue::warning(issue_codes::LINT_AM_008, "Implicit cross join detected.")
+                    .with_statement(ctx.statement_index)
             })
             .collect()
     }
 }
 
-fn lint_statement_set_ops(
-    statement: &Statement,
-    outer_ctes: &CteColumnCounts,
-    violations: &mut usize,
-) {
-    match statement {
-        Statement::Query(query) => lint_query_set_ops(query, outer_ctes, violations),
-        Statement::Insert(insert) => {
-            if let Some(source) = &insert.source {
-                lint_query_set_ops(source, outer_ctes, violations);
-            }
-        }
-        Statement::CreateView { query, .. } => lint_query_set_ops(query, outer_ctes, violations),
-        Statement::CreateTable(create) => {
-            if let Some(query) = &create.query {
-                lint_query_set_ops(query, outer_ctes, violations);
-            }
-        }
-        _ => {}
+fn count_implicit_cross_join_violations(select: &Select) -> usize {
+    // SQLFluff AM08 defers JOIN+WHERE patterns to CV12.
+    if select.selection.is_some() {
+        return 0;
     }
-}
 
-fn lint_query_set_ops(query: &Query, outer_ctes: &CteColumnCounts, violations: &mut usize) {
-    let ctes = build_query_cte_map(query, outer_ctes);
-    lint_set_expr_set_ops(&query.body, &ctes, violations);
-}
+    let mut violations = 0usize;
 
-fn lint_set_expr_set_ops(set_expr: &SetExpr, ctes: &CteColumnCounts, violations: &mut usize) {
-    match set_expr {
-        SetExpr::SetOperation { left, right, .. } => {
-            let stats = collect_set_branch_counts(set_expr, ctes);
-            if stats.fully_resolved && stats.counts.len() > 1 {
-                *violations += 1;
-            }
-
-            lint_set_expr_set_ops(left, ctes, violations);
-            lint_set_expr_set_ops(right, ctes, violations);
-        }
-        SetExpr::Query(query) => lint_query_set_ops(query, ctes, violations),
-        SetExpr::Select(select) => lint_select_subqueries_set_ops(select, ctes, violations),
-        SetExpr::Insert(statement)
-        | SetExpr::Update(statement)
-        | SetExpr::Delete(statement)
-        | SetExpr::Merge(statement) => lint_statement_set_ops(statement, ctes, violations),
-        _ => {}
-    }
-}
-
-fn lint_select_subqueries_set_ops(select: &Select, ctes: &CteColumnCounts, violations: &mut usize) {
     for table in &select.from {
-        lint_table_factor_set_ops(&table.relation, ctes, violations);
         for join in &table.joins {
-            lint_table_factor_set_ops(&join.relation, ctes, violations);
+            if !operator_requires_join_condition(&join.join_operator) {
+                continue;
+            }
+
+            if join_constraint_is_explicit(&join.join_operator) {
+                continue;
+            }
+
+            if is_unnest_join_target(&join.relation) {
+                continue;
+            }
+
+            violations += 1;
         }
+    }
+
+    violations
+}
+
+fn operator_requires_join_condition(join_operator: &JoinOperator) -> bool {
+    matches!(
+        join_operator,
+        JoinOperator::Join(_)
+            | JoinOperator::Inner(_)
+            | JoinOperator::Left(_)
+            | JoinOperator::LeftOuter(_)
+            | JoinOperator::Right(_)
+            | JoinOperator::RightOuter(_)
+            | JoinOperator::FullOuter(_)
+            | JoinOperator::StraightJoin(_)
+    )
+}
+
+fn join_constraint_is_explicit(join_operator: &JoinOperator) -> bool {
+    let Some(constraint) = join_constraint(join_operator) else {
+        return false;
+    };
+
+    matches!(
+        constraint,
+        JoinConstraint::On(_) | JoinConstraint::Using(_) | JoinConstraint::Natural
+    )
+}
+
+fn join_constraint(join_operator: &JoinOperator) -> Option<&JoinConstraint> {
+    match join_operator {
+        JoinOperator::Join(constraint)
+        | JoinOperator::Inner(constraint)
+        | JoinOperator::Left(constraint)
+        | JoinOperator::LeftOuter(constraint)
+        | JoinOperator::Right(constraint)
+        | JoinOperator::RightOuter(constraint)
+        | JoinOperator::FullOuter(constraint)
+        | JoinOperator::CrossJoin(constraint)
+        | JoinOperator::Semi(constraint)
+        | JoinOperator::LeftSemi(constraint)
+        | JoinOperator::RightSemi(constraint)
+        | JoinOperator::Anti(constraint)
+        | JoinOperator::LeftAnti(constraint)
+        | JoinOperator::RightAnti(constraint)
+        | JoinOperator::StraightJoin(constraint) => Some(constraint),
+        JoinOperator::AsOf { constraint, .. } => Some(constraint),
+        JoinOperator::CrossApply | JoinOperator::OuterApply => None,
     }
 }
 
-fn lint_table_factor_set_ops(
-    table_factor: &TableFactor,
-    ctes: &CteColumnCounts,
-    violations: &mut usize,
-) {
-    match table_factor {
-        TableFactor::Derived { subquery, .. } => lint_query_set_ops(subquery, ctes, violations),
-        TableFactor::NestedJoin {
-            table_with_joins, ..
-        } => {
-            lint_table_factor_set_ops(&table_with_joins.relation, ctes, violations);
-            for join in &table_with_joins.joins {
-                lint_table_factor_set_ops(&join.relation, ctes, violations);
-            }
-        }
-        TableFactor::Pivot { table, .. }
-        | TableFactor::Unpivot { table, .. }
-        | TableFactor::MatchRecognize { table, .. } => {
-            lint_table_factor_set_ops(table, ctes, violations)
-        }
-        _ => {}
-    }
-}
-
-fn collect_set_branch_counts(set_expr: &SetExpr, ctes: &CteColumnCounts) -> SetCountStats {
-    match set_expr {
-        SetExpr::SetOperation { left, right, .. } => {
-            let left_stats = collect_set_branch_counts(left, ctes);
-            let right_stats = collect_set_branch_counts(right, ctes);
-
-            let mut counts = left_stats.counts;
-            counts.extend(right_stats.counts);
-
-            SetCountStats {
-                counts,
-                fully_resolved: left_stats.fully_resolved && right_stats.fully_resolved,
-            }
-        }
-        _ => {
-            if let Some(count) = resolve_set_expr_output_columns(set_expr, ctes) {
-                let mut counts = HashSet::new();
-                counts.insert(count);
-                SetCountStats {
-                    counts,
-                    fully_resolved: true,
-                }
-            } else {
-                SetCountStats {
-                    counts: HashSet::new(),
-                    fully_resolved: false,
-                }
-            }
-        }
-    }
+fn is_unnest_join_target(table_factor: &TableFactor) -> bool {
+    matches!(table_factor, TableFactor::UNNEST { .. })
 }
 
 #[cfg(test)]
@@ -169,7 +127,7 @@ mod tests {
 
     fn run(sql: &str) -> Vec<Issue> {
         let statements = parse_sql(sql).expect("parse");
-        let rule = AmbiguousSetColumns;
+        let rule = AmbiguousJoinCondition;
         statements
             .iter()
             .enumerate()
@@ -186,71 +144,62 @@ mod tests {
             .collect()
     }
 
-    // --- Edge cases adopted from sqlfluff AM07 ---
+    // --- Edge cases adopted from sqlfluff AM08 ---
 
     #[test]
-    fn flags_known_set_column_count_mismatch() {
-        let issues = run("select a from t union all select c, d from k");
+    fn flags_missing_on_clause_for_inner_join() {
+        let issues = run("SELECT foo.a, bar.b FROM foo INNER JOIN bar");
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_AM_008);
     }
 
     #[test]
-    fn allows_known_set_column_count_match() {
-        let issues = run("select a, b from t union all select c, d from k");
-        assert!(issues.is_empty());
-    }
-
-    #[test]
-    fn resolves_cte_wildcard_columns_for_set_comparison() {
-        let issues =
-            run("with cte as (select a, b from t) select * from cte union select c, d from t2");
-        assert!(issues.is_empty());
-    }
-
-    #[test]
-    fn flags_resolved_cte_wildcard_mismatch() {
-        let issues =
-            run("with cte as (select a, b, c from t) select * from cte union select d, e from t2");
+    fn flags_missing_on_clause_for_left_join() {
+        let issues = run("SELECT foo.a, bar.b FROM foo left join bar");
         assert_eq!(issues.len(), 1);
     }
 
     #[test]
-    fn unresolved_external_wildcard_does_not_trigger() {
-        let issues = run("select a from t1 union all select * from t2");
-        assert!(issues.is_empty());
-    }
-
-    #[test]
-    fn resolves_derived_alias_wildcard() {
-        let issues = run(
-            "select t_alias.* from t2 join (select a from t) as t_alias using (a) union select b from t3",
-        );
-        assert!(issues.is_empty());
-    }
-
-    #[test]
-    fn resolves_nested_with_wildcard_for_set_comparison() {
-        let issues = run(
-            "SELECT * FROM (WITH cte2 AS (SELECT a, b FROM table2) SELECT * FROM cte2 as cte_al) UNION SELECT e, f FROM table3",
-        );
-        assert!(issues.is_empty());
-    }
-
-    #[test]
-    fn flags_nested_with_wildcard_mismatch_for_set_comparison() {
-        let issues = run(
-            "SELECT * FROM (WITH cte2 AS (SELECT a FROM table2) SELECT * FROM cte2 as cte_al) UNION SELECT e, f FROM table3",
-        );
+    fn flags_each_missing_join_condition_in_join_chain() {
+        let issues =
+            run("SELECT foo.a, bar.b FROM foo left join bar left join baz on foo.x = bar.y");
         assert_eq!(issues.len(), 1);
-        assert_eq!(issues[0].code, issue_codes::LINT_AM_008);
+
+        let issues =
+            run("SELECT foo.a, bar.b FROM foo left join bar on foo.x = bar.y left join baz");
+        assert_eq!(issues.len(), 1);
     }
 
     #[test]
-    fn resolves_nested_cte_chain_for_set_comparison() {
-        let issues = run(
-            "with a as (with b as (select 1 from c) select * from b) select * from a union all select k from t2",
-        );
+    fn does_not_flag_join_without_on_when_where_clause_exists() {
+        let issues = run("SELECT foo.a, bar.b FROM foo left join bar where foo.x = bar.y");
+        assert!(issues.is_empty());
+
+        let issues = run("SELECT foo.a, bar.b FROM foo JOIN bar WHERE foo.a = bar.a OR foo.x = 3");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn allows_explicit_join_conditions() {
+        let issues = run("SELECT foo.a, bar.b FROM foo INNER JOIN bar ON 1=1");
+        assert!(issues.is_empty());
+
+        let issues = run("SELECT foo.id, bar.id FROM foo LEFT JOIN bar USING (id)");
+        assert!(issues.is_empty());
+
+        let issues = run("SELECT foo.x FROM foo NATURAL JOIN bar");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn allows_explicit_cross_join() {
+        let issues = run("SELECT foo.a, bar.b FROM foo CROSS JOIN bar");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn ignores_unnest_joins() {
+        let issues = run("SELECT t.id FROM t INNER JOIN UNNEST(t.items) AS item");
         assert!(issues.is_empty());
     }
 }

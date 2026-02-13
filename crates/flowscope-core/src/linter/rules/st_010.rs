@@ -24,7 +24,7 @@ impl LintRule for StructureConstantExpression {
     }
 
     fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let mut found = false;
+        let mut found = statement_contains_constant_predicate(statement);
 
         visit_selects_in_statement(statement, &mut |select| {
             if found {
@@ -47,6 +47,20 @@ impl LintRule for StructureConstantExpression {
         } else {
             Vec::new()
         }
+    }
+}
+
+fn statement_contains_constant_predicate(statement: &Statement) -> bool {
+    match statement {
+        Statement::Update { selection, .. } => {
+            selection.as_ref().is_some_and(contains_constant_predicate)
+        }
+        Statement::Delete(delete) => delete
+            .selection
+            .as_ref()
+            .is_some_and(contains_constant_predicate),
+        Statement::Merge { on, .. } => contains_constant_predicate(on),
+        _ => false,
     }
 }
 
@@ -112,7 +126,7 @@ fn is_comparison_operator(op: BinaryOperator) -> bool {
 }
 
 fn is_allowed_literal_comparison(op: BinaryOperator, left: &str, right: &str) -> bool {
-    op == BinaryOperator::Eq && ((left == "1" && right == "1") || (left == "1" && right == "0"))
+    op == BinaryOperator::Eq && left == "1" && (right == "1" || right == "0")
 }
 
 fn literal_key(expr: &Expr) -> Option<String> {
@@ -246,5 +260,17 @@ mod tests {
 
         let false_issues = run("select * from foo where false OR x < 1 OR y != z");
         assert!(false_issues.is_empty());
+    }
+
+    #[test]
+    fn flags_constant_predicate_in_update_where() {
+        let issues = run("update foo set a = 1 where col = col");
+        assert_eq!(issues.len(), 1);
+    }
+
+    #[test]
+    fn flags_constant_predicate_in_delete_where() {
+        let issues = run("delete from foo where col = col");
+        assert_eq!(issues.len(), 1);
     }
 }

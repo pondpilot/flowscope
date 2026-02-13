@@ -1,25 +1,25 @@
-//! LINT_AM_001: DISTINCT with GROUP BY.
+//! LINT_CV_008: Prefer LEFT JOIN over RIGHT JOIN.
 //!
-//! Using DISTINCT with GROUP BY is redundant because GROUP BY already
-//! collapses duplicate rows. The DISTINCT can be safely removed.
+//! RIGHT JOIN is functionally valid but harder to read and reason about in many
+//! codebases. Prefer LEFT JOIN for consistent join direction.
 
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
 use sqlparser::ast::*;
 
-pub struct DistinctWithGroupBy;
+pub struct LeftJoinOverRightJoin;
 
-impl LintRule for DistinctWithGroupBy {
+impl LintRule for LeftJoinOverRightJoin {
     fn code(&self) -> &'static str {
-        issue_codes::LINT_AM_001
+        issue_codes::LINT_CV_008
     }
 
     fn name(&self) -> &'static str {
-        "DISTINCT with GROUP BY"
+        "LEFT JOIN convention"
     }
 
     fn description(&self) -> &'static str {
-        "DISTINCT is redundant when GROUP BY is used."
+        "Prefer LEFT JOIN over RIGHT JOIN for consistent query style."
     }
 
     fn check(&self, stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
@@ -59,29 +59,18 @@ fn check_query(query: &Query, ctx: &LintContext, issues: &mut Vec<Issue>) {
 fn check_set_expr(body: &SetExpr, ctx: &LintContext, issues: &mut Vec<Issue>) {
     match body {
         SetExpr::Select(select) => {
-            let has_distinct = matches!(
-                select.distinct,
-                Some(Distinct::Distinct) | Some(Distinct::On(_))
-            );
-            let has_group_by = match &select.group_by {
-                GroupByExpr::All(_) => true,
-                GroupByExpr::Expressions(exprs, _) => !exprs.is_empty(),
-            };
-
-            if has_distinct && has_group_by {
-                issues.push(
-                    Issue::warning(
-                        issue_codes::LINT_AM_001,
-                        "DISTINCT is redundant when GROUP BY is present.",
-                    )
-                    .with_statement(ctx.statement_index),
-                );
-            }
-
-            // Recurse into derived tables (subqueries in FROM)
             for from_item in &select.from {
                 check_table_factor(&from_item.relation, ctx, issues);
                 for join in &from_item.joins {
+                    if is_right_join(&join.join_operator) {
+                        issues.push(
+                            Issue::info(
+                                issue_codes::LINT_CV_008,
+                                "Prefer LEFT JOIN over RIGHT JOIN for readability.",
+                            )
+                            .with_statement(ctx.statement_index),
+                        );
+                    }
                     check_table_factor(&join.relation, ctx, issues);
                 }
             }
@@ -103,11 +92,30 @@ fn check_table_factor(relation: &TableFactor, ctx: &LintContext, issues: &mut Ve
         } => {
             check_table_factor(&table_with_joins.relation, ctx, issues);
             for join in &table_with_joins.joins {
+                if is_right_join(&join.join_operator) {
+                    issues.push(
+                        Issue::info(
+                            issue_codes::LINT_CV_008,
+                            "Prefer LEFT JOIN over RIGHT JOIN for readability.",
+                        )
+                        .with_statement(ctx.statement_index),
+                    );
+                }
                 check_table_factor(&join.relation, ctx, issues);
             }
         }
         _ => {}
     }
+}
+
+fn is_right_join(op: &JoinOperator) -> bool {
+    matches!(
+        op,
+        JoinOperator::Right(_)
+            | JoinOperator::RightOuter(_)
+            | JoinOperator::RightSemi(_)
+            | JoinOperator::RightAnti(_)
+    )
 }
 
 #[cfg(test)]
@@ -117,7 +125,7 @@ mod tests {
 
     fn check_sql(sql: &str) -> Vec<Issue> {
         let stmts = parse_sql(sql).unwrap();
-        let rule = DistinctWithGroupBy;
+        let rule = LeftJoinOverRightJoin;
         let ctx = LintContext {
             sql,
             statement_range: 0..sql.len(),
@@ -131,60 +139,21 @@ mod tests {
     }
 
     #[test]
-    fn test_distinct_with_group_by_detected() {
-        let issues = check_sql("SELECT DISTINCT col FROM t GROUP BY col");
+    fn test_right_join_detected() {
+        let issues = check_sql("SELECT * FROM a RIGHT JOIN b ON a.id = b.id");
         assert_eq!(issues.len(), 1);
-        assert_eq!(issues[0].code, "LINT_AM_001");
+        assert_eq!(issues[0].code, "LINT_CV_008");
     }
 
     #[test]
-    fn test_distinct_without_group_by_ok() {
-        let issues = check_sql("SELECT DISTINCT col FROM t");
+    fn test_left_join_ok() {
+        let issues = check_sql("SELECT * FROM a LEFT JOIN b ON a.id = b.id");
         assert!(issues.is_empty());
     }
 
     #[test]
-    fn test_group_by_without_distinct_ok() {
-        let issues = check_sql("SELECT col FROM t GROUP BY col");
+    fn test_inner_join_ok() {
+        let issues = check_sql("SELECT * FROM a JOIN b ON a.id = b.id");
         assert!(issues.is_empty());
-    }
-
-    // --- Edge cases adopted from sqlfluff AM01 (ambiguous.distinct) ---
-
-    #[test]
-    fn test_distinct_group_by_in_subquery() {
-        let issues = check_sql("SELECT * FROM (SELECT DISTINCT a FROM t GROUP BY a) AS sub");
-        assert_eq!(issues.len(), 1);
-    }
-
-    #[test]
-    fn test_distinct_group_by_in_cte() {
-        let issues =
-            check_sql("WITH cte AS (SELECT DISTINCT a FROM t GROUP BY a) SELECT * FROM cte");
-        assert_eq!(issues.len(), 1);
-    }
-
-    #[test]
-    fn test_distinct_group_by_in_create_view() {
-        let issues = check_sql("CREATE VIEW v AS SELECT DISTINCT a FROM t GROUP BY a");
-        assert_eq!(issues.len(), 1);
-    }
-
-    #[test]
-    fn test_distinct_group_by_in_insert() {
-        let issues = check_sql("INSERT INTO target SELECT DISTINCT a FROM t GROUP BY a");
-        assert_eq!(issues.len(), 1);
-    }
-
-    #[test]
-    fn test_no_distinct_no_group_by_ok() {
-        let issues = check_sql("SELECT a, b FROM t");
-        assert!(issues.is_empty());
-    }
-
-    #[test]
-    fn test_distinct_group_by_in_union_branch() {
-        let issues = check_sql("SELECT a FROM t UNION ALL SELECT DISTINCT b FROM t2 GROUP BY b");
-        assert_eq!(issues.len(), 1);
     }
 }

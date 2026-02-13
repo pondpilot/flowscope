@@ -1,5 +1,6 @@
 //! Lint rule trait and context for SQL linting.
 
+use super::config::sqlfluff_name_for_code;
 use crate::types::{Issue, Span};
 use sqlparser::ast::Statement;
 use std::ops::Range;
@@ -31,7 +32,7 @@ impl<'a> LintContext<'a> {
 
 /// A single lint rule that checks a parsed SQL statement for anti-patterns.
 pub trait LintRule: Send + Sync {
-    /// Machine-readable rule code (e.g., "LINT_AM_001").
+    /// Machine-readable rule code (e.g., "LINT_AM_008").
     fn code(&self) -> &'static str;
 
     /// Short human-readable name (e.g., "Bare UNION").
@@ -39,6 +40,11 @@ pub trait LintRule: Send + Sync {
 
     /// Longer description of what this rule checks.
     fn description(&self) -> &'static str;
+
+    /// SQLFluff dotted identifier (e.g., `aliasing.table`).
+    fn sqlfluff_name(&self) -> &'static str {
+        sqlfluff_name_for_code(self.code()).unwrap_or("")
+    }
 
     /// Check a single parsed statement and return any issues found.
     fn check(&self, stmt: &Statement, ctx: &LintContext) -> Vec<Issue>;

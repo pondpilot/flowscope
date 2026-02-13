@@ -72,15 +72,18 @@ impl Linter {
                     };
 
                     for issue in rule.check(statement.statement, &ctx) {
-                        let issue = issue
+                        let mut issue = issue
                             .with_lint_engine(engine)
                             .with_lint_confidence(confidence);
 
-                        let issue = if let Some(source) = fallback {
-                            issue.with_lint_fallback_source(source)
-                        } else {
-                            issue
-                        };
+                        if let Some(source) = fallback {
+                            issue = issue.with_lint_fallback_source(source);
+                        }
+
+                        let sqlfluff_name = rule.sqlfluff_name();
+                        if !sqlfluff_name.is_empty() {
+                            issue = issue.with_sqlfluff_name(sqlfluff_name);
+                        }
 
                         issues.push(issue);
                     }
@@ -88,6 +91,7 @@ impl Linter {
             }
         }
 
+        let issues = suppress_noqa_issues(issues, document);
         normalize_issues(issues)
     }
 
@@ -161,7 +165,7 @@ fn rule_engine(code: &str) -> LintEngine {
 
 fn rule_supported_in_dialect(code: &str, dialect: Dialect) -> bool {
     match code {
-        crate::types::issue_codes::LINT_AM_001 => matches!(
+        crate::types::issue_codes::LINT_AM_007 => matches!(
             dialect,
             Dialect::Generic
                 | Dialect::Ansi
@@ -206,8 +210,10 @@ fn lint_quality_for_rule(
 fn ast_rule_code(code: &str) -> bool {
     matches!(
         code,
-        crate::types::issue_codes::LINT_AL_001
-            | crate::types::issue_codes::LINT_AL_002
+        crate::types::issue_codes::LINT_AL_003
+            | crate::types::issue_codes::LINT_AL_004
+            | crate::types::issue_codes::LINT_AL_005
+            | crate::types::issue_codes::LINT_AL_008
             | crate::types::issue_codes::LINT_AM_001
             | crate::types::issue_codes::LINT_AM_002
             | crate::types::issue_codes::LINT_AM_003
@@ -216,21 +222,57 @@ fn ast_rule_code(code: &str) -> bool {
             | crate::types::issue_codes::LINT_AM_006
             | crate::types::issue_codes::LINT_AM_007
             | crate::types::issue_codes::LINT_AM_008
-            | crate::types::issue_codes::LINT_AM_009
-            | crate::types::issue_codes::LINT_CV_001
             | crate::types::issue_codes::LINT_CV_002
-            | crate::types::issue_codes::LINT_CV_003
             | crate::types::issue_codes::LINT_CV_004
+            | crate::types::issue_codes::LINT_CV_005
+            | crate::types::issue_codes::LINT_CV_008
             | crate::types::issue_codes::LINT_CV_012
             | crate::types::issue_codes::LINT_RF_001
             | crate::types::issue_codes::LINT_RF_002
             | crate::types::issue_codes::LINT_RF_003
             | crate::types::issue_codes::LINT_ST_001
-            | crate::types::issue_codes::LINT_ST_002
             | crate::types::issue_codes::LINT_ST_003
             | crate::types::issue_codes::LINT_ST_004
+            | crate::types::issue_codes::LINT_ST_007
             | crate::types::issue_codes::LINT_ST_009
             | crate::types::issue_codes::LINT_ST_010
             | crate::types::issue_codes::LINT_ST_011
     )
+}
+
+fn suppress_noqa_issues(issues: Vec<Issue>, document: &LintDocument<'_>) -> Vec<Issue> {
+    issues
+        .into_iter()
+        .filter(|issue| {
+            let Some(line) = issue_line(issue, document) else {
+                return true;
+            };
+            !document.noqa.is_suppressed(line, &issue.code)
+        })
+        .collect()
+}
+
+fn issue_line(issue: &Issue, document: &LintDocument<'_>) -> Option<usize> {
+    if let Some(span) = issue.span {
+        return Some(offset_to_line(document.sql, span.start));
+    }
+
+    let statement_index = issue.statement_index?;
+    let statement = document
+        .statements
+        .iter()
+        .find(|statement| statement.statement_index == statement_index)?;
+    Some(offset_to_line(
+        document.sql,
+        statement.statement_range.start,
+    ))
+}
+
+fn offset_to_line(sql: &str, offset: usize) -> usize {
+    1 + sql
+        .as_bytes()
+        .iter()
+        .take(offset.min(sql.len()))
+        .filter(|byte| **byte == b'\n')
+        .count()
 }

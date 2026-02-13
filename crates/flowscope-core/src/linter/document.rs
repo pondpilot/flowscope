@@ -4,12 +4,14 @@
 //! rule engines. It carries source text, dialect metadata, parsed statements,
 //! and tokenizer output with stable spans.
 
+use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
 use sqlparser::keywords::Keyword;
 use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
 
 use crate::analyzer::helpers::line_col_to_offset;
+use crate::linter::config::canonicalize_rule_code;
 use crate::types::{Dialect, Span};
 
 /// A parsed statement entry within a lint document.
@@ -44,12 +46,57 @@ pub struct LintToken {
     pub statement_index: Option<usize>,
 }
 
+#[derive(Debug, Clone)]
+enum NoqaDirective {
+    All,
+    Rules(HashSet<String>),
+}
+
+/// `-- noqa` suppression directives indexed by 1-based line number.
+#[derive(Debug, Clone, Default)]
+pub struct NoqaMap {
+    directives: HashMap<usize, NoqaDirective>,
+}
+
+impl NoqaMap {
+    /// Returns true if `code` is suppressed on `line`.
+    pub fn is_suppressed(&self, line: usize, code: &str) -> bool {
+        let Some(directive) = self.directives.get(&line) else {
+            return false;
+        };
+
+        match directive {
+            NoqaDirective::All => true,
+            NoqaDirective::Rules(rules) => {
+                let canonical = canonicalize_rule_code(code)
+                    .unwrap_or_else(|| code.trim().to_ascii_uppercase());
+                rules.contains(&canonical)
+            }
+        }
+    }
+
+    fn suppress_all(&mut self, line: usize) {
+        self.directives.insert(line, NoqaDirective::All);
+    }
+
+    fn suppress_rules(&mut self, line: usize, codes: HashSet<String>) {
+        match self.directives.get_mut(&line) {
+            Some(NoqaDirective::All) => {}
+            Some(NoqaDirective::Rules(existing)) => existing.extend(codes),
+            None => {
+                self.directives.insert(line, NoqaDirective::Rules(codes));
+            }
+        }
+    }
+}
+
 /// Normalized lint input model for a single SQL source.
 pub struct LintDocument<'a> {
     pub sql: &'a str,
     pub dialect: Dialect,
     pub statements: Vec<LintStatement<'a>>,
     pub tokens: Vec<LintToken>,
+    pub noqa: NoqaMap,
     pub parser_fallback_used: bool,
     pub tokenizer_fallback_used: bool,
 }
@@ -62,16 +109,91 @@ impl<'a> LintDocument<'a> {
             Ok(tokens) => (tokens, false),
             Err(_) => (Vec::new(), true),
         };
+        let noqa = extract_noqa(sql, &tokens);
 
         Self {
             sql,
             dialect,
             statements,
             tokens,
+            noqa,
             parser_fallback_used: false,
             tokenizer_fallback_used,
         }
     }
+}
+
+fn extract_noqa(sql: &str, tokens: &[LintToken]) -> NoqaMap {
+    let mut directives = NoqaMap::default();
+
+    for token in tokens {
+        if token.kind != LintTokenKind::Comment {
+            continue;
+        }
+
+        let Some(parsed) = parse_noqa_comment(&token.text) else {
+            continue;
+        };
+
+        let line = offset_to_line(sql, token.span.start);
+        match parsed {
+            ParsedNoqa::All => directives.suppress_all(line),
+            ParsedNoqa::Rules(rules) => directives.suppress_rules(line, rules),
+        }
+    }
+
+    directives
+}
+
+enum ParsedNoqa {
+    All,
+    Rules(HashSet<String>),
+}
+
+fn parse_noqa_comment(comment_text: &str) -> Option<ParsedNoqa> {
+    let lowered = comment_text.to_ascii_lowercase();
+    let marker_pos = lowered.find("noqa")?;
+    let suffix = comment_text[marker_pos + 4..].trim();
+
+    if suffix.is_empty() {
+        return Some(ParsedNoqa::All);
+    }
+
+    let Some(rule_list) = suffix.strip_prefix(':') else {
+        return Some(ParsedNoqa::All);
+    };
+    let rule_list = rule_list.trim();
+    if rule_list.is_empty() {
+        return Some(ParsedNoqa::All);
+    }
+
+    let mut rules = HashSet::new();
+    for item in rule_list.split(',') {
+        let token = item
+            .trim()
+            .trim_matches(|c: char| matches!(c, '"' | '\'' | '`' | ';'));
+        if token.is_empty() {
+            continue;
+        }
+        if let Some(code) = canonicalize_rule_code(token) {
+            rules.insert(code);
+        }
+    }
+
+    if rules.is_empty() {
+        return None;
+    }
+
+    Some(ParsedNoqa::Rules(rules))
+}
+
+fn offset_to_line(sql: &str, offset: usize) -> usize {
+    1 + sql
+        .as_bytes()
+        .iter()
+        .take(offset.min(sql.len()))
+        .filter(|byte| **byte == b'\n')
+        .count()
 }
 
 fn tokenize_sql(
@@ -189,5 +311,16 @@ mod tests {
             .tokens
             .iter()
             .any(|token| token.statement_index == Some(1)));
+    }
+
+    #[test]
+    fn parses_noqa_directives() {
+        let sql = "SELECT a FROM foo -- noqa: AL01, ambiguous.join\nSELECT 1 -- noqa";
+        let document = LintDocument::new(sql, Dialect::Generic, Vec::new());
+
+        assert!(document.noqa.is_suppressed(1, "AL01"));
+        assert!(document.noqa.is_suppressed(1, "LINT_AM_005"));
+        assert!(!document.noqa.is_suppressed(1, "LINT_RF_001"));
+        assert!(document.noqa.is_suppressed(2, "LINT_RF_001"));
     }
 }

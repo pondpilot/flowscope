@@ -74,6 +74,10 @@ pub struct Issue {
     /// Human-readable error message
     pub message: String,
 
+    /// SQLFluff dotted rule name (e.g., `aliasing.table`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sqlfluff_name: Option<String>,
+
     /// Optional: location in source SQL where issue occurred
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub span: Option<Span>,
@@ -105,6 +109,7 @@ impl Issue {
             severity: Severity::Error,
             code: code.into(),
             message: message.into(),
+            sqlfluff_name: None,
             span: None,
             statement_index: None,
             source_name: None,
@@ -119,6 +124,7 @@ impl Issue {
             severity: Severity::Warning,
             code: code.into(),
             message: message.into(),
+            sqlfluff_name: None,
             span: None,
             statement_index: None,
             source_name: None,
@@ -133,6 +139,7 @@ impl Issue {
             severity: Severity::Info,
             code: code.into(),
             message: message.into(),
+            sqlfluff_name: None,
             span: None,
             statement_index: None,
             source_name: None,
@@ -169,6 +176,12 @@ impl Issue {
 
     pub fn with_lint_fallback_source(mut self, source: LintFallbackSource) -> Self {
         self.lint_fallback_source = Some(source);
+        self
+    }
+
+    /// Attach a SQLFluff dotted rule name.
+    pub fn with_sqlfluff_name(mut self, name: impl Into<String>) -> Self {
+        self.sqlfluff_name = Some(name.into());
         self
     }
 }

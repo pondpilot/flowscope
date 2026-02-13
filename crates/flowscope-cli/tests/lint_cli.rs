@@ -2,7 +2,7 @@ use std::process::Command;
 
 use tempfile::tempdir;
 
-/// SQL that triggers LINT_AM_001 (bare UNION).
+/// SQL that triggers LINT_AM_002 (bare UNION).
 const SQL_WITH_VIOLATIONS: &str = "SELECT 1 UNION SELECT 2";
 
 /// Clean SQL with no lint violations.
@@ -49,8 +49,8 @@ fn test_lint_file_with_violations() {
     );
     assert!(stdout.contains("FAIL"), "Expected FAIL in output: {stdout}");
     assert!(
-        stdout.contains("LINT_AM_001"),
-        "Expected LINT_AM_001: {stdout}"
+        stdout.contains("LINT_AM_002"),
+        "Expected LINT_AM_002: {stdout}"
     );
     assert!(
         stdout.contains("1 violations"),
@@ -92,7 +92,7 @@ fn test_lint_exclude_rules() {
         .args([
             "--lint",
             "--exclude-rules",
-            "LINT_AM_001",
+            "LINT_AM_002",
             sql_path.to_str().expect("sql path"),
         ])
         .output()
@@ -120,7 +120,7 @@ fn test_lint_fix_respects_exclude_rules() {
             "--lint",
             "--fix",
             "--exclude-rules",
-            "LINT_AM_001",
+            "LINT_AM_002",
             sql_path.to_str().expect("sql path"),
         ])
         .output()
@@ -151,7 +151,7 @@ fn test_lint_fix_excluded_rule_not_rewritten_when_other_fixes_apply() {
             "--lint",
             "--fix",
             "--exclude-rules",
-            "LINT_CV_005",
+            "LINT_CV_001",
             sql_path.to_str().expect("sql path"),
         ])
         .output()
@@ -331,8 +331,8 @@ fn test_lint_stdin() {
         "Expected exit 1 for stdin violations: {stdout}"
     );
     assert!(
-        stdout.contains("LINT_AM_001"),
-        "Expected LINT_AM_001 from stdin: {stdout}"
+        stdout.contains("LINT_AM_002"),
+        "Expected LINT_AM_002 from stdin: {stdout}"
     );
 }
 
@@ -411,7 +411,7 @@ fn test_lint_directory_recursively() {
         "Expected one failing SQL file in recursive lint output: {stdout}"
     );
     assert!(
-        stdout.contains("LINT_AM_001"),
+        stdout.contains("LINT_AM_002"),
         "Expected lint violation from nested SQL file: {stdout}"
     );
     assert!(

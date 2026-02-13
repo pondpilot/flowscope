@@ -1571,9 +1571,7 @@ fn select_line_top_level_comma_count(segment: &str) -> usize {
             b'"' => in_double = true,
             b'(' => depth += 1,
             b')' => {
-                if depth > 0 {
-                    depth -= 1;
-                }
+                depth = depth.saturating_sub(1);
             }
             b',' if depth == 0 => count += 1,
             _ => {}
@@ -1744,7 +1742,7 @@ pub struct AliasingTableStyle;
 
 impl LintRule for AliasingTableStyle {
     fn code(&self) -> &'static str {
-        issue_codes::LINT_AL_003
+        issue_codes::LINT_AL_001
     }
 
     fn name(&self) -> &'static str {
@@ -1767,7 +1765,7 @@ impl LintRule for AliasingTableStyle {
             .into_iter()
             .map(|(start, end)| {
                 Issue::warning(
-                    issue_codes::LINT_AL_003,
+                    issue_codes::LINT_AL_001,
                     "Use explicit AS when aliasing tables.",
                 )
                 .with_statement(ctx.statement_index)
@@ -1778,7 +1776,7 @@ impl LintRule for AliasingTableStyle {
 }
 define_predicate_rule!(
     AliasingColumnStyle,
-    issue_codes::LINT_AL_004,
+    issue_codes::LINT_AL_002,
     "Column alias style",
     "Avoid mixing explicit and implicit aliasing for expressions.",
     info,
@@ -1789,7 +1787,7 @@ pub struct AliasingUniqueTable;
 
 impl LintRule for AliasingUniqueTable {
     fn code(&self) -> &'static str {
-        issue_codes::LINT_AL_005
+        issue_codes::LINT_AL_004
     }
 
     fn name(&self) -> &'static str {
@@ -1805,7 +1803,7 @@ impl LintRule for AliasingUniqueTable {
             return Vec::new();
         };
 
-        let mut issue = Issue::warning(issue_codes::LINT_AL_005, "Table aliases should be unique.")
+        let mut issue = Issue::warning(issue_codes::LINT_AL_004, "Table aliases should be unique.")
             .with_statement(ctx.statement_index);
 
         if let Some((start, end)) = second_occurrence_case_insensitive_span(
@@ -2055,7 +2053,7 @@ define_predicate_rule!(
 
 define_predicate_rule!(
     ConventionNotEqual,
-    issue_codes::LINT_CV_005,
+    issue_codes::LINT_CV_001,
     "Not-equal style",
     "Use a consistent not-equal operator style.",
     info,
@@ -2064,7 +2062,7 @@ define_predicate_rule!(
 );
 define_predicate_rule!(
     ConventionSelectTrailingComma,
-    issue_codes::LINT_CV_006,
+    issue_codes::LINT_CV_003,
     "Select trailing comma",
     "Avoid trailing comma before FROM.",
     warning,
@@ -2073,7 +2071,7 @@ define_predicate_rule!(
 );
 define_predicate_rule!(
     ConventionTerminator,
-    issue_codes::LINT_CV_007,
+    issue_codes::LINT_CV_006,
     "Statement terminator",
     "Statements should use consistent semicolon termination.",
     info,
@@ -2082,7 +2080,7 @@ define_predicate_rule!(
 );
 define_predicate_rule!(
     ConventionStatementBrackets,
-    issue_codes::LINT_CV_008,
+    issue_codes::LINT_CV_007,
     "Statement brackets",
     "Avoid unnecessary wrapping brackets around full statements.",
     info,
@@ -2541,7 +2539,7 @@ define_predicate_rule!(
 
 define_predicate_rule!(
     StructureSimpleCase,
-    issue_codes::LINT_ST_005,
+    issue_codes::LINT_ST_002,
     "Structure simple case",
     "Prefer simple CASE form where applicable.",
     info,
@@ -2552,7 +2550,7 @@ pub struct StructureSubquery;
 
 impl LintRule for StructureSubquery {
     fn code(&self) -> &'static str {
-        issue_codes::LINT_ST_006
+        issue_codes::LINT_ST_005
     }
 
     fn name(&self) -> &'static str {
@@ -2579,7 +2577,7 @@ impl LintRule for StructureSubquery {
         let from_end = from_start + 4;
 
         vec![Issue::info(
-            issue_codes::LINT_ST_006,
+            issue_codes::LINT_ST_005,
             "Subquery detected; consider refactoring with CTEs.",
         )
         .with_statement(ctx.statement_index)
@@ -2590,7 +2588,7 @@ pub struct StructureColumnOrder;
 
 impl LintRule for StructureColumnOrder {
     fn code(&self) -> &'static str {
-        issue_codes::LINT_ST_007
+        issue_codes::LINT_ST_006
     }
 
     fn name(&self) -> &'static str {
@@ -2629,7 +2627,7 @@ impl LintRule for StructureColumnOrder {
                 // and then later switches to simple column references.
                 if seen_expression && !seen_simple {
                     return vec![Issue::info(
-                        issue_codes::LINT_ST_007,
+                        issue_codes::LINT_ST_006,
                         "Prefer simple columns before complex expressions in SELECT.",
                     )
                     .with_statement(ctx.statement_index)
@@ -2694,12 +2692,8 @@ define_predicate_rule!(
 /// Returns all parity rule implementations defined in this module.
 pub fn parity_rules() -> Vec<Box<dyn LintRule>> {
     vec![
-        Box::new(AliasingTableStyle),
-        Box::new(AliasingColumnStyle),
-        Box::new(AliasingUniqueTable),
         Box::new(AliasingLength),
         Box::new(AliasingForbidSingleTable),
-        Box::new(AliasingUniqueColumn),
         Box::new(AliasingSelfAliasColumn),
         Box::new(CapitalisationKeywords),
         Box::new(CapitalisationIdentifiers),
@@ -2707,8 +2701,6 @@ pub fn parity_rules() -> Vec<Box<dyn LintRule>> {
         Box::new(CapitalisationLiterals),
         Box::new(CapitalisationTypes),
         Box::new(ConventionNotEqual),
-        Box::new(ConventionSelectTrailingComma),
-        Box::new(ConventionTerminator),
         Box::new(ConventionStatementBrackets),
         Box::new(ConventionBlockedWords),
         Box::new(ConventionQuotedLiterals),
@@ -2733,7 +2725,6 @@ pub fn parity_rules() -> Vec<Box<dyn LintRule>> {
         Box::new(ReferencesSpecialChars),
         Box::new(ReferencesQuoting),
         Box::new(StructureSimpleCase),
-        Box::new(StructureSubquery),
         Box::new(StructureColumnOrder),
         Box::new(StructureDistinct),
         Box::new(StructureConsecutiveSemicolons),
@@ -2787,7 +2778,7 @@ mod tests {
         assert_eq!(
             aliasing_table_style_issues
                 .iter()
-                .filter(|issue| issue.code == issue_codes::LINT_AL_003)
+                .filter(|issue| issue.code == issue_codes::LINT_AL_001)
                 .count(),
             2,
             "expected one AL_003 issue per implicit table alias"
