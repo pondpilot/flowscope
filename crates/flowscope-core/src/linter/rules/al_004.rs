@@ -2,14 +2,63 @@
 //!
 //! Table aliases should be unique within a query scope.
 
+use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
 use sqlparser::ast::{Query, Select, SetExpr, Statement, TableFactor, TableWithJoins};
 use std::collections::HashSet;
 
-use super::semantic_helpers::table_factor_alias_name;
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum AliasCaseCheck {
+    Dialect,
+    CaseInsensitive,
+    QuotedCsNakedUpper,
+    QuotedCsNakedLower,
+    CaseSensitive,
+}
 
-pub struct AliasingUniqueTable;
+impl AliasCaseCheck {
+    fn from_config(config: &LintConfig) -> Self {
+        match config
+            .rule_option_str(issue_codes::LINT_AL_004, "alias_case_check")
+            .unwrap_or("dialect")
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "case_insensitive" => Self::CaseInsensitive,
+            "quoted_cs_naked_upper" => Self::QuotedCsNakedUpper,
+            "quoted_cs_naked_lower" => Self::QuotedCsNakedLower,
+            "case_sensitive" => Self::CaseSensitive,
+            _ => Self::Dialect,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct AliasRef {
+    name: String,
+    quoted: bool,
+}
+
+pub struct AliasingUniqueTable {
+    alias_case_check: AliasCaseCheck,
+}
+
+impl AliasingUniqueTable {
+    pub fn from_config(config: &LintConfig) -> Self {
+        Self {
+            alias_case_check: AliasCaseCheck::from_config(config),
+        }
+    }
+}
+
+impl Default for AliasingUniqueTable {
+    fn default() -> Self {
+        Self {
+            alias_case_check: AliasCaseCheck::Dialect,
+        }
+    }
+}
 
 impl LintRule for AliasingUniqueTable {
     fn code(&self) -> &'static str {
@@ -25,7 +74,7 @@ impl LintRule for AliasingUniqueTable {
     }
 
     fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        if first_duplicate_table_alias_in_statement(statement).is_none() {
+        if first_duplicate_table_alias_in_statement(statement, self.alias_case_check).is_none() {
             return Vec::new();
         }
 
@@ -37,68 +86,93 @@ impl LintRule for AliasingUniqueTable {
     }
 }
 
-fn first_duplicate_table_alias_in_statement(statement: &Statement) -> Option<String> {
+fn first_duplicate_table_alias_in_statement(
+    statement: &Statement,
+    alias_case_check: AliasCaseCheck,
+) -> Option<String> {
     match statement {
-        Statement::Query(query) => first_duplicate_table_alias_in_query_with_parent(query, &[]),
-        Statement::Insert(insert) => insert
-            .source
-            .as_deref()
-            .and_then(|query| first_duplicate_table_alias_in_query_with_parent(query, &[])),
-        Statement::CreateView { query, .. } => {
-            first_duplicate_table_alias_in_query_with_parent(query, &[])
+        Statement::Query(query) => {
+            first_duplicate_table_alias_in_query_with_parent(query, &[], alias_case_check)
         }
-        Statement::CreateTable(create) => create
-            .query
-            .as_deref()
-            .and_then(|query| first_duplicate_table_alias_in_query_with_parent(query, &[])),
+        Statement::Insert(insert) => insert.source.as_deref().and_then(|query| {
+            first_duplicate_table_alias_in_query_with_parent(query, &[], alias_case_check)
+        }),
+        Statement::CreateView { query, .. } => {
+            first_duplicate_table_alias_in_query_with_parent(query, &[], alias_case_check)
+        }
+        Statement::CreateTable(create) => create.query.as_deref().and_then(|query| {
+            first_duplicate_table_alias_in_query_with_parent(query, &[], alias_case_check)
+        }),
         _ => None,
     }
 }
 
 fn first_duplicate_table_alias_in_query_with_parent(
     query: &Query,
-    parent_aliases: &[String],
+    parent_aliases: &[AliasRef],
+    alias_case_check: AliasCaseCheck,
 ) -> Option<String> {
     if let Some(with) = &query.with {
         for cte in &with.cte_tables {
             if let Some(duplicate) =
-                first_duplicate_table_alias_in_query_with_parent(&cte.query, &[])
+                first_duplicate_table_alias_in_query_with_parent(&cte.query, &[], alias_case_check)
             {
                 return Some(duplicate);
             }
         }
     }
 
-    first_duplicate_table_alias_in_set_expr_with_parent(&query.body, parent_aliases)
+    first_duplicate_table_alias_in_set_expr_with_parent(
+        &query.body,
+        parent_aliases,
+        alias_case_check,
+    )
 }
 
 fn first_duplicate_table_alias_in_set_expr_with_parent(
     set_expr: &SetExpr,
-    parent_aliases: &[String],
+    parent_aliases: &[AliasRef],
+    alias_case_check: AliasCaseCheck,
 ) -> Option<String> {
     match set_expr {
-        SetExpr::Select(select) => {
-            first_duplicate_table_alias_in_select_with_parent(select, parent_aliases)
-        }
-        SetExpr::Query(query) => {
-            first_duplicate_table_alias_in_query_with_parent(query, parent_aliases)
-        }
+        SetExpr::Select(select) => first_duplicate_table_alias_in_select_with_parent(
+            select,
+            parent_aliases,
+            alias_case_check,
+        ),
+        SetExpr::Query(query) => first_duplicate_table_alias_in_query_with_parent(
+            query,
+            parent_aliases,
+            alias_case_check,
+        ),
         SetExpr::SetOperation { left, right, .. } => {
-            first_duplicate_table_alias_in_set_expr_with_parent(left, parent_aliases).or_else(
-                || first_duplicate_table_alias_in_set_expr_with_parent(right, parent_aliases),
+            first_duplicate_table_alias_in_set_expr_with_parent(
+                left,
+                parent_aliases,
+                alias_case_check,
             )
+            .or_else(|| {
+                first_duplicate_table_alias_in_set_expr_with_parent(
+                    right,
+                    parent_aliases,
+                    alias_case_check,
+                )
+            })
         }
         SetExpr::Insert(statement)
         | SetExpr::Update(statement)
         | SetExpr::Delete(statement)
-        | SetExpr::Merge(statement) => first_duplicate_table_alias_in_statement(statement),
+        | SetExpr::Merge(statement) => {
+            first_duplicate_table_alias_in_statement(statement, alias_case_check)
+        }
         _ => None,
     }
 }
 
 fn first_duplicate_table_alias_in_select_with_parent(
     select: &Select,
-    parent_aliases: &[String],
+    parent_aliases: &[AliasRef],
+    alias_case_check: AliasCaseCheck,
 ) -> Option<String> {
     let mut aliases = Vec::new();
     for table_with_joins in &select.from {
@@ -108,7 +182,7 @@ fn first_duplicate_table_alias_in_select_with_parent(
     let mut aliases_with_parent = parent_aliases.to_vec();
     aliases_with_parent.extend(aliases);
 
-    if let Some(duplicate) = first_duplicate_case_insensitive(&aliases_with_parent) {
+    if let Some(duplicate) = first_duplicate_alias(&aliases_with_parent, alias_case_check) {
         return Some(duplicate);
     }
 
@@ -116,6 +190,7 @@ fn first_duplicate_table_alias_in_select_with_parent(
         if let Some(duplicate) = first_duplicate_table_alias_in_table_with_joins_children(
             table_with_joins,
             &aliases_with_parent,
+            alias_case_check,
         ) {
             return Some(duplicate);
         }
@@ -124,14 +199,17 @@ fn first_duplicate_table_alias_in_select_with_parent(
     None
 }
 
-fn collect_scope_table_aliases(table_with_joins: &TableWithJoins, aliases: &mut Vec<String>) {
+fn collect_scope_table_aliases(table_with_joins: &TableWithJoins, aliases: &mut Vec<AliasRef>) {
     collect_scope_table_aliases_from_factor(&table_with_joins.relation, aliases);
     for join in &table_with_joins.joins {
         collect_scope_table_aliases_from_factor(&join.relation, aliases);
     }
 }
 
-fn collect_scope_table_aliases_from_factor(table_factor: &TableFactor, aliases: &mut Vec<String>) {
+fn collect_scope_table_aliases_from_factor(
+    table_factor: &TableFactor,
+    aliases: &mut Vec<AliasRef>,
+) {
     if let Some(alias) = inferred_alias_name(table_factor) {
         aliases.push(alias);
     }
@@ -149,45 +227,86 @@ fn collect_scope_table_aliases_from_factor(table_factor: &TableFactor, aliases: 
     }
 }
 
-fn inferred_alias_name(table_factor: &TableFactor) -> Option<String> {
-    if let Some(alias) = table_factor_alias_name(table_factor) {
-        return Some(alias.to_string());
+fn inferred_alias_name(table_factor: &TableFactor) -> Option<AliasRef> {
+    if let Some(alias) = explicit_alias_name(table_factor) {
+        return Some(alias);
     }
 
     match table_factor {
         TableFactor::Table { name, .. } => name.0.last().map(|part| {
-            part.as_ident()
-                .map(|ident| ident.value.clone())
-                .unwrap_or_else(|| part.to_string())
+            if let Some(ident) = part.as_ident() {
+                AliasRef {
+                    name: ident.value.clone(),
+                    quoted: ident.quote_style.is_some(),
+                }
+            } else {
+                AliasRef {
+                    name: part.to_string(),
+                    quoted: false,
+                }
+            }
         }),
         _ => None,
     }
 }
 
-fn first_duplicate_table_alias_in_table_with_joins_children(
-    table_with_joins: &TableWithJoins,
-    parent_aliases: &[String],
-) -> Option<String> {
-    first_duplicate_table_alias_in_table_factor_children(&table_with_joins.relation, parent_aliases)
-        .or_else(|| {
-            for join in &table_with_joins.joins {
-                if let Some(duplicate) = first_duplicate_table_alias_in_table_factor_children(
-                    &join.relation,
-                    parent_aliases,
-                ) {
-                    return Some(duplicate);
-                }
-            }
-            None
-        })
+fn explicit_alias_name(table_factor: &TableFactor) -> Option<AliasRef> {
+    let alias = match table_factor {
+        TableFactor::Table { alias, .. }
+        | TableFactor::Derived { alias, .. }
+        | TableFactor::TableFunction { alias, .. }
+        | TableFactor::Function { alias, .. }
+        | TableFactor::UNNEST { alias, .. }
+        | TableFactor::JsonTable { alias, .. }
+        | TableFactor::OpenJsonTable { alias, .. }
+        | TableFactor::NestedJoin { alias, .. }
+        | TableFactor::Pivot { alias, .. }
+        | TableFactor::Unpivot { alias, .. }
+        | TableFactor::MatchRecognize { alias, .. }
+        | TableFactor::XmlTable { alias, .. }
+        | TableFactor::SemanticView { alias, .. } => alias.as_ref(),
+    }?;
+
+    Some(AliasRef {
+        name: alias.name.value.clone(),
+        quoted: alias.name.quote_style.is_some(),
+    })
 }
 
-fn child_parent_aliases(parent_aliases: &[String], table_factor: &TableFactor) -> Vec<String> {
+fn first_duplicate_table_alias_in_table_with_joins_children(
+    table_with_joins: &TableWithJoins,
+    parent_aliases: &[AliasRef],
+    alias_case_check: AliasCaseCheck,
+) -> Option<String> {
+    first_duplicate_table_alias_in_table_factor_children(
+        &table_with_joins.relation,
+        parent_aliases,
+        alias_case_check,
+    )
+    .or_else(|| {
+        for join in &table_with_joins.joins {
+            if let Some(duplicate) = first_duplicate_table_alias_in_table_factor_children(
+                &join.relation,
+                parent_aliases,
+                alias_case_check,
+            ) {
+                return Some(duplicate);
+            }
+        }
+        None
+    })
+}
+
+fn child_parent_aliases(
+    parent_aliases: &[AliasRef],
+    table_factor: &TableFactor,
+    alias_case_check: AliasCaseCheck,
+) -> Vec<AliasRef> {
     let mut next = parent_aliases.to_vec();
     if let Some(alias) = inferred_alias_name(table_factor) {
         if let Some(index) = next
             .iter()
-            .position(|existing| existing.eq_ignore_ascii_case(&alias))
+            .position(|existing| aliases_match(existing, &alias, alias_case_check))
         {
             next.remove(index);
         }
@@ -197,21 +316,32 @@ fn child_parent_aliases(parent_aliases: &[String], table_factor: &TableFactor) -
 
 fn first_duplicate_table_alias_in_table_factor_children(
     table_factor: &TableFactor,
-    parent_aliases: &[String],
+    parent_aliases: &[AliasRef],
+    alias_case_check: AliasCaseCheck,
 ) -> Option<String> {
-    let child_parent_aliases = child_parent_aliases(parent_aliases, table_factor);
+    let child_parent_aliases = child_parent_aliases(parent_aliases, table_factor, alias_case_check);
 
     match table_factor {
-        TableFactor::Derived { subquery, .. } => {
-            first_duplicate_table_alias_in_query_with_parent(subquery, &child_parent_aliases)
-        }
+        TableFactor::Derived { subquery, .. } => first_duplicate_table_alias_in_query_with_parent(
+            subquery,
+            &child_parent_aliases,
+            alias_case_check,
+        ),
         TableFactor::NestedJoin {
             table_with_joins, ..
-        } => first_duplicate_table_alias_in_nested_scope(table_with_joins, &child_parent_aliases),
+        } => first_duplicate_table_alias_in_nested_scope(
+            table_with_joins,
+            &child_parent_aliases,
+            alias_case_check,
+        ),
         TableFactor::Pivot { table, .. }
         | TableFactor::Unpivot { table, .. }
         | TableFactor::MatchRecognize { table, .. } => {
-            first_duplicate_table_alias_in_table_factor_children(table, &child_parent_aliases)
+            first_duplicate_table_alias_in_table_factor_children(
+                table,
+                &child_parent_aliases,
+                alias_case_check,
+            )
         }
         _ => None,
     }
@@ -219,29 +349,64 @@ fn first_duplicate_table_alias_in_table_factor_children(
 
 fn first_duplicate_table_alias_in_nested_scope(
     table_with_joins: &TableWithJoins,
-    parent_aliases: &[String],
+    parent_aliases: &[AliasRef],
+    alias_case_check: AliasCaseCheck,
 ) -> Option<String> {
     let mut aliases = Vec::new();
     collect_scope_table_aliases(table_with_joins, &mut aliases);
     let mut aliases_with_parent = parent_aliases.to_vec();
     aliases_with_parent.extend(aliases);
 
-    if let Some(duplicate) = first_duplicate_case_insensitive(&aliases_with_parent) {
+    if let Some(duplicate) = first_duplicate_alias(&aliases_with_parent, alias_case_check) {
         return Some(duplicate);
     }
 
-    first_duplicate_table_alias_in_table_with_joins_children(table_with_joins, &aliases_with_parent)
+    first_duplicate_table_alias_in_table_with_joins_children(
+        table_with_joins,
+        &aliases_with_parent,
+        alias_case_check,
+    )
 }
 
-fn first_duplicate_case_insensitive(values: &[String]) -> Option<String> {
-    let mut seen = HashSet::new();
+fn first_duplicate_alias(values: &[AliasRef], alias_case_check: AliasCaseCheck) -> Option<String> {
+    let mut seen_case_insensitive = HashSet::new();
+    let mut seen: Vec<&AliasRef> = Vec::new();
+
     for value in values {
-        let key = value.to_ascii_uppercase();
-        if !seen.insert(key) {
-            return Some(value.clone());
+        if matches!(alias_case_check, AliasCaseCheck::CaseInsensitive) {
+            let key = value.name.to_ascii_uppercase();
+            if !seen_case_insensitive.insert(key) {
+                return Some(value.name.clone());
+            }
+            continue;
+        }
+
+        let is_duplicate = seen
+            .iter()
+            .any(|existing| aliases_match(existing, value, alias_case_check));
+        if is_duplicate {
+            return Some(value.name.clone());
+        }
+        seen.push(value);
+    }
+
+    None
+}
+
+fn aliases_match(left: &AliasRef, right: &AliasRef, alias_case_check: AliasCaseCheck) -> bool {
+    match alias_case_check {
+        AliasCaseCheck::CaseInsensitive => left.name.eq_ignore_ascii_case(&right.name),
+        AliasCaseCheck::CaseSensitive => left.name == right.name,
+        AliasCaseCheck::Dialect
+        | AliasCaseCheck::QuotedCsNakedUpper
+        | AliasCaseCheck::QuotedCsNakedLower => {
+            if left.quoted || right.quoted {
+                left.name == right.name
+            } else {
+                left.name.eq_ignore_ascii_case(&right.name)
+            }
         }
     }
-    None
 }
 
 #[cfg(test)]
@@ -251,7 +416,7 @@ mod tests {
 
     fn run(sql: &str) -> Vec<Issue> {
         let statements = parse_sql(sql).expect("parse");
-        let rule = AliasingUniqueTable;
+        let rule = AliasingUniqueTable::default();
         statements
             .iter()
             .enumerate()
@@ -317,5 +482,59 @@ mod tests {
         let sql = "select * from (select * from users s) s";
         let issues = run(sql);
         assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn default_dialect_mode_does_not_flag_quoted_case_mismatch() {
+        let sql = "select * from users \"A\" join orders a on \"A\".id = a.user_id";
+        let issues = run(sql);
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn alias_case_check_case_sensitive_allows_case_mismatch() {
+        let sql = "select * from users a join orders A on a.id = A.user_id";
+        let statements = parse_sql(sql).expect("parse");
+        let rule = AliasingUniqueTable::from_config(&LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "aliasing.unique.table".to_string(),
+                serde_json::json!({"alias_case_check": "case_sensitive"}),
+            )]),
+        });
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn alias_case_check_case_sensitive_flags_exact_duplicates() {
+        let sql = "select * from users a join orders a on a.id = a.user_id";
+        let statements = parse_sql(sql).expect("parse");
+        let rule = AliasingUniqueTable::from_config(&LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "LINT_AL_004".to_string(),
+                serde_json::json!({"alias_case_check": "case_sensitive"}),
+            )]),
+        });
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_AL_004);
     }
 }
