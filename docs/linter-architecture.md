@@ -164,6 +164,7 @@ Move style-oriented checks to lexical engine:
 - [x] `LINT_AM_002` now follows SQLFluff AM02 core semantics by flagging bare `UNION` (without explicit `ALL`/`DISTINCT`), with CLI fixer behavior inserting explicit `DISTINCT` through AST set-operation quantifier rewrites (text-regex path removed), and dialect-scoped execution aligned to SQLFluff-supported dialects available in FlowScope.
 - [x] `LINT_CV_002` now follows SQLFluff CV02 semantics and fixer behavior by flagging IFNULL/NVL function usage and rewriting to COALESCE.
 - [x] `LINT_CV_005` now follows SQLFluff CV05 semantics and fixer behavior by flagging `= NULL`/`<> NULL` comparisons and rewriting to `IS [NOT] NULL`.
+- [x] `LINT_CV_008` fixer parity is now AST-driven across both simple and chained/nested RIGHT JOIN patterns, rewriting them to LEFT JOIN form by swapping join operands and normalizing join operators.
 - [x] `LINT_ST_004` now follows SQLFluff ST04 semantics via AST CASE analysis, flagging flattenable nested CASE expressions in ELSE clauses (instead of depth-based heuristics); fixer parity now flattens eligible nested `ELSE CASE` branches into a single CASE.
 - [x] `LINT_ST_007` now includes SQLFluff ST07 fixer parity via AST join-constraint rewrites, converting `JOIN ... USING (...)` to explicit `ON` predicates (including multi-column USING lists).
 - [x] `LINT_ST_009` now includes SQLFluff ST09 fixer parity via AST expression rewrites, swapping reversed qualified equality sides in `JOIN ... ON` predicates.

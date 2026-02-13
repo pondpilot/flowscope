@@ -122,6 +122,7 @@ This plan covers three axes:
   - `CV_001` now supports `preferred_not_equal_style` (`consistent`/`c_style`/`ansi`) through `lint.ruleConfigs`.
   - `CV_004` now supports `prefer_count_1` / `prefer_count_0` through `lint.ruleConfigs`.
   - `CV_004` fixer now rewrites both `COUNT(1)` and `COUNT(0)` to `COUNT(*)` under default preference, aligning fix behavior with current violation detection.
+  - `CV_008` fixer now rewrites both simple and chained/nested `RIGHT JOIN` patterns into `LEFT JOIN` form via AST join-tree rewrites (operand swap plus join-operator normalization).
   - `CV_006` now supports `multiline_newline` / `require_final_semicolon` through `lint.ruleConfigs`.
   - `CV_007` moved from parity handling to a dedicated core rule module (`cv_007.rs`).
   - `CV_007` was further upgraded to AST-driven statement-shape detection (`Statement::Query` + wrapper `SetExpr::Query`), replacing SQL text `starts_with('(')/ends_with(')')` heuristics.
@@ -585,15 +586,10 @@ plan (Phase 2 of `linter-architecture.md`), but are lower priority because:
 | AM_007 (ambiguous.set_columns) | No fix (SQLFluff also lacks fix) |
 | ST_003 (structure.unused_cte) | No fix (SQLFluff also lacks fix) |
 
-After filtering out rules where SQLFluff itself lacks fix support, the
-actual fix gap is:
+After filtering out rules where SQLFluff itself lacks fix support, there are
+currently no remaining fix gaps for SQLFluff-fixable rules in this plan.
 
-| Rule | Needs Fix |
-|---|---|
-| AL_005 (aliasing.unused) | Yes — remove unused alias |
-| CV_008 (convention.left_join) | Yes — rewrite to LEFT JOIN |
-
-All other missing fixers match SQLFluff behavior (also unfixable).
+All remaining no-fix rules match SQLFluff behavior (also unfixable).
 
 ---
 
