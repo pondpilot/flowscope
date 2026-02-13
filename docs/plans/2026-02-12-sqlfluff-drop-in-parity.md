@@ -140,7 +140,7 @@ This plan covers three axes:
   - `LT_001` moved from parity handling to a dedicated core rule module (`lt_001.rs`).
   - `LT_001` was further upgraded from regex matching to deterministic layout-pattern scanners (JSON arrow/type/index/numeric-scale/EXISTS line form).
   - `LT_005` moved from parity handling to a dedicated core rule module (`lt_005.rs`).
-  - `LT_005` now supports configurable `max_line_length` through `lint.ruleConfigs`.
+  - `LT_005` now supports configurable `max_line_length` and `ignore_comment_lines` through `lint.ruleConfigs`.
   - `LT_006` moved from parity handling to a dedicated core rule module (`lt_006.rs`).
   - `LT_006` was further upgraded from regex masking to token-stream function-call spacing checks with context guards.
   - `LT_007` moved from parity handling to a dedicated core rule module (`lt_007.rs`).

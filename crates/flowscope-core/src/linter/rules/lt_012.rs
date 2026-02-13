@@ -28,9 +28,8 @@ impl LintRule for LayoutEndOfFile {
             .trim_end_matches(|ch: char| ch.is_ascii_whitespace())
             .len();
         let is_last_statement = ctx.statement_range.end >= content_end;
-        let has_violation = is_last_statement
-            && ctx.sql.contains('\n')
-            && trailing_newline_count(ctx.sql) != 1;
+        let has_violation =
+            is_last_statement && ctx.sql.contains('\n') && trailing_newline_count(ctx.sql) != 1;
 
         if has_violation {
             vec![Issue::info(

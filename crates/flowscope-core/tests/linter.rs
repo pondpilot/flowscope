@@ -381,6 +381,29 @@ fn lint_rule_config_long_lines_max_line_length() {
 }
 
 #[test]
+fn lint_rule_config_long_lines_ignore_comment_lines() {
+    let sql = format!("SELECT 1;\n-- {}\nSELECT 2", "x".repeat(120));
+    let issues = run_lint_with_config(
+        &sql,
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "layout.long_lines".to_string(),
+                serde_json::json!({
+                    "max_line_length": 20,
+                    "ignore_comment_lines": true
+                }),
+            )]),
+        },
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_LT_005"),
+        "ignore_comment_lines=true should suppress LT_005 on comment-only lines: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_rule_config_select_targets_wildcard_policy_multiple() {
     let issues = run_lint_with_config(
         "SELECT * FROM t",

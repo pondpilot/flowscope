@@ -9,6 +9,7 @@ use sqlparser::ast::Statement;
 
 pub struct LayoutLongLines {
     max_line_length: usize,
+    ignore_comment_lines: bool,
 }
 
 impl LayoutLongLines {
@@ -17,6 +18,9 @@ impl LayoutLongLines {
             max_line_length: config
                 .rule_option_usize(issue_codes::LINT_LT_005, "max_line_length")
                 .unwrap_or(80),
+            ignore_comment_lines: config
+                .rule_option_bool(issue_codes::LINT_LT_005, "ignore_comment_lines")
+                .unwrap_or(false),
         }
     }
 }
@@ -25,6 +29,7 @@ impl Default for LayoutLongLines {
     fn default() -> Self {
         Self {
             max_line_length: 80,
+            ignore_comment_lines: false,
         }
     }
 }
@@ -47,7 +52,7 @@ impl LintRule for LayoutLongLines {
             return Vec::new();
         }
 
-        long_line_overflow_spans(ctx.sql, self.max_line_length)
+        long_line_overflow_spans(ctx.sql, self.max_line_length, self.ignore_comment_lines)
             .into_iter()
             .map(|(start, end)| {
                 Issue::info(
@@ -61,10 +66,15 @@ impl LintRule for LayoutLongLines {
     }
 }
 
-fn long_line_overflow_spans(sql: &str, max_len: usize) -> Vec<(usize, usize)> {
+fn long_line_overflow_spans(
+    sql: &str,
+    max_len: usize,
+    ignore_comment_lines: bool,
+) -> Vec<(usize, usize)> {
     let bytes = sql.as_bytes();
     let mut spans = Vec::new();
     let mut line_start = 0usize;
+    let mut in_block_comment = false;
 
     for idx in 0..=bytes.len() {
         if idx < bytes.len() && bytes[idx] != b'\n' {
@@ -77,6 +87,11 @@ fn long_line_overflow_spans(sql: &str, max_len: usize) -> Vec<(usize, usize)> {
         }
 
         let line = &sql[line_start..line_end];
+        if ignore_comment_lines && line_is_comment_only(line, &mut in_block_comment) {
+            line_start = idx + 1;
+            continue;
+        }
+
         if line.chars().count() > max_len {
             let mut overflow_start = line_end;
             for (char_idx, (byte_off, _)) in line.char_indices().enumerate() {
@@ -102,14 +117,39 @@ fn long_line_overflow_spans(sql: &str, max_len: usize) -> Vec<(usize, usize)> {
     spans
 }
 
+fn line_is_comment_only(line: &str, in_block_comment: &mut bool) -> bool {
+    let trimmed = line.trim_start();
+
+    if *in_block_comment {
+        if let Some(end_idx) = trimmed.find("*/") {
+            *in_block_comment = false;
+            return trimmed[end_idx + 2..].trim().is_empty();
+        }
+        return true;
+    }
+
+    if trimmed.starts_with("--") || trimmed.starts_with('#') {
+        return true;
+    }
+
+    if trimmed.starts_with("/*") {
+        if let Some(end_idx) = trimmed.find("*/") {
+            return trimmed[end_idx + 2..].trim().is_empty();
+        }
+        *in_block_comment = true;
+        return true;
+    }
+
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::parser::parse_sql;
 
-    fn run(sql: &str) -> Vec<Issue> {
+    fn run_with_rule(sql: &str, rule: &LayoutLongLines) -> Vec<Issue> {
         let statements = parse_sql(sql).expect("parse");
-        let rule = LayoutLongLines::default();
         statements
             .iter()
             .enumerate()
@@ -124,6 +164,10 @@ mod tests {
                 )
             })
             .collect()
+    }
+
+    fn run(sql: &str) -> Vec<Issue> {
+        run_with_rule(sql, &LayoutLongLines::default())
     }
 
     #[test]
@@ -179,5 +223,26 @@ mod tests {
         );
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_LT_005);
+    }
+
+    #[test]
+    fn ignore_comment_lines_skips_long_comment_only_lines() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "layout.long_lines".to_string(),
+                serde_json::json!({
+                    "max_line_length": 20,
+                    "ignore_comment_lines": true
+                }),
+            )]),
+        };
+        let sql = format!("SELECT 1;\n-- {}\nSELECT 2", "x".repeat(120));
+        let issues = run_with_rule(&sql, &LayoutLongLines::from_config(&config));
+        assert!(
+            issues.is_empty(),
+            "ignore_comment_lines should suppress long comment-only lines: {issues:?}",
+        );
     }
 }
