@@ -247,6 +247,25 @@ fn lint_rule_config_not_equal_style_c_style() {
     );
 }
 
+#[test]
+fn lint_rule_config_count_rows_prefer_count_one() {
+    let issues = run_lint_with_config(
+        "SELECT COUNT(*) FROM t",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "convention.count_rows".to_string(),
+                serde_json::json!({"prefer_count_1": true}),
+            )]),
+        },
+    );
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_CV_004"),
+        "prefer_count_1 should flag COUNT(*): {issues:?}"
+    );
+}
+
 // =============================================================================
 // Rule-specific integration tests
 // =============================================================================

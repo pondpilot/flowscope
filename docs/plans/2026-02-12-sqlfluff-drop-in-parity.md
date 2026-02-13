@@ -90,6 +90,7 @@ This plan covers three axes:
   - `CV_001` moved from parity handling to a dedicated core rule module (`cv_001.rs`).
   - `CV_001` was further upgraded from regex checks to lexer-style operator scanning that ignores comments/quoted strings for mixed `<>`/`!=` detection.
   - `CV_001` now supports `preferred_not_equal_style` (`consistent`/`c_style`/`ansi`) through `lint.ruleConfigs`.
+  - `CV_004` now supports `prefer_count_1` / `prefer_count_0` through `lint.ruleConfigs`.
   - `CV_007` moved from parity handling to a dedicated core rule module (`cv_007.rs`).
   - `CV_007` was further upgraded to AST-driven statement-shape detection (`Statement::Query` + wrapper `SetExpr::Query`), replacing SQL text `starts_with('(')/ends_with(')')` heuristics.
   - `CV_009` moved from parity handling to a dedicated core rule module (`cv_009.rs`).
@@ -501,7 +502,6 @@ These rules work but lack SQLFluff config knobs that users depend on:
 | AL_007 (aliasing.forbid) | `force_enable` | `False` (disabled by default) |
 | AM_005 (ambiguous.join) | `fully_qualify_join_types` | `inner` |
 | AM_006 (ambiguous.column_references) | `group_by_and_order_by_style` | `consistent` |
-| CV_004 (convention.count_rows) | `prefer_count_1`, `prefer_count_0` | `False`, `False` |
 | CV_006 (convention.terminator) | `multiline_newline`, `require_final_semicolon` | `False`, `False` |
 | CV_009 (convention.blocked_words) | `blocked_words`, `blocked_regex` | empty |
 | CV_010 (convention.quoted_literals) | `preferred_quoted_literal_style` | `consistent` |

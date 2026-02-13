@@ -108,7 +108,7 @@ pub fn all_rules(config: &LintConfig) -> Vec<Box<dyn LintRule>> {
         Box::new(cv_001::ConventionNotEqual::from_config(config)),
         Box::new(cv_002::CoalesceConvention),
         Box::new(cv_003::ConventionSelectTrailingComma),
-        Box::new(cv_004::CountStyle),
+        Box::new(cv_004::CountStyle::from_config(config)),
         Box::new(cv_005::NullComparison),
         Box::new(cv_006::ConventionTerminator),
         Box::new(cv_007::ConventionStatementBrackets),
