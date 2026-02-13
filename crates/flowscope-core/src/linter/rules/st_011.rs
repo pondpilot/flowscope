@@ -7,13 +7,13 @@ use std::collections::HashSet;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
 use sqlparser::ast::{
-    FunctionArg, FunctionArgExpr, JoinOperator, Select, SelectItem, Statement, TableFactor,
+    Expr, FunctionArg, FunctionArgExpr, JoinOperator, OrderByKind, Query, Select, SelectItem,
+    SetExpr, Statement, TableFactor,
 };
 
 use super::semantic_helpers::{
     collect_qualifier_prefixes_in_expr, count_reference_qualification_in_expr_excluding_aliases,
     join_on_expr, select_projection_alias_set, table_factor_reference_name,
-    visit_selects_in_statement,
 };
 
 pub struct StructureUnusedJoin;
@@ -32,11 +32,7 @@ impl LintRule for StructureUnusedJoin {
     }
 
     fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let mut violations = 0usize;
-
-        visit_selects_in_statement(statement, &mut |select| {
-            violations += unused_join_count_for_select(select);
-        });
+        let violations = unused_join_count_for_statement(statement);
 
         (0..violations)
             .map(|_| {
@@ -47,7 +43,79 @@ impl LintRule for StructureUnusedJoin {
     }
 }
 
-fn unused_join_count_for_select(select: &Select) -> usize {
+fn unused_join_count_for_statement(statement: &Statement) -> usize {
+    match statement {
+        Statement::Query(query) => unused_join_count_for_query(query),
+        Statement::Insert(insert) => insert
+            .source
+            .as_ref()
+            .map_or(0, |query| unused_join_count_for_query(query)),
+        Statement::CreateView { query, .. } => unused_join_count_for_query(query),
+        Statement::CreateTable(create) => create
+            .query
+            .as_ref()
+            .map_or(0, |query| unused_join_count_for_query(query)),
+        _ => 0,
+    }
+}
+
+fn unused_join_count_for_query(query: &Query) -> usize {
+    let mut total = 0usize;
+
+    if let Some(with) = &query.with {
+        for cte in &with.cte_tables {
+            total += unused_join_count_for_query(&cte.query);
+        }
+    }
+
+    let query_order_by_exprs = query_order_by_exprs(query);
+    total + unused_join_count_for_set_expr(&query.body, &query_order_by_exprs)
+}
+
+fn unused_join_count_for_set_expr(set_expr: &SetExpr, query_order_by_exprs: &[&Expr]) -> usize {
+    match set_expr {
+        SetExpr::Select(select) => {
+            let mut total = unused_join_count_for_select(select, query_order_by_exprs);
+
+            for table in &select.from {
+                total += unused_join_count_for_table_factor(&table.relation);
+                for join in &table.joins {
+                    total += unused_join_count_for_table_factor(&join.relation);
+                }
+            }
+
+            visit_non_join_select_expressions(select, &mut |expr| {
+                total += unused_join_count_for_expr_subqueries(expr);
+            });
+
+            total
+        }
+        SetExpr::Query(query) => unused_join_count_for_query(query),
+        SetExpr::SetOperation { left, right, .. } => {
+            unused_join_count_for_set_expr(left, &[]) + unused_join_count_for_set_expr(right, &[])
+        }
+        SetExpr::Insert(statement)
+        | SetExpr::Update(statement)
+        | SetExpr::Delete(statement)
+        | SetExpr::Merge(statement) => unused_join_count_for_statement(statement),
+        _ => 0,
+    }
+}
+
+fn query_order_by_exprs(query: &Query) -> Vec<&Expr> {
+    let Some(order_by) = &query.order_by else {
+        return Vec::new();
+    };
+
+    match &order_by.kind {
+        OrderByKind::Expressions(order_exprs) => {
+            order_exprs.iter().map(|item| &item.expr).collect()
+        }
+        _ => Vec::new(),
+    }
+}
+
+fn unused_join_count_for_select(select: &Select, query_order_by_exprs: &[&Expr]) -> usize {
     if select.from.is_empty() {
         return 0;
     }
@@ -80,6 +148,13 @@ fn unused_join_count_for_select(select: &Select) -> usize {
         unqualified_references += unqualified;
     });
 
+    for expr in query_order_by_exprs {
+        collect_qualifier_prefixes_in_expr(expr, &mut used_prefixes);
+        let (_, unqualified) =
+            count_reference_qualification_in_expr_excluding_aliases(expr, &aliases);
+        unqualified_references += unqualified;
+    }
+
     // Match SQLFluff ST11 behavior: if unqualified references exist,
     // this rule defers until reference qualification issues are resolved.
     if unqualified_references > 0 {
@@ -93,6 +168,199 @@ fn unused_join_count_for_select(select: &Select) -> usize {
         .iter()
         .filter(|source| !used_prefixes.contains(*source))
         .count()
+}
+
+fn unused_join_count_for_table_factor(table_factor: &TableFactor) -> usize {
+    match table_factor {
+        TableFactor::Derived { subquery, .. } => unused_join_count_for_query(subquery),
+        TableFactor::NestedJoin {
+            table_with_joins, ..
+        } => {
+            let mut total = unused_join_count_for_table_factor(&table_with_joins.relation);
+            for join in &table_with_joins.joins {
+                total += unused_join_count_for_table_factor(&join.relation);
+                if let Some(on_expr) = join_on_expr(&join.join_operator) {
+                    total += unused_join_count_for_expr_subqueries(on_expr);
+                }
+            }
+            total
+        }
+        TableFactor::Pivot {
+            table,
+            aggregate_functions,
+            value_column,
+            default_on_null,
+            ..
+        } => {
+            let mut total = unused_join_count_for_table_factor(table);
+            for expr_with_alias in aggregate_functions {
+                total += unused_join_count_for_expr_subqueries(&expr_with_alias.expr);
+            }
+            for expr in value_column {
+                total += unused_join_count_for_expr_subqueries(expr);
+            }
+            if let Some(expr) = default_on_null {
+                total += unused_join_count_for_expr_subqueries(expr);
+            }
+            total
+        }
+        TableFactor::Unpivot {
+            table,
+            value,
+            columns,
+            ..
+        } => {
+            let mut total = unused_join_count_for_table_factor(table);
+            total += unused_join_count_for_expr_subqueries(value);
+            for expr_with_alias in columns {
+                total += unused_join_count_for_expr_subqueries(&expr_with_alias.expr);
+            }
+            total
+        }
+        TableFactor::MatchRecognize {
+            table,
+            partition_by,
+            order_by,
+            measures,
+            ..
+        } => {
+            let mut total = unused_join_count_for_table_factor(table);
+            for expr in partition_by {
+                total += unused_join_count_for_expr_subqueries(expr);
+            }
+            for order in order_by {
+                total += unused_join_count_for_expr_subqueries(&order.expr);
+            }
+            for measure in measures {
+                total += unused_join_count_for_expr_subqueries(&measure.expr);
+            }
+            total
+        }
+        TableFactor::TableFunction { expr, .. } => unused_join_count_for_expr_subqueries(expr),
+        TableFactor::Function { args, .. } => args
+            .iter()
+            .map(unused_join_count_for_function_arg)
+            .sum::<usize>(),
+        TableFactor::UNNEST { array_exprs, .. } => array_exprs
+            .iter()
+            .map(unused_join_count_for_expr_subqueries)
+            .sum::<usize>(),
+        TableFactor::JsonTable { json_expr, .. } | TableFactor::OpenJsonTable { json_expr, .. } => {
+            unused_join_count_for_expr_subqueries(json_expr)
+        }
+        TableFactor::XmlTable { row_expression, .. } => {
+            unused_join_count_for_expr_subqueries(row_expression)
+        }
+        TableFactor::Table { .. } | TableFactor::SemanticView { .. } => 0,
+    }
+}
+
+fn unused_join_count_for_function_arg(arg: &FunctionArg) -> usize {
+    match arg {
+        FunctionArg::Unnamed(FunctionArgExpr::Expr(expr))
+        | FunctionArg::Named {
+            arg: FunctionArgExpr::Expr(expr),
+            ..
+        } => unused_join_count_for_expr_subqueries(expr),
+        _ => 0,
+    }
+}
+
+fn unused_join_count_for_expr_subqueries(expr: &Expr) -> usize {
+    match expr {
+        Expr::Subquery(query)
+        | Expr::Exists {
+            subquery: query, ..
+        } => unused_join_count_for_query(query),
+        Expr::InSubquery {
+            expr: inner,
+            subquery,
+            ..
+        } => unused_join_count_for_expr_subqueries(inner) + unused_join_count_for_query(subquery),
+        Expr::BinaryOp { left, right, .. }
+        | Expr::AnyOp { left, right, .. }
+        | Expr::AllOp { left, right, .. } => {
+            unused_join_count_for_expr_subqueries(left)
+                + unused_join_count_for_expr_subqueries(right)
+        }
+        Expr::UnaryOp { expr: inner, .. }
+        | Expr::Nested(inner)
+        | Expr::IsNull(inner)
+        | Expr::IsNotNull(inner)
+        | Expr::Cast { expr: inner, .. } => unused_join_count_for_expr_subqueries(inner),
+        Expr::InList { expr, list, .. } => {
+            unused_join_count_for_expr_subqueries(expr)
+                + list
+                    .iter()
+                    .map(unused_join_count_for_expr_subqueries)
+                    .sum::<usize>()
+        }
+        Expr::Between {
+            expr, low, high, ..
+        } => {
+            unused_join_count_for_expr_subqueries(expr)
+                + unused_join_count_for_expr_subqueries(low)
+                + unused_join_count_for_expr_subqueries(high)
+        }
+        Expr::Case {
+            operand,
+            conditions,
+            else_result,
+            ..
+        } => {
+            let operand_count = operand
+                .as_ref()
+                .map_or(0, |expr| unused_join_count_for_expr_subqueries(expr));
+            let condition_count = conditions
+                .iter()
+                .map(|when| {
+                    unused_join_count_for_expr_subqueries(&when.condition)
+                        + unused_join_count_for_expr_subqueries(&when.result)
+                })
+                .sum::<usize>();
+            let else_count = else_result
+                .as_ref()
+                .map_or(0, |expr| unused_join_count_for_expr_subqueries(expr));
+            operand_count + condition_count + else_count
+        }
+        Expr::Function(function) => {
+            let args_count =
+                if let sqlparser::ast::FunctionArguments::List(arguments) = &function.args {
+                    arguments
+                        .args
+                        .iter()
+                        .map(unused_join_count_for_function_arg)
+                        .sum::<usize>()
+                } else {
+                    0
+                };
+            let filter_count = function
+                .filter
+                .as_ref()
+                .map_or(0, |expr| unused_join_count_for_expr_subqueries(expr));
+            let within_group_count = function
+                .within_group
+                .iter()
+                .map(|order| unused_join_count_for_expr_subqueries(&order.expr))
+                .sum::<usize>();
+            let window_count = match &function.over {
+                Some(sqlparser::ast::WindowType::WindowSpec(spec)) => {
+                    spec.partition_by
+                        .iter()
+                        .map(unused_join_count_for_expr_subqueries)
+                        .sum::<usize>()
+                        + spec
+                            .order_by
+                            .iter()
+                            .map(|order| unused_join_count_for_expr_subqueries(&order.expr))
+                            .sum::<usize>()
+                }
+                _ => 0,
+            };
+            args_count + filter_count + within_group_count + window_count
+        }
+        _ => 0,
+    }
 }
 
 fn select_has_unqualified_wildcard(select: &Select) -> bool {
@@ -371,6 +639,12 @@ mod tests {
     #[test]
     fn allows_outer_join_when_joined_source_is_referenced() {
         let issues = run("select widget.id, inventor.id from widget left join inventor on widget.inventor_id = inventor.id");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn allows_outer_join_when_joined_source_only_referenced_in_query_order_by() {
+        let issues = run("select a.id from a left join b on a.id = b.id order by b.id");
         assert!(issues.is_empty());
     }
 

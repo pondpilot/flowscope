@@ -1666,6 +1666,15 @@ fn lint_st_011_unqualified_wildcard_counts_as_reference() {
 }
 
 #[test]
+fn lint_st_011_query_order_by_reference_counts_as_usage() {
+    let issues = run_lint("SELECT a.id FROM a LEFT JOIN b ON a.id = b.id ORDER BY b.id");
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_ST_011"),
+        "query-level ORDER BY references should count as joined-source usage: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_st_011_does_not_flag_base_from_with_using_join() {
     let issues = run_lint("SELECT b.id FROM a LEFT JOIN b USING(id)");
     assert!(
