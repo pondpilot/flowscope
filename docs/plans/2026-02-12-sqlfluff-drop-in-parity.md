@@ -67,6 +67,7 @@ This plan covers three axes:
 - Additional AST-driven migration progress beyond Tier 1:
   - `AL_006` moved from parity regex handling to a dedicated core AST rule (`al_006.rs`).
   - `AL_006` now supports configurable `min_alias_length` / `max_alias_length` through `lint.ruleConfigs`.
+  - `AL_003` now supports configurable `allow_scalar` through `lint.ruleConfigs`.
   - `AL_007` moved from parity regex handling to a dedicated core AST rule (`al_007.rs`).
   - `AL_009` moved from parity regex handling to a dedicated core AST rule (`al_009.rs`).
   - `RF_004` moved from parity handling to a dedicated core rule module (`rf_004.rs`).
@@ -495,7 +496,6 @@ These rules work but lack SQLFluff config knobs that users depend on:
 
 | Rule | Missing Config | SQLFluff Default |
 |---|---|---|
-| AL_003 (aliasing.expression) | `allow_scalar` | `False` |
 | AL_005 (aliasing.unused) | `alias_case_check` | dialect-dependent |
 | AL_007 (aliasing.forbid) | `force_enable` | `False` (disabled by default) |
 | AM_005 (ambiguous.join) | `fully_qualify_join_types` | `inner` |

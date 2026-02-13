@@ -4,11 +4,30 @@
 //! implementation-dependent column names. Always give computed columns
 //! an explicit alias for clarity and portability.
 
+use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
 use sqlparser::ast::*;
 
-pub struct ImplicitAlias;
+pub struct ImplicitAlias {
+    allow_scalar: bool,
+}
+
+impl ImplicitAlias {
+    pub fn from_config(config: &LintConfig) -> Self {
+        Self {
+            allow_scalar: config
+                .rule_option_bool(issue_codes::LINT_AL_003, "allow_scalar")
+                .unwrap_or(true),
+        }
+    }
+}
+
+impl Default for ImplicitAlias {
+    fn default() -> Self {
+        Self { allow_scalar: true }
+    }
+}
 
 impl LintRule for ImplicitAlias {
     fn code(&self) -> &'static str {
@@ -25,39 +44,50 @@ impl LintRule for ImplicitAlias {
 
     fn check(&self, stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
         let mut issues = Vec::new();
-        check_statement(stmt, ctx, &mut issues);
+        check_statement(stmt, ctx, self.allow_scalar, &mut issues);
         issues
     }
 }
 
-fn check_statement(stmt: &Statement, ctx: &LintContext, issues: &mut Vec<Issue>) {
+fn check_statement(
+    stmt: &Statement,
+    ctx: &LintContext,
+    allow_scalar: bool,
+    issues: &mut Vec<Issue>,
+) {
     match stmt {
-        Statement::Query(q) => check_query(q, ctx, issues),
+        Statement::Query(q) => check_query(q, ctx, allow_scalar, issues),
         Statement::Insert(ins) => {
             if let Some(ref source) = ins.source {
-                check_query(source, ctx, issues);
+                check_query(source, ctx, allow_scalar, issues);
             }
         }
-        Statement::CreateView { query, .. } => check_query(query, ctx, issues),
+        Statement::CreateView { query, .. } => check_query(query, ctx, allow_scalar, issues),
         Statement::CreateTable(create) => {
             if let Some(ref q) = create.query {
-                check_query(q, ctx, issues);
+                check_query(q, ctx, allow_scalar, issues);
             }
         }
         _ => {}
     }
 }
 
-fn check_query(query: &Query, ctx: &LintContext, issues: &mut Vec<Issue>) {
+fn check_query(query: &Query, ctx: &LintContext, allow_scalar: bool, issues: &mut Vec<Issue>) {
     if let Some(ref with) = query.with {
         for cte in &with.cte_tables {
-            check_query(&cte.query, ctx, issues);
+            check_query(&cte.query, ctx, allow_scalar, issues);
         }
     }
-    check_set_expr(&query.body, ctx, issues, false);
+    check_set_expr(&query.body, ctx, allow_scalar, issues, false);
 }
 
-fn check_set_expr(body: &SetExpr, ctx: &LintContext, issues: &mut Vec<Issue>, in_set_rhs: bool) {
+fn check_set_expr(
+    body: &SetExpr,
+    ctx: &LintContext,
+    allow_scalar: bool,
+    issues: &mut Vec<Issue>,
+    in_set_rhs: bool,
+) {
     match body {
         SetExpr::Select(select) => {
             // In set-operation RHS branches, output column names come from the left side.
@@ -68,7 +98,7 @@ fn check_set_expr(body: &SetExpr, ctx: &LintContext, issues: &mut Vec<Issue>, in
 
             for item in &select.projection {
                 if let SelectItem::UnnamedExpr(expr) = item {
-                    if is_computed(expr) {
+                    if is_computed(expr) || (!allow_scalar && is_scalar_literal(expr)) {
                         let expr_str = format!("{expr}");
                         issues.push(
                             Issue::info(
@@ -84,15 +114,15 @@ fn check_set_expr(body: &SetExpr, ctx: &LintContext, issues: &mut Vec<Issue>, in
                 }
             }
         }
-        SetExpr::Query(q) => check_query(q, ctx, issues),
+        SetExpr::Query(q) => check_query(q, ctx, allow_scalar, issues),
         SetExpr::SetOperation { left, right, .. } => {
-            check_set_expr(left, ctx, issues, false);
-            check_set_expr(right, ctx, issues, true);
+            check_set_expr(left, ctx, allow_scalar, issues, false);
+            check_set_expr(right, ctx, allow_scalar, issues, true);
         }
         SetExpr::Insert(stmt)
         | SetExpr::Update(stmt)
         | SetExpr::Delete(stmt)
-        | SetExpr::Merge(stmt) => check_statement(stmt, ctx, issues),
+        | SetExpr::Merge(stmt) => check_statement(stmt, ctx, allow_scalar, issues),
         _ => {}
     }
 }
@@ -103,6 +133,10 @@ fn is_computed(expr: &Expr) -> bool {
         expr,
         Expr::Identifier(_) | Expr::CompoundIdentifier(_) | Expr::Value(_)
     )
+}
+
+fn is_scalar_literal(expr: &Expr) -> bool {
+    matches!(expr, Expr::Value(_))
 }
 
 fn truncate(s: &str, max_len: usize) -> &str {
@@ -117,9 +151,8 @@ mod tests {
     use super::*;
     use crate::parser::parse_sql;
 
-    fn check_sql(sql: &str) -> Vec<Issue> {
+    fn check_sql_with_rule(sql: &str, rule: ImplicitAlias) -> Vec<Issue> {
         let stmts = parse_sql(sql).unwrap();
-        let rule = ImplicitAlias;
         let ctx = LintContext {
             sql,
             statement_range: 0..sql.len(),
@@ -130,6 +163,10 @@ mod tests {
             issues.extend(rule.check(stmt, &ctx));
         }
         issues
+    }
+
+    fn check_sql(sql: &str) -> Vec<Issue> {
+        check_sql_with_rule(sql, ImplicitAlias::default())
     }
 
     #[test]
@@ -271,5 +308,19 @@ mod tests {
 
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, "LINT_AL_003");
+    }
+
+    #[test]
+    fn test_allow_scalar_false_flags_literals() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "aliasing.expression".to_string(),
+                serde_json::json!({"allow_scalar": false}),
+            )]),
+        };
+        let issues = check_sql_with_rule("SELECT 1 FROM t", ImplicitAlias::from_config(&config));
+        assert_eq!(issues.len(), 1);
     }
 }

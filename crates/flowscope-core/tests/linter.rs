@@ -209,6 +209,25 @@ fn lint_rule_config_aliasing_length_max() {
     );
 }
 
+#[test]
+fn lint_rule_config_aliasing_expression_allow_scalar_false() {
+    let issues = run_lint_with_config(
+        "SELECT 1 FROM t",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "LINT_AL_003".to_string(),
+                serde_json::json!({"allow_scalar": false}),
+            )]),
+        },
+    );
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_AL_003"),
+        "allow_scalar=false should flag scalar expression aliases: {issues:?}"
+    );
+}
+
 // =============================================================================
 // Rule-specific integration tests
 // =============================================================================
