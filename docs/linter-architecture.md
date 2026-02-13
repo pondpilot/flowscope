@@ -193,6 +193,7 @@ Move style-oriented checks to lexical engine:
 - [x] `LINT_RF_003` now supports `single_table_references` (`consistent`/`qualified`/`unqualified`) and `force_enable` via `lint.ruleConfigs`.
 - [x] `LINT_RF_006` now supports `prefer_quoted_identifiers` / `case_sensitive` via `lint.ruleConfigs`.
 - [x] `LINT_AL_007` now supports `force_enable` via `lint.ruleConfigs`.
+- [x] `LINT_AL_005` now supports `alias_case_check` (including SQLFluff-style casefolding modes) via `lint.ruleConfigs`.
 - [x] `LINT_AM_005` now supports `fully_qualify_join_types` (`inner`/`outer`/`both`) via `lint.ruleConfigs`.
 - [x] `LINT_AM_006` now supports `group_by_and_order_by_style` (`consistent`/`explicit`/`implicit`) via `lint.ruleConfigs`.
 - [x] `LINT_CV_003` now uses token/depth-aware SELECT-clause analysis for trailing-comma detection, replacing regex scanning.

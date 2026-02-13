@@ -60,6 +60,7 @@ This plan covers three axes:
   - `AL_001`/`AL_002` now support SQLFluff-style `aliasing` mode (`explicit`/`implicit`) via `lint.ruleConfigs`.
   - `AL_008` moved from parity into a dedicated core AST rule (`al_008.rs`) and parity registration was removed.
   - `AL_005` was expanded to cover derived-table aliases while adding SQLFluff-compatible `LATERAL` and `VALUES` exceptions to reduce false positives.
+  - `AL_005` now supports `alias_case_check` through `lint.ruleConfigs`.
   - `CV_003` moved from parity into a dedicated core rule module (`cv_003.rs`) and parity registration was removed.
   - `CV_003` was further upgraded from regex scanning to token/depth-aware trailing-comma detection in SELECT clauses.
   - `CV_006` moved from parity into a dedicated core rule module (`cv_006.rs`) and parity registration was removed.
@@ -512,7 +513,6 @@ These rules work but lack SQLFluff config knobs that users depend on:
 
 | Rule | Missing Config | SQLFluff Default |
 |---|---|---|
-| AL_005 (aliasing.unused) | `alias_case_check` | dialect-dependent |
 | CP_001 (capitalisation.keywords) | `capitalisation_policy`, `ignore_words` | `consistent` |
 | CP_002–005 | `extended_capitalisation_policy` | `consistent` |
 

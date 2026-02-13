@@ -532,6 +532,25 @@ fn lint_rule_config_ambiguous_column_refs_explicit_mode() {
     );
 }
 
+#[test]
+fn lint_rule_config_aliasing_unused_case_sensitive() {
+    let issues = run_lint_with_config(
+        "SELECT zoo.id, b.id FROM users AS \"Zoo\" JOIN books b ON zoo.id = b.user_id",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "aliasing.unused".to_string(),
+                serde_json::json!({"alias_case_check": "case_sensitive"}),
+            )]),
+        },
+    );
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_AL_005"),
+        "alias_case_check=case_sensitive should flag case-mismatched alias refs: {issues:?}"
+    );
+}
+
 // =============================================================================
 // Rule-specific integration tests
 // =============================================================================

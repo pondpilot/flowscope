@@ -3,12 +3,69 @@
 //! A table is aliased in a FROM/JOIN clause but the alias is never referenced
 //! anywhere in the query. This may indicate dead code or a copy-paste error.
 
+use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
 use sqlparser::ast::*;
 use std::collections::{HashMap, HashSet};
 
-pub struct UnusedTableAlias;
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum AliasCaseCheck {
+    Dialect,
+    CaseInsensitive,
+    QuotedCsNakedUpper,
+    QuotedCsNakedLower,
+    CaseSensitive,
+}
+
+impl AliasCaseCheck {
+    fn from_config(config: &LintConfig) -> Self {
+        match config
+            .rule_option_str(issue_codes::LINT_AL_005, "alias_case_check")
+            .unwrap_or("dialect")
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "case_insensitive" => Self::CaseInsensitive,
+            "quoted_cs_naked_upper" => Self::QuotedCsNakedUpper,
+            "quoted_cs_naked_lower" => Self::QuotedCsNakedLower,
+            "case_sensitive" => Self::CaseSensitive,
+            _ => Self::Dialect,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct AliasRef {
+    name: String,
+    quoted: bool,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct QualifierRef {
+    name: String,
+    quoted: bool,
+}
+
+pub struct UnusedTableAlias {
+    alias_case_check: AliasCaseCheck,
+}
+
+impl UnusedTableAlias {
+    pub fn from_config(config: &LintConfig) -> Self {
+        Self {
+            alias_case_check: AliasCaseCheck::from_config(config),
+        }
+    }
+}
+
+impl Default for UnusedTableAlias {
+    fn default() -> Self {
+        Self {
+            alias_case_check: AliasCaseCheck::Dialect,
+        }
+    }
+}
 
 impl LintRule for UnusedTableAlias {
     fn code(&self) -> &'static str {
@@ -26,16 +83,18 @@ impl LintRule for UnusedTableAlias {
     fn check(&self, stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
         let mut issues = Vec::new();
         match stmt {
-            Statement::Query(q) => check_query(q, ctx, &mut issues),
+            Statement::Query(q) => check_query(q, self.alias_case_check, ctx, &mut issues),
             Statement::Insert(ins) => {
                 if let Some(ref source) = ins.source {
-                    check_query(source, ctx, &mut issues);
+                    check_query(source, self.alias_case_check, ctx, &mut issues);
                 }
             }
-            Statement::CreateView { query, .. } => check_query(query, ctx, &mut issues),
+            Statement::CreateView { query, .. } => {
+                check_query(query, self.alias_case_check, ctx, &mut issues)
+            }
             Statement::CreateTable(create) => {
                 if let Some(ref q) = create.query {
-                    check_query(q, ctx, &mut issues);
+                    check_query(q, self.alias_case_check, ctx, &mut issues);
                 }
             }
             _ => {}
@@ -44,27 +103,43 @@ impl LintRule for UnusedTableAlias {
     }
 }
 
-fn check_query(query: &Query, ctx: &LintContext, issues: &mut Vec<Issue>) {
+fn check_query(
+    query: &Query,
+    alias_case_check: AliasCaseCheck,
+    ctx: &LintContext,
+    issues: &mut Vec<Issue>,
+) {
     if let Some(ref with) = query.with {
         for cte in &with.cte_tables {
-            check_query(&cte.query, ctx, issues);
+            check_query(&cte.query, alias_case_check, ctx, issues);
         }
     }
     match query.body.as_ref() {
-        SetExpr::Select(select) => check_select(select, query.order_by.as_ref(), ctx, issues),
-        _ => check_set_expr(&query.body, ctx, issues),
+        SetExpr::Select(select) => check_select(
+            select,
+            query.order_by.as_ref(),
+            alias_case_check,
+            ctx,
+            issues,
+        ),
+        _ => check_set_expr(&query.body, alias_case_check, ctx, issues),
     }
 }
 
-fn check_set_expr(body: &SetExpr, ctx: &LintContext, issues: &mut Vec<Issue>) {
+fn check_set_expr(
+    body: &SetExpr,
+    alias_case_check: AliasCaseCheck,
+    ctx: &LintContext,
+    issues: &mut Vec<Issue>,
+) {
     match body {
         SetExpr::Select(select) => {
-            check_select(select, None, ctx, issues);
+            check_select(select, None, alias_case_check, ctx, issues);
         }
-        SetExpr::Query(q) => check_query(q, ctx, issues),
+        SetExpr::Query(q) => check_query(q, alias_case_check, ctx, issues),
         SetExpr::SetOperation { left, right, .. } => {
-            check_set_expr(left, ctx, issues);
-            check_set_expr(right, ctx, issues);
+            check_set_expr(left, alias_case_check, ctx, issues);
+            check_set_expr(right, alias_case_check, ctx, issues);
         }
         _ => {}
     }
@@ -73,6 +148,7 @@ fn check_set_expr(body: &SetExpr, ctx: &LintContext, issues: &mut Vec<Issue>) {
 fn check_select(
     select: &Select,
     order_by: Option<&OrderBy>,
+    alias_case_check: AliasCaseCheck,
     ctx: &LintContext,
     issues: &mut Vec<Issue>,
 ) {
@@ -84,7 +160,7 @@ fn check_select(
     }
 
     // Collect aliases -> table names
-    let mut aliases: HashMap<String, String> = HashMap::new();
+    let mut aliases: HashMap<String, AliasRef> = HashMap::new();
     for from_item in &select.from {
         collect_aliases(&from_item.relation, &mut aliases);
         for join in &from_item.joins {
@@ -96,15 +172,21 @@ fn check_select(
         return;
     }
 
-    let mut used_prefixes: HashSet<String> = HashSet::new();
+    let mut used_prefixes: HashSet<QualifierRef> = HashSet::new();
     collect_identifier_prefixes_from_select(select, order_by, &mut used_prefixes);
 
-    for alias in aliases.keys() {
-        if !used_prefixes.contains(&alias.to_uppercase()) {
+    for alias in aliases.values() {
+        let used = used_prefixes
+            .iter()
+            .any(|prefix| qualifier_matches_alias(prefix, alias, alias_case_check));
+        if !used {
             issues.push(
                 Issue::warning(
                     issue_codes::LINT_AL_005,
-                    format!("Table alias '{alias}' is defined but never referenced."),
+                    format!(
+                        "Table alias '{}' is defined but never referenced.",
+                        alias.name
+                    ),
                 )
                 .with_statement(ctx.statement_index),
             );
@@ -112,7 +194,10 @@ fn check_select(
     }
 }
 
-fn collect_identifier_prefixes_from_order_by(order_by: &OrderBy, prefixes: &mut HashSet<String>) {
+fn collect_identifier_prefixes_from_order_by(
+    order_by: &OrderBy,
+    prefixes: &mut HashSet<QualifierRef>,
+) {
     if let OrderByKind::Expressions(order_by_exprs) = &order_by.kind {
         for order_expr in order_by_exprs {
             collect_identifier_prefixes(&order_expr.expr, prefixes);
@@ -120,7 +205,7 @@ fn collect_identifier_prefixes_from_order_by(order_by: &OrderBy, prefixes: &mut 
     }
 }
 
-fn collect_identifier_prefixes_from_query(query: &Query, prefixes: &mut HashSet<String>) {
+fn collect_identifier_prefixes_from_query(query: &Query, prefixes: &mut HashSet<QualifierRef>) {
     if let Some(ref with) = query.with {
         for cte in &with.cte_tables {
             collect_identifier_prefixes_from_query(&cte.query, prefixes);
@@ -140,7 +225,7 @@ fn collect_identifier_prefixes_from_query(query: &Query, prefixes: &mut HashSet<
     }
 }
 
-fn collect_identifier_prefixes_from_set_expr(body: &SetExpr, prefixes: &mut HashSet<String>) {
+fn collect_identifier_prefixes_from_set_expr(body: &SetExpr, prefixes: &mut HashSet<QualifierRef>) {
     match body {
         SetExpr::Select(select) => collect_identifier_prefixes_from_select(select, None, prefixes),
         SetExpr::Query(q) => collect_identifier_prefixes_from_query(q, prefixes),
@@ -155,7 +240,7 @@ fn collect_identifier_prefixes_from_set_expr(body: &SetExpr, prefixes: &mut Hash
 fn collect_identifier_prefixes_from_select(
     select: &Select,
     order_by: Option<&OrderBy>,
-    prefixes: &mut HashSet<String>,
+    prefixes: &mut HashSet<QualifierRef>,
 ) {
     for item in &select.projection {
         collect_identifier_prefixes_from_select_item(item, prefixes);
@@ -183,7 +268,7 @@ fn collect_identifier_prefixes_from_select(
     }
 }
 
-fn collect_aliases(relation: &TableFactor, aliases: &mut HashMap<String, String>) {
+fn collect_aliases(relation: &TableFactor, aliases: &mut HashMap<String, AliasRef>) {
     match relation {
         TableFactor::Table {
             name,
@@ -194,7 +279,13 @@ fn collect_aliases(relation: &TableFactor, aliases: &mut HashMap<String, String>
             let alias_name = alias.name.value.clone();
             // Only count as alias if it differs from the table name.
             if alias_name.to_uppercase() != table_name.to_uppercase() {
-                aliases.insert(alias_name, table_name);
+                aliases.insert(
+                    alias_name.clone(),
+                    AliasRef {
+                        name: alias_name,
+                        quoted: alias.name.quote_style.is_some(),
+                    },
+                );
             }
         }
         TableFactor::Derived {
@@ -208,7 +299,13 @@ fn collect_aliases(relation: &TableFactor, aliases: &mut HashMap<String, String>
             // - Do not enforce usage for VALUES-derived aliases.
             let is_values = matches!(subquery.body.as_ref(), SetExpr::Values(_));
             if !*lateral && !is_values {
-                aliases.insert(alias.name.value.clone(), "<derived>".to_string());
+                aliases.insert(
+                    alias.name.value.clone(),
+                    AliasRef {
+                        name: alias.name.value.clone(),
+                        quoted: alias.name.quote_style.is_some(),
+                    },
+                );
             }
         }
         TableFactor::NestedJoin {
@@ -226,7 +323,10 @@ fn collect_aliases(relation: &TableFactor, aliases: &mut HashMap<String, String>
     }
 }
 
-fn collect_identifier_prefixes_from_select_item(item: &SelectItem, prefixes: &mut HashSet<String>) {
+fn collect_identifier_prefixes_from_select_item(
+    item: &SelectItem,
+    prefixes: &mut HashSet<QualifierRef>,
+) {
     match item {
         SelectItem::UnnamedExpr(expr) | SelectItem::ExprWithAlias { expr, .. } => {
             collect_identifier_prefixes(expr, prefixes);
@@ -234,18 +334,28 @@ fn collect_identifier_prefixes_from_select_item(item: &SelectItem, prefixes: &mu
         SelectItem::QualifiedWildcard(name, _) => {
             let name_str = name.to_string();
             if let Some(prefix) = name_str.split('.').next() {
-                prefixes.insert(prefix.to_uppercase());
+                prefixes.insert(QualifierRef {
+                    name: prefix
+                        .trim_matches(|ch| matches!(ch, '"' | '`' | '\'' | '[' | ']'))
+                        .to_string(),
+                    quoted: prefix.starts_with('"')
+                        || prefix.starts_with('`')
+                        || prefix.starts_with('['),
+                });
             }
         }
         _ => {}
     }
 }
 
-fn collect_identifier_prefixes(expr: &Expr, prefixes: &mut HashSet<String>) {
+fn collect_identifier_prefixes(expr: &Expr, prefixes: &mut HashSet<QualifierRef>) {
     match expr {
         Expr::CompoundIdentifier(parts) => {
             if parts.len() >= 2 {
-                prefixes.insert(parts[0].value.to_uppercase());
+                prefixes.insert(QualifierRef {
+                    name: parts[0].value.clone(),
+                    quoted: parts[0].quote_style.is_some(),
+                });
             }
         }
         Expr::BinaryOp { left, right, .. } => {
@@ -307,6 +417,38 @@ fn collect_identifier_prefixes(expr: &Expr, prefixes: &mut HashSet<String>) {
     }
 }
 
+fn qualifier_matches_alias(
+    qualifier: &QualifierRef,
+    alias: &AliasRef,
+    alias_case_check: AliasCaseCheck,
+) -> bool {
+    match alias_case_check {
+        AliasCaseCheck::CaseInsensitive => qualifier.name.eq_ignore_ascii_case(&alias.name),
+        AliasCaseCheck::CaseSensitive => qualifier.name == alias.name,
+        AliasCaseCheck::Dialect => {
+            if qualifier.quoted || alias.quoted {
+                qualifier.name == alias.name
+            } else {
+                qualifier.name.eq_ignore_ascii_case(&alias.name)
+            }
+        }
+        AliasCaseCheck::QuotedCsNakedUpper => {
+            if qualifier.quoted || alias.quoted {
+                qualifier.name == alias.name
+            } else {
+                qualifier.name.eq_ignore_ascii_case(&alias.name)
+            }
+        }
+        AliasCaseCheck::QuotedCsNakedLower => {
+            if qualifier.quoted || alias.quoted {
+                qualifier.name == alias.name
+            } else {
+                qualifier.name.eq_ignore_ascii_case(&alias.name)
+            }
+        }
+    }
+}
+
 fn join_constraint(op: &JoinOperator) -> Option<&Expr> {
     let constraint = match op {
         JoinOperator::Join(c)
@@ -331,11 +473,12 @@ fn join_constraint(op: &JoinOperator) -> Option<&Expr> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::linter::config::LintConfig;
     use crate::parser::parse_sql;
 
     fn check_sql(sql: &str) -> Vec<Issue> {
         let stmts = parse_sql(sql).unwrap();
-        let rule = UnusedTableAlias;
+        let rule = UnusedTableAlias::default();
         let ctx = LintContext {
             sql,
             statement_range: 0..sql.len(),
@@ -497,6 +640,55 @@ mod tests {
     #[test]
     fn test_lateral_alias_is_ignored() {
         let issues = check_sql("SELECT u.id FROM users u JOIN LATERAL (SELECT 1) lx ON TRUE");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn alias_case_check_case_sensitive_flags_case_mismatch() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "aliasing.unused".to_string(),
+                serde_json::json!({"alias_case_check": "case_sensitive"}),
+            )]),
+        };
+        let rule = UnusedTableAlias::from_config(&config);
+        let sql = "SELECT zoo.id, b.id FROM users AS \"Zoo\" JOIN books b ON zoo.id = b.user_id";
+        let stmts = parse_sql(sql).expect("parse");
+        let issues = rule.check(
+            &stmts[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert_eq!(issues.len(), 1);
+        assert!(issues[0].message.contains("Zoo"));
+    }
+
+    #[test]
+    fn alias_case_check_case_insensitive_allows_case_mismatch() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "LINT_AL_005".to_string(),
+                serde_json::json!({"alias_case_check": "case_insensitive"}),
+            )]),
+        };
+        let rule = UnusedTableAlias::from_config(&config);
+        let sql = "SELECT zoo.id, b.id FROM users AS \"Zoo\" JOIN books b ON zoo.id = b.user_id";
+        let stmts = parse_sql(sql).expect("parse");
+        let issues = rule.check(
+            &stmts[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
         assert!(issues.is_empty());
     }
 }
