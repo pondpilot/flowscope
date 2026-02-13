@@ -117,6 +117,7 @@ This plan covers three axes:
   - `LT_008` moved from parity handling to a dedicated core rule module (`lt_008.rs`).
   - `LT_009` moved from parity handling to a dedicated core rule module (`lt_009.rs`).
   - `LT_014` moved from parity handling to a dedicated core rule module (`lt_014.rs`).
+  - `LT_014` was further upgraded from regex masking to token/line-aware major-clause placement checks.
   - `CP_001` moved from parity handling to a dedicated core rule module (`cp_001.rs`).
   - `CP_002` moved from parity handling to a dedicated core rule module (`cp_002.rs`).
   - `CP_003` moved from parity handling to a dedicated core rule module (`cp_003.rs`).

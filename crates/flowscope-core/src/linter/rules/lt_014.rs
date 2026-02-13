@@ -5,8 +5,9 @@
 
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
-use regex::Regex;
 use sqlparser::ast::Statement;
+use sqlparser::keywords::Keyword;
+use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
 
 pub struct LayoutKeywordNewline;
 
@@ -24,31 +25,11 @@ impl LintRule for LayoutKeywordNewline {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let sql = mask_comments_and_single_quoted_strings(ctx.statement_sql());
-        let select_line_re = Regex::new(r"(?im)^\s*select\b([^\n]*)").expect("valid regex");
-        let major_clause_re =
-            Regex::new(r"(?i)\b(from|where|group\s+by|order\s+by)\b").expect("valid regex");
-
-        let Some(select_caps) = select_line_re.captures(&sql) else {
+        let Some((keyword_start, keyword_end)) =
+            keyword_newline_violation_span(ctx.statement_sql())
+        else {
             return Vec::new();
         };
-        let Some(select_tail) = select_caps.get(1) else {
-            return Vec::new();
-        };
-
-        let mut clause_iter = major_clause_re.find_iter(select_tail.as_str());
-        let Some(first_clause) = clause_iter.next() else {
-            return Vec::new();
-        };
-
-        let has_second_clause_on_select_line = clause_iter.next().is_some();
-        let has_major_clause_on_later_line = major_clause_re.is_match(&sql[select_tail.end()..]);
-        if !has_second_clause_on_select_line && !has_major_clause_on_later_line {
-            return Vec::new();
-        }
-
-        let keyword_start = select_tail.start() + first_clause.start();
-        let keyword_end = select_tail.start() + first_clause.end();
 
         vec![Issue::info(
             issue_codes::LINT_LT_014,
@@ -59,82 +40,149 @@ impl LintRule for LayoutKeywordNewline {
     }
 }
 
-fn mask_comments_and_single_quoted_strings(sql: &str) -> String {
-    enum State {
-        Normal,
-        LineComment,
-        BlockComment,
-        SingleQuoted,
+#[derive(Clone, Copy)]
+struct ClauseOccurrence {
+    line: u64,
+    start: usize,
+    end: usize,
+}
+
+fn keyword_newline_violation_span(sql: &str) -> Option<(usize, usize)> {
+    let dialect = sqlparser::dialect::GenericDialect {};
+    let mut tokenizer = Tokenizer::new(&dialect, sql);
+    let tokens = tokenizer.tokenize_with_location().ok()?;
+
+    let select_line = tokens.iter().find_map(|token| {
+        let Token::Word(word) = &token.token else {
+            return None;
+        };
+        (word.keyword == Keyword::SELECT).then_some(token.span.start.line)
+    })?;
+
+    let clauses = major_clause_occurrences(sql, &tokens)?;
+
+    let mut clauses_on_select_line = clauses.iter().filter(|clause| clause.line == select_line);
+    let first_clause_on_select_line = clauses_on_select_line.next()?;
+
+    let has_second_clause_on_select_line = clauses_on_select_line.next().is_some();
+    let has_major_clause_on_later_line = clauses.iter().any(|clause| clause.line > select_line);
+
+    if !has_second_clause_on_select_line && !has_major_clause_on_later_line {
+        return None;
     }
 
-    let mut bytes = sql.as_bytes().to_vec();
-    let mut i = 0usize;
-    let mut state = State::Normal;
+    Some((
+        first_clause_on_select_line.start,
+        first_clause_on_select_line.end,
+    ))
+}
 
-    while i < bytes.len() {
-        match state {
-            State::Normal => {
-                if bytes[i] == b'-' && i + 1 < bytes.len() && bytes[i + 1] == b'-' {
-                    bytes[i] = b' ';
-                    bytes[i + 1] = b' ';
-                    i += 2;
-                    state = State::LineComment;
-                } else if bytes[i] == b'/' && i + 1 < bytes.len() && bytes[i + 1] == b'*' {
-                    bytes[i] = b' ';
-                    bytes[i + 1] = b' ';
-                    i += 2;
-                    state = State::BlockComment;
-                } else if bytes[i] == b'\'' {
-                    bytes[i] = b' ';
-                    i += 1;
-                    state = State::SingleQuoted;
-                } else {
-                    i += 1;
-                }
+fn major_clause_occurrences(sql: &str, tokens: &[TokenWithSpan]) -> Option<Vec<ClauseOccurrence>> {
+    let significant: Vec<&TokenWithSpan> = tokens
+        .iter()
+        .filter(|token| !is_trivia_token(&token.token))
+        .collect();
+
+    let mut out = Vec::new();
+    let mut index = 0usize;
+
+    while index < significant.len() {
+        let token = significant[index];
+        let Token::Word(word) = &token.token else {
+            index += 1;
+            continue;
+        };
+
+        match word.keyword {
+            Keyword::FROM | Keyword::WHERE => {
+                let start = line_col_to_offset(
+                    sql,
+                    token.span.start.line as usize,
+                    token.span.start.column as usize,
+                )?;
+                let end = line_col_to_offset(
+                    sql,
+                    token.span.end.line as usize,
+                    token.span.end.column as usize,
+                )?;
+                out.push(ClauseOccurrence {
+                    line: token.span.start.line,
+                    start,
+                    end,
+                });
+                index += 1;
             }
-            State::LineComment => {
-                if bytes[i] == b'\n' {
-                    i += 1;
-                    state = State::Normal;
-                } else {
-                    bytes[i] = b' ';
-                    i += 1;
+            Keyword::GROUP | Keyword::ORDER => {
+                let Some(next) = significant.get(index + 1) else {
+                    index += 1;
+                    continue;
+                };
+
+                let is_by = matches!(&next.token, Token::Word(next_word) if next_word.keyword == Keyword::BY);
+                if !is_by {
+                    index += 1;
+                    continue;
                 }
+
+                let start = line_col_to_offset(
+                    sql,
+                    token.span.start.line as usize,
+                    token.span.start.column as usize,
+                )?;
+                let end = line_col_to_offset(
+                    sql,
+                    next.span.end.line as usize,
+                    next.span.end.column as usize,
+                )?;
+                out.push(ClauseOccurrence {
+                    line: token.span.start.line,
+                    start,
+                    end,
+                });
+                index += 2;
             }
-            State::BlockComment => {
-                if bytes[i] == b'*' && i + 1 < bytes.len() && bytes[i + 1] == b'/' {
-                    bytes[i] = b' ';
-                    bytes[i + 1] = b' ';
-                    i += 2;
-                    state = State::Normal;
-                } else if bytes[i] == b'\n' {
-                    i += 1;
-                } else {
-                    bytes[i] = b' ';
-                    i += 1;
-                }
-            }
-            State::SingleQuoted => {
-                if bytes[i] == b'\'' {
-                    bytes[i] = b' ';
-                    if i + 1 < bytes.len() && bytes[i + 1] == b'\'' {
-                        bytes[i + 1] = b' ';
-                        i += 2;
-                    } else {
-                        i += 1;
-                        state = State::Normal;
-                    }
-                } else {
-                    if bytes[i] != b'\n' {
-                        bytes[i] = b' ';
-                    }
-                    i += 1;
-                }
-            }
+            _ => index += 1,
         }
     }
 
-    String::from_utf8(bytes).expect("masked SQL remains UTF-8")
+    Some(out)
+}
+
+fn is_trivia_token(token: &Token) -> bool {
+    matches!(
+        token,
+        Token::Whitespace(Whitespace::Space | Whitespace::Newline | Whitespace::Tab)
+            | Token::Whitespace(Whitespace::SingleLineComment { .. })
+            | Token::Whitespace(Whitespace::MultiLineComment(_))
+    )
+}
+
+fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
+    if line == 0 || column == 0 {
+        return None;
+    }
+
+    let mut current_line = 1usize;
+    let mut current_col = 1usize;
+
+    for (offset, ch) in sql.char_indices() {
+        if current_line == line && current_col == column {
+            return Some(offset);
+        }
+
+        if ch == '\n' {
+            current_line += 1;
+            current_col = 1;
+        } else {
+            current_col += 1;
+        }
+    }
+
+    if current_line == line && current_col == column {
+        return Some(sql.len());
+    }
+
+    None
 }
 
 #[cfg(test)]
@@ -171,5 +219,10 @@ mod tests {
     fn does_not_flag_consistent_layout() {
         assert!(run("SELECT a FROM t").is_empty());
         assert!(run("SELECT a\nFROM t\nWHERE a = 1").is_empty());
+    }
+
+    #[test]
+    fn does_not_flag_clause_words_in_string_literal() {
+        assert!(run("SELECT 'FROM t WHERE x = 1' AS txt").is_empty());
     }
 }
