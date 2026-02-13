@@ -65,6 +65,7 @@ This plan covers three axes:
   - `AL_007` moved from parity regex handling to a dedicated core AST rule (`al_007.rs`).
   - `AL_009` moved from parity regex handling to a dedicated core AST rule (`al_009.rs`).
   - `RF_004` moved from parity handling to a dedicated core rule module (`rf_004.rs`).
+  - `RF_004` was further upgraded to AST-driven table/join alias analysis, eliminating SQL-string false positives from non-SQL string literals.
   - `RF_005` moved from parity handling to a dedicated core rule module (`rf_005.rs`).
   - `RF_006` moved from parity handling to a dedicated core rule module (`rf_006.rs`).
   - `ST_002` moved from parity regex handling to a dedicated core AST rule (`st_002.rs`).

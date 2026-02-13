@@ -536,7 +536,7 @@ fn lint_lt_007_cte_bracket_missing() {
 
 #[test]
 fn lint_rf_004_keyword_identifier() {
-    let issues = run_lint("SELECT 'FROM tbl AS SELECT' AS sql_snippet");
+    let issues = run_lint("SELECT \"select\".id FROM users AS \"select\"");
     assert!(
         issues
             .iter()

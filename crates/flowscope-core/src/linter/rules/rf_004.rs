@@ -5,8 +5,9 @@
 
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
-use regex::Regex;
 use sqlparser::ast::Statement;
+
+use super::semantic_helpers::{table_factor_alias_name, visit_selects_in_statement};
 
 pub struct ReferencesKeywords;
 
@@ -23,14 +24,27 @@ impl LintRule for ReferencesKeywords {
         "Avoid keywords as identifiers."
     }
 
-    fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let has_keyword_alias = capture_group(
-            ctx.statement_sql(),
-            r"(?i)\b(?:from|join)\s+[A-Za-z_][A-Za-z0-9_\.]*\s+as\s+([A-Za-z_][A-Za-z0-9_]*)",
-            1,
-        )
-        .into_iter()
-        .any(|alias| is_keyword(&alias));
+    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+        let mut has_keyword_alias = false;
+        visit_selects_in_statement(statement, &mut |select| {
+            if has_keyword_alias {
+                return;
+            }
+
+            for table in &select.from {
+                if table_factor_alias_name(&table.relation).is_some_and(is_keyword) {
+                    has_keyword_alias = true;
+                    return;
+                }
+
+                for join in &table.joins {
+                    if table_factor_alias_name(&join.relation).is_some_and(is_keyword) {
+                        has_keyword_alias = true;
+                        return;
+                    }
+                }
+            }
+        });
 
         if has_keyword_alias {
             vec![Issue::info(
@@ -42,14 +56,6 @@ impl LintRule for ReferencesKeywords {
             Vec::new()
         }
     }
-}
-
-fn capture_group(sql: &str, pattern: &str, group: usize) -> Vec<String> {
-    Regex::new(pattern)
-        .expect("valid regex")
-        .captures_iter(sql)
-        .filter_map(|captures| captures.get(group).map(|m| m.as_str().to_string()))
-        .collect()
 }
 
 fn is_keyword(token: &str) -> bool {
@@ -109,16 +115,21 @@ mod tests {
     }
 
     #[test]
-    fn flags_keyword_alias_pattern() {
-        // Preserves current regex-based parity behavior.
-        let issues = run("SELECT 'FROM tbl AS SELECT' AS sql_snippet");
+    fn flags_keyword_table_alias() {
+        let issues = run("SELECT \"select\".id FROM users AS \"select\"");
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_RF_004);
     }
 
     #[test]
-    fn does_not_flag_non_keyword_alias_pattern() {
-        let issues = run("SELECT 'FROM tbl AS alias_name' AS sql_snippet");
+    fn does_not_flag_non_keyword_alias() {
+        let issues = run("SELECT u.id FROM users AS u");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn does_not_flag_sql_like_string_literal() {
+        let issues = run("SELECT 'FROM users AS date' AS snippet");
         assert!(issues.is_empty());
     }
 }
