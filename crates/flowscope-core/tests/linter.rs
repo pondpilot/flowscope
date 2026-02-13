@@ -1692,6 +1692,36 @@ fn lint_rf_002_allows_later_projection_reference_to_previous_alias() {
     );
 }
 
+#[test]
+fn lint_rf_002_allows_bigquery_date_part_function_argument() {
+    let issues = run_lint_in_dialect(
+        "SELECT timestamp_trunc(a.ts, month) AS t FROM a JOIN b ON a.id = b.id",
+        Dialect::Bigquery,
+    );
+    assert!(
+        !issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_RF_002),
+        "datepart function-argument keywords should not trigger {}: {issues:?}",
+        issue_codes::LINT_RF_002,
+    );
+}
+
+#[test]
+fn lint_rf_002_allows_snowflake_datediff_date_part_argument() {
+    let issues = run_lint_in_dialect(
+        "SELECT datediff(year, a.column1, b.column2) FROM a JOIN b ON a.id = b.id",
+        Dialect::Snowflake,
+    );
+    assert!(
+        !issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_RF_002),
+        "datediff datepart keywords should not trigger {}: {issues:?}",
+        issue_codes::LINT_RF_002,
+    );
+}
+
 // =============================================================================
 // SQLFluff parity smoke tests
 // =============================================================================

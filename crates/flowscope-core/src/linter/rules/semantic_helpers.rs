@@ -398,13 +398,18 @@ pub fn count_reference_qualification_in_expr_excluding_aliases(
             let mut unqualified = 0usize;
 
             if let FunctionArguments::List(arguments) = &function.args {
-                for arg in &arguments.args {
+                for (index, arg) in arguments.args.iter().enumerate() {
                     match arg {
                         FunctionArg::Unnamed(FunctionArgExpr::Expr(expr))
                         | FunctionArg::Named {
                             arg: FunctionArgExpr::Expr(expr),
                             ..
                         } => {
+                            if should_skip_identifier_reference_for_function_arg(
+                                function, index, expr,
+                            ) {
+                                continue;
+                            }
                             let (q, u) = count_reference_qualification_in_expr_excluding_aliases(
                                 expr, aliases,
                             );
@@ -457,6 +462,75 @@ pub fn count_reference_qualification_in_expr_excluding_aliases(
         Expr::Exists { .. } | Expr::Subquery(_) => (0, 0),
         _ => (0, 0),
     }
+}
+
+fn should_skip_identifier_reference_for_function_arg(
+    function: &Function,
+    arg_index: usize,
+    expr: &Expr,
+) -> bool {
+    let Expr::Identifier(ident) = expr else {
+        return false;
+    };
+    if ident.quote_style.is_some() || !is_date_part_identifier(&ident.value) {
+        return false;
+    }
+
+    let Some(function_name) = function_name_upper(function) else {
+        return false;
+    };
+    if !is_datepart_function_name(&function_name) {
+        return false;
+    }
+
+    // Dialect-specific datepart-position differences exist; to avoid false
+    // positives across common dialects we allow datepart keywords in the first
+    // two argument positions of known datepart functions.
+    arg_index <= 1
+}
+
+fn function_name_upper(function: &Function) -> Option<String> {
+    function
+        .name
+        .0
+        .last()
+        .and_then(ObjectNamePart::as_ident)
+        .map(|ident| ident.value.to_ascii_uppercase())
+}
+
+fn is_datepart_function_name(name: &str) -> bool {
+    matches!(
+        name,
+        "DATEDIFF"
+            | "DATE_DIFF"
+            | "DATEADD"
+            | "DATE_ADD"
+            | "DATE_PART"
+            | "DATETIME_TRUNC"
+            | "TIME_TRUNC"
+            | "TIMESTAMP_TRUNC"
+            | "TIMESTAMP_DIFF"
+            | "TIMESTAMPDIFF"
+    )
+}
+
+fn is_date_part_identifier(value: &str) -> bool {
+    matches!(
+        value.to_ascii_uppercase().as_str(),
+        "YEAR"
+            | "QUARTER"
+            | "MONTH"
+            | "WEEK"
+            | "DAY"
+            | "DOW"
+            | "DOY"
+            | "HOUR"
+            | "MINUTE"
+            | "SECOND"
+            | "MILLISECOND"
+            | "MICROSECOND"
+            | "NANOSECOND"
+    )
 }
 
 pub fn collect_qualifier_prefixes_in_expr(expr: &Expr, prefixes: &mut HashSet<String>) {
