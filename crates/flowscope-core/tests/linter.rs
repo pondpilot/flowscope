@@ -1190,6 +1190,12 @@ fn lint_cv_004_right_join() {
 }
 
 #[test]
+fn lint_cv_012_inner_join_without_on_with_where_predicate() {
+    let issues = run_lint("SELECT a.x, b.y FROM a INNER JOIN b WHERE a.id = b.id");
+    assert!(issues.iter().any(|(code, _)| code == "LINT_CV_012"));
+}
+
+#[test]
 fn lint_st_001_unused_cte() {
     let issues = run_lint("WITH unused AS (SELECT 1) SELECT 2");
     assert!(issues.iter().any(|(code, _)| code == "LINT_ST_003"));

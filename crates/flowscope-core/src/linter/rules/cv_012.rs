@@ -58,7 +58,7 @@ fn select_has_implicit_where_join(select: &Select) -> bool {
 
         for join in &table.joins {
             let current_source = table_factor_reference_name(&join.relation);
-            let JoinOperator::Join(constraint) = &join.join_operator else {
+            let Some(constraint) = join_constraint(&join.join_operator) else {
                 if let Some(source) = current_source {
                     seen_sources.push(source);
                 }
@@ -89,6 +89,28 @@ fn select_has_implicit_where_join(select: &Select) -> bool {
     }
 
     false
+}
+
+fn join_constraint(join_operator: &JoinOperator) -> Option<&JoinConstraint> {
+    match join_operator {
+        JoinOperator::Join(constraint)
+        | JoinOperator::Inner(constraint)
+        | JoinOperator::Left(constraint)
+        | JoinOperator::LeftOuter(constraint)
+        | JoinOperator::Right(constraint)
+        | JoinOperator::RightOuter(constraint)
+        | JoinOperator::FullOuter(constraint)
+        | JoinOperator::CrossJoin(constraint)
+        | JoinOperator::Semi(constraint)
+        | JoinOperator::LeftSemi(constraint)
+        | JoinOperator::RightSemi(constraint)
+        | JoinOperator::Anti(constraint)
+        | JoinOperator::LeftAnti(constraint)
+        | JoinOperator::RightAnti(constraint)
+        | JoinOperator::StraightJoin(constraint) => Some(constraint),
+        JoinOperator::AsOf { constraint, .. } => Some(constraint),
+        JoinOperator::CrossApply | JoinOperator::OuterApply => None,
+    }
 }
 
 fn where_contains_join_predicate(
@@ -244,5 +266,12 @@ mod tests {
     fn allows_cross_join() {
         let issues = run("SELECT foo.a, bar.b FROM foo CROSS JOIN bar WHERE bar.x > 3");
         assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn flags_inner_join_without_on_with_where_predicate() {
+        let issues = run("SELECT foo.a, bar.b FROM foo INNER JOIN bar WHERE foo.x = bar.y");
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_CV_012);
     }
 }
