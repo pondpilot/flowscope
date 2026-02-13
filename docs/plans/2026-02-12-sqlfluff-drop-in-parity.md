@@ -54,6 +54,7 @@ This plan covers three axes:
   - `AL_004` moved from parity into a dedicated core AST rule (`al_004.rs`) and parity registration was removed.
   - `AL_001` moved from parity into a dedicated core rule module (`al_001.rs`) and parity registration was removed.
   - `AL_002` moved from parity into a dedicated core rule module (`al_002.rs`) and parity registration was removed.
+  - `AL_002` was further upgraded from regex extraction to token-located SELECT-clause item analysis for implicit alias detection.
   - `AL_008` moved from parity into a dedicated core AST rule (`al_008.rs`) and parity registration was removed.
   - `AL_005` was expanded to cover derived-table aliases while adding SQLFluff-compatible `LATERAL` and `VALUES` exceptions to reduce false positives.
   - `CV_003` moved from parity into a dedicated core rule module (`cv_003.rs`) and parity registration was removed.
