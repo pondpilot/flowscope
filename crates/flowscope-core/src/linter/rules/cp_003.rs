@@ -5,8 +5,10 @@
 
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
-use regex::Regex;
 use sqlparser::ast::Statement;
+use sqlparser::dialect::GenericDialect;
+use sqlparser::keywords::Keyword;
+use sqlparser::tokenizer::{Token, Tokenizer, Whitespace};
 
 pub struct CapitalisationFunctions;
 
@@ -24,159 +26,32 @@ impl LintRule for CapitalisationFunctions {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let sql = mask_comments_and_single_quoted_strings(ctx.statement_sql());
-        let functions = function_tokens_with_spans(&sql);
+        let functions = function_tokens(ctx.statement_sql());
         if functions.is_empty() {
             return Vec::new();
         }
 
         let preferred_style = functions
             .iter()
-            .map(|(name, _, _)| case_style(name))
+            .map(|name| case_style(name))
             .find(|style| *style == "lower" || *style == "upper")
             .unwrap_or("lower");
 
-        functions
-            .into_iter()
-            .filter(|(name, _, _)| {
-                let style = case_style(name);
-                (style == "lower" || style == "upper" || style == "mixed")
-                    && style != preferred_style
-            })
-            .map(|(_, start, end)| {
-                Issue::info(
-                    issue_codes::LINT_CP_003,
-                    "Function names use inconsistent capitalisation.",
-                )
-                .with_statement(ctx.statement_index)
-                .with_span(ctx.span_from_statement_offset(start, end))
-            })
-            .collect()
-    }
-}
+        let has_mismatch = functions.iter().any(|name| {
+            let style = case_style(name);
+            (style == "lower" || style == "upper" || style == "mixed") && style != preferred_style
+        });
 
-fn is_keyword(token: &str) -> bool {
-    const KEYWORDS: &[&str] = &[
-        "ALL",
-        "ALTER",
-        "AND",
-        "ANY",
-        "ANTI",
-        "ARRAY",
-        "AS",
-        "ASC",
-        "BEGIN",
-        "BETWEEN",
-        "BY",
-        "CAST",
-        "CASE",
-        "CONFLICT",
-        "CONSTRAINT",
-        "CREATE",
-        "CROSS",
-        "CURRENT",
-        "CURRENT_DATE",
-        "CURRENT_TIME",
-        "CURRENT_TIMESTAMP",
-        "DATE",
-        "DAY",
-        "DECIMAL",
-        "DELETE",
-        "DESC",
-        "DISTINCT",
-        "DO",
-        "DOUBLE",
-        "DROP",
-        "DOW",
-        "DOY",
-        "EPOCH",
-        "ELSE",
-        "END",
-        "EXCEPT",
-        "EXCLUDED",
-        "EXISTS",
-        "FALSE",
-        "FETCH",
-        "FILTER",
-        "FIRST",
-        "FLOAT",
-        "FOLLOWING",
-        "FOR",
-        "FOREIGN",
-        "FROM",
-        "HOUR",
-        "FULL",
-        "GO",
-        "GROUP",
-        "HAVING",
-        "IF",
-        "ILIKE",
-        "IN",
-        "INNER",
-        "INSERT",
-        "INTEGER",
-        "INTERSECT",
-        "INTERVAL",
-        "ISODOW",
-        "ISOYEAR",
-        "INTO",
-        "IS",
-        "JOIN",
-        "KEY",
-        "LAST",
-        "LATERAL",
-        "LEFT",
-        "LIKE",
-        "LIMIT",
-        "LOCALTIME",
-        "LOCALTIMESTAMP",
-        "MATERIALIZED",
-        "NATURAL",
-        "NO",
-        "MONTH",
-        "NOT",
-        "NULL",
-        "NULLS",
-        "NUMERIC",
-        "OFFSET",
-        "ON",
-        "ONLY",
-        "OR",
-        "ORDER",
-        "OUTER",
-        "OVER",
-        "PARTITION",
-        "PRECEDING",
-        "PRIMARY",
-        "PROCEDURE",
-        "RANGE",
-        "RECURSIVE",
-        "REFERENCES",
-        "RETURNING",
-        "RIGHT",
-        "ROWS",
-        "SECOND",
-        "SELECT",
-        "SET",
-        "TABLE",
-        "THEN",
-        "TO",
-        "TRUE",
-        "UNBOUNDED",
-        "UNION",
-        "UNIQUE",
-        "UNKNOWN",
-        "UPDATE",
-        "USING",
-        "VALUES",
-        "VIEW",
-        "WHEN",
-        "WHERE",
-        "WINDOW",
-        "WITH",
-        "YEAR",
-    ];
-    KEYWORDS.contains(&token.to_ascii_uppercase().as_str())
+        if has_mismatch {
+            vec![Issue::info(
+                issue_codes::LINT_CP_003,
+                "Function names use inconsistent capitalisation.",
+            )
+            .with_statement(ctx.statement_index)]
+        } else {
+            Vec::new()
+        }
+    }
 }
 
 fn case_style(token: &str) -> &'static str {
@@ -202,125 +77,126 @@ fn case_style(token: &str) -> &'static str {
     }
 }
 
-fn capture_group_with_spans(
-    haystack: &str,
-    pattern: &str,
-    group: usize,
-) -> Vec<(String, usize, usize)> {
-    let re = Regex::new(pattern).expect("valid regex");
-    re.captures_iter(haystack)
-        .filter_map(|caps| {
-            caps.get(group)
-                .map(|m| (m.as_str().to_string(), m.start(), m.end()))
-        })
-        .collect()
-}
+fn function_tokens(sql: &str) -> Vec<String> {
+    let dialect = GenericDialect {};
+    let mut tokenizer = Tokenizer::new(&dialect, sql);
+    let Ok(tokens) = tokenizer.tokenize() else {
+        return Vec::new();
+    };
 
-fn function_tokens_with_spans(sql: &str) -> Vec<(String, usize, usize)> {
     let mut out = Vec::new();
 
-    for (name, start, end) in
-        capture_group_with_spans(sql, r"(?i)\b([A-Za-z_][A-Za-z0-9_]*)\s*\(", 1)
-    {
-        if is_keyword(&name) && !name.eq_ignore_ascii_case("date") {
+    for (index, token) in tokens.iter().enumerate() {
+        let Token::Word(word) = token else {
+            continue;
+        };
+
+        if word.quote_style.is_some() {
             continue;
         }
 
-        let prev_word = sql[..start]
-            .split_whitespace()
-            .last()
-            .unwrap_or("")
-            .to_ascii_uppercase();
-        if matches!(
-            prev_word.as_str(),
-            "INTO" | "FROM" | "JOIN" | "UPDATE" | "TABLE"
-        ) {
+        if is_non_function_word(word.value.as_str()) {
             continue;
         }
 
-        if start > 0 && sql.as_bytes()[start - 1] == b'.' {
+        let Some(next_index) = next_non_trivia_index(&tokens, index + 1) else {
+            continue;
+        };
+        if !matches!(tokens[next_index], Token::LParen) {
             continue;
         }
 
-        out.push((name, start, end));
+        if let Some(prev_index) = prev_non_trivia_index(&tokens, index) {
+            match &tokens[prev_index] {
+                Token::Period => continue,
+                Token::Word(prev_word)
+                    if matches!(
+                        prev_word.keyword,
+                        Keyword::INTO
+                            | Keyword::FROM
+                            | Keyword::JOIN
+                            | Keyword::UPDATE
+                            | Keyword::TABLE
+                    ) =>
+                {
+                    continue;
+                }
+                _ => {}
+            }
+        }
+
+        out.push(word.value.clone());
     }
 
     out
 }
 
-fn mask_comments_and_single_quoted_strings(sql: &str) -> String {
-    #[derive(Clone, Copy)]
-    enum State {
-        Normal,
-        LineComment,
-        BlockComment,
-        SingleQuoted,
+fn next_non_trivia_index(tokens: &[Token], mut index: usize) -> Option<usize> {
+    while index < tokens.len() {
+        if !is_trivia_token(&tokens[index]) {
+            return Some(index);
+        }
+        index += 1;
     }
+    None
+}
 
-    let mut bytes = sql.as_bytes().to_vec();
-    let mut i = 0usize;
-    let mut state = State::Normal;
+fn is_non_function_word(word: &str) -> bool {
+    matches!(
+        word.to_ascii_uppercase().as_str(),
+        "ALL"
+            | "AND"
+            | "ANY"
+            | "AS"
+            | "BETWEEN"
+            | "BY"
+            | "CASE"
+            | "ELSE"
+            | "END"
+            | "EXISTS"
+            | "FROM"
+            | "GROUP"
+            | "HAVING"
+            | "IN"
+            | "INTERSECT"
+            | "IS"
+            | "JOIN"
+            | "LIKE"
+            | "ILIKE"
+            | "LIMIT"
+            | "NOT"
+            | "OFFSET"
+            | "ON"
+            | "OR"
+            | "ORDER"
+            | "OVER"
+            | "PARTITION"
+            | "SELECT"
+            | "THEN"
+            | "UNION"
+            | "WHEN"
+            | "WHERE"
+            | "WINDOW"
+    )
+}
 
-    while i < bytes.len() {
-        match state {
-            State::Normal => {
-                if bytes[i] == b'-' && i + 1 < bytes.len() && bytes[i + 1] == b'-' {
-                    bytes[i] = b' ';
-                    bytes[i + 1] = b' ';
-                    i += 2;
-                    state = State::LineComment;
-                } else if bytes[i] == b'/' && i + 1 < bytes.len() && bytes[i + 1] == b'*' {
-                    bytes[i] = b' ';
-                    bytes[i + 1] = b' ';
-                    i += 2;
-                    state = State::BlockComment;
-                } else if bytes[i] == b'\'' {
-                    bytes[i] = b' ';
-                    i += 1;
-                    state = State::SingleQuoted;
-                } else {
-                    i += 1;
-                }
-            }
-            State::LineComment => {
-                if bytes[i] == b'\n' {
-                    i += 1;
-                    state = State::Normal;
-                } else {
-                    bytes[i] = b' ';
-                    i += 1;
-                }
-            }
-            State::BlockComment => {
-                if bytes[i] == b'*' && i + 1 < bytes.len() && bytes[i + 1] == b'/' {
-                    bytes[i] = b' ';
-                    bytes[i + 1] = b' ';
-                    i += 2;
-                    state = State::Normal;
-                } else {
-                    bytes[i] = b' ';
-                    i += 1;
-                }
-            }
-            State::SingleQuoted => {
-                if bytes[i] == b'\'' {
-                    bytes[i] = b' ';
-                    if i + 1 < bytes.len() && bytes[i + 1] == b'\'' {
-                        bytes[i + 1] = b' ';
-                        i += 2;
-                    } else {
-                        i += 1;
-                        state = State::Normal;
-                    }
-                } else {
-                    bytes[i] = b' ';
-                    i += 1;
-                }
-            }
+fn prev_non_trivia_index(tokens: &[Token], mut index: usize) -> Option<usize> {
+    while index > 0 {
+        index -= 1;
+        if !is_trivia_token(&tokens[index]) {
+            return Some(index);
         }
     }
+    None
+}
 
-    String::from_utf8(bytes).expect("input SQL remains valid utf8 after masking")
+fn is_trivia_token(token: &Token) -> bool {
+    matches!(
+        token,
+        Token::Whitespace(Whitespace::Space | Whitespace::Newline | Whitespace::Tab)
+            | Token::Whitespace(Whitespace::SingleLineComment { .. })
+            | Token::Whitespace(Whitespace::MultiLineComment(_))
+    )
 }
 
 #[cfg(test)]
@@ -357,5 +233,11 @@ mod tests {
     #[test]
     fn does_not_flag_consistent_function_case() {
         assert!(run("SELECT lower(x), upper(y) FROM t").is_empty());
+    }
+
+    #[test]
+    fn does_not_flag_function_like_text_in_strings_or_comments() {
+        let sql = "SELECT 'COUNT(x) count(y)' AS txt -- COUNT(x)\nFROM t";
+        assert!(run(sql).is_empty());
     }
 }

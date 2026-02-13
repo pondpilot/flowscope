@@ -4,8 +4,9 @@
 
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
-use regex::Regex;
 use sqlparser::ast::Statement;
+use sqlparser::dialect::GenericDialect;
+use sqlparser::tokenizer::{Token, Tokenizer};
 
 pub struct CapitalisationTypes;
 
@@ -23,8 +24,7 @@ impl LintRule for CapitalisationTypes {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let sql = mask_comments_and_single_quoted_strings(ctx.statement_sql());
-        if mixed_case_for_tokens(&type_tokens(&sql)) {
+        if mixed_case_for_tokens(&type_tokens(ctx.statement_sql())) {
             vec![Issue::info(
                 issue_codes::LINT_CP_005,
                 "Type names use inconsistent capitalisation.",
@@ -36,19 +36,45 @@ impl LintRule for CapitalisationTypes {
     }
 }
 
-fn capture_group(sql: &str, pattern: &str, group: usize) -> Vec<String> {
-    Regex::new(pattern)
-        .expect("valid regex")
-        .captures_iter(sql)
-        .filter_map(|captures| captures.get(group).map(|m| m.as_str().to_string()))
+fn type_tokens(sql: &str) -> Vec<String> {
+    let dialect = GenericDialect {};
+    let mut tokenizer = Tokenizer::new(&dialect, sql);
+    let Ok(tokens) = tokenizer.tokenize() else {
+        return Vec::new();
+    };
+
+    tokens
+        .into_iter()
+        .filter_map(|token| match token {
+            Token::Word(word)
+                if word.quote_style.is_none() && is_tracked_type_name(word.value.as_str()) =>
+            {
+                Some(word.value)
+            }
+            _ => None,
+        })
         .collect()
 }
 
-fn type_tokens(sql: &str) -> Vec<String> {
-    capture_group(
-        sql,
-        r"(?i)\b(int|integer|bigint|smallint|tinyint|varchar|char|text|boolean|bool|date|timestamp|numeric|decimal|float|double)\b",
-        1,
+fn is_tracked_type_name(value: &str) -> bool {
+    matches!(
+        value.to_ascii_uppercase().as_str(),
+        "INT"
+            | "INTEGER"
+            | "BIGINT"
+            | "SMALLINT"
+            | "TINYINT"
+            | "VARCHAR"
+            | "CHAR"
+            | "TEXT"
+            | "BOOLEAN"
+            | "BOOL"
+            | "DATE"
+            | "TIMESTAMP"
+            | "NUMERIC"
+            | "DECIMAL"
+            | "FLOAT"
+            | "DOUBLE"
     )
 }
 
@@ -74,81 +100,6 @@ fn mixed_case_for_tokens(tokens: &[String]) -> bool {
     }
 
     saw_mixed || (saw_upper && saw_lower)
-}
-
-fn mask_comments_and_single_quoted_strings(sql: &str) -> String {
-    #[derive(Clone, Copy)]
-    enum State {
-        Normal,
-        LineComment,
-        BlockComment,
-        SingleQuoted,
-    }
-
-    let mut bytes = sql.as_bytes().to_vec();
-    let mut i = 0usize;
-    let mut state = State::Normal;
-
-    while i < bytes.len() {
-        match state {
-            State::Normal => {
-                if bytes[i] == b'-' && i + 1 < bytes.len() && bytes[i + 1] == b'-' {
-                    bytes[i] = b' ';
-                    bytes[i + 1] = b' ';
-                    i += 2;
-                    state = State::LineComment;
-                } else if bytes[i] == b'/' && i + 1 < bytes.len() && bytes[i + 1] == b'*' {
-                    bytes[i] = b' ';
-                    bytes[i + 1] = b' ';
-                    i += 2;
-                    state = State::BlockComment;
-                } else if bytes[i] == b'\'' {
-                    bytes[i] = b' ';
-                    i += 1;
-                    state = State::SingleQuoted;
-                } else {
-                    i += 1;
-                }
-            }
-            State::LineComment => {
-                if bytes[i] == b'\n' {
-                    i += 1;
-                    state = State::Normal;
-                } else {
-                    bytes[i] = b' ';
-                    i += 1;
-                }
-            }
-            State::BlockComment => {
-                if bytes[i] == b'*' && i + 1 < bytes.len() && bytes[i + 1] == b'/' {
-                    bytes[i] = b' ';
-                    bytes[i + 1] = b' ';
-                    i += 2;
-                    state = State::Normal;
-                } else {
-                    bytes[i] = b' ';
-                    i += 1;
-                }
-            }
-            State::SingleQuoted => {
-                if bytes[i] == b'\'' {
-                    bytes[i] = b' ';
-                    if i + 1 < bytes.len() && bytes[i + 1] == b'\'' {
-                        bytes[i + 1] = b' ';
-                        i += 2;
-                    } else {
-                        i += 1;
-                        state = State::Normal;
-                    }
-                } else {
-                    bytes[i] = b' ';
-                    i += 1;
-                }
-            }
-        }
-    }
-
-    String::from_utf8(bytes).expect("input SQL remains valid utf8 after masking")
 }
 
 #[cfg(test)]
@@ -185,5 +136,11 @@ mod tests {
     #[test]
     fn does_not_flag_consistent_type_case() {
         assert!(run("CREATE TABLE t (a int, b varchar(10))").is_empty());
+    }
+
+    #[test]
+    fn does_not_flag_type_words_in_strings_or_comments() {
+        let sql = "SELECT 'INT varchar BOOLEAN' AS txt -- INT varchar\nFROM t";
+        assert!(run(sql).is_empty());
     }
 }

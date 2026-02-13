@@ -2,7 +2,7 @@
 
 Status: In progress  
 Owner: `flowscope-core`  
-Last updated: 2026-02-12
+Last updated: 2026-02-13
 
 ## Context
 
@@ -179,7 +179,7 @@ Move style-oriented checks to lexical engine:
 - [x] `LINT_JJ_001` and `LINT_LT_010`/`LINT_LT_011`/`LINT_LT_012`/`LINT_LT_013`/`LINT_LT_015` are now split out of `parity.rs` into dedicated core modules (`jj_001.rs`, `lt_010.rs`, `lt_011.rs`, `lt_012.rs`, `lt_013.rs`, `lt_015.rs`) while preserving current heuristic behavior.
 - [x] `LINT_LT_002`/`LINT_LT_003`/`LINT_LT_004`/`LINT_LT_007` are now split out of `parity.rs` into dedicated core modules (`lt_002.rs`, `lt_003.rs`, `lt_004.rs`, `lt_007.rs`) while preserving current heuristic behavior.
 - [x] `LINT_LT_001`/`LINT_LT_005`/`LINT_LT_006`/`LINT_LT_008`/`LINT_LT_009`/`LINT_LT_014` are now split out of `parity.rs` into dedicated core modules (`lt_001.rs`, `lt_005.rs`, `lt_006.rs`, `lt_008.rs`, `lt_009.rs`, `lt_014.rs`) while preserving current heuristic behavior.
-- [x] `LINT_CP_001`-`LINT_CP_005` are now split out of `parity.rs` into dedicated core modules (`cp_001.rs`-`cp_005.rs`) while preserving current heuristic behavior.
+- [x] `LINT_CP_001`-`LINT_CP_005` are now split out of `parity.rs` into dedicated core modules (`cp_001.rs`-`cp_005.rs`); `LINT_CP_004` was migrated to tokenizer-driven literal detection and `LINT_CP_001`/`LINT_CP_002`/`LINT_CP_003`/`LINT_CP_005` are now tokenizer-driven (keyword/identifier/function/type token analysis), replacing regex + manual masking paths.
 - [x] `LINT_AM_003` now follows SQLFluff AM03 semantics via AST `ORDER BY` analysis, flagging mixed implicit/explicit sort direction (including `NULLS` ordering cases) across nested query scopes; fixer parity now adds explicit `ASC` to implicit items in mixed clauses.
 - [x] `LINT_AM_005` now supports SQLFluff AM05 fixer parity for default behavior by rewriting bare `JOIN` operators to explicit `INNER JOIN` via AST join-operator rewrites.
 - [x] `LINT_AM_006` now follows SQLFluff AM06 default (`consistent`) semantics via AST traversal of `GROUP BY` / `ORDER BY` clauses, including nested-query precedence and rollup-style references.
@@ -187,7 +187,7 @@ Move style-oriented checks to lexical engine:
 - [x] `LINT_AM_007` now performs AST set-expression branch-width checks with deterministic wildcard resolution for CTE/derived sources, while unresolved wildcard expansions remain non-violating (SQLFluff-aligned behavior).
 - [x] Parity monolith decommission is complete: migrated rule registrations and parity tests are removed, and `crates/flowscope-core/src/linter/rules/parity.rs` has been retired.
 - [~] SQLFluff fixture adoption is in progress for migrated rules; AM02/AM03/AM04/AM05/AM06/AM07/AM08/AM09, CV02, CV05, ST02, ST04, ST06, ST07, ST08, and ST09 fixture cases were adopted for `LINT_AM_002`/`LINT_AM_003`/`LINT_AM_004`/`LINT_AM_005`/`LINT_AM_006`/`LINT_AM_007`/`LINT_AM_008`/`LINT_AM_009`/`LINT_CV_002`/`LINT_CV_005`/`LINT_ST_002`/`LINT_ST_004`/`LINT_ST_007`/`LINT_ST_006`/`LINT_ST_008`/`LINT_ST_009`, and additional rule-level coverage is still being expanded.
-- [ ] Phase 2 lexical/style migrations remain open for semantic-depth parity improvements (token-aware behavior/configuration parity), with remaining major lexical work centered on CP/LT/JJ families.
+- [ ] Phase 2 lexical/style migrations remain open for semantic-depth parity improvements (token-aware behavior/configuration parity), with remaining major lexical work centered on LT/JJ families and SQLFluff configuration-depth gaps across CP/LT/JJ.
 
 ## Quality Gates
 

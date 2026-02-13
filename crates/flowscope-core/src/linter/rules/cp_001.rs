@@ -4,8 +4,10 @@
 
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
-use regex::Regex;
 use sqlparser::ast::Statement;
+use sqlparser::dialect::GenericDialect;
+use sqlparser::keywords::Keyword;
+use sqlparser::tokenizer::{Token, Tokenizer};
 
 pub struct CapitalisationKeywords;
 
@@ -23,8 +25,7 @@ impl LintRule for CapitalisationKeywords {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let sql = mask_comments_and_single_quoted_strings(ctx.statement_sql());
-        if mixed_case_for_tokens(&keyword_tokens(&sql)) {
+        if mixed_case_for_tokens(&keyword_tokens(ctx.statement_sql())) {
             vec![Issue::info(
                 issue_codes::LINT_CP_001,
                 "SQL keywords use inconsistent capitalisation.",
@@ -36,19 +37,68 @@ impl LintRule for CapitalisationKeywords {
     }
 }
 
-fn capture_group(sql: &str, pattern: &str, group: usize) -> Vec<String> {
-    Regex::new(pattern)
-        .expect("valid regex")
-        .captures_iter(sql)
-        .filter_map(|captures| captures.get(group).map(|m| m.as_str().to_string()))
+fn keyword_tokens(sql: &str) -> Vec<String> {
+    let dialect = GenericDialect {};
+    let mut tokenizer = Tokenizer::new(&dialect, sql);
+    let Ok(tokens) = tokenizer.tokenize() else {
+        return Vec::new();
+    };
+
+    tokens
+        .into_iter()
+        .filter_map(|token| match token {
+            Token::Word(word)
+                if word.keyword != Keyword::NoKeyword
+                    && is_tracked_keyword(word.value.as_str()) =>
+            {
+                Some(word.value)
+            }
+            _ => None,
+        })
         .collect()
 }
 
-fn keyword_tokens(sql: &str) -> Vec<String> {
-    capture_group(
-        sql,
-        r"(?i)\b(select|from|where|join|left|right|full|inner|outer|on|group|by|order|having|union|insert|into|update|delete|create|table|with|as|case|when|then|else|end|and|or|not|null|is|in|exists|distinct|limit|offset)\b",
-        1,
+fn is_tracked_keyword(value: &str) -> bool {
+    matches!(
+        value.to_ascii_uppercase().as_str(),
+        "SELECT"
+            | "FROM"
+            | "WHERE"
+            | "JOIN"
+            | "LEFT"
+            | "RIGHT"
+            | "FULL"
+            | "INNER"
+            | "OUTER"
+            | "ON"
+            | "GROUP"
+            | "BY"
+            | "ORDER"
+            | "HAVING"
+            | "UNION"
+            | "INSERT"
+            | "INTO"
+            | "UPDATE"
+            | "DELETE"
+            | "CREATE"
+            | "TABLE"
+            | "WITH"
+            | "AS"
+            | "CASE"
+            | "WHEN"
+            | "THEN"
+            | "ELSE"
+            | "END"
+            | "AND"
+            | "OR"
+            | "NOT"
+            | "NULL"
+            | "IS"
+            | "IN"
+            | "EXISTS"
+            | "DISTINCT"
+            | "LIMIT"
+            | "OFFSET"
     )
 }
 
@@ -74,81 +124,6 @@ fn mixed_case_for_tokens(tokens: &[String]) -> bool {
     }
 
     saw_mixed || (saw_upper && saw_lower)
-}
-
-fn mask_comments_and_single_quoted_strings(sql: &str) -> String {
-    #[derive(Clone, Copy)]
-    enum State {
-        Normal,
-        LineComment,
-        BlockComment,
-        SingleQuoted,
-    }
-
-    let mut bytes = sql.as_bytes().to_vec();
-    let mut i = 0usize;
-    let mut state = State::Normal;
-
-    while i < bytes.len() {
-        match state {
-            State::Normal => {
-                if bytes[i] == b'-' && i + 1 < bytes.len() && bytes[i + 1] == b'-' {
-                    bytes[i] = b' ';
-                    bytes[i + 1] = b' ';
-                    i += 2;
-                    state = State::LineComment;
-                } else if bytes[i] == b'/' && i + 1 < bytes.len() && bytes[i + 1] == b'*' {
-                    bytes[i] = b' ';
-                    bytes[i + 1] = b' ';
-                    i += 2;
-                    state = State::BlockComment;
-                } else if bytes[i] == b'\'' {
-                    bytes[i] = b' ';
-                    i += 1;
-                    state = State::SingleQuoted;
-                } else {
-                    i += 1;
-                }
-            }
-            State::LineComment => {
-                if bytes[i] == b'\n' {
-                    i += 1;
-                    state = State::Normal;
-                } else {
-                    bytes[i] = b' ';
-                    i += 1;
-                }
-            }
-            State::BlockComment => {
-                if bytes[i] == b'*' && i + 1 < bytes.len() && bytes[i + 1] == b'/' {
-                    bytes[i] = b' ';
-                    bytes[i + 1] = b' ';
-                    i += 2;
-                    state = State::Normal;
-                } else {
-                    bytes[i] = b' ';
-                    i += 1;
-                }
-            }
-            State::SingleQuoted => {
-                if bytes[i] == b'\'' {
-                    bytes[i] = b' ';
-                    if i + 1 < bytes.len() && bytes[i + 1] == b'\'' {
-                        bytes[i + 1] = b' ';
-                        i += 2;
-                    } else {
-                        i += 1;
-                        state = State::Normal;
-                    }
-                } else {
-                    bytes[i] = b' ';
-                    i += 1;
-                }
-            }
-        }
-    }
-
-    String::from_utf8(bytes).expect("input SQL remains valid utf8 after masking")
 }
 
 #[cfg(test)]
@@ -185,5 +160,11 @@ mod tests {
     #[test]
     fn does_not_flag_consistent_keyword_case() {
         assert!(run("SELECT a FROM t").is_empty());
+    }
+
+    #[test]
+    fn does_not_flag_keyword_words_in_strings_or_comments() {
+        let sql = "SELECT 'select from where' AS txt -- select from where\nFROM t";
+        assert!(run(sql).is_empty());
     }
 }

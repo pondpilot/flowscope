@@ -113,6 +113,10 @@ This plan covers three axes:
   - `CP_004` moved from parity handling to a dedicated core rule module (`cp_004.rs`).
   - `CP_004` was further upgraded from regex masking to tokenizer-driven literal-token collection (`NULL`/`TRUE`/`FALSE`), reducing string/comment false positives.
   - `CP_005` moved from parity handling to a dedicated core rule module (`cp_005.rs`).
+  - `CP_001` was further upgraded from regex masking to tokenizer-driven tracked-keyword collection.
+  - `CP_002` was further upgraded from regex masking to token-stream identifier/function classification.
+  - `CP_003` was further upgraded from regex scanning to token-stream function-call detection.
+  - `CP_005` was further upgraded from regex masking to tokenizer-driven type-keyword collection.
   - Legacy `parity.rs` monolith was retired; rule registration now points only to dedicated `rules/<code>.rs` modules.
 
 ### Intentionally Removed
@@ -501,13 +505,13 @@ These rules work but lack SQLFluff config knobs that users depend on:
 ### Tier 3: Improve lexical/document rule accuracy (lower priority)
 
 Remaining parity work in this tier is primarily lexical/style coverage
-(`CP`, `LT`, `JJ`, and `TQ_003`) where behavior still relies on regex and/or
-lightweight token heuristics.
+(`LT` and `JJ`, plus SQLFluff configuration-depth parity for `CP`) where
+behavior still relies on lightweight token heuristics.
 These should be migrated to token-stream analysis per the linter architecture
 plan (Phase 2 of `linter-architecture.md`), but are lower priority because:
 
 - They mostly handle formatting/style (lower impact than semantic rules).
-- Regex heuristics produce acceptable results for common patterns.
+- Lightweight token heuristics produce acceptable results for common patterns.
 - Full token-stream engine is a prerequisite (already planned).
 
 ---
