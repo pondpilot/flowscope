@@ -152,13 +152,6 @@ fn check_select(
     ctx: &LintContext,
     issues: &mut Vec<Issue>,
 ) {
-    // Only flag when there are multiple tables (JOINs) — with a single table,
-    // aliases are less important
-    let table_count: usize = select.from.iter().map(|f| 1 + f.joins.len()).sum();
-    if table_count < 2 {
-        return;
-    }
-
     // Collect aliases -> table names
     let mut aliases: HashMap<String, AliasRef> = HashMap::new();
     for from_item in &select.from {
@@ -602,9 +595,15 @@ mod tests {
     }
 
     #[test]
-    fn test_single_table_no_check() {
-        // With a single table, we don't flag unused aliases
+    fn test_single_table_unused_alias_detected() {
         let issues = check_sql("SELECT * FROM users u");
+        assert_eq!(issues.len(), 1);
+        assert!(issues[0].message.contains("u"));
+    }
+
+    #[test]
+    fn test_single_table_alias_used_ok() {
+        let issues = check_sql("SELECT u.id FROM users u");
         assert!(issues.is_empty());
     }
 

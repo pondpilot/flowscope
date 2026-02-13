@@ -824,6 +824,28 @@ fn lint_al_007_allows_self_join_aliases_but_flags_extra_unique_alias() {
 }
 
 #[test]
+fn lint_al_005_flags_unused_alias_in_single_table_query() {
+    let issues = run_lint("SELECT * FROM users u");
+    assert!(
+        issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_AL_005),
+        "single-table unused aliases should trigger AL_005: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_al_005_allows_used_alias_in_single_table_query() {
+    let issues = run_lint("SELECT u.id FROM users u");
+    assert!(
+        !issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_AL_005),
+        "single-table aliases referenced in expressions should not trigger AL_005: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_al_005_alias_used_in_qualify_clause() {
     let issues = run_lint_in_dialect(
         "SELECT u.id FROM users u JOIN orders o ON users.id = orders.user_id QUALIFY ROW_NUMBER() OVER (PARTITION BY o.user_id ORDER BY o.user_id) = 1",
