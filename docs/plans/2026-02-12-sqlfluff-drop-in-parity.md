@@ -77,6 +77,7 @@ This plan covers three axes:
   - `AL_005` now includes SQLFluff Redshift `QUALIFY` ordering parity: `QUALIFY` alias references are counted only when `QUALIFY` directly follows FROM/JOIN (and are ignored for alias-usage counting when a `WHERE` clause appears before `QUALIFY`).
   - `AL_005` now includes SQLFluff BigQuery/Redshift implicit array-relation parity by counting alias usage from table-factor forms like `FROM t, t.arr` and applying alias exceptions for relation aliases on those array/super-array factors (for example `FROM t, t.super_array AS x`).
   - `AL_005` now includes SQLFluff repeated-self-join alias parity by exempting sibling aliases on the same base relation when one alias for that repeated relation is referenced.
+  - `AL_005` now also checks `DELETE ... USING` source scopes, including nested `WITH` subqueries, matching SQLFluff AL05 behavior for unused aliases inside Snowflake delete-derived CTEs.
   - `CV_003` moved from parity into a dedicated core rule module (`cv_003.rs`) and parity registration was removed.
   - `CV_003` was further upgraded from regex scanning to token/depth-aware trailing-comma detection in SELECT clauses.
   - `CV_003` now supports `select_clause_trailing_comma` (`forbid`/`require`) through `lint.ruleConfigs`.
@@ -86,6 +87,7 @@ This plan covers three axes:
   - `ST_010` now reports per-occurrence violations for multiple constant predicates within a statement instead of collapsing to a single statement-level issue.
   - `ST_011` now aligns closer to SQLFluff ST11 by scoping checks to explicit OUTER joins, tracking only joined relations (not base `FROM` sources), deferring when unqualified refs exist, accounting for inter-join `ON`-clause references plus wildcard usage (`alias.*` and `*`), counting `DISTINCT ON (...)` references, query-level `ORDER BY` references, `CLUSTER BY`/`DISTRIBUTE BY` references, `LATERAL VIEW`/`CONNECT BY` references, named `WINDOW` clause references, references from later join relation expressions (e.g. `UNNEST(g.nested_array)`), and quoted joined-source normalization across MySQL backticks and MSSQL brackets.
   - `ST_011` now also evaluates multi-root `FROM` clauses (e.g., comma-joins combined with OUTER joins) instead of skipping analysis whenever more than one top-level `FROM` entry exists.
+  - `ST_011` now also treats Snowflake qualified wildcard `EXCLUDE` projections (`alias.* EXCLUDE ...`) as joined-source references, matching SQLFluff ST11 fixture behavior.
   - `AM_004`/`AM_007` wildcard-width resolution now also handles declared CTE column lists, table-factor alias column lists (`AS alias(col1, ...)`), and aliased nested-join table factors (including `USING(...)` width deduction plus `NATURAL JOIN` overlap deduction when both sides expose deterministic output column names; unknown wildcard sources remain conservatively unresolved).
 - Additional AST-driven migration progress beyond Tier 1:
   - `AL_006` moved from parity regex handling to a dedicated core AST rule (`al_006.rs`).
@@ -543,13 +545,13 @@ Migrate them to proper AST implementations.
 | AL_001 (aliasing.table) | Lexical | Needs to distinguish implicit vs explicit `AS`; handle dialect-specific aliasing |
 | AL_002 (aliasing.column) | Lexical | Same as AL_001 for column aliases |
 | AL_004 (aliasing.unique.table) | Lexical | Needs AST-level alias tracking across FROM/JOIN |
-| AL_005 (aliasing.unused) | Core (partial) | Remaining advanced dialect/scope edges beyond current `LATERAL`/`VALUES` and BigQuery `TO_JSON_STRING(<table_alias>)` parity |
+| AL_005 (aliasing.unused) | Core (partial) | Remaining advanced dialect/scope edges beyond current `LATERAL`/`VALUES`, BigQuery `TO_JSON_STRING(<table_alias>)`, and `DELETE ... USING` parity |
 | AL_008 (aliasing.unique.column) | Lexical | Needs AST-level SELECT projection alias tracking |
 | CV_003 (convention.select_trailing_comma) | Lexical | Needs token-aware trailing comma detection |
 | CV_006 (convention.terminator) | Lexical | Needs statement boundary awareness |
 | ST_005 (structure.subquery) | Lexical | Needs AST subquery detection in FROM/JOIN |
 | ST_010 (structure.constant_expression) | Core (partial) | Broader detection: 1=1 across more contexts |
-| ST_011 (structure.unused_join) | Core (partial) | Track SQLFluff-style OUTER-join scope, inter-join reference semantics, and wildcard/reference resolution edge cases |
+| ST_011 (structure.unused_join) | Core (partial) | Track SQLFluff-style OUTER-join scope, inter-join reference semantics, and wildcard/reference resolution edge cases (including dialect-specific wildcard variants) |
 
 ### Tier 2: Add missing configuration options (medium value)
 

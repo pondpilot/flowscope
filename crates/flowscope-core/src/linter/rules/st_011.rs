@@ -8,7 +8,7 @@ use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
 use sqlparser::ast::{
     Expr, FunctionArg, FunctionArgExpr, JoinOperator, NamedWindowExpr, OrderByKind, Query, Select,
-    SelectItem, SetExpr, Statement, TableFactor,
+    SelectItem, SelectItemQualifiedWildcardKind, SetExpr, Statement, TableFactor,
 };
 
 use super::semantic_helpers::{
@@ -526,13 +526,24 @@ fn visit_named_window_expressions<F: FnMut(&sqlparser::ast::Expr)>(
 
 fn collect_projection_wildcard_prefixes(select: &Select, prefixes: &mut HashSet<String>) {
     for item in &select.projection {
-        if let SelectItem::QualifiedWildcard(object_name, _) = item {
-            let name = object_name.to_string();
-            if let Some(last) = name.rsplit('.').next() {
-                prefixes.insert(
-                    last.trim_matches(|ch| matches!(ch, '"' | '`' | '\'' | '[' | ']'))
-                        .to_ascii_uppercase(),
-                );
+        if let SelectItem::QualifiedWildcard(kind, _) = item {
+            match kind {
+                SelectItemQualifiedWildcardKind::ObjectName(name) => {
+                    if let Some(last) = name.0.last().and_then(|part| part.as_ident()) {
+                        prefixes.insert(last.value.to_ascii_uppercase());
+                    }
+                }
+                SelectItemQualifiedWildcardKind::Expr(expr) => match expr {
+                    Expr::Identifier(identifier) => {
+                        prefixes.insert(identifier.value.to_ascii_uppercase());
+                    }
+                    Expr::CompoundIdentifier(parts) if parts.len() > 1 => {
+                        if let Some(first) = parts.first() {
+                            prefixes.insert(first.value.to_ascii_uppercase());
+                        }
+                    }
+                    _ => collect_qualifier_prefixes_in_expr(expr, prefixes),
+                },
             }
         }
     }
@@ -848,6 +859,20 @@ mod tests {
         let issues = run_in_dialect(
             "SELECT [test].one, [test-2].two FROM [test] LEFT JOIN [test-2] ON [test].id = [test-2].id",
             Dialect::Mssql,
+        );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn allows_snowflake_qualified_wildcard_exclude_for_joined_source() {
+        let issues = run_in_dialect(
+            "select \
+                simulation_source_data_reference.*, \
+                sourcings.* exclude sourcing_job_id \
+             from simulation_source_data_reference \
+             left join sourcings \
+                 on simulation_source_data_reference.sourcing_job_id = sourcings.sourcing_job_id",
+            Dialect::Snowflake,
         );
         assert!(issues.is_empty());
     }

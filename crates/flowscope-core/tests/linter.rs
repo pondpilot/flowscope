@@ -605,7 +605,9 @@ fn lint_st_005_allows_correlated_join_subquery_with_outer_alias_reference() {
          JOIN (SELECT * FROM events AS ce WHERE ce.name = pd.name)",
     );
     assert!(
-        !issues.iter().any(|(code, _)| code == issue_codes::LINT_ST_005),
+        !issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_ST_005),
         "correlated JOIN subqueries should not trigger ST_005: {issues:?}"
     );
 }
@@ -982,6 +984,25 @@ fn lint_al_005_flags_unused_snowflake_lateral_flatten_alias() {
             .iter()
             .any(|(code, _)| code == issue_codes::LINT_AL_005),
         "unused aliases in chained Snowflake LATERAL FLATTEN factors should be flagged by AL_005: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_al_005_flags_unused_alias_inside_snowflake_delete_using_cte() {
+    let issues = run_lint_in_dialect(
+        "DELETE FROM MYTABLE1 \
+         USING ( \
+             WITH MYCTE AS (SELECT COLUMN2 FROM MYTABLE3 AS MT3) \
+             SELECT COLUMN3 FROM MYTABLE3 \
+         ) X \
+         WHERE COLUMN1 = X.COLUMN3",
+        Dialect::Snowflake,
+    );
+    assert!(
+        issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_AL_005),
+        "unused aliases inside Snowflake DELETE USING CTE scopes should be flagged by AL_005: {issues:?}"
     );
 }
 
@@ -2217,6 +2238,23 @@ fn lint_st_011_unqualified_wildcard_counts_as_reference() {
     assert!(
         !issues.iter().any(|(code, _)| code == "LINT_ST_011"),
         "unqualified wildcard should count as joined-source usage: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_st_011_snowflake_qualified_wildcard_exclude_counts_as_reference() {
+    let issues = run_lint_in_dialect(
+        "select \
+            simulation_source_data_reference.*, \
+            sourcings.* exclude sourcing_job_id \
+         from simulation_source_data_reference \
+         left join sourcings \
+             on simulation_source_data_reference.sourcing_job_id = sourcings.sourcing_job_id",
+        Dialect::Snowflake,
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_ST_011"),
+        "Snowflake qualified wildcard EXCLUDE should count as joined-source usage: {issues:?}"
     );
 }
 

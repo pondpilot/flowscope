@@ -98,6 +98,9 @@ impl LintRule for UnusedTableAlias {
                     check_query(q, self.alias_case_check, ctx, &mut issues);
                 }
             }
+            Statement::Delete(delete) => {
+                check_delete(delete, self.alias_case_check, ctx, &mut issues);
+            }
             _ => {}
         }
         issues
@@ -176,6 +179,98 @@ fn check_select(
     let mut used_prefixes: HashSet<QualifierRef> = HashSet::new();
     collect_identifier_prefixes_from_select(select, order_by, ctx.dialect(), &mut used_prefixes);
 
+    emit_unused_alias_issues(
+        &aliases,
+        &used_prefixes,
+        alias_case_check,
+        ctx.statement_index,
+        issues,
+    );
+}
+
+fn check_delete(
+    delete: &Delete,
+    alias_case_check: AliasCaseCheck,
+    ctx: &LintContext,
+    issues: &mut Vec<Issue>,
+) {
+    let mut aliases: HashMap<String, AliasRef> = HashMap::new();
+    let mut used_prefixes: HashSet<QualifierRef> = HashSet::new();
+
+    for table in delete_source_tables(delete) {
+        check_table_factor_subqueries(&table.relation, alias_case_check, ctx, issues);
+        collect_aliases(&table.relation, ctx.dialect(), &mut aliases);
+        collect_identifier_prefixes_from_table_factor(
+            &table.relation,
+            ctx.dialect(),
+            &mut used_prefixes,
+        );
+
+        for join in &table.joins {
+            check_table_factor_subqueries(&join.relation, alias_case_check, ctx, issues);
+            collect_aliases(&join.relation, ctx.dialect(), &mut aliases);
+            collect_identifier_prefixes_from_table_factor(
+                &join.relation,
+                ctx.dialect(),
+                &mut used_prefixes,
+            );
+            if let Some(constraint) = join_constraint(&join.join_operator) {
+                collect_identifier_prefixes(constraint, ctx.dialect(), &mut used_prefixes);
+            }
+        }
+    }
+
+    if let Some(selection) = &delete.selection {
+        collect_identifier_prefixes(selection, ctx.dialect(), &mut used_prefixes);
+    }
+    if let Some(returning) = &delete.returning {
+        for item in returning {
+            collect_identifier_prefixes_from_select_item(item, ctx.dialect(), &mut used_prefixes);
+        }
+    }
+    for order_expr in &delete.order_by {
+        collect_identifier_prefixes(&order_expr.expr, ctx.dialect(), &mut used_prefixes);
+    }
+    if let Some(limit) = &delete.limit {
+        collect_identifier_prefixes(limit, ctx.dialect(), &mut used_prefixes);
+    }
+
+    emit_unused_alias_issues(
+        &aliases,
+        &used_prefixes,
+        alias_case_check,
+        ctx.statement_index,
+        issues,
+    );
+}
+
+fn delete_source_tables(delete: &Delete) -> Vec<&TableWithJoins> {
+    let mut tables = Vec::new();
+
+    match &delete.from {
+        FromTable::WithFromKeyword(from) | FromTable::WithoutKeyword(from) => {
+            tables.extend(from.iter());
+        }
+    }
+
+    if let Some(using_tables) = &delete.using {
+        tables.extend(using_tables.iter());
+    }
+
+    tables
+}
+
+fn emit_unused_alias_issues(
+    aliases: &HashMap<String, AliasRef>,
+    used_prefixes: &HashSet<QualifierRef>,
+    alias_case_check: AliasCaseCheck,
+    statement_index: usize,
+    issues: &mut Vec<Issue>,
+) {
+    if aliases.is_empty() {
+        return;
+    }
+
     let mut used_alias_names: HashSet<String> = HashSet::new();
     for alias in aliases.values() {
         let used = used_prefixes
@@ -192,7 +287,9 @@ fn check_select(
         let Some(relation_key) = &alias.relation_key else {
             continue;
         };
-        *relation_alias_counts.entry(relation_key.clone()).or_insert(0) += 1;
+        *relation_alias_counts
+            .entry(relation_key.clone())
+            .or_insert(0) += 1;
         if used_alias_names.contains(&alias.name) {
             relations_with_used_alias.insert(relation_key.clone());
         }
@@ -220,7 +317,7 @@ fn check_select(
                     alias.name
                 ),
             )
-            .with_statement(ctx.statement_index),
+            .with_statement(statement_index),
         );
     }
 }
@@ -359,7 +456,11 @@ fn collect_identifier_prefixes_from_select(
     }
 }
 
-fn collect_aliases(relation: &TableFactor, dialect: Dialect, aliases: &mut HashMap<String, AliasRef>) {
+fn collect_aliases(
+    relation: &TableFactor,
+    dialect: Dialect,
+    aliases: &mut HashMap<String, AliasRef>,
+) {
     match relation {
         TableFactor::Table {
             name,
@@ -1213,6 +1314,21 @@ mod tests {
         );
         assert_eq!(issues.len(), 1);
         assert!(issues[0].message.contains("f"));
+    }
+
+    #[test]
+    fn flags_unused_alias_inside_snowflake_delete_using_cte() {
+        let issues = check_sql_in_dialect(
+            "DELETE FROM MYTABLE1 \
+             USING ( \
+                 WITH MYCTE AS (SELECT COLUMN2 FROM MYTABLE3 AS MT3) \
+                 SELECT COLUMN3 FROM MYTABLE3 \
+             ) X \
+             WHERE COLUMN1 = X.COLUMN3",
+            Dialect::Snowflake,
+        );
+        assert_eq!(issues.len(), 1);
+        assert!(issues[0].message.contains("MT3"));
     }
 
     #[test]
