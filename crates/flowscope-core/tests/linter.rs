@@ -286,6 +286,25 @@ fn lint_rule_config_terminator_require_final_semicolon() {
 }
 
 #[test]
+fn lint_rule_config_select_trailing_comma_require() {
+    let issues = run_lint_with_config(
+        "SELECT a FROM t",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "convention.select_trailing_comma".to_string(),
+                serde_json::json!({"select_clause_trailing_comma": "require"}),
+            )]),
+        },
+    );
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_CV_003"),
+        "require trailing comma policy should flag missing trailing comma: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_rule_config_blocked_words_custom_list() {
     let issues = run_lint_with_config(
         "SELECT wip FROM t",

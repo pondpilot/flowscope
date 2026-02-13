@@ -2,6 +2,7 @@
 //!
 //! Avoid trailing comma before FROM.
 
+use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
 use sqlparser::ast::Statement;
@@ -9,7 +10,59 @@ use sqlparser::dialect::GenericDialect;
 use sqlparser::keywords::Keyword;
 use sqlparser::tokenizer::{Token, Tokenizer, Whitespace};
 
-pub struct ConventionSelectTrailingComma;
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SelectClauseTrailingCommaPolicy {
+    Forbid,
+    Require,
+}
+
+impl SelectClauseTrailingCommaPolicy {
+    fn from_config(config: &LintConfig) -> Self {
+        match config
+            .rule_option_str(issue_codes::LINT_CV_003, "select_clause_trailing_comma")
+            .unwrap_or("forbid")
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "require" => Self::Require,
+            _ => Self::Forbid,
+        }
+    }
+
+    fn violated(self, trailing_comma_present: bool) -> bool {
+        match self {
+            Self::Forbid => trailing_comma_present,
+            Self::Require => !trailing_comma_present,
+        }
+    }
+
+    fn message(self) -> &'static str {
+        match self {
+            Self::Forbid => "Avoid trailing comma before FROM in SELECT clause.",
+            Self::Require => "Use trailing comma before FROM in SELECT clause.",
+        }
+    }
+}
+
+pub struct ConventionSelectTrailingComma {
+    policy: SelectClauseTrailingCommaPolicy,
+}
+
+impl ConventionSelectTrailingComma {
+    pub fn from_config(config: &LintConfig) -> Self {
+        Self {
+            policy: SelectClauseTrailingCommaPolicy::from_config(config),
+        }
+    }
+}
+
+impl Default for ConventionSelectTrailingComma {
+    fn default() -> Self {
+        Self {
+            policy: SelectClauseTrailingCommaPolicy::Forbid,
+        }
+    }
+}
 
 impl LintRule for ConventionSelectTrailingComma {
     fn code(&self) -> &'static str {
@@ -25,12 +78,11 @@ impl LintRule for ConventionSelectTrailingComma {
     }
 
     fn check(&self, _stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        if has_select_trailing_comma(ctx.statement_sql()) {
-            vec![Issue::warning(
-                issue_codes::LINT_CV_003,
-                "Avoid trailing comma before FROM in SELECT clause.",
-            )
-            .with_statement(ctx.statement_index)]
+        if has_select_trailing_comma_violation(ctx.statement_sql(), self.policy) {
+            vec![
+                Issue::warning(issue_codes::LINT_CV_003, self.policy.message())
+                    .with_statement(ctx.statement_index),
+            ]
         } else {
             Vec::new()
         }
@@ -49,7 +101,7 @@ struct SelectClauseState {
     last_significant: Option<SignificantToken>,
 }
 
-fn has_select_trailing_comma(sql: &str) -> bool {
+fn has_select_trailing_comma_violation(sql: &str, policy: SelectClauseTrailingCommaPolicy) -> bool {
     let dialect = GenericDialect {};
     let mut tokenizer = Tokenizer::new(&dialect, sql);
     let Ok(tokens) = tokenizer.tokenize() else {
@@ -79,18 +131,13 @@ fn has_select_trailing_comma(sql: &str) -> bool {
             }
         }
 
-        if let Token::Word(ref word) = token {
-            if word.keyword == Keyword::FROM {
-                if let Some(state) = select_stack.last_mut() {
-                    if state.depth == depth {
-                        if state.last_significant == Some(SignificantToken::Comma) {
-                            return true;
-                        }
-                        select_stack.pop();
-                        continue;
-                    }
+        if should_terminate_select_clause(&token, depth, select_stack.last()) {
+            if let Some(state) = select_stack.pop() {
+                if policy.violated(state.last_significant == Some(SignificantToken::Comma)) {
+                    return true;
                 }
             }
+            continue;
         }
 
         if let Some(state) = select_stack.last_mut() {
@@ -105,16 +152,67 @@ fn has_select_trailing_comma(sql: &str) -> bool {
             _ => {}
         }
 
-        while let Some(state) = select_stack.last() {
+        while let Some(state) = select_stack.last().copied() {
             if state.depth > depth {
-                select_stack.pop();
+                let Some(ended) = select_stack.pop() else {
+                    break;
+                };
+                if policy.violated(ended.last_significant == Some(SignificantToken::Comma)) {
+                    return true;
+                }
             } else {
                 break;
             }
         }
     }
 
+    while let Some(state) = select_stack.pop() {
+        if policy.violated(state.last_significant == Some(SignificantToken::Comma)) {
+            return true;
+        }
+    }
+
     false
+}
+
+fn should_terminate_select_clause(
+    token: &Token,
+    depth: usize,
+    state: Option<&SelectClauseState>,
+) -> bool {
+    let Some(state) = state else {
+        return false;
+    };
+    if state.depth != depth {
+        return false;
+    }
+
+    match token {
+        Token::Word(word) => is_select_clause_terminator(word.keyword),
+        Token::RParen | Token::SemiColon => true,
+        _ => false,
+    }
+}
+
+fn is_select_clause_terminator(keyword: Keyword) -> bool {
+    matches!(
+        keyword,
+        Keyword::FROM
+            | Keyword::INTO
+            | Keyword::WHERE
+            | Keyword::GROUP
+            | Keyword::HAVING
+            | Keyword::ORDER
+            | Keyword::LIMIT
+            | Keyword::OFFSET
+            | Keyword::FETCH
+            | Keyword::QUALIFY
+            | Keyword::WINDOW
+            | Keyword::FOR
+            | Keyword::UNION
+            | Keyword::EXCEPT
+            | Keyword::INTERSECT
+    )
 }
 
 fn is_trivia_token(token: &Token) -> bool {
@@ -129,11 +227,15 @@ fn is_trivia_token(token: &Token) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::linter::config::LintConfig;
     use crate::parser::parse_sql;
 
     fn run(sql: &str) -> Vec<Issue> {
+        run_with_rule(sql, ConventionSelectTrailingComma::default())
+    }
+
+    fn run_with_rule(sql: &str, rule: ConventionSelectTrailingComma) -> Vec<Issue> {
         let stmts = parse_sql(sql).expect("parse");
-        let rule = ConventionSelectTrailingComma;
         stmts
             .iter()
             .enumerate()
@@ -174,5 +276,50 @@ mod tests {
     fn does_not_flag_comma_in_string_or_comment() {
         let issues = run("SELECT 'a, from t' AS txt -- select a, from t\nFROM t");
         assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn require_policy_flags_missing_trailing_comma() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "convention.select_trailing_comma".to_string(),
+                serde_json::json!({"select_clause_trailing_comma": "require"}),
+            )]),
+        };
+        let rule = ConventionSelectTrailingComma::from_config(&config);
+        let issues = run_with_rule("SELECT a FROM t", rule);
+        assert_eq!(issues.len(), 1);
+    }
+
+    #[test]
+    fn require_policy_allows_trailing_comma() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "LINT_CV_003".to_string(),
+                serde_json::json!({"select_clause_trailing_comma": "require"}),
+            )]),
+        };
+        let rule = ConventionSelectTrailingComma::from_config(&config);
+        let issues = run_with_rule("SELECT a, FROM t", rule);
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn require_policy_flags_select_without_from() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "convention.select_trailing_comma".to_string(),
+                serde_json::json!({"select_clause_trailing_comma": "require"}),
+            )]),
+        };
+        let rule = ConventionSelectTrailingComma::from_config(&config);
+        let issues = run_with_rule("SELECT 1", rule);
+        assert_eq!(issues.len(), 1);
     }
 }
