@@ -38,6 +38,17 @@ pub fn parse_sql_with_dialect_output(
                 }
             }
 
+            if let Some(sanitized_sql) = sanitize_trailing_comma_before_from(sql) {
+                if let Ok(statements) =
+                    Parser::parse_sql(sqlparser_dialect.as_ref(), &sanitized_sql)
+                {
+                    return Ok(ParseSqlOutput {
+                        statements,
+                        parser_fallback_used: true,
+                    });
+                }
+            }
+
             // Parity fallback: Generic dialect frequently fails on Postgres-specific
             // operators (`?`, `->>`, `::`) commonly used in warehouse SQL.
             if matches!(dialect, Dialect::Generic) && looks_like_postgres_syntax(sql) {
@@ -82,6 +93,11 @@ fn sanitize_escaped_identifiers_for_dialect(sql: &str, dialect: Dialect) -> Opti
         rewritten = remove_trailing_comma_before_from(&rewritten);
     }
 
+    (rewritten != sql).then_some(rewritten)
+}
+
+fn sanitize_trailing_comma_before_from(sql: &str) -> Option<String> {
+    let rewritten = remove_trailing_comma_before_from(sql);
     (rewritten != sql).then_some(rewritten)
 }
 
@@ -367,6 +383,14 @@ mod tests {
     fn test_parse_output_clickhouse_escaped_identifier_fallback_usage() {
         let sql = "SELECT \"\\\"`a`\"\"\".col1,\nFROM tab1 as `\"\\`a``\"`";
         let output = parse_sql_with_dialect_output(sql, Dialect::Clickhouse).expect("parse");
+        assert!(output.parser_fallback_used);
+        assert_eq!(output.statements.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_output_trailing_comma_before_from_fallback_usage() {
+        let sql = "SELECT widget.id,\nwidget.name,\nFROM widget";
+        let output = parse_sql_with_dialect_output(sql, Dialect::Ansi).expect("parse");
         assert!(output.parser_fallback_used);
         assert_eq!(output.statements.len(), 1);
     }

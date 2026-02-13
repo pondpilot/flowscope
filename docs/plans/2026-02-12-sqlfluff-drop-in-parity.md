@@ -97,7 +97,7 @@ This plan covers three axes:
   - `ST_011` now also treats Snowflake qualified wildcard `EXCLUDE` projections (`alias.* EXCLUDE ...`) as joined-source references, matching SQLFluff ST11 fixture behavior.
   - CLI lint mode now supports `--rule-configs` JSON for SQLFluff-style per-rule options (for example `{"structure.subquery":{"forbid_subquery_in":"both"}}`), enabling config-aware fixture parity replay outside unit tests.
   - CLI lint mode now honors templating in lint requests (when `--template` is provided) and adds a Jinja fallback retry for parse-erroring inputs that contain template markers (`{{`, `{%`, `{#`), improving SQLFluff-style templated lint parity.
-  - Parser fallback now normalizes escaped-quoted identifier edge cases for BigQuery/ClickHouse (plus ClickHouse trailing-comma-before-`FROM` fallback normalization), eliminating supported-dialect AL05 parse blockers from SQLFluff fixtures.
+  - Parser fallback now normalizes escaped-quoted identifier edge cases for BigQuery/ClickHouse and now applies trailing-comma-before-`FROM` fallback normalization across dialects, eliminating SQLFluff fixture parse blockers (including ANSI ST11 trailing-comma cases).
   - Config-aware SQLFluff fixture replay for `AL05`/`ST05`/`ST11` now reports zero mismatches (104/104, 40/40, and 22/22 cases respectively).
   - Config-aware SQLFluff fixture replay for `AL01`/`AL02`/`AL04` now reports zero mismatches (14/14, 9/9, and 10/10 cases respectively).
   - Config-aware SQLFluff fixture replay for `CV06` now reports zero mismatches across supported dialect fixtures (54/54).
