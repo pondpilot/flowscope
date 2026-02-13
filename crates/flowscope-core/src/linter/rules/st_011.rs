@@ -6,7 +6,9 @@ use std::collections::HashSet;
 
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
-use sqlparser::ast::{JoinOperator, Select, SelectItem, Statement};
+use sqlparser::ast::{
+    FunctionArg, FunctionArgExpr, JoinOperator, Select, SelectItem, Statement, TableFactor,
+};
 
 use super::semantic_helpers::{
     collect_qualifier_prefixes_in_expr, count_reference_qualification_in_expr_excluding_aliases,
@@ -85,6 +87,7 @@ fn unused_join_count_for_select(select: &Select) -> usize {
     }
 
     collect_projection_wildcard_prefixes(select, &mut used_prefixes);
+    collect_join_relation_reference_prefixes(select, &mut used_prefixes);
 
     joined_sources
         .iter()
@@ -203,6 +206,111 @@ fn collect_projection_wildcard_prefixes(select: &Select, prefixes: &mut HashSet<
     }
 }
 
+fn collect_join_relation_reference_prefixes(select: &Select, prefixes: &mut HashSet<String>) {
+    for table in &select.from {
+        for join in &table.joins {
+            collect_table_factor_reference_prefixes(&join.relation, prefixes);
+        }
+    }
+}
+
+fn collect_table_factor_reference_prefixes(
+    table_factor: &TableFactor,
+    prefixes: &mut HashSet<String>,
+) {
+    match table_factor {
+        TableFactor::Table { .. } => {}
+        TableFactor::Derived { .. } => {}
+        TableFactor::TableFunction { expr, .. } => {
+            collect_qualifier_prefixes_in_expr(expr, prefixes);
+        }
+        TableFactor::Function { args, .. } => {
+            for arg in args {
+                collect_function_arg_prefixes(arg, prefixes);
+            }
+        }
+        TableFactor::UNNEST { array_exprs, .. } => {
+            for expr in array_exprs {
+                collect_qualifier_prefixes_in_expr(expr, prefixes);
+            }
+        }
+        TableFactor::JsonTable { json_expr, .. } | TableFactor::OpenJsonTable { json_expr, .. } => {
+            collect_qualifier_prefixes_in_expr(json_expr, prefixes);
+        }
+        TableFactor::NestedJoin {
+            table_with_joins, ..
+        } => {
+            collect_table_factor_reference_prefixes(&table_with_joins.relation, prefixes);
+            for join in &table_with_joins.joins {
+                collect_table_factor_reference_prefixes(&join.relation, prefixes);
+            }
+        }
+        TableFactor::Pivot {
+            table,
+            aggregate_functions,
+            value_column,
+            default_on_null,
+            ..
+        } => {
+            collect_table_factor_reference_prefixes(table, prefixes);
+            for expr_with_alias in aggregate_functions {
+                collect_qualifier_prefixes_in_expr(&expr_with_alias.expr, prefixes);
+            }
+            for expr in value_column {
+                collect_qualifier_prefixes_in_expr(expr, prefixes);
+            }
+            if let Some(expr) = default_on_null {
+                collect_qualifier_prefixes_in_expr(expr, prefixes);
+            }
+        }
+        TableFactor::Unpivot {
+            table,
+            value,
+            columns,
+            ..
+        } => {
+            collect_table_factor_reference_prefixes(table, prefixes);
+            collect_qualifier_prefixes_in_expr(value, prefixes);
+            for expr_with_alias in columns {
+                collect_qualifier_prefixes_in_expr(&expr_with_alias.expr, prefixes);
+            }
+        }
+        TableFactor::MatchRecognize {
+            table,
+            partition_by,
+            order_by,
+            measures,
+            ..
+        } => {
+            collect_table_factor_reference_prefixes(table, prefixes);
+            for expr in partition_by {
+                collect_qualifier_prefixes_in_expr(expr, prefixes);
+            }
+            for order in order_by {
+                collect_qualifier_prefixes_in_expr(&order.expr, prefixes);
+            }
+            for measure in measures {
+                collect_qualifier_prefixes_in_expr(&measure.expr, prefixes);
+            }
+        }
+        TableFactor::XmlTable { row_expression, .. } => {
+            collect_qualifier_prefixes_in_expr(row_expression, prefixes);
+        }
+        TableFactor::SemanticView { .. } => {}
+    }
+}
+
+fn collect_function_arg_prefixes(arg: &FunctionArg, prefixes: &mut HashSet<String>) {
+    match arg {
+        FunctionArg::Unnamed(FunctionArgExpr::Expr(expr))
+        | FunctionArg::Named {
+            arg: FunctionArgExpr::Expr(expr),
+            ..
+        } => collect_qualifier_prefixes_in_expr(expr, prefixes),
+        _ => {}
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -312,6 +420,14 @@ mod tests {
     #[test]
     fn allows_used_outer_join_in_multi_root_from_clause() {
         let issues = run("SELECT c.id FROM a, b LEFT JOIN c ON b.id = c.id");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn allows_outer_join_source_referenced_by_later_unnest_join_relation() {
+        let issues = run(
+            "SELECT ft.id, n.generic_field FROM fact_table AS ft LEFT JOIN UNNEST(ft.generic_array) AS g LEFT JOIN UNNEST(g.nested_array) AS n",
+        );
         assert!(issues.is_empty());
     }
 }

@@ -1586,6 +1586,17 @@ fn lint_st_011_flags_multi_root_unused_outer_join_source() {
 }
 
 #[test]
+fn lint_st_011_allows_unnest_chain_reference_between_join_relations() {
+    let issues = run_lint(
+        "SELECT ft.id, n.generic_field FROM fact_table AS ft LEFT JOIN UNNEST(ft.generic_array) AS g LEFT JOIN UNNEST(g.nested_array) AS n",
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_ST_011"),
+        "UNNEST join-chain relation references should count as joined-source usage: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_lt_007_cte_bracket_missing() {
     let issues = run_lint("SELECT 'WITH cte AS SELECT 1' AS sql_snippet");
     assert!(
