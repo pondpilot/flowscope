@@ -197,6 +197,7 @@ Move style-oriented checks to lexical engine:
 - [x] `LINT_LT_003` now supports operator line-placement configuration via `lint.ruleConfigs` (`line_position=leading|trailing`, plus legacy SQLFluff `operator_new_lines=after|before` mapping).
 - [x] `LINT_LT_004` now supports comma line-placement configuration via `lint.ruleConfigs` (`line_position=trailing|leading`, plus legacy SQLFluff `comma_style` mapping).
 - [x] `LINT_ST_005` now supports `forbid_subquery_in` (`both`/`join`/`from`) via `lint.ruleConfigs`, with SQLFluff-aligned default behavior set to `join`, and now exempts correlated JOIN-derived subqueries that reference outer query sources (SQLFluff ST05 parity for correlated cases).
+- [x] CLI lint mode now supports SQLFluff-style config/template parity plumbing: `--rule-configs` JSON for per-rule options, explicit `--template` passthrough in lint mode, and Jinja fallback retry for parse-erroring templated SQL (enabling config-aware fixture replay parity checks for `AL05`/`ST05`/`ST11`).
 - [x] `LINT_ST_009` now supports `preferred_first_table_in_join_clause` (`earlier`/`later`) via `lint.ruleConfigs`.
 - [x] `LINT_RF_001` now supports `force_enable` via `lint.ruleConfigs`.
 - [x] `LINT_RF_002` now supports `force_enable` via `lint.ruleConfigs`, aligns closer to SQLFluff projection-alias semantics (self-alias projections are flagged while later references to earlier aliases remain allowed), and avoids false positives on common datepart function-argument keywords (e.g., `timestamp_trunc(..., month)`, `datediff(year, ...)`).

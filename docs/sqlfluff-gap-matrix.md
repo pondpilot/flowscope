@@ -105,3 +105,4 @@ FlowScope source-of-truth used for mapping:
 Notes:
 - `FlowScope Fix` indicates deterministic support in CLI `--fix` mode, not generic auto-fix in core linting APIs.
 - `FlowScope Fix = No` marks a tracked fix gap for that SQLFluff rule mapping.
+- CLI lint now supports `--rule-configs <json>` for per-rule options and template-aware lint fallback, enabling config-aware SQLFluff fixture replay parity checks.

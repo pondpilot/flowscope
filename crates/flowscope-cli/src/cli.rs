@@ -65,6 +65,11 @@ pub struct Args {
     #[arg(long, value_delimiter = ',')]
     pub exclude_rules: Vec<String>,
 
+    /// JSON object for per-rule lint options keyed by rule reference
+    /// (e.g., '{"structure.subquery":{"forbid_subquery_in":"both"}}')
+    #[arg(long, requires = "lint", value_name = "JSON")]
+    pub rule_configs: Option<String>,
+
     /// Suppress warnings on stderr
     #[arg(short, long)]
     pub quiet: bool,
@@ -257,6 +262,7 @@ mod tests {
         assert!(args.lint);
         assert!(!args.fix);
         assert!(args.exclude_rules.is_empty());
+        assert!(args.rule_configs.is_none());
     }
 
     #[test]
@@ -297,6 +303,21 @@ mod tests {
             "test.sql",
         ]);
         assert_eq!(args.exclude_rules, vec!["LINT_AM_008", "LINT_ST_006"]);
+    }
+
+    #[test]
+    fn test_lint_rule_configs_json() {
+        let args = Args::parse_from([
+            "flowscope",
+            "--lint",
+            "--rule-configs",
+            r#"{"structure.subquery":{"forbid_subquery_in":"both"}}"#,
+            "test.sql",
+        ]);
+        assert_eq!(
+            args.rule_configs.as_deref(),
+            Some(r#"{"structure.subquery":{"forbid_subquery_in":"both"}}"#)
+        );
     }
 
     #[cfg(feature = "serve")]

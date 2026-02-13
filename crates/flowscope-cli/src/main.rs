@@ -150,11 +150,21 @@ fn run_lint(args: Args) -> Result<bool> {
 
     let mut lint_inputs = input::read_lint_input(&args.files)?;
     let dialect = args.dialect.into();
+    let rule_configs = parse_rule_configs_json(args.rule_configs.as_deref())?;
     let lint_config = LintConfig {
         enabled: true,
         disabled_rules: args.exclude_rules.clone(),
-        rule_configs: std::collections::BTreeMap::new(),
+        rule_configs,
     };
+
+    #[cfg(feature = "templating")]
+    let template_config = args.template.map(|mode| {
+        let context = parse_template_vars(&args.template_vars);
+        flowscope_core::TemplateConfig {
+            mode: mode.into(),
+            context,
+        }
+    });
 
     if args.fix {
         let mut total_applied = 0usize;
@@ -242,7 +252,8 @@ fn run_lint(args: Args) -> Result<bool> {
 
     for lint_input in &lint_inputs {
         let source = &lint_input.source;
-        let request = AnalyzeRequest {
+        #[cfg(not(feature = "templating"))]
+        let result = analyze(&AnalyzeRequest {
             sql: source.content.clone(),
             files: None,
             dialect,
@@ -252,11 +263,49 @@ fn run_lint(args: Args) -> Result<bool> {
                 ..Default::default()
             }),
             schema: None,
-            #[cfg(feature = "templating")]
-            template_config: None,
-        };
+        });
 
-        let result = analyze(&request);
+        #[cfg(feature = "templating")]
+        let result = {
+            let request = AnalyzeRequest {
+                sql: source.content.clone(),
+                files: None,
+                dialect,
+                source_name: Some(source.name.clone()),
+                options: Some(AnalysisOptions {
+                    lint: Some(lint_config.clone()),
+                    ..Default::default()
+                }),
+                schema: None,
+                template_config: template_config.clone(),
+            };
+
+            let result = analyze(&request);
+            if template_config.is_none()
+                && contains_template_markers(&source.content)
+                && has_parse_errors(&result)
+            {
+                // SQLFluff defaults to templating-aware linting; retry as Jinja when a raw
+                // templated file would otherwise only produce parse errors.
+                analyze(&AnalyzeRequest {
+                    sql: source.content.clone(),
+                    files: None,
+                    dialect,
+                    source_name: Some(source.name.clone()),
+                    options: Some(AnalysisOptions {
+                        lint: Some(lint_config.clone()),
+                        ..Default::default()
+                    }),
+                    schema: None,
+                    template_config: Some(flowscope_core::TemplateConfig {
+                        mode: flowscope_core::TemplateMode::Jinja,
+                        context: std::collections::HashMap::new(),
+                    }),
+                })
+            } else {
+                result
+            }
+        };
 
         let issues: Vec<LintIssue> = result
             .issues
@@ -301,6 +350,42 @@ fn run_lint(args: Args) -> Result<bool> {
     write_output(&args.output, &output_str)?;
 
     Ok(has_violations)
+}
+
+fn parse_rule_configs_json(
+    raw: Option<&str>,
+) -> Result<std::collections::BTreeMap<String, serde_json::Value>> {
+    let Some(raw) = raw else {
+        return Ok(std::collections::BTreeMap::new());
+    };
+
+    let value: serde_json::Value =
+        serde_json::from_str(raw).context("Failed to parse --rule-configs JSON")?;
+    let object = value
+        .as_object()
+        .ok_or_else(|| anyhow::anyhow!("--rule-configs must be a JSON object"))?;
+
+    let mut rule_configs = std::collections::BTreeMap::new();
+    for (rule_ref, options) in object {
+        if !options.is_object() {
+            anyhow::bail!("--rule-configs entry for '{rule_ref}' must be a JSON object");
+        }
+        rule_configs.insert(rule_ref.clone(), options.clone());
+    }
+
+    Ok(rule_configs)
+}
+
+fn has_parse_errors(result: &flowscope_core::AnalyzeResult) -> bool {
+    result
+        .issues
+        .iter()
+        .any(|issue| issue.code == "PARSE_ERROR")
+}
+
+#[cfg(feature = "templating")]
+fn contains_template_markers(sql: &str) -> bool {
+    sql.contains("{{") || sql.contains("{%") || sql.contains("{#")
 }
 
 struct LintProgressBar {
@@ -639,5 +724,42 @@ fn print_issues_to_stderr(result: &flowscope_core::AnalyzeResult) {
             .unwrap_or_default();
 
         eprintln!("flowscope: {level}:{location} {}", issue.message);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_rule_configs_json;
+
+    #[test]
+    fn parse_rule_configs_json_accepts_object_map() {
+        let parsed = parse_rule_configs_json(Some(
+            r#"{"structure.subquery":{"forbid_subquery_in":"both"},"aliasing.unused":{"alias_case_check":"dialect"}}"#,
+        ))
+        .expect("parse rule configs");
+
+        assert_eq!(parsed.len(), 2);
+        assert_eq!(
+            parsed
+                .get("structure.subquery")
+                .and_then(|value| value.get("forbid_subquery_in"))
+                .and_then(|value| value.as_str()),
+            Some("both")
+        );
+    }
+
+    #[test]
+    fn parse_rule_configs_json_rejects_non_object_root() {
+        let err = parse_rule_configs_json(Some("[]")).expect_err("expected parse error");
+        assert!(err.to_string().contains("JSON object"));
+    }
+
+    #[test]
+    fn parse_rule_configs_json_rejects_non_object_entry() {
+        let err = parse_rule_configs_json(Some(r#"{"structure.subquery":"both"}"#))
+            .expect_err("expected parse error");
+        assert!(err
+            .to_string()
+            .contains("entry for 'structure.subquery' must be a JSON object"));
     }
 }

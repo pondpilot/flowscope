@@ -221,8 +221,9 @@ mod tests {
 
     #[test]
     fn flags_overlong_table_alias_with_max_length_config() {
-        let statements = parse_sql("SELECT * FROM users this_alias_name_is_longer_than_thirty_chars")
-            .expect("parse");
+        let statements =
+            parse_sql("SELECT * FROM users this_alias_name_is_longer_than_thirty_chars")
+                .expect("parse");
         let config = LintConfig {
             enabled: true,
             disabled_rules: vec![],

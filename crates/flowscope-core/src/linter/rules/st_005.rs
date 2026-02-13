@@ -235,9 +235,7 @@ fn collect_source_names_from_table_factor(table_factor: &TableFactor, names: &mu
             }
         }
         TableFactor::Derived {
-            alias,
-            subquery,
-            ..
+            alias, subquery, ..
         } => {
             if let Some(alias) = alias {
                 names.insert(alias.name.value.to_ascii_uppercase());
@@ -310,11 +308,9 @@ mod tests {
 
     #[test]
     fn default_allows_correlated_subquery_join_without_alias() {
-        let issues = run(
-            "SELECT pd.* \
+        let issues = run("SELECT pd.* \
              FROM person_dates \
-             JOIN (SELECT * FROM events WHERE events.name = person_dates.name)",
-        );
+             JOIN (SELECT * FROM events WHERE events.name = person_dates.name)");
         assert!(!issues
             .iter()
             .any(|issue| issue.code == issue_codes::LINT_ST_005));
@@ -322,11 +318,9 @@ mod tests {
 
     #[test]
     fn default_allows_correlated_subquery_join_with_alias_reference() {
-        let issues = run(
-            "SELECT pd.* \
+        let issues = run("SELECT pd.* \
              FROM person_dates AS pd \
-             JOIN (SELECT * FROM events AS ce WHERE ce.name = pd.name)",
-        );
+             JOIN (SELECT * FROM events AS ce WHERE ce.name = pd.name)");
         assert!(!issues
             .iter()
             .any(|issue| issue.code == issue_codes::LINT_ST_005));
@@ -334,11 +328,9 @@ mod tests {
 
     #[test]
     fn default_allows_correlated_subquery_join_with_outer_table_name_reference() {
-        let issues = run(
-            "SELECT pd.* \
+        let issues = run("SELECT pd.* \
              FROM person_dates AS pd \
-             JOIN (SELECT * FROM events AS ce WHERE ce.name = person_dates.name)",
-        );
+             JOIN (SELECT * FROM events AS ce WHERE ce.name = person_dates.name)");
         assert!(!issues
             .iter()
             .any(|issue| issue.code == issue_codes::LINT_ST_005));

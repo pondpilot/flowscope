@@ -9,6 +9,17 @@ const SQL_WITH_VIOLATIONS: &str = "SELECT 1 UNION SELECT 2";
 const SQL_CLEAN: &str = "SELECT 1";
 /// Invalid SQL used to verify parser/analysis errors fail lint mode.
 const SQL_INVALID: &str = "SELECT FROM";
+/// Templated SQL used to verify lint-mode Jinja fallback without explicit --template.
+const SQL_TEMPLATED_ST05: &str = r#"SELECT
+    a_table.id,
+    b_table.id
+FROM a_table
+INNER JOIN (
+    SELECT
+        id,
+        {{"mrgn"}} AS margin
+    FROM b_tbl
+) AS b_table ON a_table.some_column = b_table.some_column"#;
 
 #[test]
 fn test_lint_clean_file() {
@@ -333,6 +344,111 @@ fn test_lint_stdin() {
     assert!(
         stdout.contains("LINT_AM_002"),
         "Expected LINT_AM_002 from stdin: {stdout}"
+    );
+}
+
+#[test]
+fn test_lint_templated_sql_without_template_flag_uses_jinja_fallback() {
+    let output = Command::new(env!("CARGO_BIN_EXE_flowscope"))
+        .args(["--lint", "--format", "json"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .and_then(|mut child| {
+            use std::io::Write;
+            child
+                .stdin
+                .take()
+                .unwrap()
+                .write_all(SQL_TEMPLATED_ST05.as_bytes())
+                .unwrap();
+            child.wait_with_output()
+        })
+        .expect("run CLI");
+
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "Expected violations in fallback lint"
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).expect("Expected valid JSON output");
+    let violations = parsed[0]["violations"]
+        .as_array()
+        .expect("violations array");
+
+    let has_st05 = violations
+        .iter()
+        .any(|v| v["code"].as_str() == Some("LINT_ST_005"));
+    let has_parse_error = violations
+        .iter()
+        .any(|v| v["code"].as_str() == Some("PARSE_ERROR"));
+
+    assert!(
+        has_st05,
+        "Expected ST05 violation in templated fallback: {stdout}"
+    );
+    assert!(
+        !has_parse_error,
+        "Did not expect PARSE_ERROR after Jinja fallback: {stdout}"
+    );
+}
+
+#[test]
+fn test_lint_rule_configs_flag_applies_rule_options() {
+    let dir = tempdir().expect("temp dir");
+    let sql_path = dir.path().join("subquery.sql");
+    std::fs::write(&sql_path, "SELECT * FROM (SELECT * FROM t) sub\n").expect("write sql");
+
+    let no_cfg = Command::new(env!("CARGO_BIN_EXE_flowscope"))
+        .args([
+            "--lint",
+            "--format",
+            "json",
+            sql_path.to_str().expect("sql path"),
+        ])
+        .output()
+        .expect("run CLI without rule configs");
+
+    let no_cfg_stdout = String::from_utf8_lossy(&no_cfg.stdout);
+    let no_cfg_json: serde_json::Value =
+        serde_json::from_str(&no_cfg_stdout).expect("valid json without rule configs");
+    let no_cfg_has_st05 = no_cfg_json[0]["violations"]
+        .as_array()
+        .expect("violations array")
+        .iter()
+        .any(|v| v["code"].as_str() == Some("LINT_ST_005"));
+    assert!(
+        !no_cfg_has_st05,
+        "Expected default ST05 config (join) to ignore FROM subquery: {no_cfg_stdout}"
+    );
+
+    let with_cfg = Command::new(env!("CARGO_BIN_EXE_flowscope"))
+        .args([
+            "--lint",
+            "--format",
+            "json",
+            "--rule-configs",
+            r#"{"structure.subquery":{"forbid_subquery_in":"from"}}"#,
+            sql_path.to_str().expect("sql path"),
+        ])
+        .output()
+        .expect("run CLI with rule configs");
+
+    let with_cfg_stdout = String::from_utf8_lossy(&with_cfg.stdout);
+    let with_cfg_json: serde_json::Value =
+        serde_json::from_str(&with_cfg_stdout).expect("valid json with rule configs");
+    let with_cfg_has_st05 = with_cfg_json[0]["violations"]
+        .as_array()
+        .expect("violations array")
+        .iter()
+        .any(|v| v["code"].as_str() == Some("LINT_ST_005"));
+    assert!(
+        with_cfg_has_st05,
+        "Expected ST05 with forbid_subquery_in=from: {with_cfg_stdout}"
     );
 }
 
