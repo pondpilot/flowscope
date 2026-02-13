@@ -20,14 +20,16 @@ impl AliasingForbidSingleTable {
         Self {
             force_enable: config
                 .rule_option_bool(issue_codes::LINT_AL_007, "force_enable")
-                .unwrap_or(true),
+                .unwrap_or(false),
         }
     }
 }
 
 impl Default for AliasingForbidSingleTable {
     fn default() -> Self {
-        Self { force_enable: true }
+        Self {
+            force_enable: false,
+        }
     }
 }
 
@@ -41,7 +43,7 @@ impl LintRule for AliasingForbidSingleTable {
     }
 
     fn description(&self) -> &'static str {
-        "Single-table queries should avoid unnecessary aliases."
+        "Avoid unnecessary table aliases."
     }
 
     fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
@@ -57,11 +59,8 @@ impl LintRule for AliasingForbidSingleTable {
 
         (0..violations)
             .map(|_| {
-                Issue::info(
-                    issue_codes::LINT_AL_007,
-                    "Avoid unnecessary aliases in single-table queries.",
-                )
-                .with_statement(ctx.statement_index)
+                Issue::info(issue_codes::LINT_AL_007, "Avoid unnecessary table aliases.")
+                    .with_statement(ctx.statement_index)
             })
             .collect()
     }
@@ -163,34 +162,67 @@ mod tests {
             .collect()
     }
 
+    fn run_force_enabled(sql: &str) -> Vec<Issue> {
+        let statements = parse_sql(sql).expect("parse");
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "aliasing.forbid".to_string(),
+                serde_json::json!({"force_enable": true}),
+            )]),
+        };
+        let rule = AliasingForbidSingleTable::from_config(&config);
+        statements
+            .iter()
+            .enumerate()
+            .flat_map(|(index, statement)| {
+                rule.check(
+                    statement,
+                    &LintContext {
+                        sql,
+                        statement_range: 0..sql.len(),
+                        statement_index: index,
+                    },
+                )
+            })
+            .collect()
+    }
+
     #[test]
-    fn flags_single_table_alias() {
+    fn disabled_by_default() {
         let issues = run("SELECT * FROM users u");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn flags_single_table_alias_when_force_enabled() {
+        let issues = run_force_enabled("SELECT * FROM users u");
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_AL_007);
     }
 
     #[test]
     fn does_not_flag_single_table_without_alias() {
-        let issues = run("SELECT * FROM users");
+        let issues = run_force_enabled("SELECT * FROM users");
         assert!(issues.is_empty());
     }
 
     #[test]
-    fn does_not_flag_multi_source_query() {
-        let issues = run("SELECT * FROM users u JOIN orders o ON u.id = o.user_id");
+    fn flags_multi_source_query_when_force_enabled() {
+        let issues = run_force_enabled("SELECT * FROM users u JOIN orders o ON u.id = o.user_id");
         assert_eq!(issues.len(), 2);
     }
 
     #[test]
     fn allows_self_join_aliases() {
-        let issues = run("SELECT * FROM users u1 JOIN users u2 ON u1.id = u2.id");
+        let issues = run_force_enabled("SELECT * FROM users u1 JOIN users u2 ON u1.id = u2.id");
         assert!(issues.is_empty());
     }
 
     #[test]
     fn flags_non_self_join_alias_in_self_join_scope() {
-        let issues = run(
+        let issues = run_force_enabled(
             "SELECT * FROM users u1 JOIN users u2 ON u1.id = u2.id JOIN orders o ON o.user_id = u1.id",
         );
         assert_eq!(issues.len(), 1);
@@ -198,13 +230,13 @@ mod tests {
 
     #[test]
     fn does_not_flag_derived_table_alias() {
-        let issues = run("SELECT * FROM (SELECT 1 AS id) sub");
+        let issues = run_force_enabled("SELECT * FROM (SELECT 1 AS id) sub");
         assert!(issues.is_empty());
     }
 
     #[test]
     fn flags_nested_single_table_alias() {
-        let issues = run("SELECT * FROM (SELECT * FROM users u) sub");
+        let issues = run_force_enabled("SELECT * FROM (SELECT * FROM users u) sub");
         assert_eq!(issues.len(), 1);
     }
 

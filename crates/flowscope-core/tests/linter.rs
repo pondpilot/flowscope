@@ -752,7 +752,7 @@ fn lint_rule_config_references_special_chars_additional_allowed() {
 #[test]
 fn lint_rule_config_aliasing_forbid_force_enable_false() {
     let issues = run_lint_with_config(
-        "SELECT * FROM users u",
+        "SELECT * FROM users u JOIN orders o ON u.id = o.user_id",
         LintConfig {
             enabled: true,
             disabled_rules: vec![],
@@ -769,8 +769,27 @@ fn lint_rule_config_aliasing_forbid_force_enable_false() {
 }
 
 #[test]
-fn lint_al_007_flags_unnecessary_aliases_in_multi_source_non_self_join_query() {
+fn lint_al_007_disabled_by_default() {
     let issues = run_lint("SELECT * FROM users u JOIN orders o ON u.id = o.user_id");
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_AL_007"),
+        "AL_007 should be disabled by default unless force_enable=true: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_al_007_flags_unnecessary_aliases_in_multi_source_non_self_join_query() {
+    let issues = run_lint_with_config(
+        "SELECT * FROM users u JOIN orders o ON u.id = o.user_id",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "aliasing.forbid".to_string(),
+                serde_json::json!({"force_enable": true}),
+            )]),
+        },
+    );
     let al07_count = issues
         .iter()
         .filter(|(code, _)| code == "LINT_AL_007")
@@ -783,8 +802,16 @@ fn lint_al_007_flags_unnecessary_aliases_in_multi_source_non_self_join_query() {
 
 #[test]
 fn lint_al_007_allows_self_join_aliases_but_flags_extra_unique_alias() {
-    let issues = run_lint(
+    let issues = run_lint_with_config(
         "SELECT * FROM users u1 JOIN users u2 ON u1.id = u2.id JOIN orders o ON o.user_id = u1.id",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "aliasing.forbid".to_string(),
+                serde_json::json!({"force_enable": true}),
+            )]),
+        },
     );
     let al07_count = issues
         .iter()
@@ -2101,7 +2128,6 @@ fn lint_sqlfluff_parity_rule_smoke_cases() {
             "LINT_AL_006",
             "SELECT * FROM a x JOIN b yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy ON x.id = yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.id",
         ),
-        ("LINT_AL_007", "SELECT * FROM users u"),
         ("LINT_AL_008", "SELECT a AS x, b AS x FROM t"),
         ("LINT_AL_009", "SELECT a AS a FROM t"),
         ("LINT_AM_009", "SELECT a FROM t LIMIT 10"),
@@ -2174,4 +2200,23 @@ fn lint_sqlfluff_parity_rule_smoke_cases() {
             "expected {code} for SQL: {sql}; got: {issues:?}"
         );
     }
+
+    let al07_issues = run_lint_with_config(
+        "SELECT * FROM users u",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "aliasing.forbid".to_string(),
+                serde_json::json!({"force_enable": true}),
+            )]),
+        },
+    );
+    assert!(
+        al07_issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_AL_007),
+        "expected {} with force_enable=true in smoke case: {al07_issues:?}",
+        issue_codes::LINT_AL_007,
+    );
 }

@@ -201,7 +201,7 @@ Move style-oriented checks to lexical engine:
 - [x] `LINT_RF_002` now supports `force_enable` via `lint.ruleConfigs`, aligns closer to SQLFluff projection-alias semantics (self-alias projections are flagged while later references to earlier aliases remain allowed), and avoids false positives on common datepart function-argument keywords (e.g., `timestamp_trunc(..., month)`, `datediff(year, ...)`).
 - [x] `LINT_RF_003` now supports `single_table_references` (`consistent`/`qualified`/`unqualified`) and `force_enable` via `lint.ruleConfigs`, and treats qualified wildcards (`alias.*`) as qualified references for mixed-style detection.
 - [x] `LINT_RF_006` now supports `prefer_quoted_identifiers` / `case_sensitive` via `lint.ruleConfigs`.
-- [x] `LINT_AL_007` now supports `force_enable` via `lint.ruleConfigs`.
+- [x] `LINT_AL_007` now supports `force_enable` via `lint.ruleConfigs` and is disabled by default to match SQLFluff behavior (rule logic runs when `force_enable=true`).
 - [x] `LINT_AL_005` now supports `alias_case_check` (including SQLFluff-style casefolding modes) via `lint.ruleConfigs` and tracks alias usage across additional AST clauses (`QUALIFY`, named `WINDOW`, `DISTINCT ON`, `PREWHERE`, `CLUSTER BY`/`DISTRIBUTE BY`/`SORT BY`, `LATERAL VIEW`, `CONNECT BY`) to reduce false positives.
 - [x] `LINT_AM_005` now supports `fully_qualify_join_types` (`inner`/`outer`/`both`) via `lint.ruleConfigs`, with AST-driven outer-mode detection for unqualified `LEFT`/`RIGHT` joins and token fallback kept only for `FULL JOIN` keyword-form disambiguation.
 - [x] `LINT_AM_006` now supports `group_by_and_order_by_style` (`consistent`/`explicit`/`implicit`) via `lint.ruleConfigs`.

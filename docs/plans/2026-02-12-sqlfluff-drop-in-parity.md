@@ -81,7 +81,7 @@ This plan covers three axes:
   - `AL_006` now supports configurable `min_alias_length` / `max_alias_length` through `lint.ruleConfigs`.
   - `AL_003` now supports configurable `allow_scalar` through `lint.ruleConfigs`.
   - `AL_007` moved from parity regex handling to a dedicated core AST rule (`al_007.rs`).
-  - `AL_007` now supports `force_enable` through `lint.ruleConfigs`.
+  - `AL_007` now supports `force_enable` through `lint.ruleConfigs` and is now disabled by default to align with SQLFluff behavior.
   - `AL_007` now broadens AST scope beyond single-table SELECTs by flagging unnecessary base-table aliases across multi-source `FROM`/`JOIN` clauses while allowing aliases for repeated self-join table references.
   - `AL_009` moved from parity regex handling to a dedicated core AST rule (`al_009.rs`).
   - `AL_009` now supports `alias_case_check` through `lint.ruleConfigs` and applies quote-aware case matching for self-alias detection.
