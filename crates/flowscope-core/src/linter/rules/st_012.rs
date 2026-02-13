@@ -5,8 +5,9 @@
 
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
-use regex::Regex;
 use sqlparser::ast::Statement;
+use sqlparser::dialect::GenericDialect;
+use sqlparser::tokenizer::{Token, Tokenizer, Whitespace};
 
 pub struct StructureConsecutiveSemicolons;
 
@@ -24,7 +25,7 @@ impl LintRule for StructureConsecutiveSemicolons {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let has_violation = ctx.statement_index == 0 && has_re(ctx.sql, r";\s*;");
+        let has_violation = ctx.statement_index == 0 && sql_has_consecutive_semicolons(ctx.sql);
         if has_violation {
             vec![
                 Issue::warning(issue_codes::LINT_ST_012, "Consecutive semicolons detected.")
@@ -36,8 +37,31 @@ impl LintRule for StructureConsecutiveSemicolons {
     }
 }
 
-fn has_re(haystack: &str, pattern: &str) -> bool {
-    Regex::new(pattern).expect("valid regex").is_match(haystack)
+fn sql_has_consecutive_semicolons(sql: &str) -> bool {
+    let dialect = GenericDialect {};
+    let mut tokenizer = Tokenizer::new(&dialect, sql);
+    let Ok(tokens) = tokenizer.tokenize() else {
+        return false;
+    };
+
+    let mut saw_previous_semicolon = false;
+
+    for token in tokens {
+        match token {
+            Token::SemiColon => {
+                if saw_previous_semicolon {
+                    return true;
+                }
+                saw_previous_semicolon = true;
+            }
+            Token::Whitespace(Whitespace::Space | Whitespace::Newline | Whitespace::Tab)
+            | Token::Whitespace(Whitespace::SingleLineComment { .. })
+            | Token::Whitespace(Whitespace::MultiLineComment(_)) => {}
+            _ => saw_previous_semicolon = false,
+        }
+    }
+
+    false
 }
 
 #[cfg(test)]
@@ -74,6 +98,18 @@ mod tests {
     #[test]
     fn does_not_flag_single_semicolon() {
         let issues = run("SELECT 1;");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn does_not_flag_semicolons_inside_string_literal() {
+        let issues = run("SELECT 'a;;b';");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn does_not_flag_normal_statement_separator() {
+        let issues = run("SELECT 1; SELECT 2;");
         assert!(issues.is_empty());
     }
 }

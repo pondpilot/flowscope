@@ -74,6 +74,7 @@ This plan covers three axes:
   - `ST_006` moved from parity regex handling to a dedicated core AST rule (`st_006.rs`).
   - `ST_008` moved from parity regex handling to a dedicated core AST rule (`st_008.rs`).
   - `ST_012` moved from parity handling to a dedicated core rule module (`st_012.rs`).
+  - `ST_012` was further upgraded from regex scanning to tokenizer-level semicolon sequencing, eliminating string-literal/comment false positives for consecutive-semicolon detection.
   - `TQ_001` moved from parity handling to a dedicated core rule module (`tq_001.rs`).
   - `TQ_001` was further upgraded to AST-driven procedure-name analysis via `Statement::CreateProcedure`, replacing SQL text regex scanning.
   - `TQ_002` moved from parity handling to a dedicated core rule module (`tq_002.rs`).
