@@ -111,6 +111,7 @@ This plan covers three axes:
   - `CP_002` moved from parity handling to a dedicated core rule module (`cp_002.rs`).
   - `CP_003` moved from parity handling to a dedicated core rule module (`cp_003.rs`).
   - `CP_004` moved from parity handling to a dedicated core rule module (`cp_004.rs`).
+  - `CP_004` was further upgraded from regex masking to tokenizer-driven literal-token collection (`NULL`/`TRUE`/`FALSE`), reducing string/comment false positives.
   - `CP_005` moved from parity handling to a dedicated core rule module (`cp_005.rs`).
   - Legacy `parity.rs` monolith was retired; rule registration now points only to dedicated `rules/<code>.rs` modules.
 
