@@ -1858,6 +1858,54 @@ fn lint_st_011_mssql_bracket_quoted_joined_source_reference_counts_as_usage() {
 }
 
 #[test]
+fn lint_st_011_hive_lateral_view_reference_counts_as_usage() {
+    let issues = run_lint_in_dialect(
+        "SELECT a.id FROM a LEFT JOIN b ON a.id = b.id LATERAL VIEW explode(b.items) lv AS item",
+        Dialect::Hive,
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_ST_011"),
+        "LATERAL VIEW joined-source references should count as usage: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_st_011_hive_lateral_view_unqualified_reference_defers_check() {
+    let issues = run_lint_in_dialect(
+        "SELECT a.id FROM a LEFT JOIN b ON a.id = b.id LATERAL VIEW explode(items) lv AS item",
+        Dialect::Hive,
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_ST_011"),
+        "unqualified LATERAL VIEW references should defer ST_011: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_st_011_connect_by_reference_counts_as_usage() {
+    let issues = run_lint_in_dialect(
+        "SELECT a.id FROM a LEFT JOIN b ON a.id = b.id START WITH b.id IS NOT NULL CONNECT BY PRIOR a.id = b.id",
+        Dialect::Snowflake,
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_ST_011"),
+        "CONNECT BY joined-source references should count as usage: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_st_011_connect_by_unqualified_reference_defers_check() {
+    let issues = run_lint_in_dialect(
+        "SELECT a.id FROM a LEFT JOIN b ON a.id = b.id START WITH id IS NOT NULL CONNECT BY PRIOR a.id = b.id",
+        Dialect::Snowflake,
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_ST_011"),
+        "unqualified CONNECT BY references should defer ST_011: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_st_011_does_not_flag_base_from_with_using_join() {
     let issues = run_lint("SELECT b.id FROM a LEFT JOIN b USING(id)");
     assert!(

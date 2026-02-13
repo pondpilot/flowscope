@@ -473,12 +473,23 @@ fn visit_non_join_select_expressions<F: FnMut(&sqlparser::ast::Expr)>(
         visitor(expr);
     }
 
+    for lateral_view in &select.lateral_views {
+        visitor(&lateral_view.lateral_view);
+    }
+
     if let Some(having) = &select.having {
         visitor(having);
     }
 
     if let Some(qualify) = &select.qualify {
         visitor(qualify);
+    }
+
+    if let Some(connect_by) = &select.connect_by {
+        visitor(&connect_by.condition);
+        for relationship in &connect_by.relationships {
+            visitor(relationship);
+        }
     }
 
     for sort in &select.sort_by {
@@ -816,6 +827,42 @@ mod tests {
         let issues = run_in_dialect(
             "SELECT [test].one, [test-2].two FROM [test] LEFT JOIN [test-2] ON [test].id = [test-2].id",
             Dialect::Mssql,
+        );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn allows_outer_join_source_referenced_in_hive_lateral_view_clause() {
+        let issues = run_in_dialect(
+            "SELECT a.id FROM a LEFT JOIN b ON a.id = b.id LATERAL VIEW explode(b.items) lv AS item",
+            Dialect::Hive,
+        );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn defers_when_hive_lateral_view_clause_has_unqualified_reference() {
+        let issues = run_in_dialect(
+            "SELECT a.id FROM a LEFT JOIN b ON a.id = b.id LATERAL VIEW explode(items) lv AS item",
+            Dialect::Hive,
+        );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn allows_outer_join_source_referenced_in_connect_by_clause() {
+        let issues = run_in_dialect(
+            "SELECT a.id FROM a LEFT JOIN b ON a.id = b.id START WITH b.id IS NOT NULL CONNECT BY PRIOR a.id = b.id",
+            Dialect::Snowflake,
+        );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn defers_when_connect_by_clause_has_unqualified_reference() {
+        let issues = run_in_dialect(
+            "SELECT a.id FROM a LEFT JOIN b ON a.id = b.id START WITH id IS NOT NULL CONNECT BY PRIOR a.id = b.id",
+            Dialect::Snowflake,
         );
         assert!(issues.is_empty());
     }
