@@ -266,6 +266,82 @@ fn lint_rule_config_count_rows_prefer_count_one() {
     );
 }
 
+#[test]
+fn lint_rule_config_terminator_require_final_semicolon() {
+    let issues = run_lint_with_config(
+        "SELECT 1",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "convention.terminator".to_string(),
+                serde_json::json!({"require_final_semicolon": true}),
+            )]),
+        },
+    );
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_CV_006"),
+        "require_final_semicolon should flag missing final semicolon: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_rule_config_blocked_words_custom_list() {
+    let issues = run_lint_with_config(
+        "SELECT wip FROM t",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "convention.blocked_words".to_string(),
+                serde_json::json!({"blocked_words": ["wip"]}),
+            )]),
+        },
+    );
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_CV_009"),
+        "blocked_words custom list should flag configured terms: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_rule_config_quoted_literals_double_quotes_preference() {
+    let issues = run_lint_with_config(
+        "SELECT 'abc' FROM t",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "LINT_CV_010".to_string(),
+                serde_json::json!({"preferred_quoted_literal_style": "double_quotes"}),
+            )]),
+        },
+    );
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_CV_010"),
+        "double_quotes preference should flag single-quoted literals: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_rule_config_casting_style_shorthand() {
+    let issues = run_lint_with_config(
+        "SELECT CAST(a AS INT) FROM t",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "convention.casting_style".to_string(),
+                serde_json::json!({"preferred_type_casting_style": "shorthand"}),
+            )]),
+        },
+    );
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_CV_011"),
+        "shorthand casting style should flag CAST(...) usage: {issues:?}"
+    );
+}
+
 // =============================================================================
 // Rule-specific integration tests
 // =============================================================================

@@ -91,14 +91,18 @@ This plan covers three axes:
   - `CV_001` was further upgraded from regex checks to lexer-style operator scanning that ignores comments/quoted strings for mixed `<>`/`!=` detection.
   - `CV_001` now supports `preferred_not_equal_style` (`consistent`/`c_style`/`ansi`) through `lint.ruleConfigs`.
   - `CV_004` now supports `prefer_count_1` / `prefer_count_0` through `lint.ruleConfigs`.
+  - `CV_006` now supports `multiline_newline` / `require_final_semicolon` through `lint.ruleConfigs`.
   - `CV_007` moved from parity handling to a dedicated core rule module (`cv_007.rs`).
   - `CV_007` was further upgraded to AST-driven statement-shape detection (`Statement::Query` + wrapper `SetExpr::Query`), replacing SQL text `starts_with('(')/ends_with(')')` heuristics.
   - `CV_009` moved from parity handling to a dedicated core rule module (`cv_009.rs`).
   - `CV_009` was further upgraded to AST-driven traversal (table names, aliases, expression identifiers), replacing raw regex scanning and reducing string/comment false positives.
+  - `CV_009` now supports configurable `blocked_words` / `blocked_regex` through `lint.ruleConfigs`.
   - `CV_010` moved from parity handling to a dedicated core rule module (`cv_010.rs`).
   - `CV_010` was further upgraded to AST-driven double-quoted identifier traversal, replacing raw quote-regex scanning.
+  - `CV_010` now supports `preferred_quoted_literal_style` through `lint.ruleConfigs`.
   - `CV_011` moved from parity handling to a dedicated core rule module (`cv_011.rs`).
   - `CV_011` was further upgraded to AST-driven cast-kind traversal (`CastKind::{Cast, TryCast, SafeCast, DoubleColon}`), replacing raw SQL `::`/`CAST(` regex scanning and reducing string-literal false positives.
+  - `CV_011` now supports `preferred_type_casting_style` through `lint.ruleConfigs`.
   - `JJ_001` moved from parity handling to a dedicated core rule module (`jj_001.rs`).
   - `JJ_001` was further upgraded from regex matching to deterministic delimiter scanning for Jinja padding checks.
   - `LT_010` moved from parity handling to a dedicated core rule module (`lt_010.rs`).
@@ -502,10 +506,6 @@ These rules work but lack SQLFluff config knobs that users depend on:
 | AL_007 (aliasing.forbid) | `force_enable` | `False` (disabled by default) |
 | AM_005 (ambiguous.join) | `fully_qualify_join_types` | `inner` |
 | AM_006 (ambiguous.column_references) | `group_by_and_order_by_style` | `consistent` |
-| CV_006 (convention.terminator) | `multiline_newline`, `require_final_semicolon` | `False`, `False` |
-| CV_009 (convention.blocked_words) | `blocked_words`, `blocked_regex` | empty |
-| CV_010 (convention.quoted_literals) | `preferred_quoted_literal_style` | `consistent` |
-| CV_011 (convention.casting_style) | `preferred_type_casting_style` | `consistent` |
 | CP_001 (capitalisation.keywords) | `capitalisation_policy`, `ignore_words` | `consistent` |
 | CP_002–005 | `extended_capitalisation_policy` | `consistent` |
 | LT_005 (layout.long_lines) | `max_line_length` (configurable) | 80 |
