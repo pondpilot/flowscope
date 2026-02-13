@@ -2751,6 +2751,13 @@ mod tests {
                 1,
                 Some("FULL OUTER JOIN"),
             ),
+            (
+                "SELECT a FROM t full join u ON t.id = u.id",
+                1,
+                0,
+                1,
+                Some("FULL OUTER JOIN"),
+            ),
             ("SELECT a FROM t JOIN u ON t.id = u.id", 0, 0, 0, None),
         ];
         for (sql, before, after, fix_count, expected_text) in outer_cases {
