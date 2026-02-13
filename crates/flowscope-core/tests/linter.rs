@@ -1357,6 +1357,18 @@ fn lint_lt_007_cte_bracket_missing() {
 }
 
 #[test]
+fn lint_lt_012_multiple_trailing_newlines() {
+    let issues = run_lint("SELECT 1\nFROM t\n\n");
+    assert!(
+        issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_LT_012),
+        "expected {} for multiple trailing newlines: {issues:?}",
+        issue_codes::LINT_LT_012,
+    );
+}
+
+#[test]
 fn lint_rf_004_keyword_identifier() {
     let issues = run_lint("SELECT \"select\".id FROM users AS \"select\"");
     assert!(

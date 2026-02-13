@@ -125,6 +125,7 @@ This plan covers three axes:
   - `LT_011` moved from parity handling to a dedicated core rule module (`lt_011.rs`).
   - `LT_011` was further upgraded from regex scanning to tokenizer line-aware set-operator placement checks.
   - `LT_012` moved from parity handling to a dedicated core rule module (`lt_012.rs`).
+  - `LT_012` now enforces SQLFluff-style single trailing newline at EOF (flags both missing final newline and multiple trailing blank lines).
   - `LT_013` moved from parity handling to a dedicated core rule module (`lt_013.rs`).
   - `LT_013` was further upgraded from regex matching to direct leading-blank-line scanning.
   - `LT_015` moved from parity handling to a dedicated core rule module (`lt_015.rs`).
