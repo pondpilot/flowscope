@@ -1082,6 +1082,15 @@ fn lint_cp_001_consistent_case_ok() {
 }
 
 #[test]
+fn lint_rf_003_mixed_qualified_wildcard_and_unqualified_ref() {
+    let issues = run_lint("SELECT t.*, id FROM t");
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_RF_003"),
+        "qualified wildcard mixed with unqualified refs should trigger RF_003: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_st_010_no_constant_expression_ok() {
     let issues = run_lint("SELECT * FROM t WHERE status = 'active'");
     assert!(

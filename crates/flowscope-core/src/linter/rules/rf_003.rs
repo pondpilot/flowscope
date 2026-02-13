@@ -5,7 +5,7 @@
 use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
-use sqlparser::ast::Statement;
+use sqlparser::ast::{Select, SelectItem, Statement};
 
 use super::semantic_helpers::{
     count_reference_qualification_in_expr_excluding_aliases, select_projection_alias_set,
@@ -102,6 +102,10 @@ impl LintRule for ReferencesConsistent {
                 qualified += q;
                 unqualified += u;
             });
+            let (projection_qualified, projection_unqualified) =
+                projection_wildcard_qualification_counts(select);
+            qualified += projection_qualified;
+            unqualified += projection_unqualified;
 
             if self
                 .single_table_references
@@ -121,6 +125,22 @@ impl LintRule for ReferencesConsistent {
             })
             .collect()
     }
+}
+
+fn projection_wildcard_qualification_counts(select: &Select) -> (usize, usize) {
+    let mut qualified = 0usize;
+
+    for item in &select.projection {
+        match item {
+            // SQLFluff RF03 parity: treat qualified wildcards as qualified references.
+            SelectItem::QualifiedWildcard(_, _) => qualified += 1,
+            // Keep unqualified wildcard neutral to avoid forcing `SELECT *` style choices.
+            SelectItem::Wildcard(_) => {}
+            _ => {}
+        }
+    }
+
+    (qualified, 0)
 }
 
 #[cfg(test)]
@@ -177,6 +197,18 @@ mod tests {
     #[test]
     fn allows_consistent_references_in_subquery() {
         let issues = run("SELECT * FROM (SELECT my_tbl.bar FROM my_tbl)");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn flags_mixed_qualification_with_qualified_wildcard() {
+        let issues = run("SELECT my_tbl.*, bar FROM my_tbl");
+        assert_eq!(issues.len(), 1);
+    }
+
+    #[test]
+    fn allows_consistent_qualified_wildcard_and_columns() {
+        let issues = run("SELECT my_tbl.*, my_tbl.bar FROM my_tbl");
         assert!(issues.is_empty());
     }
 
