@@ -1061,6 +1061,15 @@ fn lint_st_010_no_constant_expression_ok() {
 }
 
 #[test]
+fn lint_st_010_non_equality_literal_comparison_ok() {
+    let issues = run_lint("SELECT * FROM t WHERE 1 < 2");
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_ST_010"),
+        "non-equality literal comparison should not trigger ST_010: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_lt_007_cte_bracket_missing() {
     let issues = run_lint("SELECT 'WITH cte AS SELECT 1' AS sql_snippet");
     assert!(

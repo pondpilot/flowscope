@@ -67,12 +67,14 @@ fn statement_contains_constant_predicate(statement: &Statement) -> bool {
 fn contains_constant_predicate(expr: &Expr) -> bool {
     match expr {
         Expr::BinaryOp { left, op, right } => {
-            let direct_match = is_comparison_operator(op.clone())
+            let direct_match = is_supported_comparison_operator(op)
+                && !contains_operator_token(left)
+                && !contains_operator_token(right)
                 && match (literal_key(left), literal_key(right)) {
                     (Some(left_literal), Some(right_literal)) => {
-                        !is_allowed_literal_comparison(op.clone(), &left_literal, &right_literal)
+                        !is_allowed_literal_comparison(op, &left_literal, &right_literal)
                     }
-                    _ => expr_equivalent(left, right),
+                    _ => expressions_equivalent_for_constant_check(left, right),
                 };
 
             direct_match || contains_constant_predicate(left) || contains_constant_predicate(right)
@@ -113,20 +115,51 @@ fn contains_constant_predicate(expr: &Expr) -> bool {
     }
 }
 
-fn is_comparison_operator(op: BinaryOperator) -> bool {
-    matches!(
-        op,
-        BinaryOperator::Eq
-            | BinaryOperator::NotEq
-            | BinaryOperator::Lt
-            | BinaryOperator::Gt
-            | BinaryOperator::LtEq
-            | BinaryOperator::GtEq
-    )
+fn is_supported_comparison_operator(op: &BinaryOperator) -> bool {
+    matches!(op, BinaryOperator::Eq | BinaryOperator::NotEq)
 }
 
-fn is_allowed_literal_comparison(op: BinaryOperator, left: &str, right: &str) -> bool {
-    op == BinaryOperator::Eq && left == "1" && (right == "1" || right == "0")
+fn contains_operator_token(expr: &Expr) -> bool {
+    match expr {
+        Expr::BinaryOp { .. } | Expr::AnyOp { .. } | Expr::AllOp { .. } => true,
+        Expr::UnaryOp { expr: inner, .. }
+        | Expr::Nested(inner)
+        | Expr::IsNull(inner)
+        | Expr::IsNotNull(inner)
+        | Expr::Cast { expr: inner, .. } => contains_operator_token(inner),
+        Expr::InList { expr, list, .. } => {
+            contains_operator_token(expr) || list.iter().any(contains_operator_token)
+        }
+        Expr::Between {
+            expr, low, high, ..
+        } => {
+            contains_operator_token(expr)
+                || contains_operator_token(low)
+                || contains_operator_token(high)
+        }
+        Expr::Case {
+            operand,
+            conditions,
+            else_result,
+            ..
+        } => {
+            operand
+                .as_ref()
+                .is_some_and(|expr| contains_operator_token(expr))
+                || conditions.iter().any(|when| {
+                    contains_operator_token(&when.condition)
+                        || contains_operator_token(&when.result)
+                })
+                || else_result
+                    .as_ref()
+                    .is_some_and(|expr| contains_operator_token(expr))
+        }
+        _ => false,
+    }
+}
+
+fn is_allowed_literal_comparison(op: &BinaryOperator, left: &str, right: &str) -> bool {
+    *op == BinaryOperator::Eq && left == "1" && (right == "1" || right == "0")
 }
 
 fn literal_key(expr: &Expr) -> Option<String> {
@@ -179,6 +212,23 @@ fn expr_equivalent(left: &Expr, right: &Expr) -> bool {
         ) => expr_equivalent(left, right_inner),
         _ => false,
     }
+}
+
+fn expressions_equivalent_for_constant_check(left: &Expr, right: &Expr) -> bool {
+    if std::mem::discriminant(left) != std::mem::discriminant(right) {
+        return false;
+    }
+
+    expr_equivalent(left, right)
+        || normalize_expr_for_compare(left) == normalize_expr_for_compare(right)
+}
+
+fn normalize_expr_for_compare(expr: &Expr) -> String {
+    expr.to_string()
+        .chars()
+        .filter(|ch| !ch.is_whitespace())
+        .collect::<String>()
+        .to_ascii_uppercase()
 }
 
 #[cfg(test)]
@@ -245,6 +295,12 @@ mod tests {
 
         let issues = run("select col from foo where 1 <> 1 or col = 'val'");
         assert_eq!(issues.len(), 1);
+    }
+
+    #[test]
+    fn allows_non_equality_literal_comparison() {
+        let issues = run("select col from foo where 1 < 2");
+        assert!(issues.is_empty());
     }
 
     #[test]
