@@ -201,7 +201,7 @@ Move style-oriented checks to lexical engine:
 - [x] `LINT_AL_005` now supports `alias_case_check` (including SQLFluff-style casefolding modes) via `lint.ruleConfigs`.
 - [x] `LINT_AM_005` now supports `fully_qualify_join_types` (`inner`/`outer`/`both`) via `lint.ruleConfigs`.
 - [x] `LINT_AM_006` now supports `group_by_and_order_by_style` (`consistent`/`explicit`/`implicit`) via `lint.ruleConfigs`.
-- [x] `LINT_CP_001` now supports `capitalisation_policy` and `ignore_words` via `lint.ruleConfigs`.
+- [x] `LINT_CP_001` now supports `capitalisation_policy`, `ignore_words`, and `ignore_words_regex` via `lint.ruleConfigs`.
 - [x] `LINT_CP_002`-`LINT_CP_005` now support `extended_capitalisation_policy` via `lint.ruleConfigs`.
 - [x] `LINT_CV_003` now uses token/depth-aware SELECT-clause analysis for trailing-comma detection, replacing regex scanning, and supports SQLFluff-style `select_clause_trailing_comma` (`forbid`/`require`) via `lint.ruleConfigs`.
 - [x] `LINT_JJ_001` and `LINT_LT_010`/`LINT_LT_011`/`LINT_LT_012`/`LINT_LT_013`/`LINT_LT_015` are now split out of `parity.rs` into dedicated core modules (`jj_001.rs`, `lt_010.rs`, `lt_011.rs`, `lt_012.rs`, `lt_013.rs`, `lt_015.rs`); `LINT_JJ_001` now uses delimiter scanning, `LINT_LT_010`/`LINT_LT_011` now use tokenizer line-aware checks, and `LINT_LT_013`/`LINT_LT_015` now use direct newline-run scanning instead of regex matching.

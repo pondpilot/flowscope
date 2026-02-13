@@ -7,6 +7,7 @@ use std::collections::HashSet;
 use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
+use regex::{Regex, RegexBuilder};
 use sqlparser::ast::Statement;
 use sqlparser::dialect::GenericDialect;
 use sqlparser::keywords::Keyword;
@@ -17,6 +18,7 @@ use super::capitalisation_policy_helpers::{tokens_violate_policy, Capitalisation
 pub struct CapitalisationKeywords {
     policy: CapitalisationPolicy,
     ignore_words: HashSet<String>,
+    ignore_words_regex: Option<Regex>,
 }
 
 impl CapitalisationKeywords {
@@ -28,6 +30,7 @@ impl CapitalisationKeywords {
                 "capitalisation_policy",
             ),
             ignore_words: ignored_words_from_config(config),
+            ignore_words_regex: ignored_words_regex_from_config(config),
         }
     }
 }
@@ -37,6 +40,7 @@ impl Default for CapitalisationKeywords {
         Self {
             policy: CapitalisationPolicy::Consistent,
             ignore_words: HashSet::new(),
+            ignore_words_regex: None,
         }
     }
 }
@@ -56,7 +60,11 @@ impl LintRule for CapitalisationKeywords {
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
         if tokens_violate_policy(
-            &keyword_tokens(ctx.statement_sql(), &self.ignore_words),
+            &keyword_tokens(
+                ctx.statement_sql(),
+                &self.ignore_words,
+                self.ignore_words_regex.as_ref(),
+            ),
             self.policy,
         ) {
             vec![Issue::info(
@@ -91,7 +99,24 @@ fn ignored_words_from_config(config: &LintConfig) -> HashSet<String> {
         .unwrap_or_default()
 }
 
-fn keyword_tokens(sql: &str, ignore_words: &HashSet<String>) -> Vec<String> {
+fn ignored_words_regex_from_config(config: &LintConfig) -> Option<Regex> {
+    let raw = config.rule_option_str(issue_codes::LINT_CP_001, "ignore_words_regex")?;
+    let pattern = raw.trim();
+    if pattern.is_empty() {
+        return None;
+    }
+
+    RegexBuilder::new(pattern)
+        .case_insensitive(true)
+        .build()
+        .ok()
+}
+
+fn keyword_tokens(
+    sql: &str,
+    ignore_words: &HashSet<String>,
+    ignore_words_regex: Option<&Regex>,
+) -> Vec<String> {
     let dialect = GenericDialect {};
     let mut tokenizer = Tokenizer::new(&dialect, sql);
     let Ok(tokens) = tokenizer.tokenize() else {
@@ -104,7 +129,10 @@ fn keyword_tokens(sql: &str, ignore_words: &HashSet<String>) -> Vec<String> {
             Token::Word(word)
                 if word.keyword != Keyword::NoKeyword
                     && is_tracked_keyword(word.value.as_str())
-                    && !ignore_words.contains(&word.value.to_ascii_uppercase()) =>
+                    && !ignore_words.contains(&word.value.to_ascii_uppercase())
+                    && !ignore_words_regex
+                        .map(|regex| regex.is_match(word.value.as_str()))
+                        .unwrap_or(false) =>
             {
                 Some(word.value)
             }
@@ -232,6 +260,30 @@ mod tests {
             rule_configs: std::collections::BTreeMap::from([(
                 "LINT_CP_001".to_string(),
                 serde_json::json!({"ignore_words": ["FROM"]}),
+            )]),
+        };
+        let rule = CapitalisationKeywords::from_config(&config);
+        let sql = "SELECT a from t";
+        let statements = parse_sql(sql).expect("parse");
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn ignore_words_regex_excludes_keywords_from_check() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "capitalisation.keywords".to_string(),
+                serde_json::json!({"ignore_words_regex": "^from$"}),
             )]),
         };
         let rule = CapitalisationKeywords::from_config(&config);

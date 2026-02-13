@@ -666,6 +666,25 @@ fn lint_rule_config_capitalisation_keywords_ignore_words() {
 }
 
 #[test]
+fn lint_rule_config_capitalisation_keywords_ignore_words_regex() {
+    let issues = run_lint_with_config(
+        "SELECT a from t",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "capitalisation.keywords".to_string(),
+                serde_json::json!({"ignore_words_regex": "^from$"}),
+            )]),
+        },
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_CP_001"),
+        "ignore_words_regex should suppress configured keyword patterns: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_rule_config_capitalisation_identifiers_upper_policy() {
     let issues = run_lint_with_config(
         "SELECT col FROM t",
