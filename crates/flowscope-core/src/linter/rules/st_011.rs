@@ -687,6 +687,12 @@ mod tests {
     }
 
     #[test]
+    fn allows_single_values_table_statement() {
+        let issues = run("select 1 from (values (1, 'one'), (2, 'two'))");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
     fn allows_inner_join_when_joined_source_unreferenced() {
         let issues = run("select a.* from a inner join b using(x)");
         assert!(issues.is_empty());
@@ -696,6 +702,13 @@ mod tests {
     fn allows_implicit_inner_join_when_joined_source_unreferenced() {
         let issues = run("select a.* from a join b using(x)");
         assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn flags_unreferenced_right_joined_source() {
+        let issues = run("select a.* from a right join d using(x)");
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_ST_011);
     }
 
     #[test]
@@ -742,6 +755,14 @@ mod tests {
             "SELECT a.col1 FROM a LEFT JOIN b ON a.id = b.a_id WHERE a.some_column IN (SELECT c.some_column FROM c WHERE c.other_column = b.col)",
         );
         assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn flags_unused_outer_join_inside_derived_subquery() {
+        let issues =
+            run("SELECT * FROM (SELECT t1.col1 FROM db1.t1 LEFT JOIN t2 ON t1.id = t2.id)");
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_ST_011);
     }
 
     #[test]
