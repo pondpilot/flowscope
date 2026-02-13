@@ -1036,6 +1036,15 @@ fn lint_al_004_duplicate_implicit_table_name_aliases() {
 }
 
 #[test]
+fn lint_al_008_duplicate_unaliased_column_reference() {
+    let issues = run_lint("SELECT foo, foo FROM t");
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_AL_008"),
+        "duplicate unaliased projection refs should trigger AL_008: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_am_005_order_by_name_ok() {
     let issues = run_lint("SELECT name FROM t ORDER BY name");
     assert!(

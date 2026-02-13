@@ -60,6 +60,7 @@ This plan covers three axes:
   - `AL_002` was further upgraded to AST-driven SELECT projection alias traversal with token-aware `AS` detection.
   - `AL_001`/`AL_002` now support SQLFluff-style `aliasing` mode (`explicit`/`implicit`) via `lint.ruleConfigs`.
   - `AL_008` moved from parity into a dedicated core AST rule (`al_008.rs`) and parity registration was removed.
+  - `AL_008` now checks duplicate output names from unaliased column references in SELECT projections (in addition to explicit aliases), improving SQLFluff AL08 parity.
   - `AL_005` was expanded to cover derived-table aliases while adding SQLFluff-compatible `LATERAL` and `VALUES` exceptions to reduce false positives.
   - `AL_005` now supports `alias_case_check` through `lint.ruleConfigs`.
   - `CV_003` moved from parity into a dedicated core rule module (`cv_003.rs`) and parity registration was removed.

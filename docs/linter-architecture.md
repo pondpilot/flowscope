@@ -176,6 +176,7 @@ Move style-oriented checks to lexical engine:
 - [x] `LINT_AL_001` now uses AST-driven table-factor alias traversal with token-aware `AS` detection, replacing regex-based matching.
 - [x] `LINT_AL_002` now uses AST-driven SELECT projection alias traversal with token-aware `AS` detection, replacing regex-based clause extraction.
 - [x] `LINT_AL_004` now also checks implicit table-name aliases (no explicit `AS`) so duplicate base table names across schemas are linted alongside explicit duplicate aliases.
+- [x] `LINT_AL_008` now checks duplicate projected output names from both explicit aliases and unaliased column references (e.g., `foo`, `schema.foo`) in SELECT clauses.
 - [x] `lint.ruleConfigs` now supports per-rule configuration objects keyed by canonical/shorthand/dotted rule references; `LINT_AL_001` and `LINT_AL_002` use this for SQLFluff-style `aliasing=explicit|implicit`.
 - [x] `LINT_AL_006` now runs as a dedicated AST rule via table-factor alias traversal and supports `min_alias_length` / `max_alias_length` via `lint.ruleConfigs` (default behavior preserves the existing max-length heuristic).
 - [x] `LINT_AL_003` now supports `allow_scalar` via `lint.ruleConfigs` (default behavior remains FlowScope-backwards-compatible while enabling SQLFluff-style strictness when configured).

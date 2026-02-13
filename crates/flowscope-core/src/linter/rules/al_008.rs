@@ -4,7 +4,9 @@
 
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
-use sqlparser::ast::{Query, Select, SelectItem, SetExpr, Statement, TableFactor, TableWithJoins};
+use sqlparser::ast::{
+    Expr, Query, Select, SelectItem, SetExpr, Statement, TableFactor, TableWithJoins,
+};
 use std::collections::HashSet;
 
 pub struct AliasingUniqueColumn;
@@ -80,8 +82,8 @@ fn first_duplicate_column_alias_in_set_expr(set_expr: &SetExpr) -> Option<String
 fn first_duplicate_column_alias_in_select(select: &Select) -> Option<String> {
     let mut aliases = Vec::new();
     for item in &select.projection {
-        if let SelectItem::ExprWithAlias { alias, .. } = item {
-            aliases.push(alias.value.clone());
+        if let Some(alias) = projected_column_alias(item) {
+            aliases.push(alias);
         }
     }
 
@@ -98,6 +100,17 @@ fn first_duplicate_column_alias_in_select(select: &Select) -> Option<String> {
     }
 
     None
+}
+
+fn projected_column_alias(item: &SelectItem) -> Option<String> {
+    match item {
+        SelectItem::ExprWithAlias { alias, .. } => Some(alias.value.clone()),
+        SelectItem::UnnamedExpr(Expr::Identifier(identifier)) => Some(identifier.value.clone()),
+        SelectItem::UnnamedExpr(Expr::CompoundIdentifier(parts)) => {
+            parts.last().map(|part| part.value.clone())
+        }
+        _ => None,
+    }
 }
 
 fn first_duplicate_column_alias_in_table_with_joins_children(
@@ -200,5 +213,19 @@ mod tests {
         let sql = "select * from (select a as x, b as x from t) s";
         let issues = run(sql);
         assert_eq!(issues.len(), 1);
+    }
+
+    #[test]
+    fn flags_duplicate_unaliased_column_reference() {
+        let issues = run("select foo, foo from t");
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_AL_008);
+    }
+
+    #[test]
+    fn flags_alias_collision_with_unaliased_reference() {
+        let issues = run("select foo, a as foo from t");
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_AL_008);
     }
 }
