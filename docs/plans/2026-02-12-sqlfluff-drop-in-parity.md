@@ -85,6 +85,7 @@ This plan covers three axes:
   - `CV_010` moved from parity handling to a dedicated core rule module (`cv_010.rs`).
   - `CV_010` was further upgraded to AST-driven double-quoted identifier traversal, replacing raw quote-regex scanning.
   - `CV_011` moved from parity handling to a dedicated core rule module (`cv_011.rs`).
+  - `CV_011` was further upgraded to AST-driven cast-kind traversal (`CastKind::{Cast, TryCast, SafeCast, DoubleColon}`), replacing raw SQL `::`/`CAST(` regex scanning and reducing string-literal false positives.
   - `JJ_001` moved from parity handling to a dedicated core rule module (`jj_001.rs`).
   - `LT_010` moved from parity handling to a dedicated core rule module (`lt_010.rs`).
   - `LT_011` moved from parity handling to a dedicated core rule module (`lt_011.rs`).
