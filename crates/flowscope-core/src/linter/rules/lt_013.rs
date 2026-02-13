@@ -4,7 +4,6 @@
 
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
-use regex::Regex;
 use sqlparser::ast::Statement;
 
 pub struct LayoutStartOfFile;
@@ -23,7 +22,7 @@ impl LintRule for LayoutStartOfFile {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let has_violation = ctx.statement_index == 0 && has_re(ctx.sql, r"^\s*\n");
+        let has_violation = ctx.statement_index == 0 && has_leading_blank_lines(ctx.sql);
         if has_violation {
             vec![Issue::info(
                 issue_codes::LINT_LT_013,
@@ -36,8 +35,15 @@ impl LintRule for LayoutStartOfFile {
     }
 }
 
-fn has_re(haystack: &str, pattern: &str) -> bool {
-    Regex::new(pattern).expect("valid regex").is_match(haystack)
+fn has_leading_blank_lines(sql: &str) -> bool {
+    for byte in sql.as_bytes() {
+        match *byte {
+            b' ' | b'\t' | b'\r' => continue,
+            b'\n' => return true,
+            _ => return false,
+        }
+    }
+    false
 }
 
 #[cfg(test)]
@@ -74,5 +80,10 @@ mod tests {
     #[test]
     fn does_not_flag_clean_start() {
         assert!(run("SELECT 1").is_empty());
+    }
+
+    #[test]
+    fn does_not_flag_leading_comment() {
+        assert!(run("-- comment\nSELECT 1").is_empty());
     }
 }

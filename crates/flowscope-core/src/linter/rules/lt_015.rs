@@ -4,7 +4,6 @@
 
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
-use regex::Regex;
 use sqlparser::ast::Statement;
 
 pub struct LayoutNewlines;
@@ -23,7 +22,7 @@ impl LintRule for LayoutNewlines {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        if has_re(ctx.statement_sql(), r"\n\s*\n\s*\n+") {
+        if has_excessive_blank_lines(ctx.statement_sql()) {
             vec![Issue::info(
                 issue_codes::LINT_LT_015,
                 "SQL contains excessive blank lines.",
@@ -35,8 +34,21 @@ impl LintRule for LayoutNewlines {
     }
 }
 
-fn has_re(haystack: &str, pattern: &str) -> bool {
-    Regex::new(pattern).expect("valid regex").is_match(haystack)
+fn has_excessive_blank_lines(sql: &str) -> bool {
+    let mut blank_run = 0usize;
+
+    for line in sql.lines() {
+        if line.trim().is_empty() {
+            blank_run += 1;
+            if blank_run >= 2 {
+                return true;
+            }
+        } else {
+            blank_run = 0;
+        }
+    }
+
+    false
 }
 
 #[cfg(test)]
@@ -73,5 +85,12 @@ mod tests {
     #[test]
     fn does_not_flag_single_blank_line() {
         assert!(run("SELECT 1\n\nFROM t").is_empty());
+    }
+
+    #[test]
+    fn flags_blank_lines_with_whitespace() {
+        let issues = run("SELECT 1\n\n   \nFROM t");
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_LT_015);
     }
 }
