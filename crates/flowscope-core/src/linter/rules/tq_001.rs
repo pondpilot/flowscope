@@ -5,8 +5,7 @@
 
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
-use regex::Regex;
-use sqlparser::ast::Statement;
+use sqlparser::ast::{ObjectName, Statement};
 
 pub struct TsqlSpPrefix;
 
@@ -23,11 +22,12 @@ impl LintRule for TsqlSpPrefix {
         "Avoid sp_ procedure prefix in TSQL."
     }
 
-    fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let has_violation = has_re(
-            ctx.statement_sql(),
-            r"(?i)\bcreate\s+(?:proc|procedure)\s+sp_[A-Za-z0-9_]*",
-        );
+    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+        let has_violation = match statement {
+            Statement::CreateProcedure { name, .. } => procedure_name_has_sp_prefix(name),
+            _ => false,
+        };
+
         if has_violation {
             vec![Issue::warning(
                 issue_codes::LINT_TQ_001,
@@ -40,8 +40,11 @@ impl LintRule for TsqlSpPrefix {
     }
 }
 
-fn has_re(haystack: &str, pattern: &str) -> bool {
-    Regex::new(pattern).expect("valid regex").is_match(haystack)
+fn procedure_name_has_sp_prefix(name: &ObjectName) -> bool {
+    name.0
+        .last()
+        .and_then(|part| part.as_ident())
+        .is_some_and(|ident| ident.value.to_ascii_lowercase().starts_with("sp_"))
 }
 
 #[cfg(test)]
@@ -69,15 +72,21 @@ mod tests {
     }
 
     #[test]
-    fn flags_sp_prefixed_procedure_name_pattern() {
-        let issues = run("SELECT 'CREATE PROCEDURE sp_legacy AS SELECT 1' AS sql_snippet");
+    fn flags_sp_prefixed_procedure_name() {
+        let issues = run("CREATE PROCEDURE sp_legacy AS SELECT 1;");
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_TQ_001);
     }
 
     #[test]
-    fn does_not_flag_non_sp_prefixed_procedure_name_pattern() {
-        let issues = run("SELECT 'CREATE PROCEDURE proc_legacy AS SELECT 1' AS sql_snippet");
+    fn does_not_flag_non_sp_prefixed_procedure_name() {
+        let issues = run("CREATE PROCEDURE proc_legacy AS SELECT 1;");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn does_not_flag_sp_prefix_text_inside_string_literal() {
+        let issues = run("SELECT 'CREATE PROCEDURE sp_legacy AS SELECT 1' AS sql_snippet");
         assert!(issues.is_empty());
     }
 }

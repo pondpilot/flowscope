@@ -5,8 +5,7 @@
 
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
-use regex::Regex;
-use sqlparser::ast::Statement;
+use sqlparser::ast::{ConditionalStatements, Statement};
 
 pub struct TsqlProcedureBeginEnd;
 
@@ -23,11 +22,13 @@ impl LintRule for TsqlProcedureBeginEnd {
         "TSQL procedures should include BEGIN/END block."
     }
 
-    fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let sql = ctx.statement_sql();
-        let has_create_proc = has_re(sql, r"(?i)\bcreate\s+(?:proc|procedure)\b");
-        let has_begin_end = has_re(sql, r"(?i)\bbegin\b") && has_re(sql, r"(?i)\bend\b");
-        if has_create_proc && !has_begin_end {
+    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+        let has_violation = match statement {
+            Statement::CreateProcedure { body, .. } => !procedure_body_uses_begin_end(body),
+            _ => false,
+        };
+
+        if has_violation {
             vec![Issue::warning(
                 issue_codes::LINT_TQ_002,
                 "CREATE PROCEDURE should include BEGIN/END block.",
@@ -39,8 +40,8 @@ impl LintRule for TsqlProcedureBeginEnd {
     }
 }
 
-fn has_re(haystack: &str, pattern: &str) -> bool {
-    Regex::new(pattern).expect("valid regex").is_match(haystack)
+fn procedure_body_uses_begin_end(body: &ConditionalStatements) -> bool {
+    matches!(body, ConditionalStatements::BeginEnd(_))
 }
 
 #[cfg(test)]
@@ -68,15 +69,21 @@ mod tests {
     }
 
     #[test]
-    fn flags_procedure_without_begin_end_pattern() {
-        let issues = run("SELECT 'CREATE PROCEDURE p AS SELECT 1' AS sql_snippet");
+    fn flags_procedure_without_begin_end() {
+        let issues = run("CREATE PROCEDURE p AS SELECT 1;");
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_TQ_002);
     }
 
     #[test]
-    fn does_not_flag_procedure_with_begin_end_pattern() {
-        let issues = run("SELECT 'CREATE PROCEDURE p AS BEGIN SELECT 1 END' AS sql_snippet");
+    fn does_not_flag_procedure_with_begin_end() {
+        let issues = run("CREATE PROCEDURE p AS BEGIN SELECT 1; END;");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn does_not_flag_procedure_text_inside_string_literal() {
+        let issues = run("SELECT 'CREATE PROCEDURE p AS SELECT 1' AS sql_snippet");
         assert!(issues.is_empty());
     }
 }

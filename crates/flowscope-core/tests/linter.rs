@@ -622,8 +622,8 @@ fn lint_sqlfluff_parity_rule_smoke_cases() {
         ("LINT_ST_010", "SELECT * FROM t WHERE col = col"),
         ("LINT_ST_011", "SELECT a.id FROM a LEFT JOIN b b1 ON a.id = b1.id"),
         ("LINT_ST_012", "SELECT 1;;"),
-        ("LINT_TQ_001", "SELECT 'CREATE PROCEDURE sp_legacy' AS sql_snippet"),
-        ("LINT_TQ_002", "SELECT 'CREATE PROCEDURE p' AS sql_snippet"),
+        ("LINT_TQ_001", "CREATE PROCEDURE sp_legacy AS SELECT 1;"),
+        ("LINT_TQ_002", "CREATE PROCEDURE p AS SELECT 1;"),
         ("LINT_TQ_003", "SELECT '\nGO\nGO\n' AS sql_snippet"),
     ];
 

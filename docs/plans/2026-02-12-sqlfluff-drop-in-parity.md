@@ -75,7 +75,9 @@ This plan covers three axes:
   - `ST_008` moved from parity regex handling to a dedicated core AST rule (`st_008.rs`).
   - `ST_012` moved from parity handling to a dedicated core rule module (`st_012.rs`).
   - `TQ_001` moved from parity handling to a dedicated core rule module (`tq_001.rs`).
+  - `TQ_001` was further upgraded to AST-driven procedure-name analysis via `Statement::CreateProcedure`, replacing SQL text regex scanning.
   - `TQ_002` moved from parity handling to a dedicated core rule module (`tq_002.rs`).
+  - `TQ_002` was further upgraded to AST-driven procedure-body analysis via `CreateProcedure` `ConditionalStatements::BeginEnd` detection, replacing SQL text regex scanning.
   - `TQ_003` moved from parity handling to a dedicated core rule module (`tq_003.rs`).
   - `CV_001` moved from parity handling to a dedicated core rule module (`cv_001.rs`).
   - `CV_007` moved from parity handling to a dedicated core rule module (`cv_007.rs`).
