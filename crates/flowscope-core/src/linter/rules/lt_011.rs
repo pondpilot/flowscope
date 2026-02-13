@@ -3,13 +3,54 @@
 //! SQLFluff LT11 parity (current scope): enforce own-line placement for set
 //! operators in multiline statements.
 
+use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
 use sqlparser::ast::Statement;
 use sqlparser::keywords::Keyword;
 use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
 
-pub struct LayoutSetOperators;
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SetOperatorLinePosition {
+    AloneStrict,
+    Leading,
+    Trailing,
+}
+
+impl SetOperatorLinePosition {
+    fn from_config(config: &LintConfig) -> Self {
+        match config
+            .rule_option_str(issue_codes::LINT_LT_011, "line_position")
+            .unwrap_or("alone:strict")
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "leading" => Self::Leading,
+            "trailing" => Self::Trailing,
+            _ => Self::AloneStrict,
+        }
+    }
+}
+
+pub struct LayoutSetOperators {
+    line_position: SetOperatorLinePosition,
+}
+
+impl LayoutSetOperators {
+    pub fn from_config(config: &LintConfig) -> Self {
+        Self {
+            line_position: SetOperatorLinePosition::from_config(config),
+        }
+    }
+}
+
+impl Default for LayoutSetOperators {
+    fn default() -> Self {
+        Self {
+            line_position: SetOperatorLinePosition::AloneStrict,
+        }
+    }
+}
 
 impl LintRule for LayoutSetOperators {
     fn code(&self) -> &'static str {
@@ -25,10 +66,10 @@ impl LintRule for LayoutSetOperators {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        if has_inline_set_operator_in_multiline_statement(ctx.statement_sql()) {
+        if has_inconsistent_set_operator_layout(ctx.statement_sql(), self.line_position) {
             vec![Issue::info(
                 issue_codes::LINT_LT_011,
-                "Set operators should be on their own line in multiline queries.",
+                "Set operator line placement appears inconsistent.",
             )
             .with_statement(ctx.statement_index)]
         } else {
@@ -37,7 +78,7 @@ impl LintRule for LayoutSetOperators {
     }
 }
 
-fn has_inline_set_operator_in_multiline_statement(sql: &str) -> bool {
+fn has_inconsistent_set_operator_layout(sql: &str, line_position: SetOperatorLinePosition) -> bool {
     if !sql.contains('\n') {
         return false;
     }
@@ -66,26 +107,37 @@ fn has_inline_set_operator_in_multiline_statement(sql: &str) -> bool {
             continue;
         };
 
-        let line = token.span.start.line;
-        let line_positions: Vec<usize> = significant_tokens
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, (_, t))| (t.span.start.line == line).then_some(idx))
-            .collect();
-
-        let is_union_all_own_line = keyword == Keyword::UNION
-            && line_positions.len() == 2
-            && line_positions[0] == position
-            && line_positions[1] == position + 1
+        let operator_end = if keyword == Keyword::UNION
             && matches!(
                 significant_tokens.get(position + 1).map(|(_, t)| &t.token),
                 Some(Token::Word(word)) if word.keyword == Keyword::ALL
-            );
+            ) {
+            position + 1
+        } else {
+            position
+        };
 
-        let is_single_operator_own_line =
-            line_positions.len() == 1 && line_positions[0] == position;
+        let Some((_, prev_token)) = position
+            .checked_sub(1)
+            .and_then(|idx| significant_tokens.get(idx))
+        else {
+            continue;
+        };
+        let Some((_, next_token)) = significant_tokens.get(operator_end + 1) else {
+            continue;
+        };
 
-        if !is_single_operator_own_line && !is_union_all_own_line {
+        let operator_line = token.span.start.line;
+        let line_break_before = prev_token.span.start.line < operator_line;
+        let line_break_after = next_token.span.start.line > operator_line;
+
+        let placement_violation = match line_position {
+            SetOperatorLinePosition::AloneStrict => !line_break_before || !line_break_after,
+            SetOperatorLinePosition::Leading => !line_break_before || line_break_after,
+            SetOperatorLinePosition::Trailing => line_break_before || !line_break_after,
+        };
+
+        if placement_violation {
             return true;
         }
     }
@@ -116,11 +168,11 @@ fn is_trivia_token(token: &Token) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::linter::config::LintConfig;
     use crate::parser::parse_sql;
 
-    fn run(sql: &str) -> Vec<Issue> {
+    fn run_with_rule(sql: &str, rule: &LayoutSetOperators) -> Vec<Issue> {
         let statements = parse_sql(sql).expect("parse");
-        let rule = LayoutSetOperators;
         statements
             .iter()
             .enumerate()
@@ -135,6 +187,10 @@ mod tests {
                 )
             })
             .collect()
+    }
+
+    fn run(sql: &str) -> Vec<Issue> {
+        run_with_rule(sql, &LayoutSetOperators::default())
     }
 
     #[test]
@@ -154,5 +210,40 @@ mod tests {
     fn does_not_flag_own_line_union_all() {
         let issues = run("SELECT 1\nUNION ALL\nSELECT 2");
         assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn leading_line_position_accepts_leading_operators() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "layout.set_operators".to_string(),
+                serde_json::json!({"line_position": "leading"}),
+            )]),
+        };
+        let issues = run_with_rule(
+            "SELECT 1\nUNION SELECT 2\nUNION SELECT 3",
+            &LayoutSetOperators::from_config(&config),
+        );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn trailing_line_position_flags_leading_operators() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "LINT_LT_011".to_string(),
+                serde_json::json!({"line_position": "trailing"}),
+            )]),
+        };
+        let issues = run_with_rule(
+            "SELECT 1\nUNION SELECT 2",
+            &LayoutSetOperators::from_config(&config),
+        );
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_LT_011);
     }
 }

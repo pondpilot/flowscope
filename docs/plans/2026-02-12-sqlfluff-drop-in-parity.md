@@ -124,6 +124,7 @@ This plan covers three axes:
   - `LT_010` was further upgraded from regex scanning to tokenizer line-aware SELECT modifier checks.
   - `LT_011` moved from parity handling to a dedicated core rule module (`lt_011.rs`).
   - `LT_011` was further upgraded from regex scanning to tokenizer line-aware set-operator placement checks.
+  - `LT_011` now supports `line_position` (`alone:strict`/`leading`/`trailing`) through `lint.ruleConfigs`.
   - `LT_012` moved from parity handling to a dedicated core rule module (`lt_012.rs`).
   - `LT_012` now enforces SQLFluff-style single trailing newline at EOF (flags both missing final newline and multiple trailing blank lines).
   - `LT_013` moved from parity handling to a dedicated core rule module (`lt_013.rs`).

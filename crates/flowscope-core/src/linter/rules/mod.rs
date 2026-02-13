@@ -129,7 +129,7 @@ pub fn all_rules(config: &LintConfig) -> Vec<Box<dyn LintRule>> {
         Box::new(lt_008::LayoutCteNewline),
         Box::new(lt_009::LayoutSelectTargets::from_config(config)),
         Box::new(lt_010::LayoutSelectModifiers),
-        Box::new(lt_011::LayoutSetOperators),
+        Box::new(lt_011::LayoutSetOperators::from_config(config)),
         Box::new(lt_012::LayoutEndOfFile),
         Box::new(lt_013::LayoutStartOfFile),
         Box::new(lt_014::LayoutKeywordNewline),

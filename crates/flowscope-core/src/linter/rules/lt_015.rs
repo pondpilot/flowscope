@@ -57,8 +57,8 @@ impl LintRule for LayoutNewlines {
         let statement_sql = ctx
             .statement_sql()
             .trim_matches(|ch: char| ch.is_ascii_whitespace());
-        let excessive_inside = max_consecutive_blank_lines(statement_sql)
-            > self.maximum_empty_lines_inside_statements;
+        let excessive_inside =
+            max_consecutive_blank_lines(statement_sql) > self.maximum_empty_lines_inside_statements;
         let excessive_between = ctx.statement_index > 0
             && max_consecutive_blank_lines(inter_statement_gap(ctx.sql, ctx.statement_range.start))
                 > self.maximum_empty_lines_between_statements;

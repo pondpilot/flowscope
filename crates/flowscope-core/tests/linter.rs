@@ -465,6 +465,44 @@ fn lint_rule_config_layout_newlines_between_limit() {
 }
 
 #[test]
+fn lint_rule_config_layout_set_operators_leading_position() {
+    let issues = run_lint_with_config(
+        "SELECT 1\nUNION SELECT 2\nUNION SELECT 3",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "layout.set_operators".to_string(),
+                serde_json::json!({"line_position": "leading"}),
+            )]),
+        },
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_LT_011"),
+        "line_position=leading should allow leading set operators: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_rule_config_layout_set_operators_trailing_position() {
+    let issues = run_lint_with_config(
+        "SELECT 1\nUNION SELECT 2",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "LINT_LT_011".to_string(),
+                serde_json::json!({"line_position": "trailing"}),
+            )]),
+        },
+    );
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_LT_011"),
+        "line_position=trailing should flag leading set operators: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_rule_config_select_targets_wildcard_policy_multiple() {
     let issues = run_lint_with_config(
         "SELECT * FROM t",
