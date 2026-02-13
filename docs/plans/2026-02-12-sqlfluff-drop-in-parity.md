@@ -64,6 +64,7 @@ This plan covers three axes:
   - `AL_008` moved from parity into a dedicated core AST rule (`al_008.rs`) and parity registration was removed.
   - `AL_008` now checks duplicate output names from unaliased column references in SELECT projections (in addition to explicit aliases), improving SQLFluff AL08 parity.
   - `AL_008` now supports quote-aware `alias_case_check` through `lint.ruleConfigs`.
+  - `AL_008` `alias_case_check` now aligns closer to SQLFluff mode semantics for `quoted_cs_naked_upper` and `quoted_cs_naked_lower` (quoted aliases case-sensitive; naked aliases case-folded per configured mode).
   - `AL_005` was expanded to cover derived-table aliases while adding SQLFluff-compatible `LATERAL` and `VALUES` exceptions to reduce false positives.
   - `AL_005` now supports `alias_case_check` through `lint.ruleConfigs`.
   - `AL_005` `alias_case_check` now aligns closer to SQLFluff mode semantics for `quoted_cs_naked_upper` and `quoted_cs_naked_lower` (quoted identifiers case-sensitive; naked identifiers case-folded per configured mode).
