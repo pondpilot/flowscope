@@ -1491,6 +1491,18 @@ fn lint_lt_012_multiple_trailing_newlines() {
 }
 
 #[test]
+fn lint_jj_001_missing_padding_before_statement_close_tag() {
+    let issues = run_lint("SELECT '{% for x in y%}' AS templated");
+    assert!(
+        issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_JJ_001),
+        "expected {} for missing close-tag padding: {issues:?}",
+        issue_codes::LINT_JJ_001,
+    );
+}
+
+#[test]
 fn lint_rf_004_keyword_identifier() {
     let issues = run_lint("SELECT \"select\".id FROM users AS \"select\"");
     assert!(

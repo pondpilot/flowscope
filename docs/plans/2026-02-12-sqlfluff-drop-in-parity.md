@@ -120,6 +120,7 @@ This plan covers three axes:
   - `CV_011` now supports `preferred_type_casting_style` through `lint.ruleConfigs`.
   - `JJ_001` moved from parity handling to a dedicated core rule module (`jj_001.rs`).
   - `JJ_001` was further upgraded from regex matching to deterministic delimiter scanning for Jinja padding checks.
+  - `JJ_001` now also checks statement/comment closing tags (`%}`/`#}`) and supports trim-marker-safe padding detection for tags like `{{- ... -}}`.
   - `LT_010` moved from parity handling to a dedicated core rule module (`lt_010.rs`).
   - `LT_010` was further upgraded from regex scanning to tokenizer line-aware SELECT modifier checks.
   - `LT_011` moved from parity handling to a dedicated core rule module (`lt_011.rs`).
