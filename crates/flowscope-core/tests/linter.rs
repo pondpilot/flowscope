@@ -1807,6 +1807,24 @@ fn lint_st_011_distinct_on_unqualified_reference_defers_check() {
 }
 
 #[test]
+fn lint_st_011_cluster_by_reference_counts_as_usage() {
+    let issues = run_lint("SELECT a.id FROM a LEFT JOIN b ON a.id = b.id CLUSTER BY b.id");
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_ST_011"),
+        "CLUSTER BY joined-source references should count as usage: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_st_011_distribute_by_reference_counts_as_usage() {
+    let issues = run_lint("SELECT a.id FROM a LEFT JOIN b ON a.id = b.id DISTRIBUTE BY b.id");
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_ST_011"),
+        "DISTRIBUTE BY joined-source references should count as usage: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_st_011_does_not_flag_base_from_with_using_join() {
     let issues = run_lint("SELECT b.id FROM a LEFT JOIN b USING(id)");
     assert!(

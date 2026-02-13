@@ -465,6 +465,14 @@ fn visit_non_join_select_expressions<F: FnMut(&sqlparser::ast::Expr)>(
         }
     }
 
+    for expr in &select.cluster_by {
+        visitor(expr);
+    }
+
+    for expr in &select.distribute_by {
+        visitor(expr);
+    }
+
     if let Some(having) = &select.having {
         visitor(having);
     }
@@ -775,6 +783,18 @@ mod tests {
     #[test]
     fn defers_when_distinct_on_clause_has_unqualified_reference() {
         let issues = run("SELECT DISTINCT ON (id) a.id FROM a LEFT JOIN b ON a.id = b.id");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn allows_outer_join_source_referenced_in_cluster_by_clause() {
+        let issues = run("SELECT a.id FROM a LEFT JOIN b ON a.id = b.id CLUSTER BY b.id");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn allows_outer_join_source_referenced_in_distribute_by_clause() {
+        let issues = run("SELECT a.id FROM a LEFT JOIN b ON a.id = b.id DISTRIBUTE BY b.id");
         assert!(issues.is_empty());
     }
 }
