@@ -86,6 +86,8 @@ This plan covers three axes:
   - `LT_013` moved from parity handling to a dedicated core rule module (`lt_013.rs`).
   - `LT_015` moved from parity handling to a dedicated core rule module (`lt_015.rs`).
   - `CP_001` moved from parity handling to a dedicated core rule module (`cp_001.rs`).
+  - `CP_002` moved from parity handling to a dedicated core rule module (`cp_002.rs`).
+  - `CP_003` moved from parity handling to a dedicated core rule module (`cp_003.rs`).
   - `CP_004` moved from parity handling to a dedicated core rule module (`cp_004.rs`).
   - `CP_005` moved from parity handling to a dedicated core rule module (`cp_005.rs`).
 

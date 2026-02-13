@@ -177,7 +177,7 @@ Move style-oriented checks to lexical engine:
 - [x] `LINT_ST_012` and `LINT_TQ_001`-`LINT_TQ_003` are now split out of `parity.rs` into dedicated core modules (`st_012.rs`, `tq_001.rs`-`tq_003.rs`) while preserving current heuristic behavior.
 - [x] `LINT_CV_001`, `LINT_CV_007`, and `LINT_CV_009`-`LINT_CV_011` are now split out of `parity.rs` into dedicated core modules (`cv_001.rs`, `cv_007.rs`, `cv_009.rs`-`cv_011.rs`) while preserving current heuristic behavior.
 - [x] `LINT_JJ_001` and `LINT_LT_010`/`LINT_LT_011`/`LINT_LT_012`/`LINT_LT_013`/`LINT_LT_015` are now split out of `parity.rs` into dedicated core modules (`jj_001.rs`, `lt_010.rs`, `lt_011.rs`, `lt_012.rs`, `lt_013.rs`, `lt_015.rs`) while preserving current heuristic behavior.
-- [x] `LINT_CP_001`, `LINT_CP_004`, and `LINT_CP_005` are now split out of `parity.rs` into dedicated core modules (`cp_001.rs`, `cp_004.rs`, `cp_005.rs`) while preserving current heuristic behavior.
+- [x] `LINT_CP_001`-`LINT_CP_005` are now split out of `parity.rs` into dedicated core modules (`cp_001.rs`-`cp_005.rs`) while preserving current heuristic behavior.
 - [x] `LINT_AM_003` now follows SQLFluff AM03 semantics via AST `ORDER BY` analysis, flagging mixed implicit/explicit sort direction (including `NULLS` ordering cases) across nested query scopes; fixer parity now adds explicit `ASC` to implicit items in mixed clauses.
 - [x] `LINT_AM_005` now supports SQLFluff AM05 fixer parity for default behavior by rewriting bare `JOIN` operators to explicit `INNER JOIN` via AST join-operator rewrites.
 - [x] `LINT_AM_006` now follows SQLFluff AM06 default (`consistent`) semantics via AST traversal of `GROUP BY` / `ORDER BY` clauses, including nested-query precedence and rollup-style references.

@@ -1699,125 +1699,6 @@ impl LintRule for AliasingUniqueColumn {
         vec![issue]
     }
 }
-pub struct CapitalisationIdentifiers;
-
-impl LintRule for CapitalisationIdentifiers {
-    fn code(&self) -> &'static str {
-        issue_codes::LINT_CP_002
-    }
-
-    fn name(&self) -> &'static str {
-        "Identifier capitalisation"
-    }
-
-    fn description(&self) -> &'static str {
-        "Identifiers should use a consistent case style."
-    }
-
-    fn check(&self, _stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let sql = mask_comments_and_single_quoted_strings(stmt_sql(ctx));
-        let function_names: HashSet<String> = function_tokens_with_spans(&sql)
-            .into_iter()
-            .map(|(name, _, _)| name.to_ascii_uppercase())
-            .collect();
-
-        let identifiers: Vec<(String, usize, usize)> =
-            capture_group_with_spans(&sql, r#"(?i)\b([A-Za-z_][A-Za-z0-9_]*)\b"#, 1)
-                .into_iter()
-                .filter(|(ident, _, _)| {
-                    let upper = ident.to_ascii_uppercase();
-                    (!is_keyword(ident) || upper == "EXCLUDED") && !function_names.contains(&upper)
-                })
-                .collect();
-
-        let excluded_issues: Vec<Issue> = identifiers
-            .iter()
-            .filter(|(ident, _, _)| {
-                ident.eq_ignore_ascii_case("EXCLUDED") && ident != &ident.to_ascii_lowercase()
-            })
-            .map(|(_, start, end)| {
-                Issue::info(
-                    issue_codes::LINT_CP_002,
-                    "Identifiers use inconsistent capitalisation.",
-                )
-                .with_statement(ctx.statement_index)
-                .with_span(ctx.span_from_statement_offset(*start, *end))
-            })
-            .collect();
-
-        if !excluded_issues.is_empty() {
-            return excluded_issues;
-        }
-
-        let names: Vec<String> = identifiers
-            .iter()
-            .map(|(name, _, _)| name.clone())
-            .collect();
-        if !mixed_case_for_tokens(&names) {
-            return Vec::new();
-        }
-
-        let (start, end) = first_style_mismatch_span(&identifiers)
-            .or_else(|| identifiers.first().map(|(_, s, e)| (*s, *e)))
-            .unwrap_or((0, 0));
-
-        vec![Issue::info(
-            issue_codes::LINT_CP_002,
-            "Identifiers use inconsistent capitalisation.",
-        )
-        .with_statement(ctx.statement_index)
-        .with_span(ctx.span_from_statement_offset(start, end))]
-    }
-}
-
-pub struct CapitalisationFunctions;
-
-impl LintRule for CapitalisationFunctions {
-    fn code(&self) -> &'static str {
-        issue_codes::LINT_CP_003
-    }
-
-    fn name(&self) -> &'static str {
-        "Function capitalisation"
-    }
-
-    fn description(&self) -> &'static str {
-        "Functions should use a consistent case style."
-    }
-
-    fn check(&self, _stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let sql = mask_comments_and_single_quoted_strings(stmt_sql(ctx));
-        let functions = function_tokens_with_spans(&sql);
-        if functions.is_empty() {
-            return Vec::new();
-        }
-
-        let preferred_style = functions
-            .iter()
-            .map(|(name, _, _)| case_style(name))
-            .find(|style| *style == "lower" || *style == "upper")
-            .unwrap_or("lower");
-
-        let issues: Vec<Issue> = functions
-            .into_iter()
-            .filter(|(name, _, _)| {
-                let style = case_style(name);
-                (style == "lower" || style == "upper" || style == "mixed")
-                    && style != preferred_style
-            })
-            .map(|(_, start, end)| {
-                Issue::info(
-                    issue_codes::LINT_CP_003,
-                    "Function names use inconsistent capitalisation.",
-                )
-                .with_statement(ctx.statement_index)
-                .with_span(ctx.span_from_statement_offset(start, end))
-            })
-            .collect();
-
-        issues
-    }
-}
 define_predicate_rule!(
     ConventionSelectTrailingComma,
     issue_codes::LINT_CV_003,
@@ -2216,8 +2097,6 @@ impl LintRule for StructureSubquery {
 /// Returns all parity rule implementations defined in this module.
 pub fn parity_rules() -> Vec<Box<dyn LintRule>> {
     vec![
-        Box::new(CapitalisationIdentifiers),
-        Box::new(CapitalisationFunctions),
         Box::new(LayoutSpacing),
         Box::new(LayoutIndent),
         Box::new(LayoutOperators),
@@ -2305,15 +2184,6 @@ mod tests {
             &AliasingUniqueColumn,
             "WITH left_side AS (SELECT id AS shared_name FROM users), right_side AS (SELECT id AS shared_name FROM orders) SELECT ls.shared_name, rs.shared_name FROM left_side ls JOIN right_side rs ON ls.shared_name = rs.shared_name",
         );
-    }
-
-    #[test]
-    fn capitalisation_rules_cover_fail_and_pass_cases() {
-        assert_rule_triggers(&CapitalisationIdentifiers, "SELECT Col, col FROM t");
-        assert_rule_not_triggers(&CapitalisationIdentifiers, "SELECT col_one, col_two FROM t");
-
-        assert_rule_triggers(&CapitalisationFunctions, "SELECT COUNT(*), count(x) FROM t");
-        assert_rule_not_triggers(&CapitalisationFunctions, "SELECT lower(x), upper(y) FROM t");
     }
 
     #[test]

@@ -22,6 +22,8 @@ pub mod am_008;
 pub mod am_009;
 pub(crate) mod column_count_helpers;
 pub mod cp_001;
+pub mod cp_002;
+pub mod cp_003;
 pub mod cp_004;
 pub mod cp_005;
 pub mod cv_001;
@@ -88,6 +90,8 @@ pub fn all_rules() -> Vec<Box<dyn LintRule>> {
         Box::new(al_008::AliasingUniqueColumn),
         Box::new(al_009::AliasingSelfAliasColumn),
         Box::new(cp_001::CapitalisationKeywords),
+        Box::new(cp_002::CapitalisationIdentifiers),
+        Box::new(cp_003::CapitalisationFunctions),
         Box::new(cp_004::CapitalisationLiterals),
         Box::new(cp_005::CapitalisationTypes),
         Box::new(cv_001::ConventionNotEqual),
