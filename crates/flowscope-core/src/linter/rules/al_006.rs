@@ -11,7 +11,7 @@ use sqlparser::ast::{Select, Statement, TableFactor, TableWithJoins};
 use super::semantic_helpers::{table_factor_alias_name, visit_selects_in_statement};
 
 const DEFAULT_MIN_ALIAS_LENGTH: usize = 0;
-const DEFAULT_MAX_ALIAS_LENGTH: Option<usize> = Some(30);
+const DEFAULT_MAX_ALIAS_LENGTH: Option<usize> = None;
 
 pub struct AliasingLength {
     min_alias_length: usize,
@@ -194,10 +194,9 @@ mod tests {
     }
 
     #[test]
-    fn flags_overlong_table_alias() {
+    fn default_does_not_flag_overlong_table_alias() {
         let issues = run("SELECT * FROM users this_alias_name_is_longer_than_thirty_chars");
-        assert_eq!(issues.len(), 1);
-        assert_eq!(issues[0].code, issue_codes::LINT_AL_006);
+        assert!(issues.is_empty());
     }
 
     #[test]
@@ -213,11 +212,46 @@ mod tests {
     }
 
     #[test]
-    fn flags_nested_select_alias() {
+    fn default_does_not_flag_nested_select_alias() {
         let issues = run(
             "SELECT * FROM (SELECT * FROM users this_alias_name_is_longer_than_thirty_chars) sub",
         );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn flags_overlong_table_alias_with_max_length_config() {
+        let statements = parse_sql("SELECT * FROM users this_alias_name_is_longer_than_thirty_chars")
+            .expect("parse");
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "aliasing.length".to_string(),
+                serde_json::json!({"max_alias_length": 30}),
+            )]),
+        };
+        let rule = AliasingLength::from_config(&config);
+
+        let issues = statements
+            .iter()
+            .enumerate()
+            .flat_map(|(index, statement)| {
+                rule.check(
+                    statement,
+                    &LintContext {
+                        sql: "SELECT * FROM users this_alias_name_is_longer_than_thirty_chars",
+                        statement_range: 0
+                            .."SELECT * FROM users this_alias_name_is_longer_than_thirty_chars"
+                                .len(),
+                        statement_index: index,
+                    },
+                )
+            })
+            .collect::<Vec<_>>();
+
         assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_AL_006);
     }
 
     #[test]

@@ -2328,10 +2328,6 @@ fn lint_sqlfluff_parity_rule_smoke_cases() {
         ("LINT_AL_001", "SELECT * FROM a x JOIN b y ON x.id = y.id"),
         ("LINT_AL_002", "SELECT a + 1 AS x, b + 2 y FROM t"),
         ("LINT_AL_004", "SELECT * FROM a t JOIN b t ON t.id = t.id"),
-        (
-            "LINT_AL_006",
-            "SELECT * FROM a x JOIN b yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy ON x.id = yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.id",
-        ),
         ("LINT_AL_008", "SELECT a AS x, b AS x FROM t"),
         ("LINT_AL_009", "SELECT a AS a FROM t"),
         ("LINT_AM_009", "SELECT a FROM t LIMIT 10"),
@@ -2422,5 +2418,24 @@ fn lint_sqlfluff_parity_rule_smoke_cases() {
             .any(|(code, _)| code == issue_codes::LINT_AL_007),
         "expected {} with force_enable=true in smoke case: {al07_issues:?}",
         issue_codes::LINT_AL_007,
+    );
+
+    let al06_issues = run_lint_with_config(
+        "SELECT * FROM a x JOIN b yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy ON x.id = yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy.id",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "aliasing.length".to_string(),
+                serde_json::json!({"max_alias_length": 30}),
+            )]),
+        },
+    );
+    assert!(
+        al06_issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_AL_006),
+        "expected {} with max_alias_length=30 in smoke case: {al06_issues:?}",
+        issue_codes::LINT_AL_006,
     );
 }
