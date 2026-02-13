@@ -71,7 +71,7 @@ impl LintRule for ConventionQuotedLiterals {
         let has_single_quoted = statement_contains_single_quoted_literal(statement);
 
         let violation = match self.preferred_style {
-            PreferredQuotedLiteralStyle::Consistent => has_double_quoted,
+            PreferredQuotedLiteralStyle::Consistent => has_double_quoted && has_single_quoted,
             PreferredQuotedLiteralStyle::SingleQuotes => has_double_quoted,
             PreferredQuotedLiteralStyle::DoubleQuotes => has_single_quoted,
         };
@@ -139,8 +139,8 @@ mod tests {
     }
 
     #[test]
-    fn flags_double_quoted_literal_like_token() {
-        let issues = run("SELECT \"abc\" FROM t");
+    fn flags_mixed_quote_styles_in_consistent_mode() {
+        let issues = run("SELECT 'abc' AS a, \"def\" AS b FROM t");
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_CV_010);
     }
@@ -148,6 +148,11 @@ mod tests {
     #[test]
     fn does_not_flag_single_quoted_literal() {
         assert!(run("SELECT 'abc' FROM t").is_empty());
+    }
+
+    #[test]
+    fn does_not_flag_only_double_quoted_literal_like_token() {
+        assert!(run("SELECT \"abc\" FROM t").is_empty());
     }
 
     #[test]

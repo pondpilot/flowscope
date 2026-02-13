@@ -1638,7 +1638,7 @@ fn lint_sqlfluff_parity_rule_smoke_cases() {
         ("LINT_CV_006", "SELECT 1; SELECT 2"),
         ("LINT_CV_007", "(SELECT 1)"),
         ("LINT_CV_009", "SELECT foo FROM t"),
-        ("LINT_CV_010", "SELECT \"abc\" FROM t"),
+        ("LINT_CV_010", "SELECT 'abc' AS a, \"def\" AS b FROM t"),
         ("LINT_CV_011", "SELECT CAST(a AS INT)::TEXT FROM t"),
         ("LINT_CV_012", "SELECT foo.a, bar.b FROM foo JOIN bar WHERE foo.x = bar.y"),
         ("LINT_JJ_001", "SELECT '{{foo}}' AS templated"),
