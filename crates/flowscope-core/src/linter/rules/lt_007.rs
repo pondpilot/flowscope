@@ -5,7 +5,6 @@
 
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
-use regex::Regex;
 use sqlparser::ast::Statement;
 
 pub struct LayoutCteBracket;
@@ -24,10 +23,7 @@ impl LintRule for LayoutCteBracket {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        if has_re(
-            ctx.statement_sql(),
-            r"(?is)\bwith\b\s+[A-Za-z_][A-Za-z0-9_]*\s+as\s+select\b",
-        ) {
+        if has_unbracketed_cte_pattern(ctx.statement_sql()) {
             vec![Issue::warning(
                 issue_codes::LINT_LT_007,
                 "CTE AS clause appears to be missing surrounding brackets.",
@@ -39,8 +35,137 @@ impl LintRule for LayoutCteBracket {
     }
 }
 
-fn has_re(haystack: &str, pattern: &str) -> bool {
-    Regex::new(pattern).expect("valid regex").is_match(haystack)
+fn has_unbracketed_cte_pattern(sql: &str) -> bool {
+    let bytes = sql.as_bytes();
+    let mut index = 0usize;
+
+    while let Some(with_start) = find_word(bytes, index, "with") {
+        let mut cursor = with_start + 4;
+
+        let ws_after_with = consume_whitespace(bytes, cursor);
+        if ws_after_with == cursor {
+            index = with_start + 1;
+            continue;
+        }
+        cursor = ws_after_with;
+
+        let Some((_, ident_end)) = parse_identifier(bytes, cursor) else {
+            index = with_start + 1;
+            continue;
+        };
+        cursor = ident_end;
+
+        let ws_after_ident = consume_whitespace(bytes, cursor);
+        if ws_after_ident == cursor {
+            index = with_start + 1;
+            continue;
+        }
+        cursor = ws_after_ident;
+
+        let Some((as_start, as_end)) = parse_word(bytes, cursor) else {
+            index = with_start + 1;
+            continue;
+        };
+        if !eq_ignore_ascii_case(bytes, as_start, as_end, "as") {
+            index = with_start + 1;
+            continue;
+        }
+        cursor = as_end;
+
+        let ws_after_as = consume_whitespace(bytes, cursor);
+        if ws_after_as == cursor {
+            index = with_start + 1;
+            continue;
+        }
+        cursor = ws_after_as;
+
+        let Some((select_start, select_end)) = parse_word(bytes, cursor) else {
+            index = with_start + 1;
+            continue;
+        };
+        if eq_ignore_ascii_case(bytes, select_start, select_end, "select") {
+            return true;
+        }
+
+        index = with_start + 1;
+    }
+
+    false
+}
+
+fn find_word(bytes: &[u8], from: usize, target: &str) -> Option<usize> {
+    let mut i = from;
+    while i < bytes.len() {
+        let Some((start, end)) = parse_word(bytes, i) else {
+            i += 1;
+            continue;
+        };
+
+        if eq_ignore_ascii_case(bytes, start, end, target) {
+            return Some(start);
+        }
+
+        i = end;
+    }
+
+    None
+}
+
+fn parse_word(bytes: &[u8], start: usize) -> Option<(usize, usize)> {
+    if start >= bytes.len() || !is_word_char(bytes[start]) {
+        return None;
+    }
+
+    let mut end = start;
+    while end < bytes.len() && is_word_char(bytes[end]) {
+        end += 1;
+    }
+
+    if start > 0 && is_word_char(bytes[start - 1]) {
+        return None;
+    }
+    if end < bytes.len() && is_word_char(bytes[end]) {
+        return None;
+    }
+
+    Some((start, end))
+}
+
+fn parse_identifier(bytes: &[u8], start: usize) -> Option<(usize, usize)> {
+    if start >= bytes.len() || !is_identifier_start(bytes[start]) {
+        return None;
+    }
+
+    let mut end = start + 1;
+    while end < bytes.len() && is_identifier_char(bytes[end]) {
+        end += 1;
+    }
+
+    Some((start, end))
+}
+
+fn consume_whitespace(bytes: &[u8], mut start: usize) -> usize {
+    while start < bytes.len() && bytes[start].is_ascii_whitespace() {
+        start += 1;
+    }
+    start
+}
+
+fn eq_ignore_ascii_case(bytes: &[u8], start: usize, end: usize, target: &str) -> bool {
+    let len = end.saturating_sub(start);
+    len == target.len() && bytes[start..end].eq_ignore_ascii_case(target.as_bytes())
+}
+
+fn is_word_char(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_'
+}
+
+fn is_identifier_start(byte: u8) -> bool {
+    byte.is_ascii_alphabetic() || byte == b'_'
+}
+
+fn is_identifier_char(byte: u8) -> bool {
+    is_word_char(byte)
 }
 
 #[cfg(test)]
