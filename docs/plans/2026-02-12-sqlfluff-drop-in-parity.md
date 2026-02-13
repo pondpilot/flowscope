@@ -159,7 +159,7 @@ This plan covers three axes:
   - `CP_003` was further upgraded from regex scanning to token-stream function-call detection.
   - `CP_005` was further upgraded from regex masking to tokenizer-driven type-keyword collection.
   - `CP_001` now supports `capitalisation_policy` / `ignore_words` / `ignore_words_regex` through `lint.ruleConfigs`.
-  - `CP_002`-`CP_005` now support `extended_capitalisation_policy` through `lint.ruleConfigs`.
+  - `CP_002`-`CP_005` now support `extended_capitalisation_policy` / `ignore_words` / `ignore_words_regex` through `lint.ruleConfigs`.
   - `AM_005` now supports `fully_qualify_join_types` (`inner`/`outer`/`both`) through `lint.ruleConfigs`.
   - `AM_006` now supports `group_by_and_order_by_style` (`consistent`/`explicit`/`implicit`) through `lint.ruleConfigs`.
   - Legacy `parity.rs` monolith was retired; rule registration now points only to dedicated `rules/<code>.rs` modules.

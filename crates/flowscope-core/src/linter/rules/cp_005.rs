@@ -2,17 +2,25 @@
 //!
 //! SQLFluff CP05 parity (current scope): detect mixed-case type names.
 
+use std::collections::HashSet;
+
 use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
+use regex::Regex;
 use sqlparser::ast::Statement;
 use sqlparser::dialect::GenericDialect;
 use sqlparser::tokenizer::{Token, Tokenizer};
 
-use super::capitalisation_policy_helpers::{tokens_violate_policy, CapitalisationPolicy};
+use super::capitalisation_policy_helpers::{
+    ignored_words_from_config, ignored_words_regex_from_config, token_is_ignored,
+    tokens_violate_policy, CapitalisationPolicy,
+};
 
 pub struct CapitalisationTypes {
     policy: CapitalisationPolicy,
+    ignore_words: HashSet<String>,
+    ignore_words_regex: Option<Regex>,
 }
 
 impl CapitalisationTypes {
@@ -23,6 +31,8 @@ impl CapitalisationTypes {
                 issue_codes::LINT_CP_005,
                 "extended_capitalisation_policy",
             ),
+            ignore_words: ignored_words_from_config(config, issue_codes::LINT_CP_005),
+            ignore_words_regex: ignored_words_regex_from_config(config, issue_codes::LINT_CP_005),
         }
     }
 }
@@ -31,6 +41,8 @@ impl Default for CapitalisationTypes {
     fn default() -> Self {
         Self {
             policy: CapitalisationPolicy::Consistent,
+            ignore_words: HashSet::new(),
+            ignore_words_regex: None,
         }
     }
 }
@@ -49,7 +61,14 @@ impl LintRule for CapitalisationTypes {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        if tokens_violate_policy(&type_tokens(ctx.statement_sql()), self.policy) {
+        if tokens_violate_policy(
+            &type_tokens(
+                ctx.statement_sql(),
+                &self.ignore_words,
+                self.ignore_words_regex.as_ref(),
+            ),
+            self.policy,
+        ) {
             vec![Issue::info(
                 issue_codes::LINT_CP_005,
                 "Type names use inconsistent capitalisation.",
@@ -61,7 +80,11 @@ impl LintRule for CapitalisationTypes {
     }
 }
 
-fn type_tokens(sql: &str) -> Vec<String> {
+fn type_tokens(
+    sql: &str,
+    ignore_words: &HashSet<String>,
+    ignore_words_regex: Option<&Regex>,
+) -> Vec<String> {
     let dialect = GenericDialect {};
     let mut tokenizer = Tokenizer::new(&dialect, sql);
     let Ok(tokens) = tokenizer.tokenize() else {
@@ -72,7 +95,9 @@ fn type_tokens(sql: &str) -> Vec<String> {
         .into_iter()
         .filter_map(|token| match token {
             Token::Word(word)
-                if word.quote_style.is_none() && is_tracked_type_name(word.value.as_str()) =>
+                if word.quote_style.is_none()
+                    && is_tracked_type_name(word.value.as_str())
+                    && !token_is_ignored(word.value.as_str(), ignore_words, ignore_words_regex) =>
             {
                 Some(word.value)
             }
@@ -168,5 +193,29 @@ mod tests {
             },
         );
         assert_eq!(issues.len(), 1);
+    }
+
+    #[test]
+    fn ignore_words_regex_excludes_types_from_check() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "LINT_CP_005".to_string(),
+                serde_json::json!({"ignore_words_regex": "^varchar$"}),
+            )]),
+        };
+        let rule = CapitalisationTypes::from_config(&config);
+        let sql = "CREATE TABLE t (a INT, b varchar(10))";
+        let statements = parse_sql(sql).expect("parse");
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert!(issues.is_empty());
     }
 }

@@ -723,6 +723,25 @@ fn lint_rule_config_capitalisation_identifiers_upper_policy() {
 }
 
 #[test]
+fn lint_rule_config_capitalisation_identifiers_ignore_words_regex() {
+    let issues = run_lint_with_config(
+        "SELECT Col, col FROM t",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "capitalisation.identifiers".to_string(),
+                serde_json::json!({"ignore_words_regex": "^col$"}),
+            )]),
+        },
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_CP_002"),
+        "identifier ignore_words_regex should suppress matching identifiers: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_rule_config_capitalisation_functions_lower_policy() {
     let issues = run_lint_with_config(
         "SELECT COUNT(x) FROM t",
@@ -738,6 +757,25 @@ fn lint_rule_config_capitalisation_functions_lower_policy() {
     assert!(
         issues.iter().any(|(code, _)| code == "LINT_CP_003"),
         "function lower policy should flag uppercase function names: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_rule_config_capitalisation_functions_ignore_words_regex() {
+    let issues = run_lint_with_config(
+        "SELECT COUNT(*), count(x) FROM t",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "capitalisation.functions".to_string(),
+                serde_json::json!({"ignore_words_regex": "^count$"}),
+            )]),
+        },
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_CP_003"),
+        "function ignore_words_regex should suppress matching function names: {issues:?}"
     );
 }
 
@@ -761,6 +799,25 @@ fn lint_rule_config_capitalisation_literals_upper_policy() {
 }
 
 #[test]
+fn lint_rule_config_capitalisation_literals_ignore_words_regex() {
+    let issues = run_lint_with_config(
+        "SELECT NULL, true FROM t",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "capitalisation.literals".to_string(),
+                serde_json::json!({"ignore_words_regex": "^true$"}),
+            )]),
+        },
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_CP_004"),
+        "literal ignore_words_regex should suppress matching literals: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_rule_config_capitalisation_types_upper_policy() {
     let issues = run_lint_with_config(
         "CREATE TABLE t (a int)",
@@ -776,6 +833,25 @@ fn lint_rule_config_capitalisation_types_upper_policy() {
     assert!(
         issues.iter().any(|(code, _)| code == "LINT_CP_005"),
         "type upper policy should flag lowercase type names: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_rule_config_capitalisation_types_ignore_words_regex() {
+    let issues = run_lint_with_config(
+        "CREATE TABLE t (a INT, b varchar(10))",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "capitalisation.types".to_string(),
+                serde_json::json!({"ignore_words_regex": "^varchar$"}),
+            )]),
+        },
+    );
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_CP_005"),
+        "type ignore_words_regex should suppress matching type names: {issues:?}"
     );
 }
 

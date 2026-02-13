@@ -7,13 +7,16 @@ use std::collections::HashSet;
 use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
-use regex::{Regex, RegexBuilder};
+use regex::Regex;
 use sqlparser::ast::Statement;
 use sqlparser::dialect::GenericDialect;
 use sqlparser::keywords::Keyword;
 use sqlparser::tokenizer::{Token, Tokenizer};
 
-use super::capitalisation_policy_helpers::{tokens_violate_policy, CapitalisationPolicy};
+use super::capitalisation_policy_helpers::{
+    ignored_words_from_config, ignored_words_regex_from_config, token_is_ignored,
+    tokens_violate_policy, CapitalisationPolicy,
+};
 
 pub struct CapitalisationKeywords {
     policy: CapitalisationPolicy,
@@ -29,8 +32,8 @@ impl CapitalisationKeywords {
                 issue_codes::LINT_CP_001,
                 "capitalisation_policy",
             ),
-            ignore_words: ignored_words_from_config(config),
-            ignore_words_regex: ignored_words_regex_from_config(config),
+            ignore_words: ignored_words_from_config(config, issue_codes::LINT_CP_001),
+            ignore_words_regex: ignored_words_regex_from_config(config, issue_codes::LINT_CP_001),
         }
     }
 }
@@ -78,40 +81,6 @@ impl LintRule for CapitalisationKeywords {
     }
 }
 
-fn ignored_words_from_config(config: &LintConfig) -> HashSet<String> {
-    if let Some(words) = config.rule_option_string_list(issue_codes::LINT_CP_001, "ignore_words") {
-        return words
-            .into_iter()
-            .map(|word| word.trim().to_ascii_uppercase())
-            .filter(|word| !word.is_empty())
-            .collect();
-    }
-
-    config
-        .rule_option_str(issue_codes::LINT_CP_001, "ignore_words")
-        .map(|raw| {
-            raw.split(',')
-                .map(str::trim)
-                .filter(|word| !word.is_empty())
-                .map(str::to_ascii_uppercase)
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-fn ignored_words_regex_from_config(config: &LintConfig) -> Option<Regex> {
-    let raw = config.rule_option_str(issue_codes::LINT_CP_001, "ignore_words_regex")?;
-    let pattern = raw.trim();
-    if pattern.is_empty() {
-        return None;
-    }
-
-    RegexBuilder::new(pattern)
-        .case_insensitive(true)
-        .build()
-        .ok()
-}
-
 fn keyword_tokens(
     sql: &str,
     ignore_words: &HashSet<String>,
@@ -129,10 +98,7 @@ fn keyword_tokens(
             Token::Word(word)
                 if word.keyword != Keyword::NoKeyword
                     && is_tracked_keyword(word.value.as_str())
-                    && !ignore_words.contains(&word.value.to_ascii_uppercase())
-                    && !ignore_words_regex
-                        .map(|regex| regex.is_match(word.value.as_str()))
-                        .unwrap_or(false) =>
+                    && !token_is_ignored(word.value.as_str(), ignore_words, ignore_words_regex) =>
             {
                 Some(word.value)
             }

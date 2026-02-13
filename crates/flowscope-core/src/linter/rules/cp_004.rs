@@ -3,17 +3,25 @@
 //! SQLFluff CP04 parity (current scope): detect mixed-case usage for
 //! NULL/TRUE/FALSE literal keywords.
 
+use std::collections::HashSet;
+
 use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
+use regex::Regex;
 use sqlparser::ast::Statement;
 use sqlparser::dialect::GenericDialect;
 use sqlparser::tokenizer::{Token, Tokenizer};
 
-use super::capitalisation_policy_helpers::{tokens_violate_policy, CapitalisationPolicy};
+use super::capitalisation_policy_helpers::{
+    ignored_words_from_config, ignored_words_regex_from_config, token_is_ignored,
+    tokens_violate_policy, CapitalisationPolicy,
+};
 
 pub struct CapitalisationLiterals {
     policy: CapitalisationPolicy,
+    ignore_words: HashSet<String>,
+    ignore_words_regex: Option<Regex>,
 }
 
 impl CapitalisationLiterals {
@@ -24,6 +32,8 @@ impl CapitalisationLiterals {
                 issue_codes::LINT_CP_004,
                 "extended_capitalisation_policy",
             ),
+            ignore_words: ignored_words_from_config(config, issue_codes::LINT_CP_004),
+            ignore_words_regex: ignored_words_regex_from_config(config, issue_codes::LINT_CP_004),
         }
     }
 }
@@ -32,6 +42,8 @@ impl Default for CapitalisationLiterals {
     fn default() -> Self {
         Self {
             policy: CapitalisationPolicy::Consistent,
+            ignore_words: HashSet::new(),
+            ignore_words_regex: None,
         }
     }
 }
@@ -50,7 +62,14 @@ impl LintRule for CapitalisationLiterals {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        if tokens_violate_policy(&literal_tokens(ctx.statement_sql()), self.policy) {
+        if tokens_violate_policy(
+            &literal_tokens(
+                ctx.statement_sql(),
+                &self.ignore_words,
+                self.ignore_words_regex.as_ref(),
+            ),
+            self.policy,
+        ) {
             vec![Issue::info(
                 issue_codes::LINT_CP_004,
                 "Literal keywords (NULL/TRUE/FALSE) use inconsistent capitalisation.",
@@ -62,7 +81,11 @@ impl LintRule for CapitalisationLiterals {
     }
 }
 
-fn literal_tokens(sql: &str) -> Vec<String> {
+fn literal_tokens(
+    sql: &str,
+    ignore_words: &HashSet<String>,
+    ignore_words_regex: Option<&Regex>,
+) -> Vec<String> {
     let dialect = GenericDialect {};
     let mut tokenizer = Tokenizer::new(&dialect, sql);
     let Ok(tokens) = tokenizer.tokenize() else {
@@ -76,6 +99,10 @@ fn literal_tokens(sql: &str) -> Vec<String> {
                 if matches!(
                     word.value.to_ascii_uppercase().as_str(),
                     "NULL" | "TRUE" | "FALSE"
+                ) && !token_is_ignored(
+                    word.value.as_str(),
+                    ignore_words,
+                    ignore_words_regex,
                 ) =>
             {
                 Some(word.value)
@@ -150,5 +177,29 @@ mod tests {
             },
         );
         assert_eq!(issues.len(), 1);
+    }
+
+    #[test]
+    fn ignore_words_regex_excludes_literals_from_check() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "capitalisation.literals".to_string(),
+                serde_json::json!({"ignore_words_regex": "^true$"}),
+            )]),
+        };
+        let rule = CapitalisationLiterals::from_config(&config);
+        let sql = "SELECT NULL, true FROM t";
+        let statements = parse_sql(sql).expect("parse");
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert!(issues.is_empty());
     }
 }

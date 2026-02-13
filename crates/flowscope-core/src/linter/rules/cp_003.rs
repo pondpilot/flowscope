@@ -3,18 +3,26 @@
 //! SQLFluff CP03 parity (current scope): detect inconsistent function name
 //! capitalisation.
 
+use std::collections::HashSet;
+
 use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
+use regex::Regex;
 use sqlparser::ast::Statement;
 use sqlparser::dialect::GenericDialect;
 use sqlparser::keywords::Keyword;
 use sqlparser::tokenizer::{Token, Tokenizer, Whitespace};
 
-use super::capitalisation_policy_helpers::{tokens_violate_policy, CapitalisationPolicy};
+use super::capitalisation_policy_helpers::{
+    ignored_words_from_config, ignored_words_regex_from_config, token_is_ignored,
+    tokens_violate_policy, CapitalisationPolicy,
+};
 
 pub struct CapitalisationFunctions {
     policy: CapitalisationPolicy,
+    ignore_words: HashSet<String>,
+    ignore_words_regex: Option<Regex>,
 }
 
 impl CapitalisationFunctions {
@@ -25,6 +33,8 @@ impl CapitalisationFunctions {
                 issue_codes::LINT_CP_003,
                 "extended_capitalisation_policy",
             ),
+            ignore_words: ignored_words_from_config(config, issue_codes::LINT_CP_003),
+            ignore_words_regex: ignored_words_regex_from_config(config, issue_codes::LINT_CP_003),
         }
     }
 }
@@ -33,6 +43,8 @@ impl Default for CapitalisationFunctions {
     fn default() -> Self {
         Self {
             policy: CapitalisationPolicy::Consistent,
+            ignore_words: HashSet::new(),
+            ignore_words_regex: None,
         }
     }
 }
@@ -51,7 +63,11 @@ impl LintRule for CapitalisationFunctions {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let functions = function_tokens(ctx.statement_sql());
+        let functions = function_tokens(
+            ctx.statement_sql(),
+            &self.ignore_words,
+            self.ignore_words_regex.as_ref(),
+        );
         if functions.is_empty() {
             return Vec::new();
         }
@@ -68,7 +84,11 @@ impl LintRule for CapitalisationFunctions {
     }
 }
 
-fn function_tokens(sql: &str) -> Vec<String> {
+fn function_tokens(
+    sql: &str,
+    ignore_words: &HashSet<String>,
+    ignore_words_regex: Option<&Regex>,
+) -> Vec<String> {
     let dialect = GenericDialect {};
     let mut tokenizer = Tokenizer::new(&dialect, sql);
     let Ok(tokens) = tokenizer.tokenize() else {
@@ -87,6 +107,10 @@ fn function_tokens(sql: &str) -> Vec<String> {
         }
 
         if is_non_function_word(word.value.as_str()) {
+            continue;
+        }
+
+        if token_is_ignored(word.value.as_str(), ignore_words, ignore_words_regex) {
             continue;
         }
 
@@ -255,5 +279,29 @@ mod tests {
             },
         );
         assert_eq!(issues.len(), 1);
+    }
+
+    #[test]
+    fn ignore_words_regex_excludes_functions_from_check() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "LINT_CP_003".to_string(),
+                serde_json::json!({"ignore_words_regex": "^count$"}),
+            )]),
+        };
+        let rule = CapitalisationFunctions::from_config(&config);
+        let sql = "SELECT COUNT(*), count(x) FROM t";
+        let statements = parse_sql(sql).expect("parse");
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert!(issues.is_empty());
     }
 }

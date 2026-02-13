@@ -1,4 +1,7 @@
+use std::collections::HashSet;
+
 use crate::linter::config::LintConfig;
+use regex::{Regex, RegexBuilder};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CapitalisationPolicy {
@@ -39,6 +42,54 @@ pub fn tokens_violate_policy(tokens: &[String], policy: CapitalisationPolicy) ->
             .iter()
             .any(|token| !token_matches_policy(token, policy)),
     }
+}
+
+pub fn ignored_words_from_config(config: &LintConfig, code: &str) -> HashSet<String> {
+    if let Some(words) = config.rule_option_string_list(code, "ignore_words") {
+        return words
+            .into_iter()
+            .map(|word| word.trim().to_ascii_uppercase())
+            .filter(|word| !word.is_empty())
+            .collect();
+    }
+
+    config
+        .rule_option_str(code, "ignore_words")
+        .map(|raw| {
+            raw.split(',')
+                .map(str::trim)
+                .filter(|word| !word.is_empty())
+                .map(str::to_ascii_uppercase)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+pub fn ignored_words_regex_from_config(config: &LintConfig, code: &str) -> Option<Regex> {
+    let raw = config.rule_option_str(code, "ignore_words_regex")?;
+    let pattern = raw.trim();
+    if pattern.is_empty() {
+        return None;
+    }
+
+    RegexBuilder::new(pattern)
+        .case_insensitive(true)
+        .build()
+        .ok()
+}
+
+pub fn token_is_ignored(
+    token: &str,
+    ignore_words: &HashSet<String>,
+    ignore_words_regex: Option<&Regex>,
+) -> bool {
+    if ignore_words.contains(&token.to_ascii_uppercase()) {
+        return true;
+    }
+
+    ignore_words_regex
+        .map(|regex| regex.is_match(token))
+        .unwrap_or(false)
 }
 
 fn token_matches_policy(token: &str, policy: CapitalisationPolicy) -> bool {
