@@ -5,8 +5,9 @@
 
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
-use regex::Regex;
 use sqlparser::ast::Statement;
+use sqlparser::keywords::Keyword;
+use sqlparser::tokenizer::{Token, Tokenizer};
 
 pub struct LayoutSelectTargets;
 
@@ -95,10 +96,37 @@ fn select_line_top_level_comma_count(segment: &str) -> usize {
 }
 
 fn lt09_violation_spans(sql: &str) -> Vec<(usize, usize)> {
-    let mut spans = Vec::new();
-    let masked = mask_comments_and_single_quoted_strings(sql);
+    let dialect = sqlparser::dialect::GenericDialect {};
+    let mut tokenizer = Tokenizer::new(&dialect, sql);
+    let Ok(tokens) = tokenizer.tokenize_with_location() else {
+        return Vec::new();
+    };
 
-    for (_token, start, end) in capture_group_with_spans(&masked, r"(?i)\bselect\b", 0) {
+    let mut spans = Vec::new();
+
+    for token in tokens {
+        let Token::Word(word) = token.token else {
+            continue;
+        };
+        if word.keyword != Keyword::SELECT {
+            continue;
+        }
+
+        let Some(start) = line_col_to_offset(
+            sql,
+            token.span.start.line as usize,
+            token.span.start.column as usize,
+        ) else {
+            continue;
+        };
+        let Some(end) = line_col_to_offset(
+            sql,
+            token.span.end.line as usize,
+            token.span.end.column as usize,
+        ) else {
+            continue;
+        };
+
         let line_end = sql[end..].find('\n').map_or(sql.len(), |off| end + off);
         let select_tail = &sql[end..line_end];
 
@@ -110,95 +138,32 @@ fn lt09_violation_spans(sql: &str) -> Vec<(usize, usize)> {
     spans
 }
 
-fn capture_group_with_spans(
-    sql: &str,
-    pattern: &str,
-    group_idx: usize,
-) -> Vec<(String, usize, usize)> {
-    Regex::new(pattern)
-        .expect("valid regex")
-        .captures_iter(sql)
-        .filter_map(|caps| caps.get(group_idx))
-        .map(|m| (m.as_str().to_string(), m.start(), m.end()))
-        .collect()
-}
-
-fn mask_comments_and_single_quoted_strings(sql: &str) -> String {
-    enum State {
-        Normal,
-        LineComment,
-        BlockComment,
-        SingleQuoted,
+fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
+    if line == 0 || column == 0 {
+        return None;
     }
 
-    let mut bytes = sql.as_bytes().to_vec();
-    let mut i = 0usize;
-    let mut state = State::Normal;
+    let mut current_line = 1usize;
+    let mut current_col = 1usize;
 
-    while i < bytes.len() {
-        match state {
-            State::Normal => {
-                if bytes[i] == b'-' && i + 1 < bytes.len() && bytes[i + 1] == b'-' {
-                    bytes[i] = b' ';
-                    bytes[i + 1] = b' ';
-                    i += 2;
-                    state = State::LineComment;
-                } else if bytes[i] == b'/' && i + 1 < bytes.len() && bytes[i + 1] == b'*' {
-                    bytes[i] = b' ';
-                    bytes[i + 1] = b' ';
-                    i += 2;
-                    state = State::BlockComment;
-                } else if bytes[i] == b'\'' {
-                    bytes[i] = b' ';
-                    i += 1;
-                    state = State::SingleQuoted;
-                } else {
-                    i += 1;
-                }
-            }
-            State::LineComment => {
-                if bytes[i] == b'\n' {
-                    i += 1;
-                    state = State::Normal;
-                } else {
-                    bytes[i] = b' ';
-                    i += 1;
-                }
-            }
-            State::BlockComment => {
-                if bytes[i] == b'*' && i + 1 < bytes.len() && bytes[i + 1] == b'/' {
-                    bytes[i] = b' ';
-                    bytes[i + 1] = b' ';
-                    i += 2;
-                    state = State::Normal;
-                } else if bytes[i] == b'\n' {
-                    i += 1;
-                } else {
-                    bytes[i] = b' ';
-                    i += 1;
-                }
-            }
-            State::SingleQuoted => {
-                if bytes[i] == b'\'' {
-                    bytes[i] = b' ';
-                    if i + 1 < bytes.len() && bytes[i + 1] == b'\'' {
-                        bytes[i + 1] = b' ';
-                        i += 2;
-                    } else {
-                        i += 1;
-                        state = State::Normal;
-                    }
-                } else {
-                    if bytes[i] != b'\n' {
-                        bytes[i] = b' ';
-                    }
-                    i += 1;
-                }
-            }
+    for (offset, ch) in sql.char_indices() {
+        if current_line == line && current_col == column {
+            return Some(offset);
+        }
+
+        if ch == '\n' {
+            current_line += 1;
+            current_col = 1;
+        } else {
+            current_col += 1;
         }
     }
 
-    String::from_utf8(bytes).expect("masked SQL remains UTF-8")
+    if current_line == line && current_col == column {
+        return Some(sql.len());
+    }
+
+    None
 }
 
 #[cfg(test)]
@@ -245,5 +210,10 @@ mod tests {
                 .count(),
             2,
         );
+    }
+
+    #[test]
+    fn does_not_flag_select_word_inside_single_quoted_string() {
+        assert!(run("SELECT 'SELECT a, b' AS txt").is_empty());
     }
 }
