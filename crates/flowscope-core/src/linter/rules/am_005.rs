@@ -6,7 +6,7 @@
 use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
-use sqlparser::ast::{JoinOperator, Statement};
+use sqlparser::ast::{JoinOperator, Select, Statement};
 use sqlparser::dialect::GenericDialect;
 use sqlparser::keywords::Keyword;
 use sqlparser::tokenizer::{Token, Tokenizer, Whitespace};
@@ -81,7 +81,7 @@ impl LintRule for AmbiguousJoinStyle {
             }
         });
 
-        let outer_unqualified_count = count_unqualified_outer_joins(ctx.statement_sql());
+        let outer_unqualified_count = count_unqualified_outer_joins(statement, ctx.statement_sql());
         let violation_count = match self.qualify_mode {
             FullyQualifyJoinTypes::Inner => plain_join_count,
             FullyQualifyJoinTypes::Outer => outer_unqualified_count,
@@ -100,7 +100,40 @@ impl LintRule for AmbiguousJoinStyle {
     }
 }
 
-fn count_unqualified_outer_joins(sql: &str) -> usize {
+fn count_unqualified_outer_joins(statement: &Statement, sql: &str) -> usize {
+    count_unqualified_left_right_outer_joins(statement) + count_unqualified_full_outer_joins(sql)
+}
+
+fn count_unqualified_left_right_outer_joins(statement: &Statement) -> usize {
+    let mut count = 0usize;
+
+    visit_selects_in_statement(statement, &mut |select| {
+        count += select_unqualified_left_right_outer_join_count(select);
+    });
+
+    count
+}
+
+fn select_unqualified_left_right_outer_join_count(select: &Select) -> usize {
+    select
+        .from
+        .iter()
+        .map(|table| {
+            table
+                .joins
+                .iter()
+                .filter(|join| {
+                    matches!(
+                        join.join_operator,
+                        JoinOperator::Left(_) | JoinOperator::Right(_)
+                    )
+                })
+                .count()
+        })
+        .sum()
+}
+
+fn count_unqualified_full_outer_joins(sql: &str) -> usize {
     let dialect = GenericDialect {};
     let mut tokenizer = Tokenizer::new(&dialect, sql);
     let Ok(tokens) = tokenizer.tokenize() else {
@@ -117,7 +150,7 @@ fn count_unqualified_outer_joins(sql: &str) -> usize {
             continue;
         };
 
-        if !matches!(word.keyword, Keyword::LEFT | Keyword::RIGHT | Keyword::FULL) {
+        if word.keyword != Keyword::FULL {
             idx += 1;
             continue;
         }
@@ -286,6 +319,54 @@ mod tests {
         };
         let rule = AmbiguousJoinStyle::from_config(&config);
         let sql = "SELECT foo.a, bar.b FROM foo LEFT OUTER JOIN bar ON foo.id = bar.id";
+        let statements = parse_sql(sql).expect("parse");
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn outer_mode_flags_right_join_without_outer_keyword() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "ambiguous.join".to_string(),
+                serde_json::json!({"fully_qualify_join_types": "outer"}),
+            )]),
+        };
+        let rule = AmbiguousJoinStyle::from_config(&config);
+        let sql = "SELECT foo.a, bar.b FROM foo RIGHT JOIN bar ON foo.id = bar.id";
+        let statements = parse_sql(sql).expect("parse");
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert_eq!(issues.len(), 1);
+    }
+
+    #[test]
+    fn outer_mode_allows_right_outer_join() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "ambiguous.join".to_string(),
+                serde_json::json!({"fully_qualify_join_types": "outer"}),
+            )]),
+        };
+        let rule = AmbiguousJoinStyle::from_config(&config);
+        let sql = "SELECT foo.a, bar.b FROM foo RIGHT OUTER JOIN bar ON foo.id = bar.id";
         let statements = parse_sql(sql).expect("parse");
         let issues = rule.check(
             &statements[0],

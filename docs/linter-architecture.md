@@ -203,7 +203,7 @@ Move style-oriented checks to lexical engine:
 - [x] `LINT_RF_006` now supports `prefer_quoted_identifiers` / `case_sensitive` via `lint.ruleConfigs`.
 - [x] `LINT_AL_007` now supports `force_enable` via `lint.ruleConfigs`.
 - [x] `LINT_AL_005` now supports `alias_case_check` (including SQLFluff-style casefolding modes) via `lint.ruleConfigs`.
-- [x] `LINT_AM_005` now supports `fully_qualify_join_types` (`inner`/`outer`/`both`) via `lint.ruleConfigs`.
+- [x] `LINT_AM_005` now supports `fully_qualify_join_types` (`inner`/`outer`/`both`) via `lint.ruleConfigs`, with AST-driven outer-mode detection for unqualified `LEFT`/`RIGHT` joins and token fallback kept only for `FULL JOIN` keyword-form disambiguation.
 - [x] `LINT_AM_006` now supports `group_by_and_order_by_style` (`consistent`/`explicit`/`implicit`) via `lint.ruleConfigs`.
 - [x] `LINT_CP_001` now supports `capitalisation_policy`, `ignore_words`, and `ignore_words_regex` via `lint.ruleConfigs`.
 - [x] `LINT_CP_002`-`LINT_CP_005` now support `extended_capitalisation_policy`, `ignore_words`, and `ignore_words_regex` via `lint.ruleConfigs`; `LINT_CP_002` additionally supports SQLFluff-style `unquoted_identifiers_policy`.

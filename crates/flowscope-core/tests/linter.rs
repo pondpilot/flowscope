@@ -788,6 +788,25 @@ fn lint_rule_config_ambiguous_join_outer_mode() {
 }
 
 #[test]
+fn lint_rule_config_ambiguous_join_outer_mode_right_join() {
+    let issues = run_lint_with_config(
+        "SELECT * FROM foo RIGHT JOIN bar ON foo.id = bar.id",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "ambiguous.join".to_string(),
+                serde_json::json!({"fully_qualify_join_types": "outer"}),
+            )]),
+        },
+    );
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_AM_005"),
+        "outer join qualification mode should flag RIGHT JOIN without OUTER: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_rule_config_ambiguous_column_refs_explicit_mode() {
     let issues = run_lint_with_config(
         "SELECT foo, bar FROM fake_table GROUP BY 1, 2",

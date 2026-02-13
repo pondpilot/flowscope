@@ -177,6 +177,7 @@ This plan covers three axes:
   - `CP_001` now supports `capitalisation_policy` / `ignore_words` / `ignore_words_regex` through `lint.ruleConfigs`.
   - `CP_002`-`CP_005` now support `extended_capitalisation_policy` / `ignore_words` / `ignore_words_regex` through `lint.ruleConfigs`; `CP_002` additionally supports SQLFluff-style `unquoted_identifiers_policy`.
   - `AM_005` now supports `fully_qualify_join_types` (`inner`/`outer`/`both`) through `lint.ruleConfigs`.
+  - `AM_005` outer-mode qualification now uses AST join-operator variants for `LEFT`/`RIGHT` detection and keeps token-level fallback only for `FULL JOIN` vs `FULL OUTER JOIN` disambiguation.
   - `AM_006` now supports `group_by_and_order_by_style` (`consistent`/`explicit`/`implicit`) through `lint.ruleConfigs`.
   - Legacy `parity.rs` monolith was retired; rule registration now points only to dedicated `rules/<code>.rs` modules.
 
