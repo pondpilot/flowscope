@@ -1514,6 +1514,19 @@ fn lint_rf_004_keyword_identifier() {
     );
 }
 
+#[test]
+fn lint_rf_004_keyword_cte_identifier() {
+    let issues =
+        run_lint("WITH \"select\"(\"from\") AS (SELECT 1) SELECT \"from\" FROM \"select\"");
+    assert!(
+        issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_RF_004),
+        "expected {} for keyword CTE identifiers: {issues:?}",
+        issue_codes::LINT_RF_004,
+    );
+}
+
 // =============================================================================
 // SQLFluff parity smoke tests
 // =============================================================================
