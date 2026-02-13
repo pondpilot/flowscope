@@ -1024,6 +1024,37 @@ fn lint_al_005_redshift_qualify_after_where_does_not_count_alias_usage() {
 }
 
 #[test]
+fn lint_al_005_allows_bigquery_implicit_array_table_reference() {
+    let issues = run_lint_in_dialect(
+        "WITH table_arr AS (SELECT [1,2,4,2] AS arr) \
+         SELECT arr \
+         FROM table_arr AS t, t.arr",
+        Dialect::Bigquery,
+    );
+    assert!(
+        !issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_AL_005),
+        "BigQuery implicit array table references should count as alias usage in AL_005: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_al_005_allows_redshift_super_array_relation_reference() {
+    let issues = run_lint_in_dialect(
+        "SELECT my_column, my_array_value \
+         FROM my_schema.my_table AS t, t.super_array AS my_array_value",
+        Dialect::Redshift,
+    );
+    assert!(
+        !issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_AL_005),
+        "Redshift super-array relation references should count as alias usage in AL_005: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_rule_config_ambiguous_join_outer_mode() {
     let issues = run_lint_with_config(
         "SELECT * FROM foo LEFT JOIN bar ON foo.id = bar.id",

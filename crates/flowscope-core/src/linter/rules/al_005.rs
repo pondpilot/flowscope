@@ -162,9 +162,9 @@ fn check_select(
     // Collect aliases -> table names
     let mut aliases: HashMap<String, AliasRef> = HashMap::new();
     for from_item in &select.from {
-        collect_aliases(&from_item.relation, &mut aliases);
+        collect_aliases(&from_item.relation, ctx.dialect(), &mut aliases);
         for join in &from_item.joins {
-            collect_aliases(&join.relation, &mut aliases);
+            collect_aliases(&join.relation, ctx.dialect(), &mut aliases);
         }
     }
 
@@ -328,7 +328,7 @@ fn collect_identifier_prefixes_from_select(
     }
 }
 
-fn collect_aliases(relation: &TableFactor, aliases: &mut HashMap<String, AliasRef>) {
+fn collect_aliases(relation: &TableFactor, dialect: Dialect, aliases: &mut HashMap<String, AliasRef>) {
     match relation {
         TableFactor::Table {
             name,
@@ -337,6 +337,9 @@ fn collect_aliases(relation: &TableFactor, aliases: &mut HashMap<String, AliasRe
             ..
         } => {
             if args.is_some() {
+                return;
+            }
+            if is_implicit_array_relation_alias(dialect, name, aliases) {
                 return;
             }
             let table_name = name.to_string();
@@ -369,14 +372,14 @@ fn collect_aliases(relation: &TableFactor, aliases: &mut HashMap<String, AliasRe
         TableFactor::NestedJoin {
             table_with_joins, ..
         } => {
-            collect_aliases(&table_with_joins.relation, aliases);
+            collect_aliases(&table_with_joins.relation, dialect, aliases);
             for join in &table_with_joins.joins {
-                collect_aliases(&join.relation, aliases);
+                collect_aliases(&join.relation, dialect, aliases);
             }
         }
         TableFactor::Pivot { table, .. }
         | TableFactor::Unpivot { table, .. }
-        | TableFactor::MatchRecognize { table, .. } => collect_aliases(table, aliases),
+        | TableFactor::MatchRecognize { table, .. } => collect_aliases(table, dialect, aliases),
         _ => {}
     }
 }
@@ -524,6 +527,11 @@ fn collect_identifier_prefixes_from_table_factor(
     prefixes: &mut HashSet<QualifierRef>,
 ) {
     match table_factor {
+        TableFactor::Table { name, .. } => {
+            if let Some(prefix) = implicit_array_relation_prefix(dialect, name) {
+                prefixes.insert(prefix);
+            }
+        }
         TableFactor::Derived {
             lateral: true,
             subquery,
@@ -652,6 +660,33 @@ fn include_qualify_alias_references(dialect: Dialect, select: &Select) -> bool {
     // SQLFluff AL05 Redshift parity: QUALIFY references only count for alias usage
     // when QUALIFY immediately follows the FROM/JOIN section (no WHERE clause).
     !matches!(dialect, Dialect::Redshift) || select.selection.is_none()
+}
+
+fn implicit_array_relation_prefix(dialect: Dialect, name: &ObjectName) -> Option<QualifierRef> {
+    if !matches!(dialect, Dialect::Bigquery | Dialect::Redshift) {
+        return None;
+    }
+    if name.0.len() != 2 {
+        return None;
+    }
+    let first = name.0.first()?.as_ident()?;
+    Some(QualifierRef {
+        name: first.value.clone(),
+        quoted: first.quote_style.is_some(),
+    })
+}
+
+fn is_implicit_array_relation_alias(
+    dialect: Dialect,
+    name: &ObjectName,
+    aliases: &HashMap<String, AliasRef>,
+) -> bool {
+    let Some(prefix) = implicit_array_relation_prefix(dialect, name) else {
+        return false;
+    };
+    aliases
+        .values()
+        .any(|alias| alias.name.eq_ignore_ascii_case(&prefix.name))
 }
 
 fn qualifier_matches_alias(
@@ -1190,5 +1225,26 @@ mod tests {
         assert_eq!(issues.len(), 2);
         assert!(issues.iter().any(|issue| issue.message.contains("s")));
         assert!(issues.iter().any(|issue| issue.message.contains("ss")));
+    }
+
+    #[test]
+    fn allows_bigquery_implicit_array_table_reference() {
+        let issues = check_sql_in_dialect(
+            "WITH table_arr AS (SELECT [1,2,4,2] AS arr) \
+             SELECT arr \
+             FROM table_arr AS t, t.arr",
+            Dialect::Bigquery,
+        );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn allows_redshift_super_array_relation_reference() {
+        let issues = check_sql_in_dialect(
+            "SELECT my_column, my_array_value \
+             FROM my_schema.my_table AS t, t.super_array AS my_array_value",
+            Dialect::Redshift,
+        );
+        assert!(issues.is_empty());
     }
 }
