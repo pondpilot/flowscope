@@ -1074,6 +1074,44 @@ fn lint_rule_config_aliasing_unique_table_case_sensitive() {
 }
 
 #[test]
+fn lint_rule_config_aliasing_unique_table_quoted_cs_naked_upper() {
+    let issues = run_lint_with_config(
+        "SELECT * FROM users AS \"FOO\" JOIN orders foo ON \"FOO\".id = foo.user_id",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "aliasing.unique.table".to_string(),
+                serde_json::json!({"alias_case_check": "quoted_cs_naked_upper"}),
+            )]),
+        },
+    );
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_AL_004"),
+        "quoted_cs_naked_upper should flag quoted-vs-unquoted aliases that match after upper folding: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_rule_config_aliasing_unique_table_quoted_cs_naked_lower() {
+    let issues = run_lint_with_config(
+        "SELECT * FROM users AS \"foo\" JOIN orders FOO ON \"foo\".id = FOO.user_id",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "aliasing.unique.table".to_string(),
+                serde_json::json!({"alias_case_check": "quoted_cs_naked_lower"}),
+            )]),
+        },
+    );
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_AL_004"),
+        "quoted_cs_naked_lower should flag quoted-vs-unquoted aliases that match after lower folding: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_rule_config_capitalisation_keywords_upper_policy() {
     let issues = run_lint_with_config(
         "select a from t",

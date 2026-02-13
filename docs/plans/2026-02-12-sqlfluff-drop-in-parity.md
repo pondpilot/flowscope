@@ -55,6 +55,7 @@ This plan covers three axes:
   - `AL_004` moved from parity into a dedicated core AST rule (`al_004.rs`) and parity registration was removed.
   - `AL_004` now also checks duplicate implicit table-name aliases (e.g., same base table name across schemas without explicit aliases) and parent-scope alias collisions in nested subqueries (excluding the subquery wrapper alias), matching SQLFluff AL04 coverage more closely.
   - `AL_004` now supports quote-aware `alias_case_check` through `lint.ruleConfigs`.
+  - `AL_004` `alias_case_check` now aligns closer to SQLFluff mode semantics for `quoted_cs_naked_upper` and `quoted_cs_naked_lower` (quoted aliases case-sensitive; naked aliases case-folded per configured mode).
   - `AL_001` moved from parity into a dedicated core rule module (`al_001.rs`) and parity registration was removed.
   - `AL_001` was further upgraded to AST-driven table-factor alias traversal with token-aware `AS` detection.
   - `AL_002` moved from parity into a dedicated core rule module (`al_002.rs`) and parity registration was removed.

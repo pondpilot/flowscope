@@ -397,15 +397,37 @@ fn aliases_match(left: &AliasRef, right: &AliasRef, alias_case_check: AliasCaseC
     match alias_case_check {
         AliasCaseCheck::CaseInsensitive => left.name.eq_ignore_ascii_case(&right.name),
         AliasCaseCheck::CaseSensitive => left.name == right.name,
-        AliasCaseCheck::Dialect
-        | AliasCaseCheck::QuotedCsNakedUpper
-        | AliasCaseCheck::QuotedCsNakedLower => {
+        AliasCaseCheck::Dialect => {
             if left.quoted || right.quoted {
                 left.name == right.name
             } else {
                 left.name.eq_ignore_ascii_case(&right.name)
             }
         }
+        AliasCaseCheck::QuotedCsNakedUpper | AliasCaseCheck::QuotedCsNakedLower => {
+            normalize_alias_for_mode(left, alias_case_check)
+                == normalize_alias_for_mode(right, alias_case_check)
+        }
+    }
+}
+
+fn normalize_alias_for_mode(alias: &AliasRef, mode: AliasCaseCheck) -> String {
+    match mode {
+        AliasCaseCheck::QuotedCsNakedUpper => {
+            if alias.quoted {
+                alias.name.clone()
+            } else {
+                alias.name.to_ascii_uppercase()
+            }
+        }
+        AliasCaseCheck::QuotedCsNakedLower => {
+            if alias.quoted {
+                alias.name.clone()
+            } else {
+                alias.name.to_ascii_lowercase()
+            }
+        }
+        _ => alias.name.clone(),
     }
 }
 
@@ -536,5 +558,99 @@ mod tests {
         );
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_AL_004);
+    }
+
+    #[test]
+    fn alias_case_check_quoted_cs_naked_upper_flags_upper_fold_match() {
+        let sql = "select * from users \"FOO\" join orders foo on \"FOO\".id = foo.user_id";
+        let statements = parse_sql(sql).expect("parse");
+        let rule = AliasingUniqueTable::from_config(&LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "aliasing.unique.table".to_string(),
+                serde_json::json!({"alias_case_check": "quoted_cs_naked_upper"}),
+            )]),
+        });
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_AL_004);
+    }
+
+    #[test]
+    fn alias_case_check_quoted_cs_naked_upper_allows_nonmatching_quoted_case() {
+        let sql = "select * from users \"foo\" join orders foo on \"foo\".id = foo.user_id";
+        let statements = parse_sql(sql).expect("parse");
+        let rule = AliasingUniqueTable::from_config(&LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "aliasing.unique.table".to_string(),
+                serde_json::json!({"alias_case_check": "quoted_cs_naked_upper"}),
+            )]),
+        });
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn alias_case_check_quoted_cs_naked_lower_flags_lower_fold_match() {
+        let sql = "select * from users \"foo\" join orders FOO on \"foo\".id = FOO.user_id";
+        let statements = parse_sql(sql).expect("parse");
+        let rule = AliasingUniqueTable::from_config(&LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "aliasing.unique.table".to_string(),
+                serde_json::json!({"alias_case_check": "quoted_cs_naked_lower"}),
+            )]),
+        });
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_AL_004);
+    }
+
+    #[test]
+    fn alias_case_check_quoted_cs_naked_lower_allows_nonmatching_quoted_case() {
+        let sql = "select * from users \"FOO\" join orders FOO on \"FOO\".id = FOO.user_id";
+        let statements = parse_sql(sql).expect("parse");
+        let rule = AliasingUniqueTable::from_config(&LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "aliasing.unique.table".to_string(),
+                serde_json::json!({"alias_case_check": "quoted_cs_naked_lower"}),
+            )]),
+        });
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert!(issues.is_empty());
     }
 }
