@@ -105,7 +105,7 @@ pub fn all_rules(config: &LintConfig) -> Vec<Box<dyn LintRule>> {
         Box::new(cp_003::CapitalisationFunctions),
         Box::new(cp_004::CapitalisationLiterals),
         Box::new(cp_005::CapitalisationTypes),
-        Box::new(cv_001::ConventionNotEqual),
+        Box::new(cv_001::ConventionNotEqual::from_config(config)),
         Box::new(cv_002::CoalesceConvention),
         Box::new(cv_003::ConventionSelectTrailingComma),
         Box::new(cv_004::CountStyle),

@@ -3,11 +3,68 @@
 //! SQLFluff CV01 parity (current scope): flag statements that mix `<>` and
 //! `!=` not-equal operators.
 
+use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
 use sqlparser::ast::Statement;
 
-pub struct ConventionNotEqual;
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PreferredNotEqualStyle {
+    Consistent,
+    CStyle,
+    Ansi,
+}
+
+impl PreferredNotEqualStyle {
+    fn from_config(config: &LintConfig) -> Self {
+        match config
+            .rule_option_str(issue_codes::LINT_CV_001, "preferred_not_equal_style")
+            .unwrap_or("consistent")
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "c_style" => Self::CStyle,
+            "ansi" => Self::Ansi,
+            _ => Self::Consistent,
+        }
+    }
+
+    fn violation(self, usage: &NotEqualUsage) -> bool {
+        match self {
+            Self::Consistent => usage.saw_angle_style && usage.saw_bang_style,
+            Self::CStyle => usage.saw_angle_style,
+            Self::Ansi => usage.saw_bang_style,
+        }
+    }
+
+    fn message(self) -> &'static str {
+        match self {
+            Self::Consistent => "Use consistent not-equal style.",
+            Self::CStyle => "Use `!=` for not-equal comparisons.",
+            Self::Ansi => "Use `<>` for not-equal comparisons.",
+        }
+    }
+}
+
+pub struct ConventionNotEqual {
+    preferred_style: PreferredNotEqualStyle,
+}
+
+impl ConventionNotEqual {
+    pub fn from_config(config: &LintConfig) -> Self {
+        Self {
+            preferred_style: PreferredNotEqualStyle::from_config(config),
+        }
+    }
+}
+
+impl Default for ConventionNotEqual {
+    fn default() -> Self {
+        Self {
+            preferred_style: PreferredNotEqualStyle::Consistent,
+        }
+    }
+}
 
 impl LintRule for ConventionNotEqual {
     fn code(&self) -> &'static str {
@@ -23,22 +80,27 @@ impl LintRule for ConventionNotEqual {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        if statement_mixes_not_equal_styles(ctx.statement_sql()) {
-            vec![Issue::info(
-                issue_codes::LINT_CV_001,
-                "Use consistent not-equal style (prefer !=).",
-            )
-            .with_statement(ctx.statement_index)]
+        let usage = statement_not_equal_usage(ctx.statement_sql());
+        if self.preferred_style.violation(&usage) {
+            vec![
+                Issue::info(issue_codes::LINT_CV_001, self.preferred_style.message())
+                    .with_statement(ctx.statement_index),
+            ]
         } else {
             Vec::new()
         }
     }
 }
 
-fn statement_mixes_not_equal_styles(sql: &str) -> bool {
+#[derive(Default)]
+struct NotEqualUsage {
+    saw_angle_style: bool,
+    saw_bang_style: bool,
+}
+
+fn statement_not_equal_usage(sql: &str) -> NotEqualUsage {
     let mut chars = sql.char_indices().peekable();
-    let mut saw_angle_style = false;
-    let mut saw_bang_style = false;
+    let mut usage = NotEqualUsage::default();
 
     enum ScanState {
         Normal,
@@ -69,12 +131,12 @@ fn statement_mixes_not_equal_styles(sql: &str) -> bool {
                 }
                 '<' => {
                     if sql[idx + ch.len_utf8()..].starts_with('>') {
-                        saw_angle_style = true;
+                        usage.saw_angle_style = true;
                     }
                 }
                 '!' => {
                     if sql[idx + ch.len_utf8()..].starts_with('=') {
-                        saw_bang_style = true;
+                        usage.saw_bang_style = true;
                     }
                 }
                 _ => {}
@@ -110,12 +172,12 @@ fn statement_mixes_not_equal_styles(sql: &str) -> bool {
             }
         }
 
-        if saw_angle_style && saw_bang_style {
-            return true;
+        if usage.saw_angle_style && usage.saw_bang_style {
+            return usage;
         }
     }
 
-    false
+    usage
 }
 
 #[cfg(test)]
@@ -125,7 +187,7 @@ mod tests {
 
     fn run(sql: &str) -> Vec<Issue> {
         let statements = parse_sql(sql).expect("parse");
-        let rule = ConventionNotEqual;
+        let rule = ConventionNotEqual::default();
         statements
             .iter()
             .enumerate()
@@ -163,5 +225,51 @@ mod tests {
     #[test]
     fn does_not_flag_not_equal_tokens_inside_comments() {
         assert!(run("SELECT * FROM t -- a <> b and c != d").is_empty());
+    }
+
+    #[test]
+    fn c_style_preference_flags_angle_bracket_operator() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "convention.not_equal".to_string(),
+                serde_json::json!({"preferred_not_equal_style": "c_style"}),
+            )]),
+        };
+        let rule = ConventionNotEqual::from_config(&config);
+        let statements = parse_sql("SELECT * FROM t WHERE a <> b").expect("parse");
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql: "SELECT * FROM t WHERE a <> b",
+                statement_range: 0.."SELECT * FROM t WHERE a <> b".len(),
+                statement_index: 0,
+            },
+        );
+        assert_eq!(issues.len(), 1);
+    }
+
+    #[test]
+    fn ansi_preference_flags_bang_operator() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "LINT_CV_001".to_string(),
+                serde_json::json!({"preferred_not_equal_style": "ansi"}),
+            )]),
+        };
+        let rule = ConventionNotEqual::from_config(&config);
+        let statements = parse_sql("SELECT * FROM t WHERE a != b").expect("parse");
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql: "SELECT * FROM t WHERE a != b",
+                statement_range: 0.."SELECT * FROM t WHERE a != b".len(),
+                statement_index: 0,
+            },
+        );
+        assert_eq!(issues.len(), 1);
     }
 }

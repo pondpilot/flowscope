@@ -228,6 +228,25 @@ fn lint_rule_config_aliasing_expression_allow_scalar_false() {
     );
 }
 
+#[test]
+fn lint_rule_config_not_equal_style_c_style() {
+    let issues = run_lint_with_config(
+        "SELECT * FROM t WHERE a <> b",
+        LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "LINT_CV_001".to_string(),
+                serde_json::json!({"preferred_not_equal_style": "c_style"}),
+            )]),
+        },
+    );
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_CV_001"),
+        "c_style not-equal preference should flag <> usage: {issues:?}"
+    );
+}
+
 // =============================================================================
 // Rule-specific integration tests
 // =============================================================================
