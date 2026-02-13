@@ -1332,12 +1332,6 @@ fn self_alias_count(sql: &str) -> usize {
         .count()
 }
 
-fn rule_cp_01(stmt: &Statement, ctx: &LintContext) -> bool {
-    let _ = stmt;
-    let sql = mask_comments_and_single_quoted_strings(stmt_sql(ctx));
-    mixed_case_for_tokens(&keyword_tokens(&sql))
-}
-
 #[allow(dead_code)]
 fn rule_cp_02(stmt: &Statement, ctx: &LintContext) -> bool {
     let _ = stmt;
@@ -1360,24 +1354,6 @@ fn rule_cp_03(stmt: &Statement, ctx: &LintContext) -> bool {
     mixed_case_for_tokens(&function_tokens(&sql))
 }
 
-fn rule_cp_04(stmt: &Statement, ctx: &LintContext) -> bool {
-    let _ = stmt;
-    let sql = mask_comments_and_single_quoted_strings(stmt_sql(ctx));
-    mixed_case_for_tokens(&literal_tokens(&sql))
-}
-
-fn rule_cp_05(stmt: &Statement, ctx: &LintContext) -> bool {
-    let _ = stmt;
-    let sql = mask_comments_and_single_quoted_strings(stmt_sql(ctx));
-    mixed_case_for_tokens(&type_tokens(&sql))
-}
-
-fn rule_cv_01(stmt: &Statement, ctx: &LintContext) -> bool {
-    let _ = stmt;
-    let sql = mask_comments_and_single_quoted_strings(stmt_sql(ctx));
-    has_re(&sql, r"<>") && has_re(&sql, r"!=")
-}
-
 fn rule_cv_03(stmt: &Statement, ctx: &LintContext) -> bool {
     issue_if_regex(stmt, ctx, r"(?is)\bselect\b[^;]*,\s*\bfrom\b")
 }
@@ -1387,32 +1363,6 @@ fn rule_cv_06(stmt: &Statement, ctx: &LintContext) -> bool {
     // Be conservative: only flag when semicolons exist in the file but this
     // statement SQL snippet itself doesn't end with one.
     ctx.sql.contains(';') && !stmt_sql(ctx).trim_end().ends_with(';')
-}
-
-fn rule_cv_07(stmt: &Statement, ctx: &LintContext) -> bool {
-    let _ = stmt;
-    let sql = stmt_sql(ctx).trim();
-    sql.starts_with('(') && sql.ends_with(')')
-}
-
-fn rule_cv_09(stmt: &Statement, ctx: &LintContext) -> bool {
-    issue_if_regex(stmt, ctx, r"(?i)\b(todo|fixme|foo|bar)\b")
-}
-
-fn rule_cv_10(stmt: &Statement, ctx: &LintContext) -> bool {
-    issue_if_regex(stmt, ctx, r#""[^"]+""#)
-}
-
-fn rule_cv_11(stmt: &Statement, ctx: &LintContext) -> bool {
-    let _ = stmt;
-    let sql = mask_comments_and_single_quoted_strings(stmt_sql(ctx));
-    has_re(&sql, r"::") && has_re(&sql, r"(?i)\bcast\s*\(")
-}
-
-fn rule_jj_01(stmt: &Statement, ctx: &LintContext) -> bool {
-    let _ = stmt;
-    let sql = stmt_sql(ctx);
-    has_re(sql, r"\{\{[^ \n]") || has_re(sql, r"[^ \n]\}\}") || has_re(sql, r"\{%[^ \n]")
 }
 
 #[allow(dead_code)]
@@ -1579,36 +1529,6 @@ fn lt09_violation_spans(sql: &str) -> Vec<(usize, usize)> {
     spans
 }
 
-fn rule_lt_10(stmt: &Statement, ctx: &LintContext) -> bool {
-    issue_if_regex(stmt, ctx, r"(?is)\bselect\s*\n+\s*(distinct|all)\b")
-}
-
-fn rule_lt_11(stmt: &Statement, ctx: &LintContext) -> bool {
-    let _ = stmt;
-    let sql = stmt_sql(ctx);
-    if !has_re(sql, r"(?i)\b(union|intersect|except)\b") || !sql.contains('\n') {
-        return false;
-    }
-
-    sql.lines().any(|line| {
-        let trimmed = line.trim().to_ascii_lowercase();
-        match trimmed.as_str() {
-            "union" | "union all" | "intersect" | "except" => false,
-            _ => has_re(&trimmed, r"\b(union|intersect|except)\b"),
-        }
-    })
-}
-
-fn rule_lt_12(stmt: &Statement, ctx: &LintContext) -> bool {
-    let _ = stmt;
-    ctx.statement_range.end == ctx.sql.len() && ctx.sql.contains('\n') && !ctx.sql.ends_with('\n')
-}
-
-fn rule_lt_13(stmt: &Statement, ctx: &LintContext) -> bool {
-    let _ = stmt;
-    ctx.statement_index == 0 && has_re(ctx.sql, r"^\s*\n")
-}
-
 #[allow(dead_code)]
 fn rule_lt_14(stmt: &Statement, ctx: &LintContext) -> bool {
     let _ = stmt;
@@ -1618,35 +1538,6 @@ fn rule_lt_14(stmt: &Statement, ctx: &LintContext) -> bool {
             sql,
             r"(?im)^\s*select\b[^\n]*\b(from|where|group by|order by)\b",
         )
-}
-
-fn rule_lt_15(stmt: &Statement, ctx: &LintContext) -> bool {
-    issue_if_regex(stmt, ctx, r"\n\s*\n\s*\n+")
-}
-
-fn rule_rf_04(stmt: &Statement, ctx: &LintContext) -> bool {
-    let _ = stmt;
-    capture_group(
-        stmt_sql(ctx),
-        r"(?i)\b(?:from|join)\s+[A-Za-z_][A-Za-z0-9_\.]*\s+as\s+([A-Za-z_][A-Za-z0-9_]*)",
-        1,
-    )
-    .into_iter()
-    .any(|alias| is_keyword(&alias))
-}
-
-fn rule_rf_05(stmt: &Statement, ctx: &LintContext) -> bool {
-    let _ = stmt;
-    capture_group(stmt_sql(ctx), r#""([^"]+)""#, 1)
-        .into_iter()
-        .any(|ident| !has_re(&ident, r"^[A-Za-z0-9_]+$"))
-}
-
-fn rule_rf_06(stmt: &Statement, ctx: &LintContext) -> bool {
-    let _ = stmt;
-    capture_group(stmt_sql(ctx), r#""([^"]+)""#, 1)
-        .into_iter()
-        .any(|ident| has_re(&ident, r"^[A-Za-z_][A-Za-z0-9_]*$"))
 }
 
 fn rule_st_02(stmt: &Statement, ctx: &LintContext) -> bool {
@@ -1692,30 +1583,6 @@ fn rule_st_06(stmt: &Statement, ctx: &LintContext) -> bool {
 
 fn rule_st_08(stmt: &Statement, ctx: &LintContext) -> bool {
     issue_if_regex(stmt, ctx, r"(?is)\bselect\s+distinct\s*\(")
-}
-
-fn rule_st_12(stmt: &Statement, ctx: &LintContext) -> bool {
-    let _ = stmt;
-    ctx.statement_index == 0 && has_re(ctx.sql, r";\s*;")
-}
-
-fn rule_tq_01(stmt: &Statement, ctx: &LintContext) -> bool {
-    issue_if_regex(
-        stmt,
-        ctx,
-        r"(?i)\bcreate\s+(?:proc|procedure)\s+sp_[A-Za-z0-9_]*",
-    )
-}
-
-fn rule_tq_02(stmt: &Statement, ctx: &LintContext) -> bool {
-    let _ = stmt;
-    let sql = stmt_sql(ctx);
-    has_re(sql, r"(?i)\bcreate\s+(?:proc|procedure)\b")
-        && !(has_re(sql, r"(?i)\bbegin\b") && has_re(sql, r"(?i)\bend\b"))
-}
-
-fn rule_tq_03(stmt: &Statement, ctx: &LintContext) -> bool {
-    issue_if_regex(stmt, ctx, r"(?im)^\s*GO\s*$\s*(?:\r?\n\s*GO\s*$)+")
 }
 
 pub struct AliasingTableStyle;
@@ -1832,15 +1699,6 @@ impl LintRule for AliasingUniqueColumn {
         vec![issue]
     }
 }
-define_predicate_rule!(
-    CapitalisationKeywords,
-    issue_codes::LINT_CP_001,
-    "Keyword capitalisation",
-    "SQL keywords should use a consistent case style.",
-    info,
-    rule_cp_01,
-    "SQL keywords use inconsistent capitalisation."
-);
 pub struct CapitalisationIdentifiers;
 
 impl LintRule for CapitalisationIdentifiers {
@@ -1961,34 +1819,6 @@ impl LintRule for CapitalisationFunctions {
     }
 }
 define_predicate_rule!(
-    CapitalisationLiterals,
-    issue_codes::LINT_CP_004,
-    "Literal capitalisation",
-    "NULL/TRUE/FALSE should use a consistent case style.",
-    info,
-    rule_cp_04,
-    "Literal keywords (NULL/TRUE/FALSE) use inconsistent capitalisation."
-);
-define_predicate_rule!(
-    CapitalisationTypes,
-    issue_codes::LINT_CP_005,
-    "Type capitalisation",
-    "Type names should use a consistent case style.",
-    info,
-    rule_cp_05,
-    "Type names use inconsistent capitalisation."
-);
-
-define_predicate_rule!(
-    ConventionNotEqual,
-    issue_codes::LINT_CV_001,
-    "Not-equal style",
-    "Use a consistent not-equal operator style.",
-    info,
-    rule_cv_01,
-    "Use consistent not-equal style (prefer !=)."
-);
-define_predicate_rule!(
     ConventionSelectTrailingComma,
     issue_codes::LINT_CV_003,
     "Select trailing comma",
@@ -2006,52 +1836,6 @@ define_predicate_rule!(
     rule_cv_06,
     "Statement terminator style is inconsistent."
 );
-define_predicate_rule!(
-    ConventionStatementBrackets,
-    issue_codes::LINT_CV_007,
-    "Statement brackets",
-    "Avoid unnecessary wrapping brackets around full statements.",
-    info,
-    rule_cv_07,
-    "Avoid wrapping the full statement in unnecessary brackets."
-);
-define_predicate_rule!(
-    ConventionBlockedWords,
-    issue_codes::LINT_CV_009,
-    "Blocked words",
-    "Avoid blocked placeholder words.",
-    warning,
-    rule_cv_09,
-    "Blocked placeholder words detected (e.g., TODO/FIXME/foo/bar)."
-);
-define_predicate_rule!(
-    ConventionQuotedLiterals,
-    issue_codes::LINT_CV_010,
-    "Quoted literals style",
-    "Quoted literal style is inconsistent with SQL convention.",
-    info,
-    rule_cv_10,
-    "Quoted literal style appears inconsistent."
-);
-define_predicate_rule!(
-    ConventionCastingStyle,
-    issue_codes::LINT_CV_011,
-    "Casting style",
-    "Use consistent casting style.",
-    info,
-    rule_cv_11,
-    "Use consistent casting style (avoid mixing :: and CAST)."
-);
-define_predicate_rule!(
-    JinjaPadding,
-    issue_codes::LINT_JJ_001,
-    "Jinja padding",
-    "Jinja tags should use consistent padding.",
-    info,
-    rule_jj_01,
-    "Jinja tag spacing appears inconsistent."
-);
-
 pub struct LayoutSpacing;
 
 impl LintRule for LayoutSpacing {
@@ -2341,42 +2125,6 @@ impl LintRule for LayoutSelectTargets {
             .collect()
     }
 }
-define_predicate_rule!(
-    LayoutSelectModifiers,
-    issue_codes::LINT_LT_010,
-    "Layout select modifiers",
-    "SELECT modifiers should be placed consistently.",
-    info,
-    rule_lt_10,
-    "SELECT modifiers (DISTINCT/ALL) should be consistently formatted."
-);
-define_predicate_rule!(
-    LayoutSetOperators,
-    issue_codes::LINT_LT_011,
-    "Layout set operators",
-    "Set operators should be consistently line-broken.",
-    info,
-    rule_lt_11,
-    "Set operators should be on their own line in multiline queries."
-);
-define_predicate_rule!(
-    LayoutEndOfFile,
-    issue_codes::LINT_LT_012,
-    "Layout end of file",
-    "File should end with newline.",
-    info,
-    rule_lt_12,
-    "SQL document should end with a trailing newline."
-);
-define_predicate_rule!(
-    LayoutStartOfFile,
-    issue_codes::LINT_LT_013,
-    "Layout start of file",
-    "Avoid leading blank lines at file start.",
-    info,
-    rule_lt_13,
-    "Avoid leading blank lines at the start of SQL file."
-);
 pub struct LayoutKeywordNewline;
 
 impl LintRule for LayoutKeywordNewline {
@@ -2427,44 +2175,6 @@ impl LintRule for LayoutKeywordNewline {
         .with_span(ctx.span_from_statement_offset(keyword_start, keyword_end))]
     }
 }
-define_predicate_rule!(
-    LayoutNewlines,
-    issue_codes::LINT_LT_015,
-    "Layout newlines",
-    "Avoid excessive blank lines.",
-    info,
-    rule_lt_15,
-    "SQL contains excessive blank lines."
-);
-
-define_predicate_rule!(
-    ReferencesKeywords,
-    issue_codes::LINT_RF_004,
-    "References keywords",
-    "Avoid SQL keywords as identifiers.",
-    warning,
-    rule_rf_04,
-    "Avoid SQL keywords as identifiers."
-);
-define_predicate_rule!(
-    ReferencesSpecialChars,
-    issue_codes::LINT_RF_005,
-    "References special chars",
-    "Identifiers should avoid special characters.",
-    warning,
-    rule_rf_05,
-    "Identifier contains special characters."
-);
-define_predicate_rule!(
-    ReferencesQuoting,
-    issue_codes::LINT_RF_006,
-    "References quoting",
-    "Avoid unnecessary identifier quoting.",
-    info,
-    rule_rf_06,
-    "Identifier quoting appears unnecessary."
-);
-
 pub struct StructureSubquery;
 
 impl LintRule for StructureSubquery {
@@ -2503,58 +2213,11 @@ impl LintRule for StructureSubquery {
         .with_span(ctx.span_from_statement_offset(from_start, from_end))]
     }
 }
-define_predicate_rule!(
-    StructureConsecutiveSemicolons,
-    issue_codes::LINT_ST_012,
-    "Structure consecutive semicolons",
-    "Avoid consecutive semicolons.",
-    warning,
-    rule_st_12,
-    "Consecutive semicolons detected."
-);
-
-define_predicate_rule!(
-    TsqlSpPrefix,
-    issue_codes::LINT_TQ_001,
-    "TSQL sp_ prefix",
-    "Avoid sp_ procedure prefix in TSQL.",
-    warning,
-    rule_tq_01,
-    "Avoid stored procedure names with sp_ prefix."
-);
-define_predicate_rule!(
-    TsqlProcedureBeginEnd,
-    issue_codes::LINT_TQ_002,
-    "TSQL procedure BEGIN/END",
-    "TSQL procedures should include BEGIN/END block.",
-    warning,
-    rule_tq_02,
-    "CREATE PROCEDURE should include BEGIN/END block."
-);
-define_predicate_rule!(
-    TsqlEmptyBatch,
-    issue_codes::LINT_TQ_003,
-    "TSQL empty batch",
-    "Avoid empty TSQL batches between GO separators.",
-    warning,
-    rule_tq_03,
-    "Empty TSQL batch detected between GO separators."
-);
-
 /// Returns all parity rule implementations defined in this module.
 pub fn parity_rules() -> Vec<Box<dyn LintRule>> {
     vec![
-        Box::new(CapitalisationKeywords),
         Box::new(CapitalisationIdentifiers),
         Box::new(CapitalisationFunctions),
-        Box::new(CapitalisationLiterals),
-        Box::new(CapitalisationTypes),
-        Box::new(ConventionNotEqual),
-        Box::new(ConventionStatementBrackets),
-        Box::new(ConventionBlockedWords),
-        Box::new(ConventionQuotedLiterals),
-        Box::new(ConventionCastingStyle),
-        Box::new(JinjaPadding),
         Box::new(LayoutSpacing),
         Box::new(LayoutIndent),
         Box::new(LayoutOperators),
@@ -2564,19 +2227,7 @@ pub fn parity_rules() -> Vec<Box<dyn LintRule>> {
         Box::new(LayoutCteBracket),
         Box::new(LayoutCteNewline),
         Box::new(LayoutSelectTargets),
-        Box::new(LayoutSelectModifiers),
-        Box::new(LayoutSetOperators),
-        Box::new(LayoutEndOfFile),
-        Box::new(LayoutStartOfFile),
         Box::new(LayoutKeywordNewline),
-        Box::new(LayoutNewlines),
-        Box::new(ReferencesKeywords),
-        Box::new(ReferencesSpecialChars),
-        Box::new(ReferencesQuoting),
-        Box::new(StructureConsecutiveSemicolons),
-        Box::new(TsqlSpPrefix),
-        Box::new(TsqlProcedureBeginEnd),
-        Box::new(TsqlEmptyBatch),
     ]
 }
 
@@ -2658,61 +2309,20 @@ mod tests {
 
     #[test]
     fn capitalisation_rules_cover_fail_and_pass_cases() {
-        assert_rule_triggers(&CapitalisationKeywords, "SELECT a from t");
-        assert_rule_not_triggers(&CapitalisationKeywords, "SELECT a FROM t");
-
         assert_rule_triggers(&CapitalisationIdentifiers, "SELECT Col, col FROM t");
         assert_rule_not_triggers(&CapitalisationIdentifiers, "SELECT col_one, col_two FROM t");
 
         assert_rule_triggers(&CapitalisationFunctions, "SELECT COUNT(*), count(x) FROM t");
         assert_rule_not_triggers(&CapitalisationFunctions, "SELECT lower(x), upper(y) FROM t");
-
-        assert_rule_triggers(&CapitalisationLiterals, "SELECT NULL, true FROM t");
-        assert_rule_not_triggers(&CapitalisationLiterals, "SELECT NULL, TRUE FROM t");
-
-        assert_rule_triggers(
-            &CapitalisationTypes,
-            "CREATE TABLE t (a INT, b varchar(10))",
-        );
-        assert_rule_not_triggers(
-            &CapitalisationTypes,
-            "CREATE TABLE t (a int, b varchar(10))",
-        );
     }
 
     #[test]
     fn convention_and_jinja_rules_cover_fail_and_pass_cases() {
-        assert_rule_triggers(
-            &ConventionNotEqual,
-            "SELECT * FROM t WHERE a <> b AND c != d",
-        );
-        assert_rule_not_triggers(&ConventionNotEqual, "SELECT * FROM t WHERE a <> b");
-        assert_rule_not_triggers(&ConventionNotEqual, "SELECT * FROM t WHERE a != b");
-
         assert_rule_triggers(&ConventionSelectTrailingComma, "SELECT a, FROM t");
         assert_rule_not_triggers(&ConventionSelectTrailingComma, "SELECT a, b FROM t");
 
         assert_rule_triggers(&ConventionTerminator, "SELECT 1; SELECT 2");
         assert_rule_not_triggers(&ConventionTerminator, "SELECT 1; SELECT 2;");
-
-        assert_rule_triggers(&ConventionStatementBrackets, "(SELECT 1)");
-        assert_rule_not_triggers(&ConventionStatementBrackets, "SELECT 1");
-
-        assert_rule_triggers(&ConventionBlockedWords, "SELECT foo FROM t");
-        assert_rule_not_triggers(&ConventionBlockedWords, "SELECT customer_id FROM t");
-
-        assert_rule_triggers(&ConventionQuotedLiterals, "SELECT \"abc\" FROM t");
-        assert_rule_not_triggers(&ConventionQuotedLiterals, "SELECT 'abc' FROM t");
-
-        assert_rule_triggers(
-            &ConventionCastingStyle,
-            "SELECT CAST(amount AS INT)::TEXT FROM t",
-        );
-        assert_rule_not_triggers(&ConventionCastingStyle, "SELECT amount::INT FROM t");
-        assert_rule_not_triggers(&ConventionCastingStyle, "SELECT CAST(amount AS INT) FROM t");
-
-        assert_rule_triggers(&JinjaPadding, "SELECT '{{foo}}' AS templated");
-        assert_rule_not_triggers(&JinjaPadding, "SELECT '{{ foo }}' AS templated");
     }
 
     #[test]
@@ -2835,55 +2445,10 @@ SELECT * FROM b",
             "expected one LT_009 issue per SELECT line with multiple top-level targets"
         );
 
-        assert_rule_triggers(&LayoutSelectModifiers, "SELECT\nDISTINCT a\nFROM t");
-        assert_rule_not_triggers(&LayoutSelectModifiers, "SELECT DISTINCT a FROM t");
-
-        assert_rule_triggers(
-            &LayoutSetOperators,
-            "SELECT 1 UNION SELECT 2\nUNION SELECT 3",
-        );
-        assert_rule_not_triggers(
-            &LayoutSetOperators,
-            "SELECT 1\nUNION\nSELECT 2\nUNION\nSELECT 3",
-        );
-
-        assert_rule_triggers(&LayoutEndOfFile, "SELECT 1\nFROM t");
-        assert_rule_not_triggers(&LayoutEndOfFile, "SELECT 1\nFROM t\n");
-
-        assert_rule_triggers(&LayoutStartOfFile, "\n\nSELECT 1");
-        assert_rule_not_triggers(&LayoutStartOfFile, "SELECT 1");
-
         assert_rule_triggers(&LayoutKeywordNewline, "SELECT a FROM t WHERE a = 1");
         assert_rule_triggers(&LayoutKeywordNewline, "SELECT a FROM t\nWHERE a = 1");
         assert_rule_not_triggers(&LayoutKeywordNewline, "SELECT a FROM t");
         assert_rule_not_triggers(&LayoutKeywordNewline, "SELECT a\nFROM t\nWHERE a = 1");
-
-        assert_rule_triggers(&LayoutNewlines, "SELECT 1\n\n\nFROM t");
-        assert_rule_not_triggers(&LayoutNewlines, "SELECT 1\n\nFROM t");
-    }
-
-    #[test]
-    fn references_rules_cover_fail_and_pass_cases() {
-        let rf04 = run_rule(
-            &ReferencesKeywords,
-            "SELECT 'FROM tbl AS SELECT' AS sql_snippet",
-        );
-        assert!(
-            rf04.iter()
-                .any(|issue| issue.code == issue_codes::LINT_RF_004),
-            "expected {} to trigger; got: {rf04:?}",
-            issue_codes::LINT_RF_004,
-        );
-        assert_rule_not_triggers(
-            &ReferencesKeywords,
-            "SELECT 'FROM tbl AS alias_name' AS sql_snippet",
-        );
-
-        assert_rule_triggers(&ReferencesSpecialChars, "SELECT \"bad-name\" FROM t");
-        assert_rule_not_triggers(&ReferencesSpecialChars, "SELECT \"good_name\" FROM t");
-
-        assert_rule_triggers(&ReferencesQuoting, "SELECT \"good_name\" FROM t");
-        assert_rule_not_triggers(&ReferencesQuoting, "SELECT \"bad-name\" FROM t");
     }
 
     #[test]
@@ -2897,33 +2462,6 @@ SELECT * FROM b",
             &StructureSubquery,
             "SELECT * FROM t WHERE id IN (SELECT id FROM t2)",
         );
-
-        assert_rule_triggers(&StructureConsecutiveSemicolons, "SELECT 1;;");
-        assert_rule_not_triggers(&StructureConsecutiveSemicolons, "SELECT 1;");
-    }
-
-    #[test]
-    fn tsql_rules_cover_fail_and_pass_cases() {
-        assert_rule_triggers(
-            &TsqlSpPrefix,
-            "SELECT 'CREATE PROCEDURE sp_legacy AS SELECT 1' AS sql_snippet",
-        );
-        assert_rule_not_triggers(
-            &TsqlSpPrefix,
-            "SELECT 'CREATE PROCEDURE proc_legacy AS SELECT 1' AS sql_snippet",
-        );
-
-        assert_rule_triggers(
-            &TsqlProcedureBeginEnd,
-            "SELECT 'CREATE PROCEDURE p AS SELECT 1' AS sql_snippet",
-        );
-        assert_rule_not_triggers(
-            &TsqlProcedureBeginEnd,
-            "SELECT 'CREATE PROCEDURE p AS BEGIN SELECT 1 END' AS sql_snippet",
-        );
-
-        assert_rule_triggers(&TsqlEmptyBatch, "SELECT '\nGO\nGO\n' AS sql_snippet");
-        assert_rule_not_triggers(&TsqlEmptyBatch, "SELECT '\nGO\n' AS sql_snippet");
     }
 
     #[test]

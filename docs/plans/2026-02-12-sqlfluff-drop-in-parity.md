@@ -64,9 +64,30 @@ This plan covers three axes:
   - `AL_006` moved from parity regex handling to a dedicated core AST rule (`al_006.rs`).
   - `AL_007` moved from parity regex handling to a dedicated core AST rule (`al_007.rs`).
   - `AL_009` moved from parity regex handling to a dedicated core AST rule (`al_009.rs`).
+  - `RF_004` moved from parity handling to a dedicated core rule module (`rf_004.rs`).
+  - `RF_005` moved from parity handling to a dedicated core rule module (`rf_005.rs`).
+  - `RF_006` moved from parity handling to a dedicated core rule module (`rf_006.rs`).
   - `ST_002` moved from parity regex handling to a dedicated core AST rule (`st_002.rs`).
   - `ST_006` moved from parity regex handling to a dedicated core AST rule (`st_006.rs`).
   - `ST_008` moved from parity regex handling to a dedicated core AST rule (`st_008.rs`).
+  - `ST_012` moved from parity handling to a dedicated core rule module (`st_012.rs`).
+  - `TQ_001` moved from parity handling to a dedicated core rule module (`tq_001.rs`).
+  - `TQ_002` moved from parity handling to a dedicated core rule module (`tq_002.rs`).
+  - `TQ_003` moved from parity handling to a dedicated core rule module (`tq_003.rs`).
+  - `CV_001` moved from parity handling to a dedicated core rule module (`cv_001.rs`).
+  - `CV_007` moved from parity handling to a dedicated core rule module (`cv_007.rs`).
+  - `CV_009` moved from parity handling to a dedicated core rule module (`cv_009.rs`).
+  - `CV_010` moved from parity handling to a dedicated core rule module (`cv_010.rs`).
+  - `CV_011` moved from parity handling to a dedicated core rule module (`cv_011.rs`).
+  - `JJ_001` moved from parity handling to a dedicated core rule module (`jj_001.rs`).
+  - `LT_010` moved from parity handling to a dedicated core rule module (`lt_010.rs`).
+  - `LT_011` moved from parity handling to a dedicated core rule module (`lt_011.rs`).
+  - `LT_012` moved from parity handling to a dedicated core rule module (`lt_012.rs`).
+  - `LT_013` moved from parity handling to a dedicated core rule module (`lt_013.rs`).
+  - `LT_015` moved from parity handling to a dedicated core rule module (`lt_015.rs`).
+  - `CP_001` moved from parity handling to a dedicated core rule module (`cp_001.rs`).
+  - `CP_004` moved from parity handling to a dedicated core rule module (`cp_004.rs`).
+  - `CP_005` moved from parity handling to a dedicated core rule module (`cp_005.rs`).
 
 ### Intentionally Removed
 

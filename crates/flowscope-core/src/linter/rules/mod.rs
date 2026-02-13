@@ -21,17 +21,34 @@ pub mod am_007;
 pub mod am_008;
 pub mod am_009;
 pub(crate) mod column_count_helpers;
+pub mod cp_001;
+pub mod cp_004;
+pub mod cp_005;
+pub mod cv_001;
 pub mod cv_002;
 pub mod cv_003;
 pub mod cv_004;
 pub mod cv_005;
 pub mod cv_006;
+pub mod cv_007;
 pub mod cv_008;
+pub mod cv_009;
+pub mod cv_010;
+pub mod cv_011;
 pub mod cv_012;
+pub mod jj_001;
+pub mod lt_010;
+pub mod lt_011;
+pub mod lt_012;
+pub mod lt_013;
+pub mod lt_015;
 pub mod parity;
 pub mod rf_001;
 pub mod rf_002;
 pub mod rf_003;
+pub mod rf_004;
+pub mod rf_005;
+pub mod rf_006;
 pub(crate) mod semantic_helpers;
 pub mod st_001;
 pub mod st_002;
@@ -44,6 +61,10 @@ pub mod st_008;
 pub mod st_009;
 pub mod st_010;
 pub mod st_011;
+pub mod st_012;
+pub mod tq_001;
+pub mod tq_002;
+pub mod tq_003;
 
 /// Returns all available lint rules.
 pub fn all_rules() -> Vec<Box<dyn LintRule>> {
@@ -66,16 +87,33 @@ pub fn all_rules() -> Vec<Box<dyn LintRule>> {
         Box::new(al_007::AliasingForbidSingleTable),
         Box::new(al_008::AliasingUniqueColumn),
         Box::new(al_009::AliasingSelfAliasColumn),
+        Box::new(cp_001::CapitalisationKeywords),
+        Box::new(cp_004::CapitalisationLiterals),
+        Box::new(cp_005::CapitalisationTypes),
+        Box::new(cv_001::ConventionNotEqual),
         Box::new(cv_002::CoalesceConvention),
         Box::new(cv_003::ConventionSelectTrailingComma),
         Box::new(cv_004::CountStyle),
         Box::new(cv_005::NullComparison),
         Box::new(cv_006::ConventionTerminator),
+        Box::new(cv_007::ConventionStatementBrackets),
         Box::new(cv_008::LeftJoinOverRightJoin),
+        Box::new(cv_009::ConventionBlockedWords),
+        Box::new(cv_010::ConventionQuotedLiterals),
+        Box::new(cv_011::ConventionCastingStyle),
         Box::new(cv_012::ConventionJoinCondition),
+        Box::new(jj_001::JinjaPadding),
+        Box::new(lt_010::LayoutSelectModifiers),
+        Box::new(lt_011::LayoutSetOperators),
+        Box::new(lt_012::LayoutEndOfFile),
+        Box::new(lt_013::LayoutStartOfFile),
+        Box::new(lt_015::LayoutNewlines),
         Box::new(rf_001::ReferencesFrom),
         Box::new(rf_002::ReferencesQualification),
         Box::new(rf_003::ReferencesConsistent),
+        Box::new(rf_004::ReferencesKeywords),
+        Box::new(rf_005::ReferencesSpecialChars),
+        Box::new(rf_006::ReferencesQuoting),
         Box::new(st_003::UnusedCte),
         Box::new(st_001::UnnecessaryElseNull),
         Box::new(st_002::StructureSimpleCase),
@@ -87,6 +125,10 @@ pub fn all_rules() -> Vec<Box<dyn LintRule>> {
         Box::new(st_009::StructureJoinConditionOrder),
         Box::new(st_010::StructureConstantExpression),
         Box::new(st_011::StructureUnusedJoin),
+        Box::new(st_012::StructureConsecutiveSemicolons),
+        Box::new(tq_001::TsqlSpPrefix),
+        Box::new(tq_002::TsqlProcedureBeginEnd),
+        Box::new(tq_003::TsqlEmptyBatch),
     ];
     rules.extend(parity::parity_rules());
     rules
