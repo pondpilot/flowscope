@@ -5,8 +5,13 @@
 use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
-use sqlparser::ast::{Query, Select, SetExpr, Statement, TableFactor, TableWithJoins};
+use sqlparser::ast::{
+    Expr, FunctionArg, FunctionArgExpr, FunctionArguments, Query, Select, SetExpr, Statement,
+    TableFactor, TableWithJoins, WindowType,
+};
 use std::collections::HashSet;
+
+use super::semantic_helpers::visit_select_expressions;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum AliasCaseCheck {
@@ -186,6 +191,14 @@ fn first_duplicate_table_alias_in_select_with_parent(
         return Some(duplicate);
     }
 
+    if let Some(duplicate) = first_duplicate_table_alias_in_select_expression_subqueries(
+        select,
+        &aliases_with_parent,
+        alias_case_check,
+    ) {
+        return Some(duplicate);
+    }
+
     for table_with_joins in &select.from {
         if let Some(duplicate) = first_duplicate_table_alias_in_table_with_joins_children(
             table_with_joins,
@@ -197,6 +210,214 @@ fn first_duplicate_table_alias_in_select_with_parent(
     }
 
     None
+}
+
+fn first_duplicate_table_alias_in_select_expression_subqueries(
+    select: &Select,
+    parent_aliases: &[AliasRef],
+    alias_case_check: AliasCaseCheck,
+) -> Option<String> {
+    let mut duplicate = None;
+    visit_select_expressions(select, &mut |expr| {
+        if duplicate.is_none() {
+            duplicate = first_duplicate_table_alias_in_expr_with_parent(
+                expr,
+                parent_aliases,
+                alias_case_check,
+            );
+        }
+    });
+    duplicate
+}
+
+fn first_duplicate_table_alias_in_expr_with_parent(
+    expr: &Expr,
+    parent_aliases: &[AliasRef],
+    alias_case_check: AliasCaseCheck,
+) -> Option<String> {
+    match expr {
+        Expr::Subquery(query)
+        | Expr::Exists {
+            subquery: query, ..
+        } => first_duplicate_table_alias_in_query_with_parent(
+            query,
+            parent_aliases,
+            alias_case_check,
+        ),
+        Expr::InSubquery {
+            expr: inner,
+            subquery,
+            ..
+        } => {
+            first_duplicate_table_alias_in_expr_with_parent(inner, parent_aliases, alias_case_check)
+                .or_else(|| {
+                    first_duplicate_table_alias_in_query_with_parent(
+                        subquery,
+                        parent_aliases,
+                        alias_case_check,
+                    )
+                })
+        }
+        Expr::BinaryOp { left, right, .. }
+        | Expr::AnyOp { left, right, .. }
+        | Expr::AllOp { left, right, .. } => {
+            first_duplicate_table_alias_in_expr_with_parent(left, parent_aliases, alias_case_check)
+                .or_else(|| {
+                    first_duplicate_table_alias_in_expr_with_parent(
+                        right,
+                        parent_aliases,
+                        alias_case_check,
+                    )
+                })
+        }
+        Expr::UnaryOp { expr: inner, .. }
+        | Expr::Nested(inner)
+        | Expr::IsNull(inner)
+        | Expr::IsNotNull(inner)
+        | Expr::Cast { expr: inner, .. } => {
+            first_duplicate_table_alias_in_expr_with_parent(inner, parent_aliases, alias_case_check)
+        }
+        Expr::InList { expr, list, .. } => {
+            first_duplicate_table_alias_in_expr_with_parent(expr, parent_aliases, alias_case_check)
+                .or_else(|| {
+                    for item in list {
+                        if let Some(duplicate) = first_duplicate_table_alias_in_expr_with_parent(
+                            item,
+                            parent_aliases,
+                            alias_case_check,
+                        ) {
+                            return Some(duplicate);
+                        }
+                    }
+                    None
+                })
+        }
+        Expr::Between {
+            expr, low, high, ..
+        } => {
+            first_duplicate_table_alias_in_expr_with_parent(expr, parent_aliases, alias_case_check)
+                .or_else(|| {
+                    first_duplicate_table_alias_in_expr_with_parent(
+                        low,
+                        parent_aliases,
+                        alias_case_check,
+                    )
+                })
+                .or_else(|| {
+                    first_duplicate_table_alias_in_expr_with_parent(
+                        high,
+                        parent_aliases,
+                        alias_case_check,
+                    )
+                })
+        }
+        Expr::Case {
+            operand,
+            conditions,
+            else_result,
+            ..
+        } => {
+            if let Some(operand) = operand {
+                if let Some(duplicate) = first_duplicate_table_alias_in_expr_with_parent(
+                    operand,
+                    parent_aliases,
+                    alias_case_check,
+                ) {
+                    return Some(duplicate);
+                }
+            }
+            for when in conditions {
+                if let Some(duplicate) = first_duplicate_table_alias_in_expr_with_parent(
+                    &when.condition,
+                    parent_aliases,
+                    alias_case_check,
+                ) {
+                    return Some(duplicate);
+                }
+                if let Some(duplicate) = first_duplicate_table_alias_in_expr_with_parent(
+                    &when.result,
+                    parent_aliases,
+                    alias_case_check,
+                ) {
+                    return Some(duplicate);
+                }
+            }
+            if let Some(otherwise) = else_result {
+                return first_duplicate_table_alias_in_expr_with_parent(
+                    otherwise,
+                    parent_aliases,
+                    alias_case_check,
+                );
+            }
+            None
+        }
+        Expr::Function(function) => {
+            if let FunctionArguments::List(arguments) = &function.args {
+                for arg in &arguments.args {
+                    match arg {
+                        FunctionArg::Unnamed(FunctionArgExpr::Expr(expr))
+                        | FunctionArg::Named {
+                            arg: FunctionArgExpr::Expr(expr),
+                            ..
+                        } => {
+                            if let Some(duplicate) = first_duplicate_table_alias_in_expr_with_parent(
+                                expr,
+                                parent_aliases,
+                                alias_case_check,
+                            ) {
+                                return Some(duplicate);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
+            if let Some(filter) = &function.filter {
+                if let Some(duplicate) = first_duplicate_table_alias_in_expr_with_parent(
+                    filter,
+                    parent_aliases,
+                    alias_case_check,
+                ) {
+                    return Some(duplicate);
+                }
+            }
+
+            for order_expr in &function.within_group {
+                if let Some(duplicate) = first_duplicate_table_alias_in_expr_with_parent(
+                    &order_expr.expr,
+                    parent_aliases,
+                    alias_case_check,
+                ) {
+                    return Some(duplicate);
+                }
+            }
+
+            if let Some(WindowType::WindowSpec(spec)) = &function.over {
+                for expr in &spec.partition_by {
+                    if let Some(duplicate) = first_duplicate_table_alias_in_expr_with_parent(
+                        expr,
+                        parent_aliases,
+                        alias_case_check,
+                    ) {
+                        return Some(duplicate);
+                    }
+                }
+                for order_expr in &spec.order_by {
+                    if let Some(duplicate) = first_duplicate_table_alias_in_expr_with_parent(
+                        &order_expr.expr,
+                        parent_aliases,
+                        alias_case_check,
+                    ) {
+                        return Some(duplicate);
+                    }
+                }
+            }
+
+            None
+        }
+        _ => None,
+    }
 }
 
 fn collect_scope_table_aliases(table_with_joins: &TableWithJoins, aliases: &mut Vec<AliasRef>) {
@@ -494,6 +715,30 @@ mod tests {
     #[test]
     fn flags_duplicate_alias_between_parent_and_subquery_scope() {
         let sql = "select * from (select * from users a) s join orders a on s.id = a.user_id";
+        let issues = run(sql);
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_AL_004);
+    }
+
+    #[test]
+    fn flags_duplicate_alias_between_parent_and_where_subquery_scope() {
+        let sql = "select * from tbl as t where t.val in (select t.val from tbl2 as t)";
+        let issues = run(sql);
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_AL_004);
+    }
+
+    #[test]
+    fn flags_implicit_table_name_alias_collision_in_where_subquery() {
+        let sql = "select * from tbl where val in (select tbl.val from tbl2 as tbl)";
+        let issues = run(sql);
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_AL_004);
+    }
+
+    #[test]
+    fn flags_implicit_table_name_collision_in_where_subquery() {
+        let sql = "select * from tbl where val in (select tbl.val from tbl)";
         let issues = run(sql);
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_AL_004);

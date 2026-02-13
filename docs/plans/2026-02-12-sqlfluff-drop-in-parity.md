@@ -55,12 +55,15 @@ This plan covers three axes:
   - `ST_005` now includes SQLFluff correlated-subquery parity for JOIN-derived queries by exempting derived subqueries that reference outer query sources (for example correlated `WHERE ce.name = pd.name` cases).
   - `AL_004` moved from parity into a dedicated core AST rule (`al_004.rs`) and parity registration was removed.
   - `AL_004` now also checks duplicate implicit table-name aliases (e.g., same base table name across schemas without explicit aliases) and parent-scope alias collisions in nested subqueries (excluding the subquery wrapper alias), matching SQLFluff AL04 coverage more closely.
+  - `AL_004` now also checks outer-scope alias collisions in expression subqueries (`WHERE`/`IN`/`EXISTS`), including implicit table-name collisions such as `FROM tbl ... (SELECT ... FROM tbl)`.
   - `AL_004` now supports quote-aware `alias_case_check` through `lint.ruleConfigs`.
   - `AL_004` `alias_case_check` now aligns closer to SQLFluff mode semantics for `quoted_cs_naked_upper` and `quoted_cs_naked_lower` (quoted aliases case-sensitive; naked aliases case-folded per configured mode).
   - `AL_001` moved from parity into a dedicated core rule module (`al_001.rs`) and parity registration was removed.
   - `AL_001` was further upgraded to AST-driven table-factor alias traversal with token-aware `AS` detection.
+  - `AL_001` now applies alias-style checks to `MERGE` target/source aliases (for example BigQuery `MERGE dataset.inventory t USING ... s`) for SQLFluff AL01 parity.
   - `AL_002` moved from parity into a dedicated core rule module (`al_002.rs`) and parity registration was removed.
   - `AL_002` was further upgraded to AST-driven SELECT projection alias traversal with token-aware `AS` detection.
+  - `AL_002` now excludes TSQL assignment-style projection aliases (`SELECT alias = expr`) from AL02 violations, matching SQLFluff behavior.
   - `AL_001`/`AL_002` now support SQLFluff-style `aliasing` mode (`explicit`/`implicit`) via `lint.ruleConfigs`.
   - `AL_008` moved from parity into a dedicated core AST rule (`al_008.rs`) and parity registration was removed.
   - `AL_008` now checks duplicate output names from unaliased column references in SELECT projections (in addition to explicit aliases), improving SQLFluff AL08 parity.
@@ -93,6 +96,7 @@ This plan covers three axes:
   - CLI lint mode now supports `--rule-configs` JSON for SQLFluff-style per-rule options (for example `{"structure.subquery":{"forbid_subquery_in":"both"}}`), enabling config-aware fixture parity replay outside unit tests.
   - CLI lint mode now honors templating in lint requests (when `--template` is provided) and adds a Jinja fallback retry for parse-erroring inputs that contain template markers (`{{`, `{%`, `{#`), improving SQLFluff-style templated lint parity.
   - Config-aware SQLFluff fixture replay for `AL05`/`ST05`/`ST11` now reports zero mismatches (104/104, 40/40, and 22/22 cases respectively).
+  - Config-aware SQLFluff fixture replay for `AL01`/`AL02`/`AL04` now reports zero mismatches (14/14, 9/9, and 10/10 cases respectively).
   - `AM_004`/`AM_007` wildcard-width resolution now also handles declared CTE column lists, table-factor alias column lists (`AS alias(col1, ...)`), and aliased nested-join table factors (including `USING(...)` width deduction plus `NATURAL JOIN` overlap deduction when both sides expose deterministic output column names; unknown wildcard sources remain conservatively unresolved).
 - Additional AST-driven migration progress beyond Tier 1:
   - `AL_006` moved from parity regex handling to a dedicated core AST rule (`al_006.rs`).
@@ -216,7 +220,7 @@ This plan covers three axes:
 - Phase 2 metadata parity:
   - SQLFluff canonical description text is not fully normalized across all rules.
 - Phase 3 semantic-depth work remains open for Tier 2 and Tier 3.
-  - Tier 1 is functionally complete across planned rules: `AL_001`, `AL_002`, `AL_004`, `AL_005` (with `LATERAL`/`VALUES` exceptions and BigQuery `TO_JSON_STRING(<table_alias>)` handling), `AL_008`, `CV_003`, `CV_006`, `ST_005`, `ST_010` (broadened), and `ST_011` (SQLFluff-aligned outer-join scope).
+  - Tier 1 AST rule migration is complete, and config-aware SQLFluff fixture replay is currently 100% for `AL_001`, `AL_002`, `AL_004`, `AL_005`, `AL_008`, `CV_003`, `ST_005`, `ST_010`, and `ST_011`; remaining Tier 1 semantic parity is concentrated in `CV_006` fixture coverage.
 
 ---
 

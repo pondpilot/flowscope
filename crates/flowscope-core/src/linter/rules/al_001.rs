@@ -194,6 +194,10 @@ fn collect_table_aliases_in_statement<F: FnMut(&Ident)>(statement: &Statement, v
                 collect_table_aliases_in_query(query, visitor);
             }
         }
+        Statement::Merge { table, source, .. } => {
+            collect_table_aliases_in_table_factor(table, visitor);
+            collect_table_aliases_in_table_factor(source, visitor);
+        }
         _ => {}
     }
 }
@@ -336,7 +340,10 @@ fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::parse_sql;
+    use crate::{
+        parser::{parse_sql, parse_sql_with_dialect},
+        Dialect,
+    };
 
     fn run_with_rule(sql: &str, rule: AliasingTableStyle) -> Vec<Issue> {
         let stmts = parse_sql(sql).expect("parse");
@@ -395,5 +402,27 @@ mod tests {
         let issues = run("select * from (select 1) d");
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_AL_001);
+    }
+
+    #[test]
+    fn flags_implicit_merge_aliases_in_bigquery() {
+        let sql = "MERGE dataset.inventory t USING dataset.newarrivals s ON t.product = s.product WHEN MATCHED THEN UPDATE SET quantity = t.quantity + s.quantity";
+        let statements = parse_sql_with_dialect(sql, Dialect::Bigquery).expect("parse");
+        let issues = statements
+            .iter()
+            .enumerate()
+            .flat_map(|(index, stmt)| {
+                AliasingTableStyle::default().check(
+                    stmt,
+                    &LintContext {
+                        sql,
+                        statement_range: 0..sql.len(),
+                        statement_index: index,
+                    },
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(issues.len(), 2);
+        assert!(issues.iter().all(|i| i.code == issue_codes::LINT_AL_001));
     }
 }

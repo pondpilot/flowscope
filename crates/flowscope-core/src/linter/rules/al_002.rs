@@ -94,6 +94,11 @@ impl LintRule for AliasingColumnStyle {
                     continue;
                 };
 
+                if occurrence.tsql_equals_assignment {
+                    // TSQL supports `SELECT alias = expr`, which SQLFluff excludes from AL02.
+                    continue;
+                }
+
                 if !self.aliasing.violation(occurrence.explicit_as) {
                     continue;
                 }
@@ -117,6 +122,7 @@ struct AliasOccurrence {
     start: usize,
     end: usize,
     explicit_as: bool,
+    tsql_equals_assignment: bool,
 }
 
 fn alias_occurrence_in_statement(
@@ -177,6 +183,10 @@ fn alias_style_index(sql: &str) -> HashMap<usize, AliasOccurrence> {
                 significant[index - 1].token,
                 Token::Word(ref word) if word.keyword == Keyword::AS
             );
+        let tsql_equals_assignment = matches!(
+            significant.get(index + 1),
+            Some(next) if matches!(next.token, Token::Eq)
+        );
 
         styles.insert(
             start,
@@ -184,6 +194,7 @@ fn alias_style_index(sql: &str) -> HashMap<usize, AliasOccurrence> {
                 start,
                 end,
                 explicit_as,
+                tsql_equals_assignment,
             },
         );
     }
@@ -247,7 +258,10 @@ fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::parse_sql;
+    use crate::{
+        parser::{parse_sql, parse_sql_with_dialect},
+        Dialect,
+    };
 
     fn run_with_rule(sql: &str, rule: AliasingColumnStyle) -> Vec<Issue> {
         let stmts = parse_sql(sql).expect("parse");
@@ -305,6 +319,21 @@ mod tests {
     #[test]
     fn does_not_flag_alias_text_in_string_literal() {
         let issues = run("select 'a as label' as value from t");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn allows_tsql_assignment_style_alias() {
+        let sql = "select alias1 = col1";
+        let statements = parse_sql_with_dialect(sql, Dialect::Mssql).expect("parse");
+        let issues = AliasingColumnStyle::default().check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
         assert!(issues.is_empty());
     }
 }

@@ -2222,6 +2222,45 @@ fn lint_al_004_duplicate_alias_between_parent_and_subquery_scope() {
 }
 
 #[test]
+fn lint_al_004_duplicate_alias_between_outer_scope_and_where_subquery() {
+    let issues = run_lint("SELECT * FROM tbl AS t WHERE t.val IN (SELECT t.val FROM tbl2 AS t)");
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_AL_004"),
+        "outer/WHERE-subquery alias collisions should trigger AL_004: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_al_004_duplicate_implicit_table_name_in_where_subquery() {
+    let issues = run_lint("SELECT * FROM tbl WHERE val IN (SELECT tbl.val FROM tbl)");
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_AL_004"),
+        "implicit table-name collisions across WHERE subqueries should trigger AL_004: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_al_001_bigquery_merge_requires_explicit_aliases() {
+    let issues = run_lint_in_dialect(
+        "MERGE dataset.inventory t USING dataset.newarrivals s ON t.product = s.product WHEN MATCHED THEN UPDATE SET quantity = t.quantity + s.quantity",
+        Dialect::Bigquery,
+    );
+    assert!(
+        issues.iter().any(|(code, _)| code == "LINT_AL_001"),
+        "BigQuery MERGE aliases without AS should trigger AL_001: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_al_002_tsql_assignment_alias_syntax_is_allowed() {
+    let issues = run_lint_in_dialect("SELECT alias1 = col1", Dialect::Mssql);
+    assert!(
+        !issues.iter().any(|(code, _)| code == "LINT_AL_002"),
+        "TSQL assignment-style aliases should not trigger AL_002: {issues:?}"
+    );
+}
+
+#[test]
 fn lint_al_008_duplicate_unaliased_column_reference() {
     let issues = run_lint("SELECT foo, foo FROM t");
     assert!(
