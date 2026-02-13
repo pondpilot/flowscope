@@ -52,15 +52,32 @@ enum NoqaDirective {
     Rules(HashSet<String>),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct NoqaDisableRange {
+    start_line: usize,
+    end_line: Option<usize>,
+}
+
 /// `-- noqa` suppression directives indexed by 1-based line number.
 #[derive(Debug, Clone, Default)]
 pub struct NoqaMap {
     directives: HashMap<usize, NoqaDirective>,
+    disable_all_ranges: Vec<NoqaDisableRange>,
 }
 
 impl NoqaMap {
     /// Returns true if `code` is suppressed on `line`.
     pub fn is_suppressed(&self, line: usize, code: &str) -> bool {
+        if self.disable_all_ranges.iter().any(|range| {
+            line >= range.start_line
+                && range
+                    .end_line
+                    .map(|end_line| line <= end_line)
+                    .unwrap_or(true)
+        }) {
+            return true;
+        }
+
         let Some(directive) = self.directives.get(&line) else {
             return false;
         };
@@ -88,11 +105,20 @@ impl NoqaMap {
             }
         }
     }
+
+    fn suppress_all_range(&mut self, start_line: usize, end_line: Option<usize>) {
+        self.disable_all_ranges.push(NoqaDisableRange {
+            start_line,
+            end_line,
+        });
+    }
 }
 
 /// Normalized lint input model for a single SQL source.
 pub struct LintDocument<'a> {
     pub sql: &'a str,
+    pub source_sql: Option<&'a str>,
+    pub source_statement_ranges: Vec<Option<Range<usize>>>,
     pub dialect: Dialect,
     pub statements: Vec<LintStatement<'a>>,
     pub tokens: Vec<LintToken>,
@@ -105,7 +131,7 @@ impl<'a> LintDocument<'a> {
     /// Build a lint document from source SQL and parsed statements.
     #[must_use]
     pub fn new(sql: &'a str, dialect: Dialect, statements: Vec<LintStatement<'a>>) -> Self {
-        Self::new_with_parser_fallback(sql, dialect, statements, false)
+        Self::new_with_parser_fallback_and_source(sql, None, dialect, statements, false, None)
     }
 
     /// Build a lint document with parser fallback provenance metadata.
@@ -116,6 +142,27 @@ impl<'a> LintDocument<'a> {
         statements: Vec<LintStatement<'a>>,
         parser_fallback_used: bool,
     ) -> Self {
+        Self::new_with_parser_fallback_and_source(
+            sql,
+            None,
+            dialect,
+            statements,
+            parser_fallback_used,
+            None,
+        )
+    }
+
+    /// Build a lint document with parser fallback metadata and optional
+    /// untemplated source mapping.
+    #[must_use]
+    pub fn new_with_parser_fallback_and_source(
+        sql: &'a str,
+        source_sql: Option<&'a str>,
+        dialect: Dialect,
+        statements: Vec<LintStatement<'a>>,
+        parser_fallback_used: bool,
+        source_statement_ranges: Option<Vec<Option<Range<usize>>>>,
+    ) -> Self {
         let (tokens, tokenizer_fallback_used) = match tokenize_sql(sql, dialect, &statements) {
             Ok(tokens) => (tokens, false),
             Err(_) => (Vec::new(), true),
@@ -124,6 +171,9 @@ impl<'a> LintDocument<'a> {
 
         Self {
             sql,
+            source_sql,
+            source_statement_ranges: source_statement_ranges
+                .unwrap_or_else(|| vec![None; statements.len()]),
             dialect,
             statements,
             tokens,
@@ -136,6 +186,7 @@ impl<'a> LintDocument<'a> {
 
 fn extract_noqa(sql: &str, tokens: &[LintToken]) -> NoqaMap {
     let mut directives = NoqaMap::default();
+    let mut disable_all_start: Option<usize> = None;
 
     for token in tokens {
         if token.kind != LintTokenKind::Comment {
@@ -146,11 +197,35 @@ fn extract_noqa(sql: &str, tokens: &[LintToken]) -> NoqaMap {
             continue;
         };
 
-        let line = offset_to_line(sql, token.span.start);
+        let start_line = offset_to_line(sql, token.span.start);
+        let end_offset = token.span.end.saturating_sub(1);
+        let end_line = offset_to_line(sql, end_offset);
         match parsed {
-            ParsedNoqa::All => directives.suppress_all(line),
-            ParsedNoqa::Rules(rules) => directives.suppress_rules(line, rules),
+            ParsedNoqa::All => {
+                for line in start_line..=end_line {
+                    directives.suppress_all(line);
+                }
+            }
+            ParsedNoqa::Rules(rules) => {
+                for line in start_line..=end_line {
+                    directives.suppress_rules(line, rules.clone());
+                }
+            }
+            ParsedNoqa::DisableAll => {
+                if disable_all_start.is_none() {
+                    disable_all_start = Some(start_line);
+                }
+            }
+            ParsedNoqa::EnableAll => {
+                if let Some(start_line) = disable_all_start.take() {
+                    directives.suppress_all_range(start_line, Some(end_line));
+                }
+            }
         }
+    }
+
+    if let Some(start_line) = disable_all_start {
+        directives.suppress_all_range(start_line, None);
     }
 
     directives
@@ -159,12 +234,28 @@ fn extract_noqa(sql: &str, tokens: &[LintToken]) -> NoqaMap {
 enum ParsedNoqa {
     All,
     Rules(HashSet<String>),
+    DisableAll,
+    EnableAll,
 }
 
 fn parse_noqa_comment(comment_text: &str) -> Option<ParsedNoqa> {
-    let lowered = comment_text.to_ascii_lowercase();
-    let marker_pos = lowered.find("noqa")?;
-    let suffix = comment_text[marker_pos + 4..].trim();
+    let body = comment_body(comment_text);
+    let lowered = body.to_ascii_lowercase();
+    let mut search_start = 0usize;
+    let mut marker_pos = None;
+
+    while let Some(rel) = lowered[search_start..].find("noqa") {
+        let absolute = search_start + rel;
+        let prefix = &body[..absolute];
+        if prefix.trim().is_empty() || prefix.trim_end().ends_with("--") {
+            marker_pos = Some(absolute);
+            break;
+        }
+        search_start = absolute + 4;
+    }
+
+    let marker_pos = marker_pos?;
+    let suffix = body[marker_pos + 4..].trim();
 
     if suffix.is_empty() {
         return Some(ParsedNoqa::All);
@@ -176,6 +267,13 @@ fn parse_noqa_comment(comment_text: &str) -> Option<ParsedNoqa> {
     let rule_list = rule_list.trim();
     if rule_list.is_empty() {
         return Some(ParsedNoqa::All);
+    }
+
+    if rule_list.eq_ignore_ascii_case("disable=all") {
+        return Some(ParsedNoqa::DisableAll);
+    }
+    if rule_list.eq_ignore_ascii_case("enable=all") {
+        return Some(ParsedNoqa::EnableAll);
     }
 
     let mut rules = HashSet::new();
@@ -196,6 +294,23 @@ fn parse_noqa_comment(comment_text: &str) -> Option<ParsedNoqa> {
     }
 
     Some(ParsedNoqa::Rules(rules))
+}
+
+fn comment_body(comment_text: &str) -> &str {
+    let trimmed = comment_text.trim();
+    if let Some(inner) = trimmed
+        .strip_prefix("/*")
+        .and_then(|text| text.strip_suffix("*/"))
+    {
+        return inner.trim();
+    }
+    if let Some(inner) = trimmed.strip_prefix("--") {
+        return inner.trim();
+    }
+    if let Some(inner) = trimmed.strip_prefix('#') {
+        return inner.trim();
+    }
+    trimmed
 }
 
 fn offset_to_line(sql: &str, offset: usize) -> usize {
@@ -353,5 +468,28 @@ mod tests {
         assert!(document.noqa.is_suppressed(1, "LINT_AM_005"));
         assert!(!document.noqa.is_suppressed(1, "LINT_RF_001"));
         assert!(document.noqa.is_suppressed(2, "LINT_RF_001"));
+    }
+
+    #[test]
+    fn parses_disable_enable_all_noqa_directives() {
+        let sql = "/* -- noqa: disable=all */\nSELECT 1\n/* noqa: enable=all */\nSELECT 2";
+        let document = LintDocument::new(sql, Dialect::Generic, Vec::new());
+
+        assert!(document.noqa.is_suppressed(2, "LINT_LT_005"));
+        assert!(!document.noqa.is_suppressed(4, "LINT_LT_005"));
+    }
+
+    #[test]
+    fn ignores_invalid_disable_all_without_double_dash_prefix() {
+        let sql = "/* This won't work: noqa: disable=all */\nSELECT 1";
+        let document = LintDocument::new(sql, Dialect::Generic, Vec::new());
+        assert!(!document.noqa.is_suppressed(2, "LINT_LT_005"));
+    }
+
+    #[test]
+    fn ignores_invalid_disable_all_with_trailing_text() {
+        let sql = "/* -- noqa: disable=all Invalid declaration */\nSELECT 1";
+        let document = LintDocument::new(sql, Dialect::Generic, Vec::new());
+        assert!(!document.noqa.is_suppressed(2, "LINT_LT_005"));
     }
 }

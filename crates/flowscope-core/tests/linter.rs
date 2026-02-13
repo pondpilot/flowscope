@@ -6,6 +6,8 @@
 use flowscope_core::{
     analyze, issue_codes, AnalysisOptions, AnalyzeRequest, Dialect, LintConfig, Severity,
 };
+#[cfg(feature = "templating")]
+use flowscope_core::{TemplateConfig, TemplateMode};
 
 fn run_lint(sql: &str) -> Vec<(String, String)> {
     run_lint_in_dialect(sql, Dialect::Generic)
@@ -54,6 +56,31 @@ fn run_lint_with_config_in_dialect(
         schema: None,
         #[cfg(feature = "templating")]
         template_config: None,
+    });
+    result
+        .issues
+        .iter()
+        .filter(|i| i.code.starts_with("LINT_"))
+        .map(|i| (i.code.clone(), i.message.clone()))
+        .collect()
+}
+
+#[cfg(feature = "templating")]
+fn run_lint_in_dialect_with_jinja_template(sql: &str, dialect: Dialect) -> Vec<(String, String)> {
+    let result = analyze(&AnalyzeRequest {
+        sql: sql.to_string(),
+        files: None,
+        dialect,
+        source_name: None,
+        options: Some(AnalysisOptions {
+            lint: Some(LintConfig::default()),
+            ..Default::default()
+        }),
+        schema: None,
+        template_config: Some(TemplateConfig {
+            mode: TemplateMode::Jinja,
+            context: std::collections::HashMap::new(),
+        }),
     });
     result
         .issues
@@ -131,7 +158,7 @@ fn lint_issues_have_statement_index() {
 #[test]
 fn lint_disabled_rule_not_reported() {
     let issues = run_lint_with_config(
-        "SELECT 1 UNION SELECT 2",
+        "SELECT 1\nUNION\nSELECT 2\n",
         LintConfig {
             enabled: true,
             disabled_rules: vec!["LINT_AM_002".to_string()],
@@ -139,8 +166,10 @@ fn lint_disabled_rule_not_reported() {
         },
     );
     assert!(
-        issues.is_empty(),
-        "disabled rule should not produce issues: {issues:?}"
+        !issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_AM_002),
+        "disabled rule should not be reported: {issues:?}"
     );
 }
 
@@ -2678,12 +2707,54 @@ fn lint_st_011_allows_unnest_chain_reference_between_join_relations() {
 
 #[test]
 fn lint_lt_007_cte_bracket_missing() {
-    let issues = run_lint("SELECT 'WITH cte AS SELECT 1' AS sql_snippet");
+    let issues = run_lint("WITH cte AS (\n  SELECT 1) SELECT * FROM cte");
     assert!(
         issues
             .iter()
             .any(|(code, _)| code == issue_codes::LINT_LT_007),
         "expected {}: {issues:?}",
+        issue_codes::LINT_LT_007,
+    );
+}
+
+#[test]
+#[cfg(feature = "templating")]
+fn lint_lt_007_jinja_whitespace_consumption_expression_on_own_line_passes() {
+    let sql = "with cte as (\n    select 1\n    {{- ' from i_consume_whitespace ' -}}\n) select * from cte";
+    let issues = run_lint_in_dialect_with_jinja_template(sql, Dialect::Ansi);
+    assert!(
+        !issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_LT_007),
+        "expected no {} for whitespace-consuming template line with own-line close: {issues:?}",
+        issue_codes::LINT_LT_007,
+    );
+}
+
+#[test]
+#[cfg(feature = "templating")]
+fn lint_lt_007_jinja_whitespace_consumption_comment_on_own_line_passes() {
+    let sql = "with cte as (\n    select 1\n    {#- consumed -#}\n) select * from cte";
+    let issues = run_lint_in_dialect_with_jinja_template(sql, Dialect::Ansi);
+    assert!(
+        !issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_LT_007),
+        "expected no {} for whitespace-consuming template comment with own-line close: {issues:?}",
+        issue_codes::LINT_LT_007,
+    );
+}
+
+#[test]
+#[cfg(feature = "templating")]
+fn lint_lt_007_jinja_whitespace_consumption_same_line_close_still_flags() {
+    let sql = "with cte as (\n    select 1\n    {%- if False -%}{%- endif -%}) select * from cte";
+    let issues = run_lint_in_dialect_with_jinja_template(sql, Dialect::Ansi);
+    assert!(
+        issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_LT_007),
+        "expected {} for same-line close after whitespace-consuming template block: {issues:?}",
         issue_codes::LINT_LT_007,
     );
 }

@@ -1,7 +1,7 @@
 //! LINT_LT_007: Layout CTE bracket.
 //!
-//! SQLFluff LT07 parity (current scope): detect `WITH ... AS SELECT` patterns
-//! that appear to miss CTE-body brackets.
+//! SQLFluff LT07 parity (current scope): in multiline CTE bodies, the closing
+//! bracket should appear on its own line.
 
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
@@ -23,7 +23,7 @@ impl LintRule for LayoutCteBracket {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        if has_unbracketed_cte_pattern(ctx.statement_sql()) {
+        if has_misplaced_cte_closing_bracket(ctx.statement_sql()) {
             vec![Issue::warning(
                 issue_codes::LINT_LT_007,
                 "CTE AS clause appears to be missing surrounding brackets.",
@@ -35,65 +35,48 @@ impl LintRule for LayoutCteBracket {
     }
 }
 
-fn has_unbracketed_cte_pattern(sql: &str) -> bool {
+fn has_misplaced_cte_closing_bracket(sql: &str) -> bool {
+    if !sql
+        .as_bytes()
+        .windows(4)
+        .any(|window| window.eq_ignore_ascii_case(b"with"))
+    {
+        return false;
+    }
+
     let bytes = sql.as_bytes();
     let mut index = 0usize;
 
-    while let Some(with_start) = find_word(bytes, index, "with") {
-        let mut cursor = with_start + 4;
-
-        let ws_after_with = consume_whitespace(bytes, cursor);
-        if ws_after_with == cursor {
-            index = with_start + 1;
+    while let Some((as_start, as_end)) = find_word(bytes, index, "as") {
+        let open_idx = consume_whitespace(bytes, as_end);
+        if open_idx >= bytes.len() || bytes[open_idx] != b'(' {
+            index = as_start + 1;
             continue;
         }
-        cursor = ws_after_with;
 
-        let Some((_, ident_end)) = parse_identifier(bytes, cursor) else {
-            index = with_start + 1;
+        let Some(close_idx) = matching_close_paren_ignoring_strings_and_comments(sql, open_idx)
+        else {
+            index = open_idx + 1;
             continue;
         };
-        cursor = ident_end;
 
-        let ws_after_ident = consume_whitespace(bytes, cursor);
-        if ws_after_ident == cursor {
-            index = with_start + 1;
-            continue;
-        }
-        cursor = ws_after_ident;
-
-        let Some((as_start, as_end)) = parse_word(bytes, cursor) else {
-            index = with_start + 1;
-            continue;
-        };
-        if !eq_ignore_ascii_case(bytes, as_start, as_end, "as") {
-            index = with_start + 1;
-            continue;
-        }
-        cursor = as_end;
-
-        let ws_after_as = consume_whitespace(bytes, cursor);
-        if ws_after_as == cursor {
-            index = with_start + 1;
-            continue;
-        }
-        cursor = ws_after_as;
-
-        let Some((select_start, select_end)) = parse_word(bytes, cursor) else {
-            index = with_start + 1;
-            continue;
-        };
-        if eq_ignore_ascii_case(bytes, select_start, select_end, "select") {
+        let body = &sql[open_idx + 1..close_idx];
+        if body.contains('\n') && !line_prefix_before(sql, close_idx).trim().is_empty() {
             return true;
         }
 
-        index = with_start + 1;
+        index = close_idx + 1;
     }
 
     false
 }
 
-fn find_word(bytes: &[u8], from: usize, target: &str) -> Option<usize> {
+fn line_prefix_before(sql: &str, idx: usize) -> &str {
+    let line_start = sql[..idx].rfind('\n').map_or(0, |pos| pos + 1);
+    &sql[line_start..idx]
+}
+
+fn find_word(bytes: &[u8], from: usize, target: &str) -> Option<(usize, usize)> {
     let mut i = from;
     while i < bytes.len() {
         let Some((start, end)) = parse_word(bytes, i) else {
@@ -102,7 +85,7 @@ fn find_word(bytes: &[u8], from: usize, target: &str) -> Option<usize> {
         };
 
         if eq_ignore_ascii_case(bytes, start, end, target) {
-            return Some(start);
+            return Some((start, end));
         }
 
         i = end;
@@ -131,17 +114,101 @@ fn parse_word(bytes: &[u8], start: usize) -> Option<(usize, usize)> {
     Some((start, end))
 }
 
-fn parse_identifier(bytes: &[u8], start: usize) -> Option<(usize, usize)> {
-    if start >= bytes.len() || !is_identifier_start(bytes[start]) {
+fn matching_close_paren_ignoring_strings_and_comments(sql: &str, open_idx: usize) -> Option<usize> {
+    let bytes = sql.as_bytes();
+    if open_idx >= bytes.len() || bytes[open_idx] != b'(' {
         return None;
     }
 
-    let mut end = start + 1;
-    while end < bytes.len() && is_identifier_char(bytes[end]) {
-        end += 1;
+    let mut idx = open_idx + 1;
+    let mut depth = 1usize;
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut in_line_comment = false;
+    let mut in_block_comment = false;
+
+    while idx < bytes.len() {
+        if in_line_comment {
+            if bytes[idx] == b'\n' {
+                in_line_comment = false;
+            }
+            idx += 1;
+            continue;
+        }
+
+        if in_block_comment {
+            if idx + 1 < bytes.len() && bytes[idx] == b'*' && bytes[idx + 1] == b'/' {
+                in_block_comment = false;
+                idx += 2;
+            } else {
+                idx += 1;
+            }
+            continue;
+        }
+
+        if in_single {
+            if bytes[idx] == b'\'' {
+                if idx + 1 < bytes.len() && bytes[idx + 1] == b'\'' {
+                    idx += 2;
+                } else {
+                    in_single = false;
+                    idx += 1;
+                }
+            } else {
+                idx += 1;
+            }
+            continue;
+        }
+
+        if in_double {
+            if bytes[idx] == b'"' {
+                if idx + 1 < bytes.len() && bytes[idx + 1] == b'"' {
+                    idx += 2;
+                } else {
+                    in_double = false;
+                    idx += 1;
+                }
+            } else {
+                idx += 1;
+            }
+            continue;
+        }
+
+        if idx + 1 < bytes.len() && bytes[idx] == b'-' && bytes[idx + 1] == b'-' {
+            in_line_comment = true;
+            idx += 2;
+            continue;
+        }
+        if idx + 1 < bytes.len() && bytes[idx] == b'/' && bytes[idx + 1] == b'*' {
+            in_block_comment = true;
+            idx += 2;
+            continue;
+        }
+        if bytes[idx] == b'\'' {
+            in_single = true;
+            idx += 1;
+            continue;
+        }
+        if bytes[idx] == b'"' {
+            in_double = true;
+            idx += 1;
+            continue;
+        }
+
+        match bytes[idx] {
+            b'(' => depth += 1,
+            b')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(idx);
+                }
+            }
+            _ => {}
+        }
+        idx += 1;
     }
 
-    Some((start, end))
+    None
 }
 
 fn consume_whitespace(bytes: &[u8], mut start: usize) -> usize {
@@ -158,14 +225,6 @@ fn eq_ignore_ascii_case(bytes: &[u8], start: usize, end: usize, target: &str) ->
 
 fn is_word_char(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || byte == b'_'
-}
-
-fn is_identifier_start(byte: u8) -> bool {
-    byte.is_ascii_alphabetic() || byte == b'_'
-}
-
-fn is_identifier_char(byte: u8) -> bool {
-    is_word_char(byte)
 }
 
 #[cfg(test)]
@@ -193,14 +252,27 @@ mod tests {
     }
 
     #[test]
-    fn flags_missing_cte_brackets_pattern() {
-        let issues = run("SELECT 'WITH cte AS SELECT 1' AS sql_snippet");
+    fn flags_closing_paren_after_sql_code_in_multiline_cte() {
+        let issues = run("with cte_1 as (\n    select foo\n    from tbl_1) select * from cte_1");
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_LT_007);
     }
 
     #[test]
-    fn does_not_flag_bracketed_cte() {
+    fn does_not_flag_single_line_cte_body() {
         assert!(run("WITH cte AS (SELECT 1) SELECT * FROM cte").is_empty());
+    }
+
+    #[test]
+    fn does_not_flag_multiline_cte_with_own_line_close() {
+        let sql = "with cte as (\n    select 1\n) select * from cte";
+        assert!(run(sql).is_empty());
+    }
+
+    #[test]
+    fn flags_templated_close_paren_on_same_line_as_cte_body_code() {
+        let sql =
+            "with\n{% if true %}\n  cte as (\n      select 1)\n{% endif %}\nselect * from cte";
+        assert!(has_misplaced_cte_closing_bracket(sql));
     }
 }

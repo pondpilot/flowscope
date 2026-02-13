@@ -1,14 +1,15 @@
 //! LINT_LT_009: Layout select targets.
 //!
-//! SQLFluff LT09 parity (current scope): require multi-target SELECT lists to
-//! be line-broken.
+//! SQLFluff LT09 parity: enforce select-target line layout for single-target
+//! and multi-target SELECT clauses, with wildcard-policy behavior.
 
 use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rules::semantic_helpers::visit_selects_in_statement;
 use crate::types::{issue_codes, Issue};
-use sqlparser::ast::Statement;
+use sqlparser::ast::{SelectItem, Statement};
 use sqlparser::keywords::Keyword;
-use sqlparser::tokenizer::{Token, Tokenizer};
+use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum WildcardPolicy {
@@ -63,8 +64,8 @@ impl LintRule for LayoutSelectTargets {
         "Select targets should be on a new line unless there is only one target."
     }
 
-    fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        lt09_violation_spans(ctx.statement_sql(), self.wildcard_policy)
+    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+        lt09_violation_spans(statement, ctx.statement_sql(), self.wildcard_policy)
             .into_iter()
             .map(|(start, end)| {
                 Issue::info(
@@ -78,102 +79,68 @@ impl LintRule for LayoutSelectTargets {
     }
 }
 
-fn select_line_top_level_metrics(segment: &str) -> (usize, bool) {
-    let mut count = 0usize;
-    let mut has_wildcard = false;
-    let mut depth = 0usize;
-    let mut in_single = false;
-    let mut in_double = false;
-    let bytes = segment.as_bytes();
-    let mut idx = 0usize;
-
-    while idx < bytes.len() {
-        let b = bytes[idx];
-
-        if in_single {
-            if b == b'\'' {
-                if idx + 1 < bytes.len() && bytes[idx + 1] == b'\'' {
-                    idx += 2;
-                } else {
-                    in_single = false;
-                    idx += 1;
-                }
-            } else {
-                idx += 1;
-            }
-            continue;
-        }
-
-        if in_double {
-            if b == b'"' {
-                if idx + 1 < bytes.len() && bytes[idx + 1] == b'"' {
-                    idx += 2;
-                } else {
-                    in_double = false;
-                    idx += 1;
-                }
-            } else {
-                idx += 1;
-            }
-            continue;
-        }
-
-        match b {
-            b'\'' => in_single = true,
-            b'"' => in_double = true,
-            b'(' => depth += 1,
-            b')' => {
-                depth = depth.saturating_sub(1);
-            }
-            b',' if depth == 0 => count += 1,
-            b'*' if depth == 0 && is_top_level_wildcard(segment, idx) => has_wildcard = true,
-            _ => {}
-        }
-
-        idx += 1;
-    }
-
-    (count, has_wildcard)
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct AstSelectSpec {
+    target_count: usize,
+    has_wildcard: bool,
 }
 
-fn is_top_level_wildcard(segment: &str, star_idx: usize) -> bool {
-    let prev = segment[..star_idx]
-        .chars()
-        .rev()
-        .find(|ch| !ch.is_ascii_whitespace());
-    let next = segment[star_idx + 1..]
-        .chars()
-        .find(|ch| !ch.is_ascii_whitespace());
-
-    let operator_like = prev.is_some_and(is_operand_tail) && next.is_some_and(is_operand_head);
-    !operator_like
+#[derive(Clone, Debug)]
+struct SelectClauseLayout {
+    select_idx: usize,
+    from_idx: Option<usize>,
+    target_ranges: Vec<(usize, usize)>,
 }
 
-fn is_operand_tail(ch: char) -> bool {
-    ch.is_ascii_alphanumeric() || matches!(ch, '_' | ')' | ']' | '"' | '\'' | '`')
-}
-
-fn is_operand_head(ch: char) -> bool {
-    ch.is_ascii_alphanumeric() || matches!(ch, '_' | '(' | '[' | '"' | '\'' | '`')
-}
-
-fn lt09_violation_spans(sql: &str, wildcard_policy: WildcardPolicy) -> Vec<(usize, usize)> {
+fn lt09_violation_spans(
+    statement: &Statement,
+    sql: &str,
+    wildcard_policy: WildcardPolicy,
+) -> Vec<(usize, usize)> {
     let dialect = sqlparser::dialect::GenericDialect {};
     let mut tokenizer = Tokenizer::new(&dialect, sql);
     let Ok(tokens) = tokenizer.tokenize_with_location() else {
         return Vec::new();
     };
 
+    let ast_specs = collect_ast_select_specs(statement);
+    let layouts = collect_select_clause_layouts(&tokens);
     let mut spans = Vec::new();
 
-    for token in tokens {
-        let Token::Word(word) = token.token else {
-            continue;
-        };
-        if word.keyword != Keyword::SELECT {
+    for (idx, layout) in layouts.iter().enumerate() {
+        if layout.target_ranges.is_empty() {
             continue;
         }
 
+        let token_target_count = layout.target_ranges.len();
+        let token_single_wildcard =
+            token_target_count == 1 && target_range_is_wildcard(&tokens, layout.target_ranges[0]);
+
+        let mut effective_target_count = token_target_count;
+        let mut has_wildcard = token_single_wildcard;
+        if let Some(spec) = ast_specs.get(idx) {
+            if spec.target_count == token_target_count {
+                effective_target_count = spec.target_count;
+                has_wildcard = spec.has_wildcard;
+            } else if token_target_count == 1 {
+                has_wildcard = spec.has_wildcard || token_single_wildcard;
+            }
+        }
+
+        let is_single_target = effective_target_count == 1
+            && (!has_wildcard || matches!(wildcard_policy, WildcardPolicy::Single));
+
+        let violation = if is_single_target {
+            single_target_layout_violation(layout, &tokens)
+        } else {
+            multiple_target_layout_violation(layout, &tokens)
+        };
+
+        if !violation {
+            continue;
+        }
+
+        let token = &tokens[layout.select_idx];
         let Some(start) = line_col_to_offset(
             sql,
             token.span.start.line as usize,
@@ -189,19 +156,260 @@ fn lt09_violation_spans(sql: &str, wildcard_policy: WildcardPolicy) -> Vec<(usiz
             continue;
         };
 
-        let line_end = sql[end..].find('\n').map_or(sql.len(), |off| end + off);
-        let select_tail = &sql[end..line_end];
-
-        let (comma_count, has_wildcard) = select_line_top_level_metrics(select_tail);
-        let violation =
-            comma_count > 0 || matches!(wildcard_policy, WildcardPolicy::Multiple) && has_wildcard;
-
-        if violation {
-            spans.push((start, end));
-        }
+        spans.push((start, end));
     }
 
     spans
+}
+
+fn collect_ast_select_specs(statement: &Statement) -> Vec<AstSelectSpec> {
+    let mut specs = Vec::new();
+    visit_selects_in_statement(statement, &mut |select| {
+        let has_wildcard = select.projection.iter().any(|item| {
+            matches!(
+                item,
+                SelectItem::Wildcard(_) | SelectItem::QualifiedWildcard(_, _)
+            )
+        });
+        specs.push(AstSelectSpec {
+            target_count: select.projection.len(),
+            has_wildcard,
+        });
+    });
+    specs
+}
+
+fn collect_select_clause_layouts(tokens: &[TokenWithSpan]) -> Vec<SelectClauseLayout> {
+    let mut depth = 0usize;
+    let mut layouts = Vec::new();
+
+    for (idx, token) in tokens.iter().enumerate() {
+        if is_select_keyword(&token.token) {
+            let (clause_end, from_idx) = find_select_clause_end(tokens, idx, depth);
+            if let Some(first_target_idx) = find_first_target_idx(tokens, idx + 1, clause_end) {
+                let target_ranges =
+                    split_target_ranges(tokens, first_target_idx, clause_end, depth);
+                layouts.push(SelectClauseLayout {
+                    select_idx: idx,
+                    from_idx,
+                    target_ranges,
+                });
+            } else {
+                layouts.push(SelectClauseLayout {
+                    select_idx: idx,
+                    from_idx,
+                    target_ranges: Vec::new(),
+                });
+            }
+        }
+
+        match token.token {
+            Token::LParen => depth += 1,
+            Token::RParen => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+    }
+
+    layouts
+}
+
+fn is_select_keyword(token: &Token) -> bool {
+    matches!(token, Token::Word(word) if word.keyword == Keyword::SELECT)
+}
+
+fn is_select_modifier_keyword(keyword: Keyword) -> bool {
+    matches!(keyword, Keyword::DISTINCT | Keyword::ALL)
+}
+
+fn is_select_clause_boundary_keyword(keyword: Keyword) -> bool {
+    matches!(
+        keyword,
+        Keyword::WHERE
+            | Keyword::GROUP
+            | Keyword::HAVING
+            | Keyword::QUALIFY
+            | Keyword::ORDER
+            | Keyword::LIMIT
+            | Keyword::FETCH
+            | Keyword::UNION
+            | Keyword::EXCEPT
+            | Keyword::INTERSECT
+            | Keyword::WINDOW
+            | Keyword::INTO
+            | Keyword::PREWHERE
+            | Keyword::CLUSTER
+            | Keyword::DISTRIBUTE
+            | Keyword::SORT
+            | Keyword::CONNECT
+    )
+}
+
+fn find_select_clause_end(
+    tokens: &[TokenWithSpan],
+    select_idx: usize,
+    select_depth: usize,
+) -> (usize, Option<usize>) {
+    let mut depth = select_depth;
+    for (idx, token) in tokens.iter().enumerate().skip(select_idx + 1) {
+        match &token.token {
+            Token::LParen => depth += 1,
+            Token::RParen => {
+                if depth == select_depth {
+                    return (idx, None);
+                }
+                depth = depth.saturating_sub(1);
+            }
+            Token::SemiColon if depth == select_depth => return (idx, None),
+            Token::Word(word) if depth == select_depth => {
+                if word.keyword == Keyword::FROM {
+                    return (idx, Some(idx));
+                }
+                if is_select_clause_boundary_keyword(word.keyword) {
+                    return (idx, None);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    (tokens.len(), None)
+}
+
+fn is_ignorable_layout_token(token: &Token) -> bool {
+    matches!(token, Token::Whitespace(_))
+}
+
+fn find_first_target_idx(tokens: &[TokenWithSpan], start: usize, end: usize) -> Option<usize> {
+    for (idx, token) in tokens.iter().enumerate().take(end).skip(start) {
+        match &token.token {
+            token if is_ignorable_layout_token(token) => {}
+            Token::Word(word) if is_select_modifier_keyword(word.keyword) => {}
+            _ => return Some(idx),
+        }
+    }
+    None
+}
+
+fn split_target_ranges(
+    tokens: &[TokenWithSpan],
+    start: usize,
+    end: usize,
+    select_depth: usize,
+) -> Vec<(usize, usize)> {
+    let mut depth = select_depth;
+    let mut ranges = Vec::new();
+    let mut range_start = start;
+
+    for (idx, token) in tokens.iter().enumerate().take(end).skip(start) {
+        match token.token {
+            Token::LParen => depth += 1,
+            Token::RParen => depth = depth.saturating_sub(1),
+            Token::Comma if depth == select_depth => {
+                if let Some(trimmed) = trim_target_range(tokens, range_start, idx) {
+                    ranges.push(trimmed);
+                }
+                range_start = idx + 1;
+            }
+            _ => {}
+        }
+    }
+
+    if let Some(trimmed) = trim_target_range(tokens, range_start, end) {
+        ranges.push(trimmed);
+    }
+
+    ranges
+}
+
+fn trim_target_range(
+    tokens: &[TokenWithSpan],
+    mut start: usize,
+    mut end: usize,
+) -> Option<(usize, usize)> {
+    while start < end && is_ignorable_layout_token(&tokens[start].token) {
+        start += 1;
+    }
+
+    while start < end && is_ignorable_layout_token(&tokens[end - 1].token) {
+        end -= 1;
+    }
+
+    (start < end).then_some((start, end))
+}
+
+fn target_range_is_wildcard(tokens: &[TokenWithSpan], range: (usize, usize)) -> bool {
+    let (start, end) = range;
+    let code_tokens: Vec<&Token> = tokens[start..end]
+        .iter()
+        .map(|token| &token.token)
+        .filter(|token| !is_ignorable_layout_token(token))
+        .collect();
+
+    if !matches!(code_tokens.last(), Some(Token::Mul)) {
+        return false;
+    }
+
+    if code_tokens.len() == 1 {
+        return true;
+    }
+
+    code_tokens[..code_tokens.len() - 1]
+        .iter()
+        .enumerate()
+        .all(|(idx, token)| {
+            if idx % 2 == 0 {
+                matches!(token, Token::Word(_))
+            } else {
+                matches!(token, Token::Period)
+            }
+        })
+}
+
+fn last_code_line_before(tokens: &[TokenWithSpan], start: usize, end: usize) -> Option<u64> {
+    let mut line = None;
+    for token in tokens.iter().take(end).skip(start) {
+        if is_ignorable_layout_token(&token.token) || matches!(token.token, Token::Comma) {
+            continue;
+        }
+        line = Some(token.span.end.line);
+    }
+    line
+}
+
+fn single_target_layout_violation(layout: &SelectClauseLayout, tokens: &[TokenWithSpan]) -> bool {
+    let Some((target_start, target_end)) = layout.target_ranges.first().copied() else {
+        return false;
+    };
+
+    let select_line = tokens[layout.select_idx].span.start.line;
+    let target_start_line = tokens[target_start].span.start.line;
+    if target_start_line <= select_line {
+        return false;
+    }
+
+    let target_end_line = tokens[target_end - 1].span.end.line;
+    target_end_line == target_start_line
+}
+
+fn multiple_target_layout_violation(layout: &SelectClauseLayout, tokens: &[TokenWithSpan]) -> bool {
+    for (idx, (target_start, _target_end)) in layout.target_ranges.iter().enumerate() {
+        let target_line = tokens[*target_start].span.start.line;
+        if last_code_line_before(tokens, layout.select_idx, *target_start)
+            .is_some_and(|prev_line| prev_line == target_line)
+        {
+            return true;
+        }
+
+        if idx + 1 == layout.target_ranges.len()
+            && layout
+                .from_idx
+                .is_some_and(|from_idx| tokens[from_idx].span.start.line == target_line)
+        {
+            return true;
+        }
+    }
+
+    false
 }
 
 fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
@@ -235,11 +443,11 @@ fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::linter::config::LintConfig;
     use crate::parser::parse_sql;
 
-    fn run(sql: &str) -> Vec<Issue> {
+    fn run_with_rule(sql: &str, rule: &LayoutSelectTargets) -> Vec<Issue> {
         let statements = parse_sql(sql).expect("parse");
-        let rule = LayoutSelectTargets::default();
         statements
             .iter()
             .enumerate()
@@ -254,6 +462,23 @@ mod tests {
                 )
             })
             .collect()
+    }
+
+    fn run(sql: &str) -> Vec<Issue> {
+        run_with_rule(sql, &LayoutSelectTargets::default())
+    }
+
+    fn run_with_wildcard_policy(sql: &str, policy: &str) -> Vec<Issue> {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "layout.select_targets".to_string(),
+                serde_json::json!({"wildcard_policy": policy}),
+            )]),
+        };
+        let rule = LayoutSelectTargets::from_config(&config);
+        run_with_rule(sql, &rule)
     }
 
     #[test]
@@ -285,50 +510,68 @@ mod tests {
 
     #[test]
     fn multiple_wildcard_policy_flags_single_wildcard_target() {
-        let config = LintConfig {
-            enabled: true,
-            disabled_rules: vec![],
-            rule_configs: std::collections::BTreeMap::from([(
-                "layout.select_targets".to_string(),
-                serde_json::json!({"wildcard_policy": "multiple"}),
-            )]),
-        };
-        let rule = LayoutSelectTargets::from_config(&config);
-        let sql = "SELECT * FROM t";
-        let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues = run_with_wildcard_policy("SELECT * FROM t", "multiple");
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_LT_009);
     }
 
     #[test]
     fn multiple_wildcard_policy_does_not_treat_multiplication_as_wildcard() {
-        let config = LintConfig {
-            enabled: true,
-            disabled_rules: vec![],
-            rule_configs: std::collections::BTreeMap::from([(
-                "LINT_LT_009".to_string(),
-                serde_json::json!({"wildcard_policy": "multiple"}),
-            )]),
-        };
-        let rule = LayoutSelectTargets::from_config(&config);
-        let sql = "SELECT a * b FROM t";
-        let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues = run_with_wildcard_policy("SELECT a * b FROM t", "multiple");
         assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn flags_single_target_on_new_line_after_select() {
+        let sql = "SELECT\n  a\nFROM x";
+        assert!(!run(sql).is_empty());
+    }
+
+    #[test]
+    fn flags_single_target_when_select_followed_by_comment_line() {
+        let sql = "SELECT -- some comment\na";
+        assert!(!run(sql).is_empty());
+    }
+
+    #[test]
+    fn does_not_flag_single_multiline_target() {
+        let sql = "SELECT\n    SUM(\n        1 + 2\n    ) AS col\nFROM t";
+        assert!(run(sql).is_empty());
+    }
+
+    #[test]
+    fn flags_last_multi_target_sharing_line_with_from() {
+        let sql = "select\n  a,\n  b,\n  c from x";
+        assert!(!run(sql).is_empty());
+    }
+
+    #[test]
+    fn flags_in_cte_single_target_newline_case() {
+        let sql = "WITH cte1 AS (\n  SELECT\n    c1 AS c\n  FROM t\n)\nSELECT 1 FROM cte1";
+        assert!(!run(sql).is_empty());
+    }
+
+    #[test]
+    fn flags_in_create_view_single_target_newline_case() {
+        let sql = "CREATE VIEW a AS\nSELECT\n    c\nFROM table1";
+        assert!(!run(sql).is_empty());
+    }
+
+    #[test]
+    fn multiple_wildcard_policy_flags_star_with_from_on_same_line() {
+        let sql = "select\n    * from x";
+        assert!(!run_with_wildcard_policy(sql, "multiple").is_empty());
+    }
+
+    #[test]
+    fn multiple_wildcard_policy_allows_star_on_own_line() {
+        let sql = "select\n    *\nfrom x";
+        assert!(run_with_wildcard_policy(sql, "multiple").is_empty());
+    }
+
+    #[test]
+    fn allows_leading_comma_layout_for_multiple_targets() {
+        let sql = "select\n    a\n    , b\n    , c";
+        assert!(run(sql).is_empty());
     }
 }

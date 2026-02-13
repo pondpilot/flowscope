@@ -43,6 +43,7 @@ This plan covers three axes:
   - Parses `-- noqa` and `-- noqa: ...` comments from tokenizer comments.
   - Builds line-based suppression map and filters issues before final output.
   - Supports canonical/shorthand/dotted rule references via canonicalization.
+  - Supports SQLFluff-style `noqa: disable=all` / `noqa: enable=all` range directives, including block-comment forms with SQLFluff-compatible guardrails for valid marker placement.
 - API schema snapshot updated to include lint output changes (`sqlfluffName`).
 - Phase 4 fix-gap items from this plan are implemented:
   - `AL_005` fixer path is wired to canonical code gating.
@@ -115,10 +116,11 @@ This plan covers three axes:
   - `RF_004` moved from parity handling to a dedicated core rule module (`rf_004.rs`).
   - `RF_004` was further upgraded to AST-driven identifier analysis (expression identifiers, projection aliases, CTE identifiers, and table/join aliases plus table-name parts), eliminating SQL-string false positives from non-SQL string literals.
   - `RF_004` now supports SQLFluff-style `quoted_identifiers_policy` / `unquoted_identifiers_policy` and `ignore_words` / `ignore_words_regex` through `lint.ruleConfigs`.
-  - `RF_001` now supports `force_enable` through `lint.ruleConfigs`.
-  - `RF_002` now supports `force_enable` through `lint.ruleConfigs`.
-  - `RF_002` now aligns closer to SQLFluff projection-alias semantics: self-alias projections (`foo AS foo`) in multi-source scopes are flagged, while later references to earlier projection aliases remain allowed.
-  - `RF_002` now avoids SQLFluff-style false positives on common datepart keyword function arguments (e.g., `timestamp_trunc(..., month)`, `datediff(year, ...)`) in multi-source qualification checks.
+  - `RF_001` now includes scope-aware AST traversal for `SELECT`/`UPDATE`/`DELETE`/`MERGE` plus PostgreSQL policy statements, supports correlated-subquery source resolution, handles multi-part qualifier matching (`schema.table.column`) with source-qualification guardrails, applies dialect-aware struct-field handling for BigQuery/Hive/Redshift and nested-field prefix handling for BigQuery/DuckDB/Hive/Redshift, recognizes trigger-only `OLD`/`NEW` pseudo references, and supports SQLFluff-style `force_enable` behavior through `lint.ruleConfigs`.
+  - `RF_002` now includes recursive AST scope analysis with external-reference semantics for nested subqueries (including scalar/`EXISTS`/`IN` forms and nested derived-subquery cases), supports SQLFluff projection-alias sequencing semantics (`foo AS foo` flagged while later references to earlier aliases are allowed), supports `ignore_words` / `ignore_words_regex` and `subqueries_ignore_external_references` via `lint.ruleConfigs`, handles BigQuery value-table function (`UNNEST`) source-count and alias exemptions, exempts declared BigQuery script variables and `@` variables, and keeps datepart keyword argument false-positive guards (e.g., `timestamp_trunc(..., month)`, `datediff(year, ...)`).
+  - Supported-dialect SQLFluff fixture replay for references rules now reports zero mismatches:
+    - `RF01`: 49/49 supported-dialect cases matched.
+    - `RF02`: 51/51 supported-dialect cases matched.
   - `RF_003` now supports `single_table_references` (`consistent`/`qualified`/`unqualified`) and `force_enable` through `lint.ruleConfigs`, and now treats qualified wildcards (`alias.*`) as qualified references in consistency checks.
   - `RF_005` moved from parity handling to a dedicated core rule module (`rf_005.rs`).
   - `RF_005` was further upgraded to AST-driven quoted-identifier traversal, replacing raw quote-regex scanning.
@@ -184,15 +186,20 @@ This plan covers three axes:
   - `LT_001` moved from parity handling to a dedicated core rule module (`lt_001.rs`).
   - `LT_001` was further upgraded from regex matching to deterministic layout-pattern scanners (JSON arrow/type/index/numeric-scale/EXISTS line form).
   - `LT_005` moved from parity handling to a dedicated core rule module (`lt_005.rs`).
-  - `LT_005` now supports configurable `max_line_length`, `ignore_comment_lines`, and `ignore_comment_clauses` through `lint.ruleConfigs`.
+  - `LT_005` now supports configurable `max_line_length`, `ignore_comment_lines`, and `ignore_comment_clauses` through `lint.ruleConfigs`, including SQLFluff-style disabled checks when `max_line_length <= 0`, comma-prefixed and Jinja comment-line handling, and SQL `COMMENT` clause handling for ignore-comment-clause semantics.
+  - Analyzer linting now runs `LT_005` for statementless/comment-only SQL inputs via document-level fallback, closing SQLFluff LT05 coverage gaps for comment-only files.
   - `LT_006` moved from parity handling to a dedicated core rule module (`lt_006.rs`).
   - `LT_006` was further upgraded from regex masking to token-stream function-call spacing checks with context guards.
   - `LT_007` moved from parity handling to a dedicated core rule module (`lt_007.rs`).
-  - `LT_007` was further upgraded from regex matching to deterministic CTE `WITH <ident> AS SELECT` sequence scanning.
+  - `LT_007` now includes source-aware templating parity: when templating is enabled, lint evaluation uses untemplated source slices for CTE close-bracket checks so SQLFluff whitespace-consuming Jinja forms (`{{- ... -}}`, `{#- ... -#}`, `{%- ... -%}`) no longer produce false positives.
   - `LT_008` moved from parity handling to a dedicated core rule module (`lt_008.rs`).
   - `LT_009` moved from parity handling to a dedicated core rule module (`lt_009.rs`).
-  - `LT_009` was further upgraded from regex masking to tokenizer-located SELECT-line target counting.
+  - `LT_009` was further upgraded from regex masking to AST-backed SELECT target analysis with token-aware clause layout checks (single-target newline semantics, multi-target line separation, and `FROM`-line checks).
   - `LT_009` now supports `wildcard_policy` (`single`/`multiple`) through `lint.ruleConfigs`.
+  - Supported-dialect SQLFluff layout fixture replay now reports zero mismatches for upgraded layout rules:
+    - `LT05`: 55/55 cases matched (with replay mapping from SQLFluff `core.max_line_length` to `layout.long_lines.max_line_length`).
+    - `LT07`: 13/13 SQLFluff standard cases matched (including whitespace-consuming Jinja fixtures).
+    - `LT09`: 37/37 cases matched.
   - `LT_014` moved from parity handling to a dedicated core rule module (`lt_014.rs`).
   - `LT_014` was further upgraded from regex masking to token/line-aware major-clause placement checks.
   - `CP_001` moved from parity handling to a dedicated core rule module (`cp_001.rs`).

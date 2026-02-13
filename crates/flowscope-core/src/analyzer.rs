@@ -198,6 +198,7 @@ impl<'a> Analyzer<'a> {
         self.precollect_ddl(&all_statements);
 
         if all_statements.is_empty() {
+            self.run_lint_documents_without_statements();
             return self.build_result();
         }
 
@@ -280,6 +281,7 @@ impl<'a> Analyzer<'a> {
                 .as_deref()
                 .map(|name| name.as_str());
             let source_sql_key = statements[start].source_sql.as_ref();
+            let source_untemplated_sql_key = statements[start].source_sql_untemplated.as_deref();
 
             let mut end = start + 1;
             while end < statements.len()
@@ -289,32 +291,58 @@ impl<'a> Analyzer<'a> {
                     .map(|name| name.as_str())
                     == source_name_key
                 && statements[end].source_sql.as_ref() == source_sql_key
+                && statements[end].source_sql_untemplated.as_deref() == source_untemplated_sql_key
             {
                 end += 1;
             }
 
-            let lint_statements = statements[start..end]
-                .iter()
-                .enumerate()
-                .map(|(offset, statement_input)| LintStatement {
+            let mut lint_statements = Vec::with_capacity(end - start);
+            let mut source_statement_ranges = Vec::with_capacity(end - start);
+            for (offset, statement_input) in statements[start..end].iter().enumerate() {
+                lint_statements.push(LintStatement {
                     statement: &statement_input.statement,
                     statement_index: offset,
                     statement_range: statement_input.source_range.clone(),
-                })
-                .collect();
+                });
+                source_statement_ranges.push(statement_input.source_range_untemplated.clone());
+            }
 
             let parser_fallback_used = statements[start..end]
                 .iter()
                 .any(|statement_input| statement_input.parser_fallback_used);
-            let document = LintDocument::new_with_parser_fallback(
+            let document = LintDocument::new_with_parser_fallback_and_source(
                 source_sql_key,
+                source_untemplated_sql_key,
                 self.request.dialect,
                 lint_statements,
                 parser_fallback_used,
+                Some(source_statement_ranges),
             );
             self.issues.extend(linter.check_document(&document));
 
             start = end;
+        }
+    }
+
+    fn run_lint_documents_without_statements(&mut self) {
+        let Some(linter) = self.linter.as_ref() else {
+            return;
+        };
+
+        if let Some(files) = &self.request.files {
+            if files.is_empty() {
+                return;
+            }
+            for file in files {
+                let document = LintDocument::new(&file.content, self.request.dialect, Vec::new());
+                self.issues.extend(linter.check_document(&document));
+            }
+            return;
+        }
+
+        if !self.request.sql.is_empty() {
+            let document = LintDocument::new(&self.request.sql, self.request.dialect, Vec::new());
+            self.issues.extend(linter.check_document(&document));
         }
     }
 

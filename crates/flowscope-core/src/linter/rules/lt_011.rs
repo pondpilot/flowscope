@@ -79,10 +79,6 @@ impl LintRule for LayoutSetOperators {
 }
 
 fn has_inconsistent_set_operator_layout(sql: &str, line_position: SetOperatorLinePosition) -> bool {
-    if !sql.contains('\n') {
-        return false;
-    }
-
     let dialect = sqlparser::dialect::GenericDialect {};
     let mut tokenizer = Tokenizer::new(&dialect, sql);
     let Ok(tokens) = tokenizer.tokenize_with_location() else {
@@ -196,6 +192,13 @@ mod tests {
     #[test]
     fn flags_inline_set_operator_in_multiline_statement() {
         let issues = run("SELECT 1 UNION SELECT 2\nUNION SELECT 3");
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_LT_011);
+    }
+
+    #[test]
+    fn flags_inline_set_operator_in_single_line_statement() {
+        let issues = run("SELECT 1 UNION SELECT 2");
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_LT_011);
     }

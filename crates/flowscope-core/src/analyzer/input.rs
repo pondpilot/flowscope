@@ -94,6 +94,8 @@ struct ParseContext<'a> {
     source_name: Option<Rc<String>>,
     /// SQL dialect for parsing.
     dialect: Dialect,
+    /// Original SQL before template rendering, when templating is applied.
+    untemplated_sql: Option<Cow<'a, str>>,
     /// Whether template processing was applied to produce `source_sql`.
     templating_applied: bool,
 }
@@ -117,6 +119,10 @@ pub(crate) struct StatementInput<'a> {
     pub(crate) source_sql: Cow<'a, str>,
     /// Byte range of the statement within `source_sql`.
     pub(crate) source_range: Range<usize>,
+    /// Original SQL before template rendering, when templating is applied.
+    pub(crate) source_sql_untemplated: Option<Cow<'a, str>>,
+    /// Byte range of the statement within `source_sql_untemplated`, when available.
+    pub(crate) source_range_untemplated: Option<Range<usize>>,
     /// Whether template processing was applied to produce `source_sql`.
     /// When true, `source_sql` contains the resolved/compiled SQL.
     pub(crate) templating_applied: bool,
@@ -202,6 +208,7 @@ pub(crate) fn collect_statements<'a>(
                 source_sql,
                 source_name: Some(Rc::new(file.name.clone())),
                 dialect: request.dialect,
+                untemplated_sql: templating_applied.then(|| Cow::Borrowed(file.content.as_str())),
                 templating_applied,
             };
             let (file_stmts, file_issues) = parse_statements_individually(&ctx);
@@ -233,6 +240,7 @@ pub(crate) fn collect_statements<'a>(
             source_sql,
             source_name: request.source_name.clone().map(Rc::new),
             dialect: request.dialect,
+            untemplated_sql: templating_applied.then(|| Cow::Borrowed(request.sql.as_str())),
             templating_applied,
         };
         let (inline_stmts, inline_issues) = parse_statements_individually(&ctx);
@@ -320,13 +328,26 @@ fn parse_full_sql_buffer<'a>(
         }
     };
 
+    let aligned_untemplated_ranges = ctx.untemplated_sql.as_deref().and_then(|sql| {
+        let ranges = compute_statement_ranges_for_dialect(sql, ctx.dialect);
+        align_statement_ranges(sql, &ranges, ctx.dialect, parsed.len()).ok()
+    });
+
     let mut statements = Vec::with_capacity(parsed.len());
-    for (stmt, range) in parsed.into_iter().zip(aligned_ranges.into_iter()) {
+    for (index, (stmt, range)) in parsed
+        .into_iter()
+        .zip(aligned_ranges.into_iter())
+        .enumerate()
+    {
         statements.push(StatementInput {
             statement: stmt,
             source_name: ctx.source_name.clone(),
             source_sql: ctx.source_sql.clone(),
             source_range: range,
+            source_sql_untemplated: ctx.untemplated_sql.clone(),
+            source_range_untemplated: aligned_untemplated_ranges
+                .as_ref()
+                .and_then(|ranges| ranges.get(index).cloned()),
             templating_applied: ctx.templating_applied,
             parser_fallback_used,
         });
@@ -474,6 +495,8 @@ fn parse_statement_ranges_best_effort<'a>(
                         source_name: ctx.source_name.clone(),
                         source_sql: ctx.source_sql.clone(),
                         source_range: range.clone(),
+                        source_sql_untemplated: ctx.untemplated_sql.clone(),
+                        source_range_untemplated: None,
                         templating_applied: ctx.templating_applied,
                         parser_fallback_used,
                     });

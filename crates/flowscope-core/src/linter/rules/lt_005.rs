@@ -8,17 +8,38 @@ use crate::types::{issue_codes, Issue, Span};
 use sqlparser::ast::Statement;
 
 pub struct LayoutLongLines {
-    max_line_length: usize,
+    max_line_length: Option<usize>,
     ignore_comment_lines: bool,
     ignore_comment_clauses: bool,
 }
 
 impl LayoutLongLines {
     pub fn from_config(config: &LintConfig) -> Self {
+        let max_line_length = if let Some(value) = config
+            .rule_config_object(issue_codes::LINT_LT_005)
+            .and_then(|obj| obj.get("max_line_length"))
+        {
+            value
+                .as_i64()
+                .map(|signed| {
+                    if signed <= 0 {
+                        None
+                    } else {
+                        usize::try_from(signed).ok()
+                    }
+                })
+                .or_else(|| {
+                    value
+                        .as_u64()
+                        .and_then(|unsigned| usize::try_from(unsigned).ok().map(Some))
+                })
+                .flatten()
+        } else {
+            Some(80)
+        };
+
         Self {
-            max_line_length: config
-                .rule_option_usize(issue_codes::LINT_LT_005, "max_line_length")
-                .unwrap_or(80),
+            max_line_length,
             ignore_comment_lines: config
                 .rule_option_bool(issue_codes::LINT_LT_005, "ignore_comment_lines")
                 .unwrap_or(false),
@@ -32,7 +53,7 @@ impl LayoutLongLines {
 impl Default for LayoutLongLines {
     fn default() -> Self {
         Self {
-            max_line_length: 80,
+            max_line_length: Some(80),
             ignore_comment_lines: false,
             ignore_comment_clauses: false,
         }
@@ -53,13 +74,17 @@ impl LintRule for LayoutLongLines {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+        let Some(max_line_length) = self.max_line_length else {
+            return Vec::new();
+        };
+
         if ctx.statement_index != 0 {
             return Vec::new();
         }
 
         long_line_overflow_spans(
             ctx.sql,
-            self.max_line_length,
+            max_line_length,
             self.ignore_comment_lines,
             self.ignore_comment_clauses,
         )
@@ -86,6 +111,7 @@ fn long_line_overflow_spans(
     let mut spans = Vec::new();
     let mut line_start = 0usize;
     let mut in_block_comment = false;
+    let mut in_jinja_comment = false;
 
     for idx in 0..=bytes.len() {
         if idx < bytes.len() && bytes[idx] != b'\n' {
@@ -98,7 +124,9 @@ fn long_line_overflow_spans(
         }
 
         let line = &sql[line_start..line_end];
-        if ignore_comment_lines && line_is_comment_only(line, &mut in_block_comment) {
+        if ignore_comment_lines
+            && line_is_comment_only(line, &mut in_block_comment, &mut in_jinja_comment)
+        {
             line_start = idx + 1;
             continue;
         }
@@ -137,8 +165,15 @@ fn long_line_overflow_spans(
     spans
 }
 
-fn line_is_comment_only(line: &str, in_block_comment: &mut bool) -> bool {
-    let trimmed = line.trim_start();
+fn line_is_comment_only(
+    line: &str,
+    in_block_comment: &mut bool,
+    in_jinja_comment: &mut bool,
+) -> bool {
+    let mut trimmed = line.trim_start();
+    while let Some(rest) = trimmed.strip_prefix(',') {
+        trimmed = rest.trim_start();
+    }
 
     if *in_block_comment {
         if let Some(end_idx) = trimmed.find("*/") {
@@ -148,7 +183,23 @@ fn line_is_comment_only(line: &str, in_block_comment: &mut bool) -> bool {
         return true;
     }
 
+    if *in_jinja_comment {
+        if let Some(end_idx) = trimmed.find("#}") {
+            *in_jinja_comment = false;
+            return trimmed[end_idx + 2..].trim().is_empty();
+        }
+        return true;
+    }
+
     if trimmed.starts_with("--") || trimmed.starts_with('#') {
+        return true;
+    }
+
+    if trimmed.starts_with("{#") {
+        if let Some(end_idx) = trimmed.find("#}") {
+            return trimmed[end_idx + 2..].trim().is_empty();
+        }
+        *in_jinja_comment = true;
         return true;
     }
 
@@ -232,10 +283,31 @@ fn comment_clause_start_offset(line: &str) -> Option<usize> {
             }
         }
 
+        if is_ident_start(bytes[idx]) {
+            let start = idx;
+            idx += 1;
+            while idx < bytes.len() && is_ident_continue(bytes[idx]) {
+                idx += 1;
+            }
+
+            if line[start..idx].eq_ignore_ascii_case("comment") {
+                return Some(start);
+            }
+            continue;
+        }
+
         idx += 1;
     }
 
     None
+}
+
+fn is_ident_start(byte: u8) -> bool {
+    byte.is_ascii_alphabetic() || byte == b'_'
+}
+
+fn is_ident_continue(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_'
 }
 
 #[cfg(test)]
@@ -342,6 +414,32 @@ mod tests {
     }
 
     #[test]
+    fn ignore_comment_lines_skips_comma_prefixed_comment_lines() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "layout.long_lines".to_string(),
+                serde_json::json!({
+                    "max_line_length": 30,
+                    "ignore_comment_lines": true
+                }),
+            )]),
+        };
+        let sql = "SELECT\nc1\n,-- this is a very long comment line that should be ignored\nc2\n";
+        let issues = run_with_rule(sql, &LayoutLongLines::from_config(&config));
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn ignore_comment_lines_skips_jinja_comment_lines() {
+        let sql =
+            "SELECT *\n{# this is a very long jinja comment line that should be ignored #}\nFROM t";
+        let spans = long_line_overflow_spans(sql, 30, true, false);
+        assert!(spans.is_empty());
+    }
+
+    #[test]
     fn ignore_comment_clauses_skips_long_trailing_comment_text() {
         let config = LintConfig {
             enabled: true,
@@ -379,5 +477,38 @@ mod tests {
         let issues = run_with_rule(&sql, &LayoutLongLines::from_config(&config));
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_LT_005);
+    }
+
+    #[test]
+    fn ignore_comment_clauses_skips_sql_comment_clause_lines() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "layout.long_lines".to_string(),
+                serde_json::json!({
+                    "max_line_length": 40,
+                    "ignore_comment_clauses": true
+                }),
+            )]),
+        };
+        let sql = "CREATE TABLE t (\n    c1 INT COMMENT 'this is a very very very very very very very very long comment'\n)";
+        let issues = run_with_rule(sql, &LayoutLongLines::from_config(&config));
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn non_positive_max_line_length_disables_rule() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "layout.long_lines".to_string(),
+                serde_json::json!({"max_line_length": -1}),
+            )]),
+        };
+        let sql = "SELECT this_is_a_very_long_column_name_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx FROM t";
+        let issues = run_with_rule(sql, &LayoutLongLines::from_config(&config));
+        assert!(issues.is_empty());
     }
 }
