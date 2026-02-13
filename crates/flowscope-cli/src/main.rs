@@ -287,7 +287,7 @@ fn run_lint(args: Args) -> Result<bool> {
             {
                 // SQLFluff defaults to templating-aware linting; retry as Jinja when a raw
                 // templated file would otherwise only produce parse errors.
-                analyze(&AnalyzeRequest {
+                let jinja_retry = analyze(&AnalyzeRequest {
                     sql: source.content.clone(),
                     files: None,
                     dialect,
@@ -301,7 +301,29 @@ fn run_lint(args: Args) -> Result<bool> {
                         mode: flowscope_core::TemplateMode::Jinja,
                         context: std::collections::HashMap::new(),
                     }),
-                })
+                });
+
+                if has_template_errors(&jinja_retry) {
+                    // Fallback to dbt-compatible macro stubs for common Jinja macros
+                    // (`ref`, `source`, etc.) when strict Jinja mode fails.
+                    analyze(&AnalyzeRequest {
+                        sql: source.content.clone(),
+                        files: None,
+                        dialect,
+                        source_name: Some(source.name.clone()),
+                        options: Some(AnalysisOptions {
+                            lint: Some(lint_config.clone()),
+                            ..Default::default()
+                        }),
+                        schema: None,
+                        template_config: Some(flowscope_core::TemplateConfig {
+                            mode: flowscope_core::TemplateMode::Dbt,
+                            context: std::collections::HashMap::new(),
+                        }),
+                    })
+                } else {
+                    jinja_retry
+                }
             } else {
                 result
             }
@@ -381,6 +403,13 @@ fn has_parse_errors(result: &flowscope_core::AnalyzeResult) -> bool {
         .issues
         .iter()
         .any(|issue| issue.code == "PARSE_ERROR")
+}
+
+fn has_template_errors(result: &flowscope_core::AnalyzeResult) -> bool {
+    result
+        .issues
+        .iter()
+        .any(|issue| issue.code == "TEMPLATE_ERROR")
 }
 
 #[cfg(feature = "templating")]

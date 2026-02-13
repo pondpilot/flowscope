@@ -53,6 +53,31 @@ pub fn ignored_words_from_config(config: &LintConfig, code: &str) -> HashSet<Str
             .collect();
     }
 
+    if let Some(value) = config
+        .rule_config_object(code)
+        .and_then(|obj| obj.get("ignore_words"))
+    {
+        let scalar = match value {
+            serde_json::Value::String(raw) => Some(raw.clone()),
+            serde_json::Value::Bool(flag) => Some(if *flag {
+                "true".to_string()
+            } else {
+                "false".to_string()
+            }),
+            serde_json::Value::Number(number) => Some(number.to_string()),
+            _ => None,
+        };
+
+        if let Some(raw) = scalar {
+            return raw
+                .split(',')
+                .map(str::trim)
+                .filter(|word| !word.is_empty())
+                .map(str::to_ascii_uppercase)
+                .collect();
+        }
+    }
+
     config
         .rule_option_str(code, "ignore_words")
         .map(|raw| {
@@ -141,7 +166,7 @@ fn token_matches_policy(token: &str, policy: CapitalisationPolicy) -> bool {
 }
 
 fn tokens_match_consistent_policy(tokens: &[String]) -> bool {
-    if tokens.len() < 2 {
+    if tokens.is_empty() {
         return true;
     }
 

@@ -65,8 +65,43 @@ impl Linter {
 
                 let (confidence, fallback) = lint_quality_for_rule(rule.code(), engine, document);
 
+                if rule_uses_document_scope(rule.code()) {
+                    let Some(synthetic_statement) = parse_sql("SELECT 1")
+                        .ok()
+                        .and_then(|mut statements| statements.drain(..).next())
+                    else {
+                        continue;
+                    };
+
+                    let ctx = LintContext {
+                        sql: document.sql,
+                        statement_range: 0..document.sql.len(),
+                        statement_index: 0,
+                    };
+
+                    with_active_dialect(document.dialect, || {
+                        for issue in rule.check(&synthetic_statement, &ctx) {
+                            let mut issue = issue
+                                .with_lint_engine(engine)
+                                .with_lint_confidence(confidence);
+
+                            if let Some(source) = fallback {
+                                issue = issue.with_lint_fallback_source(source);
+                            }
+
+                            let sqlfluff_name = rule.sqlfluff_name();
+                            if !sqlfluff_name.is_empty() {
+                                issue = issue.with_sqlfluff_name(sqlfluff_name);
+                            }
+
+                            issues.push(issue);
+                        }
+                    });
+                    continue;
+                }
+
                 if document.statements.is_empty() {
-                    if rule.code() != crate::types::issue_codes::LINT_LT_005 {
+                    if !rule_supports_statementless_fallback(rule.code()) {
                         continue;
                     }
 
@@ -304,6 +339,27 @@ fn ast_rule_code(code: &str) -> bool {
             | crate::types::issue_codes::LINT_ST_009
             | crate::types::issue_codes::LINT_ST_010
             | crate::types::issue_codes::LINT_ST_011
+    )
+}
+
+fn rule_uses_document_scope(code: &str) -> bool {
+    matches!(
+        code,
+        crate::types::issue_codes::LINT_CP_001
+            | crate::types::issue_codes::LINT_CP_003
+            | crate::types::issue_codes::LINT_CP_004
+            | crate::types::issue_codes::LINT_CP_005
+    )
+}
+
+fn rule_supports_statementless_fallback(code: &str) -> bool {
+    matches!(
+        code,
+        crate::types::issue_codes::LINT_LT_005
+            | crate::types::issue_codes::LINT_CP_001
+            | crate::types::issue_codes::LINT_CP_003
+            | crate::types::issue_codes::LINT_CP_004
+            | crate::types::issue_codes::LINT_CP_005
     )
 }
 

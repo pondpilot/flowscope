@@ -2,8 +2,8 @@ use std::process::Command;
 
 use tempfile::tempdir;
 
-/// SQL that triggers LINT_AM_002 (bare UNION).
-const SQL_WITH_VIOLATIONS: &str = "SELECT 1 UNION SELECT 2";
+/// SQL that triggers LINT_AM_002 (bare UNION) without LT011 layout noise.
+const SQL_WITH_VIOLATIONS: &str = "SELECT 1\nUNION\nSELECT 2\n";
 
 /// Clean SQL with no lint violations.
 const SQL_CLEAN: &str = "SELECT 1";

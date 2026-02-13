@@ -10,7 +10,6 @@ use crate::types::{issue_codes, Issue};
 use regex::Regex;
 use sqlparser::ast::Statement;
 use sqlparser::dialect::GenericDialect;
-use sqlparser::keywords::Keyword;
 use sqlparser::tokenizer::{Token, Tokenizer};
 
 use super::capitalisation_policy_helpers::{
@@ -96,8 +95,8 @@ fn keyword_tokens(
         .into_iter()
         .filter_map(|token| match token {
             Token::Word(word)
-                if word.keyword != Keyword::NoKeyword
-                    && is_tracked_keyword(word.value.as_str())
+                if is_tracked_keyword(word.value.as_str())
+                    && !is_excluded_keyword(word.value.as_str())
                     && !token_is_ignored(word.value.as_str(), ignore_words, ignore_words_regex) =>
             {
                 Some(word.value)
@@ -130,7 +129,9 @@ fn is_tracked_keyword(value: &str) -> bool {
             | "UPDATE"
             | "DELETE"
             | "CREATE"
+            | "ALTER"
             | "TABLE"
+            | "TYPE"
             | "WITH"
             | "AS"
             | "CASE"
@@ -141,13 +142,66 @@ fn is_tracked_keyword(value: &str) -> bool {
             | "AND"
             | "OR"
             | "NOT"
-            | "NULL"
             | "IS"
             | "IN"
             | "EXISTS"
             | "DISTINCT"
             | "LIMIT"
             | "OFFSET"
+            | "INTERVAL"
+            | "YEAR"
+            | "MONTH"
+            | "DAY"
+            | "HOUR"
+            | "MINUTE"
+            | "SECOND"
+            | "WEEK"
+            | "MONDAY"
+            | "TUESDAY"
+            | "WEDNESDAY"
+            | "THURSDAY"
+            | "FRIDAY"
+            | "SATURDAY"
+            | "SUNDAY"
+            | "CUBE"
+            | "CAST"
+            | "COALESCE"
+            | "SAFE_CAST"
+            | "TRY_CAST"
+    )
+}
+
+fn is_excluded_keyword(value: &str) -> bool {
+    matches!(
+        value.to_ascii_uppercase().as_str(),
+        "NULL"
+            | "TRUE"
+            | "FALSE"
+            | "INT"
+            | "INTEGER"
+            | "BIGINT"
+            | "SMALLINT"
+            | "TINYINT"
+            | "VARCHAR"
+            | "CHAR"
+            | "TEXT"
+            | "BOOLEAN"
+            | "BOOL"
+            | "STRING"
+            | "INT64"
+            | "FLOAT64"
+            | "BYTES"
+            | "NUMERIC"
+            | "DECIMAL"
+            | "FLOAT"
+            | "DOUBLE"
+            | "DATE"
+            | "TIME"
+            | "TIMESTAMP"
+            | "STRUCT"
+            | "ARRAY"
+            | "MAP"
+            | "ENUM"
     )
 }
 

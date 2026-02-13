@@ -3682,7 +3682,7 @@ mod tests {
             (issue_codes::LINT_LT_006, "SELECT COUNT (1) FROM t"),
             (
                 issue_codes::LINT_LT_007,
-                "SELECT 'WITH cte AS SELECT 1' AS sql_snippet",
+                "WITH cte AS (\n  SELECT 1) SELECT * FROM cte",
             ),
             (issue_codes::LINT_LT_009, "SELECT a,b,c,d,e FROM t"),
             (issue_codes::LINT_LT_010, "SELECT\nDISTINCT a\nFROM t"),

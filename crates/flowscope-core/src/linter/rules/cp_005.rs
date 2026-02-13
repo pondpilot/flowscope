@@ -91,12 +91,15 @@ fn type_tokens(
         return Vec::new();
     };
 
+    let user_defined_types = collect_user_defined_type_names(&tokens);
+
     tokens
         .into_iter()
         .filter_map(|token| match token {
             Token::Word(word)
                 if word.quote_style.is_none()
-                    && is_tracked_type_name(word.value.as_str())
+                    && (is_tracked_type_name(word.value.as_str())
+                        || user_defined_types.contains(&word.value.to_ascii_uppercase()))
                     && !token_is_ignored(word.value.as_str(), ignore_words, ignore_words_regex) =>
             {
                 Some(word.value)
@@ -104,6 +107,50 @@ fn type_tokens(
             _ => None,
         })
         .collect()
+}
+
+fn collect_user_defined_type_names(tokens: &[Token]) -> HashSet<String> {
+    let mut out = HashSet::new();
+
+    for index in 0..tokens.len() {
+        let Token::Word(first) = &tokens[index] else {
+            continue;
+        };
+        let head = first.value.to_ascii_uppercase();
+        if head != "CREATE" && head != "ALTER" {
+            continue;
+        }
+
+        let Some(type_index) = next_non_trivia_index(tokens, index + 1) else {
+            continue;
+        };
+        let Token::Word(type_word) = &tokens[type_index] else {
+            continue;
+        };
+        if !type_word.value.eq_ignore_ascii_case("TYPE") {
+            continue;
+        }
+
+        let Some(name_index) = next_non_trivia_index(tokens, type_index + 1) else {
+            continue;
+        };
+        let Token::Word(name_word) = &tokens[name_index] else {
+            continue;
+        };
+        out.insert(name_word.value.to_ascii_uppercase());
+    }
+
+    out
+}
+
+fn next_non_trivia_index(tokens: &[Token], mut index: usize) -> Option<usize> {
+    while index < tokens.len() {
+        match &tokens[index] {
+            Token::Whitespace(_) => index += 1,
+            _ => return Some(index),
+        }
+    }
+    None
 }
 
 fn is_tracked_type_name(value: &str) -> bool {
@@ -119,12 +166,24 @@ fn is_tracked_type_name(value: &str) -> bool {
             | "TEXT"
             | "BOOLEAN"
             | "BOOL"
+            | "STRING"
+            | "INT64"
+            | "FLOAT64"
+            | "BYTES"
             | "DATE"
+            | "TIME"
             | "TIMESTAMP"
+            | "INTERVAL"
             | "NUMERIC"
             | "DECIMAL"
             | "FLOAT"
             | "DOUBLE"
+            | "STRUCT"
+            | "ARRAY"
+            | "MAP"
+            | "ENUM"
+            | "WITH"
+            | "ZONE"
     )
 }
 

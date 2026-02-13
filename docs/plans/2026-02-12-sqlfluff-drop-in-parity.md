@@ -96,7 +96,7 @@ This plan covers three axes:
   - `ST_011` now also evaluates multi-root `FROM` clauses (e.g., comma-joins combined with OUTER joins) instead of skipping analysis whenever more than one top-level `FROM` entry exists.
   - `ST_011` now also treats Snowflake qualified wildcard `EXCLUDE` projections (`alias.* EXCLUDE ...`) as joined-source references, matching SQLFluff ST11 fixture behavior.
   - CLI lint mode now supports `--rule-configs` JSON for SQLFluff-style per-rule options (for example `{"structure.subquery":{"forbid_subquery_in":"both"}}`), enabling config-aware fixture parity replay outside unit tests.
-  - CLI lint mode now honors templating in lint requests (when `--template` is provided) and adds a Jinja fallback retry for parse-erroring inputs that contain template markers (`{{`, `{%`, `{#`), improving SQLFluff-style templated lint parity.
+  - CLI lint mode now honors templating in lint requests (when `--template` is provided), adds a Jinja fallback retry for parse-erroring inputs that contain template markers (`{{`, `{%`, `{#`), and now retries with dbt template mode when Jinja emits template errors (for macros like `ref`/`source`), improving SQLFluff-style templated lint parity.
   - Parser fallback now normalizes escaped-quoted identifier edge cases for BigQuery/ClickHouse and now applies trailing-comma-before-`FROM` fallback normalization across dialects, eliminating SQLFluff fixture parse blockers (including ANSI ST11 trailing-comma cases).
   - Config-aware SQLFluff fixture replay for `AL05`/`ST05`/`ST11` now reports zero mismatches (104/104, 40/40, and 22/22 cases respectively).
   - Config-aware SQLFluff fixture replay for `AL01`/`AL02`/`AL04` now reports zero mismatches (14/14, 9/9, and 10/10 cases respectively).
@@ -217,6 +217,15 @@ This plan covers three axes:
   - `CP_002` consistent-policy handling now aligns closer to SQLFluff ambiguity behavior by evaluating shared style compatibility (`upper`/`lower`/`capitalise`) across identifier tokens, allowing single-letter ambiguous forms like `A` to align with capitalised tokens.
   - `CP_002` Pascal policy handling now aligns with SQLFluff fixture expectations for all-caps identifiers (for example `PASCALCASE` under `extended_capitalisation_policy=pascal`).
   - `CP_002` now includes Databricks/SparkSQL `SHOW TBLPROPERTIES ... (<property.path>)` identifier candidate extraction via AST `ShowVariable` handling, covering mixed-case property path violations (for example `created.BY.user`, `Created.By.User`).
+  - `CP_001`/`CP_003`/`CP_004`/`CP_005` now run once per document with full-SQL lexical context and now also run in statementless parser-fallback mode, improving SQLFluff parity on parser-erroring fixture inputs while avoiding per-statement case-policy fragmentation.
+  - `CP_001` consistent-policy handling now treats single tracked mixed-case tokens (for example `SeLeCt`) as violations, matching SQLFluff fixture expectations.
+  - `CP_003` now includes bare-function keyword forms (`CURRENT_TIMESTAMP`, `CURRENT_DATE`, `CURRENT_USER`, etc.) in token-stream function case checks.
+  - `CP_005` now includes broader SQL dialect type keyword coverage (`STRING`, `INT64`, `FLOAT64`, `BYTES`, `TIME`, `INTERVAL`, `STRUCT`, `ARRAY`, `MAP`, `ENUM`, `WITH`, `ZONE`) and now tracks user-defined type names introduced by `CREATE TYPE` / `ALTER TYPE` for downstream type-case checks.
+  - Supported-dialect SQLFluff fixture replay for CP keyword/function/literal/type rules now reports zero mismatches on supported cases:
+    - `CP01`: 25/25 checked, 0 mismatches (2 skipped for unsupported `core.ignore_templated_areas` config).
+    - `CP03`: 15/15 checked, 0 mismatches (2 skipped for unsupported `core.ignore_templated_areas` config).
+    - `CP04`: 5/5 checked, 0 mismatches.
+    - `CP05`: 21/21 checked, 0 mismatches (1 SparkSQL-only case skipped).
   - Shared AST traversal helpers (`visit_expressions`, `visit_selects_in_statement`) now include `UPDATE`/`DELETE`/`MERGE` statement expression paths plus richer function-argument traversal (`Named`, `ExprNamed`, subquery args, argument clauses), reducing non-SELECT blind spots for AST-driven lint rules.
   - Supported-dialect SQLFluff fixture replay for `CP02` now reports zero mismatches (44/44), and `CP02_LT01` now reports zero mismatches for CP02 expectations across supported templaters (4/4; one placeholder-templater case skipped).
   - `AM_005` now supports `fully_qualify_join_types` (`inner`/`outer`/`both`) through `lint.ruleConfigs`.

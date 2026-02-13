@@ -115,9 +115,15 @@ fn function_tokens(
         }
 
         let Some(next_index) = next_non_trivia_index(&tokens, index + 1) else {
+            if is_bare_function_name(word.value.as_str()) {
+                out.push(word.value.clone());
+            }
             continue;
         };
         if !matches!(tokens[next_index], Token::LParen) {
+            if is_bare_function_name(word.value.as_str()) {
+                out.push(word.value.clone());
+            }
             continue;
         }
 
@@ -144,6 +150,21 @@ fn function_tokens(
     }
 
     out
+}
+
+fn is_bare_function_name(word: &str) -> bool {
+    matches!(
+        word.to_ascii_uppercase().as_str(),
+        "CURRENT_DATE"
+            | "CURRENT_TIME"
+            | "CURRENT_TIMESTAMP"
+            | "LOCALTIME"
+            | "LOCALTIMESTAMP"
+            | "CURRENT_USER"
+            | "SESSION_USER"
+            | "SYSTEM_USER"
+            | "USER"
+    )
 }
 
 fn next_non_trivia_index(tokens: &[Token], mut index: usize) -> Option<usize> {
