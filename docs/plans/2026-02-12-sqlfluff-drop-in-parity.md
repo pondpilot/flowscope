@@ -80,6 +80,7 @@ This plan covers three axes:
   - `TQ_002` moved from parity handling to a dedicated core rule module (`tq_002.rs`).
   - `TQ_002` was further upgraded to AST-driven procedure-body analysis via `CreateProcedure` `ConditionalStatements::BeginEnd` detection, replacing SQL text regex scanning.
   - `TQ_003` moved from parity handling to a dedicated core rule module (`tq_003.rs`).
+  - `TQ_003` was further upgraded from regex scanning to token/line-aware repeated-`GO` separator detection, reducing string-literal false positives.
   - `CV_001` moved from parity handling to a dedicated core rule module (`cv_001.rs`).
   - `CV_001` was further upgraded from regex checks to lexer-style operator scanning that ignores comments/quoted strings for mixed `<>`/`!=` detection.
   - `CV_007` moved from parity handling to a dedicated core rule module (`cv_007.rs`).

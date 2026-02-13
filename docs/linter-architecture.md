@@ -174,7 +174,7 @@ Move style-oriented checks to lexical engine:
 - [x] `LINT_AL_006` now runs as a dedicated AST rule via table-factor alias traversal (current behavior preserves the existing max-length heuristic; SQLFluff config parity is pending).
 - [x] `LINT_AL_007` now runs as a dedicated AST rule via single-source SELECT analysis for unnecessary base-table aliases (current scope remains intentionally conservative).
 - [x] `LINT_RF_004`/`LINT_RF_005`/`LINT_RF_006` are now split out of `parity.rs` into dedicated core modules (`rf_004.rs`-`rf_006.rs`); all three now use AST-driven traversal (`RF04` alias analysis, `RF05`/`RF06` shared quoted-identifier traversal).
-- [x] `LINT_ST_012` and `LINT_TQ_001`-`LINT_TQ_003` are now split out of `parity.rs` into dedicated core modules (`st_012.rs`, `tq_001.rs`-`tq_003.rs`); `LINT_TQ_001`/`LINT_TQ_002` are now AST-driven (`CreateProcedure` name/body analysis), `LINT_ST_012` is now token-driven (consecutive semicolon token sequencing), and `LINT_TQ_003` currently preserves heuristic behavior.
+- [x] `LINT_ST_012` and `LINT_TQ_001`-`LINT_TQ_003` are now split out of `parity.rs` into dedicated core modules (`st_012.rs`, `tq_001.rs`-`tq_003.rs`); `LINT_TQ_001`/`LINT_TQ_002` are AST-driven (`CreateProcedure` name/body analysis), and `LINT_ST_012`/`LINT_TQ_003` now use token-driven sequencing checks.
 - [x] `LINT_CV_001`, `LINT_CV_007`, and `LINT_CV_009`-`LINT_CV_011` are now split out of `parity.rs` into dedicated core modules (`cv_001.rs`, `cv_007.rs`, `cv_009.rs`-`cv_011.rs`); `LINT_CV_007`, `LINT_CV_009`, `LINT_CV_010`, and `LINT_CV_011` are now AST-driven, and `LINT_CV_001` now uses token-aware operator scanning instead of regex.
 - [x] `LINT_JJ_001` and `LINT_LT_010`/`LINT_LT_011`/`LINT_LT_012`/`LINT_LT_013`/`LINT_LT_015` are now split out of `parity.rs` into dedicated core modules (`jj_001.rs`, `lt_010.rs`, `lt_011.rs`, `lt_012.rs`, `lt_013.rs`, `lt_015.rs`) while preserving current heuristic behavior.
 - [x] `LINT_LT_002`/`LINT_LT_003`/`LINT_LT_004`/`LINT_LT_007` are now split out of `parity.rs` into dedicated core modules (`lt_002.rs`, `lt_003.rs`, `lt_004.rs`, `lt_007.rs`) while preserving current heuristic behavior.
@@ -187,7 +187,7 @@ Move style-oriented checks to lexical engine:
 - [x] `LINT_AM_007` now performs AST set-expression branch-width checks with deterministic wildcard resolution for CTE/derived sources, while unresolved wildcard expansions remain non-violating (SQLFluff-aligned behavior).
 - [x] Parity monolith decommission is complete: migrated rule registrations and parity tests are removed, and `crates/flowscope-core/src/linter/rules/parity.rs` has been retired.
 - [~] SQLFluff fixture adoption is in progress for migrated rules; AM02/AM03/AM04/AM05/AM06/AM07/AM08/AM09, CV02, CV05, ST02, ST04, ST06, ST07, ST08, and ST09 fixture cases were adopted for `LINT_AM_002`/`LINT_AM_003`/`LINT_AM_004`/`LINT_AM_005`/`LINT_AM_006`/`LINT_AM_007`/`LINT_AM_008`/`LINT_AM_009`/`LINT_CV_002`/`LINT_CV_005`/`LINT_ST_002`/`LINT_ST_004`/`LINT_ST_007`/`LINT_ST_006`/`LINT_ST_008`/`LINT_ST_009`, and additional rule-level coverage is still being expanded.
-- [ ] Phase 2 lexical/style migrations remain open for semantic-depth parity improvements (token-aware behavior/configuration parity), with remaining major lexical work centered on CP/LT/JJ and `TQ_003`.
+- [ ] Phase 2 lexical/style migrations remain open for semantic-depth parity improvements (token-aware behavior/configuration parity), with remaining major lexical work centered on CP/LT/JJ families.
 
 ## Quality Gates
 

@@ -624,7 +624,6 @@ fn lint_sqlfluff_parity_rule_smoke_cases() {
         ("LINT_ST_012", "SELECT 1;;"),
         ("LINT_TQ_001", "CREATE PROCEDURE sp_legacy AS SELECT 1;"),
         ("LINT_TQ_002", "CREATE PROCEDURE p AS SELECT 1;"),
-        ("LINT_TQ_003", "SELECT '\nGO\nGO\n' AS sql_snippet"),
     ];
 
     for (code, sql) in cases {

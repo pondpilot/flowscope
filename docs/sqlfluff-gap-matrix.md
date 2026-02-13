@@ -100,7 +100,7 @@ FlowScope source-of-truth used for mapping:
 | Structure | `structure.consecutive_semicolons` | `ST12` | No | Yes | Implemented (partial) | `LINT_ST_012` | No | Dedicated core rule in `crates/flowscope-core/src/linter/rules/st_012.rs`; now uses tokenizer-level semicolon sequencing (instead of regex) to avoid string-literal/comment false positives, while remaining narrower than full SQLFluff configurability. |
 | TSQL | `tsql.sp_prefix` | `TQ01` | No | No | Implemented (partial) | `LINT_TQ_001` | No | AST-driven core rule in `crates/flowscope-core/src/linter/rules/tq_001.rs`; now checks `Statement::CreateProcedure` names directly (no SQL-string regex), while remaining narrower than full SQLFluff configurability. |
 | TSQL | `tsql.procedure_begin_end` | `TQ02` | No | Yes | Implemented (partial) | `LINT_TQ_002` | No | AST-driven core rule in `crates/flowscope-core/src/linter/rules/tq_002.rs`; now checks `CreateProcedure` body shape (`ConditionalStatements::BeginEnd`) instead of SQL-string regex scanning, while remaining narrower than full SQLFluff configurability. |
-| TSQL | `tsql.empty_batch` | `TQ03` | No | Yes | Implemented (partial) | `LINT_TQ_003` | No | Dedicated core heuristic rule in `crates/flowscope-core/src/linter/rules/tq_003.rs`; semantics are narrower than SQLFluff. |
+| TSQL | `tsql.empty_batch` | `TQ03` | No | Yes | Implemented (partial) | `LINT_TQ_003` | No | Dedicated core rule in `crates/flowscope-core/src/linter/rules/tq_003.rs`; now uses token/line-aware GO-separator detection instead of regex, while remaining narrower than full SQLFluff batch-handling semantics. |
 
 Notes:
 - `FlowScope Fix` indicates deterministic support in CLI `--fix` mode, not generic auto-fix in core linting APIs.
