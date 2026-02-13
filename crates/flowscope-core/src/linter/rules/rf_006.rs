@@ -5,8 +5,9 @@
 
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
-use regex::Regex;
 use sqlparser::ast::Statement;
+
+use super::references_quoted_helpers::quoted_identifiers_in_statement;
 
 pub struct ReferencesQuoting;
 
@@ -23,10 +24,10 @@ impl LintRule for ReferencesQuoting {
         "Avoid unnecessary identifier quoting."
     }
 
-    fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let has_unnecessary_quoting = capture_group(ctx.statement_sql(), r#""([^"]+)""#, 1)
+    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+        let has_unnecessary_quoting = quoted_identifiers_in_statement(statement)
             .into_iter()
-            .any(|ident| has_re(&ident, r"^[A-Za-z_][A-Za-z0-9_]*$"));
+            .any(|ident| is_unnecessarily_quoted_identifier(&ident));
 
         if has_unnecessary_quoting {
             vec![Issue::info(
@@ -40,16 +41,17 @@ impl LintRule for ReferencesQuoting {
     }
 }
 
-fn has_re(haystack: &str, pattern: &str) -> bool {
-    Regex::new(pattern).expect("valid regex").is_match(haystack)
-}
+fn is_unnecessarily_quoted_identifier(ident: &str) -> bool {
+    let mut chars = ident.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
 
-fn capture_group(sql: &str, pattern: &str, group: usize) -> Vec<String> {
-    Regex::new(pattern)
-        .expect("valid regex")
-        .captures_iter(sql)
-        .filter_map(|captures| captures.get(group).map(|m| m.as_str().to_string()))
-        .collect()
+    if !(first.is_ascii_alphabetic() || first == '_') {
+        return false;
+    }
+
+    chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
 }
 
 #[cfg(test)]
@@ -86,6 +88,12 @@ mod tests {
     #[test]
     fn does_not_flag_quoted_identifier_with_special_char() {
         let issues = run("SELECT \"bad-name\" FROM t");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn does_not_flag_double_quotes_inside_string_literal() {
+        let issues = run("SELECT '\"good_name\"' AS note FROM t");
         assert!(issues.is_empty());
     }
 }
