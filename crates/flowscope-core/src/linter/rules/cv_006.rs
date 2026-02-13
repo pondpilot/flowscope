@@ -40,7 +40,8 @@ impl LintRule for ConventionTerminator {
     }
 
     fn check(&self, _stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let has_terminal_semicolon = terminal_semicolon_info(ctx).is_some();
+        let semicolon = terminal_semicolon_info(ctx);
+        let has_terminal_semicolon = semicolon.is_some();
 
         if self.require_final_semicolon && is_last_statement(ctx) && !has_terminal_semicolon {
             return vec![Issue::info(
@@ -50,25 +51,43 @@ impl LintRule for ConventionTerminator {
             .with_statement(ctx.statement_index)];
         }
 
-        if self.multiline_newline
-            && statement_is_multiline(ctx)
-            && has_terminal_semicolon
-            && !semicolon_on_newline(ctx)
-        {
-            vec![Issue::info(
-                issue_codes::LINT_CV_006,
-                "Multi-line statements must place the semi-colon on a new line.",
-            )
-            .with_statement(ctx.statement_index)]
-        } else if ctx.sql.contains(';') && !has_terminal_semicolon {
-            vec![Issue::info(
+        let Some(semicolon) = semicolon else {
+            return Vec::new();
+        };
+
+        if self.multiline_newline {
+            if statement_is_multiline(ctx) {
+                let invalid_newline_style = !semicolon.newline_before_semicolon
+                    || semicolon.newline_count_before_semicolon != 1
+                    || semicolon.has_comment_before_semicolon
+                    || statement_has_trailing_block_comment(ctx)
+                    || statement_has_detached_trailing_line_comment(ctx);
+                if invalid_newline_style {
+                    return vec![Issue::info(
+                        issue_codes::LINT_CV_006,
+                        "Multi-line statements must place the semi-colon on a new line.",
+                    )
+                    .with_statement(ctx.statement_index)];
+                }
+            } else if semicolon.semicolon_offset != ctx.statement_range.end {
+                return vec![Issue::info(
+                    issue_codes::LINT_CV_006,
+                    "Statement terminator style is inconsistent.",
+                )
+                .with_statement(ctx.statement_index)];
+            }
+            return Vec::new();
+        }
+
+        if semicolon.semicolon_offset != ctx.statement_range.end {
+            return vec![Issue::info(
                 issue_codes::LINT_CV_006,
                 "Statement terminator style is inconsistent.",
             )
-            .with_statement(ctx.statement_index)]
-        } else {
-            Vec::new()
+            .with_statement(ctx.statement_index)];
         }
+
+        Vec::new()
     }
 }
 
@@ -76,46 +95,103 @@ fn statement_is_multiline(ctx: &LintContext) -> bool {
     ctx.statement_sql().contains('\n')
 }
 
-fn semicolon_on_newline(ctx: &LintContext) -> bool {
-    terminal_semicolon_info(ctx).is_some_and(|info| info.newline_before_semicolon)
-}
-
 fn terminal_semicolon_info(ctx: &LintContext) -> Option<TerminalSemicolon> {
-    let statement_sql = ctx.statement_sql();
-    let trimmed = statement_sql.trim_end_matches(|ch: char| ch.is_ascii_whitespace());
-    if let Some(without_semicolon) = trimmed.strip_suffix(';') {
-        let mut newline_before_semicolon = false;
-        for ch in without_semicolon.chars().rev() {
-            if ch == '\n' || ch == '\r' {
-                newline_before_semicolon = true;
-                break;
-            }
-            if !ch.is_ascii_whitespace() {
-                break;
-            }
-        }
-        return Some(TerminalSemicolon {
-            newline_before_semicolon,
-        });
-    }
-
     let bytes = ctx.sql.as_bytes();
     let mut idx = ctx.statement_range.end;
-    let mut newline_before_semicolon = false;
-    while idx < bytes.len() && bytes[idx].is_ascii_whitespace() {
-        if bytes[idx] == b'\n' || bytes[idx] == b'\r' {
-            newline_before_semicolon = true;
+    let mut newline_count_before_semicolon = 0usize;
+    let mut has_comment_before_semicolon = false;
+
+    while idx < bytes.len() {
+        match bytes[idx] {
+            b';' => {
+                return Some(TerminalSemicolon {
+                    semicolon_offset: idx,
+                    newline_before_semicolon: newline_count_before_semicolon > 0,
+                    newline_count_before_semicolon,
+                    has_comment_before_semicolon,
+                });
+            }
+            b' ' | b'\t' => {
+                idx += 1;
+            }
+            b'\n' => {
+                newline_count_before_semicolon += 1;
+                idx += 1;
+            }
+            b'\r' => {
+                newline_count_before_semicolon += 1;
+                idx += 1;
+                if idx < bytes.len() && bytes[idx] == b'\n' {
+                    idx += 1;
+                }
+            }
+            b'-' if idx + 1 < bytes.len() && bytes[idx + 1] == b'-' => {
+                has_comment_before_semicolon = true;
+                idx += 2;
+                while idx < bytes.len() && bytes[idx] != b'\n' && bytes[idx] != b'\r' {
+                    idx += 1;
+                }
+            }
+            b'#' => {
+                has_comment_before_semicolon = true;
+                idx += 1;
+                while idx < bytes.len() && bytes[idx] != b'\n' && bytes[idx] != b'\r' {
+                    idx += 1;
+                }
+            }
+            b'/' if idx + 1 < bytes.len() && bytes[idx + 1] == b'*' => {
+                has_comment_before_semicolon = true;
+                idx += 2;
+                while idx + 1 < bytes.len() {
+                    if bytes[idx] == b'*' && bytes[idx + 1] == b'/' {
+                        idx += 2;
+                        break;
+                    }
+                    if bytes[idx] == b'\n' {
+                        newline_count_before_semicolon += 1;
+                    } else if bytes[idx] == b'\r' {
+                        newline_count_before_semicolon += 1;
+                        if idx + 1 < bytes.len() && bytes[idx + 1] == b'\n' {
+                            idx += 1;
+                        }
+                    }
+                    idx += 1;
+                }
+            }
+            _ => return None,
         }
-        idx += 1;
     }
 
-    (idx < bytes.len() && bytes[idx] == b';').then_some(TerminalSemicolon {
-        newline_before_semicolon,
-    })
+    None
 }
 
 struct TerminalSemicolon {
+    semicolon_offset: usize,
     newline_before_semicolon: bool,
+    newline_count_before_semicolon: usize,
+    has_comment_before_semicolon: bool,
+}
+
+fn statement_has_trailing_block_comment(ctx: &LintContext) -> bool {
+    ctx.statement_sql().trim_end().ends_with("*/")
+}
+
+fn statement_has_detached_trailing_line_comment(ctx: &LintContext) -> bool {
+    let mut non_empty_lines: Vec<&str> = Vec::new();
+    for line in ctx.statement_sql().lines() {
+        let trimmed = line.trim();
+        if !trimmed.is_empty() {
+            non_empty_lines.push(trimmed);
+        }
+    }
+
+    if non_empty_lines.len() < 2 {
+        return false;
+    }
+
+    non_empty_lines
+        .last()
+        .is_some_and(|line| line.starts_with("--") || line.starts_with('#'))
 }
 
 fn is_last_statement(ctx: &LintContext) -> bool {
@@ -179,10 +255,9 @@ mod tests {
     }
 
     #[test]
-    fn flags_when_file_has_mixed_terminator_style() {
+    fn default_allows_missing_final_semicolon_in_multi_statement_file() {
         let issues = run("select 1; select 2");
-        assert_eq!(issues.len(), 2);
-        assert_eq!(issues[0].code, issue_codes::LINT_CV_006);
+        assert!(issues.is_empty());
     }
 
     #[test]
@@ -234,6 +309,47 @@ mod tests {
             &LintContext {
                 sql,
                 statement_range: 0.."SELECT\n  1".len(),
+                statement_index: 0,
+            },
+        );
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_CV_006);
+    }
+
+    #[test]
+    fn default_flags_space_before_semicolon() {
+        let sql = "SELECT a FROM foo  ;";
+        let stmts = parse_sql(sql).expect("parse");
+        let issues = ConventionTerminator::default().check(
+            &stmts[0],
+            &LintContext {
+                sql,
+                statement_range: 0.."SELECT a FROM foo".len(),
+                statement_index: 0,
+            },
+        );
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_CV_006);
+    }
+
+    #[test]
+    fn multiline_newline_flags_extra_blank_line_before_semicolon() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "convention.terminator".to_string(),
+                serde_json::json!({"multiline_newline": true}),
+            )]),
+        };
+        let rule = ConventionTerminator::from_config(&config);
+        let sql = "SELECT a\nFROM foo\n\n;";
+        let stmts = parse_sql(sql).expect("parse");
+        let issues = rule.check(
+            &stmts[0],
+            &LintContext {
+                sql,
+                statement_range: 0.."SELECT a\nFROM foo".len(),
                 statement_index: 0,
             },
         );

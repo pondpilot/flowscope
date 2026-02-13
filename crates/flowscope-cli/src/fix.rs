@@ -196,44 +196,101 @@ pub fn apply_lint_fixes_with_lint_config(
     })
 }
 
-/// Check whether SQL contains comment markers outside of string literals.
-///
-/// Scans character-by-character so that `'--'` inside a string literal is
-/// not mistaken for an actual comment.
+/// Check whether SQL contains comment markers outside of quoted regions.
 fn contains_comment_markers(sql: &str, dialect: Dialect) -> bool {
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum ScanMode {
+        Outside,
+        SingleQuote,
+        DoubleQuote,
+        BacktickQuote,
+        BracketQuote,
+    }
+
     let bytes = sql.as_bytes();
-    let mut in_single = false;
-    let mut i = 0;
+    let mut mode = ScanMode::Outside;
+    let mut i = 0usize;
 
     while i < bytes.len() {
         let b = bytes[i];
-        if b == b'\'' {
-            in_single = !in_single;
-            i += 1;
-            continue;
-        }
+        let next = bytes.get(i + 1).copied();
 
-        if in_single {
-            i += 1;
-            continue;
-        }
+        match mode {
+            ScanMode::Outside => {
+                if b == b'\'' {
+                    mode = ScanMode::SingleQuote;
+                    i += 1;
+                    continue;
+                }
+                if b == b'"' {
+                    mode = ScanMode::DoubleQuote;
+                    i += 1;
+                    continue;
+                }
+                if b == b'`' {
+                    mode = ScanMode::BacktickQuote;
+                    i += 1;
+                    continue;
+                }
+                if b == b'[' {
+                    mode = ScanMode::BracketQuote;
+                    i += 1;
+                    continue;
+                }
 
-        // Line comment: --
-        if b == b'-' && i + 1 < bytes.len() && bytes[i + 1] == b'-' {
-            return true;
-        }
+                if b == b'-' && next == Some(b'-') {
+                    return true;
+                }
+                if b == b'/' && next == Some(b'*') {
+                    return true;
+                }
+                if matches!(dialect, Dialect::Mysql) && b == b'#' {
+                    return true;
+                }
 
-        // Block comment: /*
-        if b == b'/' && i + 1 < bytes.len() && bytes[i + 1] == b'*' {
-            return true;
+                i += 1;
+            }
+            ScanMode::SingleQuote => {
+                if b == b'\'' && next == Some(b'\'') {
+                    i += 2;
+                } else if b == b'\'' {
+                    mode = ScanMode::Outside;
+                    i += 1;
+                } else {
+                    i += 1;
+                }
+            }
+            ScanMode::DoubleQuote => {
+                if b == b'"' && next == Some(b'"') {
+                    i += 2;
+                } else if b == b'"' {
+                    mode = ScanMode::Outside;
+                    i += 1;
+                } else {
+                    i += 1;
+                }
+            }
+            ScanMode::BacktickQuote => {
+                if b == b'`' && next == Some(b'`') {
+                    i += 2;
+                } else if b == b'`' {
+                    mode = ScanMode::Outside;
+                    i += 1;
+                } else {
+                    i += 1;
+                }
+            }
+            ScanMode::BracketQuote => {
+                if b == b']' && next == Some(b']') {
+                    i += 2;
+                } else if b == b']' {
+                    mode = ScanMode::Outside;
+                    i += 1;
+                } else {
+                    i += 1;
+                }
+            }
         }
-
-        // MySQL hash comment: #
-        if matches!(dialect, Dialect::Mysql) && b == b'#' {
-            return true;
-        }
-
-        i += 1;
     }
 
     false
@@ -3346,6 +3403,31 @@ mod tests {
         assert!(!out.changed);
         assert!(out.skipped_due_to_comments);
         assert_eq!(out.sql, sql);
+    }
+    #[test]
+    fn does_not_treat_double_quoted_comment_markers_as_comments() {
+        let sql = "SELECT \"a--b\", \"x/*y\" FROM t";
+        assert!(!contains_comment_markers(sql, Dialect::Generic));
+    }
+
+    #[test]
+    fn does_not_treat_backtick_or_bracketed_markers_as_comments() {
+        let sql = "SELECT `a--b`, [x/*y] FROM t";
+        assert!(!contains_comment_markers(sql, Dialect::Mysql));
+    }
+
+    #[test]
+    fn fix_mode_does_not_skip_double_quoted_markers() {
+        let sql = "SELECT \"a--b\", COUNT(1) FROM t";
+        let out = apply_lint_fixes(sql, Dialect::Generic, &[]).expect("fix result");
+        assert!(!out.skipped_due_to_comments);
+    }
+
+    #[test]
+    fn fix_mode_does_not_skip_backtick_markers() {
+        let sql = "SELECT `a--b`, COUNT(1) FROM t";
+        let out = apply_lint_fixes(sql, Dialect::Mysql, &[]).expect("fix result");
+        assert!(!out.skipped_due_to_comments);
     }
 
     #[test]

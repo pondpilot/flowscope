@@ -50,10 +50,6 @@ pub fn analyze(request: &AnalyzeRequest) -> AnalyzeResult {
 }
 
 /// Split SQL into statement spans.
-///
-/// Note: The `dialect` field in the request is reserved for future dialect-specific
-/// splitting behavior. The current implementation uses a universal tokenizer that
-/// handles common SQL constructs (strings, comments, dollar-quoting).
 #[must_use]
 pub fn split_statements(request: &StatementSplitRequest) -> StatementSplitResult {
     // Validate input size to prevent memory exhaustion
@@ -66,7 +62,7 @@ pub fn split_statements(request: &StatementSplitRequest) -> StatementSplitResult
     }
 
     StatementSplitResult {
-        statements: input::split_statement_spans(&request.sql),
+        statements: input::split_statement_spans_with_dialect(&request.sql, request.dialect),
         error: None,
     }
 }
@@ -216,6 +212,7 @@ impl<'a> Analyzer<'a> {
                 source_sql,
                 source_range,
                 templating_applied,
+                ..
             },
         ) in all_statements.into_iter().enumerate()
         {
@@ -301,12 +298,20 @@ impl<'a> Analyzer<'a> {
                 .enumerate()
                 .map(|(offset, statement_input)| LintStatement {
                     statement: &statement_input.statement,
-                    statement_index: start + offset,
+                    statement_index: offset,
                     statement_range: statement_input.source_range.clone(),
                 })
                 .collect();
 
-            let document = LintDocument::new(source_sql_key, self.request.dialect, lint_statements);
+            let parser_fallback_used = statements[start..end]
+                .iter()
+                .any(|statement_input| statement_input.parser_fallback_used);
+            let document = LintDocument::new_with_parser_fallback(
+                source_sql_key,
+                self.request.dialect,
+                lint_statements,
+                parser_fallback_used,
+            );
             self.issues.extend(linter.check_document(&document));
 
             start = end;

@@ -105,6 +105,17 @@ impl<'a> LintDocument<'a> {
     /// Build a lint document from source SQL and parsed statements.
     #[must_use]
     pub fn new(sql: &'a str, dialect: Dialect, statements: Vec<LintStatement<'a>>) -> Self {
+        Self::new_with_parser_fallback(sql, dialect, statements, false)
+    }
+
+    /// Build a lint document with parser fallback provenance metadata.
+    #[must_use]
+    pub fn new_with_parser_fallback(
+        sql: &'a str,
+        dialect: Dialect,
+        statements: Vec<LintStatement<'a>>,
+        parser_fallback_used: bool,
+    ) -> Self {
         let (tokens, tokenizer_fallback_used) = match tokenize_sql(sql, dialect, &statements) {
             Ok(tokens) => (tokens, false),
             Err(_) => (Vec::new(), true),
@@ -117,7 +128,7 @@ impl<'a> LintDocument<'a> {
             statements,
             tokens,
             noqa,
-            parser_fallback_used: false,
+            parser_fallback_used,
             tokenizer_fallback_used,
         }
     }
@@ -311,6 +322,26 @@ mod tests {
             .tokens
             .iter()
             .any(|token| token.statement_index == Some(1)));
+    }
+
+    #[test]
+    fn records_parser_fallback_provenance() {
+        let sql = "SELECT 1";
+        let statements = parse_sql_with_dialect(sql, Dialect::Generic).expect("parse");
+        let lint_statements = statements
+            .iter()
+            .enumerate()
+            .map(|(index, statement)| LintStatement {
+                statement,
+                statement_index: index,
+                statement_range: 0..sql.len(),
+            })
+            .collect::<Vec<_>>();
+
+        let document =
+            LintDocument::new_with_parser_fallback(sql, Dialect::Generic, lint_statements, true);
+
+        assert!(document.parser_fallback_used);
     }
 
     #[test]

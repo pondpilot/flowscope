@@ -87,6 +87,7 @@ This plan covers three axes:
   - `CV_003` was further upgraded from regex scanning to token/depth-aware trailing-comma detection in SELECT clauses.
   - `CV_003` now supports `select_clause_trailing_comma` (`forbid`/`require`) through `lint.ruleConfigs`.
   - `CV_006` moved from parity into a dedicated core rule module (`cv_006.rs`) and parity registration was removed.
+  - `CV_006` now aligns with SQLFluff TSQL batch handling by splitting MSSQL statement ranges on `GO` separators before best-effort parsing, preventing parser dropouts from masking final-semicolon checks.
   - `ST_010` constant-expression detection scope was broadened beyond SELECT traversal to also check `UPDATE`/`DELETE` predicates and `MERGE ... ON`.
   - `ST_010` now aligns closer with SQLFluff ST10 comparison semantics by detecting equivalent-expression predicate comparisons across `=`/`!=`/`<`/`>`/`<=`/`>=` (e.g. `x = x`, `x < x`, `'A'||'B' = 'A'||'B'`) with operator-side guardrails that defer nested comparison-expression operands while preserving SQLFluff-style literal handling (`1=1`/`1=0` allow-list and non-equality literal-vs-literal deferral).
   - `ST_010` now reports per-occurrence violations for multiple constant predicates within a statement instead of collapsing to a single statement-level issue.
@@ -95,8 +96,11 @@ This plan covers three axes:
   - `ST_011` now also treats Snowflake qualified wildcard `EXCLUDE` projections (`alias.* EXCLUDE ...`) as joined-source references, matching SQLFluff ST11 fixture behavior.
   - CLI lint mode now supports `--rule-configs` JSON for SQLFluff-style per-rule options (for example `{"structure.subquery":{"forbid_subquery_in":"both"}}`), enabling config-aware fixture parity replay outside unit tests.
   - CLI lint mode now honors templating in lint requests (when `--template` is provided) and adds a Jinja fallback retry for parse-erroring inputs that contain template markers (`{{`, `{%`, `{#`), improving SQLFluff-style templated lint parity.
+  - Parser fallback now normalizes escaped-quoted identifier edge cases for BigQuery/ClickHouse (plus ClickHouse trailing-comma-before-`FROM` fallback normalization), eliminating supported-dialect AL05 parse blockers from SQLFluff fixtures.
   - Config-aware SQLFluff fixture replay for `AL05`/`ST05`/`ST11` now reports zero mismatches (104/104, 40/40, and 22/22 cases respectively).
   - Config-aware SQLFluff fixture replay for `AL01`/`AL02`/`AL04` now reports zero mismatches (14/14, 9/9, and 10/10 cases respectively).
+  - Config-aware SQLFluff fixture replay for `CV06` now reports zero mismatches across supported dialect fixtures (54/54).
+  - Tier 1 supported-dialect fixture bundle replay (`AL01`/`AL02`/`AL04`/`AL05`/`AL08`/`CV03`/`CV06`/`ST05`/`ST10`/`ST11`) now reports zero mismatches (286/286 checked; unsupported dialect fixtures skipped).
   - `AM_004`/`AM_007` wildcard-width resolution now also handles declared CTE column lists, table-factor alias column lists (`AS alias(col1, ...)`), and aliased nested-join table factors (including `USING(...)` width deduction plus `NATURAL JOIN` overlap deduction when both sides expose deterministic output column names; unknown wildcard sources remain conservatively unresolved).
 - Additional AST-driven migration progress beyond Tier 1:
   - `AL_006` moved from parity regex handling to a dedicated core AST rule (`al_006.rs`).
@@ -220,7 +224,7 @@ This plan covers three axes:
 - Phase 2 metadata parity:
   - SQLFluff canonical description text is not fully normalized across all rules.
 - Phase 3 semantic-depth work remains open for Tier 2 and Tier 3.
-  - Tier 1 AST rule migration is complete, and config-aware SQLFluff fixture replay is currently 100% for `AL_001`, `AL_002`, `AL_004`, `AL_005`, `AL_008`, `CV_003`, `ST_005`, `ST_010`, and `ST_011`; remaining Tier 1 semantic parity is concentrated in `CV_006` fixture coverage.
+  - Tier 1 AST rule migration is complete, and config-aware SQLFluff fixture replay is currently 100% on supported-dialect cases for `AL_001`, `AL_002`, `AL_004`, `AL_005`, `AL_008`, `CV_003`, `CV_006`, `ST_005`, `ST_010`, and `ST_011`.
 
 ---
 

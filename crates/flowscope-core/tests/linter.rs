@@ -34,10 +34,18 @@ fn run_lint_in_dialect(sql: &str, dialect: Dialect) -> Vec<(String, String)> {
 }
 
 fn run_lint_with_config(sql: &str, config: LintConfig) -> Vec<(String, String)> {
+    run_lint_with_config_in_dialect(sql, Dialect::Generic, config)
+}
+
+fn run_lint_with_config_in_dialect(
+    sql: &str,
+    dialect: Dialect,
+    config: LintConfig,
+) -> Vec<(String, String)> {
     let result = analyze(&AnalyzeRequest {
         sql: sql.to_string(),
         files: None,
-        dialect: Dialect::Generic,
+        dialect,
         source_name: None,
         options: Some(AnalysisOptions {
             lint: Some(config),
@@ -282,6 +290,47 @@ fn lint_rule_config_terminator_require_final_semicolon() {
     assert!(
         issues.iter().any(|(code, _)| code == "LINT_CV_006"),
         "require_final_semicolon should flag missing final semicolon: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_rule_config_terminator_require_final_semicolon_mssql_go_batches() {
+    let result = analyze(&AnalyzeRequest {
+        sql: "CREATE SCHEMA staging;\nGO\nCREATE TABLE test (id INT)\n".to_string(),
+        files: None,
+        dialect: Dialect::Mssql,
+        source_name: None,
+        options: Some(AnalysisOptions {
+            lint: Some(LintConfig {
+                enabled: true,
+                disabled_rules: vec![],
+                rule_configs: std::collections::BTreeMap::from([(
+                    "convention.terminator".to_string(),
+                    serde_json::json!({"require_final_semicolon": true}),
+                )]),
+            }),
+            ..Default::default()
+        }),
+        schema: None,
+        #[cfg(feature = "templating")]
+        template_config: None,
+    });
+
+    assert!(
+        !result
+            .issues
+            .iter()
+            .any(|issue| issue.code == issue_codes::PARSE_ERROR),
+        "MSSQL GO batches should not fail parsing in lint mode: {:?}",
+        result.issues
+    );
+    assert!(
+        result
+            .issues
+            .iter()
+            .any(|issue| issue.code == issue_codes::LINT_CV_006),
+        "require_final_semicolon should flag last statement after GO batch separator: {:?}",
+        result.issues
     );
 }
 
@@ -950,6 +999,74 @@ fn lint_al_005_dialect_mode_hive_allows_case_insensitive_quoted_reference() {
             .iter()
             .any(|(code, _)| code == issue_codes::LINT_AL_005),
         "Hive quoted identifier references should match unquoted aliases case-insensitively in AL_005: {issues:?}"
+    );
+}
+
+#[test]
+fn lint_al_005_bigquery_escaped_quoted_identifiers_do_not_parse_error() {
+    let result = analyze(&AnalyzeRequest {
+        sql: "SELECT `\\`a`.col1\nFROM tab1 as `\\`A`".to_string(),
+        files: None,
+        dialect: Dialect::Bigquery,
+        source_name: None,
+        options: Some(AnalysisOptions {
+            lint: Some(LintConfig::default()),
+            ..Default::default()
+        }),
+        schema: None,
+        #[cfg(feature = "templating")]
+        template_config: None,
+    });
+
+    assert!(
+        !result
+            .issues
+            .iter()
+            .any(|issue| issue.code == issue_codes::PARSE_ERROR),
+        "escaped BigQuery quoted identifiers should parse in fallback mode: {:?}",
+        result.issues
+    );
+    assert!(
+        !result
+            .issues
+            .iter()
+            .any(|issue| issue.code == issue_codes::LINT_AL_005),
+        "escaped BigQuery quoted identifiers should not trigger AL_005 when alias is referenced: {:?}",
+        result.issues
+    );
+}
+
+#[test]
+fn lint_al_005_clickhouse_escaped_quoted_identifiers_do_not_parse_error() {
+    let result = analyze(&AnalyzeRequest {
+        sql: "SELECT \"\\\"`a`\"\"\".col1,\nFROM tab1 as `\"\\`a``\"`".to_string(),
+        files: None,
+        dialect: Dialect::Clickhouse,
+        source_name: None,
+        options: Some(AnalysisOptions {
+            lint: Some(LintConfig::default()),
+            ..Default::default()
+        }),
+        schema: None,
+        #[cfg(feature = "templating")]
+        template_config: None,
+    });
+
+    assert!(
+        !result
+            .issues
+            .iter()
+            .any(|issue| issue.code == issue_codes::PARSE_ERROR),
+        "escaped ClickHouse quoted identifiers should parse in fallback mode: {:?}",
+        result.issues
+    );
+    assert!(
+        !result
+            .issues
+            .iter()
+            .any(|issue| issue.code == issue_codes::LINT_AL_005),
+        "escaped ClickHouse quoted identifiers should not trigger AL_005 when alias is referenced: {:?}",
+        result.issues
     );
 }
 
@@ -2711,7 +2828,7 @@ fn lint_sqlfluff_parity_rule_smoke_cases() {
         ("LINT_CV_001", "SELECT * FROM t WHERE a <> b AND c != d"),
         ("LINT_CV_002", "SELECT IFNULL(a, 0) FROM t"),
         ("LINT_CV_003", "SELECT a, FROM t"),
-        ("LINT_CV_006", "SELECT 1; SELECT 2"),
+        ("LINT_CV_006", "SELECT 1 ;"),
         ("LINT_CV_007", "(SELECT 1)"),
         ("LINT_CV_009", "SELECT foo FROM t"),
         ("LINT_CV_010", "SELECT 'abc' AS a, \"def\" AS b FROM t"),
