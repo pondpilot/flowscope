@@ -5,8 +5,9 @@
 
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
-use regex::Regex;
 use sqlparser::ast::Statement;
+use sqlparser::dialect::GenericDialect;
+use sqlparser::tokenizer::{Token, Tokenizer, Whitespace};
 
 pub struct LayoutCommas;
 
@@ -24,8 +25,7 @@ impl LintRule for LayoutCommas {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let sql = ctx.statement_sql();
-        if has_re(sql, r"\s+,") || has_re(sql, r",[^\s\n]") {
+        if has_inconsistent_comma_spacing(ctx.statement_sql()) {
             vec![Issue::info(
                 issue_codes::LINT_LT_004,
                 "Comma spacing appears inconsistent.",
@@ -37,8 +37,38 @@ impl LintRule for LayoutCommas {
     }
 }
 
-fn has_re(haystack: &str, pattern: &str) -> bool {
-    Regex::new(pattern).expect("valid regex").is_match(haystack)
+fn has_inconsistent_comma_spacing(sql: &str) -> bool {
+    let dialect = GenericDialect {};
+    let mut tokenizer = Tokenizer::new(&dialect, sql);
+    let Ok(tokens) = tokenizer.tokenize() else {
+        return false;
+    };
+
+    for (index, token) in tokens.iter().enumerate() {
+        if !matches!(token, Token::Comma) {
+            continue;
+        }
+
+        if index > 0 && is_plain_space_token(&tokens[index - 1]) {
+            return true;
+        }
+
+        let Some(next) = tokens.get(index + 1) else {
+            continue;
+        };
+        if !is_plain_space_token(next) {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn is_plain_space_token(token: &Token) -> bool {
+    matches!(
+        token,
+        Token::Whitespace(Whitespace::Space | Whitespace::Newline | Whitespace::Tab)
+    )
 }
 
 #[cfg(test)]
@@ -75,5 +105,10 @@ mod tests {
     #[test]
     fn does_not_flag_spaced_commas() {
         assert!(run("SELECT a, b FROM t").is_empty());
+    }
+
+    #[test]
+    fn does_not_flag_comma_inside_string_literal() {
+        assert!(run("SELECT 'a,b' AS txt, b FROM t").is_empty());
     }
 }

@@ -101,7 +101,9 @@ This plan covers three axes:
   - `LT_015` moved from parity handling to a dedicated core rule module (`lt_015.rs`).
   - `LT_002` moved from parity handling to a dedicated core rule module (`lt_002.rs`).
   - `LT_003` moved from parity handling to a dedicated core rule module (`lt_003.rs`).
+  - `LT_003` was further upgraded from regex scanning to tokenizer line-aware trailing-operator checks.
   - `LT_004` moved from parity handling to a dedicated core rule module (`lt_004.rs`).
+  - `LT_004` was further upgraded from regex scanning to tokenizer-driven comma-spacing checks.
   - `LT_001` moved from parity handling to a dedicated core rule module (`lt_001.rs`).
   - `LT_005` moved from parity handling to a dedicated core rule module (`lt_005.rs`).
   - `LT_006` moved from parity handling to a dedicated core rule module (`lt_006.rs`).
