@@ -195,6 +195,7 @@ This plan covers three axes:
   - `LT_007` moved from parity handling to a dedicated core rule module (`lt_007.rs`).
   - `LT_007` now includes source-aware templating parity: when templating is enabled, lint evaluation uses untemplated source slices for CTE close-bracket checks so SQLFluff whitespace-consuming Jinja forms (`{{- ... -}}`, `{#- ... -#}`, `{%- ... -%}`) no longer produce false positives.
   - `LT_008` moved from parity handling to a dedicated core rule module (`lt_008.rs`).
+  - `LT_008` was further upgraded from raw byte/state scanning to AST/token-aware CTE suffix analysis using `Query.with.cte_tables` closing-paren tokens plus tokenizer span traversal for blank-line detection.
   - `LT_009` moved from parity handling to a dedicated core rule module (`lt_009.rs`).
   - `LT_009` was further upgraded from regex masking to AST-backed SELECT target analysis with token-aware clause layout checks (single-target newline semantics, multi-target line separation, and `FROM`-line checks).
   - `LT_009` now supports `wildcard_policy` (`single`/`multiple`) through `lint.ruleConfigs`.

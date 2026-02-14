@@ -4,8 +4,9 @@
 //! closing parenthesis and following query/CTE text.
 
 use crate::linter::rule::{LintContext, LintRule};
-use crate::types::{issue_codes, Issue};
+use crate::types::{issue_codes, Dialect, Issue};
 use sqlparser::ast::Statement;
+use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
 
 pub struct LayoutCteNewline;
 
@@ -22,8 +23,8 @@ impl LintRule for LayoutCteNewline {
         "Blank line should separate CTE blocks from following code."
     }
 
-    fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        lt08_violation_spans(ctx.statement_sql())
+    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+        lt08_violation_spans(statement, ctx)
             .into_iter()
             .map(|(start, end)| {
                 Issue::info(
@@ -37,287 +38,190 @@ impl LintRule for LayoutCteNewline {
     }
 }
 
-fn is_word_byte(byte: u8) -> bool {
-    byte.is_ascii_alphanumeric() || byte == b'_'
+#[derive(Clone)]
+struct LocatedToken {
+    token: Token,
+    start: usize,
+    end: usize,
 }
 
-fn is_keyword_at(sql: &str, idx: usize, keyword: &str) -> bool {
-    let bytes = sql.as_bytes();
-    let kw = keyword.as_bytes();
-    if idx + kw.len() > bytes.len() {
-        return false;
-    }
-    if idx > 0 && is_word_byte(bytes[idx - 1]) {
-        return false;
-    }
-    if idx + kw.len() < bytes.len() && is_word_byte(bytes[idx + kw.len()]) {
-        return false;
-    }
-    bytes[idx..idx + kw.len()].eq_ignore_ascii_case(kw)
-}
+fn lt08_violation_spans(statement: &Statement, ctx: &LintContext) -> Vec<(usize, usize)> {
+    let Statement::Query(query) = statement else {
+        return Vec::new();
+    };
+    let Some(with_clause) = &query.with else {
+        return Vec::new();
+    };
 
-fn skip_whitespace_and_comments(sql: &str, mut idx: usize) -> usize {
-    let bytes = sql.as_bytes();
-    while idx < bytes.len() {
-        if bytes[idx].is_ascii_whitespace() {
-            idx += 1;
-            continue;
-        }
-        if idx + 1 < bytes.len() && bytes[idx] == b'-' && bytes[idx + 1] == b'-' {
-            idx += 2;
-            while idx < bytes.len() && bytes[idx] != b'\n' {
-                idx += 1;
-            }
-            continue;
-        }
-        if idx + 1 < bytes.len() && bytes[idx] == b'/' && bytes[idx + 1] == b'*' {
-            idx += 2;
-            while idx + 1 < bytes.len() && !(bytes[idx] == b'*' && bytes[idx + 1] == b'/') {
-                idx += 1;
-            }
-            if idx + 1 < bytes.len() {
-                idx += 2;
-            }
-            continue;
-        }
-        break;
-    }
-    idx
-}
+    let Some(tokens) = tokenize_with_offsets(ctx.sql, ctx.dialect()) else {
+        return Vec::new();
+    };
 
-fn matching_close_paren_ignoring_strings_and_comments(sql: &str, open_idx: usize) -> Option<usize> {
-    let bytes = sql.as_bytes();
-    if open_idx >= bytes.len() || bytes[open_idx] != b'(' {
-        return None;
-    }
-
-    let mut idx = open_idx + 1;
-    let mut depth = 1usize;
-    let mut in_single = false;
-    let mut in_double = false;
-    let mut in_line_comment = false;
-    let mut in_block_comment = false;
-
-    while idx < bytes.len() {
-        if in_line_comment {
-            if bytes[idx] == b'\n' {
-                in_line_comment = false;
-            }
-            idx += 1;
-            continue;
-        }
-
-        if in_block_comment {
-            if idx + 1 < bytes.len() && bytes[idx] == b'*' && bytes[idx + 1] == b'/' {
-                in_block_comment = false;
-                idx += 2;
-            } else {
-                idx += 1;
-            }
-            continue;
-        }
-
-        if in_single {
-            if bytes[idx] == b'\'' {
-                if idx + 1 < bytes.len() && bytes[idx + 1] == b'\'' {
-                    idx += 2;
-                } else {
-                    in_single = false;
-                    idx += 1;
-                }
-            } else {
-                idx += 1;
-            }
-            continue;
-        }
-
-        if in_double {
-            if bytes[idx] == b'"' {
-                if idx + 1 < bytes.len() && bytes[idx + 1] == b'"' {
-                    idx += 2;
-                } else {
-                    in_double = false;
-                    idx += 1;
-                }
-            } else {
-                idx += 1;
-            }
-            continue;
-        }
-
-        if idx + 1 < bytes.len() && bytes[idx] == b'-' && bytes[idx + 1] == b'-' {
-            in_line_comment = true;
-            idx += 2;
-            continue;
-        }
-        if idx + 1 < bytes.len() && bytes[idx] == b'/' && bytes[idx + 1] == b'*' {
-            in_block_comment = true;
-            idx += 2;
-            continue;
-        }
-        if bytes[idx] == b'\'' {
-            in_single = true;
-            idx += 1;
-            continue;
-        }
-        if bytes[idx] == b'"' {
-            in_double = true;
-            idx += 1;
-            continue;
-        }
-
-        match bytes[idx] {
-            b'(' => depth += 1,
-            b')' => {
-                depth -= 1;
-                if depth == 0 {
-                    return Some(idx);
-                }
-            }
-            _ => {}
-        }
-        idx += 1;
-    }
-
-    None
-}
-
-fn lt08_anchor_end(sql: &str, start: usize) -> usize {
-    let bytes = sql.as_bytes();
-    if start >= bytes.len() {
-        return start;
-    }
-
-    if is_word_byte(bytes[start]) {
-        let mut end = start + 1;
-        while end < bytes.len() && is_word_byte(bytes[end]) {
-            end += 1;
-        }
-        end
-    } else {
-        (start + 1).min(bytes.len())
-    }
-}
-
-fn lt08_suffix_summary(sql: &str, mut idx: usize) -> (usize, Option<usize>, bool) {
-    let bytes = sql.as_bytes();
-    let mut blank_lines = 0usize;
-    let mut line_blank = false;
-    let mut saw_comma = false;
-
-    while idx < bytes.len() {
-        if idx + 1 < bytes.len() && bytes[idx] == b'-' && bytes[idx + 1] == b'-' {
-            line_blank = false;
-            idx += 2;
-            while idx < bytes.len() && bytes[idx] != b'\n' {
-                idx += 1;
-            }
-            continue;
-        }
-
-        if idx + 1 < bytes.len() && bytes[idx] == b'/' && bytes[idx + 1] == b'*' {
-            line_blank = false;
-            idx += 2;
-            while idx + 1 < bytes.len() {
-                if bytes[idx] == b'\n' {
-                    if line_blank {
-                        blank_lines += 1;
-                    }
-                    line_blank = true;
-                    idx += 1;
-                    continue;
-                }
-
-                if bytes[idx] == b'*' && bytes[idx + 1] == b'/' {
-                    idx += 2;
-                    break;
-                }
-
-                line_blank = false;
-                idx += 1;
-            }
-            continue;
-        }
-
-        match bytes[idx] {
-            b',' => {
-                saw_comma = true;
-                idx += 1;
-            }
-            b'\n' => {
-                if line_blank {
-                    blank_lines += 1;
-                }
-                line_blank = true;
-                idx += 1;
-            }
-            b if b.is_ascii_whitespace() => idx += 1,
-            _ => return (blank_lines, Some(idx), saw_comma),
-        }
-    }
-
-    (blank_lines, None, saw_comma)
-}
-
-fn lt08_violation_spans(sql: &str) -> Vec<(usize, usize)> {
-    let bytes = sql.as_bytes();
     let mut spans = Vec::new();
 
-    let mut idx = skip_whitespace_and_comments(sql, 0);
-    if !is_keyword_at(sql, idx, "WITH") {
-        return spans;
-    }
-    idx += "WITH".len();
-    idx = skip_whitespace_and_comments(sql, idx);
-    if is_keyword_at(sql, idx, "RECURSIVE") {
-        idx += "RECURSIVE".len();
-    }
-
-    while idx < bytes.len() {
-        idx = skip_whitespace_and_comments(sql, idx);
-        if idx >= bytes.len() {
-            break;
-        }
-
-        if !is_keyword_at(sql, idx, "AS") {
-            idx += 1;
+    for cte in &with_clause.cte_tables {
+        let Some(close_abs) = token_start_offset(ctx.sql, &cte.closing_paren_token.0) else {
             continue;
-        }
-
-        let mut body_start = skip_whitespace_and_comments(sql, idx + "AS".len());
-        if is_keyword_at(sql, body_start, "NOT") {
-            body_start = skip_whitespace_and_comments(sql, body_start + "NOT".len());
-        }
-        if is_keyword_at(sql, body_start, "MATERIALIZED") {
-            body_start = skip_whitespace_and_comments(sql, body_start + "MATERIALIZED".len());
-        }
-        if body_start >= bytes.len() || bytes[body_start] != b'(' {
-            idx += 1;
-            continue;
-        }
-
-        let Some(close_idx) = matching_close_paren_ignoring_strings_and_comments(sql, body_start)
-        else {
-            break;
         };
 
-        let (blank_lines, next_code_idx, saw_comma) = lt08_suffix_summary(sql, close_idx + 1);
+        if close_abs < ctx.statement_range.start || close_abs >= ctx.statement_range.end {
+            continue;
+        }
+
+        let (blank_lines, next_code_span) = suffix_summary_after_offset(
+            ctx.sql,
+            &tokens,
+            close_abs + 1,
+            ctx.statement_range.end,
+        );
+
         if blank_lines == 0 {
-            if let Some(start) = next_code_idx {
-                spans.push((start, lt08_anchor_end(sql, start)));
+            if let Some((next_start, next_end)) = next_code_span {
+                spans.push((
+                    next_start - ctx.statement_range.start,
+                    next_end - ctx.statement_range.start,
+                ));
             }
         }
-
-        if !saw_comma {
-            break;
-        }
-        let Some(next_idx) = next_code_idx else {
-            break;
-        };
-        idx = next_idx;
     }
 
     spans
+}
+
+fn tokenize_with_offsets(sql: &str, dialect: Dialect) -> Option<Vec<LocatedToken>> {
+    let dialect = dialect.to_sqlparser_dialect();
+    let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
+    let tokens = tokenizer.tokenize_with_location().ok()?;
+
+    let mut out = Vec::with_capacity(tokens.len());
+    for token in tokens {
+        let Some(start) = line_col_to_offset(
+            sql,
+            token.span.start.line as usize,
+            token.span.start.column as usize,
+        ) else {
+            continue;
+        };
+        let Some(end) =
+            line_col_to_offset(sql, token.span.end.line as usize, token.span.end.column as usize)
+        else {
+            continue;
+        };
+
+        out.push(LocatedToken {
+            token: token.token,
+            start,
+            end,
+        });
+    }
+
+    Some(out)
+}
+
+fn token_start_offset(sql: &str, token: &TokenWithSpan) -> Option<usize> {
+    line_col_to_offset(
+        sql,
+        token.span.start.line as usize,
+        token.span.start.column as usize,
+    )
+}
+
+fn suffix_summary_after_offset(
+    sql: &str,
+    tokens: &[LocatedToken],
+    start_offset: usize,
+    statement_end: usize,
+) -> (usize, Option<(usize, usize)>) {
+    let mut blank_lines = 0usize;
+    let mut line_blank = false;
+
+    for token in tokens {
+        if token.start < start_offset {
+            continue;
+        }
+        if token.start >= statement_end {
+            break;
+        }
+
+        match &token.token {
+            Token::Comma => {
+                line_blank = false;
+            }
+            trivia if is_trivia_token(trivia) => {
+                consume_text_for_blank_lines(
+                    &sql[token.start..token.end],
+                    &mut blank_lines,
+                    &mut line_blank,
+                );
+            }
+            _ => return (blank_lines, Some((token.start, token.end))),
+        }
+    }
+
+    (blank_lines, None)
+}
+
+fn consume_text_for_blank_lines(text: &str, blank_lines: &mut usize, line_blank: &mut bool) {
+    let mut chars = text.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        match ch {
+            '\n' => {
+                if *line_blank {
+                    *blank_lines += 1;
+                }
+                *line_blank = true;
+            }
+            '\r' => {
+                if matches!(chars.peek(), Some('\n')) {
+                    let _ = chars.next();
+                }
+                if *line_blank {
+                    *blank_lines += 1;
+                }
+                *line_blank = true;
+            }
+            c if c.is_whitespace() => {}
+            _ => *line_blank = false,
+        }
+    }
+}
+
+fn is_trivia_token(token: &Token) -> bool {
+    matches!(
+        token,
+        Token::Whitespace(Whitespace::Space | Whitespace::Tab | Whitespace::Newline)
+            | Token::Whitespace(Whitespace::SingleLineComment { .. })
+            | Token::Whitespace(Whitespace::MultiLineComment(_))
+    )
+}
+
+fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
+    if line == 0 || column == 0 {
+        return None;
+    }
+
+    let mut current_line = 1usize;
+    let mut current_col = 1usize;
+
+    for (offset, ch) in sql.char_indices() {
+        if current_line == line && current_col == column {
+            return Some(offset);
+        }
+
+        if ch == '\n' {
+            current_line += 1;
+            current_col = 1;
+        } else {
+            current_col += 1;
+        }
+    }
+
+    if current_line == line && current_col == column {
+        return Some(sql.len());
+    }
+
+    None
 }
 
 #[cfg(test)]
@@ -368,5 +272,10 @@ SELECT * FROM b");
                 .count(),
             2,
         );
+    }
+
+    #[test]
+    fn comment_only_line_is_not_a_blank_line_separator() {
+        assert!(!run("WITH cte AS (SELECT 1)\n-- separator\nSELECT * FROM cte").is_empty());
     }
 }
