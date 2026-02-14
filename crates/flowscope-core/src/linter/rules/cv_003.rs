@@ -4,9 +4,8 @@
 
 use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
-use crate::types::{issue_codes, Issue};
+use crate::types::{issue_codes, Dialect, Issue};
 use sqlparser::ast::Statement;
-use sqlparser::dialect::GenericDialect;
 use sqlparser::keywords::Keyword;
 use sqlparser::tokenizer::{Token, Tokenizer, Whitespace};
 
@@ -78,7 +77,7 @@ impl LintRule for ConventionSelectTrailingComma {
     }
 
     fn check(&self, _stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        if has_select_trailing_comma_violation(ctx.statement_sql(), self.policy) {
+        if has_select_trailing_comma_violation(ctx.statement_sql(), self.policy, ctx.dialect()) {
             vec![
                 Issue::warning(issue_codes::LINT_CV_003, self.policy.message())
                     .with_statement(ctx.statement_index),
@@ -101,9 +100,13 @@ struct SelectClauseState {
     last_significant: Option<SignificantToken>,
 }
 
-fn has_select_trailing_comma_violation(sql: &str, policy: SelectClauseTrailingCommaPolicy) -> bool {
-    let dialect = GenericDialect {};
-    let mut tokenizer = Tokenizer::new(&dialect, sql);
+fn has_select_trailing_comma_violation(
+    sql: &str,
+    policy: SelectClauseTrailingCommaPolicy,
+    dialect: Dialect,
+) -> bool {
+    let dialect = dialect.to_sqlparser_dialect();
+    let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
     let Ok(tokens) = tokenizer.tokenize() else {
         return false;
     };

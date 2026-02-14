@@ -4,9 +4,8 @@
 //! `GO` separators.
 
 use crate::linter::rule::{LintContext, LintRule};
-use crate::types::{issue_codes, Issue};
+use crate::types::{issue_codes, Dialect, Issue};
 use sqlparser::ast::Statement;
-use sqlparser::dialect::GenericDialect;
 use sqlparser::tokenizer::{Token, Tokenizer};
 
 pub struct TsqlEmptyBatch;
@@ -25,7 +24,7 @@ impl LintRule for TsqlEmptyBatch {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let has_violation = has_empty_go_batch_separator(ctx.statement_sql());
+        let has_violation = has_empty_go_batch_separator(ctx.statement_sql(), ctx.dialect());
         if has_violation {
             vec![Issue::warning(
                 issue_codes::LINT_TQ_003,
@@ -38,9 +37,9 @@ impl LintRule for TsqlEmptyBatch {
     }
 }
 
-fn has_empty_go_batch_separator(sql: &str) -> bool {
-    let dialect = GenericDialect {};
-    let mut tokenizer = Tokenizer::new(&dialect, sql);
+fn has_empty_go_batch_separator(sql: &str, dialect: Dialect) -> bool {
+    let dialect = dialect.to_sqlparser_dialect();
+    let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
     let Ok(tokens) = tokenizer.tokenize_with_location() else {
         return false;
     };
@@ -119,19 +118,20 @@ mod tests {
 
     #[test]
     fn detects_repeated_go_separator_lines() {
-        assert!(has_empty_go_batch_separator("GO\nGO\n"));
-        assert!(has_empty_go_batch_separator("GO\n\nGO\n"));
+        assert!(has_empty_go_batch_separator("GO\nGO\n", Dialect::Generic));
+        assert!(has_empty_go_batch_separator("GO\n\nGO\n", Dialect::Generic));
     }
 
     #[test]
     fn does_not_detect_single_go_separator_line() {
-        assert!(!has_empty_go_batch_separator("GO\n"));
+        assert!(!has_empty_go_batch_separator("GO\n", Dialect::Generic));
     }
 
     #[test]
     fn does_not_detect_go_text_inside_string_literal() {
         assert!(!has_empty_go_batch_separator(
-            "SELECT '\nGO\nGO\n' AS sql_snippet"
+            "SELECT '\nGO\nGO\n' AS sql_snippet",
+            Dialect::Generic,
         ));
     }
 

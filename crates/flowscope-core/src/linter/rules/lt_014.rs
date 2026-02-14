@@ -4,7 +4,7 @@
 //! keyword placement relative to the SELECT line.
 
 use crate::linter::rule::{LintContext, LintRule};
-use crate::types::{issue_codes, Issue};
+use crate::types::{issue_codes, Dialect, Issue};
 use sqlparser::ast::Statement;
 use sqlparser::keywords::Keyword;
 use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
@@ -26,7 +26,7 @@ impl LintRule for LayoutKeywordNewline {
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
         let Some((keyword_start, keyword_end)) =
-            keyword_newline_violation_span(ctx.statement_sql())
+            keyword_newline_violation_span(ctx.statement_sql(), ctx.dialect())
         else {
             return Vec::new();
         };
@@ -47,9 +47,9 @@ struct ClauseOccurrence {
     end: usize,
 }
 
-fn keyword_newline_violation_span(sql: &str) -> Option<(usize, usize)> {
-    let dialect = sqlparser::dialect::GenericDialect {};
-    let mut tokenizer = Tokenizer::new(&dialect, sql);
+fn keyword_newline_violation_span(sql: &str, dialect: Dialect) -> Option<(usize, usize)> {
+    let dialect = dialect.to_sqlparser_dialect();
+    let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
     let tokens = tokenizer.tokenize_with_location().ok()?;
 
     let select_line = tokens.iter().find_map(|token| {

@@ -85,7 +85,7 @@ This plan covers three axes:
   - `AL_005` now includes dialect-aware quoted/unquoted identifier normalization in default (`dialect`) mode, aligning SQLFluff AL05 alias usage matching across dialect-specific casefold behavior (for example Postgres/Redshift lower-folding, Snowflake upper-folding, and case-insensitive quoted identifiers for DuckDB/Hive/SQLite).
   - `AL_005` now includes SQLFluff Redshift QUALIFY parity for unqualified alias-prefixed identifiers (for example `ss_sold_date` / `ss_sales_price` counting as `ss` usage when QUALIFY follows FROM/JOIN directly).
   - `CV_003` moved from parity into a dedicated core rule module (`cv_003.rs`) and parity registration was removed.
-  - `CV_003` was further upgraded from regex scanning to token/depth-aware trailing-comma detection in SELECT clauses.
+  - `CV_003` was further upgraded from regex scanning to active-dialect token/depth-aware trailing-comma detection in SELECT clauses.
   - `CV_003` now supports `select_clause_trailing_comma` (`forbid`/`require`) through `lint.ruleConfigs`.
   - `CV_006` moved from parity into a dedicated core rule module (`cv_006.rs`) and parity registration was removed.
   - `CV_006` now aligns with SQLFluff TSQL batch handling by splitting MSSQL statement ranges on `GO` separators before best-effort parsing, preventing parser dropouts from masking final-semicolon checks.
@@ -142,7 +142,7 @@ This plan covers three axes:
   - `TQ_002` moved from parity handling to a dedicated core rule module (`tq_002.rs`).
   - `TQ_002` was further upgraded to AST-driven procedure-body analysis via `CreateProcedure` `ConditionalStatements::BeginEnd` detection, replacing SQL text regex scanning.
   - `TQ_003` moved from parity handling to a dedicated core rule module (`tq_003.rs`).
-  - `TQ_003` was further upgraded from regex scanning to token/line-aware repeated-`GO` separator detection, reducing string-literal false positives.
+  - `TQ_003` was further upgraded from regex scanning to active-dialect token/line-aware repeated-`GO` separator detection, reducing string-literal false positives.
   - `CV_001` moved from parity handling to a dedicated core rule module (`cv_001.rs`).
   - `CV_001` was further upgraded from regex checks to lexer-style operator scanning that ignores comments/quoted strings for mixed `<>`/`!=` detection.
   - `CV_001` now supports `preferred_not_equal_style` (`consistent`/`c_style`/`ansi`) through `lint.ruleConfigs`.
@@ -209,7 +209,7 @@ This plan covers three axes:
     - `LT07`: 13/13 SQLFluff standard cases matched (including whitespace-consuming Jinja fixtures).
     - `LT09`: 37/37 cases matched.
   - `LT_014` moved from parity handling to a dedicated core rule module (`lt_014.rs`).
-  - `LT_014` was further upgraded from regex masking to token/line-aware major-clause placement checks.
+  - `LT_014` was further upgraded from regex masking to active-dialect token/line-aware major-clause placement checks.
   - `CP_001` moved from parity handling to a dedicated core rule module (`cp_001.rs`).
   - `CP_002` moved from parity handling to a dedicated core rule module (`cp_002.rs`).
   - `CP_003` moved from parity handling to a dedicated core rule module (`cp_003.rs`).
