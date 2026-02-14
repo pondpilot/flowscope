@@ -6,7 +6,7 @@
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Dialect, Issue};
 use sqlparser::ast::Statement;
-use sqlparser::tokenizer::{Token, Tokenizer, Whitespace};
+use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
 
 pub struct StructureConsecutiveSemicolons;
 
@@ -24,8 +24,9 @@ impl LintRule for StructureConsecutiveSemicolons {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let has_violation =
-            ctx.statement_index == 0 && sql_has_consecutive_semicolons(ctx.sql, ctx.dialect());
+        let tokens = tokenize_with_offsets_for_context(ctx);
+        let has_violation = ctx.statement_index == 0
+            && sql_has_consecutive_semicolons(ctx.sql, ctx.dialect(), tokens.as_deref());
         if has_violation {
             vec![
                 Issue::warning(issue_codes::LINT_ST_012, "Consecutive semicolons detected.")
@@ -37,9 +38,20 @@ impl LintRule for StructureConsecutiveSemicolons {
     }
 }
 
-fn sql_has_consecutive_semicolons(sql: &str, dialect: Dialect) -> bool {
-    let Some(tokens) = tokenize_with_offsets(sql, dialect) else {
-        return false;
+fn sql_has_consecutive_semicolons(
+    sql: &str,
+    dialect: Dialect,
+    tokens: Option<&[LocatedToken]>,
+) -> bool {
+    let owned_tokens;
+    let tokens = if let Some(tokens) = tokens {
+        tokens
+    } else {
+        owned_tokens = match tokenize_with_offsets(sql, dialect) {
+            Some(tokens) => tokens,
+            None => return false,
+        };
+        &owned_tokens
     };
 
     let mut previous_semicolon_end = None;
@@ -96,6 +108,33 @@ fn tokenize_with_offsets(sql: &str, dialect: Dialect) -> Option<Vec<LocatedToken
     Some(out)
 }
 
+fn tokenize_with_offsets_for_context(ctx: &LintContext) -> Option<Vec<LocatedToken>> {
+    let tokens = ctx.with_document_tokens(|tokens| {
+        if tokens.is_empty() {
+            return None;
+        }
+
+        Some(
+            tokens
+                .iter()
+                .filter_map(|token| {
+                    token_with_span_offsets(ctx.sql, token).map(|(start, end)| LocatedToken {
+                        token: token.token.clone(),
+                        start,
+                        end,
+                    })
+                })
+                .collect::<Vec<_>>(),
+        )
+    });
+
+    if let Some(tokens) = tokens {
+        return Some(tokens);
+    }
+
+    tokenize_with_offsets(ctx.sql, ctx.dialect())
+}
+
 fn is_trivia_token(token: &Token) -> bool {
     matches!(
         token,
@@ -131,6 +170,20 @@ fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
     }
 
     None
+}
+
+fn token_with_span_offsets(sql: &str, token: &TokenWithSpan) -> Option<(usize, usize)> {
+    let start = line_col_to_offset(
+        sql,
+        token.span.start.line as usize,
+        token.span.start.column as usize,
+    )?;
+    let end = line_col_to_offset(
+        sql,
+        token.span.end.line as usize,
+        token.span.end.column as usize,
+    )?;
+    Some((start, end))
 }
 
 #[cfg(test)]
@@ -221,8 +274,8 @@ mod tests {
     #[test]
     fn mysql_hash_comment_is_treated_as_trivia() {
         let sql = "SELECT 1; # dialect-specific comment\n;";
-        assert!(!sql_has_consecutive_semicolons(sql, Dialect::Generic));
-        assert!(sql_has_consecutive_semicolons(sql, Dialect::Mysql));
+        assert!(!sql_has_consecutive_semicolons(sql, Dialect::Generic, None));
+        assert!(sql_has_consecutive_semicolons(sql, Dialect::Mysql, None));
 
         let issues = run_in_dialect(sql, Dialect::Mysql);
         assert_eq!(issues.len(), 1);
