@@ -61,6 +61,8 @@ struct LocatedToken {
     token: Token,
     start: usize,
     end: usize,
+    start_line: usize,
+    end_line: usize,
 }
 
 fn has_misplaced_cte_closing_bracket_for_statement(
@@ -119,7 +121,7 @@ fn has_misplaced_cte_closing_bracket_in_query(
             continue;
         }
         if cte_body_has_line_break(tokens, sql, open_idx, close_idx)
-            && !line_prefix_before(sql, body_end).trim().is_empty()
+            && has_non_spacing_tokens_before_on_same_line(tokens, close_idx)
         {
             return Some(true);
         }
@@ -178,6 +180,8 @@ fn tokenize_with_offsets(sql: &str, dialect: Dialect) -> Option<Vec<LocatedToken
             token: token.token,
             start,
             end,
+            start_line: token.span.start.line as usize,
+            end_line: token.span.end.line as usize,
         });
     }
 
@@ -206,6 +210,8 @@ fn tokenize_with_offsets_for_context(ctx: &LintContext) -> Option<Vec<LocatedTok
                         token: token.token.clone(),
                         start: start - statement_start,
                         end: end - statement_start,
+                        start_line: token.span.start.line as usize,
+                        end_line: token.span.end.line as usize,
                     })
                 })
                 .collect::<Vec<_>>(),
@@ -317,7 +323,7 @@ fn has_misplaced_cte_closing_bracket(
         if body_start < body_end
             && body_end <= sql.len()
             && cte_body_has_line_break(tokens, sql, open_idx, close_idx)
-            && !line_prefix_before(sql, body_end).trim().is_empty()
+            && has_non_spacing_tokens_before_on_same_line(tokens, close_idx)
         {
             return true;
         }
@@ -326,11 +332,6 @@ fn has_misplaced_cte_closing_bracket(
     }
 
     false
-}
-
-fn line_prefix_before(sql: &str, idx: usize) -> &str {
-    let line_start = sql[..idx].rfind('\n').map_or(0, |pos| pos + 1);
-    &sql[line_start..idx]
 }
 
 fn cte_body_has_line_break(
@@ -348,6 +349,28 @@ fn cte_body_has_line_break(
         .take(close_idx)
         .skip(open_idx + 1)
         .any(|token| token.end <= sql.len() && count_line_breaks(&sql[token.start..token.end]) > 0)
+}
+
+fn has_non_spacing_tokens_before_on_same_line(tokens: &[LocatedToken], close_idx: usize) -> bool {
+    let Some(close) = tokens.get(close_idx) else {
+        return false;
+    };
+    let line = close.start_line;
+
+    for token in tokens[..close_idx].iter().rev() {
+        if token.end_line < line {
+            break;
+        }
+        if token.start_line != line {
+            continue;
+        }
+        if is_spacing_whitespace(&token.token) {
+            continue;
+        }
+        return true;
+    }
+
+    false
 }
 
 fn find_next_as_keyword(tokens: &[LocatedToken], mut index: usize) -> Option<usize> {
@@ -401,6 +424,13 @@ fn is_trivia_token(token: &Token) -> bool {
         Token::Whitespace(Whitespace::Space | Whitespace::Tab | Whitespace::Newline)
             | Token::Whitespace(Whitespace::SingleLineComment { .. })
             | Token::Whitespace(Whitespace::MultiLineComment(_))
+    )
+}
+
+fn is_spacing_whitespace(token: &Token) -> bool {
+    matches!(
+        token,
+        Token::Whitespace(Whitespace::Space | Whitespace::Tab | Whitespace::Newline)
     )
 }
 
@@ -473,5 +503,13 @@ mod tests {
             Dialect::Generic,
             None
         ));
+    }
+
+    #[test]
+    fn flags_close_paren_when_comment_precedes_on_same_line() {
+        let sql = "WITH cte AS (\n  SELECT 1 /* trailing comment */)\nSELECT * FROM cte";
+        let issues = run(sql);
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_LT_007);
     }
 }

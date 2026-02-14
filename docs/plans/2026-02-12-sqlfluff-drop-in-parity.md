@@ -226,6 +226,7 @@ This plan covers three axes:
   - `LT_007` closing-bracket checks are now AST-first (`Query.with.cte_tables` closing-paren metadata) with tokenizer-span matching for multiline close placement, and now use tokenizer fallback scanning (raw byte fallback removed) when AST/token span mapping is unavailable.
   - `LT_007` now consumes the shared document token stream for statement tokenization before fallback tokenization (templated-source fallback preserved).
   - `LT_007` multiline CTE-body detection now derives from token spans between CTE parens (CRLF/CR/LF-aware) instead of direct body-slice newline checks.
+  - `LT_007` close-bracket own-line checks now derive from token-line content before the closing `)` (instead of raw line-prefix trimming).
   - `LT_008` moved from parity handling to a dedicated core rule module (`lt_008.rs`).
   - `LT_008` was further upgraded from raw byte/state scanning to AST/token-aware CTE suffix analysis using `Query.with.cte_tables` closing-paren tokens plus tokenizer span traversal for blank-line detection, consuming the shared document token stream before fallback tokenization.
   - `LT_009` moved from parity handling to a dedicated core rule module (`lt_009.rs`).
