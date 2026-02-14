@@ -172,6 +172,16 @@ pub fn apply_lint_fixes_with_lint_config(
     let after_counts = lint_rule_counts(&fixed_sql, dialect, lint_config);
     let counts = FixCounts::from_removed(&before_counts, &after_counts);
 
+    if parse_errors_increased(&before_counts, &after_counts) {
+        return Ok(FixOutcome {
+            sql: sql.to_string(),
+            counts: FixCounts::default(),
+            changed: false,
+            skipped_due_to_comments: false,
+            skipped_due_to_regression: true,
+        });
+    }
+
     if counts.total() == 0 {
         // Regression guard: no rules improved. Flag as regression if total violations
         // actually increased (text-fix side effects introduced new violations).
@@ -333,11 +343,25 @@ fn lint_rule_counts(
     for issue in analyze(&request)
         .issues
         .into_iter()
-        .filter(|issue| issue.code.starts_with("LINT_"))
+        .filter(|issue| issue.code.starts_with("LINT_") || issue.code == issue_codes::PARSE_ERROR)
     {
         *counts.entry(issue.code).or_insert(0usize) += 1;
     }
     counts
+}
+
+fn parse_errors_increased(
+    before_counts: &BTreeMap<String, usize>,
+    after_counts: &BTreeMap<String, usize>,
+) -> bool {
+    after_counts
+        .get(issue_codes::PARSE_ERROR)
+        .copied()
+        .unwrap_or(0)
+        > before_counts
+            .get(issue_codes::PARSE_ERROR)
+            .copied()
+            .unwrap_or(0)
 }
 
 fn apply_text_fixes(sql: &str, rule_filter: &RuleFilter) -> String {
@@ -1084,19 +1108,153 @@ fn fix_table_alias_keywords(sql: &str) -> String {
 }
 
 fn fix_subquery_to_cte(sql: &str) -> String {
-    let re = Regex::new(
-        r"(?is)\bselect\s+\*\s+from\s+\(\s*(select\s+[^)]*)\)\s+(?:as\s+)?([A-Za-z_][A-Za-z0-9_]*)\b",
-    )
-    .expect("valid fix regex");
-    let Some(caps) = re.captures(sql) else {
+    let prefix = Regex::new(r"(?is)^\s*select\s+\*\s+from\s+\(").expect("valid fix regex");
+    let Some(prefix_match) = prefix.find(sql) else {
         return sql.to_string();
     };
-    let subquery = caps.get(1).map(|m| m.as_str()).unwrap_or_default().trim();
-    let alias = caps.get(2).map(|m| m.as_str()).unwrap_or_default();
-    if subquery.is_empty() || alias.is_empty() {
+    let open_paren_idx = prefix_match.end() - 1;
+    let Some(close_paren_idx) = find_matching_parenthesis_outside_quotes(sql, open_paren_idx)
+    else {
+        return sql.to_string();
+    };
+
+    let subquery = sql[open_paren_idx + 1..close_paren_idx].trim();
+    if !subquery.to_ascii_lowercase().starts_with("select") {
         return sql.to_string();
     }
-    format!("WITH {alias} AS ({subquery}) SELECT * FROM {alias}")
+
+    let suffix = &sql[close_paren_idx + 1..];
+    let alias_re = Regex::new(r"(?is)^\s*(?:as\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*;?\s*$")
+        .expect("valid fix regex");
+    let Some(alias_caps) = alias_re.captures(suffix) else {
+        return sql.to_string();
+    };
+    let alias = alias_caps
+        .get(1)
+        .map(|m| m.as_str())
+        .unwrap_or_default()
+        .trim();
+    if alias.is_empty() {
+        return sql.to_string();
+    }
+
+    let mut rewritten = format!("WITH {alias} AS ({subquery}) SELECT * FROM {alias}");
+    if suffix.trim_end().ends_with(';') {
+        rewritten.push(';');
+    }
+    rewritten
+}
+
+fn find_matching_parenthesis_outside_quotes(sql: &str, open_paren_idx: usize) -> Option<usize> {
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum Mode {
+        Outside,
+        SingleQuote,
+        DoubleQuote,
+        BacktickQuote,
+        BracketQuote,
+    }
+
+    let bytes = sql.as_bytes();
+    if open_paren_idx >= bytes.len() || bytes[open_paren_idx] != b'(' {
+        return None;
+    }
+
+    let mut depth = 0usize;
+    let mut mode = Mode::Outside;
+    let mut i = open_paren_idx;
+
+    while i < bytes.len() {
+        let b = bytes[i];
+        let next = bytes.get(i + 1).copied();
+
+        match mode {
+            Mode::Outside => {
+                if b == b'\'' {
+                    mode = Mode::SingleQuote;
+                    i += 1;
+                    continue;
+                }
+                if b == b'"' {
+                    mode = Mode::DoubleQuote;
+                    i += 1;
+                    continue;
+                }
+                if b == b'`' {
+                    mode = Mode::BacktickQuote;
+                    i += 1;
+                    continue;
+                }
+                if b == b'[' {
+                    mode = Mode::BracketQuote;
+                    i += 1;
+                    continue;
+                }
+                if b == b'(' {
+                    depth += 1;
+                    i += 1;
+                    continue;
+                }
+                if b == b')' {
+                    depth = depth.checked_sub(1)?;
+                    if depth == 0 {
+                        return Some(i);
+                    }
+                }
+                i += 1;
+            }
+            Mode::SingleQuote => {
+                if b == b'\'' {
+                    if next == Some(b'\'') {
+                        i += 2;
+                    } else {
+                        mode = Mode::Outside;
+                        i += 1;
+                    }
+                } else {
+                    i += 1;
+                }
+            }
+            Mode::DoubleQuote => {
+                if b == b'"' {
+                    if next == Some(b'"') {
+                        i += 2;
+                    } else {
+                        mode = Mode::Outside;
+                        i += 1;
+                    }
+                } else {
+                    i += 1;
+                }
+            }
+            Mode::BacktickQuote => {
+                if b == b'`' {
+                    if next == Some(b'`') {
+                        i += 2;
+                    } else {
+                        mode = Mode::Outside;
+                        i += 1;
+                    }
+                } else {
+                    i += 1;
+                }
+            }
+            Mode::BracketQuote => {
+                if b == b']' {
+                    if next == Some(b']') {
+                        i += 2;
+                    } else {
+                        mode = Mode::Outside;
+                        i += 1;
+                    }
+                } else {
+                    i += 1;
+                }
+            }
+        }
+    }
+
+    None
 }
 
 fn fix_mixed_reference_qualification(sql: &str) -> String {
@@ -2512,6 +2670,32 @@ mod tests {
         counts.get(code)
     }
 
+    #[test]
+    fn lint_rule_counts_includes_parse_errors() {
+        let counts = lint_rule_counts("SELECT (", Dialect::Generic, &default_lint_config());
+        assert!(
+            counts.get(issue_codes::PARSE_ERROR).copied().unwrap_or(0) > 0,
+            "invalid SQL should contribute PARSE_ERROR to regression counts"
+        );
+    }
+
+    #[test]
+    fn parse_error_regression_is_detected_even_with_lint_improvements() {
+        let before = std::collections::BTreeMap::from([(issue_codes::LINT_ST_005.to_string(), 1)]);
+        let after = std::collections::BTreeMap::from([(issue_codes::PARSE_ERROR.to_string(), 1)]);
+        let removed = FixCounts::from_removed(&before, &after);
+
+        assert_eq!(
+            removed.total(),
+            1,
+            "lint-only comparison can still look improved"
+        );
+        assert!(
+            parse_errors_increased(&before, &after),
+            "introduced parse errors must force regression"
+        );
+    }
+
     fn assert_rule_case(
         sql: &str,
         code: &str,
@@ -3460,6 +3644,28 @@ mod tests {
             fixed.to_ascii_uppercase().contains("WITH SUB AS"),
             "expected CTE rewrite, got: {fixed}"
         );
+    }
+
+    #[test]
+    fn subquery_to_cte_text_fix_handles_nested_parentheses() {
+        let fixed = fix_subquery_to_cte("SELECT * FROM (SELECT COUNT(*) FROM t) sub");
+        assert_eq!(
+            fixed,
+            "WITH sub AS (SELECT COUNT(*) FROM t) SELECT * FROM sub"
+        );
+        parse_sql_with_dialect(&fixed, Dialect::Generic).expect("fixed SQL should parse");
+    }
+
+    #[test]
+    fn lint_fix_subquery_with_function_call_is_parseable() {
+        let sql = "SELECT * FROM (SELECT COUNT(*) FROM t) sub";
+        let out = apply_lint_fixes(sql, Dialect::Generic, &[]).expect("fix result");
+        assert!(
+            !out.skipped_due_to_regression,
+            "function-call subquery rewrite should not be treated as regression: {}",
+            out.sql
+        );
+        parse_sql_with_dialect(&out.sql, Dialect::Generic).expect("fixed SQL should parse");
     }
 
     #[test]
