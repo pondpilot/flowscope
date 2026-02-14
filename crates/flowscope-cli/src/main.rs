@@ -388,11 +388,43 @@ fn parse_rule_configs_json(
         .ok_or_else(|| anyhow::anyhow!("--rule-configs must be a JSON object"))?;
 
     let mut rule_configs = std::collections::BTreeMap::new();
+    let mut indentation_legacy = serde_json::Map::new();
     for (rule_ref, options) in object {
-        if !options.is_object() {
-            anyhow::bail!("--rule-configs entry for '{rule_ref}' must be a JSON object");
+        if options.is_object() {
+            rule_configs.insert(rule_ref.clone(), options.clone());
+            continue;
         }
-        rule_configs.insert(rule_ref.clone(), options.clone());
+
+        // SQLFluff compatibility: allow flat indentation keys at the root of
+        // --rule-configs (e.g., {"indent_unit":"tab","tab_space_size":2}).
+        if matches!(
+            rule_ref.to_ascii_lowercase().as_str(),
+            "indent_unit" | "tab_space_size" | "indented_joins" | "indented_using_on"
+        ) {
+            indentation_legacy.insert(rule_ref.clone(), options.clone());
+            continue;
+        }
+
+        anyhow::bail!("--rule-configs entry for '{rule_ref}' must be a JSON object");
+    }
+
+    if !indentation_legacy.is_empty() {
+        let merged = match rule_configs.remove("indentation") {
+            Some(serde_json::Value::Object(existing)) => {
+                let mut merged = existing;
+                for (key, value) in indentation_legacy {
+                    merged.insert(key, value);
+                }
+                merged
+            }
+            Some(other) => {
+                anyhow::bail!(
+                    "--rule-configs entry for 'indentation' must be a JSON object, found {other}"
+                );
+            }
+            None => indentation_legacy,
+        };
+        rule_configs.insert("indentation".to_string(), serde_json::Value::Object(merged));
     }
 
     Ok(rule_configs)
@@ -790,5 +822,26 @@ mod tests {
         assert!(err
             .to_string()
             .contains("entry for 'structure.subquery' must be a JSON object"));
+    }
+
+    #[test]
+    fn parse_rule_configs_json_accepts_flat_indentation_legacy_keys() {
+        let parsed = parse_rule_configs_json(Some(r#"{"indent_unit":"tab","tab_space_size":2}"#))
+            .expect("parse rule configs");
+
+        let indentation = parsed
+            .get("indentation")
+            .and_then(serde_json::Value::as_object)
+            .expect("indentation object");
+        assert_eq!(
+            indentation.get("indent_unit").and_then(serde_json::Value::as_str),
+            Some("tab")
+        );
+        assert_eq!(
+            indentation
+                .get("tab_space_size")
+                .and_then(serde_json::Value::as_u64),
+            Some(2)
+        );
     }
 }

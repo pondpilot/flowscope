@@ -85,9 +85,36 @@ impl LintConfig {
             .collect()
     }
 
+    /// Returns an object for a named top-level config section.
+    pub fn config_section_object(
+        &self,
+        section: &str,
+    ) -> Option<&serde_json::Map<String, serde_json::Value>> {
+        self.rule_configs
+            .iter()
+            .find_map(|(rule_ref, value)| rule_ref.eq_ignore_ascii_case(section).then_some(value))
+            .and_then(serde_json::Value::as_object)
+    }
+
+    /// Returns a string option from a named top-level config section.
+    pub fn section_option_str(&self, section: &str, key: &str) -> Option<&str> {
+        self.config_section_object(section)?.get(key)?.as_str()
+    }
+
+    /// Returns a boolean option from a named top-level config section.
+    pub fn section_option_bool(&self, section: &str, key: &str) -> Option<bool> {
+        self.config_section_object(section)?.get(key)?.as_bool()
+    }
+
+    /// Returns an unsigned integer option from a named top-level config section.
+    pub fn section_option_usize(&self, section: &str, key: &str) -> Option<usize> {
+        let value = self.config_section_object(section)?.get(key)?.as_u64()?;
+        usize::try_from(value).ok()
+    }
+
     /// Returns a boolean option from the top-level SQLFluff `core` config map.
     pub fn core_option_bool(&self, key: &str) -> Option<bool> {
-        self.core_config_object()?.get(key)?.as_bool()
+        self.section_option_bool("core", key)
     }
 
     fn matching_rule_config_value(&self, code: &str) -> Option<&serde_json::Value> {
@@ -98,12 +125,6 @@ impl LintConfig {
         })
     }
 
-    fn core_config_object(&self) -> Option<&serde_json::Map<String, serde_json::Value>> {
-        self.rule_configs
-            .iter()
-            .find_map(|(rule_ref, value)| rule_ref.eq_ignore_ascii_case("core").then_some(value))
-            .and_then(serde_json::Value::as_object)
-    }
 }
 
 /// Canonicalizes a user-facing rule spec to a canonical `LINT_*` code.
@@ -616,5 +637,26 @@ mod tests {
         };
 
         assert_eq!(config.core_option_bool("ignore_templated_areas"), Some(true));
+    }
+
+    #[test]
+    fn section_options_resolve_case_insensitively() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: BTreeMap::from([(
+                "INDENTATION".to_string(),
+                serde_json::json!({"indent_unit": "tab", "tab_space_size": 2}),
+            )]),
+        };
+
+        assert_eq!(
+            config.section_option_str("indentation", "indent_unit"),
+            Some("tab")
+        );
+        assert_eq!(
+            config.section_option_usize("indentation", "tab_space_size"),
+            Some(2)
+        );
     }
 }

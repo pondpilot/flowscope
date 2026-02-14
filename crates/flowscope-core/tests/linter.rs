@@ -2780,6 +2780,18 @@ fn lint_lt_007_cte_bracket_missing() {
 }
 
 #[test]
+fn lint_lt_002_first_line_indented() {
+    let issues = run_lint("    SELECT 1");
+    assert!(
+        issues
+            .iter()
+            .any(|(code, _)| code == issue_codes::LINT_LT_002),
+        "expected {} for first-line indentation: {issues:?}",
+        issue_codes::LINT_LT_002,
+    );
+}
+
+#[test]
 #[cfg(feature = "templating")]
 fn lint_lt_007_jinja_whitespace_consumption_expression_on_own_line_passes() {
     let sql = "with cte as (\n    select 1\n    {{- ' from i_consume_whitespace ' -}}\n) select * from cte";
