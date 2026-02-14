@@ -79,7 +79,7 @@ impl LintRule for UnusedCte {
                 }
 
                 let stmt_sql = ctx.statement_sql();
-                let span = find_cte_name_span(stmt_sql, &cte.alias.name.value, ctx);
+                let span = find_cte_name_span(&cte.alias.name, stmt_sql, ctx);
                 let mut issue = Issue::warning(
                     issue_codes::LINT_ST_003,
                     format!(
@@ -325,10 +325,43 @@ fn collect_join_constraint_refs(join_operator: &JoinOperator, refs: &mut HashSet
     }
 }
 
-fn find_cte_name_span(stmt_sql: &str, name: &str, ctx: &LintContext) -> Option<crate::types::Span> {
+fn find_cte_name_span(
+    name: &Ident,
+    stmt_sql: &str,
+    ctx: &LintContext,
+) -> Option<crate::types::Span> {
+    if let Some(span) = ident_span_in_statement(name, ctx) {
+        return Some(span);
+    }
+
     use crate::analyzer::helpers::find_cte_definition_span;
-    find_cte_definition_span(stmt_sql, name, 0)
+    find_cte_definition_span(stmt_sql, &name.value, 0)
         .map(|s| ctx.span_from_statement_offset(s.start, s.end))
+}
+
+fn ident_span_in_statement(name: &Ident, ctx: &LintContext) -> Option<crate::types::Span> {
+    use crate::analyzer::helpers::line_col_to_offset;
+
+    let start = line_col_to_offset(
+        ctx.sql,
+        name.span.start.line as usize,
+        name.span.start.column as usize,
+    )?;
+    let end = line_col_to_offset(
+        ctx.sql,
+        name.span.end.line as usize,
+        name.span.end.column as usize,
+    )?;
+
+    if start >= end {
+        return None;
+    }
+
+    if start < ctx.statement_range.start || end > ctx.statement_range.end {
+        return None;
+    }
+
+    Some(crate::types::Span::new(start, end))
 }
 
 #[cfg(test)]
@@ -357,6 +390,14 @@ mod tests {
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, "LINT_ST_003");
         assert!(issues[0].message.contains("unused"));
+    }
+
+    #[test]
+    fn test_unused_cte_span_matches_cte_name() {
+        let sql = "WITH unused AS (SELECT 1) SELECT 2";
+        let issues = check_sql(sql);
+        let span = issues[0].span.expect("span");
+        assert_eq!(&sql[span.start..span.end], "unused");
     }
 
     #[test]
