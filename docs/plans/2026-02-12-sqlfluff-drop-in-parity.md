@@ -214,12 +214,12 @@ This plan covers three axes:
   - `CP_002` moved from parity handling to a dedicated core rule module (`cp_002.rs`).
   - `CP_003` moved from parity handling to a dedicated core rule module (`cp_003.rs`).
   - `CP_004` moved from parity handling to a dedicated core rule module (`cp_004.rs`).
-  - `CP_004` was further upgraded from regex masking to tokenizer-driven literal-token collection (`NULL`/`TRUE`/`FALSE`), reducing string/comment false positives.
+  - `CP_004` was further upgraded from regex masking to active-dialect tokenizer-driven literal-token collection (`NULL`/`TRUE`/`FALSE`), reducing string/comment false positives.
   - `CP_005` moved from parity handling to a dedicated core rule module (`cp_005.rs`).
-  - `CP_001` was further upgraded from regex masking to tokenizer-driven tracked-keyword collection.
+  - `CP_001` was further upgraded from regex masking to active-dialect tokenizer-driven tracked-keyword collection.
   - `CP_002` was further upgraded from regex masking to AST identifier-candidate traversal.
-  - `CP_003` was further upgraded from regex scanning to token-stream function-call detection.
-  - `CP_005` was further upgraded from regex masking to tokenizer-driven type-keyword collection.
+  - `CP_003` was further upgraded from regex scanning to active-dialect token-stream function-call detection.
+  - `CP_005` was further upgraded from regex masking to active-dialect tokenizer-driven type-keyword collection.
   - `CP_001` now supports `capitalisation_policy` / `ignore_words` / `ignore_words_regex` through `lint.ruleConfigs`.
   - `CP_002`-`CP_005` now support `extended_capitalisation_policy` / `ignore_words` / `ignore_words_regex` through `lint.ruleConfigs`; `CP_002` additionally supports SQLFluff-style `unquoted_identifiers_policy`.
   - `CP_002` consistent-policy handling now aligns closer to SQLFluff ambiguity behavior by evaluating shared style compatibility (`upper`/`lower`/`capitalise`) across identifier tokens, allowing single-letter ambiguous forms like `A` to align with capitalised tokens.

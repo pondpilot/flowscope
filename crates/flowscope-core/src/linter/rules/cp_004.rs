@@ -7,10 +7,9 @@ use std::collections::HashSet;
 
 use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
-use crate::types::{issue_codes, Issue};
+use crate::types::{issue_codes, Dialect, Issue};
 use regex::Regex;
 use sqlparser::ast::Statement;
-use sqlparser::dialect::GenericDialect;
 use sqlparser::tokenizer::{Token, Tokenizer};
 
 use super::capitalisation_policy_helpers::{
@@ -67,6 +66,7 @@ impl LintRule for CapitalisationLiterals {
                 ctx.statement_sql(),
                 &self.ignore_words,
                 self.ignore_words_regex.as_ref(),
+                ctx.dialect(),
             ),
             self.policy,
         ) {
@@ -85,9 +85,10 @@ fn literal_tokens(
     sql: &str,
     ignore_words: &HashSet<String>,
     ignore_words_regex: Option<&Regex>,
+    dialect: Dialect,
 ) -> Vec<String> {
-    let dialect = GenericDialect {};
-    let mut tokenizer = Tokenizer::new(&dialect, sql);
+    let dialect = dialect.to_sqlparser_dialect();
+    let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
     let Ok(tokens) = tokenizer.tokenize() else {
         return Vec::new();
     };
