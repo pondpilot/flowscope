@@ -6,7 +6,7 @@
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Dialect, Issue};
 use sqlparser::ast::Statement;
-use sqlparser::tokenizer::{Token, Tokenizer, Whitespace};
+use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
 
 pub struct LayoutEndOfFile;
 
@@ -29,7 +29,7 @@ impl LintRule for LayoutEndOfFile {
             .trim_end_matches(|ch: char| ch.is_ascii_whitespace())
             .len();
         let is_last_statement = ctx.statement_range.end >= content_end;
-        let trailing_newlines = trailing_newline_count_tokenized(ctx.sql, ctx.dialect());
+        let trailing_newlines = trailing_newline_count_tokenized(ctx);
         let has_violation = is_last_statement && ctx.sql.contains('\n') && trailing_newlines != 1;
 
         if has_violation {
@@ -50,22 +50,22 @@ struct LocatedToken {
     end: usize,
 }
 
-fn trailing_newline_count_tokenized(sql: &str, dialect: Dialect) -> usize {
-    let tokens = tokenize_with_offsets(sql, dialect);
+fn trailing_newline_count_tokenized(ctx: &LintContext) -> usize {
+    let tokens = tokenize_with_offsets_for_context(ctx)
+        .or_else(|| tokenize_with_offsets(ctx.sql, ctx.dialect()))
+        .unwrap_or_default();
     let content_end = tokens
         .iter()
         .rev()
         .find(|token| !is_whitespace_token(&token.token))
         .map_or(0, |token| token.end);
-    trailing_newline_count(&sql[content_end..])
+    trailing_newline_count(&ctx.sql[content_end..])
 }
 
-fn tokenize_with_offsets(sql: &str, dialect: Dialect) -> Vec<LocatedToken> {
+fn tokenize_with_offsets(sql: &str, dialect: Dialect) -> Option<Vec<LocatedToken>> {
     let dialect = dialect.to_sqlparser_dialect();
     let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
-    let tokens = tokenizer
-        .tokenize_with_location()
-        .expect("statement tokenization should mirror the successful parser run");
+    let tokens = tokenizer.tokenize_with_location().ok()?;
 
     let mut out = Vec::with_capacity(tokens.len());
     for token in tokens {
@@ -81,7 +81,27 @@ fn tokenize_with_offsets(sql: &str, dialect: Dialect) -> Vec<LocatedToken> {
             end,
         });
     }
-    out
+    Some(out)
+}
+
+fn tokenize_with_offsets_for_context(ctx: &LintContext) -> Option<Vec<LocatedToken>> {
+    ctx.with_document_tokens(|tokens| {
+        if tokens.is_empty() {
+            return None;
+        }
+
+        Some(
+            tokens
+                .iter()
+                .filter_map(|token| {
+                    token_with_span_offsets(ctx.sql, token).map(|(_start, end)| LocatedToken {
+                        token: token.token.clone(),
+                        end,
+                    })
+                })
+                .collect(),
+        )
+    })
 }
 
 fn is_whitespace_token(token: &Token) -> bool {
@@ -117,6 +137,20 @@ fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
     }
 
     None
+}
+
+fn token_with_span_offsets(sql: &str, token: &TokenWithSpan) -> Option<(usize, usize)> {
+    let start = line_col_to_offset(
+        sql,
+        token.span.start.line as usize,
+        token.span.start.column as usize,
+    )?;
+    let end = line_col_to_offset(
+        sql,
+        token.span.end.line as usize,
+        token.span.end.column as usize,
+    )?;
+    Some((start, end))
 }
 
 fn trailing_newline_count(sql: &str) -> usize {

@@ -5,7 +5,7 @@
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Dialect, Issue};
 use sqlparser::ast::Statement;
-use sqlparser::tokenizer::{Token, Tokenizer, Whitespace};
+use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
 
 pub struct LayoutStartOfFile;
 
@@ -23,8 +23,7 @@ impl LintRule for LayoutStartOfFile {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let has_violation =
-            ctx.statement_index == 0 && has_leading_blank_lines(ctx.sql, ctx.dialect());
+        let has_violation = ctx.statement_index == 0 && has_leading_blank_lines_for_context(ctx);
         if has_violation {
             vec![Issue::info(
                 issue_codes::LINT_LT_013,
@@ -37,6 +36,22 @@ impl LintRule for LayoutStartOfFile {
     }
 }
 
+fn has_leading_blank_lines_for_context(ctx: &LintContext) -> bool {
+    let from_document_tokens = ctx.with_document_tokens(|tokens| {
+        if tokens.is_empty() {
+            None
+        } else {
+            Some(has_leading_blank_lines_in_tokens(tokens))
+        }
+    });
+
+    if let Some(has_violation) = from_document_tokens {
+        return has_violation;
+    }
+
+    has_leading_blank_lines(ctx.sql, ctx.dialect())
+}
+
 fn has_leading_blank_lines(sql: &str, dialect: Dialect) -> bool {
     let dialect = dialect.to_sqlparser_dialect();
     let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
@@ -46,6 +61,20 @@ fn has_leading_blank_lines(sql: &str, dialect: Dialect) -> bool {
 
     for token in tokens {
         match token {
+            Token::Whitespace(Whitespace::Space | Whitespace::Tab) => continue,
+            Token::Whitespace(Whitespace::Newline) => return true,
+            Token::Whitespace(Whitespace::SingleLineComment { .. })
+            | Token::Whitespace(Whitespace::MultiLineComment(_)) => return false,
+            _ => return false,
+        }
+    }
+
+    false
+}
+
+fn has_leading_blank_lines_in_tokens(tokens: &[TokenWithSpan]) -> bool {
+    for token in tokens {
+        match &token.token {
             Token::Whitespace(Whitespace::Space | Whitespace::Tab) => continue,
             Token::Whitespace(Whitespace::Newline) => return true,
             Token::Whitespace(Whitespace::SingleLineComment { .. })
