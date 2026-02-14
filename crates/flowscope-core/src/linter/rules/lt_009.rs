@@ -6,7 +6,7 @@
 use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::linter::rules::semantic_helpers::visit_selects_in_statement;
-use crate::types::{issue_codes, Issue};
+use crate::types::{issue_codes, Dialect, Issue};
 use sqlparser::ast::{SelectItem, Statement};
 use sqlparser::keywords::Keyword;
 use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer};
@@ -65,17 +65,22 @@ impl LintRule for LayoutSelectTargets {
     }
 
     fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        lt09_violation_spans(statement, ctx.statement_sql(), self.wildcard_policy)
-            .into_iter()
-            .map(|(start, end)| {
-                Issue::info(
-                    issue_codes::LINT_LT_009,
-                    "Select targets should be on a new line unless there is only one target.",
-                )
-                .with_statement(ctx.statement_index)
-                .with_span(ctx.span_from_statement_offset(start, end))
-            })
-            .collect()
+        lt09_violation_spans(
+            statement,
+            ctx.statement_sql(),
+            self.wildcard_policy,
+            ctx.dialect(),
+        )
+        .into_iter()
+        .map(|(start, end)| {
+            Issue::info(
+                issue_codes::LINT_LT_009,
+                "Select targets should be on a new line unless there is only one target.",
+            )
+            .with_statement(ctx.statement_index)
+            .with_span(ctx.span_from_statement_offset(start, end))
+        })
+        .collect()
     }
 }
 
@@ -96,9 +101,10 @@ fn lt09_violation_spans(
     statement: &Statement,
     sql: &str,
     wildcard_policy: WildcardPolicy,
+    dialect: Dialect,
 ) -> Vec<(usize, usize)> {
-    let dialect = sqlparser::dialect::GenericDialect {};
-    let mut tokenizer = Tokenizer::new(&dialect, sql);
+    let dialect = dialect.to_sqlparser_dialect();
+    let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
     let Ok(tokens) = tokenizer.tokenize_with_location() else {
         return Vec::new();
     };

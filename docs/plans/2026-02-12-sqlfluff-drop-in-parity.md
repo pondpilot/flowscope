@@ -60,10 +60,10 @@ This plan covers three axes:
   - `AL_004` now supports quote-aware `alias_case_check` through `lint.ruleConfigs`.
   - `AL_004` `alias_case_check` now aligns closer to SQLFluff mode semantics for `quoted_cs_naked_upper` and `quoted_cs_naked_lower` (quoted aliases case-sensitive; naked aliases case-folded per configured mode).
   - `AL_001` moved from parity into a dedicated core rule module (`al_001.rs`) and parity registration was removed.
-  - `AL_001` was further upgraded to AST-driven table-factor alias traversal with token-aware `AS` detection.
+  - `AL_001` was further upgraded to AST-driven table-factor alias traversal with active-dialect token-aware `AS` detection.
   - `AL_001` now applies alias-style checks to `MERGE` target/source aliases (for example BigQuery `MERGE dataset.inventory t USING ... s`) for SQLFluff AL01 parity.
   - `AL_002` moved from parity into a dedicated core rule module (`al_002.rs`) and parity registration was removed.
-  - `AL_002` was further upgraded to AST-driven SELECT projection alias traversal with token-aware `AS` detection.
+  - `AL_002` was further upgraded to AST-driven SELECT projection alias traversal with active-dialect token-aware `AS` detection.
   - `AL_002` now excludes TSQL assignment-style projection aliases (`SELECT alias = expr`) from AL02 violations, matching SQLFluff behavior.
   - `AL_001`/`AL_002` now support SQLFluff-style `aliasing` mode (`explicit`/`implicit`) via `lint.ruleConfigs`.
   - `AL_008` moved from parity into a dedicated core AST rule (`al_008.rs`) and parity registration was removed.
@@ -202,7 +202,7 @@ This plan covers three axes:
   - `LT_008` moved from parity handling to a dedicated core rule module (`lt_008.rs`).
   - `LT_008` was further upgraded from raw byte/state scanning to AST/token-aware CTE suffix analysis using `Query.with.cte_tables` closing-paren tokens plus tokenizer span traversal for blank-line detection.
   - `LT_009` moved from parity handling to a dedicated core rule module (`lt_009.rs`).
-  - `LT_009` was further upgraded from regex masking to AST-backed SELECT target analysis with token-aware clause layout checks (single-target newline semantics, multi-target line separation, and `FROM`-line checks).
+  - `LT_009` was further upgraded from regex masking to AST-backed SELECT target analysis with active-dialect token-aware clause layout checks (single-target newline semantics, multi-target line separation, and `FROM`-line checks).
   - `LT_009` now supports `wildcard_policy` (`single`/`multiple`) through `lint.ruleConfigs`.
   - Supported-dialect SQLFluff layout fixture replay now reports zero mismatches for upgraded layout rules:
     - `LT05`: 55/55 cases matched (with replay mapping from SQLFluff `core.max_line_length` to `layout.long_lines.max_line_length`).

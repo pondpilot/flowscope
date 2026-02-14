@@ -4,7 +4,7 @@
 
 use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
-use crate::types::{issue_codes, Issue};
+use crate::types::{issue_codes, Dialect, Issue};
 use sqlparser::ast::{Ident, Query, SetExpr, Statement, TableFactor, TableWithJoins};
 use sqlparser::keywords::Keyword;
 use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
@@ -78,7 +78,7 @@ impl LintRule for AliasingTableStyle {
     }
 
     fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let alias_style = alias_style_index(ctx.statement_sql());
+        let alias_style = alias_style_index(ctx.statement_sql(), ctx.dialect());
         let mut issues = Vec::new();
 
         collect_table_aliases_in_statement(statement, &mut |alias| {
@@ -135,9 +135,9 @@ fn alias_occurrence_in_statement(
     (occurrence.end == rel_end).then_some(*occurrence)
 }
 
-fn alias_style_index(sql: &str) -> HashMap<usize, AliasOccurrence> {
-    let dialect = sqlparser::dialect::GenericDialect {};
-    let mut tokenizer = Tokenizer::new(&dialect, sql);
+fn alias_style_index(sql: &str, dialect: Dialect) -> HashMap<usize, AliasOccurrence> {
+    let dialect = dialect.to_sqlparser_dialect();
+    let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
     let Ok(tokens) = tokenizer.tokenize_with_location() else {
         return HashMap::new();
     };
