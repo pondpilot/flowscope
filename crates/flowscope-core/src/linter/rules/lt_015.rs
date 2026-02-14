@@ -90,20 +90,35 @@ fn trimmed_statement_range_and_sql<'a>(ctx: &'a LintContext) -> (Range<usize>, &
     }
 
     let statement_sql = ctx.statement_sql();
-    let mut start = 0usize;
-    while start < statement_sql.len() && statement_sql.as_bytes()[start].is_ascii_whitespace() {
-        start += 1;
-    }
-
-    let mut end = statement_sql.len();
-    while end > start && statement_sql.as_bytes()[end - 1].is_ascii_whitespace() {
-        end -= 1;
-    }
+    let (start, end) = trim_ascii_whitespace_bounds(statement_sql);
 
     (
         (ctx.statement_range.start + start)..(ctx.statement_range.start + end),
         &statement_sql[start..end],
     )
+}
+
+fn trim_ascii_whitespace_bounds(sql: &str) -> (usize, usize) {
+    let mut start = sql.len();
+    for (index, ch) in sql.char_indices() {
+        if !ch.is_ascii_whitespace() {
+            start = index;
+            break;
+        }
+    }
+    if start == sql.len() {
+        return (sql.len(), sql.len());
+    }
+
+    let mut end = start;
+    for (index, ch) in sql.char_indices().rev() {
+        if !ch.is_ascii_whitespace() {
+            end = index + ch.len_utf8();
+            break;
+        }
+    }
+
+    (start, end)
 }
 
 fn trimmed_statement_range_from_tokens(ctx: &LintContext) -> Option<Range<usize>> {
@@ -527,5 +542,11 @@ mod tests {
         let issues = run("SELECT 1\r\n\r\n\r\nFROM t");
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_LT_015);
+    }
+
+    #[test]
+    fn trim_ascii_whitespace_bounds_handles_all_whitespace_input() {
+        let (start, end) = trim_ascii_whitespace_bounds(" \t\r\n ");
+        assert_eq!((start, end), (5, 5));
     }
 }
