@@ -7,7 +7,7 @@ use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Dialect, Issue};
 use sqlparser::ast::{Query, Statement};
 use sqlparser::keywords::Keyword;
-use sqlparser::tokenizer::{Token, Tokenizer, Whitespace};
+use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
 
 pub struct LayoutCteBracket;
 
@@ -25,10 +25,20 @@ impl LintRule for LayoutCteBracket {
     }
 
     fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let has_violation = has_misplaced_cte_closing_bracket_for_statement(statement, ctx)
-            .unwrap_or_else(|| {
-                has_misplaced_cte_closing_bracket(ctx.statement_sql(), ctx.dialect())
-            });
+        let tokens = if has_template_markers(ctx.statement_sql()) {
+            None
+        } else {
+            tokenize_with_offsets_for_context(ctx)
+        };
+        let has_violation =
+            has_misplaced_cte_closing_bracket_for_statement(statement, ctx, tokens.as_deref())
+                .unwrap_or_else(|| {
+                    has_misplaced_cte_closing_bracket(
+                        ctx.statement_sql(),
+                        ctx.dialect(),
+                        tokens.as_deref(),
+                    )
+                });
 
         if has_violation {
             vec![Issue::warning(
@@ -42,6 +52,10 @@ impl LintRule for LayoutCteBracket {
     }
 }
 
+fn has_template_markers(sql: &str) -> bool {
+    sql.contains("{{") || sql.contains("{%") || sql.contains("{#")
+}
+
 #[derive(Clone)]
 struct LocatedToken {
     token: Token,
@@ -52,6 +66,7 @@ struct LocatedToken {
 fn has_misplaced_cte_closing_bracket_for_statement(
     statement: &Statement,
     ctx: &LintContext,
+    tokens: Option<&[LocatedToken]>,
 ) -> Option<bool> {
     let query = match statement {
         Statement::Query(query) => query.as_ref(),
@@ -59,13 +74,23 @@ fn has_misplaced_cte_closing_bracket_for_statement(
         _ => return None,
     };
 
-    has_misplaced_cte_closing_bracket_in_query(query, ctx)
+    has_misplaced_cte_closing_bracket_in_query(query, ctx, tokens)
 }
 
-fn has_misplaced_cte_closing_bracket_in_query(query: &Query, ctx: &LintContext) -> Option<bool> {
+fn has_misplaced_cte_closing_bracket_in_query(
+    query: &Query,
+    ctx: &LintContext,
+    tokens: Option<&[LocatedToken]>,
+) -> Option<bool> {
     let with = query.with.as_ref()?;
     let sql = ctx.statement_sql();
-    let tokens = tokenize_with_offsets(sql, ctx.dialect())?;
+    let owned_tokens;
+    let tokens = if let Some(tokens) = tokens {
+        tokens
+    } else {
+        owned_tokens = tokenize_with_offsets(sql, ctx.dialect())?;
+        &owned_tokens
+    };
 
     let mut evaluated_any = false;
 
@@ -159,12 +184,61 @@ fn tokenize_with_offsets(sql: &str, dialect: Dialect) -> Option<Vec<LocatedToken
     Some(out)
 }
 
+fn tokenize_with_offsets_for_context(ctx: &LintContext) -> Option<Vec<LocatedToken>> {
+    let statement_start = ctx.statement_range.start;
+    let from_document_tokens = ctx.with_document_tokens(|tokens| {
+        if tokens.is_empty() {
+            return None;
+        }
+
+        Some(
+            tokens
+                .iter()
+                .filter_map(|token| {
+                    let Some((start, end)) = token_with_span_offsets(ctx.sql, token) else {
+                        return None;
+                    };
+                    if start < ctx.statement_range.start || end > ctx.statement_range.end {
+                        return None;
+                    }
+
+                    Some(LocatedToken {
+                        token: token.token.clone(),
+                        start: start - statement_start,
+                        end: end - statement_start,
+                    })
+                })
+                .collect::<Vec<_>>(),
+        )
+    });
+
+    if let Some(tokens) = from_document_tokens {
+        return Some(tokens);
+    }
+
+    tokenize_with_offsets(ctx.statement_sql(), ctx.dialect())
+}
+
 fn token_start_offset(sql: &str, token: &sqlparser::tokenizer::TokenWithSpan) -> Option<usize> {
     line_col_to_offset(
         sql,
         token.span.start.line as usize,
         token.span.start.column as usize,
     )
+}
+
+fn token_with_span_offsets(sql: &str, token: &TokenWithSpan) -> Option<(usize, usize)> {
+    let start = line_col_to_offset(
+        sql,
+        token.span.start.line as usize,
+        token.span.start.column as usize,
+    )?;
+    let end = line_col_to_offset(
+        sql,
+        token.span.end.line as usize,
+        token.span.end.column as usize,
+    )?;
+    Some((start, end))
 }
 
 fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
@@ -195,10 +269,25 @@ fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
     None
 }
 
-fn has_misplaced_cte_closing_bracket(sql: &str, dialect: Dialect) -> bool {
-    let Some(tokens) = tokenize_with_offsets(sql, dialect) else {
-        return false;
+fn has_misplaced_cte_closing_bracket(
+    sql: &str,
+    dialect: Dialect,
+    tokens: Option<&[LocatedToken]>,
+) -> bool {
+    let owned_tokens;
+    let tokens = if let Some(tokens) = tokens {
+        tokens
+    } else {
+        owned_tokens = match tokenize_with_offsets(sql, dialect) {
+            Some(tokens) => tokens,
+            None => return false,
+        };
+        &owned_tokens
     };
+
+    if tokens.is_empty() {
+        return false;
+    }
 
     let has_with = tokens
         .iter()
@@ -343,6 +432,10 @@ mod tests {
     fn flags_templated_close_paren_on_same_line_as_cte_body_code() {
         let sql =
             "with\n{% if true %}\n  cte as (\n      select 1)\n{% endif %}\nselect * from cte";
-        assert!(has_misplaced_cte_closing_bracket(sql, Dialect::Generic));
+        assert!(has_misplaced_cte_closing_bracket(
+            sql,
+            Dialect::Generic,
+            None
+        ));
     }
 }

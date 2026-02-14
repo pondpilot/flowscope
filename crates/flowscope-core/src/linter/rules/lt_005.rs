@@ -6,7 +6,7 @@ use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Dialect, Issue, Span};
 use sqlparser::ast::Statement;
-use sqlparser::tokenizer::{Token, Tokenizer, Whitespace};
+use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
 
 pub struct LayoutLongLines {
     max_line_length: Option<usize>,
@@ -83,12 +83,11 @@ impl LintRule for LayoutLongLines {
             return Vec::new();
         }
 
-        long_line_overflow_spans(
-            ctx.sql,
+        long_line_overflow_spans_for_context(
+            ctx,
             max_line_length,
             self.ignore_comment_lines,
             self.ignore_comment_clauses,
-            ctx.dialect(),
         )
         .into_iter()
         .map(|(start, end)| {
@@ -101,6 +100,43 @@ impl LintRule for LayoutLongLines {
         })
         .collect()
     }
+}
+
+fn long_line_overflow_spans_for_context(
+    ctx: &LintContext,
+    max_len: usize,
+    ignore_comment_lines: bool,
+    ignore_comment_clauses: bool,
+) -> Vec<(usize, usize)> {
+    let jinja_comment_spans = jinja_comment_spans(ctx.sql);
+    if !jinja_comment_spans.is_empty() {
+        return long_line_overflow_spans(
+            ctx.sql,
+            max_len,
+            ignore_comment_lines,
+            ignore_comment_clauses,
+            ctx.dialect(),
+        );
+    }
+
+    if let Some(tokens) = tokenize_with_offsets_for_context(ctx) {
+        return long_line_overflow_spans_from_tokens(
+            ctx.sql,
+            max_len,
+            ignore_comment_lines,
+            ignore_comment_clauses,
+            &tokens,
+            &jinja_comment_spans,
+        );
+    }
+
+    long_line_overflow_spans(
+        ctx.sql,
+        max_len,
+        ignore_comment_lines,
+        ignore_comment_clauses,
+        ctx.dialect(),
+    )
 }
 
 fn long_line_overflow_spans(
@@ -137,6 +173,24 @@ fn long_line_overflow_spans_tokenized(
     let jinja_comment_spans = jinja_comment_spans(sql);
     let sanitized = sanitize_sql_for_jinja_comments(sql, &jinja_comment_spans);
     let tokens = tokenize_with_offsets(&sanitized, dialect)?;
+    Some(long_line_overflow_spans_from_tokens(
+        sql,
+        max_len,
+        ignore_comment_lines,
+        ignore_comment_clauses,
+        &tokens,
+        &jinja_comment_spans,
+    ))
+}
+
+fn long_line_overflow_spans_from_tokens(
+    sql: &str,
+    max_len: usize,
+    ignore_comment_lines: bool,
+    ignore_comment_clauses: bool,
+    tokens: &[LocatedToken],
+    jinja_comment_spans: &[std::ops::Range<usize>],
+) -> Vec<(usize, usize)> {
     let line_ranges = line_ranges(sql);
     let mut spans = Vec::new();
 
@@ -190,7 +244,7 @@ fn long_line_overflow_spans_tokenized(
         }
     }
 
-    Some(spans)
+    spans
 }
 
 fn line_ranges(sql: &str) -> Vec<(usize, usize)> {
@@ -364,6 +418,27 @@ fn tokenize_with_offsets(sql: &str, dialect: Dialect) -> Option<Vec<LocatedToken
     Some(out)
 }
 
+fn tokenize_with_offsets_for_context(ctx: &LintContext) -> Option<Vec<LocatedToken>> {
+    ctx.with_document_tokens(|tokens| {
+        if tokens.is_empty() {
+            return None;
+        }
+
+        Some(
+            tokens
+                .iter()
+                .filter_map(|token| {
+                    token_with_span_offsets(ctx.sql, token).map(|(start, end)| LocatedToken {
+                        token: token.token.clone(),
+                        start,
+                        end,
+                    })
+                })
+                .collect::<Vec<_>>(),
+        )
+    })
+}
+
 fn jinja_comment_spans(sql: &str) -> Vec<std::ops::Range<usize>> {
     let mut spans = Vec::new();
     let mut cursor = 0usize;
@@ -498,6 +573,20 @@ fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
     }
 
     None
+}
+
+fn token_with_span_offsets(sql: &str, token: &TokenWithSpan) -> Option<(usize, usize)> {
+    let start = line_col_to_offset(
+        sql,
+        token.span.start.line as usize,
+        token.span.start.column as usize,
+    )?;
+    let end = line_col_to_offset(
+        sql,
+        token.span.end.line as usize,
+        token.span.end.column as usize,
+    )?;
+    Some((start, end))
 }
 
 #[cfg(test)]

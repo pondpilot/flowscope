@@ -209,6 +209,7 @@ This plan covers three axes:
   - `LT_005` moved from parity handling to a dedicated core rule module (`lt_005.rs`).
   - `LT_005` now supports configurable `max_line_length`, `ignore_comment_lines`, and `ignore_comment_clauses` through `lint.ruleConfigs`, including SQLFluff-style disabled checks when `max_line_length <= 0`, comma-prefixed and Jinja comment-line handling, and SQL `COMMENT` clause handling for ignore-comment-clause semantics.
   - `LT_005` long-line overflow detection now uses tokenizer/span-derived line analysis only, including Jinja-comment-safe sanitization for tokenization plus Jinja-aware line/comment-clause handling (raw fallback removed).
+  - `LT_005` now consumes the shared document token stream for document-level tokenization before fallback tokenization (with Jinja-comment-aware fallback preserved).
   - Analyzer linting now runs `LT_005` for statementless/comment-only SQL inputs via document-level fallback, closing SQLFluff LT05 coverage gaps for comment-only files.
   - `LT_006` moved from parity handling to a dedicated core rule module (`lt_006.rs`).
   - `LT_006` was further upgraded from regex masking to active-dialect token-stream function-call spacing checks with context guards.
@@ -217,11 +218,13 @@ This plan covers three axes:
   - `LT_007` moved from parity handling to a dedicated core rule module (`lt_007.rs`).
   - `LT_007` now includes source-aware templating parity: when templating is enabled, lint evaluation uses untemplated source slices for CTE close-bracket checks so SQLFluff whitespace-consuming Jinja forms (`{{- ... -}}`, `{#- ... -#}`, `{%- ... -%}`) no longer produce false positives.
   - `LT_007` closing-bracket checks are now AST-first (`Query.with.cte_tables` closing-paren metadata) with tokenizer-span matching for multiline close placement, and now use tokenizer fallback scanning (raw byte fallback removed) when AST/token span mapping is unavailable.
+  - `LT_007` now consumes the shared document token stream for statement tokenization before fallback tokenization (templated-source fallback preserved).
   - `LT_008` moved from parity handling to a dedicated core rule module (`lt_008.rs`).
   - `LT_008` was further upgraded from raw byte/state scanning to AST/token-aware CTE suffix analysis using `Query.with.cte_tables` closing-paren tokens plus tokenizer span traversal for blank-line detection, consuming the shared document token stream before fallback tokenization.
   - `LT_009` moved from parity handling to a dedicated core rule module (`lt_009.rs`).
   - `LT_009` was further upgraded from regex masking to AST-backed SELECT target analysis with active-dialect token-aware clause layout checks (single-target newline semantics, multi-target line separation, and `FROM`-line checks).
   - `LT_009` now supports `wildcard_policy` (`single`/`multiple`) through `lint.ruleConfigs`.
+  - `LT_009` now consumes the shared document token stream for statement tokenization before fallback tokenization.
   - Supported-dialect SQLFluff layout fixture replay now reports zero mismatches for upgraded layout rules:
     - `LT05`: 55/55 cases matched (with replay mapping from SQLFluff `core.max_line_length` to `layout.long_lines.max_line_length`).
     - `LT07`: 13/13 SQLFluff standard cases matched (including whitespace-consuming Jinja fixtures).
