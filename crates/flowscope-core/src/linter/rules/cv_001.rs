@@ -5,8 +5,9 @@
 
 use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
-use crate::types::{issue_codes, Issue};
+use crate::types::{issue_codes, Dialect, Issue};
 use sqlparser::ast::Statement;
+use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum PreferredNotEqualStyle {
@@ -80,7 +81,7 @@ impl LintRule for ConventionNotEqual {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let usage = statement_not_equal_usage(ctx.statement_sql());
+        let usage = statement_not_equal_usage(ctx.statement_sql(), ctx.dialect());
         if self.preferred_style.violation(&usage) {
             vec![
                 Issue::info(issue_codes::LINT_CV_001, self.preferred_style.message())
@@ -98,78 +99,29 @@ struct NotEqualUsage {
     saw_bang_style: bool,
 }
 
-fn statement_not_equal_usage(sql: &str) -> NotEqualUsage {
-    let mut chars = sql.char_indices().peekable();
+enum NotEqualStyle {
+    Angle,
+    Bang,
+}
+
+fn statement_not_equal_usage(sql: &str, dialect: Dialect) -> NotEqualUsage {
     let mut usage = NotEqualUsage::default();
 
-    enum ScanState {
-        Normal,
-        SingleQuote,
-        DoubleQuote,
-        LineComment,
-        BlockComment,
-    }
+    let dialect = dialect.to_sqlparser_dialect();
+    let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
+    let Ok(tokens) = tokenizer.tokenize_with_location() else {
+        return usage;
+    };
 
-    let mut state = ScanState::Normal;
+    for token in &tokens {
+        if !matches!(token.token, Token::Neq) {
+            continue;
+        }
 
-    while let Some((idx, ch)) = chars.next() {
-        match state {
-            ScanState::Normal => match ch {
-                '\'' => state = ScanState::SingleQuote,
-                '"' => state = ScanState::DoubleQuote,
-                '-' => {
-                    if sql[idx + ch.len_utf8()..].starts_with('-') {
-                        chars.next();
-                        state = ScanState::LineComment;
-                    }
-                }
-                '/' => {
-                    if sql[idx + ch.len_utf8()..].starts_with('*') {
-                        chars.next();
-                        state = ScanState::BlockComment;
-                    }
-                }
-                '<' => {
-                    if sql[idx + ch.len_utf8()..].starts_with('>') {
-                        usage.saw_angle_style = true;
-                    }
-                }
-                '!' => {
-                    if sql[idx + ch.len_utf8()..].starts_with('=') {
-                        usage.saw_bang_style = true;
-                    }
-                }
-                _ => {}
-            },
-            ScanState::SingleQuote => {
-                if ch == '\'' {
-                    if sql[idx + ch.len_utf8()..].starts_with('\'') {
-                        chars.next();
-                    } else {
-                        state = ScanState::Normal;
-                    }
-                }
-            }
-            ScanState::DoubleQuote => {
-                if ch == '"' {
-                    if sql[idx + ch.len_utf8()..].starts_with('"') {
-                        chars.next();
-                    } else {
-                        state = ScanState::Normal;
-                    }
-                }
-            }
-            ScanState::LineComment => {
-                if ch == '\n' {
-                    state = ScanState::Normal;
-                }
-            }
-            ScanState::BlockComment => {
-                if ch == '*' && sql[idx + ch.len_utf8()..].starts_with('/') {
-                    chars.next();
-                    state = ScanState::Normal;
-                }
-            }
+        match not_equal_style_for_token(sql, token) {
+            Some(NotEqualStyle::Angle) => usage.saw_angle_style = true,
+            Some(NotEqualStyle::Bang) => usage.saw_bang_style = true,
+            None => {}
         }
 
         if usage.saw_angle_style && usage.saw_bang_style {
@@ -178,6 +130,51 @@ fn statement_not_equal_usage(sql: &str) -> NotEqualUsage {
     }
 
     usage
+}
+
+fn not_equal_style_for_token(sql: &str, token: &TokenWithSpan) -> Option<NotEqualStyle> {
+    let start = line_col_to_offset(
+        sql,
+        token.span.start.line as usize,
+        token.span.start.column as usize,
+    )?;
+    let end = line_col_to_offset(
+        sql,
+        token.span.end.line as usize,
+        token.span.end.column as usize,
+    )?;
+    let raw = sql.get(start..end)?;
+    match raw {
+        "<>" => Some(NotEqualStyle::Angle),
+        "!=" => Some(NotEqualStyle::Bang),
+        _ => None,
+    }
+}
+
+fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
+    if line == 0 || column == 0 {
+        return None;
+    }
+
+    let mut current_line = 1usize;
+    let mut current_col = 1usize;
+    for (offset, ch) in sql.char_indices() {
+        if current_line == line && current_col == column {
+            return Some(offset);
+        }
+        if ch == '\n' {
+            current_line += 1;
+            current_col = 1;
+        } else {
+            current_col += 1;
+        }
+    }
+
+    if current_line == line && current_col == column {
+        Some(sql.len())
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]
