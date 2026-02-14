@@ -101,7 +101,7 @@ impl LintRule for ConventionTerminator {
 
 fn statement_is_multiline(ctx: &LintContext, tokens: Option<&[LocatedToken]>) -> bool {
     let Some(tokens) = tokens else {
-        return ctx.statement_sql().contains('\n');
+        return count_line_breaks(ctx.statement_sql()) > 0;
     };
 
     tokens
@@ -618,5 +618,16 @@ mod tests {
             },
         );
         assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn statement_is_multiline_fallback_handles_crlf_line_breaks() {
+        let sql = "SELECT\r\n  1";
+        let ctx = LintContext {
+            sql,
+            statement_range: 0..sql.len(),
+            statement_index: 0,
+        };
+        assert!(statement_is_multiline(&ctx, None));
     }
 }

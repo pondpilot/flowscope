@@ -157,6 +157,7 @@ This plan covers three axes:
   - `CV_006` now supports `multiline_newline` / `require_final_semicolon` through `lint.ruleConfigs`.
   - `CV_006` semicolon-style analysis is now tokenizer/span-only (byte-scan fallback removed), including tokenized last-statement detection with MSSQL `GO` batch-separator awareness and tokenized trailing-comment checks for multiline newline-style terminators.
   - Lint execution now threads the document-level tokenizer stream through rule context (`parse once, tokenize once` path), and `CV_006` consumes that shared token stream before fallback tokenization.
+  - `CV_006` multiline fallback classification now counts CRLF/CR/LF line breaks instead of raw `contains('\n')`, keeping fallback behavior aligned with tokenizer line-break semantics.
   - `CV_007` moved from parity handling to a dedicated core rule module (`cv_007.rs`).
   - `CV_007` was further upgraded to AST-driven statement-shape detection (`Statement::Query` + wrapper `SetExpr::Query`), replacing SQL text `starts_with('(')/ends_with(')')` heuristics.
   - `CV_009` moved from parity handling to a dedicated core rule module (`cv_009.rs`).
@@ -186,6 +187,7 @@ This plan covers three axes:
   - `LT_012` moved from parity handling to a dedicated core rule module (`lt_012.rs`).
   - `LT_012` now enforces SQLFluff-style single trailing newline at EOF (flags both missing final newline and multiple trailing blank lines), and now derives trailing-content boundaries from tokenizer spans without raw-text fallback.
   - `LT_012` now consumes the shared document token stream for document-level tokenization before fallback tokenization.
+  - `LT_012` document multiline gating now derives from token span line metadata (with CRLF-aware fallback) instead of raw `sql.contains('\n')`.
   - `LT_013` moved from parity handling to a dedicated core rule module (`lt_013.rs`).
   - `LT_013` was further upgraded from regex matching to direct leading-blank-line scanning.
   - `LT_013` now uses tokenizer-first start-of-file trivia detection without raw-text fallback for leading blank-line parity.
@@ -219,6 +221,7 @@ This plan covers three axes:
   - `LT_007` now includes source-aware templating parity: when templating is enabled, lint evaluation uses untemplated source slices for CTE close-bracket checks so SQLFluff whitespace-consuming Jinja forms (`{{- ... -}}`, `{#- ... -#}`, `{%- ... -%}`) no longer produce false positives.
   - `LT_007` closing-bracket checks are now AST-first (`Query.with.cte_tables` closing-paren metadata) with tokenizer-span matching for multiline close placement, and now use tokenizer fallback scanning (raw byte fallback removed) when AST/token span mapping is unavailable.
   - `LT_007` now consumes the shared document token stream for statement tokenization before fallback tokenization (templated-source fallback preserved).
+  - `LT_007` multiline CTE-body detection now derives from token spans between CTE parens (CRLF/CR/LF-aware) instead of direct body-slice newline checks.
   - `LT_008` moved from parity handling to a dedicated core rule module (`lt_008.rs`).
   - `LT_008` was further upgraded from raw byte/state scanning to AST/token-aware CTE suffix analysis using `Query.with.cte_tables` closing-paren tokens plus tokenizer span traversal for blank-line detection, consuming the shared document token stream before fallback tokenization.
   - `LT_009` moved from parity handling to a dedicated core rule module (`lt_009.rs`).

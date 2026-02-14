@@ -114,13 +114,13 @@ fn has_misplaced_cte_closing_bracket_in_query(
 
         evaluated_any = true;
 
-        let body_start = tokens[open_idx].end;
         let body_end = tokens[close_idx].start;
-        if body_start >= body_end || body_end > sql.len() {
+        if body_end > sql.len() {
             continue;
         }
-        let body = &sql[body_start..body_end];
-        if body.contains('\n') && !line_prefix_before(sql, body_end).trim().is_empty() {
+        if cte_body_has_line_break(tokens, sql, open_idx, close_idx)
+            && !line_prefix_before(sql, body_end).trim().is_empty()
+        {
             return Some(true);
         }
     }
@@ -314,11 +314,12 @@ fn has_misplaced_cte_closing_bracket(
 
         let body_start = tokens[open_idx].end;
         let body_end = tokens[close_idx].start;
-        if body_start < body_end && body_end <= sql.len() {
-            let body = &sql[body_start..body_end];
-            if body.contains('\n') && !line_prefix_before(sql, body_end).trim().is_empty() {
-                return true;
-            }
+        if body_start < body_end
+            && body_end <= sql.len()
+            && cte_body_has_line_break(tokens, sql, open_idx, close_idx)
+            && !line_prefix_before(sql, body_end).trim().is_empty()
+        {
+            return true;
         }
 
         index = close_idx + 1;
@@ -330,6 +331,23 @@ fn has_misplaced_cte_closing_bracket(
 fn line_prefix_before(sql: &str, idx: usize) -> &str {
     let line_start = sql[..idx].rfind('\n').map_or(0, |pos| pos + 1);
     &sql[line_start..idx]
+}
+
+fn cte_body_has_line_break(
+    tokens: &[LocatedToken],
+    sql: &str,
+    open_idx: usize,
+    close_idx: usize,
+) -> bool {
+    if close_idx <= open_idx + 1 {
+        return false;
+    }
+
+    tokens
+        .iter()
+        .take(close_idx)
+        .skip(open_idx + 1)
+        .any(|token| token.end <= sql.len() && count_line_breaks(&sql[token.start..token.end]) > 0)
 }
 
 fn find_next_as_keyword(tokens: &[LocatedToken], mut index: usize) -> Option<usize> {
@@ -384,6 +402,24 @@ fn is_trivia_token(token: &Token) -> bool {
             | Token::Whitespace(Whitespace::SingleLineComment { .. })
             | Token::Whitespace(Whitespace::MultiLineComment(_))
     )
+}
+
+fn count_line_breaks(text: &str) -> usize {
+    let mut count = 0usize;
+    let mut chars = text.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '\n' {
+            count += 1;
+            continue;
+        }
+        if ch == '\r' {
+            count += 1;
+            if matches!(chars.peek(), Some('\n')) {
+                let _ = chars.next();
+            }
+        }
+    }
+    count
 }
 
 #[cfg(test)]
