@@ -5,8 +5,9 @@
 
 use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
-use crate::types::{issue_codes, Issue};
+use crate::types::{issue_codes, Dialect, Issue};
 use sqlparser::ast::Statement;
+use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
 
 pub struct LayoutIndent {
     indent_unit: usize,
@@ -75,18 +76,13 @@ impl LintRule for LayoutIndent {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let sql = ctx.statement_sql();
         let mut has_violation = first_line_is_indented(ctx);
-        for (line_index, line) in sql.lines().enumerate() {
-            if line.trim().is_empty() {
-                continue;
-            }
-
-            let indent = leading_indent(line, self.tab_space_size);
+        for snapshot in line_indent_snapshots(ctx, self.tab_space_size) {
+            let indent = snapshot.indent;
 
             // Rule-level tests and fallback contexts may not expose raw leading
             // whitespace via `statement_range`; keep direct first-line check.
-            if line_index == 0 && indent.width > 0 {
+            if snapshot.line_index == 0 && indent.width > 0 {
                 has_violation = true;
                 break;
             }
@@ -110,7 +106,6 @@ impl LintRule for LayoutIndent {
                 has_violation = true;
                 break;
             }
-
         }
 
         if has_violation {
@@ -136,6 +131,7 @@ fn first_line_is_indented(ctx: &LintContext) -> bool {
     !leading.is_empty() && leading.chars().all(char::is_whitespace)
 }
 
+#[derive(Clone, Copy)]
 struct LeadingIndent {
     width: usize,
     space_count: usize,
@@ -143,12 +139,79 @@ struct LeadingIndent {
     has_mixed_indent_chars: bool,
 }
 
+#[derive(Clone, Copy)]
+struct LineIndentSnapshot {
+    line_index: usize,
+    indent: LeadingIndent,
+}
+
+fn line_indent_snapshots(ctx: &LintContext, tab_space_size: usize) -> Vec<LineIndentSnapshot> {
+    let sql = ctx.statement_sql();
+
+    let Some(tokens) = tokenize_with_locations(sql, ctx.dialect()) else {
+        return sql
+            .lines()
+            .enumerate()
+            .filter_map(|(line_index, line)| {
+                if line.trim().is_empty() {
+                    return None;
+                }
+                Some(LineIndentSnapshot {
+                    line_index,
+                    indent: leading_indent(line, tab_space_size),
+                })
+            })
+            .collect();
+    };
+
+    let mut first_token_by_line: std::collections::BTreeMap<usize, usize> =
+        std::collections::BTreeMap::new();
+    for token in &tokens {
+        if is_whitespace_token(&token.token) {
+            continue;
+        }
+        let line = token.span.start.line as usize;
+        let column = token.span.start.column as usize;
+        first_token_by_line.entry(line).or_insert(column);
+    }
+
+    first_token_by_line
+        .into_iter()
+        .filter_map(|(line, column)| {
+            let line_start = line_col_to_offset(sql, line, 1)?;
+            let token_start = line_col_to_offset(sql, line, column)?;
+            let leading = &sql[line_start..token_start];
+            Some(LineIndentSnapshot {
+                line_index: line.saturating_sub(1),
+                indent: leading_indent_from_prefix(leading, tab_space_size),
+            })
+        })
+        .collect()
+}
+
+fn tokenize_with_locations(sql: &str, dialect: Dialect) -> Option<Vec<TokenWithSpan>> {
+    let dialect = dialect.to_sqlparser_dialect();
+    let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
+    tokenizer.tokenize_with_location().ok()
+}
+
+fn is_whitespace_token(token: &Token) -> bool {
+    matches!(
+        token,
+        Token::Whitespace(Whitespace::Space | Whitespace::Tab | Whitespace::Newline)
+    )
+}
+
 fn leading_indent(line: &str, tab_space_size: usize) -> LeadingIndent {
+    leading_indent_from_prefix(line, tab_space_size)
+}
+
+fn leading_indent_from_prefix(prefix: &str, tab_space_size: usize) -> LeadingIndent {
     let mut width = 0usize;
     let mut space_count = 0usize;
     let mut tab_count = 0usize;
 
-    for ch in line.chars() {
+    for ch in prefix.chars() {
         match ch {
             ' ' => {
                 space_count += 1;
@@ -168,6 +231,34 @@ fn leading_indent(line: &str, tab_space_size: usize) -> LeadingIndent {
         tab_count,
         has_mixed_indent_chars: space_count > 0 && tab_count > 0,
     }
+}
+
+fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
+    if line == 0 || column == 0 {
+        return None;
+    }
+
+    let mut current_line = 1usize;
+    let mut current_col = 1usize;
+
+    for (offset, ch) in sql.char_indices() {
+        if current_line == line && current_col == column {
+            return Some(offset);
+        }
+
+        if ch == '\n' {
+            current_line += 1;
+            current_col = 1;
+        } else {
+            current_col += 1;
+        }
+    }
+
+    if current_line == line && current_col == column {
+        return Some(sql.len());
+    }
+
+    None
 }
 
 #[cfg(test)]
@@ -266,6 +357,13 @@ mod tests {
         };
         let issues = run_with_config("SELECT a\n\t, b\nFROM t", config);
         assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn indentation_on_comment_line_is_checked() {
+        let issues = run("SELECT 1\n   -- comment\nFROM t");
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_LT_002);
     }
 
 }
