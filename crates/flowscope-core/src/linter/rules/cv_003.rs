@@ -252,13 +252,12 @@ fn span_end(span: sqlparser::tokenizer::Span) -> Option<(u64, u64)> {
 
 fn first_significant_token_is_comma(
     tokens: Option<&[LocatedToken]>,
-    sql: &str,
+    _sql: &str,
     start: usize,
     end: usize,
 ) -> bool {
     let Some(tokens) = tokens else {
-        let clause_suffix = &sql[start..end];
-        return first_significant_char_is_comma(clause_suffix);
+        return false;
     };
 
     for token in tokens {
@@ -269,38 +268,6 @@ fn first_significant_token_is_comma(
             continue;
         }
         return matches!(token.token, Token::Comma);
-    }
-    false
-}
-
-fn first_significant_char_is_comma(slice: &str) -> bool {
-    let bytes = slice.as_bytes();
-    let mut index = 0usize;
-    while index < bytes.len() {
-        match bytes[index] {
-            b' ' | b'\t' | b'\n' | b'\r' => {
-                index += 1;
-            }
-            b'-' if index + 1 < bytes.len() && bytes[index + 1] == b'-' => {
-                index += 2;
-                while index < bytes.len() && bytes[index] != b'\n' {
-                    index += 1;
-                }
-            }
-            b'/' if index + 1 < bytes.len() && bytes[index + 1] == b'*' => {
-                index += 2;
-                while index + 1 < bytes.len() && !(bytes[index] == b'*' && bytes[index + 1] == b'/')
-                {
-                    index += 1;
-                }
-                if index + 1 < bytes.len() {
-                    index += 2;
-                } else {
-                    index = bytes.len();
-                }
-            }
-            byte => return byte == b',',
-        }
     }
     false
 }

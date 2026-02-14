@@ -180,8 +180,7 @@ fn not_equal_style_between(
         return not_equal_style_in_tokens(sql, tokens, start, end);
     }
 
-    let raw = sql.get(start..end)?;
-    not_equal_style_in_segment(raw)
+    None
 }
 
 fn not_equal_style_in_tokens(
@@ -209,50 +208,10 @@ fn not_equal_style_in_tokens(
         return match raw {
             "<>" => Some(NotEqualStyle::Angle),
             "!=" => Some(NotEqualStyle::Bang),
-            _ => not_equal_style_in_segment(raw),
+            _ => None,
         };
     }
 
-    None
-}
-
-fn not_equal_style_in_segment(segment: &str) -> Option<NotEqualStyle> {
-    let bytes = segment.as_bytes();
-    let mut index = 0usize;
-    while index < bytes.len() {
-        match bytes[index] {
-            b' ' | b'\t' | b'\n' | b'\r' => {
-                index += 1;
-            }
-            b'-' if index + 1 < bytes.len() && bytes[index + 1] == b'-' => {
-                index += 2;
-                while index < bytes.len() && bytes[index] != b'\n' {
-                    index += 1;
-                }
-            }
-            b'/' if index + 1 < bytes.len() && bytes[index + 1] == b'*' => {
-                index += 2;
-                while index + 1 < bytes.len() && !(bytes[index] == b'*' && bytes[index + 1] == b'/')
-                {
-                    index += 1;
-                }
-                if index + 1 < bytes.len() {
-                    index += 2;
-                } else {
-                    index = bytes.len();
-                }
-            }
-            b'<' if index + 1 < bytes.len() && bytes[index + 1] == b'>' => {
-                return Some(NotEqualStyle::Angle);
-            }
-            b'!' if index + 1 < bytes.len() && bytes[index + 1] == b'=' => {
-                return Some(NotEqualStyle::Bang);
-            }
-            _ => {
-                index += 1;
-            }
-        }
-    }
     None
 }
 
