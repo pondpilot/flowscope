@@ -173,7 +173,7 @@ fn is_last_statement(ctx: &LintContext, tokens: Option<&[LocatedToken]>) -> bool
     {
         if matches!(token.token, Token::SemiColon)
             || is_trivia_token(&token.token)
-            || is_go_batch_separator(token, ctx.sql, ctx.dialect())
+            || is_go_batch_separator(token, tokens, ctx.dialect())
         {
             continue;
         }
@@ -206,6 +206,8 @@ struct LocatedToken {
     token: Token,
     start: usize,
     end: usize,
+    start_line: usize,
+    end_line: usize,
 }
 
 fn tokenize_with_offsets_for_context(ctx: &LintContext) -> Option<Vec<LocatedToken>> {
@@ -222,6 +224,8 @@ fn tokenize_with_offsets_for_context(ctx: &LintContext) -> Option<Vec<LocatedTok
                         token: token.token.clone(),
                         start,
                         end,
+                        start_line: token.span.start.line as usize,
+                        end_line: token.span.end.line as usize,
                     })
                 })
                 .collect::<Vec<_>>(),
@@ -249,6 +253,8 @@ fn tokenize_with_offsets(sql: &str, dialect: Dialect) -> Option<Vec<LocatedToken
             token: token.token,
             start,
             end,
+            start_line: token.span.start.line as usize,
+            end_line: token.span.end.line as usize,
         });
     }
 
@@ -293,7 +299,7 @@ fn is_spacing_whitespace(token: &Token) -> bool {
     )
 }
 
-fn is_go_batch_separator(token: &LocatedToken, sql: &str, dialect: Dialect) -> bool {
+fn is_go_batch_separator(token: &LocatedToken, tokens: &[LocatedToken], dialect: Dialect) -> bool {
     if dialect != Dialect::Mssql {
         return false;
     }
@@ -303,20 +309,28 @@ fn is_go_batch_separator(token: &LocatedToken, sql: &str, dialect: Dialect) -> b
     if !word.value.eq_ignore_ascii_case("GO") {
         return false;
     }
-
-    line_text(sql, token.start).is_some_and(|line| line.trim().eq_ignore_ascii_case("GO"))
-}
-
-fn line_text(sql: &str, offset: usize) -> Option<&str> {
-    if offset > sql.len() {
-        return None;
+    if token.start_line != token.end_line {
+        return false;
     }
 
-    let line_start = sql[..offset].rfind('\n').map_or(0, |idx| idx + 1);
-    let line_end = sql[offset..]
-        .find('\n')
-        .map_or(sql.len(), |idx| offset + idx);
-    sql.get(line_start..line_end)
+    let line = token.start_line;
+    let mut go_count = 0usize;
+    for candidate in tokens {
+        if candidate.start_line != line {
+            continue;
+        }
+        if is_spacing_whitespace(&candidate.token) {
+            continue;
+        }
+        match &candidate.token {
+            Token::Word(word) if word.value.eq_ignore_ascii_case("GO") => {
+                go_count += 1;
+            }
+            _ => return false,
+        }
+    }
+
+    go_count == 1
 }
 
 fn count_line_breaks(text: &str) -> usize {
@@ -583,6 +597,32 @@ mod tests {
         let rule = ConventionTerminator::from_config(&config);
         let stmt = &parse_sql("SELECT 1").expect("parse")[0];
         let sql = "SELECT 1\nGO\nSELECT 2;";
+        let issues = with_active_dialect(Dialect::Mssql, || {
+            rule.check(
+                stmt,
+                &LintContext {
+                    sql,
+                    statement_range: 0.."SELECT 1".len(),
+                    statement_index: 0,
+                },
+            )
+        });
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn require_final_semicolon_does_not_treat_inline_comment_go_as_batch_separator() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "convention.terminator".to_string(),
+                serde_json::json!({"require_final_semicolon": true}),
+            )]),
+        };
+        let rule = ConventionTerminator::from_config(&config);
+        let stmt = &parse_sql("SELECT 1").expect("parse")[0];
+        let sql = "SELECT 1\nGO -- not a standalone separator\n";
         let issues = with_active_dialect(Dialect::Mssql, || {
             rule.check(
                 stmt,
