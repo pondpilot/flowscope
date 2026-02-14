@@ -78,8 +78,7 @@ impl LintRule for UnusedCte {
                     continue;
                 }
 
-                let stmt_sql = ctx.statement_sql();
-                let span = find_cte_name_span(&cte.alias.name, stmt_sql, ctx);
+                let span = find_cte_name_span(&cte.alias.name, ctx);
                 let mut issue = Issue::warning(
                     issue_codes::LINT_ST_003,
                     format!(
@@ -325,18 +324,8 @@ fn collect_join_constraint_refs(join_operator: &JoinOperator, refs: &mut HashSet
     }
 }
 
-fn find_cte_name_span(
-    name: &Ident,
-    stmt_sql: &str,
-    ctx: &LintContext,
-) -> Option<crate::types::Span> {
-    if let Some(span) = ident_span_in_statement(name, ctx) {
-        return Some(span);
-    }
-
-    use crate::analyzer::helpers::find_cte_definition_span;
-    find_cte_definition_span(stmt_sql, &name.value, 0)
-        .map(|s| ctx.span_from_statement_offset(s.start, s.end))
+fn find_cte_name_span(name: &Ident, ctx: &LintContext) -> Option<crate::types::Span> {
+    ident_span_in_statement(name, ctx)
 }
 
 fn ident_span_in_statement(name: &Ident, ctx: &LintContext) -> Option<crate::types::Span> {
