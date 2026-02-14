@@ -4,8 +4,10 @@
 //! where spacing is expected.
 
 use crate::linter::rule::{LintContext, LintRule};
-use crate::types::{issue_codes, Issue};
+use crate::types::{issue_codes, Dialect, Issue};
 use sqlparser::ast::Statement;
+use sqlparser::keywords::Keyword;
+use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
 
 pub struct LayoutSpacing;
 
@@ -23,7 +25,7 @@ impl LintRule for LayoutSpacing {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        spacing_violation_spans(ctx.statement_sql())
+        spacing_violation_spans(ctx.statement_sql(), ctx.dialect())
             .into_iter()
             .map(|(start, end)| {
                 Issue::info(
@@ -37,169 +39,268 @@ impl LintRule for LayoutSpacing {
     }
 }
 
-fn spacing_violation_spans(sql: &str) -> Vec<(usize, usize)> {
+fn spacing_violation_spans(sql: &str, dialect: Dialect) -> Vec<(usize, usize)> {
     let mut spans = Vec::new();
-    let bytes = sql.as_bytes();
+    let Some(tokens) = tokenized(sql, dialect) else {
+        return spans;
+    };
 
-    // Pattern group 1: compact JSON arrow expression like payload->>'id'.
-    for index in 0..bytes.len().saturating_sub(2) {
-        if &bytes[index..index + 3] != b"->>" {
-            continue;
-        }
-        if !matches_compact_json_arrow(sql, index) {
-            continue;
-        }
+    collect_json_arrow_spacing_violations(sql, &tokens, &mut spans);
+    collect_compact_text_bracket_violations(sql, &tokens, &mut spans);
+    collect_compact_numeric_scale_violations(sql, &tokens, &mut spans);
+    collect_exists_line_paren_violations(sql, &tokens, &mut spans);
 
-        spans.push((index, (index + 1).min(bytes.len())));
-        if index + 3 < bytes.len() {
-            spans.push((index + 3, (index + 4).min(bytes.len())));
-        }
-    }
-
-    // Pattern group 2: compact `text[` cast/index form.
-    for index in find_ascii_case_insensitive(sql, "text[") {
-        if index > 0 && is_word_char(bytes[index - 1]) {
-            continue;
-        }
-        let bracket_start = index + 4;
-        if bracket_start < bytes.len() {
-            spans.push((bracket_start, bracket_start + 1));
-        }
-    }
-
-    // Pattern group 3: compact numeric precision form like `,2`.
-    for index in 0..bytes.len().saturating_sub(1) {
-        if bytes[index] == b',' && bytes[index + 1].is_ascii_digit() {
-            spans.push((index + 1, index + 2));
-        }
-    }
-
-    // Pattern group 4: `EXISTS (` layout at line start.
-    let lines = collect_lines_with_offsets(sql);
-    for (line_index, (line_start, line)) in lines.iter().enumerate() {
-        let Some(paren_offset) = exists_line_paren_offset(line) else {
-            continue;
-        };
-
-        let prev_token = lines[..line_index]
-            .iter()
-            .rev()
-            .map(|(_, prev_line)| prev_line.trim())
-            .find(|prev_line| !prev_line.is_empty() && !prev_line.starts_with("--"));
-        if matches!(prev_token, Some("OR") | Some("AND") | Some("NOT")) {
-            continue;
-        }
-
-        let start = line_start + paren_offset;
-        spans.push((start, start + 1));
-    }
+    spans.sort_unstable();
+    spans.dedup();
 
     spans
 }
 
-fn matches_compact_json_arrow(sql: &str, arrow_index: usize) -> bool {
-    let bytes = sql.as_bytes();
-
-    // Left side must be an identifier/path token.
-    let mut start = arrow_index;
-    while start > 0 && is_ident_or_dot(bytes[start - 1]) {
-        start -= 1;
-    }
-    if start == arrow_index {
-        return false;
-    }
-
-    let left = &bytes[start..arrow_index];
-    if !left.first().copied().is_some_and(is_identifier_start) {
-        return false;
-    }
-
-    // Right side must be a single-quoted literal (`'[^']*'`).
-    let mut pos = arrow_index + 3;
-    if pos >= bytes.len() || bytes[pos] != b'\'' {
-        return false;
-    }
-    pos += 1;
-    while pos < bytes.len() && bytes[pos] != b'\'' {
-        pos += 1;
-    }
-    pos < bytes.len()
+fn tokenized(sql: &str, dialect: Dialect) -> Option<Vec<TokenWithSpan>> {
+    let dialect = dialect.to_sqlparser_dialect();
+    let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
+    tokenizer.tokenize_with_location().ok()
 }
 
-fn find_ascii_case_insensitive(haystack: &str, needle: &str) -> Vec<usize> {
-    let h = haystack.as_bytes();
-    let n = needle.as_bytes();
-    if n.is_empty() || h.len() < n.len() {
-        return Vec::new();
-    }
+fn collect_json_arrow_spacing_violations(
+    sql: &str,
+    tokens: &[TokenWithSpan],
+    spans: &mut Vec<(usize, usize)>,
+) {
+    for (index, token) in tokens.iter().enumerate() {
+        if !matches!(token.token, Token::Arrow | Token::LongArrow) {
+            continue;
+        }
 
-    let mut out = Vec::new();
-    for index in 0..=h.len() - n.len() {
-        if h[index..index + n.len()].eq_ignore_ascii_case(n) {
-            out.push(index);
+        let Some(prev_index) = prev_non_trivia_index(tokens, index) else {
+            continue;
+        };
+        let Some(next_index) = next_non_trivia_index(tokens, index + 1) else {
+            continue;
+        };
+
+        if !has_trivia_between(tokens, prev_index, index) {
+            if let Some((start, _)) = token_offsets(sql, token) {
+                spans.push(single_char_span(sql, start));
+            }
+        }
+
+        if !has_trivia_between(tokens, index, next_index) {
+            if let Some((start, _)) = token_offsets(sql, &tokens[next_index]) {
+                spans.push(single_char_span(sql, start));
+            }
         }
     }
-    out
 }
 
-fn collect_lines_with_offsets(sql: &str) -> Vec<(usize, &str)> {
-    let mut out = Vec::new();
-    let mut offset = 0usize;
+fn collect_compact_text_bracket_violations(
+    sql: &str,
+    tokens: &[TokenWithSpan],
+    spans: &mut Vec<(usize, usize)>,
+) {
+    for (index, token) in tokens.iter().enumerate() {
+        let Token::Word(word) = &token.token else {
+            continue;
+        };
+        if word.quote_style.is_some() || !word.value.eq_ignore_ascii_case("text") {
+            continue;
+        }
 
-    for line in sql.split_inclusive('\n') {
-        let line = line.strip_suffix('\n').unwrap_or(line);
-        out.push((offset, line));
-        offset += line.len();
-        if sql.as_bytes().get(offset) == Some(&b'\n') {
-            offset += 1;
+        let Some(next_index) = next_non_trivia_index(tokens, index + 1) else {
+            continue;
+        };
+        if !matches!(tokens[next_index].token, Token::LBracket) {
+            continue;
+        }
+        if has_trivia_between(tokens, index, next_index) {
+            continue;
+        }
+
+        if let Some((start, _)) = token_offsets(sql, &tokens[next_index]) {
+            spans.push(single_char_span(sql, start));
+        }
+    }
+}
+
+fn collect_compact_numeric_scale_violations(
+    sql: &str,
+    tokens: &[TokenWithSpan],
+    spans: &mut Vec<(usize, usize)>,
+) {
+    for (index, token) in tokens.iter().enumerate() {
+        if !matches!(token.token, Token::Comma) {
+            continue;
+        }
+
+        let Some(prev_index) = prev_non_trivia_index(tokens, index) else {
+            continue;
+        };
+        let Some(next_index) = next_non_trivia_index(tokens, index + 1) else {
+            continue;
+        };
+        if !matches!(tokens[prev_index].token, Token::Number(_, _))
+            || !matches!(tokens[next_index].token, Token::Number(_, _))
+        {
+            continue;
+        }
+        if has_trivia_between(tokens, index, next_index) {
+            continue;
+        }
+
+        let Some(before_prev_index) = prev_non_trivia_index(tokens, prev_index) else {
+            continue;
+        };
+        let Some(after_next_index) = next_non_trivia_index(tokens, next_index + 1) else {
+            continue;
+        };
+        if !matches!(tokens[before_prev_index].token, Token::LParen)
+            || !matches!(tokens[after_next_index].token, Token::RParen)
+        {
+            continue;
+        }
+
+        if let Some((start, _)) = token_offsets(sql, &tokens[next_index]) {
+            spans.push(single_char_span(sql, start));
+        }
+    }
+}
+
+fn collect_exists_line_paren_violations(
+    sql: &str,
+    tokens: &[TokenWithSpan],
+    spans: &mut Vec<(usize, usize)>,
+) {
+    for (index, token) in tokens.iter().enumerate() {
+        let Token::Word(word) = &token.token else {
+            continue;
+        };
+        if word.keyword != Keyword::EXISTS {
+            continue;
+        }
+
+        let Some(next_index) = next_non_trivia_index(tokens, index + 1) else {
+            continue;
+        };
+        if !matches!(tokens[next_index].token, Token::LParen) {
+            continue;
+        }
+        if !has_trivia_between(tokens, index, next_index) {
+            continue;
+        }
+
+        if previous_line_ends_with_boolean_keyword(tokens, index) {
+            continue;
+        }
+
+        let Some((exists_start, _)) = token_offsets(sql, token) else {
+            continue;
+        };
+        if !line_prefix_is_whitespace(sql, exists_start) {
+            continue;
+        }
+
+        if let Some((paren_start, _)) = token_offsets(sql, &tokens[next_index]) {
+            spans.push(single_char_span(sql, paren_start));
+        }
+    }
+}
+
+fn previous_line_ends_with_boolean_keyword(tokens: &[TokenWithSpan], index: usize) -> bool {
+    let Some(prev_index) = prev_non_trivia_index(tokens, index) else {
+        return false;
+    };
+    let Token::Word(prev_word) = &tokens[prev_index].token else {
+        return false;
+    };
+    if !matches!(
+        prev_word.keyword,
+        Keyword::AND | Keyword::OR | Keyword::NOT
+    ) {
+        return false;
+    }
+
+    tokens[prev_index].span.end.line < tokens[index].span.start.line
+}
+
+fn line_prefix_is_whitespace(sql: &str, offset: usize) -> bool {
+    let line_start = sql[..offset].rfind('\n').map_or(0, |index| index + 1);
+    sql[line_start..offset].chars().all(char::is_whitespace)
+}
+
+fn token_offsets(sql: &str, token: &TokenWithSpan) -> Option<(usize, usize)> {
+    let start = line_col_to_offset(
+        sql,
+        token.span.start.line as usize,
+        token.span.start.column as usize,
+    )?;
+    let end = line_col_to_offset(sql, token.span.end.line as usize, token.span.end.column as usize)?;
+    Some((start, end))
+}
+
+fn single_char_span(sql: &str, start: usize) -> (usize, usize) {
+    let end = (start + 1).min(sql.len());
+    (start, end)
+}
+
+fn next_non_trivia_index(tokens: &[TokenWithSpan], mut index: usize) -> Option<usize> {
+    while index < tokens.len() {
+        if !is_trivia_token(&tokens[index].token) {
+            return Some(index);
+        }
+        index += 1;
+    }
+    None
+}
+
+fn prev_non_trivia_index(tokens: &[TokenWithSpan], mut index: usize) -> Option<usize> {
+    while index > 0 {
+        index -= 1;
+        if !is_trivia_token(&tokens[index].token) {
+            return Some(index);
+        }
+    }
+    None
+}
+
+fn has_trivia_between(tokens: &[TokenWithSpan], left: usize, right: usize) -> bool {
+    right > left + 1 && tokens[left + 1..right].iter().any(|token| is_trivia_token(&token.token))
+}
+
+fn is_trivia_token(token: &Token) -> bool {
+    matches!(
+        token,
+        Token::Whitespace(Whitespace::Space | Whitespace::Newline | Whitespace::Tab)
+            | Token::Whitespace(Whitespace::SingleLineComment { .. })
+            | Token::Whitespace(Whitespace::MultiLineComment(_))
+    )
+}
+
+fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
+    if line == 0 || column == 0 {
+        return None;
+    }
+
+    let mut current_line = 1usize;
+    let mut current_col = 1usize;
+
+    for (offset, ch) in sql.char_indices() {
+        if current_line == line && current_col == column {
+            return Some(offset);
+        }
+
+        if ch == '\n' {
+            current_line += 1;
+            current_col = 1;
+        } else {
+            current_col += 1;
         }
     }
 
-    if out.is_empty() {
-        out.push((0, sql));
+    if current_line == line && current_col == column {
+        return Some(sql.len());
     }
 
-    out
-}
-
-fn exists_line_paren_offset(line: &str) -> Option<usize> {
-    let bytes = line.as_bytes();
-    let mut index = 0usize;
-
-    while index < bytes.len() && bytes[index].is_ascii_whitespace() {
-        index += 1;
-    }
-
-    let exists = b"exists";
-    if index + exists.len() > bytes.len() {
-        return None;
-    }
-    if !bytes[index..index + exists.len()].eq_ignore_ascii_case(exists) {
-        return None;
-    }
-    index += exists.len();
-
-    let ws_start = index;
-    while index < bytes.len() && bytes[index].is_ascii_whitespace() {
-        index += 1;
-    }
-    if index == ws_start {
-        return None;
-    }
-
-    (index < bytes.len() && bytes[index] == b'(').then_some(index)
-}
-
-fn is_identifier_start(byte: u8) -> bool {
-    byte.is_ascii_alphabetic() || byte == b'_'
-}
-
-fn is_ident_or_dot(byte: u8) -> bool {
-    byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'.'
-}
-
-fn is_word_char(byte: u8) -> bool {
-    byte.is_ascii_alphanumeric() || byte == b'_'
+    None
 }
 
 #[cfg(test)]
@@ -253,5 +354,16 @@ mod tests {
     fn flags_exists_parenthesis_layout_case() {
         let issues = run("SELECT\n    EXISTS (\n        SELECT 1\n    ) AS has_row");
         assert!(!issues.is_empty());
+    }
+
+    #[test]
+    fn does_not_flag_spacing_patterns_inside_literals_or_comments() {
+        let issues = run("SELECT 'payload->>''id''' AS txt -- EXISTS (\nFROM t");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn does_not_flag_regular_comma_separated_projection() {
+        assert!(run("SELECT 1,2").is_empty());
     }
 }

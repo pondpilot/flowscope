@@ -2,7 +2,7 @@
 
 Status: In Progress
 Created: 2026-02-12
-Last Updated: 2026-02-13
+Last Updated: 2026-02-14
 Owner: flowscope-core
 
 ## Goal
@@ -177,7 +177,7 @@ This plan covers three axes:
   - `LT_015` was further upgraded from regex matching to direct blank-line run detection.
   - `LT_015` now supports `maximum_empty_lines_inside_statements` / `maximum_empty_lines_between_statements` through `lint.ruleConfigs`.
   - `LT_002` moved from parity handling to a dedicated core rule module (`lt_002.rs`).
-  - `LT_002` now supports configurable `indent_unit` / `tab_space_size` and flags mixed tab/space indentation in leading whitespace.
+  - `LT_002` now supports SQLFluff-style indentation config shapes across both `layout.indent` and top-level `indentation` sections (`indent_unit` / `tab_space_size`), enforces tab-vs-space indentation style, and detects first-line indentation from full-statement source context.
   - `LT_003` moved from parity handling to a dedicated core rule module (`lt_003.rs`).
   - `LT_003` was further upgraded from regex scanning to tokenizer line-aware trailing-operator checks.
   - `LT_003` now supports operator line-position configuration through `lint.ruleConfigs` (`line_position=leading|trailing`) and legacy SQLFluff `operator_new_lines` compatibility.
@@ -185,7 +185,7 @@ This plan covers three axes:
   - `LT_004` was further upgraded from regex scanning to tokenizer-driven comma-spacing checks.
   - `LT_004` now supports comma line-position configuration through `lint.ruleConfigs` (`line_position=trailing|leading`) and legacy SQLFluff `comma_style` compatibility.
   - `LT_001` moved from parity handling to a dedicated core rule module (`lt_001.rs`).
-  - `LT_001` was further upgraded from regex matching to deterministic layout-pattern scanners (JSON arrow/type/index/numeric-scale/EXISTS line form).
+  - `LT_001` was further upgraded from deterministic raw-text scanning to tokenizer-with-span layout detection (JSON arrows, compact `text[` forms, numeric precision commas, and line-start `EXISTS (` patterns), reducing literal/comment false positives.
   - `LT_005` moved from parity handling to a dedicated core rule module (`lt_005.rs`).
   - `LT_005` now supports configurable `max_line_length`, `ignore_comment_lines`, and `ignore_comment_clauses` through `lint.ruleConfigs`, including SQLFluff-style disabled checks when `max_line_length <= 0`, comma-prefixed and Jinja comment-line handling, and SQL `COMMENT` clause handling for ignore-comment-clause semantics.
   - Analyzer linting now runs `LT_005` for statementless/comment-only SQL inputs via document-level fallback, closing SQLFluff LT05 coverage gaps for comment-only files.
