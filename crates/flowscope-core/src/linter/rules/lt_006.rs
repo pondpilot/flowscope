@@ -4,10 +4,11 @@
 //! from opening parenthesis.
 
 use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::visit::visit_expressions;
 use crate::types::{issue_codes, Dialect, Issue};
-use sqlparser::ast::Statement;
-use sqlparser::keywords::Keyword;
+use sqlparser::ast::{Expr, Statement};
 use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
+use std::collections::HashSet;
 
 pub struct LayoutFunctions;
 
@@ -24,8 +25,9 @@ impl LintRule for LayoutFunctions {
         "Function call spacing should be consistent."
     }
 
-    fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let Some((start, end)) = function_spacing_issue_span(ctx.statement_sql(), ctx.dialect())
+    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+        let Some((start, end)) =
+            function_spacing_issue_span(statement, ctx.statement_sql(), ctx.dialect())
         else {
             return Vec::new();
         };
@@ -39,7 +41,13 @@ impl LintRule for LayoutFunctions {
     }
 }
 
-fn function_spacing_issue_span(sql: &str, dialect: Dialect) -> Option<(usize, usize)> {
+fn function_spacing_issue_span(
+    statement: &Statement,
+    sql: &str,
+    dialect: Dialect,
+) -> Option<(usize, usize)> {
+    let tracked_function_names = tracked_function_names(statement);
+
     let dialect = dialect.to_sqlparser_dialect();
     let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
     let tokens = tokenizer.tokenize_with_location().ok()?;
@@ -49,7 +57,13 @@ fn function_spacing_issue_span(sql: &str, dialect: Dialect) -> Option<(usize, us
             continue;
         };
 
-        if word.quote_style.is_some() || is_non_function_word(word.value.as_str()) {
+        if word.quote_style.is_some() {
+            continue;
+        }
+
+        let word_upper = word.value.to_ascii_uppercase();
+        if !tracked_function_names.contains(&word_upper) && !is_always_function_keyword(&word_upper)
+        {
             continue;
         }
 
@@ -67,21 +81,8 @@ fn function_spacing_issue_span(sql: &str, dialect: Dialect) -> Option<(usize, us
         }
 
         if let Some(prev_index) = prev_non_trivia_index(&tokens, index) {
-            match &tokens[prev_index].token {
-                Token::Period => continue,
-                Token::Word(prev_word)
-                    if matches!(
-                        prev_word.keyword,
-                        Keyword::INTO
-                            | Keyword::FROM
-                            | Keyword::JOIN
-                            | Keyword::UPDATE
-                            | Keyword::TABLE
-                    ) =>
-                {
-                    continue;
-                }
-                _ => {}
+            if matches!(&tokens[prev_index].token, Token::Period) {
+                continue;
             }
         }
 
@@ -99,6 +100,18 @@ fn function_spacing_issue_span(sql: &str, dialect: Dialect) -> Option<(usize, us
     }
 
     None
+}
+
+fn tracked_function_names(statement: &Statement) -> HashSet<String> {
+    let mut names = HashSet::new();
+    visit_expressions(statement, &mut |expr| {
+        if let Expr::Function(function) = expr {
+            if let Some(last_part) = function.name.0.last() {
+                names.insert(last_part.to_string().to_ascii_uppercase());
+            }
+        }
+    });
+    names
 }
 
 fn next_non_trivia_index(tokens: &[TokenWithSpan], mut index: usize) -> Option<usize> {
@@ -130,44 +143,8 @@ fn is_trivia_token(token: &Token) -> bool {
     )
 }
 
-fn is_non_function_word(word: &str) -> bool {
-    matches!(
-        word.to_ascii_uppercase().as_str(),
-        "ALL"
-            | "AND"
-            | "ANY"
-            | "AS"
-            | "BETWEEN"
-            | "BY"
-            | "CASE"
-            | "ELSE"
-            | "END"
-            | "EXISTS"
-            | "FROM"
-            | "GROUP"
-            | "HAVING"
-            | "IN"
-            | "INTERSECT"
-            | "IS"
-            | "JOIN"
-            | "LIKE"
-            | "ILIKE"
-            | "LIMIT"
-            | "NOT"
-            | "OFFSET"
-            | "ON"
-            | "OR"
-            | "ORDER"
-            | "OVER"
-            | "PARTITION"
-            | "SELECT"
-            | "THEN"
-            | "UNION"
-            | "VALUES"
-            | "WHEN"
-            | "WHERE"
-            | "WINDOW"
-    )
+fn is_always_function_keyword(word: &str) -> bool {
+    matches!(word, "CAST" | "TRY_CAST" | "SAFE_CAST" | "CONVERT")
 }
 
 fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
@@ -242,5 +219,12 @@ mod tests {
     #[test]
     fn does_not_flag_string_literal_function_like_text() {
         assert!(run("SELECT 'COUNT (1)' AS txt").is_empty());
+    }
+
+    #[test]
+    fn flags_space_between_cast_keyword_and_paren() {
+        let issues = run("SELECT CAST (1 AS INT)");
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_LT_006);
     }
 }

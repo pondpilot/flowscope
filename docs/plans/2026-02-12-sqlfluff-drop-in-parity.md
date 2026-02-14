@@ -200,6 +200,7 @@ This plan covers three axes:
   - Analyzer linting now runs `LT_005` for statementless/comment-only SQL inputs via document-level fallback, closing SQLFluff LT05 coverage gaps for comment-only files.
   - `LT_006` moved from parity handling to a dedicated core rule module (`lt_006.rs`).
   - `LT_006` was further upgraded from regex masking to active-dialect token-stream function-call spacing checks with context guards.
+  - `LT_006` spacing checks now derive candidate function names from AST expression traversal and apply token/span adjacency checks only to those function-call identifiers (plus cast-style function keywords), reducing non-function false positives from pure token heuristics.
   - `LT_007` moved from parity handling to a dedicated core rule module (`lt_007.rs`).
   - `LT_007` now includes source-aware templating parity: when templating is enabled, lint evaluation uses untemplated source slices for CTE close-bracket checks so SQLFluff whitespace-consuming Jinja forms (`{{- ... -}}`, `{#- ... -#}`, `{%- ... -%}`) no longer produce false positives.
   - `LT_007` closing-bracket checks are now AST-first (`Query.with.cte_tables` closing-paren metadata) with tokenizer-span matching for multiline close placement, and now use tokenizer fallback scanning (raw byte fallback removed) when AST/token span mapping is unavailable.
