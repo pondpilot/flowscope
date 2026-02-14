@@ -3,8 +3,9 @@
 //! SQLFluff LT13 parity (current scope): avoid leading blank lines.
 
 use crate::linter::rule::{LintContext, LintRule};
-use crate::types::{issue_codes, Issue};
+use crate::types::{issue_codes, Dialect, Issue};
 use sqlparser::ast::Statement;
+use sqlparser::tokenizer::{Token, Tokenizer, Whitespace};
 
 pub struct LayoutStartOfFile;
 
@@ -22,7 +23,9 @@ impl LintRule for LayoutStartOfFile {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let has_violation = ctx.statement_index == 0 && has_leading_blank_lines(ctx.sql);
+        let has_violation = ctx.statement_index == 0
+            && has_leading_blank_lines_tokenized(ctx.sql, ctx.dialect())
+                .unwrap_or_else(|| has_leading_blank_lines(ctx.sql));
         if has_violation {
             vec![Issue::info(
                 issue_codes::LINT_LT_013,
@@ -33,6 +36,24 @@ impl LintRule for LayoutStartOfFile {
             Vec::new()
         }
     }
+}
+
+fn has_leading_blank_lines_tokenized(sql: &str, dialect: Dialect) -> Option<bool> {
+    let dialect = dialect.to_sqlparser_dialect();
+    let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
+    let tokens = tokenizer.tokenize().ok()?;
+
+    for token in tokens {
+        match token {
+            Token::Whitespace(Whitespace::Space | Whitespace::Tab) => continue,
+            Token::Whitespace(Whitespace::Newline) => return Some(true),
+            Token::Whitespace(Whitespace::SingleLineComment { .. })
+            | Token::Whitespace(Whitespace::MultiLineComment(_)) => return Some(false),
+            _ => return Some(false),
+        }
+    }
+
+    Some(false)
 }
 
 fn has_leading_blank_lines(sql: &str) -> bool {
@@ -85,5 +106,12 @@ mod tests {
     #[test]
     fn does_not_flag_leading_comment() {
         assert!(run("-- comment\nSELECT 1").is_empty());
+    }
+
+    #[test]
+    fn flags_blank_line_before_comment() {
+        let issues = run("  \n-- comment\nSELECT 1");
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_LT_013);
     }
 }

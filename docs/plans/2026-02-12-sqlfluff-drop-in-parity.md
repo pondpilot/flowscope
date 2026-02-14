@@ -136,6 +136,7 @@ This plan covers three axes:
   - `ST_009` now supports `preferred_first_table_in_join_clause` (`earlier`/`later`) through `lint.ruleConfigs`.
   - `ST_012` moved from parity handling to a dedicated core rule module (`st_012.rs`).
   - `ST_012` was further upgraded from regex scanning to tokenizer-level semicolon sequencing, eliminating string-literal/comment false positives for consecutive-semicolon detection.
+  - `ST_012` semicolon sequencing is now dialect-aware and span-based (active-dialect tokenization), including dialect-specific comment trivia handling (for example MySQL `#` comments).
   - `TQ_001` moved from parity handling to a dedicated core rule module (`tq_001.rs`).
   - `TQ_001` was further upgraded to AST-driven procedure-name analysis via `Statement::CreateProcedure`, replacing SQL text regex scanning.
   - `TQ_002` moved from parity handling to a dedicated core rule module (`tq_002.rs`).
@@ -149,6 +150,7 @@ This plan covers three axes:
   - `CV_004` fixer now rewrites both `COUNT(1)` and `COUNT(0)` to `COUNT(*)` under default preference, aligning fix behavior with current violation detection.
   - `CV_008` fixer now rewrites both simple and chained/nested `RIGHT JOIN` patterns into `LEFT JOIN` form via AST join-tree rewrites (operand swap plus join-operator normalization).
   - `CV_006` now supports `multiline_newline` / `require_final_semicolon` through `lint.ruleConfigs`.
+  - `CV_006` semicolon-style analysis is now tokenizer/span-only (byte-scan fallback removed), including tokenized last-statement detection and tokenized trailing-comment checks for multiline newline-style terminators.
   - `CV_007` moved from parity handling to a dedicated core rule module (`cv_007.rs`).
   - `CV_007` was further upgraded to AST-driven statement-shape detection (`Statement::Query` + wrapper `SetExpr::Query`), replacing SQL text `starts_with('(')/ends_with(')')` heuristics.
   - `CV_009` moved from parity handling to a dedicated core rule module (`cv_009.rs`).
@@ -174,6 +176,7 @@ This plan covers three axes:
   - `LT_012` now enforces SQLFluff-style single trailing newline at EOF (flags both missing final newline and multiple trailing blank lines), and now derives trailing-content boundaries from tokenizer spans with fallback to raw-text counting.
   - `LT_013` moved from parity handling to a dedicated core rule module (`lt_013.rs`).
   - `LT_013` was further upgraded from regex matching to direct leading-blank-line scanning.
+  - `LT_013` now uses tokenizer-first start-of-file trivia detection (with raw-text fallback) for leading blank-line parity.
   - `LT_015` moved from parity handling to a dedicated core rule module (`lt_015.rs`).
   - `LT_015` was further upgraded from line-splitting-only blank-line run detection to tokenizer-derived line occupancy with fallback.
   - `LT_015` now supports `maximum_empty_lines_inside_statements` / `maximum_empty_lines_between_statements` through `lint.ruleConfigs`.

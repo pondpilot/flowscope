@@ -61,8 +61,10 @@ impl LintRule for ConventionTerminator {
                 let invalid_newline_style = !semicolon.newline_before_semicolon
                     || semicolon.newline_count_before_semicolon != 1
                     || semicolon.has_comment_before_semicolon
-                    || statement_has_trailing_block_comment(ctx)
-                    || statement_has_detached_trailing_line_comment(ctx);
+                    || statement_has_trailing_comment_before_semicolon(
+                        ctx,
+                        semicolon.semicolon_offset,
+                    );
                 if invalid_newline_style {
                     return vec![Issue::info(
                         issue_codes::LINT_CV_006,
@@ -97,7 +99,7 @@ fn statement_is_multiline(ctx: &LintContext) -> bool {
 }
 
 fn terminal_semicolon_info(ctx: &LintContext) -> Option<TerminalSemicolon> {
-    terminal_semicolon_info_tokenized(ctx).or_else(|| terminal_semicolon_info_bytes(ctx))
+    terminal_semicolon_info_tokenized(ctx)
 }
 
 fn terminal_semicolon_info_tokenized(ctx: &LintContext) -> Option<TerminalSemicolon> {
@@ -119,79 +121,10 @@ fn terminal_semicolon_info_tokenized(ctx: &LintContext) -> Option<TerminalSemico
                 });
             }
             trivia if is_trivia_token(trivia) => {
-                newline_count_before_semicolon += count_line_breaks(&ctx.sql[token.start..token.end]);
+                newline_count_before_semicolon +=
+                    count_line_breaks(&ctx.sql[token.start..token.end]);
                 if is_comment_token(trivia) {
                     has_comment_before_semicolon = true;
-                }
-            }
-            _ => return None,
-        }
-    }
-
-    None
-}
-
-fn terminal_semicolon_info_bytes(ctx: &LintContext) -> Option<TerminalSemicolon> {
-    let bytes = ctx.sql.as_bytes();
-    let mut idx = ctx.statement_range.end;
-    let mut newline_count_before_semicolon = 0usize;
-    let mut has_comment_before_semicolon = false;
-
-    while idx < bytes.len() {
-        match bytes[idx] {
-            b';' => {
-                return Some(TerminalSemicolon {
-                    semicolon_offset: idx,
-                    newline_before_semicolon: newline_count_before_semicolon > 0,
-                    newline_count_before_semicolon,
-                    has_comment_before_semicolon,
-                });
-            }
-            b' ' | b'\t' => {
-                idx += 1;
-            }
-            b'\n' => {
-                newline_count_before_semicolon += 1;
-                idx += 1;
-            }
-            b'\r' => {
-                newline_count_before_semicolon += 1;
-                idx += 1;
-                if idx < bytes.len() && bytes[idx] == b'\n' {
-                    idx += 1;
-                }
-            }
-            b'-' if idx + 1 < bytes.len() && bytes[idx + 1] == b'-' => {
-                has_comment_before_semicolon = true;
-                idx += 2;
-                while idx < bytes.len() && bytes[idx] != b'\n' && bytes[idx] != b'\r' {
-                    idx += 1;
-                }
-            }
-            b'#' => {
-                has_comment_before_semicolon = true;
-                idx += 1;
-                while idx < bytes.len() && bytes[idx] != b'\n' && bytes[idx] != b'\r' {
-                    idx += 1;
-                }
-            }
-            b'/' if idx + 1 < bytes.len() && bytes[idx + 1] == b'*' => {
-                has_comment_before_semicolon = true;
-                idx += 2;
-                while idx + 1 < bytes.len() {
-                    if bytes[idx] == b'*' && bytes[idx + 1] == b'/' {
-                        idx += 2;
-                        break;
-                    }
-                    if bytes[idx] == b'\n' {
-                        newline_count_before_semicolon += 1;
-                    } else if bytes[idx] == b'\r' {
-                        newline_count_before_semicolon += 1;
-                        if idx + 1 < bytes.len() && bytes[idx + 1] == b'\n' {
-                            idx += 1;
-                        }
-                    }
-                    idx += 1;
                 }
             }
             _ => return None,
@@ -208,30 +141,8 @@ struct TerminalSemicolon {
     has_comment_before_semicolon: bool,
 }
 
-fn statement_has_trailing_block_comment(ctx: &LintContext) -> bool {
-    ctx.statement_sql().trim_end().ends_with("*/")
-}
-
-fn statement_has_detached_trailing_line_comment(ctx: &LintContext) -> bool {
-    let mut non_empty_lines: Vec<&str> = Vec::new();
-    for line in ctx.statement_sql().lines() {
-        let trimmed = line.trim();
-        if !trimmed.is_empty() {
-            non_empty_lines.push(trimmed);
-        }
-    }
-
-    if non_empty_lines.len() < 2 {
-        return false;
-    }
-
-    non_empty_lines
-        .last()
-        .is_some_and(|line| line.starts_with("--") || line.starts_with('#'))
-}
-
 fn is_last_statement(ctx: &LintContext) -> bool {
-    is_last_statement_tokenized(ctx).unwrap_or_else(|| is_last_statement_bytes(ctx))
+    is_last_statement_tokenized(ctx).unwrap_or(false)
 }
 
 fn is_last_statement_tokenized(ctx: &LintContext) -> Option<bool> {
@@ -248,40 +159,20 @@ fn is_last_statement_tokenized(ctx: &LintContext) -> Option<bool> {
     Some(true)
 }
 
-fn is_last_statement_bytes(ctx: &LintContext) -> bool {
-    let bytes = ctx.sql.as_bytes();
-    let mut idx = ctx.statement_range.end;
+fn statement_has_trailing_comment_before_semicolon(ctx: &LintContext, semicolon: usize) -> bool {
+    let Some(tokens) = tokenize_with_offsets(ctx.sql, ctx.dialect()) else {
+        return false;
+    };
 
-    while idx < bytes.len() {
-        match bytes[idx] {
-            b' ' | b'\t' | b'\r' | b'\n' | b';' => idx += 1,
-            b'-' if idx + 1 < bytes.len() && bytes[idx + 1] == b'-' => {
-                idx += 2;
-                while idx < bytes.len() && bytes[idx] != b'\n' && bytes[idx] != b'\r' {
-                    idx += 1;
-                }
-            }
-            b'#' => {
-                idx += 1;
-                while idx < bytes.len() && bytes[idx] != b'\n' && bytes[idx] != b'\r' {
-                    idx += 1;
-                }
-            }
-            b'/' if idx + 1 < bytes.len() && bytes[idx + 1] == b'*' => {
-                idx += 2;
-                while idx + 1 < bytes.len() {
-                    if bytes[idx] == b'*' && bytes[idx + 1] == b'/' {
-                        idx += 2;
-                        break;
-                    }
-                    idx += 1;
-                }
-            }
-            _ => return false,
-        }
-    }
-
-    true
+    tokens
+        .iter()
+        .filter(|token| {
+            token.start >= ctx.statement_range.start
+                && token.end <= semicolon
+                && !is_spacing_whitespace(&token.token)
+        })
+        .next_back()
+        .is_some_and(|token| is_comment_token(&token.token))
 }
 
 struct LocatedToken {
@@ -304,9 +195,11 @@ fn tokenize_with_offsets(sql: &str, dialect: Dialect) -> Option<Vec<LocatedToken
         ) else {
             continue;
         };
-        let Some(end) =
-            line_col_to_offset(sql, token.span.end.line as usize, token.span.end.column as usize)
-        else {
+        let Some(end) = line_col_to_offset(
+            sql,
+            token.span.end.line as usize,
+            token.span.end.column as usize,
+        ) else {
             continue;
         };
         out.push(LocatedToken {
@@ -333,6 +226,13 @@ fn is_trivia_token(token: &Token) -> bool {
         Token::Whitespace(Whitespace::Space | Whitespace::Tab | Whitespace::Newline)
             | Token::Whitespace(Whitespace::SingleLineComment { .. })
             | Token::Whitespace(Whitespace::MultiLineComment(_))
+    )
+}
+
+fn is_spacing_whitespace(token: &Token) -> bool {
+    matches!(
+        token,
+        Token::Whitespace(Whitespace::Space | Whitespace::Tab | Whitespace::Newline)
     )
 }
 
@@ -527,6 +427,31 @@ mod tests {
             &LintContext {
                 sql,
                 statement_range: 0.."SELECT a\nFROM foo".len(),
+                statement_index: 0,
+            },
+        );
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_CV_006);
+    }
+
+    #[test]
+    fn multiline_newline_flags_trailing_comment_inside_statement_range() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "convention.terminator".to_string(),
+                serde_json::json!({"multiline_newline": true}),
+            )]),
+        };
+        let rule = ConventionTerminator::from_config(&config);
+        let sql = "SELECT a\nFROM foo\n-- trailing\n;";
+        let stmts = parse_sql(sql).expect("parse");
+        let issues = rule.check(
+            &stmts[0],
+            &LintContext {
+                sql,
+                statement_range: 0.."SELECT a\nFROM foo\n-- trailing".len(),
                 statement_index: 0,
             },
         );
