@@ -203,7 +203,7 @@ fn line_ranges(sql: &str) -> Vec<(usize, usize)> {
         }
 
         let mut line_end = idx;
-        if line_end > line_start && sql.as_bytes()[line_end - 1] == b'\r' {
+        if line_end > line_start && sql[line_start..line_end].ends_with('\r') {
             line_end -= 1;
         }
         ranges.push((line_start, line_end));
@@ -211,7 +211,7 @@ fn line_ranges(sql: &str) -> Vec<(usize, usize)> {
     }
 
     let mut line_end = sql.len();
-    if line_end > line_start && sql.as_bytes()[line_end - 1] == b'\r' {
+    if line_end > line_start && sql[line_start..line_end].ends_with('\r') {
         line_end -= 1;
     }
     ranges.push((line_start, line_end));
@@ -365,33 +365,23 @@ fn tokenize_with_offsets(sql: &str, dialect: Dialect) -> Option<Vec<LocatedToken
 }
 
 fn jinja_comment_spans(sql: &str) -> Vec<std::ops::Range<usize>> {
-    let bytes = sql.as_bytes();
     let mut spans = Vec::new();
-    let mut idx = 0usize;
+    let mut cursor = 0usize;
 
-    while idx + 1 < bytes.len() {
-        if bytes[idx] == b'{' && bytes[idx + 1] == b'#' {
-            let start = idx;
-            idx += 2;
-
-            while idx + 1 < bytes.len() {
-                if bytes[idx] == b'#' && bytes[idx + 1] == b'}' {
-                    idx += 2;
-                    spans.push(start..idx);
-                    break;
-                }
-                idx += 1;
-            }
-
-            if idx >= bytes.len() {
-                spans.push(start..bytes.len());
-                break;
-            }
-
-            continue;
+    while cursor < sql.len() {
+        let Some(open_rel) = sql[cursor..].find("{#") else {
+            break;
+        };
+        let start = cursor + open_rel;
+        let content_start = start + 2;
+        if let Some(close_rel) = sql[content_start..].find("#}") {
+            let end = content_start + close_rel + 2;
+            spans.push(start..end);
+            cursor = end;
+        } else {
+            spans.push(start..sql.len());
+            break;
         }
-
-        idx += 1;
     }
 
     spans
