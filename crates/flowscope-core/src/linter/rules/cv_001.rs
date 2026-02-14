@@ -5,9 +5,9 @@
 
 use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
-use crate::types::{issue_codes, Dialect, Issue};
-use sqlparser::ast::Statement;
-use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer};
+use crate::linter::visit::visit_expressions;
+use crate::types::{issue_codes, Issue};
+use sqlparser::ast::{BinaryOperator, Expr, Spanned, Statement};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum PreferredNotEqualStyle {
@@ -80,8 +80,8 @@ impl LintRule for ConventionNotEqual {
         "Use a consistent not-equal operator style."
     }
 
-    fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let usage = statement_not_equal_usage(ctx.statement_sql(), ctx.dialect());
+    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+        let usage = statement_not_equal_usage(statement, ctx.statement_sql());
         if self.preferred_style.violation(&usage) {
             vec![
                 Issue::info(issue_codes::LINT_CV_001, self.preferred_style.message())
@@ -104,51 +104,99 @@ enum NotEqualStyle {
     Bang,
 }
 
-fn statement_not_equal_usage(sql: &str, dialect: Dialect) -> NotEqualUsage {
+fn statement_not_equal_usage(statement: &Statement, sql: &str) -> NotEqualUsage {
     let mut usage = NotEqualUsage::default();
-
-    let dialect = dialect.to_sqlparser_dialect();
-    let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
-    let Ok(tokens) = tokenizer.tokenize_with_location() else {
-        return usage;
-    };
-
-    for token in &tokens {
-        if !matches!(token.token, Token::Neq) {
-            continue;
+    visit_expressions(statement, &mut |expr| {
+        if usage.saw_angle_style && usage.saw_bang_style {
+            return;
         }
 
-        match not_equal_style_for_token(sql, token) {
+        let style = match expr {
+            Expr::BinaryOp { left, op, right } if *op == BinaryOperator::NotEq => {
+                not_equal_style_between(sql, left.as_ref(), right.as_ref())
+            }
+            Expr::AnyOp {
+                left,
+                compare_op,
+                right,
+                ..
+            } if *compare_op == BinaryOperator::NotEq => {
+                not_equal_style_between(sql, left.as_ref(), right.as_ref())
+            }
+            Expr::AllOp {
+                left,
+                compare_op,
+                right,
+            } if *compare_op == BinaryOperator::NotEq => {
+                not_equal_style_between(sql, left.as_ref(), right.as_ref())
+            }
+            _ => None,
+        };
+
+        match style {
             Some(NotEqualStyle::Angle) => usage.saw_angle_style = true,
             Some(NotEqualStyle::Bang) => usage.saw_bang_style = true,
             None => {}
         }
-
-        if usage.saw_angle_style && usage.saw_bang_style {
-            return usage;
-        }
-    }
+    });
 
     usage
 }
 
-fn not_equal_style_for_token(sql: &str, token: &TokenWithSpan) -> Option<NotEqualStyle> {
-    let start = line_col_to_offset(
-        sql,
-        token.span.start.line as usize,
-        token.span.start.column as usize,
-    )?;
-    let end = line_col_to_offset(
-        sql,
-        token.span.end.line as usize,
-        token.span.end.column as usize,
-    )?;
-    let raw = sql.get(start..end)?;
-    match raw {
-        "<>" => Some(NotEqualStyle::Angle),
-        "!=" => Some(NotEqualStyle::Bang),
-        _ => None,
+fn not_equal_style_between(sql: &str, left: &Expr, right: &Expr) -> Option<NotEqualStyle> {
+    let left_end = left.span().end;
+    let right_start = right.span().start;
+    if left_end.line == 0 || left_end.column == 0 || right_start.line == 0 || right_start.column == 0 {
+        return None;
     }
+
+    let start = line_col_to_offset(sql, left_end.line as usize, left_end.column as usize)?;
+    let end = line_col_to_offset(sql, right_start.line as usize, right_start.column as usize)?;
+    if end < start {
+        return None;
+    }
+    let raw = sql.get(start..end)?;
+    not_equal_style_in_segment(raw)
+}
+
+fn not_equal_style_in_segment(segment: &str) -> Option<NotEqualStyle> {
+    let bytes = segment.as_bytes();
+    let mut index = 0usize;
+    while index < bytes.len() {
+        match bytes[index] {
+            b' ' | b'\t' | b'\n' | b'\r' => {
+                index += 1;
+            }
+            b'-' if index + 1 < bytes.len() && bytes[index + 1] == b'-' => {
+                index += 2;
+                while index < bytes.len() && bytes[index] != b'\n' {
+                    index += 1;
+                }
+            }
+            b'/' if index + 1 < bytes.len() && bytes[index + 1] == b'*' => {
+                index += 2;
+                while index + 1 < bytes.len() && !(bytes[index] == b'*' && bytes[index + 1] == b'/')
+                {
+                    index += 1;
+                }
+                if index + 1 < bytes.len() {
+                    index += 2;
+                } else {
+                    index = bytes.len();
+                }
+            }
+            b'<' if index + 1 < bytes.len() && bytes[index + 1] == b'>' => {
+                return Some(NotEqualStyle::Angle);
+            }
+            b'!' if index + 1 < bytes.len() && bytes[index + 1] == b'=' => {
+                return Some(NotEqualStyle::Bang);
+            }
+            _ => {
+                index += 1;
+            }
+        }
+    }
+    None
 }
 
 fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {

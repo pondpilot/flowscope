@@ -146,8 +146,8 @@ This plan covers three axes:
   - `TQ_003` moved from parity handling to a dedicated core rule module (`tq_003.rs`).
   - `TQ_003` was further upgraded from regex scanning to active-dialect token/line-aware repeated-`GO` separator detection, reducing string-literal false positives.
   - `CV_001` moved from parity handling to a dedicated core rule module (`cv_001.rs`).
-  - `CV_001` was further upgraded from regex checks to lexer-style operator scanning that ignores comments/quoted strings for mixed `<>`/`!=` detection.
-  - `CV_001` not-equal style detection is now active-dialect tokenizer/span-driven (`Token::Neq` raw-slice classification for `<>` vs `!=`) rather than manual SQL-state scanning.
+  - `CV_001` was further upgraded from regex checks to AST expression traversal for not-equal comparisons, reducing lexical false positives.
+  - `CV_001` not-equal style detection is now AST span-driven (operator classification from source slices between `Expr` operand spans), replacing tokenizer-wide `Token::Neq` scanning.
   - `CV_001` now supports `preferred_not_equal_style` (`consistent`/`c_style`/`ansi`) through `lint.ruleConfigs`.
   - `CV_004` now supports `prefer_count_1` / `prefer_count_0` through `lint.ruleConfigs`.
   - `CV_004` fixer now rewrites both `COUNT(1)` and `COUNT(0)` to `COUNT(*)` under default preference, aligning fix behavior with current violation detection.
