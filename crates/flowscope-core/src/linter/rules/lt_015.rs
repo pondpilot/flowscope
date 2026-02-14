@@ -4,8 +4,9 @@
 
 use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
-use crate::types::{issue_codes, Issue};
+use crate::types::{issue_codes, Dialect, Issue};
 use sqlparser::ast::Statement;
+use sqlparser::tokenizer::{Token, Tokenizer, Whitespace};
 
 pub struct LayoutNewlines {
     maximum_empty_lines_inside_statements: usize,
@@ -57,11 +58,13 @@ impl LintRule for LayoutNewlines {
         let statement_sql = ctx
             .statement_sql()
             .trim_matches(|ch: char| ch.is_ascii_whitespace());
-        let excessive_inside =
-            max_consecutive_blank_lines(statement_sql) > self.maximum_empty_lines_inside_statements;
+        let excessive_inside = max_consecutive_blank_lines(statement_sql, ctx.dialect())
+            > self.maximum_empty_lines_inside_statements;
         let excessive_between = ctx.statement_index > 0
-            && max_consecutive_blank_lines(inter_statement_gap(ctx.sql, ctx.statement_range.start))
-                > self.maximum_empty_lines_between_statements;
+            && max_consecutive_blank_lines(
+                inter_statement_gap(ctx.sql, ctx.statement_range.start),
+                ctx.dialect(),
+            ) > self.maximum_empty_lines_between_statements;
 
         if excessive_inside || excessive_between {
             vec![Issue::info(
@@ -75,7 +78,49 @@ impl LintRule for LayoutNewlines {
     }
 }
 
-fn max_consecutive_blank_lines(sql: &str) -> usize {
+fn max_consecutive_blank_lines(sql: &str, dialect: Dialect) -> usize {
+    max_consecutive_blank_lines_tokenized(sql, dialect)
+        .unwrap_or_else(|| max_consecutive_blank_lines_fallback(sql))
+}
+
+fn max_consecutive_blank_lines_tokenized(sql: &str, dialect: Dialect) -> Option<usize> {
+    if sql.is_empty() {
+        return Some(0);
+    }
+
+    let dialect = dialect.to_sqlparser_dialect();
+    let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
+    let tokens = tokenizer.tokenize_with_location().ok()?;
+
+    let mut non_blank_lines = std::collections::BTreeSet::new();
+    for token in tokens {
+        if is_spacing_whitespace_token(&token.token) {
+            continue;
+        }
+        let start_line = token.span.start.line as usize;
+        let end_line = token.span.end.line as usize;
+        for line in start_line..=end_line {
+            non_blank_lines.insert(line);
+        }
+    }
+
+    let mut blank_run = 0usize;
+    let mut max_run = 0usize;
+    let line_count = sql.lines().count();
+
+    for line in 1..=line_count {
+        if non_blank_lines.contains(&line) {
+            blank_run = 0;
+        } else {
+            blank_run += 1;
+            max_run = max_run.max(blank_run);
+        }
+    }
+
+    Some(max_run)
+}
+
+fn max_consecutive_blank_lines_fallback(sql: &str) -> usize {
     let mut blank_run = 0usize;
     let mut max_run = 0usize;
 
@@ -89,6 +134,13 @@ fn max_consecutive_blank_lines(sql: &str) -> usize {
     }
 
     max_run
+}
+
+fn is_spacing_whitespace_token(token: &Token) -> bool {
+    matches!(
+        token,
+        Token::Whitespace(Whitespace::Space | Whitespace::Tab | Whitespace::Newline)
+    )
 }
 
 fn inter_statement_gap(sql: &str, statement_start: usize) -> &str {

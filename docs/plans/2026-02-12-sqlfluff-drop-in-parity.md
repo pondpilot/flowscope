@@ -175,7 +175,7 @@ This plan covers three axes:
   - `LT_013` moved from parity handling to a dedicated core rule module (`lt_013.rs`).
   - `LT_013` was further upgraded from regex matching to direct leading-blank-line scanning.
   - `LT_015` moved from parity handling to a dedicated core rule module (`lt_015.rs`).
-  - `LT_015` was further upgraded from regex matching to direct blank-line run detection.
+  - `LT_015` was further upgraded from line-splitting-only blank-line run detection to tokenizer-derived line occupancy with fallback.
   - `LT_015` now supports `maximum_empty_lines_inside_statements` / `maximum_empty_lines_between_statements` through `lint.ruleConfigs`.
   - `LT_002` moved from parity handling to a dedicated core rule module (`lt_002.rs`).
   - `LT_002` now supports SQLFluff-style indentation config shapes across both `layout.indent` and top-level `indentation` sections (`indent_unit` / `tab_space_size`), enforces tab-vs-space indentation style, detects first-line indentation from full-statement source context, and now builds line-indentation snapshots from tokenizer spans (including comment lines) instead of line-splitting alone.
