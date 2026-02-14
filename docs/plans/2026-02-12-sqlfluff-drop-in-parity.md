@@ -63,8 +63,9 @@ This plan covers three axes:
   - `AL_001` was further upgraded to AST-driven table-factor alias traversal with span-bounded source analysis for explicit vs implicit `AS` detection (tokenizer pass removed).
   - `AL_001` now applies alias-style checks to `MERGE` target/source aliases (for example BigQuery `MERGE dataset.inventory t USING ... s`) for SQLFluff AL01 parity.
   - `AL_002` moved from parity into a dedicated core rule module (`al_002.rs`) and parity registration was removed.
-  - `AL_002` was further upgraded to AST-driven SELECT projection alias traversal with span-bounded source analysis for explicit vs implicit `AS` detection (tokenizer pass removed).
+  - `AL_002` was further upgraded to AST-driven SELECT projection alias traversal with token-span-aware alias-context checks (shared document tokens first, tokenizer fallback) for explicit vs implicit `AS` detection.
   - `AL_002` now excludes TSQL assignment-style projection aliases (`SELECT alias = expr`) from AL02 violations, matching SQLFluff behavior.
+  - `AL_002` TSQL assignment detection removed raw byte-scanned leading-trivia fallback in favor of token-aware checks plus char-safe fallback trimming.
   - `AL_001`/`AL_002` now support SQLFluff-style `aliasing` mode (`explicit`/`implicit`) via `lint.ruleConfigs`.
   - `AL_008` moved from parity into a dedicated core AST rule (`al_008.rs`) and parity registration was removed.
   - `AL_008` now checks duplicate output names from unaliased column references in SELECT projections (in addition to explicit aliases), improving SQLFluff AL08 parity.
@@ -624,7 +625,7 @@ Migrate them to proper AST implementations.
 | Rule | Current Engine | SQLFluff Behavior Gap |
 |---|---|---|
 | AL_001 (aliasing.table) | Lexical | Needs to distinguish implicit vs explicit `AS`; handle dialect-specific aliasing |
-| AL_002 (aliasing.column) | Lexical | Same as AL_001 for column aliases |
+| AL_002 (aliasing.column) | Core (partial) | Remaining advanced SQLFluff edge cases beyond current AST + token-span explicit/implicit alias checks |
 | AL_004 (aliasing.unique.table) | Lexical | Needs AST-level alias tracking across FROM/JOIN |
 | AL_005 (aliasing.unused) | Core (partial) | Remaining advanced dialect/scope edges beyond current `LATERAL`/`VALUES`, BigQuery `TO_JSON_STRING(<table_alias>)`, `DELETE ... USING`, and Redshift QUALIFY alias-prefix parity |
 | AL_008 (aliasing.unique.column) | Lexical | Needs AST-level SELECT projection alias tracking |
