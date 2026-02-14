@@ -130,6 +130,8 @@ fn alias_occurrence_in_statement(
     ctx: &LintContext,
     tokens: Option<&[LocatedToken]>,
 ) -> Option<AliasOccurrence> {
+    let tokens = tokens?;
+
     let abs_start = line_col_to_offset(
         ctx.sql,
         alias.span.start.line as usize,
@@ -158,127 +160,15 @@ fn alias_occurrence_in_statement(
     }
     let rel_item_end = abs_item_end - ctx.statement_range.start;
 
-    let statement_sql = ctx.statement_sql();
-    let explicit_as = tokens
-        .and_then(|tokens| explicit_as_before_alias_tokens(tokens, rel_start))
-        .unwrap_or_else(|| explicit_as_before_alias(statement_sql, rel_start));
-    let tsql_equals_assignment = tokens
-        .and_then(|tokens| tsql_assignment_after_alias_tokens(tokens, rel_end, rel_item_end))
-        .unwrap_or_else(|| tsql_assignment_after_alias(statement_sql, rel_end, rel_item_end));
+    let explicit_as = explicit_as_before_alias_tokens(tokens, rel_start)?;
+    let tsql_equals_assignment =
+        tsql_assignment_after_alias_tokens(tokens, rel_end, rel_item_end).unwrap_or(false);
     Some(AliasOccurrence {
         start: rel_start,
         end: rel_end,
         explicit_as,
         tsql_equals_assignment,
     })
-}
-
-fn explicit_as_before_alias(statement_sql: &str, alias_start: usize) -> bool {
-    if alias_start > statement_sql.len() {
-        return false;
-    }
-    let prefix = &statement_sql[..alias_start];
-    let trimmed = trim_trailing_trivia(prefix);
-    trailing_word(trimmed)
-        .map(|word| word.eq_ignore_ascii_case("as"))
-        .unwrap_or(false)
-}
-
-fn tsql_assignment_after_alias(statement_sql: &str, alias_end: usize, item_end: usize) -> bool {
-    if alias_end > item_end || item_end > statement_sql.len() {
-        return false;
-    }
-    let suffix = &statement_sql[alias_end..item_end];
-    strip_leading_trivia(suffix).starts_with('=')
-}
-
-fn trim_trailing_trivia(mut input: &str) -> &str {
-    loop {
-        let trimmed = input.trim_end_matches(char::is_whitespace);
-        if trimmed.len() != input.len() {
-            input = trimmed;
-            continue;
-        }
-
-        if let Some(stripped) = strip_trailing_line_comment(input) {
-            input = stripped;
-            continue;
-        }
-
-        if let Some(stripped) = strip_trailing_block_comment(input) {
-            input = stripped;
-            continue;
-        }
-
-        return input;
-    }
-}
-
-fn strip_trailing_line_comment(input: &str) -> Option<&str> {
-    let line_start = input.rfind('\n').map_or(0, |idx| idx + 1);
-    let tail = &input[line_start..];
-    let comment_start = tail.rfind("--")?;
-    Some(&input[..line_start + comment_start])
-}
-
-fn strip_trailing_block_comment(input: &str) -> Option<&str> {
-    if !input.ends_with("*/") {
-        return None;
-    }
-    let start = input.rfind("/*")?;
-    Some(&input[..start])
-}
-
-fn trailing_word(input: &str) -> Option<&str> {
-    let mut end = input.len();
-    while end > 0 && !input.is_char_boundary(end) {
-        end -= 1;
-    }
-
-    let mut start = end;
-    while start > 0 {
-        let ch = input[..start].chars().next_back()?;
-        if ch.is_ascii_alphanumeric() || ch == '_' {
-            start -= ch.len_utf8();
-        } else {
-            break;
-        }
-    }
-
-    (start < end).then_some(&input[start..end])
-}
-
-fn strip_leading_trivia(mut input: &str) -> &str {
-    loop {
-        let trimmed = input.trim_start_matches(char::is_whitespace);
-        if trimmed.len() != input.len() {
-            input = trimmed;
-            continue;
-        }
-        if let Some(stripped) = strip_leading_line_comment(input) {
-            input = stripped;
-            continue;
-        }
-        if let Some(stripped) = strip_leading_block_comment(input) {
-            input = stripped;
-            continue;
-        }
-        return input;
-    }
-}
-
-fn strip_leading_line_comment(input: &str) -> Option<&str> {
-    let suffix = input.strip_prefix("--")?;
-    let next_line = suffix
-        .find('\n')
-        .map_or(suffix.len(), |idx| idx + 1);
-    Some(&suffix[next_line..])
-}
-
-fn strip_leading_block_comment(input: &str) -> Option<&str> {
-    let suffix = input.strip_prefix("/*")?;
-    let end = suffix.find("*/")?;
-    Some(&suffix[end + 2..])
 }
 
 fn explicit_as_before_alias_tokens(tokens: &[LocatedToken], alias_start: usize) -> Option<bool> {
