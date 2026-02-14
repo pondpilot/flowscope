@@ -85,6 +85,10 @@ impl LintRule for LayoutNewlines {
 }
 
 fn trimmed_statement_range_and_sql<'a>(ctx: &'a LintContext) -> (Range<usize>, &'a str) {
+    if let Some(range) = trimmed_statement_range_from_tokens(ctx) {
+        return (range.clone(), &ctx.sql[range]);
+    }
+
     let statement_sql = ctx.statement_sql();
     let mut start = 0usize;
     while start < statement_sql.len() && statement_sql.as_bytes()[start].is_ascii_whitespace() {
@@ -100,6 +104,40 @@ fn trimmed_statement_range_and_sql<'a>(ctx: &'a LintContext) -> (Range<usize>, &
         (ctx.statement_range.start + start)..(ctx.statement_range.start + end),
         &statement_sql[start..end],
     )
+}
+
+fn trimmed_statement_range_from_tokens(ctx: &LintContext) -> Option<Range<usize>> {
+    let statement_start = ctx.statement_range.start;
+    let statement_end = ctx.statement_range.end;
+
+    ctx.with_document_tokens(|tokens| {
+        if tokens.is_empty() {
+            return None;
+        }
+
+        let mut first = None::<usize>;
+        let mut last = None::<usize>;
+
+        for token in tokens {
+            let Some((start, end)) = token_with_span_offsets(ctx.sql, token) else {
+                continue;
+            };
+            if start < statement_start || end > statement_end {
+                continue;
+            }
+            if is_spacing_whitespace_token(&token.token) {
+                continue;
+            }
+
+            first = Some(first.map_or(start, |current| current.min(start)));
+            last = Some(last.map_or(end, |current| current.max(end)));
+        }
+
+        Some(match (first, last) {
+            (Some(start), Some(end)) => start..end,
+            _ => statement_start..statement_start,
+        })
+    })
 }
 
 fn max_consecutive_blank_lines(
@@ -147,7 +185,7 @@ fn max_consecutive_blank_lines_tokenized(
 
     let mut blank_run = 0usize;
     let mut max_run = 0usize;
-    let line_count = sql.lines().count();
+    let line_count = line_count_from_tokens_or_sql(sql, tokens);
 
     for line in 1..=line_count {
         if non_blank_lines.contains(&line) {
@@ -159,6 +197,37 @@ fn max_consecutive_blank_lines_tokenized(
     }
 
     max_run
+}
+
+fn line_count_from_tokens_or_sql(sql: &str, tokens: &[TokenWithSpan]) -> usize {
+    let token_line_max = tokens
+        .iter()
+        .map(|token| match &token.token {
+            Token::Whitespace(Whitespace::SingleLineComment { .. }) => token.span.start.line,
+            _ => token.span.end.line,
+        } as usize)
+        .max()
+        .unwrap_or(0);
+    let fallback = count_line_breaks(sql) + 1;
+    token_line_max.max(fallback)
+}
+
+fn count_line_breaks(text: &str) -> usize {
+    let mut count = 0usize;
+    let mut chars = text.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '\n' {
+            count += 1;
+            continue;
+        }
+        if ch == '\r' {
+            count += 1;
+            if matches!(chars.peek(), Some('\n')) {
+                let _ = chars.next();
+            }
+        }
+    }
+    count
 }
 
 fn is_spacing_whitespace_token(token: &Token) -> bool {
@@ -449,6 +518,13 @@ mod tests {
     #[test]
     fn flags_blank_lines_between_statements_with_comment_gap() {
         let issues = run("SELECT 1;\n-- there was a comment\n\n\nSELECT 2");
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_LT_015);
+    }
+
+    #[test]
+    fn flags_excessive_blank_lines_with_crlf_line_breaks() {
+        let issues = run("SELECT 1\r\n\r\n\r\nFROM t");
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_LT_015);
     }
