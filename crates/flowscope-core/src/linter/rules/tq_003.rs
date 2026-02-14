@@ -6,7 +6,8 @@
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Dialect, Issue};
 use sqlparser::ast::Statement;
-use sqlparser::tokenizer::{Location, Span, Token, TokenWithSpan, Tokenizer};
+use sqlparser::tokenizer::{Location, Span, Token, TokenWithSpan, Tokenizer, Whitespace};
+use std::collections::{BTreeMap, BTreeSet};
 
 pub struct TsqlEmptyBatch;
 
@@ -55,20 +56,26 @@ fn has_empty_go_batch_separator(
         &owned_tokens
     };
 
-    let mut go_lines = Vec::new();
-    for token in tokens {
-        let Token::Word(word) = &token.token else {
-            continue;
-        };
-        if !word.value.eq_ignore_ascii_case("GO") {
-            continue;
-        }
+    let mut line_summary = BTreeMap::<usize, LineSummary>::new();
+    let mut go_candidate_lines = BTreeSet::<usize>::new();
 
-        let line = token.span.start.line as usize;
-        if line_is_go_separator(sql, line) {
-            go_lines.push(line);
+    for token in tokens {
+        update_line_summary(&mut line_summary, token);
+        if let Token::Word(word) = &token.token {
+            if word.value.eq_ignore_ascii_case("GO") {
+                go_candidate_lines.insert(token.span.start.line as usize);
+            }
         }
     }
+
+    let mut go_lines = go_candidate_lines
+        .into_iter()
+        .filter(|line| {
+            line_summary
+                .get(line)
+                .is_some_and(|summary| summary.is_go_separator())
+        })
+        .collect::<Vec<_>>();
 
     if go_lines.len() < 2 {
         return false;
@@ -79,7 +86,7 @@ fn has_empty_go_batch_separator(
 
     go_lines
         .windows(2)
-        .any(|pair| lines_between_are_empty(sql, pair[0], pair[1]))
+        .any(|pair| lines_between_are_empty(&line_summary, pair[0], pair[1]))
 }
 
 fn tokenized(sql: &str, dialect: Dialect) -> Option<Vec<TokenWithSpan>> {
@@ -133,11 +140,48 @@ fn tokenized_for_context(ctx: &LintContext) -> Option<Vec<TokenWithSpan>> {
     })
 }
 
-fn line_is_go_separator(sql: &str, line_number: usize) -> bool {
-    line_text(sql, line_number).is_some_and(|line| line.trim().eq_ignore_ascii_case("GO"))
+#[derive(Default, Clone, Copy)]
+struct LineSummary {
+    go_count: usize,
+    other_count: usize,
 }
 
-fn lines_between_are_empty(sql: &str, first_line: usize, second_line: usize) -> bool {
+impl LineSummary {
+    fn is_go_separator(self) -> bool {
+        self.go_count == 1 && self.other_count == 0
+    }
+}
+
+fn update_line_summary(summary: &mut BTreeMap<usize, LineSummary>, token: &TokenWithSpan) {
+    let start_line = token.span.start.line as usize;
+    let end_line = token.span.end.line as usize;
+
+    match &token.token {
+        Token::Whitespace(Whitespace::Space | Whitespace::Tab | Whitespace::Newline) => {}
+        Token::Whitespace(Whitespace::SingleLineComment { .. }) => {
+            summary.entry(start_line).or_default().other_count += 1;
+        }
+        Token::Whitespace(Whitespace::MultiLineComment(_)) => {
+            for line in start_line..=end_line {
+                summary.entry(line).or_default().other_count += 1;
+            }
+        }
+        Token::Word(word) if word.value.eq_ignore_ascii_case("GO") && start_line == end_line => {
+            summary.entry(start_line).or_default().go_count += 1;
+        }
+        _ => {
+            for line in start_line..=end_line {
+                summary.entry(line).or_default().other_count += 1;
+            }
+        }
+    }
+}
+
+fn lines_between_are_empty(
+    line_summary: &BTreeMap<usize, LineSummary>,
+    first_line: usize,
+    second_line: usize,
+) -> bool {
     if second_line <= first_line {
         return false;
     }
@@ -146,12 +190,7 @@ fn lines_between_are_empty(sql: &str, first_line: usize, second_line: usize) -> 
         return true;
     }
 
-    ((first_line + 1)..second_line)
-        .all(|line_number| line_text(sql, line_number).is_some_and(|line| line.trim().is_empty()))
-}
-
-fn line_text(sql: &str, line_number: usize) -> Option<&str> {
-    sql.lines().nth(line_number.saturating_sub(1))
+    ((first_line + 1)..second_line).all(|line_number| !line_summary.contains_key(&line_number))
 }
 
 fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
@@ -309,6 +348,15 @@ mod tests {
     fn does_not_detect_go_text_inside_string_literal() {
         assert!(!has_empty_go_batch_separator(
             "SELECT '\nGO\nGO\n' AS sql_snippet",
+            Dialect::Generic,
+            None,
+        ));
+    }
+
+    #[test]
+    fn does_not_treat_comment_line_between_go_as_empty_batch() {
+        assert!(!has_empty_go_batch_separator(
+            "GO\n-- keep batch non-empty\nGO\n",
             Dialect::Generic,
             None,
         ));

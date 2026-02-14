@@ -147,6 +147,7 @@ This plan covers three axes:
   - `TQ_003` moved from parity handling to a dedicated core rule module (`tq_003.rs`).
   - `TQ_003` was further upgraded from regex scanning to active-dialect token/line-aware repeated-`GO` separator detection, reducing string-literal false positives.
   - `TQ_003` now consumes the shared document token stream from lint context (`parse once, tokenize once`) before fallback tokenization.
+  - `TQ_003` empty-batch detection now derives GO-separator and in-between-line emptiness from token-span line summaries (including comment-line handling) instead of `sql.lines()` text trimming.
   - `CV_001` moved from parity handling to a dedicated core rule module (`cv_001.rs`).
   - `CV_001` was further upgraded from regex checks to AST expression traversal for not-equal comparisons, reducing lexical false positives.
   - `CV_001` not-equal style detection is now AST span-driven (operator classification from source slices between `Expr` operand spans), replacing tokenizer-wide `Token::Neq` scanning.
