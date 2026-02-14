@@ -13,7 +13,7 @@ pub(crate) mod visit;
 
 use config::LintConfig;
 use document::{LintDocument, LintStatement};
-use rule::{with_active_dialect, LintContext, LintRule};
+use rule::{with_active_dialect, with_active_document_tokens, LintContext, LintRule};
 use sqlparser::ast::Statement;
 use std::borrow::Cow;
 
@@ -49,148 +49,151 @@ impl Linter {
             return Vec::new();
         }
 
-        let mut issues = Vec::new();
+        with_active_document_tokens(&document.raw_tokens, || {
+            let mut issues = Vec::new();
 
-        for engine in [
-            LintEngine::Semantic,
-            LintEngine::Lexical,
-            LintEngine::Document,
-        ] {
-            for rule in &self.rules {
-                if !self.config.is_rule_enabled(rule.code())
-                    || rule_engine(rule.code()) != engine
-                    || !rule_supported_in_dialect(rule.code(), document.dialect)
-                {
-                    continue;
-                }
-
-                let (confidence, fallback) = lint_quality_for_rule(rule.code(), engine, document);
-
-                if rule_uses_document_scope(rule.code()) {
-                    let Some(synthetic_statement) = parse_sql("SELECT 1")
-                        .ok()
-                        .and_then(|mut statements| statements.drain(..).next())
-                    else {
-                        continue;
-                    };
-
-                    let document_scope_sql =
-                        document_scope_sql_for_rule(&self.config, rule.code(), document);
-                    let ctx = LintContext {
-                        sql: document_scope_sql.as_ref(),
-                        statement_range: 0..document_scope_sql.len(),
-                        statement_index: 0,
-                    };
-
-                    with_active_dialect(document.dialect, || {
-                        for issue in rule.check(&synthetic_statement, &ctx) {
-                            let mut issue = issue
-                                .with_lint_engine(engine)
-                                .with_lint_confidence(confidence);
-
-                            if let Some(source) = fallback {
-                                issue = issue.with_lint_fallback_source(source);
-                            }
-
-                            let sqlfluff_name = rule.sqlfluff_name();
-                            if !sqlfluff_name.is_empty() {
-                                issue = issue.with_sqlfluff_name(sqlfluff_name);
-                            }
-
-                            issues.push(issue);
-                        }
-                    });
-                    continue;
-                }
-
-                if document.statements.is_empty() {
-                    if !rule_supports_statementless_fallback(rule.code()) {
+            for engine in [
+                LintEngine::Semantic,
+                LintEngine::Lexical,
+                LintEngine::Document,
+            ] {
+                for rule in &self.rules {
+                    if !self.config.is_rule_enabled(rule.code())
+                        || rule_engine(rule.code()) != engine
+                        || !rule_supported_in_dialect(rule.code(), document.dialect)
+                    {
                         continue;
                     }
 
-                    let Some(synthetic_statement) = parse_sql("SELECT 1")
-                        .ok()
-                        .and_then(|mut statements| statements.drain(..).next())
-                    else {
-                        continue;
-                    };
+                    let (confidence, fallback) =
+                        lint_quality_for_rule(rule.code(), engine, document);
 
-                    let ctx = LintContext {
-                        sql: document.sql,
-                        statement_range: 0..document.sql.len(),
-                        statement_index: 0,
-                    };
-
-                    with_active_dialect(document.dialect, || {
-                        for issue in rule.check(&synthetic_statement, &ctx) {
-                            let mut issue = issue
-                                .with_lint_engine(engine)
-                                .with_lint_confidence(confidence);
-
-                            if let Some(source) = fallback {
-                                issue = issue.with_lint_fallback_source(source);
-                            }
-
-                            let sqlfluff_name = rule.sqlfluff_name();
-                            if !sqlfluff_name.is_empty() {
-                                issue = issue.with_sqlfluff_name(sqlfluff_name);
-                            }
-
-                            issues.push(issue);
-                        }
-                    });
-                    continue;
-                }
-
-                for statement in &document.statements {
-                    let (ctx_sql, ctx_statement_range) =
-                        if rule.code() == crate::types::issue_codes::LINT_LT_007 {
-                            match (
-                                document.source_sql,
-                                document
-                                    .source_statement_ranges
-                                    .get(statement.statement_index)
-                                    .and_then(|range| range.clone()),
-                            ) {
-                                (Some(source_sql), Some(source_statement_range)) => {
-                                    (source_sql, source_statement_range)
-                                }
-                                _ => (document.sql, statement.statement_range.clone()),
-                            }
-                        } else {
-                            (document.sql, statement.statement_range.clone())
+                    if rule_uses_document_scope(rule.code()) {
+                        let Some(synthetic_statement) = parse_sql("SELECT 1")
+                            .ok()
+                            .and_then(|mut statements| statements.drain(..).next())
+                        else {
+                            continue;
                         };
 
-                    let ctx = LintContext {
-                        sql: ctx_sql,
-                        statement_range: ctx_statement_range,
-                        statement_index: statement.statement_index,
-                    };
+                        let document_scope_sql =
+                            document_scope_sql_for_rule(&self.config, rule.code(), document);
+                        let ctx = LintContext {
+                            sql: document_scope_sql.as_ref(),
+                            statement_range: 0..document_scope_sql.len(),
+                            statement_index: 0,
+                        };
 
-                    with_active_dialect(document.dialect, || {
-                        for issue in rule.check(statement.statement, &ctx) {
-                            let mut issue = issue
-                                .with_lint_engine(engine)
-                                .with_lint_confidence(confidence);
+                        with_active_dialect(document.dialect, || {
+                            for issue in rule.check(&synthetic_statement, &ctx) {
+                                let mut issue = issue
+                                    .with_lint_engine(engine)
+                                    .with_lint_confidence(confidence);
 
-                            if let Some(source) = fallback {
-                                issue = issue.with_lint_fallback_source(source);
+                                if let Some(source) = fallback {
+                                    issue = issue.with_lint_fallback_source(source);
+                                }
+
+                                let sqlfluff_name = rule.sqlfluff_name();
+                                if !sqlfluff_name.is_empty() {
+                                    issue = issue.with_sqlfluff_name(sqlfluff_name);
+                                }
+
+                                issues.push(issue);
                             }
+                        });
+                        continue;
+                    }
 
-                            let sqlfluff_name = rule.sqlfluff_name();
-                            if !sqlfluff_name.is_empty() {
-                                issue = issue.with_sqlfluff_name(sqlfluff_name);
-                            }
-
-                            issues.push(issue);
+                    if document.statements.is_empty() {
+                        if !rule_supports_statementless_fallback(rule.code()) {
+                            continue;
                         }
-                    });
+
+                        let Some(synthetic_statement) = parse_sql("SELECT 1")
+                            .ok()
+                            .and_then(|mut statements| statements.drain(..).next())
+                        else {
+                            continue;
+                        };
+
+                        let ctx = LintContext {
+                            sql: document.sql,
+                            statement_range: 0..document.sql.len(),
+                            statement_index: 0,
+                        };
+
+                        with_active_dialect(document.dialect, || {
+                            for issue in rule.check(&synthetic_statement, &ctx) {
+                                let mut issue = issue
+                                    .with_lint_engine(engine)
+                                    .with_lint_confidence(confidence);
+
+                                if let Some(source) = fallback {
+                                    issue = issue.with_lint_fallback_source(source);
+                                }
+
+                                let sqlfluff_name = rule.sqlfluff_name();
+                                if !sqlfluff_name.is_empty() {
+                                    issue = issue.with_sqlfluff_name(sqlfluff_name);
+                                }
+
+                                issues.push(issue);
+                            }
+                        });
+                        continue;
+                    }
+
+                    for statement in &document.statements {
+                        let (ctx_sql, ctx_statement_range) =
+                            if rule.code() == crate::types::issue_codes::LINT_LT_007 {
+                                match (
+                                    document.source_sql,
+                                    document
+                                        .source_statement_ranges
+                                        .get(statement.statement_index)
+                                        .and_then(|range| range.clone()),
+                                ) {
+                                    (Some(source_sql), Some(source_statement_range)) => {
+                                        (source_sql, source_statement_range)
+                                    }
+                                    _ => (document.sql, statement.statement_range.clone()),
+                                }
+                            } else {
+                                (document.sql, statement.statement_range.clone())
+                            };
+
+                        let ctx = LintContext {
+                            sql: ctx_sql,
+                            statement_range: ctx_statement_range,
+                            statement_index: statement.statement_index,
+                        };
+
+                        with_active_dialect(document.dialect, || {
+                            for issue in rule.check(statement.statement, &ctx) {
+                                let mut issue = issue
+                                    .with_lint_engine(engine)
+                                    .with_lint_confidence(confidence);
+
+                                if let Some(source) = fallback {
+                                    issue = issue.with_lint_fallback_source(source);
+                                }
+
+                                let sqlfluff_name = rule.sqlfluff_name();
+                                if !sqlfluff_name.is_empty() {
+                                    issue = issue.with_sqlfluff_name(sqlfluff_name);
+                                }
+
+                                issues.push(issue);
+                            }
+                        });
+                    }
                 }
             }
-        }
 
-        let issues = suppress_noqa_issues(issues, document);
-        normalize_issues(issues)
+            let issues = suppress_noqa_issues(issues, document);
+            normalize_issues(issues)
+        })
     }
 
     /// Checks a single statement against all enabled lint rules.

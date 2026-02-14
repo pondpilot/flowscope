@@ -41,10 +41,14 @@ impl LintRule for ConventionTerminator {
     }
 
     fn check(&self, _stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let semicolon = terminal_semicolon_info(ctx);
+        let tokens = tokenize_with_offsets_for_context(ctx);
+        let semicolon = terminal_semicolon_info(ctx, tokens.as_deref());
         let has_terminal_semicolon = semicolon.is_some();
 
-        if self.require_final_semicolon && is_last_statement(ctx) && !has_terminal_semicolon {
+        if self.require_final_semicolon
+            && is_last_statement(ctx, tokens.as_deref())
+            && !has_terminal_semicolon
+        {
             return vec![Issue::info(
                 issue_codes::LINT_CV_006,
                 "Final statement must end with a semi-colon.",
@@ -57,13 +61,14 @@ impl LintRule for ConventionTerminator {
         };
 
         if self.multiline_newline {
-            if statement_is_multiline(ctx) {
+            if statement_is_multiline(ctx, tokens.as_deref()) {
                 let invalid_newline_style = !semicolon.newline_before_semicolon
                     || semicolon.newline_count_before_semicolon != 1
                     || semicolon.has_comment_before_semicolon
                     || statement_has_trailing_comment_before_semicolon(
                         ctx,
                         semicolon.semicolon_offset,
+                        tokens.as_deref(),
                     );
                 if invalid_newline_style {
                     return vec![Issue::info(
@@ -94,35 +99,33 @@ impl LintRule for ConventionTerminator {
     }
 }
 
-fn statement_is_multiline(ctx: &LintContext) -> bool {
-    statement_has_multiline_trivia(ctx.statement_sql(), ctx.dialect())
-}
-
-fn statement_has_multiline_trivia(sql: &str, dialect: Dialect) -> bool {
-    let dialect = dialect.to_sqlparser_dialect();
-    let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
-    let Ok(tokens) = tokenizer.tokenize_with_location() else {
-        return sql.contains('\n');
+fn statement_is_multiline(ctx: &LintContext, tokens: Option<&[LocatedToken]>) -> bool {
+    let Some(tokens) = tokens else {
+        return ctx.statement_sql().contains('\n');
     };
 
-    tokens.iter().any(is_multiline_whitespace)
+    tokens
+        .iter()
+        .filter(|token| {
+            token.start >= ctx.statement_range.start && token.end <= ctx.statement_range.end
+        })
+        .any(|token| is_multiline_trivia_token(&token.token))
 }
 
-fn is_multiline_whitespace(token: &TokenWithSpan) -> bool {
+fn is_multiline_trivia_token(token: &Token) -> bool {
     matches!(
-        token.token,
+        token,
         Token::Whitespace(Whitespace::Newline)
             | Token::Whitespace(Whitespace::SingleLineComment { .. })
             | Token::Whitespace(Whitespace::MultiLineComment(_))
     )
 }
 
-fn terminal_semicolon_info(ctx: &LintContext) -> Option<TerminalSemicolon> {
-    terminal_semicolon_info_tokenized(ctx)
-}
-
-fn terminal_semicolon_info_tokenized(ctx: &LintContext) -> Option<TerminalSemicolon> {
-    let tokens = tokenize_with_offsets(ctx.sql, ctx.dialect())?;
+fn terminal_semicolon_info(
+    ctx: &LintContext,
+    tokens: Option<&[LocatedToken]>,
+) -> Option<TerminalSemicolon> {
+    let tokens = tokens?;
     let mut newline_count_before_semicolon = 0usize;
     let mut has_comment_before_semicolon = false;
 
@@ -160,12 +163,10 @@ struct TerminalSemicolon {
     has_comment_before_semicolon: bool,
 }
 
-fn is_last_statement(ctx: &LintContext) -> bool {
-    is_last_statement_tokenized(ctx).unwrap_or(false)
-}
-
-fn is_last_statement_tokenized(ctx: &LintContext) -> Option<bool> {
-    let tokens = tokenize_with_offsets(ctx.sql, ctx.dialect())?;
+fn is_last_statement(ctx: &LintContext, tokens: Option<&[LocatedToken]>) -> bool {
+    let Some(tokens) = tokens else {
+        return false;
+    };
     for token in tokens
         .iter()
         .filter(|token| token.start >= ctx.statement_range.end)
@@ -176,13 +177,17 @@ fn is_last_statement_tokenized(ctx: &LintContext) -> Option<bool> {
         {
             continue;
         }
-        return Some(false);
+        return false;
     }
-    Some(true)
+    true
 }
 
-fn statement_has_trailing_comment_before_semicolon(ctx: &LintContext, semicolon: usize) -> bool {
-    let Some(tokens) = tokenize_with_offsets(ctx.sql, ctx.dialect()) else {
+fn statement_has_trailing_comment_before_semicolon(
+    ctx: &LintContext,
+    semicolon: usize,
+    tokens: Option<&[LocatedToken]>,
+) -> bool {
+    let Some(tokens) = tokens else {
         return false;
     };
 
@@ -203,6 +208,33 @@ struct LocatedToken {
     end: usize,
 }
 
+fn tokenize_with_offsets_for_context(ctx: &LintContext) -> Option<Vec<LocatedToken>> {
+    let tokens = ctx.with_document_tokens(|tokens| {
+        if tokens.is_empty() {
+            return None;
+        }
+
+        Some(
+            tokens
+                .iter()
+                .filter_map(|token| {
+                    token_with_span_offsets(ctx.sql, token).map(|(start, end)| LocatedToken {
+                        token: token.token.clone(),
+                        start,
+                        end,
+                    })
+                })
+                .collect::<Vec<_>>(),
+        )
+    });
+
+    if let Some(tokens) = tokens {
+        return Some(tokens);
+    }
+
+    tokenize_with_offsets(ctx.sql, ctx.dialect())
+}
+
 fn tokenize_with_offsets(sql: &str, dialect: Dialect) -> Option<Vec<LocatedToken>> {
     let dialect = dialect.to_sqlparser_dialect();
     let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
@@ -210,18 +242,7 @@ fn tokenize_with_offsets(sql: &str, dialect: Dialect) -> Option<Vec<LocatedToken
 
     let mut out = Vec::with_capacity(tokens.len());
     for token in tokens {
-        let Some(start) = line_col_to_offset(
-            sql,
-            token.span.start.line as usize,
-            token.span.start.column as usize,
-        ) else {
-            continue;
-        };
-        let Some(end) = line_col_to_offset(
-            sql,
-            token.span.end.line as usize,
-            token.span.end.column as usize,
-        ) else {
+        let Some((start, end)) = token_with_span_offsets(sql, &token) else {
             continue;
         };
         out.push(LocatedToken {
@@ -240,6 +261,20 @@ fn is_comment_token(token: &Token) -> bool {
         Token::Whitespace(Whitespace::SingleLineComment { .. })
             | Token::Whitespace(Whitespace::MultiLineComment(_))
     )
+}
+
+fn token_with_span_offsets(sql: &str, token: &TokenWithSpan) -> Option<(usize, usize)> {
+    let start = line_col_to_offset(
+        sql,
+        token.span.start.line as usize,
+        token.span.start.column as usize,
+    )?;
+    let end = line_col_to_offset(
+        sql,
+        token.span.end.line as usize,
+        token.span.end.column as usize,
+    )?;
+    Some((start, end))
 }
 
 fn is_trivia_token(token: &Token) -> bool {

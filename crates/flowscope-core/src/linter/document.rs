@@ -122,6 +122,7 @@ pub struct LintDocument<'a> {
     pub dialect: Dialect,
     pub statements: Vec<LintStatement<'a>>,
     pub tokens: Vec<LintToken>,
+    pub raw_tokens: Vec<TokenWithSpan>,
     pub noqa: NoqaMap,
     pub parser_fallback_used: bool,
     pub tokenizer_fallback_used: bool,
@@ -163,10 +164,11 @@ impl<'a> LintDocument<'a> {
         parser_fallback_used: bool,
         source_statement_ranges: Option<Vec<Option<Range<usize>>>>,
     ) -> Self {
-        let (tokens, tokenizer_fallback_used) = match tokenize_sql(sql, dialect, &statements) {
-            Ok(tokens) => (tokens, false),
-            Err(_) => (Vec::new(), true),
-        };
+        let (tokens, raw_tokens, tokenizer_fallback_used) =
+            match tokenize_sql(sql, dialect, &statements) {
+                Ok((tokens, raw_tokens)) => (tokens, raw_tokens, false),
+                Err(_) => (Vec::new(), Vec::new(), true),
+            };
         let noqa = extract_noqa(sql, &tokens);
 
         Self {
@@ -177,6 +179,7 @@ impl<'a> LintDocument<'a> {
             dialect,
             statements,
             tokens,
+            raw_tokens,
             noqa,
             parser_fallback_used,
             tokenizer_fallback_used,
@@ -326,16 +329,16 @@ fn tokenize_sql(
     sql: &str,
     dialect: Dialect,
     statements: &[LintStatement<'_>],
-) -> Result<Vec<LintToken>, String> {
+) -> Result<(Vec<LintToken>, Vec<TokenWithSpan>), String> {
     let dialect = dialect.to_sqlparser_dialect();
     let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
-    let tokens: Vec<TokenWithSpan> = tokenizer
+    let raw_tokens: Vec<TokenWithSpan> = tokenizer
         .tokenize_with_location()
         .map_err(|error| error.to_string())?;
 
-    let mut out = Vec::with_capacity(tokens.len());
+    let mut out = Vec::with_capacity(raw_tokens.len());
 
-    for token in tokens {
+    for token in &raw_tokens {
         let Some(span) = token_span_to_offsets(sql, &token.span) else {
             continue;
         };
@@ -356,7 +359,7 @@ fn tokenize_sql(
         });
     }
 
-    Ok(out)
+    Ok((out, raw_tokens))
 }
 
 fn token_span_to_offsets(sql: &str, span: &sqlparser::tokenizer::Span) -> Option<Span> {

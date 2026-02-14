@@ -154,6 +154,7 @@ This plan covers three axes:
   - `CV_008` fixer now rewrites both simple and chained/nested `RIGHT JOIN` patterns into `LEFT JOIN` form via AST join-tree rewrites (operand swap plus join-operator normalization).
   - `CV_006` now supports `multiline_newline` / `require_final_semicolon` through `lint.ruleConfigs`.
   - `CV_006` semicolon-style analysis is now tokenizer/span-only (byte-scan fallback removed), including tokenized last-statement detection with MSSQL `GO` batch-separator awareness and tokenized trailing-comment checks for multiline newline-style terminators.
+  - Lint execution now threads the document-level tokenizer stream through rule context (`parse once, tokenize once` path), and `CV_006` consumes that shared token stream before fallback tokenization.
   - `CV_007` moved from parity handling to a dedicated core rule module (`cv_007.rs`).
   - `CV_007` was further upgraded to AST-driven statement-shape detection (`Statement::Query` + wrapper `SetExpr::Query`), replacing SQL text `starts_with('(')/ends_with(')')` heuristics.
   - `CV_009` moved from parity handling to a dedicated core rule module (`cv_009.rs`).
