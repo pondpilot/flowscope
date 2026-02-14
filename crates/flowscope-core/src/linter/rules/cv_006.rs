@@ -6,7 +6,7 @@ use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Dialect, Issue};
 use sqlparser::ast::Statement;
-use sqlparser::tokenizer::{Token, Tokenizer, Whitespace};
+use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
 
 #[derive(Default)]
 pub struct ConventionTerminator {
@@ -95,7 +95,26 @@ impl LintRule for ConventionTerminator {
 }
 
 fn statement_is_multiline(ctx: &LintContext) -> bool {
-    ctx.statement_sql().contains('\n')
+    statement_has_multiline_trivia(ctx.statement_sql(), ctx.dialect())
+}
+
+fn statement_has_multiline_trivia(sql: &str, dialect: Dialect) -> bool {
+    let dialect = dialect.to_sqlparser_dialect();
+    let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
+    let Ok(tokens) = tokenizer.tokenize_with_location() else {
+        return sql.contains('\n');
+    };
+
+    tokens.iter().any(is_multiline_whitespace)
+}
+
+fn is_multiline_whitespace(token: &TokenWithSpan) -> bool {
+    matches!(
+        token.token,
+        Token::Whitespace(Whitespace::Newline)
+            | Token::Whitespace(Whitespace::SingleLineComment { .. })
+            | Token::Whitespace(Whitespace::MultiLineComment(_))
+    )
 }
 
 fn terminal_semicolon_info(ctx: &LintContext) -> Option<TerminalSemicolon> {
@@ -539,6 +558,30 @@ mod tests {
                 },
             )
         });
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn multiline_newline_allows_newline_within_string_literal() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "convention.terminator".to_string(),
+                serde_json::json!({"multiline_newline": true}),
+            )]),
+        };
+        let rule = ConventionTerminator::from_config(&config);
+        let sql = "SELECT 'line1\nline2';";
+        let stmt = &parse_sql(sql).expect("parse")[0];
+        let issues = rule.check(
+            stmt,
+            &LintContext {
+                sql,
+                statement_range: 0.."SELECT 'line1\nline2'".len(),
+                statement_index: 0,
+            },
+        );
         assert!(issues.is_empty());
     }
 }
