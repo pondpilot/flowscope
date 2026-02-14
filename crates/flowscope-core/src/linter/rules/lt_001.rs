@@ -7,7 +7,7 @@ use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Dialect, Issue};
 use sqlparser::ast::Statement;
 use sqlparser::keywords::Keyword;
-use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
+use sqlparser::tokenizer::{Location, Span, Token, TokenWithSpan, Tokenizer, Whitespace};
 
 pub struct LayoutSpacing;
 
@@ -25,7 +25,7 @@ impl LintRule for LayoutSpacing {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        spacing_violation_spans(ctx.statement_sql(), ctx.dialect())
+        spacing_violation_spans(ctx)
             .into_iter()
             .map(|(start, end)| {
                 Issue::info(
@@ -39,9 +39,11 @@ impl LintRule for LayoutSpacing {
     }
 }
 
-fn spacing_violation_spans(sql: &str, dialect: Dialect) -> Vec<(usize, usize)> {
+fn spacing_violation_spans(ctx: &LintContext) -> Vec<(usize, usize)> {
+    let sql = ctx.statement_sql();
     let mut spans = Vec::new();
-    let Some(tokens) = tokenized(sql, dialect) else {
+    let tokens = tokenized_for_context(ctx).or_else(|| tokenized(sql, ctx.dialect()));
+    let Some(tokens) = tokens else {
         return spans;
     };
 
@@ -60,6 +62,51 @@ fn tokenized(sql: &str, dialect: Dialect) -> Option<Vec<TokenWithSpan>> {
     let dialect = dialect.to_sqlparser_dialect();
     let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
     tokenizer.tokenize_with_location().ok()
+}
+
+fn tokenized_for_context(ctx: &LintContext) -> Option<Vec<TokenWithSpan>> {
+    let (statement_start_line, statement_start_column) =
+        offset_to_line_col(ctx.sql, ctx.statement_range.start)?;
+
+    ctx.with_document_tokens(|tokens| {
+        if tokens.is_empty() {
+            return None;
+        }
+
+        let mut out = Vec::new();
+        for token in tokens {
+            let Some((start, end)) = token_with_span_offsets(ctx.sql, token) else {
+                continue;
+            };
+            if start < ctx.statement_range.start || end > ctx.statement_range.end {
+                continue;
+            }
+
+            let Some(start_loc) = relative_location(
+                token.span.start,
+                statement_start_line,
+                statement_start_column,
+            ) else {
+                continue;
+            };
+            let Some(end_loc) =
+                relative_location(token.span.end, statement_start_line, statement_start_column)
+            else {
+                continue;
+            };
+
+            out.push(TokenWithSpan::new(
+                token.token.clone(),
+                Span::new(start_loc, end_loc),
+            ));
+        }
+
+        if out.is_empty() {
+            None
+        } else {
+            Some(out)
+        }
+    })
 }
 
 fn collect_json_arrow_spacing_violations(
@@ -212,10 +259,7 @@ fn previous_line_ends_with_boolean_keyword(tokens: &[TokenWithSpan], index: usiz
     let Token::Word(prev_word) = &tokens[prev_index].token else {
         return false;
     };
-    if !matches!(
-        prev_word.keyword,
-        Keyword::AND | Keyword::OR | Keyword::NOT
-    ) {
+    if !matches!(prev_word.keyword, Keyword::AND | Keyword::OR | Keyword::NOT) {
         return false;
     }
 
@@ -233,7 +277,11 @@ fn token_offsets(sql: &str, token: &TokenWithSpan) -> Option<(usize, usize)> {
         token.span.start.line as usize,
         token.span.start.column as usize,
     )?;
-    let end = line_col_to_offset(sql, token.span.end.line as usize, token.span.end.column as usize)?;
+    let end = line_col_to_offset(
+        sql,
+        token.span.end.line as usize,
+        token.span.end.column as usize,
+    )?;
     Some((start, end))
 }
 
@@ -263,7 +311,10 @@ fn prev_non_trivia_index(tokens: &[TokenWithSpan], mut index: usize) -> Option<u
 }
 
 fn has_trivia_between(tokens: &[TokenWithSpan], left: usize, right: usize) -> bool {
-    right > left + 1 && tokens[left + 1..right].iter().any(|token| is_trivia_token(&token.token))
+    right > left + 1
+        && tokens[left + 1..right]
+            .iter()
+            .any(|token| is_trivia_token(&token.token))
 }
 
 fn is_trivia_token(token: &Token) -> bool {
@@ -301,6 +352,78 @@ fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
     }
 
     None
+}
+
+fn token_with_span_offsets(sql: &str, token: &TokenWithSpan) -> Option<(usize, usize)> {
+    let start = line_col_to_offset(
+        sql,
+        token.span.start.line as usize,
+        token.span.start.column as usize,
+    )?;
+    let end = line_col_to_offset(
+        sql,
+        token.span.end.line as usize,
+        token.span.end.column as usize,
+    )?;
+    Some((start, end))
+}
+
+fn offset_to_line_col(sql: &str, offset: usize) -> Option<(usize, usize)> {
+    if offset > sql.len() {
+        return None;
+    }
+    if offset == sql.len() {
+        let line = 1 + sql.as_bytes().iter().filter(|byte| **byte == b'\n').count();
+        let column = sql
+            .rsplit_once('\n')
+            .map_or(sql.chars().count() + 1, |(_, tail)| {
+                tail.chars().count() + 1
+            });
+        return Some((line, column));
+    }
+
+    let mut line = 1usize;
+    let mut column = 1usize;
+    for (index, ch) in sql.char_indices() {
+        if index == offset {
+            return Some((line, column));
+        }
+        if ch == '\n' {
+            line += 1;
+            column = 1;
+        } else {
+            column += 1;
+        }
+    }
+    Some((line, column))
+}
+
+fn relative_location(
+    location: Location,
+    statement_start_line: usize,
+    statement_start_column: usize,
+) -> Option<Location> {
+    if location.line == 0 || location.column == 0 {
+        return None;
+    }
+
+    let line = location.line as usize;
+    let column = location.column as usize;
+    if line < statement_start_line {
+        return None;
+    }
+
+    let relative_line = line - statement_start_line + 1;
+    let relative_column = if line == statement_start_line {
+        if column < statement_start_column {
+            return None;
+        }
+        column - statement_start_column + 1
+    } else {
+        column
+    };
+
+    Some(Location::new(relative_line as u64, relative_column as u64))
 }
 
 #[cfg(test)]

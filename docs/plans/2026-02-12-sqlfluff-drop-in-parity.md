@@ -195,7 +195,7 @@ This plan covers three axes:
   - `LT_004` was further upgraded from regex scanning to active-dialect tokenizer-driven comma-spacing checks.
   - `LT_004` now supports comma line-position configuration through `lint.ruleConfigs` (`line_position=trailing|leading`) and legacy SQLFluff `comma_style` compatibility.
   - `LT_001` moved from parity handling to a dedicated core rule module (`lt_001.rs`).
-  - `LT_001` was further upgraded from deterministic raw-text scanning to tokenizer-with-span layout detection (JSON arrows, compact `text[` forms, numeric precision commas, and line-start `EXISTS (` patterns), reducing literal/comment false positives.
+  - `LT_001` was further upgraded from deterministic raw-text scanning to tokenizer-with-span layout detection (JSON arrows, compact `text[` forms, numeric precision commas, and line-start `EXISTS (` patterns), reducing literal/comment false positives and consuming the shared document token stream before fallback tokenization.
   - `LT_005` moved from parity handling to a dedicated core rule module (`lt_005.rs`).
   - `LT_005` now supports configurable `max_line_length`, `ignore_comment_lines`, and `ignore_comment_clauses` through `lint.ruleConfigs`, including SQLFluff-style disabled checks when `max_line_length <= 0`, comma-prefixed and Jinja comment-line handling, and SQL `COMMENT` clause handling for ignore-comment-clause semantics.
   - `LT_005` long-line overflow detection now uses tokenizer/span-derived line analysis only, including Jinja-comment-safe sanitization for tokenization plus Jinja-aware line/comment-clause handling (raw fallback removed).
