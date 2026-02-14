@@ -12,6 +12,7 @@ use flowscope_core::{
 };
 use regex::{Captures, Regex};
 use sqlparser::ast::*;
+use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
 use std::collections::{BTreeMap, HashSet};
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -166,7 +167,7 @@ pub fn apply_lint_fixes_with_lint_config(
     }
 
     let mut fixed_sql = render_statements(&statements, sql);
-    fixed_sql = apply_text_fixes(&fixed_sql, &rule_filter);
+    fixed_sql = apply_text_fixes(&fixed_sql, &rule_filter, dialect);
     fixed_sql = apply_am005_full_outer_keyword_fix(&fixed_sql, &rule_filter);
 
     let after_counts = lint_rule_counts(&fixed_sql, dialect, lint_config);
@@ -364,14 +365,14 @@ fn parse_errors_increased(
             .unwrap_or(0)
 }
 
-fn apply_text_fixes(sql: &str, rule_filter: &RuleFilter) -> String {
+fn apply_text_fixes(sql: &str, rule_filter: &RuleFilter, dialect: Dialect) -> String {
     let mut out = sql.to_string();
 
     if rule_filter.allows(issue_codes::LINT_JJ_001) {
         out = fix_jinja_padding(&out);
     }
     if rule_filter.allows(issue_codes::LINT_ST_012) {
-        out = fix_consecutive_semicolons(&out);
+        out = fix_consecutive_semicolons(&out, dialect);
     }
     if rule_filter.allows(issue_codes::LINT_CV_001) {
         out = fix_not_equal_operator(&out);
@@ -545,8 +546,59 @@ fn fix_jinja_padding(sql: &str) -> String {
     regex_replace_all(&out, r"\{%\s*([^%]+?)\s*%\}", "{% $1 %}")
 }
 
-fn fix_consecutive_semicolons(sql: &str) -> String {
-    regex_replace_all(sql, r";\s*;+", ";")
+fn fix_consecutive_semicolons(sql: &str, dialect: Dialect) -> String {
+    let Some(tokens) = tokenize_with_offsets(sql, dialect) else {
+        return regex_replace_all(sql, r";\s*;+", ";");
+    };
+
+    let mut out = String::with_capacity(sql.len());
+    let mut cursor = 0usize;
+    let mut idx = 0usize;
+
+    while idx < tokens.len() {
+        if !matches!(tokens[idx].token, Token::SemiColon) {
+            idx += 1;
+            continue;
+        }
+
+        let mut j = idx + 1;
+        let mut semicolon_count = 1usize;
+        let mut last_semicolon_end = tokens[idx].end;
+
+        while j < tokens.len() {
+            match &tokens[j].token {
+                Token::SemiColon => {
+                    semicolon_count += 1;
+                    last_semicolon_end = tokens[j].end;
+                    j += 1;
+                }
+                token if is_trivia_token(token) => {
+                    j += 1;
+                }
+                _ => break,
+            }
+        }
+
+        if semicolon_count < 2 {
+            idx += 1;
+            continue;
+        }
+
+        let run_start = tokens[idx].start;
+        if run_start > cursor {
+            out.push_str(&sql[cursor..run_start]);
+        }
+        out.push(';');
+        cursor = last_semicolon_end;
+        idx = j;
+    }
+
+    if cursor == 0 {
+        return sql.to_string();
+    }
+
+    out.push_str(&sql[cursor..]);
+    out
 }
 
 fn fix_not_equal_operator(sql: &str) -> String {
@@ -1418,6 +1470,87 @@ fn fix_trailing_newline(sql: &str) -> String {
         return format!("{sql}\n");
     }
     sql.to_string()
+}
+
+struct LocatedToken {
+    token: Token,
+    start: usize,
+    end: usize,
+}
+
+fn tokenize_with_offsets(sql: &str, dialect: Dialect) -> Option<Vec<LocatedToken>> {
+    let dialect = dialect.to_sqlparser_dialect();
+    let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
+    let tokens = tokenizer.tokenize_with_location().ok()?;
+
+    let mut out = Vec::with_capacity(tokens.len());
+    for token in tokens {
+        let Some((start, end)) = token_with_span_offsets(sql, &token) else {
+            continue;
+        };
+        out.push(LocatedToken {
+            token: token.token,
+            start,
+            end,
+        });
+    }
+
+    Some(out)
+}
+
+fn token_with_span_offsets(sql: &str, token: &TokenWithSpan) -> Option<(usize, usize)> {
+    let start = line_col_to_offset(
+        sql,
+        token.span.start.line as usize,
+        token.span.start.column as usize,
+    )?;
+    let end = line_col_to_offset(
+        sql,
+        token.span.end.line as usize,
+        token.span.end.column as usize,
+    )?;
+    Some((start, end))
+}
+
+fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
+    if line == 0 || column == 0 {
+        return None;
+    }
+
+    let mut current_line = 1usize;
+    let mut current_col = 1usize;
+
+    for (offset, ch) in sql.char_indices() {
+        if current_line == line && current_col == column {
+            return Some(offset);
+        }
+
+        if ch == '\n' {
+            current_line += 1;
+            current_col = 1;
+        } else {
+            current_col += 1;
+        }
+    }
+
+    if current_line == line && current_col == column {
+        return Some(sql.len());
+    }
+
+    None
+}
+
+fn is_trivia_token(token: &Token) -> bool {
+    matches!(
+        token,
+        Token::Whitespace(
+            Whitespace::Space
+                | Whitespace::Newline
+                | Whitespace::Tab
+                | Whitespace::SingleLineComment { .. }
+                | Whitespace::MultiLineComment(_)
+        )
+    )
 }
 
 fn fix_statement(stmt: &mut Statement, rule_filter: &RuleFilter) {
@@ -3522,6 +3655,19 @@ mod tests {
     }
 
     #[test]
+    fn sqlfluff_st012_cases_are_fixed_or_unchanged() {
+        let cases = [
+            ("SELECT 1;;", 1, 0, 1),
+            ("SELECT 1;\n \t ;", 1, 0, 1),
+            ("SELECT 1;", 0, 0, 0),
+        ];
+
+        for (sql, before, after, fix_count) in cases {
+            assert_rule_case(sql, issue_codes::LINT_ST_012, before, after, fix_count);
+        }
+    }
+
+    #[test]
     fn sqlfluff_st002_cases_are_fixed_or_unchanged() {
         let cases = [
             ("SELECT CASE WHEN x > 1 THEN 'a' ELSE NULL END FROM t", 1, 0, 1),
@@ -3672,7 +3818,11 @@ mod tests {
 
     #[test]
     fn text_fix_pipeline_converts_subquery_to_cte() {
-        let fixed = apply_text_fixes("SELECT * FROM (SELECT 1) sub", &RuleFilter::default());
+        let fixed = apply_text_fixes(
+            "SELECT * FROM (SELECT 1) sub",
+            &RuleFilter::default(),
+            Dialect::Generic,
+        );
         assert!(
             fixed.to_ascii_uppercase().contains("WITH SUB AS"),
             "expected CTE rewrite, got: {fixed}"
@@ -3687,6 +3837,28 @@ mod tests {
             "WITH sub AS (SELECT COUNT(*) FROM t) SELECT * FROM sub"
         );
         parse_sql_with_dialect(&fixed, Dialect::Generic).expect("fixed SQL should parse");
+    }
+
+    #[test]
+    fn consecutive_semicolon_fix_ignores_string_literal_content() {
+        let sql = "SELECT 'a;;b' AS txt;;";
+        let out = apply_lint_fixes(sql, Dialect::Generic, &[]).expect("fix result");
+        assert!(
+            out.sql.contains("'a;;b'"),
+            "string literal content must be preserved: {}",
+            out.sql
+        );
+        assert!(
+            out.sql.trim_end().ends_with(';') && !out.sql.trim_end().ends_with(";;"),
+            "trailing semicolon run should be collapsed to one terminator: {}",
+            out.sql
+        );
+    }
+
+    #[test]
+    fn consecutive_semicolon_fix_collapses_whitespace_separated_runs() {
+        let fixed = fix_consecutive_semicolons("SELECT 1;\n \t ;", Dialect::Generic);
+        assert_eq!(fixed, "SELECT 1;");
     }
 
     #[test]
@@ -3799,7 +3971,7 @@ mod tests {
             issue_codes::LINT_LT_014.to_string(),
             issue_codes::LINT_RF_004.to_string(),
         ]);
-        let out_rf_disabled = apply_text_fixes(sql, &rf_disabled);
+        let out_rf_disabled = apply_text_fixes(sql, &rf_disabled, Dialect::Generic);
         assert_eq!(
             out_rf_disabled, sql,
             "excluding RF_004 should block alias-keyword rewrite"
@@ -3809,7 +3981,7 @@ mod tests {
             issue_codes::LINT_LT_014.to_string(),
             issue_codes::LINT_AL_005.to_string(),
         ]);
-        let out_al_disabled = apply_text_fixes(sql, &al_disabled);
+        let out_al_disabled = apply_text_fixes(sql, &al_disabled, Dialect::Generic);
         assert!(
             out_al_disabled.contains("alias_select"),
             "excluding AL_005 must not block RF_004 rewrite: {out_al_disabled}"
