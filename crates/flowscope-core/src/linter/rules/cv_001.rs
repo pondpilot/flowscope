@@ -8,6 +8,7 @@ use crate::linter::rule::{LintContext, LintRule};
 use crate::linter::visit::visit_expressions;
 use crate::types::{issue_codes, Issue};
 use sqlparser::ast::{BinaryOperator, Expr, Spanned, Statement};
+use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum PreferredNotEqualStyle {
@@ -81,7 +82,13 @@ impl LintRule for ConventionNotEqual {
     }
 
     fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let usage = statement_not_equal_usage(statement, ctx.statement_sql());
+        let tokens =
+            tokenized_for_context(ctx).or_else(|| tokenized(ctx.statement_sql(), ctx.dialect()));
+        let usage = statement_not_equal_usage_with_tokens(
+            statement,
+            ctx.statement_sql(),
+            tokens.as_deref(),
+        );
         if self.preferred_style.violation(&usage) {
             vec![
                 Issue::info(issue_codes::LINT_CV_001, self.preferred_style.message())
@@ -104,7 +111,11 @@ enum NotEqualStyle {
     Bang,
 }
 
-fn statement_not_equal_usage(statement: &Statement, sql: &str) -> NotEqualUsage {
+fn statement_not_equal_usage_with_tokens(
+    statement: &Statement,
+    sql: &str,
+    tokens: Option<&[LocatedToken]>,
+) -> NotEqualUsage {
     let mut usage = NotEqualUsage::default();
     visit_expressions(statement, &mut |expr| {
         if usage.saw_angle_style && usage.saw_bang_style {
@@ -113,7 +124,7 @@ fn statement_not_equal_usage(statement: &Statement, sql: &str) -> NotEqualUsage 
 
         let style = match expr {
             Expr::BinaryOp { left, op, right } if *op == BinaryOperator::NotEq => {
-                not_equal_style_between(sql, left.as_ref(), right.as_ref())
+                not_equal_style_between(sql, left.as_ref(), right.as_ref(), tokens)
             }
             Expr::AnyOp {
                 left,
@@ -121,14 +132,14 @@ fn statement_not_equal_usage(statement: &Statement, sql: &str) -> NotEqualUsage 
                 right,
                 ..
             } if *compare_op == BinaryOperator::NotEq => {
-                not_equal_style_between(sql, left.as_ref(), right.as_ref())
+                not_equal_style_between(sql, left.as_ref(), right.as_ref(), tokens)
             }
             Expr::AllOp {
                 left,
                 compare_op,
                 right,
             } if *compare_op == BinaryOperator::NotEq => {
-                not_equal_style_between(sql, left.as_ref(), right.as_ref())
+                not_equal_style_between(sql, left.as_ref(), right.as_ref(), tokens)
             }
             _ => None,
         };
@@ -143,10 +154,19 @@ fn statement_not_equal_usage(statement: &Statement, sql: &str) -> NotEqualUsage 
     usage
 }
 
-fn not_equal_style_between(sql: &str, left: &Expr, right: &Expr) -> Option<NotEqualStyle> {
+fn not_equal_style_between(
+    sql: &str,
+    left: &Expr,
+    right: &Expr,
+    tokens: Option<&[LocatedToken]>,
+) -> Option<NotEqualStyle> {
     let left_end = left.span().end;
     let right_start = right.span().start;
-    if left_end.line == 0 || left_end.column == 0 || right_start.line == 0 || right_start.column == 0 {
+    if left_end.line == 0
+        || left_end.column == 0
+        || right_start.line == 0
+        || right_start.column == 0
+    {
         return None;
     }
 
@@ -155,8 +175,45 @@ fn not_equal_style_between(sql: &str, left: &Expr, right: &Expr) -> Option<NotEq
     if end < start {
         return None;
     }
+
+    if let Some(tokens) = tokens {
+        return not_equal_style_in_tokens(sql, tokens, start, end);
+    }
+
     let raw = sql.get(start..end)?;
     not_equal_style_in_segment(raw)
+}
+
+fn not_equal_style_in_tokens(
+    sql: &str,
+    tokens: &[LocatedToken],
+    start: usize,
+    end: usize,
+) -> Option<NotEqualStyle> {
+    for token in tokens {
+        if token.end <= start || token.start >= end {
+            continue;
+        }
+        if is_trivia_token(&token.token) {
+            continue;
+        }
+
+        if !matches!(token.token, Token::Neq) {
+            return None;
+        }
+        if token.end > sql.len() {
+            return None;
+        }
+
+        let raw = &sql[token.start..token.end];
+        return match raw {
+            "<>" => Some(NotEqualStyle::Angle),
+            "!=" => Some(NotEqualStyle::Bang),
+            _ => not_equal_style_in_segment(raw),
+        };
+    }
+
+    None
 }
 
 fn not_equal_style_in_segment(segment: &str) -> Option<NotEqualStyle> {
@@ -197,6 +254,90 @@ fn not_equal_style_in_segment(segment: &str) -> Option<NotEqualStyle> {
         }
     }
     None
+}
+
+#[derive(Clone)]
+struct LocatedToken {
+    token: Token,
+    start: usize,
+    end: usize,
+}
+
+fn tokenized(sql: &str, dialect: crate::types::Dialect) -> Option<Vec<LocatedToken>> {
+    let dialect = dialect.to_sqlparser_dialect();
+    let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
+    let tokens = tokenizer.tokenize_with_location().ok()?;
+
+    let mut out = Vec::with_capacity(tokens.len());
+    for token in tokens {
+        let Some((start, end)) = token_with_span_offsets(sql, &token) else {
+            continue;
+        };
+        out.push(LocatedToken {
+            token: token.token,
+            start,
+            end,
+        });
+    }
+    Some(out)
+}
+
+fn tokenized_for_context(ctx: &LintContext) -> Option<Vec<LocatedToken>> {
+    let statement_start = ctx.statement_range.start;
+    let from_document = ctx.with_document_tokens(|tokens| {
+        if tokens.is_empty() {
+            return None;
+        }
+
+        Some(
+            tokens
+                .iter()
+                .filter_map(|token| {
+                    let Some((start, end)) = token_with_span_offsets(ctx.sql, token) else {
+                        return None;
+                    };
+                    if start < ctx.statement_range.start || end > ctx.statement_range.end {
+                        return None;
+                    }
+
+                    Some(LocatedToken {
+                        token: token.token.clone(),
+                        start: start - statement_start,
+                        end: end - statement_start,
+                    })
+                })
+                .collect::<Vec<_>>(),
+        )
+    });
+
+    if let Some(tokens) = from_document {
+        return Some(tokens);
+    }
+
+    tokenized(ctx.statement_sql(), ctx.dialect())
+}
+
+fn token_with_span_offsets(sql: &str, token: &TokenWithSpan) -> Option<(usize, usize)> {
+    let start = line_col_to_offset(
+        sql,
+        token.span.start.line as usize,
+        token.span.start.column as usize,
+    )?;
+    let end = line_col_to_offset(
+        sql,
+        token.span.end.line as usize,
+        token.span.end.column as usize,
+    )?;
+    Some((start, end))
+}
+
+fn is_trivia_token(token: &Token) -> bool {
+    matches!(
+        token,
+        Token::Whitespace(Whitespace::Space | Whitespace::Tab | Whitespace::Newline)
+            | Token::Whitespace(Whitespace::SingleLineComment { .. })
+            | Token::Whitespace(Whitespace::MultiLineComment(_))
+    )
 }
 
 fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
