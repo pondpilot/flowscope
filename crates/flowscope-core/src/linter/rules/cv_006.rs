@@ -151,7 +151,10 @@ fn is_last_statement_tokenized(ctx: &LintContext) -> Option<bool> {
         .iter()
         .filter(|token| token.start >= ctx.statement_range.end)
     {
-        if matches!(token.token, Token::SemiColon) || is_trivia_token(&token.token) {
+        if matches!(token.token, Token::SemiColon)
+            || is_trivia_token(&token.token)
+            || is_go_batch_separator(token, ctx.sql, ctx.dialect())
+        {
             continue;
         }
         return Some(false);
@@ -236,6 +239,32 @@ fn is_spacing_whitespace(token: &Token) -> bool {
     )
 }
 
+fn is_go_batch_separator(token: &LocatedToken, sql: &str, dialect: Dialect) -> bool {
+    if dialect != Dialect::Mssql {
+        return false;
+    }
+    let Token::Word(word) = &token.token else {
+        return false;
+    };
+    if !word.value.eq_ignore_ascii_case("GO") {
+        return false;
+    }
+
+    line_text(sql, token.start).is_some_and(|line| line.trim().eq_ignore_ascii_case("GO"))
+}
+
+fn line_text(sql: &str, offset: usize) -> Option<&str> {
+    if offset > sql.len() {
+        return None;
+    }
+
+    let line_start = sql[..offset].rfind('\n').map_or(0, |idx| idx + 1);
+    let line_end = sql[offset..]
+        .find('\n')
+        .map_or(sql.len(), |idx| offset + idx);
+    sql.get(line_start..line_end)
+}
+
 fn count_line_breaks(text: &str) -> usize {
     let mut count = 0usize;
     let mut chars = text.chars().peekable();
@@ -285,6 +314,7 @@ fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::linter::rule::with_active_dialect;
     use crate::parser::parse_sql;
 
     fn run(sql: &str) -> Vec<Issue> {
@@ -457,5 +487,58 @@ mod tests {
         );
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_CV_006);
+    }
+
+    #[test]
+    fn require_final_semicolon_flags_missing_semicolon_before_trailing_go_batch_separator() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "convention.terminator".to_string(),
+                serde_json::json!({"require_final_semicolon": true}),
+            )]),
+        };
+        let rule = ConventionTerminator::from_config(&config);
+        let stmt = &parse_sql("SELECT 1").expect("parse")[0];
+        let sql = "SELECT 1\nGO\n";
+        let issues = with_active_dialect(Dialect::Mssql, || {
+            rule.check(
+                stmt,
+                &LintContext {
+                    sql,
+                    statement_range: 0.."SELECT 1".len(),
+                    statement_index: 0,
+                },
+            )
+        });
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_CV_006);
+    }
+
+    #[test]
+    fn require_final_semicolon_does_not_flag_non_last_statement_before_go_batch_separator() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "convention.terminator".to_string(),
+                serde_json::json!({"require_final_semicolon": true}),
+            )]),
+        };
+        let rule = ConventionTerminator::from_config(&config);
+        let stmt = &parse_sql("SELECT 1").expect("parse")[0];
+        let sql = "SELECT 1\nGO\nSELECT 2;";
+        let issues = with_active_dialect(Dialect::Mssql, || {
+            rule.check(
+                stmt,
+                &LintContext {
+                    sql,
+                    statement_range: 0.."SELECT 1".len(),
+                    statement_index: 0,
+                },
+            )
+        });
+        assert!(issues.is_empty());
     }
 }

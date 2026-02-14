@@ -90,6 +90,7 @@ This plan covers three axes:
   - `CV_006` moved from parity into a dedicated core rule module (`cv_006.rs`) and parity registration was removed.
   - `CV_006` now aligns with SQLFluff TSQL batch handling by splitting MSSQL statement ranges on `GO` separators before best-effort parsing, preventing parser dropouts from masking final-semicolon checks.
   - `CV_006` terminator detection is now tokenizer/span-driven at statement boundaries (with byte-scan fallback), reducing brittle raw-SQL scanning for semicolon and trailing-comment/newline checks.
+  - `CV_006` now treats standalone MSSQL `GO` batch separator lines as non-statement tokens in last-statement detection, so `require_final_semicolon` checks continue to apply to the final SQL statement even when a trailing `GO` line is present.
   - `ST_010` constant-expression detection scope was broadened beyond SELECT traversal to also check `UPDATE`/`DELETE` predicates and `MERGE ... ON`.
   - `ST_010` now aligns closer with SQLFluff ST10 comparison semantics by detecting equivalent-expression predicate comparisons across `=`/`!=`/`<`/`>`/`<=`/`>=` (e.g. `x = x`, `x < x`, `'A'||'B' = 'A'||'B'`) with operator-side guardrails that defer nested comparison-expression operands while preserving SQLFluff-style literal handling (`1=1`/`1=0` allow-list and non-equality literal-vs-literal deferral).
   - `ST_010` now reports per-occurrence violations for multiple constant predicates within a statement instead of collapsing to a single statement-level issue.
@@ -151,7 +152,7 @@ This plan covers three axes:
   - `CV_004` fixer now rewrites both `COUNT(1)` and `COUNT(0)` to `COUNT(*)` under default preference, aligning fix behavior with current violation detection.
   - `CV_008` fixer now rewrites both simple and chained/nested `RIGHT JOIN` patterns into `LEFT JOIN` form via AST join-tree rewrites (operand swap plus join-operator normalization).
   - `CV_006` now supports `multiline_newline` / `require_final_semicolon` through `lint.ruleConfigs`.
-  - `CV_006` semicolon-style analysis is now tokenizer/span-only (byte-scan fallback removed), including tokenized last-statement detection and tokenized trailing-comment checks for multiline newline-style terminators.
+  - `CV_006` semicolon-style analysis is now tokenizer/span-only (byte-scan fallback removed), including tokenized last-statement detection with MSSQL `GO` batch-separator awareness and tokenized trailing-comment checks for multiline newline-style terminators.
   - `CV_007` moved from parity handling to a dedicated core rule module (`cv_007.rs`).
   - `CV_007` was further upgraded to AST-driven statement-shape detection (`Statement::Query` + wrapper `SetExpr::Query`), replacing SQL text `starts_with('(')/ends_with(')')` heuristics.
   - `CV_009` moved from parity handling to a dedicated core rule module (`cv_009.rs`).
