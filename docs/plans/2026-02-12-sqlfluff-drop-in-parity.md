@@ -89,6 +89,7 @@ This plan covers three axes:
   - `CV_003` now supports `select_clause_trailing_comma` (`forbid`/`require`) through `lint.ruleConfigs`.
   - `CV_006` moved from parity into a dedicated core rule module (`cv_006.rs`) and parity registration was removed.
   - `CV_006` now aligns with SQLFluff TSQL batch handling by splitting MSSQL statement ranges on `GO` separators before best-effort parsing, preventing parser dropouts from masking final-semicolon checks.
+  - `CV_006` terminator detection is now tokenizer/span-driven at statement boundaries (with byte-scan fallback), reducing brittle raw-SQL scanning for semicolon and trailing-comment/newline checks.
   - `ST_010` constant-expression detection scope was broadened beyond SELECT traversal to also check `UPDATE`/`DELETE` predicates and `MERGE ... ON`.
   - `ST_010` now aligns closer with SQLFluff ST10 comparison semantics by detecting equivalent-expression predicate comparisons across `=`/`!=`/`<`/`>`/`<=`/`>=` (e.g. `x = x`, `x < x`, `'A'||'B' = 'A'||'B'`) with operator-side guardrails that defer nested comparison-expression operands while preserving SQLFluff-style literal handling (`1=1`/`1=0` allow-list and non-equality literal-vs-literal deferral).
   - `ST_010` now reports per-occurrence violations for multiple constant predicates within a statement instead of collapsing to a single statement-level issue.

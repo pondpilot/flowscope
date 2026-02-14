@@ -4,8 +4,9 @@
 
 use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
-use crate::types::{issue_codes, Issue};
+use crate::types::{issue_codes, Dialect, Issue};
 use sqlparser::ast::Statement;
+use sqlparser::tokenizer::{Token, Tokenizer, Whitespace};
 
 #[derive(Default)]
 pub struct ConventionTerminator {
@@ -96,6 +97,41 @@ fn statement_is_multiline(ctx: &LintContext) -> bool {
 }
 
 fn terminal_semicolon_info(ctx: &LintContext) -> Option<TerminalSemicolon> {
+    terminal_semicolon_info_tokenized(ctx).or_else(|| terminal_semicolon_info_bytes(ctx))
+}
+
+fn terminal_semicolon_info_tokenized(ctx: &LintContext) -> Option<TerminalSemicolon> {
+    let tokens = tokenize_with_offsets(ctx.sql, ctx.dialect())?;
+    let mut newline_count_before_semicolon = 0usize;
+    let mut has_comment_before_semicolon = false;
+
+    for token in tokens
+        .iter()
+        .filter(|token| token.start >= ctx.statement_range.end)
+    {
+        match &token.token {
+            Token::SemiColon => {
+                return Some(TerminalSemicolon {
+                    semicolon_offset: token.start,
+                    newline_before_semicolon: newline_count_before_semicolon > 0,
+                    newline_count_before_semicolon,
+                    has_comment_before_semicolon,
+                });
+            }
+            trivia if is_trivia_token(trivia) => {
+                newline_count_before_semicolon += count_line_breaks(&ctx.sql[token.start..token.end]);
+                if is_comment_token(trivia) {
+                    has_comment_before_semicolon = true;
+                }
+            }
+            _ => return None,
+        }
+    }
+
+    None
+}
+
+fn terminal_semicolon_info_bytes(ctx: &LintContext) -> Option<TerminalSemicolon> {
     let bytes = ctx.sql.as_bytes();
     let mut idx = ctx.statement_range.end;
     let mut newline_count_before_semicolon = 0usize;
@@ -195,6 +231,24 @@ fn statement_has_detached_trailing_line_comment(ctx: &LintContext) -> bool {
 }
 
 fn is_last_statement(ctx: &LintContext) -> bool {
+    is_last_statement_tokenized(ctx).unwrap_or_else(|| is_last_statement_bytes(ctx))
+}
+
+fn is_last_statement_tokenized(ctx: &LintContext) -> Option<bool> {
+    let tokens = tokenize_with_offsets(ctx.sql, ctx.dialect())?;
+    for token in tokens
+        .iter()
+        .filter(|token| token.start >= ctx.statement_range.end)
+    {
+        if matches!(token.token, Token::SemiColon) || is_trivia_token(&token.token) {
+            continue;
+        }
+        return Some(false);
+    }
+    Some(true)
+}
+
+fn is_last_statement_bytes(ctx: &LintContext) -> bool {
     let bytes = ctx.sql.as_bytes();
     let mut idx = ctx.statement_range.end;
 
@@ -228,6 +282,104 @@ fn is_last_statement(ctx: &LintContext) -> bool {
     }
 
     true
+}
+
+struct LocatedToken {
+    token: Token,
+    start: usize,
+    end: usize,
+}
+
+fn tokenize_with_offsets(sql: &str, dialect: Dialect) -> Option<Vec<LocatedToken>> {
+    let dialect = dialect.to_sqlparser_dialect();
+    let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
+    let tokens = tokenizer.tokenize_with_location().ok()?;
+
+    let mut out = Vec::with_capacity(tokens.len());
+    for token in tokens {
+        let Some(start) = line_col_to_offset(
+            sql,
+            token.span.start.line as usize,
+            token.span.start.column as usize,
+        ) else {
+            continue;
+        };
+        let Some(end) =
+            line_col_to_offset(sql, token.span.end.line as usize, token.span.end.column as usize)
+        else {
+            continue;
+        };
+        out.push(LocatedToken {
+            token: token.token,
+            start,
+            end,
+        });
+    }
+
+    Some(out)
+}
+
+fn is_comment_token(token: &Token) -> bool {
+    matches!(
+        token,
+        Token::Whitespace(Whitespace::SingleLineComment { .. })
+            | Token::Whitespace(Whitespace::MultiLineComment(_))
+    )
+}
+
+fn is_trivia_token(token: &Token) -> bool {
+    matches!(
+        token,
+        Token::Whitespace(Whitespace::Space | Whitespace::Tab | Whitespace::Newline)
+            | Token::Whitespace(Whitespace::SingleLineComment { .. })
+            | Token::Whitespace(Whitespace::MultiLineComment(_))
+    )
+}
+
+fn count_line_breaks(text: &str) -> usize {
+    let mut count = 0usize;
+    let mut chars = text.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '\n' {
+            count += 1;
+            continue;
+        }
+        if ch == '\r' {
+            count += 1;
+            if matches!(chars.peek(), Some('\n')) {
+                let _ = chars.next();
+            }
+        }
+    }
+    count
+}
+
+fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
+    if line == 0 || column == 0 {
+        return None;
+    }
+
+    let mut current_line = 1usize;
+    let mut current_col = 1usize;
+
+    for (offset, ch) in sql.char_indices() {
+        if current_line == line && current_col == column {
+            return Some(offset);
+        }
+
+        if ch == '\n' {
+            current_line += 1;
+            current_col = 1;
+        } else {
+            current_col += 1;
+        }
+    }
+
+    if current_line == line && current_col == column {
+        return Some(sql.len());
+    }
+
+    None
 }
 
 #[cfg(test)]
@@ -344,6 +496,31 @@ mod tests {
         };
         let rule = ConventionTerminator::from_config(&config);
         let sql = "SELECT a\nFROM foo\n\n;";
+        let stmts = parse_sql(sql).expect("parse");
+        let issues = rule.check(
+            &stmts[0],
+            &LintContext {
+                sql,
+                statement_range: 0.."SELECT a\nFROM foo".len(),
+                statement_index: 0,
+            },
+        );
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_CV_006);
+    }
+
+    #[test]
+    fn multiline_newline_flags_comment_before_semicolon() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "convention.terminator".to_string(),
+                serde_json::json!({"multiline_newline": true}),
+            )]),
+        };
+        let rule = ConventionTerminator::from_config(&config);
+        let sql = "SELECT a\nFROM foo\n-- trailing\n;";
         let stmts = parse_sql(sql).expect("parse");
         let issues = rule.check(
             &stmts[0],
