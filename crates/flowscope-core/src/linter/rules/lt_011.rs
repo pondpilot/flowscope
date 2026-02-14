@@ -5,7 +5,7 @@
 
 use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
-use crate::types::{issue_codes, Issue};
+use crate::types::{issue_codes, Dialect, Issue};
 use sqlparser::ast::Statement;
 use sqlparser::keywords::Keyword;
 use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
@@ -66,7 +66,11 @@ impl LintRule for LayoutSetOperators {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        if has_inconsistent_set_operator_layout(ctx.statement_sql(), self.line_position) {
+        if has_inconsistent_set_operator_layout(
+            ctx.statement_sql(),
+            self.line_position,
+            ctx.dialect(),
+        ) {
             vec![Issue::info(
                 issue_codes::LINT_LT_011,
                 "Set operator line placement appears inconsistent.",
@@ -78,9 +82,13 @@ impl LintRule for LayoutSetOperators {
     }
 }
 
-fn has_inconsistent_set_operator_layout(sql: &str, line_position: SetOperatorLinePosition) -> bool {
-    let dialect = sqlparser::dialect::GenericDialect {};
-    let mut tokenizer = Tokenizer::new(&dialect, sql);
+fn has_inconsistent_set_operator_layout(
+    sql: &str,
+    line_position: SetOperatorLinePosition,
+    dialect: Dialect,
+) -> bool {
+    let dialect = dialect.to_sqlparser_dialect();
+    let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
     let Ok(tokens) = tokenizer.tokenize_with_location() else {
         return false;
     };

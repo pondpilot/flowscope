@@ -4,9 +4,8 @@
 //! from opening parenthesis.
 
 use crate::linter::rule::{LintContext, LintRule};
-use crate::types::{issue_codes, Issue};
+use crate::types::{issue_codes, Dialect, Issue};
 use sqlparser::ast::Statement;
-use sqlparser::dialect::GenericDialect;
 use sqlparser::keywords::Keyword;
 use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
 
@@ -26,7 +25,8 @@ impl LintRule for LayoutFunctions {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let Some((start, end)) = function_spacing_issue_span(ctx.statement_sql()) else {
+        let Some((start, end)) = function_spacing_issue_span(ctx.statement_sql(), ctx.dialect())
+        else {
             return Vec::new();
         };
 
@@ -39,9 +39,9 @@ impl LintRule for LayoutFunctions {
     }
 }
 
-fn function_spacing_issue_span(sql: &str) -> Option<(usize, usize)> {
-    let dialect = GenericDialect {};
-    let mut tokenizer = Tokenizer::new(&dialect, sql);
+fn function_spacing_issue_span(sql: &str, dialect: Dialect) -> Option<(usize, usize)> {
+    let dialect = dialect.to_sqlparser_dialect();
+    let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
     let tokens = tokenizer.tokenize_with_location().ok()?;
 
     for (index, token) in tokens.iter().enumerate() {

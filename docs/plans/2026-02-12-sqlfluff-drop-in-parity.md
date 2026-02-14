@@ -168,9 +168,9 @@ This plan covers three axes:
   - `JJ_001` was further upgraded from regex matching to deterministic delimiter scanning for Jinja padding checks.
   - `JJ_001` now also checks statement/comment closing tags (`%}`/`#}`) and supports trim-marker-safe padding detection for tags like `{{- ... -}}`.
   - `LT_010` moved from parity handling to a dedicated core rule module (`lt_010.rs`).
-  - `LT_010` was further upgraded from regex scanning to tokenizer line-aware SELECT modifier checks.
+  - `LT_010` was further upgraded from regex scanning to active-dialect tokenizer line-aware SELECT modifier checks.
   - `LT_011` moved from parity handling to a dedicated core rule module (`lt_011.rs`).
-  - `LT_011` was further upgraded from regex scanning to tokenizer line-aware set-operator placement checks.
+  - `LT_011` was further upgraded from regex scanning to active-dialect tokenizer line-aware set-operator placement checks.
   - `LT_011` now supports `line_position` (`alone:strict`/`leading`/`trailing`) through `lint.ruleConfigs`.
   - `LT_012` moved from parity handling to a dedicated core rule module (`lt_012.rs`).
   - `LT_012` now enforces SQLFluff-style single trailing newline at EOF (flags both missing final newline and multiple trailing blank lines), and now derives trailing-content boundaries from tokenizer spans with fallback to raw-text counting.
@@ -183,10 +183,10 @@ This plan covers three axes:
   - `LT_002` moved from parity handling to a dedicated core rule module (`lt_002.rs`).
   - `LT_002` now supports SQLFluff-style indentation config shapes across both `layout.indent` and top-level `indentation` sections (`indent_unit` / `tab_space_size`), enforces tab-vs-space indentation style, detects first-line indentation from full-statement source context, and now builds line-indentation snapshots from tokenizer spans (including comment lines) instead of line-splitting alone.
   - `LT_003` moved from parity handling to a dedicated core rule module (`lt_003.rs`).
-  - `LT_003` was further upgraded from regex scanning to tokenizer line-aware trailing-operator checks.
+  - `LT_003` was further upgraded from regex scanning to active-dialect tokenizer line-aware trailing-operator checks.
   - `LT_003` now supports operator line-position configuration through `lint.ruleConfigs` (`line_position=leading|trailing`) and legacy SQLFluff `operator_new_lines` compatibility.
   - `LT_004` moved from parity handling to a dedicated core rule module (`lt_004.rs`).
-  - `LT_004` was further upgraded from regex scanning to tokenizer-driven comma-spacing checks.
+  - `LT_004` was further upgraded from regex scanning to active-dialect tokenizer-driven comma-spacing checks.
   - `LT_004` now supports comma line-position configuration through `lint.ruleConfigs` (`line_position=trailing|leading`) and legacy SQLFluff `comma_style` compatibility.
   - `LT_001` moved from parity handling to a dedicated core rule module (`lt_001.rs`).
   - `LT_001` was further upgraded from deterministic raw-text scanning to tokenizer-with-span layout detection (JSON arrows, compact `text[` forms, numeric precision commas, and line-start `EXISTS (` patterns), reducing literal/comment false positives.
@@ -195,7 +195,7 @@ This plan covers three axes:
   - `LT_005` long-line overflow detection now uses tokenizer/span-derived line analysis (with deterministic raw-scan fallback for Jinja comment syntax), reducing byte-level scanning in the primary path.
   - Analyzer linting now runs `LT_005` for statementless/comment-only SQL inputs via document-level fallback, closing SQLFluff LT05 coverage gaps for comment-only files.
   - `LT_006` moved from parity handling to a dedicated core rule module (`lt_006.rs`).
-  - `LT_006` was further upgraded from regex masking to token-stream function-call spacing checks with context guards.
+  - `LT_006` was further upgraded from regex masking to active-dialect token-stream function-call spacing checks with context guards.
   - `LT_007` moved from parity handling to a dedicated core rule module (`lt_007.rs`).
   - `LT_007` now includes source-aware templating parity: when templating is enabled, lint evaluation uses untemplated source slices for CTE close-bracket checks so SQLFluff whitespace-consuming Jinja forms (`{{- ... -}}`, `{#- ... -#}`, `{%- ... -%}`) no longer produce false positives.
   - `LT_007` closing-bracket checks are now AST-first (`Query.with.cte_tables` closing-paren metadata) with tokenizer-span matching for multiline close placement, while retaining deterministic fallback scanning when AST/token span mapping is unavailable.
