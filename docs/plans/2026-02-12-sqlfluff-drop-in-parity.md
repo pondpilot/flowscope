@@ -151,6 +151,7 @@ This plan covers three axes:
   - `CV_001` was further upgraded from regex checks to AST expression traversal for not-equal comparisons, reducing lexical false positives.
   - `CV_001` not-equal style detection is now AST span-driven (operator classification from source slices between `Expr` operand spans), replacing tokenizer-wide `Token::Neq` scanning.
   - `CV_001` now supports `preferred_not_equal_style` (`consistent`/`c_style`/`ansi`) through `lint.ruleConfigs`.
+  - `CV_003` trailing-comma boundary detection now uses token-stream classification (shared document tokens first, then fallback tokenization) for first-significant-token checks, replacing raw clause-suffix byte scanning.
   - `CV_004` now supports `prefer_count_1` / `prefer_count_0` through `lint.ruleConfigs`.
   - `CV_004` fixer now rewrites both `COUNT(1)` and `COUNT(0)` to `COUNT(*)` under default preference, aligning fix behavior with current violation detection.
   - `CV_008` fixer now rewrites both simple and chained/nested `RIGHT JOIN` patterns into `LEFT JOIN` form via AST join-tree rewrites (operand swap plus join-operator normalization).

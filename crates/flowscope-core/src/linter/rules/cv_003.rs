@@ -5,8 +5,9 @@
 use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
 use crate::linter::rules::semantic_helpers::visit_selects_in_statement;
-use crate::types::{issue_codes, Issue};
+use crate::types::{issue_codes, Dialect, Issue};
 use sqlparser::ast::{GroupByExpr, Select, SelectItem, Spanned, Statement};
+use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum SelectClauseTrailingCommaPolicy {
@@ -76,7 +77,14 @@ impl LintRule for ConventionSelectTrailingComma {
     }
 
     fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        if has_select_trailing_comma_violation(statement, ctx.statement_sql(), self.policy) {
+        let tokens =
+            tokenized_for_context(ctx).or_else(|| tokenized(ctx.statement_sql(), ctx.dialect()));
+        if has_select_trailing_comma_violation(
+            statement,
+            ctx.statement_sql(),
+            self.policy,
+            tokens.as_deref(),
+        ) {
             vec![
                 Issue::warning(issue_codes::LINT_CV_003, self.policy.message())
                     .with_statement(ctx.statement_index),
@@ -91,13 +99,14 @@ fn has_select_trailing_comma_violation(
     statement: &Statement,
     sql: &str,
     policy: SelectClauseTrailingCommaPolicy,
+    tokens: Option<&[LocatedToken]>,
 ) -> bool {
     let mut violation = false;
     visit_selects_in_statement(statement, &mut |select| {
         if violation {
             return;
         }
-        if select_clause_violates_policy(select, sql, policy) {
+        if select_clause_violates_policy(select, sql, policy, tokens) {
             violation = true;
         }
     });
@@ -108,6 +117,7 @@ fn select_clause_violates_policy(
     select: &Select,
     sql: &str,
     policy: SelectClauseTrailingCommaPolicy,
+    tokens: Option<&[LocatedToken]>,
 ) -> bool {
     let Some(last_projection_end) = select_last_projection_end(select) else {
         return false;
@@ -132,8 +142,8 @@ fn select_clause_violates_policy(
         return false;
     }
 
-    let clause_suffix = &sql[last_projection_end_offset..boundary_offset];
-    let has_trailing_comma = first_significant_char_is_comma(clause_suffix);
+    let has_trailing_comma =
+        first_significant_token_is_comma(tokens, sql, last_projection_end_offset, boundary_offset);
     policy.violated(has_trailing_comma)
 }
 
@@ -240,6 +250,29 @@ fn span_end(span: sqlparser::tokenizer::Span) -> Option<(u64, u64)> {
     }
 }
 
+fn first_significant_token_is_comma(
+    tokens: Option<&[LocatedToken]>,
+    sql: &str,
+    start: usize,
+    end: usize,
+) -> bool {
+    let Some(tokens) = tokens else {
+        let clause_suffix = &sql[start..end];
+        return first_significant_char_is_comma(clause_suffix);
+    };
+
+    for token in tokens {
+        if token.end <= start || token.start >= end {
+            continue;
+        }
+        if is_trivia_token(&token.token) {
+            continue;
+        }
+        return matches!(token.token, Token::Comma);
+    }
+    false
+}
+
 fn first_significant_char_is_comma(slice: &str) -> bool {
     let bytes = slice.as_bytes();
     let mut index = 0usize;
@@ -270,6 +303,90 @@ fn first_significant_char_is_comma(slice: &str) -> bool {
         }
     }
     false
+}
+
+#[derive(Clone)]
+struct LocatedToken {
+    token: Token,
+    start: usize,
+    end: usize,
+}
+
+fn tokenized(sql: &str, dialect: Dialect) -> Option<Vec<LocatedToken>> {
+    let dialect = dialect.to_sqlparser_dialect();
+    let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
+    let tokens = tokenizer.tokenize_with_location().ok()?;
+
+    let mut out = Vec::with_capacity(tokens.len());
+    for token in tokens {
+        let Some((start, end)) = token_with_span_offsets(sql, &token) else {
+            continue;
+        };
+        out.push(LocatedToken {
+            token: token.token,
+            start,
+            end,
+        });
+    }
+    Some(out)
+}
+
+fn tokenized_for_context(ctx: &LintContext) -> Option<Vec<LocatedToken>> {
+    let statement_start = ctx.statement_range.start;
+    let from_document = ctx.with_document_tokens(|tokens| {
+        if tokens.is_empty() {
+            return None;
+        }
+
+        Some(
+            tokens
+                .iter()
+                .filter_map(|token| {
+                    let Some((start, end)) = token_with_span_offsets(ctx.sql, token) else {
+                        return None;
+                    };
+                    if start < ctx.statement_range.start || end > ctx.statement_range.end {
+                        return None;
+                    }
+
+                    Some(LocatedToken {
+                        token: token.token.clone(),
+                        start: start - statement_start,
+                        end: end - statement_start,
+                    })
+                })
+                .collect::<Vec<_>>(),
+        )
+    });
+
+    if let Some(tokens) = from_document {
+        return Some(tokens);
+    }
+
+    tokenized(ctx.statement_sql(), ctx.dialect())
+}
+
+fn token_with_span_offsets(sql: &str, token: &TokenWithSpan) -> Option<(usize, usize)> {
+    let start = line_col_to_offset(
+        sql,
+        token.span.start.line as usize,
+        token.span.start.column as usize,
+    )?;
+    let end = line_col_to_offset(
+        sql,
+        token.span.end.line as usize,
+        token.span.end.column as usize,
+    )?;
+    Some((start, end))
+}
+
+fn is_trivia_token(token: &Token) -> bool {
+    matches!(
+        token,
+        Token::Whitespace(Whitespace::Space | Whitespace::Tab | Whitespace::Newline)
+            | Token::Whitespace(Whitespace::SingleLineComment { .. })
+            | Token::Whitespace(Whitespace::MultiLineComment(_))
+    )
 }
 
 fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
