@@ -4,10 +4,9 @@
 
 use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
-use crate::types::{issue_codes, Dialect, Issue};
-use sqlparser::ast::Statement;
-use sqlparser::keywords::Keyword;
-use sqlparser::tokenizer::{Token, Tokenizer, Whitespace};
+use crate::linter::rules::semantic_helpers::visit_selects_in_statement;
+use crate::types::{issue_codes, Issue};
+use sqlparser::ast::{GroupByExpr, Select, SelectItem, Spanned, Statement};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum SelectClauseTrailingCommaPolicy {
@@ -76,8 +75,8 @@ impl LintRule for ConventionSelectTrailingComma {
         "Trailing commas within select clause."
     }
 
-    fn check(&self, _stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        if has_select_trailing_comma_violation(ctx.statement_sql(), self.policy, ctx.dialect()) {
+    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+        if has_select_trailing_comma_violation(statement, ctx.statement_sql(), self.policy) {
             vec![
                 Issue::warning(issue_codes::LINT_CV_003, self.policy.message())
                     .with_statement(ctx.statement_index),
@@ -88,143 +87,212 @@ impl LintRule for ConventionSelectTrailingComma {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum SignificantToken {
-    Comma,
-    Other,
-}
-
-#[derive(Clone, Copy)]
-struct SelectClauseState {
-    depth: usize,
-    last_significant: Option<SignificantToken>,
-}
-
 fn has_select_trailing_comma_violation(
+    statement: &Statement,
     sql: &str,
     policy: SelectClauseTrailingCommaPolicy,
-    dialect: Dialect,
 ) -> bool {
-    let dialect = dialect.to_sqlparser_dialect();
-    let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
-    let Ok(tokens) = tokenizer.tokenize() else {
+    let mut violation = false;
+    visit_selects_in_statement(statement, &mut |select| {
+        if violation {
+            return;
+        }
+        if select_clause_violates_policy(select, sql, policy) {
+            violation = true;
+        }
+    });
+    violation
+}
+
+fn select_clause_violates_policy(
+    select: &Select,
+    sql: &str,
+    policy: SelectClauseTrailingCommaPolicy,
+) -> bool {
+    let Some(last_projection_end) = select_last_projection_end(select) else {
+        return false;
+    };
+    let Some(last_projection_end_offset) = line_col_to_offset(
+        sql,
+        last_projection_end.0 as usize,
+        last_projection_end.1 as usize,
+    ) else {
         return false;
     };
 
-    let mut depth = 0usize;
-    let mut select_stack: Vec<SelectClauseState> = Vec::new();
+    let boundary = select_clause_boundary(select).or_else(|| span_end(select.span()));
+    let Some(boundary) = boundary else {
+        return false;
+    };
+    let Some(boundary_offset) = line_col_to_offset(sql, boundary.0 as usize, boundary.1 as usize)
+    else {
+        return false;
+    };
+    if boundary_offset < last_projection_end_offset {
+        return false;
+    }
 
-    for token in tokens {
-        if is_trivia_token(&token) {
-            continue;
-        }
+    let clause_suffix = &sql[last_projection_end_offset..boundary_offset];
+    let has_trailing_comma = first_significant_char_is_comma(clause_suffix);
+    policy.violated(has_trailing_comma)
+}
 
-        let significant = match token {
-            Token::Comma => Some(SignificantToken::Comma),
-            _ => Some(SignificantToken::Other),
-        };
+fn select_last_projection_end(select: &Select) -> Option<(u64, u64)> {
+    let item = select.projection.last()?;
+    match item {
+        SelectItem::ExprWithAlias { alias, .. } => span_end(alias.span),
+        SelectItem::UnnamedExpr(expr) => span_end(expr.span()),
+        SelectItem::Wildcard(_) | SelectItem::QualifiedWildcard(_, _) => span_end(item.span()),
+    }
+}
 
-        if let Token::Word(ref word) = token {
-            if word.keyword == Keyword::SELECT {
-                select_stack.push(SelectClauseState {
-                    depth,
-                    last_significant: None,
-                });
-                continue;
-            }
-        }
+fn select_clause_boundary(select: &Select) -> Option<(u64, u64)> {
+    let mut candidates = Vec::new();
 
-        if should_terminate_select_clause(&token, depth, select_stack.last()) {
-            if let Some(state) = select_stack.pop() {
-                if policy.violated(state.last_significant == Some(SignificantToken::Comma)) {
-                    return true;
-                }
-            }
-            continue;
-        }
-
-        if let Some(state) = select_stack.last_mut() {
-            if state.depth == depth {
-                state.last_significant = significant;
-            }
-        }
-
-        match token {
-            Token::LParen => depth += 1,
-            Token::RParen => depth = depth.saturating_sub(1),
-            _ => {}
-        }
-
-        while let Some(state) = select_stack.last().copied() {
-            if state.depth > depth {
-                let Some(ended) = select_stack.pop() else {
-                    break;
-                };
-                if policy.violated(ended.last_significant == Some(SignificantToken::Comma)) {
-                    return true;
-                }
-            } else {
-                break;
-            }
+    if let Some(first_from) = select.from.first() {
+        if let Some(start) = span_start(first_from.relation.span()) {
+            candidates.push(start);
         }
     }
 
-    while let Some(state) = select_stack.pop() {
-        if policy.violated(state.last_significant == Some(SignificantToken::Comma)) {
-            return true;
+    if let Some(into) = &select.into {
+        if let Some(start) = span_start(into.span()) {
+            candidates.push(start);
         }
     }
 
+    if let Some(expr) = &select.prewhere {
+        if let Some(start) = span_start(expr.span()) {
+            candidates.push(start);
+        }
+    }
+    if let Some(expr) = &select.selection {
+        if let Some(start) = span_start(expr.span()) {
+            candidates.push(start);
+        }
+    }
+    if let Some(expr) = &select.having {
+        if let Some(start) = span_start(expr.span()) {
+            candidates.push(start);
+        }
+    }
+    if let Some(expr) = &select.qualify {
+        if let Some(start) = span_start(expr.span()) {
+            candidates.push(start);
+        }
+    }
+    if let Some(connect_by) = &select.connect_by {
+        if let Some(start) = span_start(connect_by.span()) {
+            candidates.push(start);
+        }
+    }
+
+    if let GroupByExpr::Expressions(exprs, _) = &select.group_by {
+        if let Some(start) = exprs.first().and_then(|expr| span_start(expr.span())) {
+            candidates.push(start);
+        }
+    }
+    if let Some(start) = select
+        .cluster_by
+        .first()
+        .and_then(|expr| span_start(expr.span()))
+    {
+        candidates.push(start);
+    }
+    if let Some(start) = select
+        .distribute_by
+        .first()
+        .and_then(|expr| span_start(expr.span()))
+    {
+        candidates.push(start);
+    }
+    if let Some(start) = select
+        .sort_by
+        .first()
+        .and_then(|expr| span_start(expr.expr.span()))
+    {
+        candidates.push(start);
+    }
+    if let Some(start) = select
+        .named_window
+        .first()
+        .and_then(|window| span_start(window.span()))
+    {
+        candidates.push(start);
+    }
+
+    candidates.into_iter().min()
+}
+
+fn span_start(span: sqlparser::tokenizer::Span) -> Option<(u64, u64)> {
+    if span.start.line == 0 || span.start.column == 0 {
+        None
+    } else {
+        Some((span.start.line, span.start.column))
+    }
+}
+
+fn span_end(span: sqlparser::tokenizer::Span) -> Option<(u64, u64)> {
+    if span.end.line == 0 || span.end.column == 0 {
+        None
+    } else {
+        Some((span.end.line, span.end.column))
+    }
+}
+
+fn first_significant_char_is_comma(slice: &str) -> bool {
+    let bytes = slice.as_bytes();
+    let mut index = 0usize;
+    while index < bytes.len() {
+        match bytes[index] {
+            b' ' | b'\t' | b'\n' | b'\r' => {
+                index += 1;
+            }
+            b'-' if index + 1 < bytes.len() && bytes[index + 1] == b'-' => {
+                index += 2;
+                while index < bytes.len() && bytes[index] != b'\n' {
+                    index += 1;
+                }
+            }
+            b'/' if index + 1 < bytes.len() && bytes[index + 1] == b'*' => {
+                index += 2;
+                while index + 1 < bytes.len() && !(bytes[index] == b'*' && bytes[index + 1] == b'/')
+                {
+                    index += 1;
+                }
+                if index + 1 < bytes.len() {
+                    index += 2;
+                } else {
+                    index = bytes.len();
+                }
+            }
+            byte => return byte == b',',
+        }
+    }
     false
 }
 
-fn should_terminate_select_clause(
-    token: &Token,
-    depth: usize,
-    state: Option<&SelectClauseState>,
-) -> bool {
-    let Some(state) = state else {
-        return false;
-    };
-    if state.depth != depth {
-        return false;
+fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
+    if line == 0 || column == 0 {
+        return None;
     }
-
-    match token {
-        Token::Word(word) => is_select_clause_terminator(word.keyword),
-        Token::RParen | Token::SemiColon => true,
-        _ => false,
+    let mut current_line = 1usize;
+    let mut current_col = 1usize;
+    for (idx, ch) in sql.char_indices() {
+        if current_line == line && current_col == column {
+            return Some(idx);
+        }
+        if ch == '\n' {
+            current_line += 1;
+            current_col = 1;
+        } else {
+            current_col += 1;
+        }
     }
-}
-
-fn is_select_clause_terminator(keyword: Keyword) -> bool {
-    matches!(
-        keyword,
-        Keyword::FROM
-            | Keyword::INTO
-            | Keyword::WHERE
-            | Keyword::GROUP
-            | Keyword::HAVING
-            | Keyword::ORDER
-            | Keyword::LIMIT
-            | Keyword::OFFSET
-            | Keyword::FETCH
-            | Keyword::QUALIFY
-            | Keyword::WINDOW
-            | Keyword::FOR
-            | Keyword::UNION
-            | Keyword::EXCEPT
-            | Keyword::INTERSECT
-    )
-}
-
-fn is_trivia_token(token: &Token) -> bool {
-    matches!(
-        token,
-        Token::Whitespace(Whitespace::Space | Whitespace::Newline | Whitespace::Tab)
-            | Token::Whitespace(Whitespace::SingleLineComment { .. })
-            | Token::Whitespace(Whitespace::MultiLineComment(_))
-    )
+    if current_line == line && current_col == column {
+        return Some(sql.len());
+    }
+    None
 }
 
 #[cfg(test)]
@@ -258,6 +326,19 @@ mod tests {
     #[test]
     fn flags_trailing_comma_before_from() {
         let issues = run("select a, from t");
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_CV_003);
+    }
+
+    #[test]
+    fn wildcard_select_without_trailing_comma_is_allowed() {
+        let issues = run("SELECT * FROM t");
+        assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn wildcard_select_with_trailing_comma_is_flagged() {
+        let issues = run("SELECT *, FROM t");
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_CV_003);
     }

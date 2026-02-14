@@ -7,11 +7,11 @@ use std::collections::HashSet;
 
 use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::visit::visit_expressions;
+use crate::parser::parse_sql_with_dialect;
 use crate::types::{issue_codes, Dialect, Issue};
 use regex::Regex;
-use sqlparser::ast::Statement;
-use sqlparser::keywords::Keyword;
-use sqlparser::tokenizer::{Token, Tokenizer, Whitespace};
+use sqlparser::ast::{Expr, Statement};
 
 use super::capitalisation_policy_helpers::{
     ignored_words_from_config, ignored_words_regex_from_config, token_is_ignored,
@@ -61,8 +61,9 @@ impl LintRule for CapitalisationFunctions {
         "Functions should use a consistent case style."
     }
 
-    fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
         let functions = function_tokens(
+            statement,
             ctx.statement_sql(),
             &self.ignore_words,
             self.ignore_words_regex.as_ref(),
@@ -85,155 +86,48 @@ impl LintRule for CapitalisationFunctions {
 }
 
 fn function_tokens(
+    statement: &Statement,
     sql: &str,
     ignore_words: &HashSet<String>,
     ignore_words_regex: Option<&Regex>,
     dialect: Dialect,
 ) -> Vec<String> {
-    let dialect = dialect.to_sqlparser_dialect();
-    let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
-    let Ok(tokens) = tokenizer.tokenize() else {
-        return Vec::new();
-    };
-
-    let mut out = Vec::new();
-
-    for (index, token) in tokens.iter().enumerate() {
-        let Token::Word(word) = token else {
-            continue;
-        };
-
-        if word.quote_style.is_some() {
-            continue;
-        }
-
-        if is_non_function_word(word.value.as_str()) {
-            continue;
-        }
-
-        if token_is_ignored(word.value.as_str(), ignore_words, ignore_words_regex) {
-            continue;
-        }
-
-        let Some(next_index) = next_non_trivia_index(&tokens, index + 1) else {
-            if is_bare_function_name(word.value.as_str()) {
-                out.push(word.value.clone());
-            }
-            continue;
-        };
-        if !matches!(tokens[next_index], Token::LParen) {
-            if is_bare_function_name(word.value.as_str()) {
-                out.push(word.value.clone());
-            }
-            continue;
-        }
-
-        if let Some(prev_index) = prev_non_trivia_index(&tokens, index) {
-            match &tokens[prev_index] {
-                Token::Period => continue,
-                Token::Word(prev_word)
-                    if matches!(
-                        prev_word.keyword,
-                        Keyword::INTO
-                            | Keyword::FROM
-                            | Keyword::JOIN
-                            | Keyword::UPDATE
-                            | Keyword::TABLE
-                    ) =>
-                {
-                    continue;
-                }
-                _ => {}
+    let mut out = ast_function_tokens(statement, ignore_words, ignore_words_regex);
+    if out.is_empty() {
+        if let Ok(statements) = parse_sql_with_dialect(sql, dialect) {
+            for parsed_statement in &statements {
+                out.extend(ast_function_tokens(
+                    parsed_statement,
+                    ignore_words,
+                    ignore_words_regex,
+                ));
             }
         }
-
-        out.push(word.value.clone());
     }
-
     out
 }
 
-fn is_bare_function_name(word: &str) -> bool {
-    matches!(
-        word.to_ascii_uppercase().as_str(),
-        "CURRENT_DATE"
-            | "CURRENT_TIME"
-            | "CURRENT_TIMESTAMP"
-            | "LOCALTIME"
-            | "LOCALTIMESTAMP"
-            | "CURRENT_USER"
-            | "SESSION_USER"
-            | "SYSTEM_USER"
-            | "USER"
-    )
-}
-
-fn next_non_trivia_index(tokens: &[Token], mut index: usize) -> Option<usize> {
-    while index < tokens.len() {
-        if !is_trivia_token(&tokens[index]) {
-            return Some(index);
+fn ast_function_tokens(
+    statement: &Statement,
+    ignore_words: &HashSet<String>,
+    ignore_words_regex: Option<&Regex>,
+) -> Vec<String> {
+    let mut out = Vec::new();
+    visit_expressions(statement, &mut |expr| {
+        if let Expr::Function(function) = expr {
+            if let Some(part) = function.name.0.last() {
+                let name = part
+                    .as_ident()
+                    .map(|ident| ident.value.clone())
+                    .unwrap_or_else(|| part.to_string());
+                if token_is_ignored(&name, ignore_words, ignore_words_regex) {
+                    return;
+                }
+                out.push(name);
+            }
         }
-        index += 1;
-    }
-    None
-}
-
-fn is_non_function_word(word: &str) -> bool {
-    matches!(
-        word.to_ascii_uppercase().as_str(),
-        "ALL"
-            | "AND"
-            | "ANY"
-            | "AS"
-            | "BETWEEN"
-            | "BY"
-            | "CASE"
-            | "ELSE"
-            | "END"
-            | "EXISTS"
-            | "FROM"
-            | "GROUP"
-            | "HAVING"
-            | "IN"
-            | "INTERSECT"
-            | "IS"
-            | "JOIN"
-            | "LIKE"
-            | "ILIKE"
-            | "LIMIT"
-            | "NOT"
-            | "OFFSET"
-            | "ON"
-            | "OR"
-            | "ORDER"
-            | "OVER"
-            | "PARTITION"
-            | "SELECT"
-            | "THEN"
-            | "UNION"
-            | "WHEN"
-            | "WHERE"
-            | "WINDOW"
-    )
-}
-
-fn prev_non_trivia_index(tokens: &[Token], mut index: usize) -> Option<usize> {
-    while index > 0 {
-        index -= 1;
-        if !is_trivia_token(&tokens[index]) {
-            return Some(index);
-        }
-    }
-    None
-}
-
-fn is_trivia_token(token: &Token) -> bool {
-    matches!(
-        token,
-        Token::Whitespace(Whitespace::Space | Whitespace::Newline | Whitespace::Tab)
-            | Token::Whitespace(Whitespace::SingleLineComment { .. })
-            | Token::Whitespace(Whitespace::MultiLineComment(_))
-    )
+    });
+    out
 }
 
 #[cfg(test)]
@@ -325,5 +219,12 @@ mod tests {
             },
         );
         assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn bare_function_keywords_are_tracked() {
+        let issues = run("SELECT CURRENT_TIMESTAMP, current_timestamp FROM t");
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_CP_003);
     }
 }

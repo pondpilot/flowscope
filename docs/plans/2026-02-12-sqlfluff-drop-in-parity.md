@@ -85,7 +85,7 @@ This plan covers three axes:
   - `AL_005` now includes dialect-aware quoted/unquoted identifier normalization in default (`dialect`) mode, aligning SQLFluff AL05 alias usage matching across dialect-specific casefold behavior (for example Postgres/Redshift lower-folding, Snowflake upper-folding, and case-insensitive quoted identifiers for DuckDB/Hive/SQLite).
   - `AL_005` now includes SQLFluff Redshift QUALIFY parity for unqualified alias-prefixed identifiers (for example `ss_sold_date` / `ss_sales_price` counting as `ss` usage when QUALIFY follows FROM/JOIN directly).
   - `CV_003` moved from parity into a dedicated core rule module (`cv_003.rs`) and parity registration was removed.
-  - `CV_003` was further upgraded from regex scanning to active-dialect token/depth-aware trailing-comma detection in SELECT clauses.
+  - `CV_003` was further upgraded from regex scanning to AST-driven SELECT traversal with span-based trailing-comma detection at clause boundaries.
   - `CV_003` now supports `select_clause_trailing_comma` (`forbid`/`require`) through `lint.ruleConfigs`.
   - `CV_006` moved from parity into a dedicated core rule module (`cv_006.rs`) and parity registration was removed.
   - `CV_006` now aligns with SQLFluff TSQL batch handling by splitting MSSQL statement ranges on `GO` separators before best-effort parsing, preventing parser dropouts from masking final-semicolon checks.
@@ -223,7 +223,8 @@ This plan covers three axes:
   - `CP_005` moved from parity handling to a dedicated core rule module (`cp_005.rs`).
   - `CP_001` was further upgraded from regex masking to active-dialect tokenizer-driven tracked-keyword collection.
   - `CP_002` was further upgraded from regex masking to AST identifier-candidate traversal.
-  - `CP_003` was further upgraded from regex scanning to active-dialect token-stream function-call detection.
+  - `CP_003` was further upgraded from regex scanning to AST expression traversal for function-name detection.
+  - `CP_003` function-name detection is now AST-expression-driven (`Expr::Function` traversal), including bare function keyword forms (for example `CURRENT_TIMESTAMP`) without tokenizer fallback.
   - `CP_005` was further upgraded from regex masking to active-dialect tokenizer-driven type-keyword collection.
   - `CP_001` now supports `capitalisation_policy` / `ignore_words` / `ignore_words_regex` through `lint.ruleConfigs`.
   - `CP_002`-`CP_005` now support `extended_capitalisation_policy` / `ignore_words` / `ignore_words_regex` through `lint.ruleConfigs`; `CP_002` additionally supports SQLFluff-style `unquoted_identifiers_policy`.
@@ -233,7 +234,7 @@ This plan covers three axes:
   - `CP_001`/`CP_003`/`CP_004`/`CP_005` now run once per document with full-SQL lexical context and now also run in statementless parser-fallback mode, improving SQLFluff parity on parser-erroring fixture inputs while avoiding per-statement case-policy fragmentation.
   - SQLFluff-style `core.ignore_templated_areas` is now supported through `lint.ruleConfigs.core.ignore_templated_areas` for lexical CP document-scope checks, masking Jinja tag regions from case-policy evaluation when enabled.
   - `CP_001` consistent-policy handling now treats single tracked mixed-case tokens (for example `SeLeCt`) as violations, matching SQLFluff fixture expectations.
-  - `CP_003` now includes bare-function keyword forms (`CURRENT_TIMESTAMP`, `CURRENT_DATE`, `CURRENT_USER`, etc.) in token-stream function case checks.
+  - `CP_003` now includes bare-function keyword forms (`CURRENT_TIMESTAMP`, `CURRENT_DATE`, `CURRENT_USER`, etc.) in AST-based function case checks.
   - `CP_005` now includes broader SQL dialect type keyword coverage (`STRING`, `INT64`, `FLOAT64`, `BYTES`, `TIME`, `INTERVAL`, `STRUCT`, `ARRAY`, `MAP`, `ENUM`, `WITH`, `ZONE`) and now tracks user-defined type names introduced by `CREATE TYPE` / `ALTER TYPE` for downstream type-case checks.
   - Supported-dialect SQLFluff fixture replay for CP keyword/function/literal/type rules now reports zero mismatches on supported cases:
     - `CP01`: 27/27 checked, 0 mismatches.
