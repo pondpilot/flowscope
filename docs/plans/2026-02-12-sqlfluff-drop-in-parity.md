@@ -171,7 +171,7 @@ This plan covers three axes:
   - `LT_011` was further upgraded from regex scanning to tokenizer line-aware set-operator placement checks.
   - `LT_011` now supports `line_position` (`alone:strict`/`leading`/`trailing`) through `lint.ruleConfigs`.
   - `LT_012` moved from parity handling to a dedicated core rule module (`lt_012.rs`).
-  - `LT_012` now enforces SQLFluff-style single trailing newline at EOF (flags both missing final newline and multiple trailing blank lines).
+  - `LT_012` now enforces SQLFluff-style single trailing newline at EOF (flags both missing final newline and multiple trailing blank lines), and now derives trailing-content boundaries from tokenizer spans with fallback to raw-text counting.
   - `LT_013` moved from parity handling to a dedicated core rule module (`lt_013.rs`).
   - `LT_013` was further upgraded from regex matching to direct leading-blank-line scanning.
   - `LT_015` moved from parity handling to a dedicated core rule module (`lt_015.rs`).
@@ -194,6 +194,7 @@ This plan covers three axes:
   - `LT_006` was further upgraded from regex masking to token-stream function-call spacing checks with context guards.
   - `LT_007` moved from parity handling to a dedicated core rule module (`lt_007.rs`).
   - `LT_007` now includes source-aware templating parity: when templating is enabled, lint evaluation uses untemplated source slices for CTE close-bracket checks so SQLFluff whitespace-consuming Jinja forms (`{{- ... -}}`, `{#- ... -#}`, `{%- ... -%}`) no longer produce false positives.
+  - `LT_007` closing-bracket checks are now AST-first (`Query.with.cte_tables` closing-paren metadata) with tokenizer-span matching for multiline close placement, while retaining deterministic fallback scanning when AST/token span mapping is unavailable.
   - `LT_008` moved from parity handling to a dedicated core rule module (`lt_008.rs`).
   - `LT_008` was further upgraded from raw byte/state scanning to AST/token-aware CTE suffix analysis using `Query.with.cte_tables` closing-paren tokens plus tokenizer span traversal for blank-line detection.
   - `LT_009` moved from parity handling to a dedicated core rule module (`lt_009.rs`).

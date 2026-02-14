@@ -4,8 +4,9 @@
 //! bracket should appear on its own line.
 
 use crate::linter::rule::{LintContext, LintRule};
-use crate::types::{issue_codes, Issue};
-use sqlparser::ast::Statement;
+use crate::types::{issue_codes, Dialect, Issue};
+use sqlparser::ast::{Query, Statement};
+use sqlparser::tokenizer::{Token, Tokenizer};
 
 pub struct LayoutCteBracket;
 
@@ -22,8 +23,11 @@ impl LintRule for LayoutCteBracket {
         "CTE bodies should be wrapped in brackets."
     }
 
-    fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        if has_misplaced_cte_closing_bracket(ctx.statement_sql()) {
+    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+        let has_violation = has_misplaced_cte_closing_bracket_for_statement(statement, ctx)
+            .unwrap_or_else(|| has_misplaced_cte_closing_bracket(ctx.statement_sql()));
+
+        if has_violation {
             vec![Issue::warning(
                 issue_codes::LINT_LT_007,
                 "CTE AS clause appears to be missing surrounding brackets.",
@@ -33,6 +37,159 @@ impl LintRule for LayoutCteBracket {
             Vec::new()
         }
     }
+}
+
+#[derive(Clone)]
+struct LocatedToken {
+    token: Token,
+    start: usize,
+    end: usize,
+}
+
+fn has_misplaced_cte_closing_bracket_for_statement(
+    statement: &Statement,
+    ctx: &LintContext,
+) -> Option<bool> {
+    let query = match statement {
+        Statement::Query(query) => query.as_ref(),
+        Statement::CreateView { query, .. } => query.as_ref(),
+        _ => return None,
+    };
+
+    has_misplaced_cte_closing_bracket_in_query(query, ctx)
+}
+
+fn has_misplaced_cte_closing_bracket_in_query(query: &Query, ctx: &LintContext) -> Option<bool> {
+    let with = query.with.as_ref()?;
+    let sql = ctx.statement_sql();
+    let tokens = tokenize_with_offsets(sql, ctx.dialect())?;
+
+    let mut evaluated_any = false;
+
+    for cte in &with.cte_tables {
+        let Some(close_abs) = token_start_offset(ctx.sql, &cte.closing_paren_token.0) else {
+            continue;
+        };
+        if close_abs < ctx.statement_range.start || close_abs >= ctx.statement_range.end {
+            continue;
+        }
+        let close_rel = close_abs - ctx.statement_range.start;
+        let Some(close_idx) = tokens
+            .iter()
+            .position(|token| matches!(token.token, Token::RParen) && token.start == close_rel)
+        else {
+            continue;
+        };
+        let Some(open_idx) = matching_open_paren_index(&tokens, close_idx) else {
+            continue;
+        };
+
+        evaluated_any = true;
+
+        let body_start = tokens[open_idx].end;
+        let body_end = tokens[close_idx].start;
+        if body_start >= body_end || body_end > sql.len() {
+            continue;
+        }
+        let body = &sql[body_start..body_end];
+        if body.contains('\n') && !line_prefix_before(sql, body_end).trim().is_empty() {
+            return Some(true);
+        }
+    }
+
+    if evaluated_any {
+        Some(false)
+    } else {
+        None
+    }
+}
+
+fn matching_open_paren_index(tokens: &[LocatedToken], close_idx: usize) -> Option<usize> {
+    if !matches!(tokens.get(close_idx)?.token, Token::RParen) {
+        return None;
+    }
+
+    let mut depth = 0usize;
+    for index in (0..=close_idx).rev() {
+        match tokens[index].token {
+            Token::RParen => depth += 1,
+            Token::LParen => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return Some(index);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn tokenize_with_offsets(sql: &str, dialect: Dialect) -> Option<Vec<LocatedToken>> {
+    let dialect = dialect.to_sqlparser_dialect();
+    let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
+    let tokens = tokenizer.tokenize_with_location().ok()?;
+
+    let mut out = Vec::with_capacity(tokens.len());
+    for token in tokens {
+        let Some(start) = line_col_to_offset(
+            sql,
+            token.span.start.line as usize,
+            token.span.start.column as usize,
+        ) else {
+            continue;
+        };
+        let Some(end) = line_col_to_offset(
+            sql,
+            token.span.end.line as usize,
+            token.span.end.column as usize,
+        ) else {
+            continue;
+        };
+        out.push(LocatedToken {
+            token: token.token,
+            start,
+            end,
+        });
+    }
+
+    Some(out)
+}
+
+fn token_start_offset(sql: &str, token: &sqlparser::tokenizer::TokenWithSpan) -> Option<usize> {
+    line_col_to_offset(
+        sql,
+        token.span.start.line as usize,
+        token.span.start.column as usize,
+    )
+}
+
+fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
+    if line == 0 || column == 0 {
+        return None;
+    }
+
+    let mut current_line = 1usize;
+    let mut current_col = 1usize;
+
+    for (offset, ch) in sql.char_indices() {
+        if current_line == line && current_col == column {
+            return Some(offset);
+        }
+
+        if ch == '\n' {
+            current_line += 1;
+            current_col = 1;
+        } else {
+            current_col += 1;
+        }
+    }
+
+    if current_line == line && current_col == column {
+        return Some(sql.len());
+    }
+
+    None
 }
 
 fn has_misplaced_cte_closing_bracket(sql: &str) -> bool {
