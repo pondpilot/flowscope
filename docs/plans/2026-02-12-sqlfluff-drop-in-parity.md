@@ -24,7 +24,7 @@ This plan covers three axes:
 - 60 rules are "partial" (narrower scope, missing config, or regex-based).
 - **27 rule codes are misnumbered** relative to SQLFluff (see Appendix A).
 - Rule names use human-readable labels; SQLFluff uses dotted identifiers.
-- Fix coverage: 62/72 (10 rules lack `--fix` support).
+- Fix coverage: 63/72 (9 rules lack `--fix` support).
 
 ## Progress Snapshot (2026-02-13)
 
@@ -167,6 +167,7 @@ This plan covers three axes:
   - `CV_006` multiline fallback classification now counts CRLF/CR/LF line breaks instead of raw `contains('\n')`, keeping fallback behavior aligned with tokenizer line-break semantics.
   - `CV_007` moved from parity handling to a dedicated core rule module (`cv_007.rs`).
   - `CV_007` was further upgraded to AST-driven statement-shape detection (`Statement::Query` + wrapper `SetExpr::Query`), replacing SQL text `starts_with('(')/ends_with(')')` heuristics.
+  - `CV_007` fixer now applies AST wrapper-query unnesting in CLI fix mode (`fix_statement` query rewrite), replacing the text-regex bracket unwrap path.
   - `CV_009` moved from parity handling to a dedicated core rule module (`cv_009.rs`).
   - `CV_009` was further upgraded to AST-driven traversal (table names, aliases, expression identifiers), replacing raw regex scanning and reducing string/comment false positives.
   - `CV_009` now supports configurable `blocked_words` / `blocked_regex` through `lint.ruleConfigs`.
@@ -655,7 +656,7 @@ plan (Phase 2 of `linter-architecture.md`), but are lower priority because:
 
 ## Phase 4: Fix Coverage Gaps
 
-10 rules currently lack `--fix` support. Priority order by user impact:
+9 rules currently lack `--fix` support. Priority order by user impact:
 
 ### High Priority (semantic fixers)
 

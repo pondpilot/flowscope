@@ -373,9 +373,6 @@ fn apply_text_fixes(sql: &str, rule_filter: &RuleFilter) -> String {
     if rule_filter.allows(issue_codes::LINT_ST_012) {
         out = fix_consecutive_semicolons(&out);
     }
-    if rule_filter.allows(issue_codes::LINT_CV_007) {
-        out = fix_statement_brackets(&out);
-    }
     if rule_filter.allows(issue_codes::LINT_CV_001) {
         out = fix_not_equal_operator(&out);
     }
@@ -550,20 +547,6 @@ fn fix_jinja_padding(sql: &str) -> String {
 
 fn fix_consecutive_semicolons(sql: &str) -> String {
     regex_replace_all(sql, r";\s*;+", ";")
-}
-
-fn fix_statement_brackets(sql: &str) -> String {
-    let trimmed = sql.trim();
-    if trimmed.starts_with('(')
-        && trimmed.ends_with(')')
-        && trimmed[1..trimmed.len() - 1]
-            .trim_start()
-            .to_ascii_lowercase()
-            .starts_with("select")
-    {
-        return trimmed[1..trimmed.len() - 1].trim().to_string();
-    }
-    sql.to_string()
 }
 
 fn fix_not_equal_operator(sql: &str) -> String {
@@ -1439,7 +1422,12 @@ fn fix_trailing_newline(sql: &str) -> String {
 
 fn fix_statement(stmt: &mut Statement, rule_filter: &RuleFilter) {
     match stmt {
-        Statement::Query(query) => fix_query(query, rule_filter),
+        Statement::Query(query) => {
+            if rule_filter.allows(issue_codes::LINT_CV_007) {
+                unwrap_wrapper_queries(query);
+            }
+            fix_query(query, rule_filter);
+        }
         Statement::Insert(insert) => {
             if let Some(source) = insert.source.as_mut() {
                 fix_query(source, rule_filter);
@@ -1452,6 +1440,29 @@ fn fix_statement(stmt: &mut Statement, rule_filter: &RuleFilter) {
             }
         }
         _ => {}
+    }
+}
+
+fn unwrap_wrapper_queries(query: &mut Query) {
+    loop {
+        if query.with.is_some()
+            || query.order_by.is_some()
+            || query.limit_clause.is_some()
+            || query.fetch.is_some()
+            || !query.locks.is_empty()
+            || query.for_clause.is_some()
+            || query.settings.is_some()
+            || query.format_clause.is_some()
+            || !query.pipe_operators.is_empty()
+        {
+            return;
+        }
+
+        let SetExpr::Query(inner) = query.body.as_ref() else {
+            return;
+        };
+
+        *query = inner.as_ref().clone();
     }
 }
 
@@ -3486,6 +3497,28 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn sqlfluff_cv007_cases_are_fixed_or_unchanged() {
+        let cases = [
+            ("(SELECT 1)", 1, 0, 1),
+            ("((SELECT 1))", 1, 0, 1),
+            ("SELECT 1", 0, 0, 0),
+        ];
+
+        for (sql, before, after, fix_count) in cases {
+            assert_rule_case(sql, issue_codes::LINT_CV_007, before, after, fix_count);
+        }
+    }
+
+    #[test]
+    fn cv007_fix_respects_disabled_rules() {
+        let sql = "(SELECT 1)";
+        let out = apply_lint_fixes(sql, Dialect::Generic, &[issue_codes::LINT_CV_007.to_string()])
+            .expect("fix result");
+        assert_eq!(out.sql, sql);
+        assert_eq!(out.counts.get(issue_codes::LINT_CV_007), 0);
     }
 
     #[test]
