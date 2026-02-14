@@ -6,7 +6,8 @@
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Dialect, Issue};
 use sqlparser::ast::{Query, Statement};
-use sqlparser::tokenizer::{Token, Tokenizer};
+use sqlparser::keywords::Keyword;
+use sqlparser::tokenizer::{Token, Tokenizer, Whitespace};
 
 pub struct LayoutCteBracket;
 
@@ -25,7 +26,9 @@ impl LintRule for LayoutCteBracket {
 
     fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
         let has_violation = has_misplaced_cte_closing_bracket_for_statement(statement, ctx)
-            .unwrap_or_else(|| has_misplaced_cte_closing_bracket(ctx.statement_sql()));
+            .unwrap_or_else(|| {
+                has_misplaced_cte_closing_bracket(ctx.statement_sql(), ctx.dialect())
+            });
 
         if has_violation {
             vec![Issue::warning(
@@ -192,34 +195,41 @@ fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
     None
 }
 
-fn has_misplaced_cte_closing_bracket(sql: &str) -> bool {
-    if !sql
-        .as_bytes()
-        .windows(4)
-        .any(|window| window.eq_ignore_ascii_case(b"with"))
-    {
+fn has_misplaced_cte_closing_bracket(sql: &str, dialect: Dialect) -> bool {
+    let Some(tokens) = tokenize_with_offsets(sql, dialect) else {
+        return false;
+    };
+
+    let has_with = tokens
+        .iter()
+        .any(|token| matches!(token.token, Token::Word(ref word) if word.keyword == Keyword::WITH));
+    if !has_with {
         return false;
     }
 
-    let bytes = sql.as_bytes();
     let mut index = 0usize;
-
-    while let Some((as_start, as_end)) = find_word(bytes, index, "as") {
-        let open_idx = consume_whitespace(bytes, as_end);
-        if open_idx >= bytes.len() || bytes[open_idx] != b'(' {
-            index = as_start + 1;
+    while let Some(as_idx) = find_next_as_keyword(&tokens, index) {
+        let Some(open_idx) = next_non_trivia_index(&tokens, as_idx + 1) else {
+            index = as_idx + 1;
+            continue;
+        };
+        if !matches!(tokens[open_idx].token, Token::LParen) {
+            index = as_idx + 1;
             continue;
         }
 
-        let Some(close_idx) = matching_close_paren_ignoring_strings_and_comments(sql, open_idx)
-        else {
+        let Some(close_idx) = matching_close_paren_index(&tokens, open_idx) else {
             index = open_idx + 1;
             continue;
         };
 
-        let body = &sql[open_idx + 1..close_idx];
-        if body.contains('\n') && !line_prefix_before(sql, close_idx).trim().is_empty() {
-            return true;
+        let body_start = tokens[open_idx].end;
+        let body_end = tokens[close_idx].start;
+        if body_start < body_end && body_end <= sql.len() {
+            let body = &sql[body_start..body_end];
+            if body.contains('\n') && !line_prefix_before(sql, body_end).trim().is_empty() {
+                return true;
+            }
         }
 
         index = close_idx + 1;
@@ -233,128 +243,39 @@ fn line_prefix_before(sql: &str, idx: usize) -> &str {
     &sql[line_start..idx]
 }
 
-fn find_word(bytes: &[u8], from: usize, target: &str) -> Option<(usize, usize)> {
-    let mut i = from;
-    while i < bytes.len() {
-        let Some((start, end)) = parse_word(bytes, i) else {
-            i += 1;
-            continue;
-        };
-
-        if eq_ignore_ascii_case(bytes, start, end, target) {
-            return Some((start, end));
+fn find_next_as_keyword(tokens: &[LocatedToken], mut index: usize) -> Option<usize> {
+    while index < tokens.len() {
+        if matches!(
+            tokens[index].token,
+            Token::Word(ref word) if word.keyword == Keyword::AS
+        ) {
+            return Some(index);
         }
-
-        i = end;
+        index += 1;
     }
-
     None
 }
 
-fn parse_word(bytes: &[u8], start: usize) -> Option<(usize, usize)> {
-    if start >= bytes.len() || !is_word_char(bytes[start]) {
-        return None;
+fn next_non_trivia_index(tokens: &[LocatedToken], mut index: usize) -> Option<usize> {
+    while index < tokens.len() {
+        if !is_trivia_token(&tokens[index].token) {
+            return Some(index);
+        }
+        index += 1;
     }
-
-    let mut end = start;
-    while end < bytes.len() && is_word_char(bytes[end]) {
-        end += 1;
-    }
-
-    if start > 0 && is_word_char(bytes[start - 1]) {
-        return None;
-    }
-    if end < bytes.len() && is_word_char(bytes[end]) {
-        return None;
-    }
-
-    Some((start, end))
+    None
 }
 
-fn matching_close_paren_ignoring_strings_and_comments(sql: &str, open_idx: usize) -> Option<usize> {
-    let bytes = sql.as_bytes();
-    if open_idx >= bytes.len() || bytes[open_idx] != b'(' {
+fn matching_close_paren_index(tokens: &[LocatedToken], open_idx: usize) -> Option<usize> {
+    if !matches!(tokens.get(open_idx)?.token, Token::LParen) {
         return None;
     }
 
-    let mut idx = open_idx + 1;
-    let mut depth = 1usize;
-    let mut in_single = false;
-    let mut in_double = false;
-    let mut in_line_comment = false;
-    let mut in_block_comment = false;
-
-    while idx < bytes.len() {
-        if in_line_comment {
-            if bytes[idx] == b'\n' {
-                in_line_comment = false;
-            }
-            idx += 1;
-            continue;
-        }
-
-        if in_block_comment {
-            if idx + 1 < bytes.len() && bytes[idx] == b'*' && bytes[idx + 1] == b'/' {
-                in_block_comment = false;
-                idx += 2;
-            } else {
-                idx += 1;
-            }
-            continue;
-        }
-
-        if in_single {
-            if bytes[idx] == b'\'' {
-                if idx + 1 < bytes.len() && bytes[idx + 1] == b'\'' {
-                    idx += 2;
-                } else {
-                    in_single = false;
-                    idx += 1;
-                }
-            } else {
-                idx += 1;
-            }
-            continue;
-        }
-
-        if in_double {
-            if bytes[idx] == b'"' {
-                if idx + 1 < bytes.len() && bytes[idx + 1] == b'"' {
-                    idx += 2;
-                } else {
-                    in_double = false;
-                    idx += 1;
-                }
-            } else {
-                idx += 1;
-            }
-            continue;
-        }
-
-        if idx + 1 < bytes.len() && bytes[idx] == b'-' && bytes[idx + 1] == b'-' {
-            in_line_comment = true;
-            idx += 2;
-            continue;
-        }
-        if idx + 1 < bytes.len() && bytes[idx] == b'/' && bytes[idx + 1] == b'*' {
-            in_block_comment = true;
-            idx += 2;
-            continue;
-        }
-        if bytes[idx] == b'\'' {
-            in_single = true;
-            idx += 1;
-            continue;
-        }
-        if bytes[idx] == b'"' {
-            in_double = true;
-            idx += 1;
-            continue;
-        }
-
-        match bytes[idx] {
-            b'(' => depth += 1,
-            b')' => {
+    let mut depth = 0usize;
+    for (idx, token) in tokens.iter().enumerate().skip(open_idx) {
+        match token.token {
+            Token::LParen => depth += 1,
+            Token::RParen => {
                 depth -= 1;
                 if depth == 0 {
                     return Some(idx);
@@ -362,26 +283,18 @@ fn matching_close_paren_ignoring_strings_and_comments(sql: &str, open_idx: usize
             }
             _ => {}
         }
-        idx += 1;
     }
 
     None
 }
 
-fn consume_whitespace(bytes: &[u8], mut start: usize) -> usize {
-    while start < bytes.len() && bytes[start].is_ascii_whitespace() {
-        start += 1;
-    }
-    start
-}
-
-fn eq_ignore_ascii_case(bytes: &[u8], start: usize, end: usize, target: &str) -> bool {
-    let len = end.saturating_sub(start);
-    len == target.len() && bytes[start..end].eq_ignore_ascii_case(target.as_bytes())
-}
-
-fn is_word_char(byte: u8) -> bool {
-    byte.is_ascii_alphanumeric() || byte == b'_'
+fn is_trivia_token(token: &Token) -> bool {
+    matches!(
+        token,
+        Token::Whitespace(Whitespace::Space | Whitespace::Tab | Whitespace::Newline)
+            | Token::Whitespace(Whitespace::SingleLineComment { .. })
+            | Token::Whitespace(Whitespace::MultiLineComment(_))
+    )
 }
 
 #[cfg(test)]
@@ -430,6 +343,6 @@ mod tests {
     fn flags_templated_close_paren_on_same_line_as_cte_body_code() {
         let sql =
             "with\n{% if true %}\n  cte as (\n      select 1)\n{% endif %}\nselect * from cte";
-        assert!(has_misplaced_cte_closing_bracket(sql));
+        assert!(has_misplaced_cte_closing_bracket(sql, Dialect::Generic));
     }
 }

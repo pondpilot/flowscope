@@ -165,8 +165,9 @@ This plan covers three axes:
   - `CV_011` now supports `preferred_type_casting_style` through `lint.ruleConfigs`.
   - `CV_012` now broadens AST join-operator handling to include `INNER JOIN` forms represented as `JoinOperator::Inner` without `ON/USING`, and now aligns closer to SQLFluff CV12 chain semantics by flagging only when all naked joins in a join chain are represented via WHERE join predicates.
   - `JJ_001` moved from parity handling to a dedicated core rule module (`jj_001.rs`).
-  - `JJ_001` was further upgraded from regex matching to deterministic delimiter scanning for Jinja padding checks.
+  - `JJ_001` was further upgraded from regex matching to tokenizer/span-aware delimiter checks for Jinja padding.
   - `JJ_001` now also checks statement/comment closing tags (`%}`/`#}`) and supports trim-marker-safe padding detection for tags like `{{- ... -}}`.
+  - `AM_002` bare-`UNION` issue spans now use active-dialect tokenized `UNION` keyword spans aligned to AST set-operation traversal order, replacing SQL-text keyword searching.
   - `LT_010` moved from parity handling to a dedicated core rule module (`lt_010.rs`).
   - `LT_010` was further upgraded from regex scanning to active-dialect tokenizer line-aware SELECT modifier checks.
   - `LT_011` moved from parity handling to a dedicated core rule module (`lt_011.rs`).
@@ -176,9 +177,9 @@ This plan covers three axes:
   - `LT_012` now enforces SQLFluff-style single trailing newline at EOF (flags both missing final newline and multiple trailing blank lines), and now derives trailing-content boundaries from tokenizer spans with fallback to raw-text counting.
   - `LT_013` moved from parity handling to a dedicated core rule module (`lt_013.rs`).
   - `LT_013` was further upgraded from regex matching to direct leading-blank-line scanning.
-  - `LT_013` now uses tokenizer-first start-of-file trivia detection (with raw-text fallback) for leading blank-line parity.
+  - `LT_013` now uses tokenizer-first start-of-file trivia detection without raw-text fallback for leading blank-line parity.
   - `LT_015` moved from parity handling to a dedicated core rule module (`lt_015.rs`).
-  - `LT_015` was further upgraded from line-splitting-only blank-line run detection to tokenizer-derived line occupancy with fallback.
+  - `LT_015` was further upgraded from line-splitting-only blank-line run detection to tokenizer-derived line occupancy without raw fallback, including single-line comment end-line handling for blank-line run counting.
   - `LT_015` now supports `maximum_empty_lines_inside_statements` / `maximum_empty_lines_between_statements` through `lint.ruleConfigs`.
   - `LT_002` moved from parity handling to a dedicated core rule module (`lt_002.rs`).
   - `LT_002` now supports SQLFluff-style indentation config shapes across both `layout.indent` and top-level `indentation` sections (`indent_unit` / `tab_space_size`), enforces tab-vs-space indentation style, detects first-line indentation from full-statement source context, and now builds line-indentation snapshots from tokenizer spans (including comment lines) instead of line-splitting alone.
@@ -192,13 +193,13 @@ This plan covers three axes:
   - `LT_001` was further upgraded from deterministic raw-text scanning to tokenizer-with-span layout detection (JSON arrows, compact `text[` forms, numeric precision commas, and line-start `EXISTS (` patterns), reducing literal/comment false positives.
   - `LT_005` moved from parity handling to a dedicated core rule module (`lt_005.rs`).
   - `LT_005` now supports configurable `max_line_length`, `ignore_comment_lines`, and `ignore_comment_clauses` through `lint.ruleConfigs`, including SQLFluff-style disabled checks when `max_line_length <= 0`, comma-prefixed and Jinja comment-line handling, and SQL `COMMENT` clause handling for ignore-comment-clause semantics.
-  - `LT_005` long-line overflow detection now uses tokenizer/span-derived line analysis (with deterministic raw-scan fallback for Jinja comment syntax), reducing byte-level scanning in the primary path.
+  - `LT_005` long-line overflow detection now uses tokenizer/span-derived line analysis only, including Jinja-comment-safe sanitization for tokenization plus Jinja-aware line/comment-clause handling (raw fallback removed).
   - Analyzer linting now runs `LT_005` for statementless/comment-only SQL inputs via document-level fallback, closing SQLFluff LT05 coverage gaps for comment-only files.
   - `LT_006` moved from parity handling to a dedicated core rule module (`lt_006.rs`).
   - `LT_006` was further upgraded from regex masking to active-dialect token-stream function-call spacing checks with context guards.
   - `LT_007` moved from parity handling to a dedicated core rule module (`lt_007.rs`).
   - `LT_007` now includes source-aware templating parity: when templating is enabled, lint evaluation uses untemplated source slices for CTE close-bracket checks so SQLFluff whitespace-consuming Jinja forms (`{{- ... -}}`, `{#- ... -#}`, `{%- ... -%}`) no longer produce false positives.
-  - `LT_007` closing-bracket checks are now AST-first (`Query.with.cte_tables` closing-paren metadata) with tokenizer-span matching for multiline close placement, while retaining deterministic fallback scanning when AST/token span mapping is unavailable.
+  - `LT_007` closing-bracket checks are now AST-first (`Query.with.cte_tables` closing-paren metadata) with tokenizer-span matching for multiline close placement, and now use tokenizer fallback scanning (raw byte fallback removed) when AST/token span mapping is unavailable.
   - `LT_008` moved from parity handling to a dedicated core rule module (`lt_008.rs`).
   - `LT_008` was further upgraded from raw byte/state scanning to AST/token-aware CTE suffix analysis using `Query.with.cte_tables` closing-paren tokens plus tokenizer span traversal for blank-line detection.
   - `LT_009` moved from parity handling to a dedicated core rule module (`lt_009.rs`).

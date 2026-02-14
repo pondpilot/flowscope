@@ -23,9 +23,8 @@ impl LintRule for LayoutStartOfFile {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let has_violation = ctx.statement_index == 0
-            && has_leading_blank_lines_tokenized(ctx.sql, ctx.dialect())
-                .unwrap_or_else(|| has_leading_blank_lines(ctx.sql));
+        let has_violation =
+            ctx.statement_index == 0 && has_leading_blank_lines(ctx.sql, ctx.dialect());
         if has_violation {
             vec![Issue::info(
                 issue_codes::LINT_LT_013,
@@ -38,32 +37,23 @@ impl LintRule for LayoutStartOfFile {
     }
 }
 
-fn has_leading_blank_lines_tokenized(sql: &str, dialect: Dialect) -> Option<bool> {
+fn has_leading_blank_lines(sql: &str, dialect: Dialect) -> bool {
     let dialect = dialect.to_sqlparser_dialect();
     let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
-    let tokens = tokenizer.tokenize().ok()?;
+    let Ok(tokens) = tokenizer.tokenize() else {
+        return false;
+    };
 
     for token in tokens {
         match token {
             Token::Whitespace(Whitespace::Space | Whitespace::Tab) => continue,
-            Token::Whitespace(Whitespace::Newline) => return Some(true),
+            Token::Whitespace(Whitespace::Newline) => return true,
             Token::Whitespace(Whitespace::SingleLineComment { .. })
-            | Token::Whitespace(Whitespace::MultiLineComment(_)) => return Some(false),
-            _ => return Some(false),
-        }
-    }
-
-    Some(false)
-}
-
-fn has_leading_blank_lines(sql: &str) -> bool {
-    for byte in sql.as_bytes() {
-        match *byte {
-            b' ' | b'\t' | b'\r' => continue,
-            b'\n' => return true,
+            | Token::Whitespace(Whitespace::MultiLineComment(_)) => return false,
             _ => return false,
         }
     }
+
     false
 }
 

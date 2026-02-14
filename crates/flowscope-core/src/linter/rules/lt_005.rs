@@ -117,78 +117,7 @@ fn long_line_overflow_spans(
         ignore_comment_clauses,
         dialect,
     )
-    .unwrap_or_else(|| {
-        long_line_overflow_spans_fallback(
-            sql,
-            max_len,
-            ignore_comment_lines,
-            ignore_comment_clauses,
-        )
-    })
-}
-
-fn long_line_overflow_spans_fallback(
-    sql: &str,
-    max_len: usize,
-    ignore_comment_lines: bool,
-    ignore_comment_clauses: bool,
-) -> Vec<(usize, usize)> {
-    let bytes = sql.as_bytes();
-    let mut spans = Vec::new();
-    let mut line_start = 0usize;
-    let mut in_block_comment = false;
-    let mut in_jinja_comment = false;
-
-    for idx in 0..=bytes.len() {
-        if idx < bytes.len() && bytes[idx] != b'\n' {
-            continue;
-        }
-
-        let mut line_end = idx;
-        if line_end > line_start && bytes[line_end - 1] == b'\r' {
-            line_end -= 1;
-        }
-
-        let line = &sql[line_start..line_end];
-        if ignore_comment_lines
-            && line_is_comment_only(line, &mut in_block_comment, &mut in_jinja_comment)
-        {
-            line_start = idx + 1;
-            continue;
-        }
-
-        let effective_line = if ignore_comment_clauses {
-            match comment_clause_start_offset(line) {
-                Some(offset) => &line[..offset],
-                None => line,
-            }
-        } else {
-            line
-        };
-
-        if effective_line.chars().count() > max_len {
-            let mut overflow_start = line_end;
-            for (char_idx, (byte_off, _)) in effective_line.char_indices().enumerate() {
-                if char_idx == max_len {
-                    overflow_start = line_start + byte_off;
-                    break;
-                }
-            }
-
-            if overflow_start < line_end {
-                let overflow_end = sql[overflow_start..line_end]
-                    .chars()
-                    .next()
-                    .map(|ch| overflow_start + ch.len_utf8())
-                    .unwrap_or(overflow_start);
-                spans.push((overflow_start, overflow_end));
-            }
-        }
-
-        line_start = idx + 1;
-    }
-
-    spans
+    .unwrap_or_default()
 }
 
 #[derive(Clone)]
@@ -205,24 +134,35 @@ fn long_line_overflow_spans_tokenized(
     ignore_comment_clauses: bool,
     dialect: Dialect,
 ) -> Option<Vec<(usize, usize)>> {
-    if sql.contains("{#") || sql.contains("#}") {
-        return None;
-    }
-
-    let tokens = tokenize_with_offsets(sql, dialect)?;
+    let jinja_comment_spans = jinja_comment_spans(sql);
+    let sanitized = sanitize_sql_for_jinja_comments(sql, &jinja_comment_spans);
+    let tokens = tokenize_with_offsets(&sanitized, dialect)?;
     let line_ranges = line_ranges(sql);
     let mut spans = Vec::new();
 
     for (line_start, line_end) in line_ranges {
         let line = &sql[line_start..line_end];
         if ignore_comment_lines
-            && line_is_comment_only_tokenized(line_start, line_end, &tokens, line)
+            && line_is_comment_only_tokenized(
+                line_start,
+                line_end,
+                &tokens,
+                line,
+                sql,
+                &jinja_comment_spans,
+            )
         {
             continue;
         }
 
         let effective_end = if ignore_comment_clauses {
-            comment_clause_start_offset_tokenized(line_start, line_end, &tokens).unwrap_or(line_end)
+            comment_clause_start_offset_tokenized(
+                line_start,
+                line_end,
+                &tokens,
+                &jinja_comment_spans,
+            )
+            .unwrap_or(line_end)
         } else {
             line_end
         };
@@ -283,7 +223,13 @@ fn line_is_comment_only_tokenized(
     line_end: usize,
     tokens: &[LocatedToken],
     line_text: &str,
+    sql: &str,
+    jinja_comment_spans: &[std::ops::Range<usize>],
 ) -> bool {
+    if line_is_jinja_comment_only(line_start, line_end, sql, jinja_comment_spans) {
+        return true;
+    }
+
     let line_tokens = tokens_on_line(tokens, line_start, line_end);
     if line_tokens.is_empty() {
         return false;
@@ -320,7 +266,9 @@ fn comment_clause_start_offset_tokenized(
     line_start: usize,
     line_end: usize,
     tokens: &[LocatedToken],
+    jinja_comment_spans: &[std::ops::Range<usize>],
 ) -> Option<usize> {
+    let jinja_start = first_jinja_comment_start_on_line(line_start, line_end, jinja_comment_spans);
     let line_tokens = tokens_on_line(tokens, line_start, line_end);
     let significant: Vec<&LocatedToken> = line_tokens
         .iter()
@@ -328,10 +276,14 @@ fn comment_clause_start_offset_tokenized(
         .filter(|token| !is_spacing_whitespace(&token.token))
         .collect();
 
+    let mut earliest = jinja_start;
+
     for (index, token) in significant.iter().enumerate() {
         if let Token::Word(word) = &token.token {
             if word.value.eq_ignore_ascii_case("comment") {
-                return Some(token.start.max(line_start));
+                let candidate = token.start.max(line_start);
+                earliest = Some(earliest.map_or(candidate, |current| current.min(candidate)));
+                break;
             }
         }
 
@@ -339,7 +291,9 @@ fn comment_clause_start_offset_tokenized(
             token.token,
             Token::Whitespace(Whitespace::SingleLineComment { .. })
         ) {
-            return Some(token.start.max(line_start));
+            let candidate = token.start.max(line_start);
+            earliest = Some(earliest.map_or(candidate, |current| current.min(candidate)));
+            break;
         }
 
         if matches!(
@@ -349,11 +303,13 @@ fn comment_clause_start_offset_tokenized(
             .iter()
             .all(|next| is_spacing_whitespace(&next.token))
         {
-            return Some(token.start.max(line_start));
+            let candidate = token.start.max(line_start);
+            earliest = Some(earliest.map_or(candidate, |current| current.min(candidate)));
+            break;
         }
     }
 
-    None
+    earliest
 }
 
 fn tokens_on_line(
@@ -408,6 +364,109 @@ fn tokenize_with_offsets(sql: &str, dialect: Dialect) -> Option<Vec<LocatedToken
     Some(out)
 }
 
+fn jinja_comment_spans(sql: &str) -> Vec<std::ops::Range<usize>> {
+    let bytes = sql.as_bytes();
+    let mut spans = Vec::new();
+    let mut idx = 0usize;
+
+    while idx + 1 < bytes.len() {
+        if bytes[idx] == b'{' && bytes[idx + 1] == b'#' {
+            let start = idx;
+            idx += 2;
+
+            while idx + 1 < bytes.len() {
+                if bytes[idx] == b'#' && bytes[idx + 1] == b'}' {
+                    idx += 2;
+                    spans.push(start..idx);
+                    break;
+                }
+                idx += 1;
+            }
+
+            if idx >= bytes.len() {
+                spans.push(start..bytes.len());
+                break;
+            }
+
+            continue;
+        }
+
+        idx += 1;
+    }
+
+    spans
+}
+
+fn sanitize_sql_for_jinja_comments(sql: &str, spans: &[std::ops::Range<usize>]) -> String {
+    if spans.is_empty() {
+        return sql.to_string();
+    }
+
+    let mut bytes = sql.as_bytes().to_vec();
+    for span in spans {
+        for idx in span.start..span.end.min(bytes.len()) {
+            if bytes[idx] != b'\n' {
+                bytes[idx] = b' ';
+            }
+        }
+    }
+
+    String::from_utf8(bytes).expect("sanitized SQL should remain valid UTF-8")
+}
+
+fn first_jinja_comment_start_on_line(
+    line_start: usize,
+    line_end: usize,
+    spans: &[std::ops::Range<usize>],
+) -> Option<usize> {
+    spans
+        .iter()
+        .filter_map(|span| {
+            if span.start >= line_end || span.end <= line_start {
+                return None;
+            }
+            Some(span.start.max(line_start))
+        })
+        .min()
+}
+
+fn line_is_jinja_comment_only(
+    line_start: usize,
+    line_end: usize,
+    sql: &str,
+    spans: &[std::ops::Range<usize>],
+) -> bool {
+    let mut in_prefix = true;
+    let mut saw_comment = false;
+
+    for (rel, ch) in sql[line_start..line_end].char_indices() {
+        if in_prefix {
+            if ch.is_whitespace() || ch == ',' {
+                continue;
+            }
+            in_prefix = false;
+        }
+
+        if ch.is_whitespace() {
+            continue;
+        }
+
+        let abs = line_start + rel;
+        if !offset_in_any_span(abs, spans) {
+            return false;
+        }
+        saw_comment = true;
+    }
+
+    saw_comment
+}
+
+fn offset_in_any_span(offset: usize, spans: &[std::ops::Range<usize>]) -> bool {
+    spans
+        .iter()
+        .any(|span| offset >= span.start && offset < span.end)
+}
+
 fn is_comment_token(token: &Token) -> bool {
     matches!(
         token,
@@ -449,151 +508,6 @@ fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
     }
 
     None
-}
-
-fn line_is_comment_only(
-    line: &str,
-    in_block_comment: &mut bool,
-    in_jinja_comment: &mut bool,
-) -> bool {
-    let mut trimmed = line.trim_start();
-    while let Some(rest) = trimmed.strip_prefix(',') {
-        trimmed = rest.trim_start();
-    }
-
-    if *in_block_comment {
-        if let Some(end_idx) = trimmed.find("*/") {
-            *in_block_comment = false;
-            return trimmed[end_idx + 2..].trim().is_empty();
-        }
-        return true;
-    }
-
-    if *in_jinja_comment {
-        if let Some(end_idx) = trimmed.find("#}") {
-            *in_jinja_comment = false;
-            return trimmed[end_idx + 2..].trim().is_empty();
-        }
-        return true;
-    }
-
-    if trimmed.starts_with("--") || trimmed.starts_with('#') {
-        return true;
-    }
-
-    if trimmed.starts_with("{#") {
-        if let Some(end_idx) = trimmed.find("#}") {
-            return trimmed[end_idx + 2..].trim().is_empty();
-        }
-        *in_jinja_comment = true;
-        return true;
-    }
-
-    if trimmed.starts_with("/*") {
-        if let Some(end_idx) = trimmed.find("*/") {
-            return trimmed[end_idx + 2..].trim().is_empty();
-        }
-        *in_block_comment = true;
-        return true;
-    }
-
-    false
-}
-
-fn comment_clause_start_offset(line: &str) -> Option<usize> {
-    let bytes = line.as_bytes();
-    let mut idx = 0usize;
-    let mut in_single_quote = false;
-    let mut in_double_quote = false;
-
-    while idx < bytes.len() {
-        let byte = bytes[idx];
-
-        if in_single_quote {
-            if byte == b'\'' {
-                if idx + 1 < bytes.len() && bytes[idx + 1] == b'\'' {
-                    idx += 2;
-                } else {
-                    in_single_quote = false;
-                    idx += 1;
-                }
-            } else {
-                idx += 1;
-            }
-            continue;
-        }
-
-        if in_double_quote {
-            if byte == b'"' {
-                if idx + 1 < bytes.len() && bytes[idx + 1] == b'"' {
-                    idx += 2;
-                } else {
-                    in_double_quote = false;
-                    idx += 1;
-                }
-            } else {
-                idx += 1;
-            }
-            continue;
-        }
-
-        if byte == b'\'' {
-            in_single_quote = true;
-            idx += 1;
-            continue;
-        }
-
-        if byte == b'"' {
-            in_double_quote = true;
-            idx += 1;
-            continue;
-        }
-
-        if byte == b'#' {
-            return Some(idx);
-        }
-
-        if idx + 1 < bytes.len() && bytes[idx] == b'-' && bytes[idx + 1] == b'-' {
-            return Some(idx);
-        }
-
-        if idx + 1 < bytes.len() && bytes[idx] == b'/' && bytes[idx + 1] == b'*' {
-            if let Some(close_rel) = line[idx + 2..].find("*/") {
-                let close_idx = idx + 2 + close_rel;
-                let remainder = &line[close_idx + 2..];
-                if remainder.trim().is_empty() {
-                    return Some(idx);
-                }
-                idx = close_idx + 2;
-                continue;
-            }
-        }
-
-        if is_ident_start(bytes[idx]) {
-            let start = idx;
-            idx += 1;
-            while idx < bytes.len() && is_ident_continue(bytes[idx]) {
-                idx += 1;
-            }
-
-            if line[start..idx].eq_ignore_ascii_case("comment") {
-                return Some(start);
-            }
-            continue;
-        }
-
-        idx += 1;
-    }
-
-    None
-}
-
-fn is_ident_start(byte: u8) -> bool {
-    byte.is_ascii_alphabetic() || byte == b'_'
-}
-
-fn is_ident_continue(byte: u8) -> bool {
-    byte.is_ascii_alphanumeric() || byte == b'_'
 }
 
 #[cfg(test)]

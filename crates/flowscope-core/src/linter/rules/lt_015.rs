@@ -80,17 +80,18 @@ impl LintRule for LayoutNewlines {
 
 fn max_consecutive_blank_lines(sql: &str, dialect: Dialect) -> usize {
     max_consecutive_blank_lines_tokenized(sql, dialect)
-        .unwrap_or_else(|| max_consecutive_blank_lines_fallback(sql))
 }
 
-fn max_consecutive_blank_lines_tokenized(sql: &str, dialect: Dialect) -> Option<usize> {
+fn max_consecutive_blank_lines_tokenized(sql: &str, dialect: Dialect) -> usize {
     if sql.is_empty() {
-        return Some(0);
+        return 0;
     }
 
     let dialect = dialect.to_sqlparser_dialect();
     let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
-    let tokens = tokenizer.tokenize_with_location().ok()?;
+    let tokens = tokenizer
+        .tokenize_with_location()
+        .expect("statement tokenization should mirror the successful parser run");
 
     let mut non_blank_lines = std::collections::BTreeSet::new();
     for token in tokens {
@@ -98,7 +99,10 @@ fn max_consecutive_blank_lines_tokenized(sql: &str, dialect: Dialect) -> Option<
             continue;
         }
         let start_line = token.span.start.line as usize;
-        let end_line = token.span.end.line as usize;
+        let end_line = match &token.token {
+            Token::Whitespace(Whitespace::SingleLineComment { .. }) => start_line,
+            _ => token.span.end.line as usize,
+        };
         for line in start_line..=end_line {
             non_blank_lines.insert(line);
         }
@@ -114,22 +118,6 @@ fn max_consecutive_blank_lines_tokenized(sql: &str, dialect: Dialect) -> Option<
         } else {
             blank_run += 1;
             max_run = max_run.max(blank_run);
-        }
-    }
-
-    Some(max_run)
-}
-
-fn max_consecutive_blank_lines_fallback(sql: &str) -> usize {
-    let mut blank_run = 0usize;
-    let mut max_run = 0usize;
-
-    for line in sql.lines() {
-        if line.trim().is_empty() {
-            blank_run += 1;
-            max_run = max_run.max(blank_run);
-        } else {
-            blank_run = 0;
         }
     }
 
@@ -262,6 +250,20 @@ mod tests {
             "SELECT 1;\n\n\nSELECT 2",
             &LayoutNewlines::from_config(&config),
         );
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_LT_015);
+    }
+
+    #[test]
+    fn flags_blank_lines_after_inline_comment() {
+        let issues = run("SELECT 1 -- inline\n\n\nFROM t");
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_LT_015);
+    }
+
+    #[test]
+    fn flags_blank_lines_between_statements_with_comment_gap() {
+        let issues = run("SELECT 1;\n-- there was a comment\n\n\nSELECT 2");
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_LT_015);
     }

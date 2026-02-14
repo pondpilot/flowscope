@@ -4,8 +4,9 @@
 //! Jinja delimiters.
 
 use crate::linter::rule::{LintContext, LintRule};
-use crate::types::{issue_codes, Issue};
+use crate::types::{issue_codes, Dialect, Issue};
 use sqlparser::ast::Statement;
+use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer};
 
 pub struct JinjaPadding;
 
@@ -23,59 +24,184 @@ impl LintRule for JinjaPadding {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let has_violation = has_inconsistent_jinja_padding(ctx.statement_sql());
+        let Some((start, end)) = jinja_padding_violation_span(ctx.statement_sql(), ctx.dialect())
+        else {
+            return Vec::new();
+        };
 
-        if has_violation {
-            vec![Issue::info(
-                issue_codes::LINT_JJ_001,
-                "Jinja tag spacing appears inconsistent.",
-            )
-            .with_statement(ctx.statement_index)]
+        vec![Issue::info(
+            issue_codes::LINT_JJ_001,
+            "Jinja tag spacing appears inconsistent.",
+        )
+        .with_statement(ctx.statement_index)
+        .with_span(ctx.span_from_statement_offset(start, end))]
+    }
+}
+
+fn jinja_padding_violation_span(sql: &str, dialect: Dialect) -> Option<(usize, usize)> {
+    let tokens = token_spans(sql, dialect)?;
+
+    for token in &tokens {
+        if let Some(span) = token_text_violation(sql, token) {
+            return Some(span);
+        }
+    }
+
+    for pair in tokens.windows(2) {
+        let left = &pair[0];
+        let right = &pair[1];
+        if is_open_delimiter_tokens(&left.token, &right.token) {
+            let delimiter_start = left.start;
+            let delimiter_end = right.end;
+            if has_missing_padding_after(sql, delimiter_end) {
+                return Some((delimiter_start, delimiter_end));
+            }
+        }
+
+        if is_close_delimiter_tokens(&left.token, &right.token) {
+            let delimiter_start = left.start;
+            let delimiter_end = right.end;
+            if has_missing_padding_before(sql, delimiter_start) {
+                return Some((delimiter_start, delimiter_end));
+            }
+        }
+    }
+
+    None
+}
+
+struct TokenSpan {
+    token: Token,
+    start: usize,
+    end: usize,
+}
+
+fn token_spans(sql: &str, dialect: Dialect) -> Option<Vec<TokenSpan>> {
+    let dialect = dialect.to_sqlparser_dialect();
+    let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
+    let tokens: Vec<TokenWithSpan> = tokenizer.tokenize_with_location().ok()?;
+
+    let mut out = Vec::with_capacity(tokens.len());
+    for token in tokens {
+        let start = line_col_to_offset(
+            sql,
+            token.span.start.line as usize,
+            token.span.start.column as usize,
+        )?;
+        let end = line_col_to_offset(
+            sql,
+            token.span.end.line as usize,
+            token.span.end.column as usize,
+        )?;
+        if start < end {
+            out.push(TokenSpan {
+                token: token.token,
+                start,
+                end,
+            });
+        }
+    }
+
+    Some(out)
+}
+
+fn token_text_violation(sql: &str, token: &TokenSpan) -> Option<(usize, usize)> {
+    let text = &sql[token.start..token.end];
+
+    for pattern in &OPEN_DELIMITERS {
+        for (idx, _) in text.match_indices(pattern) {
+            let delimiter_start = token.start + idx;
+            let delimiter_end = delimiter_start + pattern.len();
+            if has_missing_padding_after(sql, delimiter_end) {
+                return Some((delimiter_start, delimiter_end));
+            }
+        }
+    }
+
+    for pattern in &CLOSE_DELIMITERS {
+        for (idx, _) in text.match_indices(pattern) {
+            let delimiter_start = token.start + idx;
+            if has_missing_padding_before(sql, delimiter_start) {
+                return Some((delimiter_start, delimiter_start + pattern.len()));
+            }
+        }
+    }
+
+    None
+}
+
+const OPEN_DELIMITERS: [&str; 3] = ["{{", "{%", "{#"];
+const CLOSE_DELIMITERS: [&str; 3] = ["}}", "%}", "#}"];
+
+fn is_open_delimiter_tokens(left: &Token, right: &Token) -> bool {
+    matches!(
+        (left, right),
+        (Token::LBrace, Token::LBrace)
+            | (Token::LBrace, Token::Mod)
+            | (Token::LBrace, Token::Sharp)
+    )
+}
+
+fn is_close_delimiter_tokens(left: &Token, right: &Token) -> bool {
+    matches!(
+        (left, right),
+        (Token::RBrace, Token::RBrace)
+            | (Token::Mod, Token::RBrace)
+            | (Token::Sharp, Token::RBrace)
+    )
+}
+
+fn has_missing_padding_after(sql: &str, delimiter_end: usize) -> bool {
+    match sql
+        .get(delimiter_end..)
+        .and_then(|remainder| remainder.chars().next())
+    {
+        Some(next) => !is_padding_or_trim_marker(next),
+        None => true,
+    }
+}
+
+fn has_missing_padding_before(sql: &str, delimiter_start: usize) -> bool {
+    if delimiter_start == 0 {
+        return true;
+    }
+
+    match sql[..delimiter_start].chars().rev().next() {
+        Some(prev) => !is_padding_or_trim_marker(prev),
+        None => true,
+    }
+}
+
+fn is_padding_or_trim_marker(ch: char) -> bool {
+    ch.is_whitespace() || ch == '-'
+}
+
+fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
+    if line == 0 || column == 0 {
+        return None;
+    }
+
+    let mut current_line = 1usize;
+    let mut current_col = 1usize;
+
+    for (offset, ch) in sql.char_indices() {
+        if current_line == line && current_col == column {
+            return Some(offset);
+        }
+
+        if ch == '\n' {
+            current_line += 1;
+            current_col = 1;
         } else {
-            Vec::new()
+            current_col += 1;
         }
     }
-}
 
-fn has_inconsistent_jinja_padding(sql: &str) -> bool {
-    let bytes = sql.as_bytes();
-
-    let mut i = 0usize;
-    while i + 2 <= bytes.len() {
-        if is_jinja_open_delimiter(bytes[i], bytes[i + 1]) {
-            if i + 2 < bytes.len() && !is_padding_or_trim_marker(bytes[i + 2]) {
-                return true;
-            }
-            i += 2;
-            continue;
-        }
-
-        if is_jinja_close_delimiter(bytes[i], bytes[i + 1]) {
-            if i > 0 && !is_padding_or_trim_marker(bytes[i - 1]) {
-                return true;
-            }
-            i += 2;
-            continue;
-        }
-
-        i += 1;
+    if current_line == line && current_col == column {
+        return Some(sql.len());
     }
 
-    false
-}
-
-fn is_jinja_open_delimiter(first: u8, second: u8) -> bool {
-    first == b'{' && matches!(second, b'{' | b'%' | b'#')
-}
-
-fn is_jinja_close_delimiter(first: u8, second: u8) -> bool {
-    (first == b'}' && second == b'}')
-        || (first == b'%' && second == b'}')
-        || (first == b'#' && second == b'}')
-}
-
-fn is_padding_or_trim_marker(byte: u8) -> bool {
-    matches!(byte, b' ' | b'\n' | b'\t' | b'-')
+    None
 }
 
 #[cfg(test)]
@@ -107,6 +233,12 @@ mod tests {
         let issues = run("SELECT '{{foo}}' AS templated");
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_JJ_001);
+        assert_eq!(
+            issues[0].span.expect("expected span").start,
+            "SELECT '{{foo}}' AS templated"
+                .find("{{")
+                .expect("expected opening delimiter"),
+        );
     }
 
     #[test]

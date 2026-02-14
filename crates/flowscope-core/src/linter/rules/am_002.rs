@@ -5,6 +5,8 @@
 use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Issue};
 use sqlparser::ast::*;
+use sqlparser::keywords::Keyword;
+use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer};
 
 pub struct BareUnion;
 
@@ -24,22 +26,20 @@ impl LintRule for BareUnion {
     fn check(&self, stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
         let mut issues = Vec::new();
         let stmt_sql = ctx.statement_sql();
-        let mut union_search_start = 0;
+        let mut unions = union_keyword_ranges(stmt_sql, ctx.dialect());
         match stmt {
-            Statement::Query(query) => {
-                check_query(query, stmt_sql, &mut union_search_start, ctx, &mut issues)
-            }
+            Statement::Query(query) => check_query(query, &mut unions, ctx, &mut issues),
             Statement::Insert(insert) => {
                 if let Some(ref source) = insert.source {
-                    check_query(source, stmt_sql, &mut union_search_start, ctx, &mut issues);
+                    check_query(source, &mut unions, ctx, &mut issues);
                 }
             }
             Statement::CreateView { query, .. } => {
-                check_query(query, stmt_sql, &mut union_search_start, ctx, &mut issues)
+                check_query(query, &mut unions, ctx, &mut issues)
             }
             Statement::CreateTable(create) => {
                 if let Some(ref query) = create.query {
-                    check_query(query, stmt_sql, &mut union_search_start, ctx, &mut issues);
+                    check_query(query, &mut unions, ctx, &mut issues);
                 }
             }
             _ => {}
@@ -50,23 +50,21 @@ impl LintRule for BareUnion {
 
 fn check_query(
     query: &Query,
-    stmt_sql: &str,
-    union_search_start: &mut usize,
+    unions: &mut UnionKeywordRanges,
     ctx: &LintContext,
     issues: &mut Vec<Issue>,
 ) {
     if let Some(ref with) = query.with {
         for cte in &with.cte_tables {
-            check_query(&cte.query, stmt_sql, union_search_start, ctx, issues);
+            check_query(&cte.query, unions, ctx, issues);
         }
     }
-    check_query_body(&query.body, stmt_sql, union_search_start, ctx, issues);
+    check_query_body(&query.body, unions, ctx, issues);
 }
 
 fn check_query_body(
     body: &SetExpr,
-    stmt_sql: &str,
-    union_search_start: &mut usize,
+    unions: &mut UnionKeywordRanges,
     ctx: &LintContext,
     issues: &mut Vec<Issue>,
 ) {
@@ -77,11 +75,8 @@ fn check_query_body(
             left,
             right,
         } => {
-            check_query_body(left, stmt_sql, union_search_start, ctx, issues);
-            let union_span = find_next_union_keyword(stmt_sql, ctx, *union_search_start);
-            if let Some((_, next_search_start)) = union_span {
-                *union_search_start = next_search_start;
-            }
+            check_query_body(left, unions, ctx, issues);
+            let union_span = unions.next();
 
             if matches!(set_quantifier, SetQuantifier::None | SetQuantifier::ByName) {
                 let mut issue = Issue::warning(
@@ -89,50 +84,108 @@ fn check_query_body(
                     "Use UNION DISTINCT or UNION ALL instead of bare UNION.",
                 )
                 .with_statement(ctx.statement_index);
-                if let Some((s, _)) = union_span {
+                if let Some((start, end)) = union_span {
+                    let s = ctx.span_from_statement_offset(start, end);
                     issue = issue.with_span(s);
                 }
                 issues.push(issue);
             }
-            check_query_body(right, stmt_sql, union_search_start, ctx, issues);
+            check_query_body(right, unions, ctx, issues);
         }
         SetExpr::SetOperation { left, right, .. } => {
-            check_query_body(left, stmt_sql, union_search_start, ctx, issues);
-            check_query_body(right, stmt_sql, union_search_start, ctx, issues);
+            check_query_body(left, unions, ctx, issues);
+            check_query_body(right, unions, ctx, issues);
         }
         SetExpr::Select(_) => {}
         SetExpr::Query(q) => {
-            check_query(q, stmt_sql, union_search_start, ctx, issues);
+            check_query(q, unions, ctx, issues);
         }
         _ => {}
     }
 }
 
-/// Finds the next `UNION` keyword byte span after `search_start`.
-fn find_next_union_keyword(
-    stmt_sql: &str,
-    ctx: &LintContext,
-    search_start: usize,
-) -> Option<(crate::types::Span, usize)> {
-    let upper = stmt_sql.to_ascii_uppercase();
-    let mut search_pos = search_start;
-    while let Some(pos) = upper[search_pos..].find("UNION") {
-        let abs_pos = search_pos + pos;
-        let after = abs_pos + 5;
-        // Check word boundaries
-        let before_ok = abs_pos == 0 || !is_sql_identifier_char(stmt_sql.as_bytes()[abs_pos - 1]);
-        let after_ok =
-            after >= stmt_sql.len() || !is_sql_identifier_char(stmt_sql.as_bytes()[after]);
-        if before_ok && after_ok {
-            return Some((ctx.span_from_statement_offset(abs_pos, after), after));
-        }
-        search_pos = after;
-    }
-    None
+struct UnionKeywordRanges {
+    ranges: Vec<(usize, usize)>,
+    index: usize,
 }
 
-fn is_sql_identifier_char(byte: u8) -> bool {
-    byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'$')
+impl UnionKeywordRanges {
+    fn next(&mut self) -> Option<(usize, usize)> {
+        let range = self.ranges.get(self.index).copied();
+        if range.is_some() {
+            self.index += 1;
+        }
+        range
+    }
+}
+
+fn union_keyword_ranges(sql: &str, dialect: crate::types::Dialect) -> UnionKeywordRanges {
+    let dialect = dialect.to_sqlparser_dialect();
+    let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
+    let Ok(tokens) = tokenizer.tokenize_with_location() else {
+        return UnionKeywordRanges {
+            ranges: Vec::new(),
+            index: 0,
+        };
+    };
+
+    let ranges = tokens
+        .iter()
+        .filter_map(|token| {
+            let Token::Word(word) = &token.token else {
+                return None;
+            };
+            if word.keyword != Keyword::UNION {
+                return None;
+            }
+
+            token_offsets(sql, token)
+        })
+        .collect();
+
+    UnionKeywordRanges { ranges, index: 0 }
+}
+
+fn token_offsets(sql: &str, token: &TokenWithSpan) -> Option<(usize, usize)> {
+    let start = line_col_to_offset(
+        sql,
+        token.span.start.line as usize,
+        token.span.start.column as usize,
+    )?;
+    let end = line_col_to_offset(
+        sql,
+        token.span.end.line as usize,
+        token.span.end.column as usize,
+    )?;
+    Some((start, end))
+}
+
+fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
+    if line == 0 || column == 0 {
+        return None;
+    }
+
+    let mut current_line = 1usize;
+    let mut current_col = 1usize;
+
+    for (offset, ch) in sql.char_indices() {
+        if current_line == line && current_col == column {
+            return Some(offset);
+        }
+
+        if ch == '\n' {
+            current_line += 1;
+            current_col = 1;
+        } else {
+            current_col += 1;
+        }
+    }
+
+    if current_line == line && current_col == column {
+        return Some(sql.len());
+    }
+
+    None
 }
 
 #[cfg(test)]
@@ -238,6 +291,16 @@ mod tests {
     #[test]
     fn test_union_identifier_with_underscore_does_not_steal_span() {
         let sql = "SELECT union_col FROM t UNION SELECT 2";
+        let issues = check_sql(sql);
+        assert_eq!(issues.len(), 1);
+        let span = issues[0].span.expect("UNION issue should include a span");
+        let union_pos = sql.find("UNION").expect("query should contain UNION");
+        assert_eq!(span.start, union_pos);
+    }
+
+    #[test]
+    fn test_union_with_comments_keeps_keyword_span() {
+        let sql = "WITH cte AS (SELECT 1 /* left */ UNION /* right */ SELECT 2) SELECT * FROM cte";
         let issues = check_sql(sql);
         assert_eq!(issues.len(), 1);
         let span = issues[0].span.expect("UNION issue should include a span");
