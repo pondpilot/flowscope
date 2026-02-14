@@ -834,7 +834,9 @@ mod tests {
             .and_then(serde_json::Value::as_object)
             .expect("indentation object");
         assert_eq!(
-            indentation.get("indent_unit").and_then(serde_json::Value::as_str),
+            indentation
+                .get("indent_unit")
+                .and_then(serde_json::Value::as_str),
             Some("tab")
         );
         assert_eq!(

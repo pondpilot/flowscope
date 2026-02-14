@@ -1725,7 +1725,10 @@ fn lint_rule_config_capitalisation_keywords_ignore_templated_areas_true() {
                     "capitalisation.keywords".to_string(),
                     serde_json::json!({"capitalisation_policy": "upper"}),
                 ),
-                ("core".to_string(), serde_json::json!({"ignore_templated_areas": true})),
+                (
+                    "core".to_string(),
+                    serde_json::json!({"ignore_templated_areas": true}),
+                ),
             ]),
         },
     );

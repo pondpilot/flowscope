@@ -124,7 +124,6 @@ impl LintConfig {
                 .then_some(value)
         })
     }
-
 }
 
 /// Canonicalizes a user-facing rule spec to a canonical `LINT_*` code.
@@ -636,7 +635,10 @@ mod tests {
             )]),
         };
 
-        assert_eq!(config.core_option_bool("ignore_templated_areas"), Some(true));
+        assert_eq!(
+            config.core_option_bool("ignore_templated_areas"),
+            Some(true)
+        );
     }
 
     #[test]

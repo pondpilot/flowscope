@@ -104,10 +104,7 @@ struct AliasOccurrence {
     explicit_as: bool,
 }
 
-fn alias_occurrence_in_statement(
-    alias: &Ident,
-    ctx: &LintContext,
-) -> Option<AliasOccurrence> {
+fn alias_occurrence_in_statement(alias: &Ident, ctx: &LintContext) -> Option<AliasOccurrence> {
     let abs_start = line_col_to_offset(
         ctx.sql,
         alias.span.start.line as usize,

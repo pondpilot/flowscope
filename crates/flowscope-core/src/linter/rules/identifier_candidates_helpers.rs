@@ -197,7 +197,9 @@ fn collect_assignment_target_identifiers(
 ) {
     match statement {
         Statement::Insert(insert) => collect_assignment_targets(&insert.assignments, candidates),
-        Statement::Update { assignments, .. } => collect_assignment_targets(assignments, candidates),
+        Statement::Update { assignments, .. } => {
+            collect_assignment_targets(assignments, candidates)
+        }
         Statement::Merge { clauses, .. } => {
             for clause in clauses {
                 if let sqlparser::ast::MergeAction::Update { assignments } = &clause.action {
@@ -209,7 +211,10 @@ fn collect_assignment_target_identifiers(
     }
 }
 
-fn collect_assignment_targets(assignments: &[Assignment], candidates: &mut Vec<IdentifierCandidate>) {
+fn collect_assignment_targets(
+    assignments: &[Assignment],
+    candidates: &mut Vec<IdentifierCandidate>,
+) {
     for assignment in assignments {
         match &assignment.target {
             AssignmentTarget::ColumnName(name) => {

@@ -155,8 +155,7 @@ fn alias_occurrence_in_statement(
 
     let statement_sql = ctx.statement_sql();
     let explicit_as = explicit_as_before_alias(statement_sql, rel_start);
-    let tsql_equals_assignment =
-        tsql_assignment_after_alias(statement_sql, rel_end, rel_item_end);
+    let tsql_equals_assignment = tsql_assignment_after_alias(statement_sql, rel_end, rel_item_end);
     Some(AliasOccurrence {
         start: rel_start,
         end: rel_end,
