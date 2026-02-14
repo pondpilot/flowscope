@@ -9,7 +9,7 @@ use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Dialect, Issue};
 use regex::Regex;
 use sqlparser::ast::Statement;
-use sqlparser::tokenizer::{Token, Tokenizer};
+use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer};
 
 use super::capitalisation_policy_helpers::{
     ignored_words_from_config, ignored_words_regex_from_config, token_is_ignored,
@@ -61,12 +61,7 @@ impl LintRule for CapitalisationKeywords {
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
         if tokens_violate_policy(
-            &keyword_tokens(
-                ctx.statement_sql(),
-                &self.ignore_words,
-                self.ignore_words_regex.as_ref(),
-                ctx.dialect(),
-            ),
+            &keyword_tokens_for_context(ctx, &self.ignore_words, self.ignore_words_regex.as_ref()),
             self.policy,
         ) {
             vec![Issue::info(
@@ -78,6 +73,68 @@ impl LintRule for CapitalisationKeywords {
             Vec::new()
         }
     }
+}
+
+fn keyword_tokens_for_context(
+    ctx: &LintContext,
+    ignore_words: &HashSet<String>,
+    ignore_words_regex: Option<&Regex>,
+) -> Vec<String> {
+    if has_template_markers(ctx.statement_sql()) {
+        return keyword_tokens(
+            ctx.statement_sql(),
+            ignore_words,
+            ignore_words_regex,
+            ctx.dialect(),
+        );
+    }
+
+    let from_document_tokens = ctx.with_document_tokens(|tokens| {
+        if tokens.is_empty() {
+            return None;
+        }
+
+        Some(
+            tokens
+                .iter()
+                .filter_map(|token| {
+                    let Some((start, end)) = token_with_span_offsets(ctx.sql, token) else {
+                        return None;
+                    };
+                    if start < ctx.statement_range.start || end > ctx.statement_range.end {
+                        return None;
+                    }
+
+                    match &token.token {
+                        Token::Word(word)
+                            if source_word_matches(ctx.sql, start, end, word.value.as_str())
+                                && is_tracked_keyword(word.value.as_str())
+                                && !is_excluded_keyword(word.value.as_str())
+                                && !token_is_ignored(
+                                    word.value.as_str(),
+                                    ignore_words,
+                                    ignore_words_regex,
+                                ) =>
+                        {
+                            Some(word.value.clone())
+                        }
+                        _ => None,
+                    }
+                })
+                .collect::<Vec<_>>(),
+        )
+    });
+
+    if let Some(tokens) = from_document_tokens {
+        return tokens;
+    }
+
+    keyword_tokens(
+        ctx.statement_sql(),
+        ignore_words,
+        ignore_words_regex,
+        ctx.dialect(),
+    )
 }
 
 fn keyword_tokens(
@@ -105,6 +162,60 @@ fn keyword_tokens(
             _ => None,
         })
         .collect()
+}
+
+fn token_with_span_offsets(sql: &str, token: &TokenWithSpan) -> Option<(usize, usize)> {
+    let start = line_col_to_offset(
+        sql,
+        token.span.start.line as usize,
+        token.span.start.column as usize,
+    )?;
+    let end = line_col_to_offset(
+        sql,
+        token.span.end.line as usize,
+        token.span.end.column as usize,
+    )?;
+    Some((start, end))
+}
+
+fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
+    if line == 0 || column == 0 {
+        return None;
+    }
+
+    let mut current_line = 1usize;
+    let mut current_col = 1usize;
+
+    for (offset, ch) in sql.char_indices() {
+        if current_line == line && current_col == column {
+            return Some(offset);
+        }
+
+        if ch == '\n' {
+            current_line += 1;
+            current_col = 1;
+        } else {
+            current_col += 1;
+        }
+    }
+
+    if current_line == line && current_col == column {
+        return Some(sql.len());
+    }
+
+    None
+}
+
+fn has_template_markers(sql: &str) -> bool {
+    sql.contains("{{") || sql.contains("{%") || sql.contains("{#")
+}
+
+fn source_word_matches(sql: &str, start: usize, end: usize, value: &str) -> bool {
+    let Some(raw) = sql.get(start..end) else {
+        return false;
+    };
+    let normalized = raw.trim_matches(|ch| matches!(ch, '"' | '`' | '[' | ']'));
+    normalized.eq_ignore_ascii_case(value)
 }
 
 fn is_tracked_keyword(value: &str) -> bool {

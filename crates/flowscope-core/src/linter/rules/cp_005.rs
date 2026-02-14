@@ -9,7 +9,7 @@ use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Dialect, Issue};
 use regex::Regex;
 use sqlparser::ast::Statement;
-use sqlparser::tokenizer::{Token, Tokenizer};
+use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer};
 
 use super::capitalisation_policy_helpers::{
     ignored_words_from_config, ignored_words_regex_from_config, token_is_ignored,
@@ -61,12 +61,7 @@ impl LintRule for CapitalisationTypes {
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
         if tokens_violate_policy(
-            &type_tokens(
-                ctx.statement_sql(),
-                &self.ignore_words,
-                self.ignore_words_regex.as_ref(),
-                ctx.dialect(),
-            ),
+            &type_tokens_for_context(ctx, &self.ignore_words, self.ignore_words_regex.as_ref()),
             self.policy,
         ) {
             vec![Issue::info(
@@ -78,6 +73,62 @@ impl LintRule for CapitalisationTypes {
             Vec::new()
         }
     }
+}
+
+fn type_tokens_for_context(
+    ctx: &LintContext,
+    ignore_words: &HashSet<String>,
+    ignore_words_regex: Option<&Regex>,
+) -> Vec<String> {
+    if has_template_markers(ctx.statement_sql()) {
+        return type_tokens(
+            ctx.statement_sql(),
+            ignore_words,
+            ignore_words_regex,
+            ctx.dialect(),
+        );
+    }
+
+    let from_document_tokens = ctx.with_document_tokens(|tokens| {
+        if tokens.is_empty() {
+            return None;
+        }
+
+        let statement_tokens = tokens
+            .iter()
+            .filter_map(|token| {
+                let Some((start, end)) = token_with_span_offsets(ctx.sql, token) else {
+                    return None;
+                };
+                if start < ctx.statement_range.start || end > ctx.statement_range.end {
+                    return None;
+                }
+                if let Token::Word(word) = &token.token {
+                    if !source_word_matches(ctx.sql, start, end, word.value.as_str()) {
+                        return None;
+                    }
+                }
+                Some(token.token.clone())
+            })
+            .collect::<Vec<_>>();
+
+        Some(type_tokens_from_tokens(
+            statement_tokens,
+            ignore_words,
+            ignore_words_regex,
+        ))
+    });
+
+    if let Some(tokens) = from_document_tokens {
+        return tokens;
+    }
+
+    type_tokens(
+        ctx.statement_sql(),
+        ignore_words,
+        ignore_words_regex,
+        ctx.dialect(),
+    )
 }
 
 fn type_tokens(
@@ -92,6 +143,14 @@ fn type_tokens(
         return Vec::new();
     };
 
+    type_tokens_from_tokens(tokens, ignore_words, ignore_words_regex)
+}
+
+fn type_tokens_from_tokens(
+    tokens: Vec<Token>,
+    ignore_words: &HashSet<String>,
+    ignore_words_regex: Option<&Regex>,
+) -> Vec<String> {
     let user_defined_types = collect_user_defined_type_names(&tokens);
 
     tokens
@@ -108,6 +167,60 @@ fn type_tokens(
             _ => None,
         })
         .collect()
+}
+
+fn token_with_span_offsets(sql: &str, token: &TokenWithSpan) -> Option<(usize, usize)> {
+    let start = line_col_to_offset(
+        sql,
+        token.span.start.line as usize,
+        token.span.start.column as usize,
+    )?;
+    let end = line_col_to_offset(
+        sql,
+        token.span.end.line as usize,
+        token.span.end.column as usize,
+    )?;
+    Some((start, end))
+}
+
+fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
+    if line == 0 || column == 0 {
+        return None;
+    }
+
+    let mut current_line = 1usize;
+    let mut current_col = 1usize;
+
+    for (offset, ch) in sql.char_indices() {
+        if current_line == line && current_col == column {
+            return Some(offset);
+        }
+
+        if ch == '\n' {
+            current_line += 1;
+            current_col = 1;
+        } else {
+            current_col += 1;
+        }
+    }
+
+    if current_line == line && current_col == column {
+        return Some(sql.len());
+    }
+
+    None
+}
+
+fn has_template_markers(sql: &str) -> bool {
+    sql.contains("{{") || sql.contains("{%") || sql.contains("{#")
+}
+
+fn source_word_matches(sql: &str, start: usize, end: usize, value: &str) -> bool {
+    let Some(raw) = sql.get(start..end) else {
+        return false;
+    };
+    let normalized = raw.trim_matches(|ch| matches!(ch, '"' | '`' | '[' | ']'));
+    normalized.eq_ignore_ascii_case(value)
 }
 
 fn collect_user_defined_type_names(tokens: &[Token]) -> HashSet<String> {

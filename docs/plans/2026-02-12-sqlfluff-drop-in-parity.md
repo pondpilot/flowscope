@@ -197,9 +197,11 @@ This plan covers three axes:
   - `LT_003` moved from parity handling to a dedicated core rule module (`lt_003.rs`).
   - `LT_003` was further upgraded from regex scanning to active-dialect tokenizer line-aware trailing-operator checks.
   - `LT_003` now supports operator line-position configuration through `lint.ruleConfigs` (`line_position=leading|trailing`) and legacy SQLFluff `operator_new_lines` compatibility.
+  - `LT_003` now consumes the shared document token stream for statement tokenization before fallback tokenization.
   - `LT_004` moved from parity handling to a dedicated core rule module (`lt_004.rs`).
   - `LT_004` was further upgraded from regex scanning to active-dialect tokenizer-driven comma-spacing checks.
   - `LT_004` now supports comma line-position configuration through `lint.ruleConfigs` (`line_position=trailing|leading`) and legacy SQLFluff `comma_style` compatibility.
+  - `LT_004` now consumes the shared document token stream for statement tokenization before fallback tokenization.
   - `LT_001` moved from parity handling to a dedicated core rule module (`lt_001.rs`).
   - `LT_001` was further upgraded from deterministic raw-text scanning to tokenizer-with-span layout detection (JSON arrows, compact `text[` forms, numeric precision commas, and line-start `EXISTS (` patterns), reducing literal/comment false positives and consuming the shared document token stream before fallback tokenization.
   - `LT_005` moved from parity handling to a dedicated core rule module (`lt_005.rs`).
@@ -241,6 +243,7 @@ This plan covers three axes:
   - `CP_002` Pascal policy handling now aligns with SQLFluff fixture expectations for all-caps identifiers (for example `PASCALCASE` under `extended_capitalisation_policy=pascal`).
   - `CP_002` now includes Databricks/SparkSQL `SHOW TBLPROPERTIES ... (<property.path>)` identifier candidate extraction via AST `ShowVariable` handling, covering mixed-case property path violations (for example `created.BY.user`, `Created.By.User`).
   - `CP_001`/`CP_003`/`CP_004`/`CP_005` now run once per document with full-SQL lexical context and now also run in statementless parser-fallback mode, improving SQLFluff parity on parser-erroring fixture inputs while avoiding per-statement case-policy fragmentation.
+  - `CP_001`/`CP_004`/`CP_005` now consume the shared document token stream for statement tokenization before fallback tokenization.
   - SQLFluff-style `core.ignore_templated_areas` is now supported through `lint.ruleConfigs.core.ignore_templated_areas` for lexical CP document-scope checks, masking Jinja tag regions from case-policy evaluation when enabled.
   - `CP_001` consistent-policy handling now treats single tracked mixed-case tokens (for example `SeLeCt`) as violations, matching SQLFluff fixture expectations.
   - `CP_003` now includes bare-function keyword forms (`CURRENT_TIMESTAMP`, `CURRENT_DATE`, `CURRENT_USER`, etc.) in AST-based function case checks.
