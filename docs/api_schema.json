@@ -11,7 +11,10 @@
       },
       "files": {
         "description": "Optional list of source files to analyze (alternative to single `sql` field)",
-        "type": ["array", "null"],
+        "type": [
+          "array",
+          "null"
+        ],
         "items": {
           "$ref": "#/definitions/FileSource"
         }
@@ -26,7 +29,10 @@
       },
       "sourceName": {
         "description": "Optional source name (file path or script identifier) for grouping",
-        "type": ["string", "null"]
+        "type": [
+          "string",
+          "null"
+        ]
       },
       "options": {
         "description": "Optional analysis options",
@@ -62,7 +68,10 @@
         ]
       }
     },
-    "required": ["sql", "dialect"],
+    "required": [
+      "sql",
+      "dialect"
+    ],
     "definitions": {
       "FileSource": {
         "type": "object",
@@ -74,7 +83,10 @@
             "type": "string"
           }
         },
-        "required": ["name", "content"]
+        "required": [
+          "name",
+          "content"
+        ]
       },
       "Dialect": {
         "description": "SQL dialect for parsing and analysis.\n\nDifferent dialects have different syntax rules and identifier normalization behavior.",
@@ -101,7 +113,10 @@
         "properties": {
           "enableColumnLineage": {
             "description": "Enable column-level lineage (Phase 2+, default true when implemented)",
-            "type": ["boolean", "null"],
+            "type": [
+              "boolean",
+              "null"
+            ],
             "default": null
           },
           "graphDetailLevel": {
@@ -117,7 +132,21 @@
           },
           "hideCtes": {
             "description": "Hide CTEs from output, creating bypass edges (A→CTE→B becomes A→B)",
-            "type": ["boolean", "null"]
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "lint": {
+            "description": "SQL lint configuration",
+            "anyOf": [
+              {
+                "$ref": "#/definitions/LintConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
       },
@@ -141,21 +170,53 @@
           }
         ]
       },
+      "LintConfig": {
+        "description": "Configuration for the SQL linter.\n\nControls which lint rules are enabled/disabled. By default, all rules are enabled.",
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "description": "Master toggle for linting (default: true).",
+            "type": "boolean",
+            "default": true
+          },
+          "disabledRules": {
+            "description": "List of rule codes to disable (e.g., [\"LINT_AM_008\"]).",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ruleConfigs": {
+            "description": "Per-rule option objects keyed by rule reference (`LINT_*`, `AL01`,\n`aliasing.table`, etc).",
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
       "SchemaMetadata": {
         "description": "Schema metadata for accurate column and table resolution.\n\nWhen provided, allows the analyzer to resolve ambiguous references and\nproduce more accurate lineage information.",
         "type": "object",
         "properties": {
           "defaultCatalog": {
             "description": "Default catalog applied to unqualified identifiers",
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "defaultSchema": {
             "description": "Default schema applied to unqualified identifiers",
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "searchPath": {
             "description": "Ordered list mirroring database search_path behavior",
-            "type": ["array", "null"],
+            "type": [
+              "array",
+              "null"
+            ],
             "items": {
               "$ref": "#/definitions/SchemaNamespaceHint"
             }
@@ -189,13 +250,18 @@
         "type": "object",
         "properties": {
           "catalog": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "schema": {
             "type": "string"
           }
         },
-        "required": ["schema"]
+        "required": [
+          "schema"
+        ]
       },
       "CaseSensitivity": {
         "description": "Case sensitivity for identifier normalization.",
@@ -226,10 +292,16 @@
         "type": "object",
         "properties": {
           "catalog": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "schema": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "name": {
             "type": "string"
@@ -242,7 +314,9 @@
             "default": []
           }
         },
-        "required": ["name"]
+        "required": [
+          "name"
+        ]
       },
       "ColumnSchema": {
         "type": "object",
@@ -251,11 +325,17 @@
             "type": "string"
           },
           "dataType": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "isPrimaryKey": {
             "description": "True if this column is a primary key (or part of composite PK)",
-            "type": ["boolean", "null"]
+            "type": [
+              "boolean",
+              "null"
+            ]
           },
           "foreignKey": {
             "description": "Foreign key reference if this column references another table",
@@ -269,7 +349,9 @@
             ]
           }
         },
-        "required": ["name"]
+        "required": [
+          "name"
+        ]
       },
       "ForeignKeyRef": {
         "description": "A foreign key reference to another table's column.",
@@ -284,7 +366,10 @@
             "type": "string"
           }
         },
-        "required": ["table", "column"]
+        "required": [
+          "table",
+          "column"
+        ]
       },
       "TemplateConfig": {
         "description": "Configuration for SQL template preprocessing.",
@@ -377,7 +462,12 @@
         ]
       }
     },
-    "required": ["statements", "globalLineage", "issues", "summary"],
+    "required": [
+      "statements",
+      "globalLineage",
+      "issues",
+      "summary"
+    ],
     "definitions": {
       "StatementLineage": {
         "description": "Lineage information for a single SQL statement.",
@@ -395,7 +485,10 @@
           },
           "sourceName": {
             "description": "Optional source name (file path or script identifier) for grouping",
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "nodes": {
             "description": "All nodes in the lineage graph for this statement",
@@ -437,7 +530,10 @@
           },
           "resolvedSql": {
             "description": "Resolved/compiled SQL after template expansion (e.g., dbt Jinja rendering).\nOnly present when templating was run in non-raw mode. May contain sensitive\nvalues from template variables (e.g., database credentials).",
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -471,11 +567,17 @@
           },
           "qualifiedName": {
             "description": "Fully qualified name when available",
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "expression": {
             "description": "SQL expression text for computed columns",
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "span": {
             "description": "Source location in original SQL",
@@ -490,7 +592,10 @@
           },
           "metadata": {
             "description": "Extensible metadata for future use",
-            "type": ["object", "null"],
+            "type": [
+              "object",
+              "null"
+            ],
             "additionalProperties": true
           },
           "resolutionSource": {
@@ -524,7 +629,10 @@
           },
           "joinCondition": {
             "description": "For table nodes that are JOINed: the join condition (ON clause).",
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "aggregation": {
             "description": "For column nodes: aggregation information if this column is aggregated or a grouping key.\nPresence indicates the query uses GROUP BY; the fields indicate the column's role.",
@@ -538,7 +646,11 @@
             ]
           }
         },
-        "required": ["id", "type", "label"]
+        "required": [
+          "id",
+          "type",
+          "label"
+        ]
       },
       "NodeType": {
         "description": "The type of a node in the lineage graph.",
@@ -587,7 +699,10 @@
             "minimum": 0
           }
         },
-        "required": ["start", "end"]
+        "required": [
+          "start",
+          "end"
+        ]
       },
       "ResolutionSource": {
         "description": "How a table reference was resolved during analysis.",
@@ -626,7 +741,10 @@
             ]
           }
         },
-        "required": ["expression", "clauseType"]
+        "required": [
+          "expression",
+          "clauseType"
+        ]
       },
       "FilterClauseType": {
         "description": "The type of SQL clause where a filter predicate appears.",
@@ -723,14 +841,22 @@
           },
           "function": {
             "description": "The aggregation function used (e.g., \"SUM\", \"COUNT\", \"AVG\")\nNone if this is a grouping key or non-aggregated column",
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "distinct": {
             "description": "True if this aggregation uses DISTINCT (e.g., COUNT(DISTINCT col))",
-            "type": ["boolean", "null"]
+            "type": [
+              "boolean",
+              "null"
+            ]
           }
         },
-        "required": ["isGroupingKey"]
+        "required": [
+          "isGroupingKey"
+        ]
       },
       "Edge": {
         "description": "An edge connecting two nodes in the lineage graph.",
@@ -758,11 +884,17 @@
           },
           "expression": {
             "description": "Optional: SQL expression if this edge represents a transformation",
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "operation": {
             "description": "Optional: operation label ('JOIN', 'UNION', 'AGGREGATE', etc.)",
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "joinType": {
             "description": "Optional: specific join type for JOIN edges (INNER, LEFT, RIGHT, FULL, CROSS, etc.)\nNote: For table-level visualization, the frontend typically reads join info from the\ntarget Node's join_type/join_condition fields. These Edge fields are preserved for\ncolumn-level lineage edges and future use cases where edge-level join context is needed.",
@@ -777,19 +909,33 @@
           },
           "joinCondition": {
             "description": "Optional: join condition expression (ON clause)\nSee join_type comment for usage notes.",
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "metadata": {
             "description": "Extensible metadata for future use",
-            "type": ["object", "null"],
+            "type": [
+              "object",
+              "null"
+            ],
             "additionalProperties": true
           },
           "approximate": {
             "description": "True if this edge represents approximate/uncertain lineage",
-            "type": ["boolean", "null"]
+            "type": [
+              "boolean",
+              "null"
+            ]
           }
         },
-        "required": ["id", "from", "to", "type"]
+        "required": [
+          "id",
+          "from",
+          "to",
+          "type"
+        ]
       },
       "EdgeType": {
         "oneOf": [
@@ -839,7 +985,10 @@
             }
           }
         },
-        "required": ["nodes", "edges"]
+        "required": [
+          "nodes",
+          "edges"
+        ]
       },
       "GlobalNode": {
         "type": "object",
@@ -877,7 +1026,10 @@
           },
           "metadata": {
             "description": "Extensible metadata",
-            "type": ["object", "null"],
+            "type": [
+              "object",
+              "null"
+            ],
             "additionalProperties": true
           },
           "resolutionSource": {
@@ -892,25 +1044,42 @@
             ]
           }
         },
-        "required": ["id", "type", "label", "canonicalName", "statementRefs"]
+        "required": [
+          "id",
+          "type",
+          "label",
+          "canonicalName",
+          "statementRefs"
+        ]
       },
       "CanonicalName": {
         "type": "object",
         "properties": {
           "catalog": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "schema": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "name": {
             "type": "string"
           },
           "column": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
-        "required": ["name"]
+        "required": [
+          "name"
+        ]
       },
       "StatementRef": {
         "type": "object",
@@ -923,10 +1092,15 @@
           },
           "nodeId": {
             "description": "ID of the local node inside that statement graph (if available)",
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
-        "required": ["statementIndex"]
+        "required": [
+          "statementIndex"
+        ]
       },
       "GlobalEdge": {
         "type": "object",
@@ -964,11 +1138,19 @@
             ]
           },
           "metadata": {
-            "type": ["object", "null"],
+            "type": [
+              "object",
+              "null"
+            ],
             "additionalProperties": true
           }
         },
-        "required": ["id", "from", "to", "type"]
+        "required": [
+          "id",
+          "from",
+          "to",
+          "type"
+        ]
       },
       "Issue": {
         "description": "An issue encountered during SQL analysis (error, warning, or info).",
@@ -990,6 +1172,13 @@
             "description": "Human-readable error message",
             "type": "string"
           },
+          "sqlfluffName": {
+            "description": "SQLFluff dotted rule name (e.g., `aliasing.table`).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "span": {
             "description": "Optional: location in source SQL where issue occurred",
             "anyOf": [
@@ -1003,20 +1192,94 @@
           },
           "statementIndex": {
             "description": "Optional: which statement index this issue relates to",
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "uint",
             "minimum": 0
           },
           "sourceName": {
             "description": "Optional: source file name where the issue occurred",
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lintEngine": {
+            "description": "Optional: linter engine provenance (`semantic`, `lexical`, `document`).",
+            "anyOf": [
+              {
+                "$ref": "#/definitions/LintEngine"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lintConfidence": {
+            "description": "Optional: confidence level for lint detection quality.",
+            "anyOf": [
+              {
+                "$ref": "#/definitions/LintConfidence"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lintFallbackSource": {
+            "description": "Optional: fallback mode used while evaluating this lint.",
+            "anyOf": [
+              {
+                "$ref": "#/definitions/LintFallbackSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
-        "required": ["severity", "code", "message"]
+        "required": [
+          "severity",
+          "code",
+          "message"
+        ]
       },
       "Severity": {
         "type": "string",
-        "enum": ["error", "warning", "info"]
+        "enum": [
+          "error",
+          "warning",
+          "info"
+        ]
+      },
+      "LintEngine": {
+        "description": "Lint execution engine category.",
+        "type": "string",
+        "enum": [
+          "semantic",
+          "lexical",
+          "document"
+        ]
+      },
+      "LintConfidence": {
+        "description": "Confidence level attached to lint findings.",
+        "type": "string",
+        "enum": [
+          "high",
+          "medium",
+          "low"
+        ]
+      },
+      "LintFallbackSource": {
+        "description": "Source of degraded lint confidence or fallback behavior.",
+        "type": "string",
+        "enum": [
+          "parser_fallback",
+          "tokenizer_fallback",
+          "heuristic_rule"
+        ]
       },
       "Summary": {
         "description": "Summary statistics for the analysis result.",
@@ -1099,7 +1362,11 @@
             "minimum": 0
           }
         },
-        "required": ["errors", "warnings", "infos"]
+        "required": [
+          "errors",
+          "warnings",
+          "infos"
+        ]
       },
       "ResolvedSchemaMetadata": {
         "description": "Resolved schema metadata showing the effective schema used during analysis.\n\nCombines imported (user-provided) and implied (inferred from DDL) schema.",
@@ -1113,17 +1380,25 @@
             }
           }
         },
-        "required": ["tables"]
+        "required": [
+          "tables"
+        ]
       },
       "ResolvedSchemaTable": {
         "description": "A table in the resolved schema with origin metadata.",
         "type": "object",
         "properties": {
           "catalog": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "schema": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "name": {
             "type": "string"
@@ -1144,7 +1419,10 @@
           },
           "sourceStatementIndex": {
             "description": "For implied tables: which statement created it",
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "uint",
             "minimum": 0
           },
@@ -1154,7 +1432,10 @@
           },
           "temporary": {
             "description": "True if this is a temporary table",
-            "type": ["boolean", "null"]
+            "type": [
+              "boolean",
+              "null"
+            ]
           },
           "constraints": {
             "description": "Table-level constraints (composite PKs, FKs, etc.)",
@@ -1164,7 +1445,12 @@
             }
           }
         },
-        "required": ["name", "columns", "origin", "updatedAt"]
+        "required": [
+          "name",
+          "columns",
+          "origin",
+          "updatedAt"
+        ]
       },
       "ResolvedColumnSchema": {
         "description": "A column in the resolved schema with origin tracking.",
@@ -1174,7 +1460,10 @@
             "type": "string"
           },
           "dataType": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "origin": {
             "description": "Column-level origin (can differ from table origin in future merging)",
@@ -1189,7 +1478,10 @@
           },
           "isPrimaryKey": {
             "description": "True if this column is a primary key (or part of composite PK)",
-            "type": ["boolean", "null"]
+            "type": [
+              "boolean",
+              "null"
+            ]
           },
           "foreignKey": {
             "description": "Foreign key reference if this column references another table",
@@ -1203,7 +1495,9 @@
             ]
           }
         },
-        "required": ["name"]
+        "required": [
+          "name"
+        ]
       },
       "SchemaOrigin": {
         "description": "The origin of schema information.",
@@ -1233,7 +1527,10 @@
             "type": "string"
           }
         },
-        "required": ["table", "column"]
+        "required": [
+          "table",
+          "column"
+        ]
       },
       "TableConstraintInfo": {
         "description": "Information about a table-level constraint (composite PK, FK, etc.).",
@@ -1256,22 +1553,35 @@
           },
           "referencedTable": {
             "description": "For FK: the referenced table",
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "referencedColumns": {
             "description": "For FK: the referenced columns",
-            "type": ["array", "null"],
+            "type": [
+              "array",
+              "null"
+            ],
             "items": {
               "type": "string"
             }
           }
         },
-        "required": ["constraintType", "columns"]
+        "required": [
+          "constraintType",
+          "columns"
+        ]
       },
       "ConstraintType": {
         "description": "Type of table constraint.\n\nThis enum is marked `#[non_exhaustive]` to allow adding constraint types\n(e.g., CHECK, EXCLUDE) in the future without breaking API compatibility.",
         "type": "string",
-        "enum": ["primary_key", "foreign_key", "unique"]
+        "enum": [
+          "primary_key",
+          "foreign_key",
+          "unique"
+        ]
       }
     }
   }

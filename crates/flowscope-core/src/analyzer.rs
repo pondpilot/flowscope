@@ -1,3 +1,5 @@
+use crate::linter::document::{LintDocument, LintStatement};
+use crate::linter::Linter;
 use crate::types::*;
 use sqlparser::ast::Statement;
 use std::borrow::Cow;
@@ -48,10 +50,6 @@ pub fn analyze(request: &AnalyzeRequest) -> AnalyzeResult {
 }
 
 /// Split SQL into statement spans.
-///
-/// Note: The `dialect` field in the request is reserved for future dialect-specific
-/// splitting behavior. The current implementation uses a universal tokenizer that
-/// handles common SQL constructs (strings, comments, dollar-quoting).
 #[must_use]
 pub fn split_statements(request: &StatementSplitRequest) -> StatementSplitResult {
     // Validate input size to prevent memory exhaustion
@@ -64,7 +62,7 @@ pub fn split_statements(request: &StatementSplitRequest) -> StatementSplitResult
     }
 
     StatementSplitResult {
-        statements: input::split_statement_spans(&request.sql),
+        statements: input::split_statement_spans_with_dialect(&request.sql, request.dialect),
         error: None,
     }
 }
@@ -90,6 +88,8 @@ pub(crate) struct Analyzer<'a> {
     current_statement_source: Option<StatementSourceSlice<'a>>,
     /// Statements that already emitted a recursion-depth warning.
     depth_limit_statements: HashSet<usize>,
+    /// SQL linter (None if linting is disabled).
+    linter: Option<Linter>,
 }
 
 impl<'a> Analyzer<'a> {
@@ -103,6 +103,14 @@ impl<'a> Analyzer<'a> {
 
         let (schema, init_issues) = SchemaRegistry::new(request.schema.as_ref(), request.dialect);
 
+        // Initialize linter only when explicitly requested via options.lint
+        let linter = request
+            .options
+            .as_ref()
+            .and_then(|o| o.lint.clone())
+            .filter(|c| c.enabled)
+            .map(Linter::new);
+
         Self {
             request,
             issues: init_issues,
@@ -112,6 +120,7 @@ impl<'a> Analyzer<'a> {
             column_lineage_enabled,
             current_statement_source: None,
             depth_limit_statements: HashSet::new(),
+            linter,
         }
     }
 
@@ -189,8 +198,11 @@ impl<'a> Analyzer<'a> {
         self.precollect_ddl(&all_statements);
 
         if all_statements.is_empty() {
+            self.run_lint_documents_without_statements();
             return self.build_result();
         }
+
+        self.run_lint_documents(&all_statements);
 
         // Analyze all statements
         for (
@@ -201,6 +213,7 @@ impl<'a> Analyzer<'a> {
                 source_sql,
                 source_range,
                 templating_applied,
+                ..
             },
         ) in all_statements.into_iter().enumerate()
         {
@@ -219,7 +232,6 @@ impl<'a> Analyzer<'a> {
             } else {
                 None
             };
-
             self.current_statement_source = Some(StatementSourceSlice {
                 sql: source_sql,
                 range: source_range.clone(),
@@ -257,6 +269,83 @@ struct StatementSourceSlice<'a> {
 }
 
 impl<'a> Analyzer<'a> {
+    fn run_lint_documents(&mut self, statements: &[StatementInput<'a>]) {
+        let Some(linter) = self.linter.as_ref() else {
+            return;
+        };
+
+        let mut start = 0usize;
+        while start < statements.len() {
+            let source_name_key = statements[start]
+                .source_name
+                .as_deref()
+                .map(|name| name.as_str());
+            let source_sql_key = statements[start].source_sql.as_ref();
+            let source_untemplated_sql_key = statements[start].source_sql_untemplated.as_deref();
+
+            let mut end = start + 1;
+            while end < statements.len()
+                && statements[end]
+                    .source_name
+                    .as_deref()
+                    .map(|name| name.as_str())
+                    == source_name_key
+                && statements[end].source_sql.as_ref() == source_sql_key
+                && statements[end].source_sql_untemplated.as_deref() == source_untemplated_sql_key
+            {
+                end += 1;
+            }
+
+            let mut lint_statements = Vec::with_capacity(end - start);
+            let mut source_statement_ranges = Vec::with_capacity(end - start);
+            for (offset, statement_input) in statements[start..end].iter().enumerate() {
+                lint_statements.push(LintStatement {
+                    statement: &statement_input.statement,
+                    statement_index: offset,
+                    statement_range: statement_input.source_range.clone(),
+                });
+                source_statement_ranges.push(statement_input.source_range_untemplated.clone());
+            }
+
+            let parser_fallback_used = statements[start..end]
+                .iter()
+                .any(|statement_input| statement_input.parser_fallback_used);
+            let document = LintDocument::new_with_parser_fallback_and_source(
+                source_sql_key,
+                source_untemplated_sql_key,
+                self.request.dialect,
+                lint_statements,
+                parser_fallback_used,
+                Some(source_statement_ranges),
+            );
+            self.issues.extend(linter.check_document(&document));
+
+            start = end;
+        }
+    }
+
+    fn run_lint_documents_without_statements(&mut self) {
+        let Some(linter) = self.linter.as_ref() else {
+            return;
+        };
+
+        if let Some(files) = &self.request.files {
+            if files.is_empty() {
+                return;
+            }
+            for file in files {
+                let document = LintDocument::new(&file.content, self.request.dialect, Vec::new());
+                self.issues.extend(linter.check_document(&document));
+            }
+            return;
+        }
+
+        if !self.request.sql.is_empty() {
+            let document = LintDocument::new(&self.request.sql, self.request.dialect, Vec::new());
+            self.issues.extend(linter.check_document(&document));
+        }
+    }
+
     /// Pre-registers CREATE TABLE/VIEW targets so earlier statements can resolve them.
     fn precollect_ddl(&mut self, statements: &[StatementInput]) {
         for (index, stmt_input) in statements.iter().enumerate() {

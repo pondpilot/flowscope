@@ -136,6 +136,22 @@ export interface AnalysisOptions {
   graphDetailLevel?: GraphDetailLevel;
   /** Hide CTEs from output, creating bypass edges (A→CTE→B becomes A→B) */
   hideCtes?: boolean;
+  /** SQL lint configuration */
+  lint?: LintConfig;
+}
+
+/**
+ * Configuration for the SQL linter.
+ *
+ * Controls which lint rules are enabled/disabled. By default, all rules are enabled.
+ */
+export interface LintConfig {
+  /** Master toggle for linting (default: true) */
+  enabled?: boolean;
+  /** List of rule codes to disable (e.g., ["LINT_AM_008"]) */
+  disabledRules?: string[];
+  /** Per-rule option objects keyed by rule ref (e.g., "LINT_AL_001" or "aliasing.table") */
+  ruleConfigs?: Record<string, Record<string, unknown>>;
 }
 
 /**

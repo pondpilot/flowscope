@@ -9,7 +9,7 @@ use std::path::PathBuf;
 #[command(about = "Analyze SQL files for data lineage", long_about = None)]
 #[command(version)]
 pub struct Args {
-    /// SQL files to analyze (reads from stdin if none provided)
+    /// SQL files to analyze (reads from stdin if none provided; --lint also accepts directories)
     #[arg(value_name = "FILES")]
     pub files: Vec<PathBuf>,
 
@@ -52,6 +52,23 @@ pub struct Args {
     /// Graph detail level for mermaid output
     #[arg(short, long, default_value = "table", value_enum)]
     pub view: ViewMode,
+
+    /// Run SQL linter and report violations
+    #[arg(long)]
+    pub lint: bool,
+
+    /// Apply deterministic SQL lint auto-fixes in place (requires --lint)
+    #[arg(long, requires = "lint")]
+    pub fix: bool,
+
+    /// Comma-separated list of lint rule codes to exclude (e.g., LINT_AM_008,LINT_ST_006)
+    #[arg(long, value_delimiter = ',')]
+    pub exclude_rules: Vec<String>,
+
+    /// JSON object for per-rule lint options keyed by rule reference
+    /// (e.g., '{"structure.subquery":{"forbid_subquery_in":"both"}}')
+    #[arg(long, requires = "lint", value_name = "JSON")]
+    pub rule_configs: Option<String>,
 
     /// Suppress warnings on stderr
     #[arg(short, long)]
@@ -99,6 +116,7 @@ pub enum DialectArg {
     Ansi,
     Bigquery,
     Clickhouse,
+    #[value(alias = "sparksql")]
     Databricks,
     Duckdb,
     Hive,
@@ -195,6 +213,14 @@ mod tests {
     }
 
     #[test]
+    fn test_sparksql_dialect_alias_maps_to_databricks() {
+        let args = Args::parse_from(["flowscope", "-d", "sparksql", "test.sql"]);
+        assert_eq!(args.dialect, DialectArg::Databricks);
+        let core_dialect: flowscope_core::Dialect = args.dialect.into();
+        assert_eq!(core_dialect, flowscope_core::Dialect::Databricks);
+    }
+
+    #[test]
     fn test_parse_minimal_args() {
         let args = Args::parse_from(["flowscope", "test.sql"]);
         assert_eq!(args.files.len(), 1);
@@ -237,6 +263,70 @@ mod tests {
         assert!(args.quiet);
         assert!(args.compact);
         assert_eq!(args.files.len(), 2);
+    }
+
+    #[test]
+    fn test_lint_flag() {
+        let args = Args::parse_from(["flowscope", "--lint", "test.sql"]);
+        assert!(args.lint);
+        assert!(!args.fix);
+        assert!(args.exclude_rules.is_empty());
+        assert!(args.rule_configs.is_none());
+    }
+
+    #[test]
+    fn test_lint_fix_flag() {
+        let args = Args::parse_from(["flowscope", "--lint", "--fix", "test.sql"]);
+        assert!(args.lint);
+        assert!(args.fix);
+    }
+
+    #[test]
+    fn test_fix_requires_lint() {
+        let result = Args::try_parse_from(["flowscope", "--fix", "test.sql"]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_lint_exclude_rules() {
+        let args = Args::parse_from([
+            "flowscope",
+            "--lint",
+            "--exclude-rules",
+            "LINT_AM_008,LINT_ST_006",
+            "test.sql",
+        ]);
+        assert!(args.lint);
+        assert_eq!(args.exclude_rules, vec!["LINT_AM_008", "LINT_ST_006"]);
+    }
+
+    #[test]
+    fn test_lint_exclude_rules_repeated() {
+        let args = Args::parse_from([
+            "flowscope",
+            "--lint",
+            "--exclude-rules",
+            "LINT_AM_008",
+            "--exclude-rules",
+            "LINT_ST_006",
+            "test.sql",
+        ]);
+        assert_eq!(args.exclude_rules, vec!["LINT_AM_008", "LINT_ST_006"]);
+    }
+
+    #[test]
+    fn test_lint_rule_configs_json() {
+        let args = Args::parse_from([
+            "flowscope",
+            "--lint",
+            "--rule-configs",
+            r#"{"structure.subquery":{"forbid_subquery_in":"both"}}"#,
+            "test.sql",
+        ]);
+        assert_eq!(
+            args.rule_configs.as_deref(),
+            Some(r#"{"structure.subquery":{"forbid_subquery_in":"both"}}"#)
+        );
     }
 
     #[cfg(feature = "serve")]

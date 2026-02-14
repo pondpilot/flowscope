@@ -69,10 +69,10 @@ pub struct StatementSplitRequest {
     /// The SQL code to split (UTF-8 string, multi-statement supported)
     pub sql: String,
 
-    /// SQL dialect (currently unused; reserved for future dialect-specific splitting).
+    /// SQL dialect for statement splitting.
     ///
-    /// The current implementation uses a universal tokenizer that handles common SQL
-    /// constructs (strings, comments, dollar-quoting) across all dialects.
+    /// The splitter is mostly dialect-agnostic, but dialect-specific batch separators
+    /// (for example TSQL `GO`) are honored where supported.
     #[serde(default)]
     pub dialect: Dialect,
 }
@@ -175,6 +175,10 @@ pub struct AnalysisOptions {
     /// Hide CTEs from output, creating bypass edges (A→CTE→B becomes A→B)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hide_ctes: Option<bool>,
+
+    /// SQL lint configuration
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lint: Option<crate::linter::config::LintConfig>,
 }
 
 /// Schema metadata for accurate column and table resolution.

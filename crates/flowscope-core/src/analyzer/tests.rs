@@ -1,6 +1,9 @@
 use super::*;
 use crate::test_utils::{load_schema_fixture, load_sql_fixture};
-use crate::types::AnalysisOptions;
+use crate::{
+    types::{AnalysisOptions, LintConfidence, LintFallbackSource},
+    LintConfig,
+};
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 fn make_request(sql: &str) -> AnalyzeRequest {
@@ -283,6 +286,68 @@ fn file_statements_produce_spans() {
         .span
         .expect("span should be present for file statement");
     assert_eq!(&file_sql[span.start..span.end], "missing_table");
+}
+
+#[test]
+fn lint_document_rules_apply_to_each_file_in_multi_file_request() {
+    let mut request = make_request("");
+    request.files = Some(vec![
+        FileSource {
+            name: "first.sql".to_string(),
+            content: "SELECT 1;;".to_string(),
+        },
+        FileSource {
+            name: "second.sql".to_string(),
+            content: "SELECT 2;;".to_string(),
+        },
+    ]);
+    request.options = Some(AnalysisOptions {
+        lint: Some(LintConfig::default()),
+        ..Default::default()
+    });
+
+    let result = analyze(&request);
+    let st012_issues: Vec<_> = result
+        .issues
+        .iter()
+        .filter(|issue| issue.code == issue_codes::LINT_ST_012)
+        .collect();
+
+    assert_eq!(st012_issues.len(), 2, "expected one ST_012 issue per file");
+    assert!(
+        st012_issues
+            .iter()
+            .all(|issue| issue.statement_index == Some(0)),
+        "document-level lint rules should run with per-document statement indices"
+    );
+}
+
+#[test]
+fn parser_fallback_metadata_is_attached_to_lint_issues() {
+    let mut request =
+        make_request("SELECT usage_metadata ? 'pipeline_id' FROM ledger.usage_line_item;;");
+    request.options = Some(AnalysisOptions {
+        lint: Some(LintConfig::default()),
+        ..Default::default()
+    });
+
+    let result = analyze(&request);
+    let st012_issue = result
+        .issues
+        .iter()
+        .find(|issue| issue.code == issue_codes::LINT_ST_012)
+        .expect("expected ST_012 lint issue");
+
+    assert_eq!(
+        st012_issue.lint_confidence,
+        Some(LintConfidence::Medium),
+        "parser fallback should downgrade lint confidence"
+    );
+    assert_eq!(
+        st012_issue.lint_fallback_source,
+        Some(LintFallbackSource::ParserFallback),
+        "lint issue should report parser fallback provenance"
+    );
 }
 
 #[test]

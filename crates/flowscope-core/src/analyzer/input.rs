@@ -3,9 +3,11 @@
 //! This module handles the parsing and collection of SQL statements from analysis requests,
 //! supporting both file-based and inline SQL inputs.
 
-use crate::parser::parse_sql_with_dialect;
+use crate::parser::{parse_sql_with_dialect, parse_sql_with_dialect_output};
 use crate::types::{issue_codes, AnalyzeRequest, Dialect, Issue, Span};
 use sqlparser::ast::Statement;
+use sqlparser::dialect::MsSqlDialect;
+use sqlparser::tokenizer::{Token, Tokenizer};
 use std::borrow::Cow;
 use std::ops::Range;
 use std::rc::Rc;
@@ -92,6 +94,8 @@ struct ParseContext<'a> {
     source_name: Option<Rc<String>>,
     /// SQL dialect for parsing.
     dialect: Dialect,
+    /// Original SQL before template rendering, when templating is applied.
+    untemplated_sql: Option<Cow<'a, str>>,
     /// Whether template processing was applied to produce `source_sql`.
     templating_applied: bool,
 }
@@ -115,9 +119,15 @@ pub(crate) struct StatementInput<'a> {
     pub(crate) source_sql: Cow<'a, str>,
     /// Byte range of the statement within `source_sql`.
     pub(crate) source_range: Range<usize>,
+    /// Original SQL before template rendering, when templating is applied.
+    pub(crate) source_sql_untemplated: Option<Cow<'a, str>>,
+    /// Byte range of the statement within `source_sql_untemplated`, when available.
+    pub(crate) source_range_untemplated: Option<Range<usize>>,
     /// Whether template processing was applied to produce `source_sql`.
     /// When true, `source_sql` contains the resolved/compiled SQL.
     pub(crate) templating_applied: bool,
+    /// Whether parser fallback was used while parsing this statement.
+    pub(crate) parser_fallback_used: bool,
 }
 
 /// Collects and parses SQL statements from the analysis request.
@@ -198,6 +208,7 @@ pub(crate) fn collect_statements<'a>(
                 source_sql,
                 source_name: Some(Rc::new(file.name.clone())),
                 dialect: request.dialect,
+                untemplated_sql: templating_applied.then(|| Cow::Borrowed(file.content.as_str())),
                 templating_applied,
             };
             let (file_stmts, file_issues) = parse_statements_individually(&ctx);
@@ -229,6 +240,7 @@ pub(crate) fn collect_statements<'a>(
             source_sql,
             source_name: request.source_name.clone().map(Rc::new),
             dialect: request.dialect,
+            untemplated_sql: templating_applied.then(|| Cow::Borrowed(request.sql.as_str())),
             templating_applied,
         };
         let (inline_stmts, inline_issues) = parse_statements_individually(&ctx);
@@ -248,7 +260,7 @@ pub(crate) fn collect_statements<'a>(
 fn parse_statements_individually<'a>(
     ctx: &ParseContext<'a>,
 ) -> (Vec<StatementInput<'a>>, Vec<Issue>) {
-    let statement_ranges = compute_statement_ranges(&ctx.source_sql);
+    let statement_ranges = compute_statement_ranges_for_dialect(&ctx.source_sql, ctx.dialect);
 
     match parse_full_sql_buffer(ctx, &statement_ranges) {
         Ok(statements) => (statements, Vec::new()),
@@ -289,7 +301,10 @@ fn parse_full_sql_buffer<'a>(
     ctx: &ParseContext<'a>,
     statement_ranges: &[Range<usize>],
 ) -> Result<Vec<StatementInput<'a>>, Option<RangeAlignmentError>> {
-    let parsed = parse_sql_with_dialect(&ctx.source_sql, ctx.dialect).map_err(|_| None)?;
+    let parsed_output =
+        parse_sql_with_dialect_output(&ctx.source_sql, ctx.dialect).map_err(|_| None)?;
+    let parser_fallback_used = parsed_output.parser_fallback_used;
+    let parsed = parsed_output.statements;
 
     if parsed.is_empty() {
         return Ok(Vec::new());
@@ -313,14 +328,28 @@ fn parse_full_sql_buffer<'a>(
         }
     };
 
+    let aligned_untemplated_ranges = ctx.untemplated_sql.as_deref().and_then(|sql| {
+        let ranges = compute_statement_ranges_for_dialect(sql, ctx.dialect);
+        align_statement_ranges(sql, &ranges, ctx.dialect, parsed.len()).ok()
+    });
+
     let mut statements = Vec::with_capacity(parsed.len());
-    for (stmt, range) in parsed.into_iter().zip(aligned_ranges.into_iter()) {
+    for (index, (stmt, range)) in parsed
+        .into_iter()
+        .zip(aligned_ranges.into_iter())
+        .enumerate()
+    {
         statements.push(StatementInput {
             statement: stmt,
             source_name: ctx.source_name.clone(),
             source_sql: ctx.source_sql.clone(),
             source_range: range,
+            source_sql_untemplated: ctx.untemplated_sql.clone(),
+            source_range_untemplated: aligned_untemplated_ranges
+                .as_ref()
+                .and_then(|ranges| ranges.get(index).cloned()),
             templating_applied: ctx.templating_applied,
+            parser_fallback_used,
         });
     }
 
@@ -455,16 +484,21 @@ fn parse_statement_ranges_best_effort<'a>(
 
         let statement_sql = &source_sql_ref[range.clone()];
 
-        match parse_sql_with_dialect(statement_sql, ctx.dialect) {
-            Ok(parsed) => {
+        match parse_sql_with_dialect_output(statement_sql, ctx.dialect) {
+            Ok(parsed_output) => {
+                let parser_fallback_used = parsed_output.parser_fallback_used;
+
                 // Typically one statement per range, but handle multiple if present
-                for stmt in parsed {
+                for stmt in parsed_output.statements {
                     statements.push(StatementInput {
                         statement: stmt,
                         source_name: ctx.source_name.clone(),
                         source_sql: ctx.source_sql.clone(),
                         source_range: range.clone(),
+                        source_sql_untemplated: ctx.untemplated_sql.clone(),
+                        source_range_untemplated: None,
                         templating_applied: ctx.templating_applied,
+                        parser_fallback_used,
                     });
                 }
             }
@@ -488,11 +522,107 @@ fn parse_statement_ranges_best_effort<'a>(
     (statements, issues)
 }
 
-pub(crate) fn split_statement_spans(sql: &str) -> Vec<Span> {
-    compute_statement_ranges(sql)
+pub(crate) fn split_statement_spans_with_dialect(sql: &str, dialect: Dialect) -> Vec<Span> {
+    compute_statement_ranges_for_dialect(sql, dialect)
         .into_iter()
         .map(|range| Span::new(range.start, range.end))
         .collect()
+}
+
+fn compute_statement_ranges_for_dialect(sql: &str, dialect: Dialect) -> Vec<Range<usize>> {
+    let ranges = compute_statement_ranges(sql);
+    if !matches!(dialect, Dialect::Mssql) {
+        return ranges;
+    }
+    split_ranges_on_mssql_go_separators(sql, ranges)
+}
+
+fn split_ranges_on_mssql_go_separators(sql: &str, ranges: Vec<Range<usize>>) -> Vec<Range<usize>> {
+    let go_line_ranges = mssql_go_line_ranges(sql);
+    if go_line_ranges.is_empty() {
+        return ranges;
+    }
+
+    let mut out = Vec::new();
+    for range in ranges {
+        let mut cursor = range.start;
+        for go_range in &go_line_ranges {
+            if go_range.start < range.start || go_range.end > range.end || go_range.start < cursor {
+                continue;
+            }
+            if let Some(chunk) = trim_statement_range(sql, cursor, go_range.start) {
+                out.push(chunk);
+            }
+            cursor = go_range.end;
+        }
+
+        if let Some(chunk) = trim_statement_range(sql, cursor, range.end) {
+            out.push(chunk);
+        }
+    }
+
+    out
+}
+
+fn mssql_go_line_ranges(sql: &str) -> Vec<Range<usize>> {
+    let mut tokenizer = Tokenizer::new(&MsSqlDialect {}, sql);
+    let Ok(tokens) = tokenizer.tokenize_with_location() else {
+        return Vec::new();
+    };
+
+    let mut go_lines = Vec::new();
+    for token in tokens {
+        let Token::Word(word) = token.token else {
+            continue;
+        };
+        if !word.value.eq_ignore_ascii_case("GO") {
+            continue;
+        }
+        let line = token.span.start.line as usize;
+        if line_is_go_separator(sql, line) {
+            go_lines.push(line);
+        }
+    }
+
+    if go_lines.is_empty() {
+        return Vec::new();
+    }
+
+    go_lines.sort_unstable();
+    go_lines.dedup();
+
+    go_lines
+        .into_iter()
+        .filter_map(|line| line_byte_range(sql, line))
+        .collect()
+}
+
+fn line_is_go_separator(sql: &str, line_number: usize) -> bool {
+    line_text(sql, line_number).is_some_and(|line| line.trim().eq_ignore_ascii_case("GO"))
+}
+
+fn line_text(sql: &str, line_number: usize) -> Option<&str> {
+    let range = line_byte_range(sql, line_number)?;
+    let line = &sql[range];
+    Some(line.trim_end_matches(['\n', '\r']))
+}
+
+fn line_byte_range(sql: &str, line_number: usize) -> Option<Range<usize>> {
+    if line_number == 0 {
+        return None;
+    }
+
+    let bytes = sql.as_bytes();
+    let mut starts = vec![0usize];
+    for (idx, byte) in bytes.iter().enumerate() {
+        if *byte == b'\n' {
+            starts.push(idx + 1);
+        }
+    }
+
+    let start = *starts.get(line_number - 1)?;
+    let end = starts.get(line_number).copied().unwrap_or(sql.len());
+    Some(start..end)
 }
 
 /// Split SQL text into statement ranges by finding semicolons outside of strings/comments.
@@ -927,6 +1057,29 @@ mod tests {
             "DO $$ BEGIN RAISE NOTICE ';'; END $$"
         );
         assert_eq!(&sql[ranges[1].clone()], "SELECT 1");
+    }
+
+    #[test]
+    fn mssql_statement_ranges_split_go_batch_separators() {
+        let sql = "CREATE SCHEMA staging;\nGO\nCREATE TABLE test (id INT)\n";
+        let ranges = compute_statement_ranges_for_dialect(sql, Dialect::Mssql);
+        assert_eq!(ranges.len(), 2);
+        assert_eq!(&sql[ranges[0].clone()], "CREATE SCHEMA staging");
+        assert_eq!(&sql[ranges[1].clone()], "CREATE TABLE test (id INT)");
+    }
+
+    #[test]
+    fn collect_statements_mssql_go_batch_without_final_semicolon_parses_statements() {
+        let mut request = base_request();
+        request.dialect = Dialect::Mssql;
+        request.sql = "CREATE SCHEMA staging;\nGO\nCREATE TABLE test (id INT)\n".to_string();
+
+        let (statements, issues) = collect_statements(&request);
+        assert!(
+            issues.is_empty(),
+            "MSSQL GO separators should not produce parse errors: {issues:?}"
+        );
+        assert_eq!(statements.len(), 2);
     }
 
     #[test]

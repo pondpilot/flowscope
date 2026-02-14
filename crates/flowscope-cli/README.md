@@ -50,7 +50,7 @@ flowscope -f mermaid -v column query.sql > lineage.mmd
 Usage: flowscope [OPTIONS] [FILES]...
 
 Arguments:
-  [FILES]...  SQL files to analyze (reads from stdin if none provided)
+  [FILES]...  SQL files to analyze (reads from stdin if none provided; --lint also accepts directories)
 
 Options:
   -d, --dialect <DIALECT>  SQL dialect [default: generic]
@@ -72,6 +72,10 @@ Options:
                            Schema name to prefix DuckDB SQL export
   -v, --view <VIEW>        Graph detail level for mermaid output [default: table]
                            [possible values: script, table, column, hybrid]
+      --lint               Run SQL linter and report violations
+      --fix                Apply deterministic SQL lint auto-fixes in place (requires --lint)
+      --exclude-rules <EXCLUDE_RULES>
+                           Comma-separated lint rule codes to exclude
   -q, --quiet              Suppress warnings on stderr
   -c, --compact            Compact JSON output (no pretty-printing)
   -h, --help               Print help
@@ -79,6 +83,24 @@ Options:
 ```
 
 ## Examples
+
+### Lint and Auto-fix
+
+```bash
+# Lint SQL files
+flowscope --lint queries/*.sql
+
+# Lint every .sql file under a directory (recursive)
+flowscope --lint ./queries
+
+# Apply supported auto-fixes, then report remaining violations
+flowscope --lint --fix queries/*.sql
+
+# Exclude specific lint rules
+flowscope --lint --exclude-rules LINT_AM_001,LINT_ST_001 queries/*.sql
+```
+
+`--fix` now applies deterministic rewrites across the full SQLFluff-mapped fix-rule set used by FlowScope parity checks, plus core deterministic fixes. Files containing SQL comments are linted but still skipped for auto-fix to avoid dropping comments during AST render.
 
 ### JSON Output
 

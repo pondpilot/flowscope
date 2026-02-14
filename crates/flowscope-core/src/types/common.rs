@@ -34,6 +34,33 @@ impl CaseSensitivity {
     }
 }
 
+/// Lint execution engine category.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum LintEngine {
+    Semantic,
+    Lexical,
+    Document,
+}
+
+/// Confidence level attached to lint findings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum LintConfidence {
+    High,
+    Medium,
+    Low,
+}
+
+/// Source of degraded lint confidence or fallback behavior.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum LintFallbackSource {
+    ParserFallback,
+    TokenizerFallback,
+    HeuristicRule,
+}
+
 /// An issue encountered during SQL analysis (error, warning, or info).
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -47,6 +74,10 @@ pub struct Issue {
     /// Human-readable error message
     pub message: String,
 
+    /// SQLFluff dotted rule name (e.g., `aliasing.table`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sqlfluff_name: Option<String>,
+
     /// Optional: location in source SQL where issue occurred
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub span: Option<Span>,
@@ -58,6 +89,18 @@ pub struct Issue {
     /// Optional: source file name where the issue occurred
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_name: Option<String>,
+
+    /// Optional: linter engine provenance (`semantic`, `lexical`, `document`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lint_engine: Option<LintEngine>,
+
+    /// Optional: confidence level for lint detection quality.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lint_confidence: Option<LintConfidence>,
+
+    /// Optional: fallback mode used while evaluating this lint.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lint_fallback_source: Option<LintFallbackSource>,
 }
 
 impl Issue {
@@ -66,9 +109,13 @@ impl Issue {
             severity: Severity::Error,
             code: code.into(),
             message: message.into(),
+            sqlfluff_name: None,
             span: None,
             statement_index: None,
             source_name: None,
+            lint_engine: None,
+            lint_confidence: None,
+            lint_fallback_source: None,
         }
     }
 
@@ -77,9 +124,13 @@ impl Issue {
             severity: Severity::Warning,
             code: code.into(),
             message: message.into(),
+            sqlfluff_name: None,
             span: None,
             statement_index: None,
             source_name: None,
+            lint_engine: None,
+            lint_confidence: None,
+            lint_fallback_source: None,
         }
     }
 
@@ -88,9 +139,13 @@ impl Issue {
             severity: Severity::Info,
             code: code.into(),
             message: message.into(),
+            sqlfluff_name: None,
             span: None,
             statement_index: None,
             source_name: None,
+            lint_engine: None,
+            lint_confidence: None,
+            lint_fallback_source: None,
         }
     }
 
@@ -106,6 +161,27 @@ impl Issue {
 
     pub fn with_source_name(mut self, name: impl Into<String>) -> Self {
         self.source_name = Some(name.into());
+        self
+    }
+
+    pub fn with_lint_engine(mut self, engine: LintEngine) -> Self {
+        self.lint_engine = Some(engine);
+        self
+    }
+
+    pub fn with_lint_confidence(mut self, confidence: LintConfidence) -> Self {
+        self.lint_confidence = Some(confidence);
+        self
+    }
+
+    pub fn with_lint_fallback_source(mut self, source: LintFallbackSource) -> Self {
+        self.lint_fallback_source = Some(source);
+        self
+    }
+
+    /// Attach a SQLFluff dotted rule name.
+    pub fn with_sqlfluff_name(mut self, name: impl Into<String>) -> Self {
+        self.sqlfluff_name = Some(name.into());
         self
     }
 }
@@ -189,6 +265,96 @@ pub mod issue_codes {
     pub const SCHEMA_CONFLICT: &str = "SCHEMA_CONFLICT";
     pub const TEMPLATE_ERROR: &str = "TEMPLATE_ERROR";
     pub const TYPE_MISMATCH: &str = "TYPE_MISMATCH";
+
+    // Lint rules — ambiguity
+    pub const LINT_AM_001: &str = "LINT_AM_001";
+    pub const LINT_AM_002: &str = "LINT_AM_002";
+    pub const LINT_AM_003: &str = "LINT_AM_003";
+    pub const LINT_AM_004: &str = "LINT_AM_004";
+    pub const LINT_AM_005: &str = "LINT_AM_005";
+    pub const LINT_AM_006: &str = "LINT_AM_006";
+    pub const LINT_AM_007: &str = "LINT_AM_007";
+    pub const LINT_AM_008: &str = "LINT_AM_008";
+    pub const LINT_AM_009: &str = "LINT_AM_009";
+
+    // Lint rules — capitalisation
+    pub const LINT_CP_001: &str = "LINT_CP_001";
+    pub const LINT_CP_002: &str = "LINT_CP_002";
+    pub const LINT_CP_003: &str = "LINT_CP_003";
+    pub const LINT_CP_004: &str = "LINT_CP_004";
+    pub const LINT_CP_005: &str = "LINT_CP_005";
+
+    // Lint rules — convention
+    pub const LINT_CV_001: &str = "LINT_CV_001";
+    pub const LINT_CV_002: &str = "LINT_CV_002";
+    pub const LINT_CV_003: &str = "LINT_CV_003";
+    pub const LINT_CV_004: &str = "LINT_CV_004";
+    pub const LINT_CV_005: &str = "LINT_CV_005";
+    pub const LINT_CV_006: &str = "LINT_CV_006";
+    pub const LINT_CV_007: &str = "LINT_CV_007";
+    pub const LINT_CV_008: &str = "LINT_CV_008";
+    pub const LINT_CV_009: &str = "LINT_CV_009";
+    pub const LINT_CV_010: &str = "LINT_CV_010";
+    pub const LINT_CV_011: &str = "LINT_CV_011";
+    pub const LINT_CV_012: &str = "LINT_CV_012";
+
+    // Lint rules — jinja
+    pub const LINT_JJ_001: &str = "LINT_JJ_001";
+
+    // Lint rules — layout
+    pub const LINT_LT_001: &str = "LINT_LT_001";
+    pub const LINT_LT_002: &str = "LINT_LT_002";
+    pub const LINT_LT_003: &str = "LINT_LT_003";
+    pub const LINT_LT_004: &str = "LINT_LT_004";
+    pub const LINT_LT_005: &str = "LINT_LT_005";
+    pub const LINT_LT_006: &str = "LINT_LT_006";
+    pub const LINT_LT_007: &str = "LINT_LT_007";
+    pub const LINT_LT_008: &str = "LINT_LT_008";
+    pub const LINT_LT_009: &str = "LINT_LT_009";
+    pub const LINT_LT_010: &str = "LINT_LT_010";
+    pub const LINT_LT_011: &str = "LINT_LT_011";
+    pub const LINT_LT_012: &str = "LINT_LT_012";
+    pub const LINT_LT_013: &str = "LINT_LT_013";
+    pub const LINT_LT_014: &str = "LINT_LT_014";
+    pub const LINT_LT_015: &str = "LINT_LT_015";
+
+    // Lint rules — references
+    pub const LINT_RF_001: &str = "LINT_RF_001";
+    pub const LINT_RF_002: &str = "LINT_RF_002";
+    pub const LINT_RF_003: &str = "LINT_RF_003";
+    pub const LINT_RF_004: &str = "LINT_RF_004";
+    pub const LINT_RF_005: &str = "LINT_RF_005";
+    pub const LINT_RF_006: &str = "LINT_RF_006";
+
+    // Lint rules — structure
+    pub const LINT_ST_001: &str = "LINT_ST_001";
+    pub const LINT_ST_002: &str = "LINT_ST_002";
+    pub const LINT_ST_003: &str = "LINT_ST_003";
+    pub const LINT_ST_004: &str = "LINT_ST_004";
+    pub const LINT_ST_005: &str = "LINT_ST_005";
+    pub const LINT_ST_006: &str = "LINT_ST_006";
+    pub const LINT_ST_007: &str = "LINT_ST_007";
+    pub const LINT_ST_008: &str = "LINT_ST_008";
+    pub const LINT_ST_009: &str = "LINT_ST_009";
+    pub const LINT_ST_010: &str = "LINT_ST_010";
+    pub const LINT_ST_011: &str = "LINT_ST_011";
+    pub const LINT_ST_012: &str = "LINT_ST_012";
+
+    // Lint rules — aliasing
+    pub const LINT_AL_001: &str = "LINT_AL_001";
+    pub const LINT_AL_002: &str = "LINT_AL_002";
+    pub const LINT_AL_003: &str = "LINT_AL_003";
+    pub const LINT_AL_004: &str = "LINT_AL_004";
+    pub const LINT_AL_005: &str = "LINT_AL_005";
+    pub const LINT_AL_006: &str = "LINT_AL_006";
+    pub const LINT_AL_007: &str = "LINT_AL_007";
+    pub const LINT_AL_008: &str = "LINT_AL_008";
+    pub const LINT_AL_009: &str = "LINT_AL_009";
+
+    // Lint rules — tsql
+    pub const LINT_TQ_001: &str = "LINT_TQ_001";
+    pub const LINT_TQ_002: &str = "LINT_TQ_002";
+    pub const LINT_TQ_003: &str = "LINT_TQ_003";
 }
 
 #[cfg(test)]
@@ -199,11 +365,14 @@ mod tests {
     fn test_issue_creation() {
         let issue = Issue::error("PARSE_ERROR", "Unexpected token")
             .with_span(Span::new(10, 20))
-            .with_statement(0);
+            .with_statement(0)
+            .with_lint_engine(LintEngine::Semantic)
+            .with_lint_confidence(LintConfidence::High);
 
         assert_eq!(issue.severity, Severity::Error);
         assert_eq!(issue.code, "PARSE_ERROR");
         assert_eq!(issue.span.unwrap().start, 10);
         assert_eq!(issue.statement_index, Some(0));
+        assert_eq!(issue.lint_engine, Some(LintEngine::Semantic));
     }
 }

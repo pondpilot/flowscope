@@ -1,5 +1,6 @@
 ---
 source: crates/flowscope-core/tests/snapshots.rs
+assertion_line: 50
 expression: clean_result
 ---
 {
