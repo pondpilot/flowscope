@@ -187,7 +187,7 @@ This plan covers three axes:
   - `LT_015` was further upgraded from line-splitting-only blank-line run detection to tokenizer-derived line occupancy without raw fallback, including single-line comment end-line handling for blank-line run counting.
   - `LT_015` now supports `maximum_empty_lines_inside_statements` / `maximum_empty_lines_between_statements` through `lint.ruleConfigs`.
   - `LT_002` moved from parity handling to a dedicated core rule module (`lt_002.rs`).
-  - `LT_002` now supports SQLFluff-style indentation config shapes across both `layout.indent` and top-level `indentation` sections (`indent_unit` / `tab_space_size`), enforces tab-vs-space indentation style, detects first-line indentation from full-statement source context, and now builds line-indentation snapshots from tokenizer spans (including comment lines) instead of line-splitting alone.
+  - `LT_002` now supports SQLFluff-style indentation config shapes across both `layout.indent` and top-level `indentation` sections (`indent_unit` / `tab_space_size`), enforces tab-vs-space indentation style, detects first-line indentation from full-statement source context, and now builds line-indentation snapshots from tokenizer spans (including comment lines) instead of line-splitting alone, consuming the shared document token stream before fallback tokenization.
   - `LT_003` moved from parity handling to a dedicated core rule module (`lt_003.rs`).
   - `LT_003` was further upgraded from regex scanning to active-dialect tokenizer line-aware trailing-operator checks.
   - `LT_003` now supports operator line-position configuration through `lint.ruleConfigs` (`line_position=leading|trailing`) and legacy SQLFluff `operator_new_lines` compatibility.
@@ -207,7 +207,7 @@ This plan covers three axes:
   - `LT_007` now includes source-aware templating parity: when templating is enabled, lint evaluation uses untemplated source slices for CTE close-bracket checks so SQLFluff whitespace-consuming Jinja forms (`{{- ... -}}`, `{#- ... -#}`, `{%- ... -%}`) no longer produce false positives.
   - `LT_007` closing-bracket checks are now AST-first (`Query.with.cte_tables` closing-paren metadata) with tokenizer-span matching for multiline close placement, and now use tokenizer fallback scanning (raw byte fallback removed) when AST/token span mapping is unavailable.
   - `LT_008` moved from parity handling to a dedicated core rule module (`lt_008.rs`).
-  - `LT_008` was further upgraded from raw byte/state scanning to AST/token-aware CTE suffix analysis using `Query.with.cte_tables` closing-paren tokens plus tokenizer span traversal for blank-line detection.
+  - `LT_008` was further upgraded from raw byte/state scanning to AST/token-aware CTE suffix analysis using `Query.with.cte_tables` closing-paren tokens plus tokenizer span traversal for blank-line detection, consuming the shared document token stream before fallback tokenization.
   - `LT_009` moved from parity handling to a dedicated core rule module (`lt_009.rs`).
   - `LT_009` was further upgraded from regex masking to AST-backed SELECT target analysis with active-dialect token-aware clause layout checks (single-target newline semantics, multi-target line separation, and `FROM`-line checks).
   - `LT_009` now supports `wildcard_policy` (`single`/`multiple`) through `lint.ruleConfigs`.

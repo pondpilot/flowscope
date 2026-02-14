@@ -53,7 +53,7 @@ fn lt08_violation_spans(statement: &Statement, ctx: &LintContext) -> Vec<(usize,
         return Vec::new();
     };
 
-    let Some(tokens) = tokenize_with_offsets(ctx.sql, ctx.dialect()) else {
+    let Some(tokens) = tokenize_with_offsets_for_context(ctx) else {
         return Vec::new();
     };
 
@@ -68,12 +68,8 @@ fn lt08_violation_spans(statement: &Statement, ctx: &LintContext) -> Vec<(usize,
             continue;
         }
 
-        let (blank_lines, next_code_span) = suffix_summary_after_offset(
-            ctx.sql,
-            &tokens,
-            close_abs + 1,
-            ctx.statement_range.end,
-        );
+        let (blank_lines, next_code_span) =
+            suffix_summary_after_offset(ctx.sql, &tokens, close_abs + 1, ctx.statement_range.end);
 
         if blank_lines == 0 {
             if let Some((next_start, next_end)) = next_code_span {
@@ -102,9 +98,11 @@ fn tokenize_with_offsets(sql: &str, dialect: Dialect) -> Option<Vec<LocatedToken
         ) else {
             continue;
         };
-        let Some(end) =
-            line_col_to_offset(sql, token.span.end.line as usize, token.span.end.column as usize)
-        else {
+        let Some(end) = line_col_to_offset(
+            sql,
+            token.span.end.line as usize,
+            token.span.end.column as usize,
+        ) else {
             continue;
         };
 
@@ -116,6 +114,33 @@ fn tokenize_with_offsets(sql: &str, dialect: Dialect) -> Option<Vec<LocatedToken
     }
 
     Some(out)
+}
+
+fn tokenize_with_offsets_for_context(ctx: &LintContext) -> Option<Vec<LocatedToken>> {
+    let tokens = ctx.with_document_tokens(|tokens| {
+        if tokens.is_empty() {
+            return None;
+        }
+
+        Some(
+            tokens
+                .iter()
+                .filter_map(|token| {
+                    token_with_span_offsets(ctx.sql, token).map(|(start, end)| LocatedToken {
+                        token: token.token.clone(),
+                        start,
+                        end,
+                    })
+                })
+                .collect::<Vec<_>>(),
+        )
+    });
+
+    if let Some(tokens) = tokens {
+        return Some(tokens);
+    }
+
+    tokenize_with_offsets(ctx.sql, ctx.dialect())
 }
 
 fn token_start_offset(sql: &str, token: &TokenWithSpan) -> Option<usize> {
@@ -222,6 +247,20 @@ fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
     }
 
     None
+}
+
+fn token_with_span_offsets(sql: &str, token: &TokenWithSpan) -> Option<(usize, usize)> {
+    let start = line_col_to_offset(
+        sql,
+        token.span.start.line as usize,
+        token.span.start.column as usize,
+    )?;
+    let end = line_col_to_offset(
+        sql,
+        token.span.end.line as usize,
+        token.span.end.column as usize,
+    )?;
+    Some((start, end))
 }
 
 #[cfg(test)]

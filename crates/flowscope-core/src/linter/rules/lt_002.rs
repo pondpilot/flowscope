@@ -8,6 +8,7 @@ use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Dialect, Issue};
 use sqlparser::ast::Statement;
 use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
+use std::collections::BTreeMap;
 
 pub struct LayoutIndent {
     indent_unit: usize,
@@ -126,7 +127,9 @@ fn first_line_is_indented(ctx: &LintContext) -> bool {
         return false;
     }
 
-    let line_start = ctx.sql[..statement_start].rfind('\n').map_or(0, |index| index + 1);
+    let line_start = ctx.sql[..statement_start]
+        .rfind('\n')
+        .map_or(0, |index| index + 1);
     let leading = &ctx.sql[line_start..statement_start];
     !leading.is_empty() && leading.chars().all(char::is_whitespace)
 }
@@ -146,8 +149,40 @@ struct LineIndentSnapshot {
 }
 
 fn line_indent_snapshots(ctx: &LintContext, tab_space_size: usize) -> Vec<LineIndentSnapshot> {
-    let sql = ctx.statement_sql();
+    if let Some(tokens) = tokenize_with_offsets_for_context(ctx) {
+        let mut first_token_by_line: BTreeMap<usize, usize> = BTreeMap::new();
+        for token in &tokens {
+            if token.start < ctx.statement_range.start || token.start >= ctx.statement_range.end {
+                continue;
+            }
+            if is_whitespace_token(&token.token) {
+                continue;
+            }
+            let line = offset_to_line(ctx.sql, token.start);
+            first_token_by_line.entry(line).or_insert(token.start);
+        }
 
+        return first_token_by_line
+            .into_values()
+            .filter_map(|token_start| {
+                let line_start = ctx.sql[..token_start]
+                    .rfind('\n')
+                    .map_or(0, |index| index + 1);
+                let leading = &ctx.sql[line_start..token_start];
+                let line_index = ctx.sql[ctx.statement_range.start..token_start]
+                    .as_bytes()
+                    .iter()
+                    .filter(|byte| **byte == b'\n')
+                    .count();
+                Some(LineIndentSnapshot {
+                    line_index,
+                    indent: leading_indent_from_prefix(leading, tab_space_size),
+                })
+            })
+            .collect();
+    }
+
+    let sql = ctx.statement_sql();
     let Some(tokens) = tokenize_with_locations(sql, ctx.dialect()) else {
         return sql
             .lines()
@@ -189,10 +224,36 @@ fn line_indent_snapshots(ctx: &LintContext, tab_space_size: usize) -> Vec<LineIn
         .collect()
 }
 
+#[derive(Clone)]
+struct LocatedToken {
+    token: Token,
+    start: usize,
+}
+
 fn tokenize_with_locations(sql: &str, dialect: Dialect) -> Option<Vec<TokenWithSpan>> {
     let dialect = dialect.to_sqlparser_dialect();
     let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
     tokenizer.tokenize_with_location().ok()
+}
+
+fn tokenize_with_offsets_for_context(ctx: &LintContext) -> Option<Vec<LocatedToken>> {
+    ctx.with_document_tokens(|tokens| {
+        if tokens.is_empty() {
+            return None;
+        }
+
+        Some(
+            tokens
+                .iter()
+                .filter_map(|token| {
+                    token_with_span_offsets(ctx.sql, token).map(|(start, _end)| LocatedToken {
+                        token: token.token.clone(),
+                        start,
+                    })
+                })
+                .collect::<Vec<_>>(),
+        )
+    })
 }
 
 fn is_whitespace_token(token: &Token) -> bool {
@@ -259,6 +320,29 @@ fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
     }
 
     None
+}
+
+fn token_with_span_offsets(sql: &str, token: &TokenWithSpan) -> Option<(usize, usize)> {
+    let start = line_col_to_offset(
+        sql,
+        token.span.start.line as usize,
+        token.span.start.column as usize,
+    )?;
+    let end = line_col_to_offset(
+        sql,
+        token.span.end.line as usize,
+        token.span.end.column as usize,
+    )?;
+    Some((start, end))
+}
+
+fn offset_to_line(sql: &str, offset: usize) -> usize {
+    1 + sql
+        .as_bytes()
+        .iter()
+        .take(offset.min(sql.len()))
+        .filter(|byte| **byte == b'\n')
+        .count()
 }
 
 #[cfg(test)]
@@ -365,5 +449,4 @@ mod tests {
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_LT_002);
     }
-
 }
