@@ -3605,6 +3605,18 @@ mod tests {
     }
 
     #[test]
+    fn sqlfluff_cv001_not_equal_style_cases_are_fixed_or_unchanged() {
+        let cases = [
+            ("SELECT * FROM t WHERE a <> b AND c != d", 1, 0, 1),
+            ("SELECT * FROM t WHERE a != b", 0, 0, 0),
+        ];
+
+        for (sql, before, after, fix_count) in cases {
+            assert_rule_case(sql, issue_codes::LINT_CV_001, before, after, fix_count);
+        }
+    }
+
+    #[test]
     fn sqlfluff_cv008_cases_are_fixed_or_unchanged() {
         let cases = [
             (

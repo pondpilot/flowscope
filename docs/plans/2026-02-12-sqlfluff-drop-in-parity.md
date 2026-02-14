@@ -24,7 +24,7 @@ This plan covers three axes:
 - 60 rules are "partial" (narrower scope, missing config, or regex-based).
 - **27 rule codes are misnumbered** relative to SQLFluff (see Appendix A).
 - Rule names use human-readable labels; SQLFluff uses dotted identifiers.
-- Fix coverage: 65/72 (7 rules lack `--fix` support).
+- Fix coverage: 66/72 (6 rules lack `--fix` support).
 
 ## Progress Snapshot (2026-02-13)
 
@@ -155,6 +155,7 @@ This plan covers three axes:
   - `CV_001` not-equal style detection is now AST span-driven (operator classification from source slices between `Expr` operand spans), replacing tokenizer-wide `Token::Neq` scanning.
   - `CV_001` not-equal operator-style classification now uses shared token-stream slices between AST operand spans (with fallback), reducing raw between-operand byte scanning.
   - `CV_001` not-equal operator-style classification is now token-stream-only (shared document tokens with statement-token fallback), with raw between-operand byte-scan fallback removed.
+  - `CV_001` fixer coverage is now enforced with strict CLI regression tests for mixed operator-style normalization (`a <> b AND c != d` → consistent style).
   - `CV_001` now supports `preferred_not_equal_style` (`consistent`/`c_style`/`ansi`) through `lint.ruleConfigs`.
   - `CV_003` trailing-comma boundary detection now uses token-stream classification (shared document tokens first, then fallback tokenization) for first-significant-token checks, replacing raw clause-suffix byte scanning.
   - `CV_003` trailing-comma first-significant-token checks are now token-stream-only (shared document tokens with statement-token fallback), with raw clause-suffix byte-scan fallback removed.
@@ -658,7 +659,7 @@ plan (Phase 2 of `linter-architecture.md`), but are lower priority because:
 
 ## Phase 4: Fix Coverage Gaps
 
-7 rules currently lack `--fix` support. Priority order by user impact:
+6 rules currently lack `--fix` support. Priority order by user impact:
 
 ### High Priority (semantic fixers)
 
