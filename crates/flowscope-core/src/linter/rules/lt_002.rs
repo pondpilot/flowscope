@@ -150,6 +150,7 @@ struct LineIndentSnapshot {
 
 fn line_indent_snapshots(ctx: &LintContext, tab_space_size: usize) -> Vec<LineIndentSnapshot> {
     if let Some(tokens) = tokenize_with_offsets_for_context(ctx) {
+        let statement_start_line = offset_to_line(ctx.sql, ctx.statement_range.start);
         let mut first_token_by_line: BTreeMap<usize, usize> = BTreeMap::new();
         for token in &tokens {
             if token.start < ctx.statement_range.start || token.start >= ctx.statement_range.end {
@@ -158,24 +159,20 @@ fn line_indent_snapshots(ctx: &LintContext, tab_space_size: usize) -> Vec<LineIn
             if is_whitespace_token(&token.token) {
                 continue;
             }
-            let line = offset_to_line(ctx.sql, token.start);
-            first_token_by_line.entry(line).or_insert(token.start);
+            first_token_by_line
+                .entry(token.start_line)
+                .or_insert(token.start);
         }
 
         return first_token_by_line
-            .into_values()
-            .filter_map(|token_start| {
+            .into_iter()
+            .filter_map(|(line, token_start)| {
                 let line_start = ctx.sql[..token_start]
                     .rfind('\n')
                     .map_or(0, |index| index + 1);
                 let leading = &ctx.sql[line_start..token_start];
-                let line_index = ctx.sql[ctx.statement_range.start..token_start]
-                    .as_bytes()
-                    .iter()
-                    .filter(|byte| **byte == b'\n')
-                    .count();
                 Some(LineIndentSnapshot {
-                    line_index,
+                    line_index: line.saturating_sub(statement_start_line),
                     indent: leading_indent_from_prefix(leading, tab_space_size),
                 })
             })
@@ -228,6 +225,7 @@ fn line_indent_snapshots(ctx: &LintContext, tab_space_size: usize) -> Vec<LineIn
 struct LocatedToken {
     token: Token,
     start: usize,
+    start_line: usize,
 }
 
 fn tokenize_with_locations(sql: &str, dialect: Dialect) -> Option<Vec<TokenWithSpan>> {
@@ -249,6 +247,7 @@ fn tokenize_with_offsets_for_context(ctx: &LintContext) -> Option<Vec<LocatedTok
                     token_with_span_offsets(ctx.sql, token).map(|(start, _end)| LocatedToken {
                         token: token.token.clone(),
                         start,
+                        start_line: token.span.start.line as usize,
                     })
                 })
                 .collect::<Vec<_>>(),
@@ -337,11 +336,9 @@ fn token_with_span_offsets(sql: &str, token: &TokenWithSpan) -> Option<(usize, u
 }
 
 fn offset_to_line(sql: &str, offset: usize) -> usize {
-    1 + sql
-        .as_bytes()
-        .iter()
-        .take(offset.min(sql.len()))
-        .filter(|byte| **byte == b'\n')
+    1 + sql[..offset.min(sql.len())]
+        .chars()
+        .filter(|ch| *ch == '\n')
         .count()
 }
 
