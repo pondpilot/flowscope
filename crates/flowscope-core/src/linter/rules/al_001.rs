@@ -4,11 +4,8 @@
 
 use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
-use crate::types::{issue_codes, Dialect, Issue};
+use crate::types::{issue_codes, Issue};
 use sqlparser::ast::{Ident, Query, SetExpr, Statement, TableFactor, TableWithJoins};
-use sqlparser::keywords::Keyword;
-use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
-use std::collections::HashMap;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum AliasingPreference {
@@ -78,11 +75,10 @@ impl LintRule for AliasingTableStyle {
     }
 
     fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let alias_style = alias_style_index(ctx.statement_sql(), ctx.dialect());
         let mut issues = Vec::new();
 
         collect_table_aliases_in_statement(statement, &mut |alias| {
-            let Some(occurrence) = alias_occurrence_in_statement(alias, ctx, &alias_style) else {
+            let Some(occurrence) = alias_occurrence_in_statement(alias, ctx) else {
                 return;
             };
 
@@ -111,7 +107,6 @@ struct AliasOccurrence {
 fn alias_occurrence_in_statement(
     alias: &Ident,
     ctx: &LintContext,
-    style_index: &HashMap<usize, AliasOccurrence>,
 ) -> Option<AliasOccurrence> {
     let abs_start = line_col_to_offset(
         ctx.sql,
@@ -130,54 +125,13 @@ fn alias_occurrence_in_statement(
 
     let rel_start = abs_start - ctx.statement_range.start;
     let rel_end = abs_end - ctx.statement_range.start;
-
-    let occurrence = style_index.get(&rel_start)?;
-    (occurrence.end == rel_end).then_some(*occurrence)
-}
-
-fn alias_style_index(sql: &str, dialect: Dialect) -> HashMap<usize, AliasOccurrence> {
-    let dialect = dialect.to_sqlparser_dialect();
-    let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
-    let Ok(tokens) = tokenizer.tokenize_with_location() else {
-        return HashMap::new();
-    };
-
-    let significant: Vec<&TokenWithSpan> = tokens
-        .iter()
-        .filter(|token| !is_trivia_token(&token.token))
-        .collect();
-
-    let mut styles = HashMap::new();
-
-    for (index, token) in significant.iter().enumerate() {
-        let Token::Word(_) = token.token else {
-            continue;
-        };
-
-        let Some(start) = token_start_offset(sql, token) else {
-            continue;
-        };
-        let Some(end) = token_end_offset(sql, token) else {
-            continue;
-        };
-
-        let explicit_as = index > 0
-            && matches!(
-                significant[index - 1].token,
-                Token::Word(ref word) if word.keyword == Keyword::AS
-            );
-
-        styles.insert(
-            start,
-            AliasOccurrence {
-                start,
-                end,
-                explicit_as,
-            },
-        );
-    }
-
-    styles
+    let statement_sql = ctx.statement_sql();
+    let explicit_as = explicit_as_before_alias(statement_sql, rel_start);
+    Some(AliasOccurrence {
+        start: rel_start,
+        end: rel_end,
+        explicit_as,
+    })
 }
 
 fn collect_table_aliases_in_statement<F: FnMut(&Ident)>(statement: &Statement, visitor: &mut F) {
@@ -284,29 +238,71 @@ fn table_factor_alias_ident(table_factor: &TableFactor) -> Option<&Ident> {
     Some(&alias.name)
 }
 
-fn is_trivia_token(token: &Token) -> bool {
-    matches!(
-        token,
-        Token::Whitespace(Whitespace::Space | Whitespace::Newline | Whitespace::Tab)
-            | Token::Whitespace(Whitespace::SingleLineComment { .. })
-            | Token::Whitespace(Whitespace::MultiLineComment(_))
-    )
+fn explicit_as_before_alias(statement_sql: &str, alias_start: usize) -> bool {
+    if alias_start > statement_sql.len() {
+        return false;
+    }
+    let prefix = &statement_sql[..alias_start];
+    let trimmed = trim_trailing_trivia(prefix);
+    trailing_word(trimmed)
+        .map(|word| word.eq_ignore_ascii_case("as"))
+        .unwrap_or(false)
 }
 
-fn token_start_offset(sql: &str, token: &TokenWithSpan) -> Option<usize> {
-    line_col_to_offset(
-        sql,
-        token.span.start.line as usize,
-        token.span.start.column as usize,
-    )
+fn trim_trailing_trivia(mut input: &str) -> &str {
+    loop {
+        let trimmed = input.trim_end_matches(char::is_whitespace);
+        if trimmed.len() != input.len() {
+            input = trimmed;
+            continue;
+        }
+
+        if let Some(stripped) = strip_trailing_line_comment(input) {
+            input = stripped;
+            continue;
+        }
+
+        if let Some(stripped) = strip_trailing_block_comment(input) {
+            input = stripped;
+            continue;
+        }
+
+        return input;
+    }
 }
 
-fn token_end_offset(sql: &str, token: &TokenWithSpan) -> Option<usize> {
-    line_col_to_offset(
-        sql,
-        token.span.end.line as usize,
-        token.span.end.column as usize,
-    )
+fn strip_trailing_line_comment(input: &str) -> Option<&str> {
+    let line_start = input.rfind('\n').map_or(0, |idx| idx + 1);
+    let tail = &input[line_start..];
+    let comment_start = tail.rfind("--")?;
+    Some(&input[..line_start + comment_start])
+}
+
+fn strip_trailing_block_comment(input: &str) -> Option<&str> {
+    if !input.ends_with("*/") {
+        return None;
+    }
+    let start = input.rfind("/*")?;
+    Some(&input[..start])
+}
+
+fn trailing_word(input: &str) -> Option<&str> {
+    let mut end = input.len();
+    while end > 0 && !input.is_char_boundary(end) {
+        end -= 1;
+    }
+
+    let mut start = end;
+    while start > 0 {
+        let ch = input[..start].chars().next_back()?;
+        if ch.is_ascii_alphanumeric() || ch == '_' {
+            start -= ch.len_utf8();
+        } else {
+            break;
+        }
+    }
+
+    (start < end).then_some(&input[start..end])
 }
 
 fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {

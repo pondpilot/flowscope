@@ -60,10 +60,10 @@ This plan covers three axes:
   - `AL_004` now supports quote-aware `alias_case_check` through `lint.ruleConfigs`.
   - `AL_004` `alias_case_check` now aligns closer to SQLFluff mode semantics for `quoted_cs_naked_upper` and `quoted_cs_naked_lower` (quoted aliases case-sensitive; naked aliases case-folded per configured mode).
   - `AL_001` moved from parity into a dedicated core rule module (`al_001.rs`) and parity registration was removed.
-  - `AL_001` was further upgraded to AST-driven table-factor alias traversal with active-dialect token-aware `AS` detection.
+  - `AL_001` was further upgraded to AST-driven table-factor alias traversal with span-bounded source analysis for explicit vs implicit `AS` detection (tokenizer pass removed).
   - `AL_001` now applies alias-style checks to `MERGE` target/source aliases (for example BigQuery `MERGE dataset.inventory t USING ... s`) for SQLFluff AL01 parity.
   - `AL_002` moved from parity into a dedicated core rule module (`al_002.rs`) and parity registration was removed.
-  - `AL_002` was further upgraded to AST-driven SELECT projection alias traversal with active-dialect token-aware `AS` detection.
+  - `AL_002` was further upgraded to AST-driven SELECT projection alias traversal with span-bounded source analysis for explicit vs implicit `AS` detection (tokenizer pass removed).
   - `AL_002` now excludes TSQL assignment-style projection aliases (`SELECT alias = expr`) from AL02 violations, matching SQLFluff behavior.
   - `AL_001`/`AL_002` now support SQLFluff-style `aliasing` mode (`explicit`/`implicit`) via `lint.ruleConfigs`.
   - `AL_008` moved from parity into a dedicated core AST rule (`al_008.rs`) and parity registration was removed.

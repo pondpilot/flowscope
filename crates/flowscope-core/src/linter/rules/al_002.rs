@@ -4,11 +4,8 @@
 
 use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
-use crate::types::{issue_codes, Dialect, Issue};
-use sqlparser::ast::{Ident, SelectItem, Statement};
-use sqlparser::keywords::Keyword;
-use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
-use std::collections::HashMap;
+use crate::types::{issue_codes, Issue};
+use sqlparser::ast::{Ident, SelectItem, Spanned, Statement};
 
 use super::semantic_helpers::visit_selects_in_statement;
 
@@ -80,7 +77,6 @@ impl LintRule for AliasingColumnStyle {
     }
 
     fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let alias_style = alias_style_index(ctx.statement_sql(), ctx.dialect());
         let mut issues = Vec::new();
 
         visit_selects_in_statement(statement, &mut |select| {
@@ -89,8 +85,7 @@ impl LintRule for AliasingColumnStyle {
                     continue;
                 };
 
-                let Some(occurrence) = alias_occurrence_in_statement(alias, ctx, &alias_style)
-                else {
+                let Some(occurrence) = alias_occurrence_in_statement(alias, item, ctx) else {
                     continue;
                 };
 
@@ -127,8 +122,8 @@ struct AliasOccurrence {
 
 fn alias_occurrence_in_statement(
     alias: &Ident,
+    item: &SelectItem,
     ctx: &LintContext,
-    style_index: &HashMap<usize, AliasOccurrence>,
 ) -> Option<AliasOccurrence> {
     let abs_start = line_col_to_offset(
         ctx.sql,
@@ -147,84 +142,135 @@ fn alias_occurrence_in_statement(
 
     let rel_start = abs_start - ctx.statement_range.start;
     let rel_end = abs_end - ctx.statement_range.start;
+    let item_span = item.span();
+    let abs_item_end = line_col_to_offset(
+        ctx.sql,
+        item_span.end.line as usize,
+        item_span.end.column as usize,
+    )?;
+    if abs_item_end < abs_end || abs_item_end > ctx.statement_range.end {
+        return None;
+    }
+    let rel_item_end = abs_item_end - ctx.statement_range.start;
 
-    let occurrence = style_index.get(&rel_start)?;
-    (occurrence.end == rel_end).then_some(*occurrence)
+    let statement_sql = ctx.statement_sql();
+    let explicit_as = explicit_as_before_alias(statement_sql, rel_start);
+    let tsql_equals_assignment =
+        tsql_assignment_after_alias(statement_sql, rel_end, rel_item_end);
+    Some(AliasOccurrence {
+        start: rel_start,
+        end: rel_end,
+        explicit_as,
+        tsql_equals_assignment,
+    })
 }
 
-fn alias_style_index(sql: &str, dialect: Dialect) -> HashMap<usize, AliasOccurrence> {
-    let dialect = dialect.to_sqlparser_dialect();
-    let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
-    let Ok(tokens) = tokenizer.tokenize_with_location() else {
-        return HashMap::new();
-    };
+fn explicit_as_before_alias(statement_sql: &str, alias_start: usize) -> bool {
+    if alias_start > statement_sql.len() {
+        return false;
+    }
+    let prefix = &statement_sql[..alias_start];
+    let trimmed = trim_trailing_trivia(prefix);
+    trailing_word(trimmed)
+        .map(|word| word.eq_ignore_ascii_case("as"))
+        .unwrap_or(false)
+}
 
-    let significant: Vec<&TokenWithSpan> = tokens
-        .iter()
-        .filter(|token| !is_trivia_token(&token.token))
-        .collect();
+fn tsql_assignment_after_alias(statement_sql: &str, alias_end: usize, item_end: usize) -> bool {
+    if alias_end > item_end || item_end > statement_sql.len() {
+        return false;
+    }
+    let suffix = &statement_sql[alias_end..item_end];
+    let offset = leading_trivia_len(suffix);
+    suffix[offset..].starts_with('=')
+}
 
-    let mut styles = HashMap::new();
-
-    for (index, token) in significant.iter().enumerate() {
-        let Token::Word(_) = token.token else {
+fn trim_trailing_trivia(mut input: &str) -> &str {
+    loop {
+        let trimmed = input.trim_end_matches(char::is_whitespace);
+        if trimmed.len() != input.len() {
+            input = trimmed;
             continue;
-        };
+        }
 
-        let Some(start) = token_start_offset(sql, token) else {
+        if let Some(stripped) = strip_trailing_line_comment(input) {
+            input = stripped;
             continue;
-        };
-        let Some(end) = token_end_offset(sql, token) else {
+        }
+
+        if let Some(stripped) = strip_trailing_block_comment(input) {
+            input = stripped;
             continue;
-        };
+        }
 
-        let explicit_as = index > 0
-            && matches!(
-                significant[index - 1].token,
-                Token::Word(ref word) if word.keyword == Keyword::AS
-            );
-        let tsql_equals_assignment = matches!(
-            significant.get(index + 1),
-            Some(next) if matches!(next.token, Token::Eq)
-        );
+        return input;
+    }
+}
 
-        styles.insert(
-            start,
-            AliasOccurrence {
-                start,
-                end,
-                explicit_as,
-                tsql_equals_assignment,
-            },
-        );
+fn strip_trailing_line_comment(input: &str) -> Option<&str> {
+    let line_start = input.rfind('\n').map_or(0, |idx| idx + 1);
+    let tail = &input[line_start..];
+    let comment_start = tail.rfind("--")?;
+    Some(&input[..line_start + comment_start])
+}
+
+fn strip_trailing_block_comment(input: &str) -> Option<&str> {
+    if !input.ends_with("*/") {
+        return None;
+    }
+    let start = input.rfind("/*")?;
+    Some(&input[..start])
+}
+
+fn trailing_word(input: &str) -> Option<&str> {
+    let mut end = input.len();
+    while end > 0 && !input.is_char_boundary(end) {
+        end -= 1;
     }
 
-    styles
+    let mut start = end;
+    while start > 0 {
+        let ch = input[..start].chars().next_back()?;
+        if ch.is_ascii_alphanumeric() || ch == '_' {
+            start -= ch.len_utf8();
+        } else {
+            break;
+        }
+    }
+
+    (start < end).then_some(&input[start..end])
 }
 
-fn is_trivia_token(token: &Token) -> bool {
-    matches!(
-        token,
-        Token::Whitespace(Whitespace::Space | Whitespace::Newline | Whitespace::Tab)
-            | Token::Whitespace(Whitespace::SingleLineComment { .. })
-            | Token::Whitespace(Whitespace::MultiLineComment(_))
-    )
-}
-
-fn token_start_offset(sql: &str, token: &TokenWithSpan) -> Option<usize> {
-    line_col_to_offset(
-        sql,
-        token.span.start.line as usize,
-        token.span.start.column as usize,
-    )
-}
-
-fn token_end_offset(sql: &str, token: &TokenWithSpan) -> Option<usize> {
-    line_col_to_offset(
-        sql,
-        token.span.end.line as usize,
-        token.span.end.column as usize,
-    )
+fn leading_trivia_len(input: &str) -> usize {
+    let bytes = input.as_bytes();
+    let mut index = 0usize;
+    while index < bytes.len() {
+        match bytes[index] {
+            b' ' | b'\t' | b'\n' | b'\r' => {
+                index += 1;
+            }
+            b'-' if index + 1 < bytes.len() && bytes[index + 1] == b'-' => {
+                index += 2;
+                while index < bytes.len() && bytes[index] != b'\n' {
+                    index += 1;
+                }
+            }
+            b'/' if index + 1 < bytes.len() && bytes[index + 1] == b'*' => {
+                index += 2;
+                while index + 1 < bytes.len() && !(bytes[index] == b'*' && bytes[index + 1] == b'/')
+                {
+                    index += 1;
+                }
+                if index + 1 < bytes.len() {
+                    index += 2;
+                } else {
+                    index = bytes.len();
+                }
+            }
+            _ => break,
+        }
+    }
+    index
 }
 
 fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
