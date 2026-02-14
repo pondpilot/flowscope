@@ -24,7 +24,7 @@ This plan covers three axes:
 - 60 rules are "partial" (narrower scope, missing config, or regex-based).
 - **27 rule codes are misnumbered** relative to SQLFluff (see Appendix A).
 - Rule names use human-readable labels; SQLFluff uses dotted identifiers.
-- Fix coverage: 64/72 (8 rules lack `--fix` support).
+- Fix coverage: 65/72 (7 rules lack `--fix` support).
 
 ## Progress Snapshot (2026-02-13)
 
@@ -88,6 +88,7 @@ This plan covers three axes:
   - `CV_003` moved from parity into a dedicated core rule module (`cv_003.rs`) and parity registration was removed.
   - `CV_003` was further upgraded from regex scanning to AST-driven SELECT traversal with span-based trailing-comma detection at clause boundaries.
   - `CV_003` now supports `select_clause_trailing_comma` (`forbid`/`require`) through `lint.ruleConfigs`.
+  - `CV_003` fixer coverage is now enforced with strict CLI regression tests for default-style trailing comma removal (`SELECT a, FROM t` → `SELECT a FROM t`).
   - `CV_006` moved from parity into a dedicated core rule module (`cv_006.rs`) and parity registration was removed.
   - `CV_006` now aligns with SQLFluff TSQL batch handling by splitting MSSQL statement ranges on `GO` separators before best-effort parsing, preventing parser dropouts from masking final-semicolon checks.
   - `CV_006` terminator detection is now tokenizer/span-driven at statement boundaries (with byte-scan fallback), reducing brittle raw-SQL scanning for semicolon and trailing-comment/newline checks.
@@ -657,7 +658,7 @@ plan (Phase 2 of `linter-architecture.md`), but are lower priority because:
 
 ## Phase 4: Fix Coverage Gaps
 
-8 rules currently lack `--fix` support. Priority order by user impact:
+7 rules currently lack `--fix` support. Priority order by user impact:
 
 ### High Priority (semantic fixers)
 

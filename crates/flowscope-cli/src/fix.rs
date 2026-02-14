@@ -3592,6 +3592,19 @@ mod tests {
     }
 
     #[test]
+    fn sqlfluff_cv003_trailing_comma_cases_are_fixed_or_unchanged() {
+        let cases = [
+            ("SELECT a, FROM t", 1, 0, 1),
+            ("SELECT a , FROM t", 1, 0, 1),
+            ("SELECT a FROM t", 0, 0, 0),
+        ];
+
+        for (sql, before, after, fix_count) in cases {
+            assert_rule_case(sql, issue_codes::LINT_CV_003, before, after, fix_count);
+        }
+    }
+
+    #[test]
     fn sqlfluff_cv008_cases_are_fixed_or_unchanged() {
         let cases = [
             (
