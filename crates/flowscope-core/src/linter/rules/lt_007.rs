@@ -8,6 +8,7 @@ use crate::types::{issue_codes, Dialect, Issue};
 use sqlparser::ast::{Query, Statement};
 use sqlparser::keywords::Keyword;
 use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
+use std::ops::Range;
 
 pub struct LayoutCteBracket;
 
@@ -25,11 +26,7 @@ impl LintRule for LayoutCteBracket {
     }
 
     fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let tokens = if has_template_markers(ctx.statement_sql()) {
-            None
-        } else {
-            tokenize_with_offsets_for_context(ctx)
-        };
+        let tokens = tokenize_with_offsets_for_context(ctx);
         let has_violation =
             has_misplaced_cte_closing_bracket_for_statement(statement, ctx, tokens.as_deref())
                 .unwrap_or_else(|| {
@@ -50,10 +47,6 @@ impl LintRule for LayoutCteBracket {
             Vec::new()
         }
     }
-}
-
-fn has_template_markers(sql: &str) -> bool {
-    sql.contains("{{") || sql.contains("{%") || sql.contains("{#")
 }
 
 #[derive(Clone)]
@@ -195,27 +188,36 @@ fn tokenize_with_offsets_for_context(ctx: &LintContext) -> Option<Vec<LocatedTok
             return None;
         }
 
-        Some(
-            tokens
-                .iter()
-                .filter_map(|token| {
-                    let Some((start, end)) = token_with_span_offsets(ctx.sql, token) else {
-                        return None;
-                    };
-                    if start < ctx.statement_range.start || end > ctx.statement_range.end {
-                        return None;
-                    }
+        let mut out = Vec::new();
+        let mut covered_ranges = Vec::new();
+        for token in tokens {
+            let Some((start, end)) = token_with_span_offsets(ctx.sql, token) else {
+                return None;
+            };
+            if start < ctx.statement_range.start || end > ctx.statement_range.end {
+                continue;
+            }
+            // Document token spans are tied to rendered SQL. If the source
+            // slice does not match, the streams are misaligned; fall back to
+            // statement-local tokenization.
+            if !token_span_matches_source(ctx.sql, start, end, &token.token) {
+                return None;
+            }
+            covered_ranges.push(start..end);
 
-                    Some(LocatedToken {
-                        token: token.token.clone(),
-                        start: start - statement_start,
-                        end: end - statement_start,
-                        start_line: token.span.start.line as usize,
-                        end_line: token.span.end.line as usize,
-                    })
-                })
-                .collect::<Vec<_>>(),
-        )
+            out.push(LocatedToken {
+                token: token.token.clone(),
+                start: start - statement_start,
+                end: end - statement_start,
+                start_line: token.span.start.line as usize,
+                end_line: token.span.end.line as usize,
+            });
+        }
+
+        if !gaps_are_whitespace_only(ctx.sql, ctx.statement_range.clone(), &covered_ranges) {
+            return None;
+        }
+        Some(out)
     });
 
     if let Some(tokens) = from_document_tokens {
@@ -223,6 +225,65 @@ fn tokenize_with_offsets_for_context(ctx: &LintContext) -> Option<Vec<LocatedTok
     }
 
     tokenize_with_offsets(ctx.statement_sql(), ctx.dialect())
+}
+
+fn token_span_matches_source(sql: &str, start: usize, end: usize, token: &Token) -> bool {
+    if start > end || end > sql.len() {
+        return false;
+    }
+
+    match token {
+        Token::Word(word) => source_word_matches(sql, start, end, word.value.as_str()),
+        Token::LParen => sql.get(start..end) == Some("("),
+        Token::RParen => sql.get(start..end) == Some(")"),
+        _ => true,
+    }
+}
+
+fn source_word_matches(sql: &str, start: usize, end: usize, value: &str) -> bool {
+    let Some(raw) = sql.get(start..end) else {
+        return false;
+    };
+    let normalized = raw.trim_matches(|ch| matches!(ch, '"' | '`' | '[' | ']'));
+    normalized.eq_ignore_ascii_case(value)
+}
+
+fn gaps_are_whitespace_only(sql: &str, range: Range<usize>, covered: &[Range<usize>]) -> bool {
+    if range.start > range.end || range.end > sql.len() {
+        return false;
+    }
+
+    let mut spans = covered.to_vec();
+    spans.sort_by_key(|span| (span.start, span.end));
+
+    let mut cursor = range.start;
+    for span in spans {
+        if span.end <= range.start || span.start >= range.end {
+            continue;
+        }
+        let start = span.start.max(range.start);
+        let end = span.end.min(range.end);
+        if start > cursor {
+            let Some(gap) = sql.get(cursor..start) else {
+                return false;
+            };
+            if gap.chars().any(|ch| !ch.is_whitespace()) {
+                return false;
+            }
+        }
+        cursor = cursor.max(end);
+    }
+
+    if cursor < range.end {
+        let Some(gap) = sql.get(cursor..range.end) else {
+            return false;
+        };
+        if gap.chars().any(|ch| !ch.is_whitespace()) {
+            return false;
+        }
+    }
+
+    true
 }
 
 fn token_start_offset(sql: &str, token: &sqlparser::tokenizer::TokenWithSpan) -> Option<usize> {

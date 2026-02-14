@@ -228,6 +228,7 @@ This plan covers three axes:
   - `LT_007` now consumes the shared document token stream for statement tokenization before fallback tokenization (templated-source fallback preserved).
   - `LT_007` multiline CTE-body detection now derives from token spans between CTE parens (CRLF/CR/LF-aware) instead of direct body-slice newline checks.
   - `LT_007` close-bracket own-line checks now derive from token-line content before the closing `)` (instead of raw line-prefix trimming).
+  - `LT_007` document-token usage is now gated by span/source alignment plus whitespace-gap validation, replacing raw template-marker string checks while preserving templated-source fallback semantics.
   - `LT_008` moved from parity handling to a dedicated core rule module (`lt_008.rs`).
   - `LT_008` was further upgraded from raw byte/state scanning to AST/token-aware CTE suffix analysis using `Query.with.cte_tables` closing-paren tokens plus tokenizer span traversal for blank-line detection, consuming the shared document token stream before fallback tokenization.
   - `LT_009` moved from parity handling to a dedicated core rule module (`lt_009.rs`).
@@ -259,6 +260,7 @@ This plan covers three axes:
   - `CP_002` now includes Databricks/SparkSQL `SHOW TBLPROPERTIES ... (<property.path>)` identifier candidate extraction via AST `ShowVariable` handling, covering mixed-case property path violations (for example `created.BY.user`, `Created.By.User`).
   - `CP_001`/`CP_003`/`CP_004`/`CP_005` now run once per document with full-SQL lexical context and now also run in statementless parser-fallback mode, improving SQLFluff parity on parser-erroring fixture inputs while avoiding per-statement case-policy fragmentation.
   - `CP_001`/`CP_004`/`CP_005` now consume the shared document token stream for statement tokenization before fallback tokenization.
+  - `CP_001`/`CP_004`/`CP_005` document-token usage is now gated by span/source word-alignment checks, replacing raw template-marker string checks for fallback routing.
   - SQLFluff-style `core.ignore_templated_areas` is now supported through `lint.ruleConfigs.core.ignore_templated_areas` for lexical CP document-scope checks, masking Jinja tag regions from case-policy evaluation when enabled.
   - `CP_001` consistent-policy handling now treats single tracked mixed-case tokens (for example `SeLeCt`) as violations, matching SQLFluff fixture expectations.
   - `CP_003` now includes bare-function keyword forms (`CURRENT_TIMESTAMP`, `CURRENT_DATE`, `CURRENT_USER`, etc.) in AST-based function case checks.

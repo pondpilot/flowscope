@@ -81,51 +81,35 @@ fn literal_tokens_for_context(
     ignore_words: &HashSet<String>,
     ignore_words_regex: Option<&Regex>,
 ) -> Vec<String> {
-    if has_template_markers(ctx.statement_sql()) {
-        return literal_tokens(
-            ctx.statement_sql(),
-            ignore_words,
-            ignore_words_regex,
-            ctx.dialect(),
-        );
-    }
-
     let from_document_tokens = ctx.with_document_tokens(|tokens| {
         if tokens.is_empty() {
             return None;
         }
 
-        Some(
-            tokens
-                .iter()
-                .filter_map(|token| {
-                    let Some((start, end)) = token_with_span_offsets(ctx.sql, token) else {
-                        return None;
-                    };
-                    if start < ctx.statement_range.start || end > ctx.statement_range.end {
-                        return None;
-                    }
+        let mut out = Vec::new();
+        for token in tokens {
+            let Some((start, end)) = token_with_span_offsets(ctx.sql, token) else {
+                continue;
+            };
+            if start < ctx.statement_range.start || end > ctx.statement_range.end {
+                continue;
+            }
 
-                    match &token.token {
-                        Token::Word(word)
-                            if source_word_matches(ctx.sql, start, end, word.value.as_str())
-                                && matches!(
-                                    word.value.to_ascii_uppercase().as_str(),
-                                    "NULL" | "TRUE" | "FALSE"
-                                )
-                                && !token_is_ignored(
-                                    word.value.as_str(),
-                                    ignore_words,
-                                    ignore_words_regex,
-                                ) =>
-                        {
-                            Some(word.value.clone())
-                        }
-                        _ => None,
-                    }
-                })
-                .collect::<Vec<_>>(),
-        )
+            if let Token::Word(word) = &token.token {
+                // Document token spans are tied to rendered SQL. If the source
+                // slice does not match the token text, fall back to
+                // statement-local tokenization.
+                if !source_word_matches(ctx.sql, start, end, word.value.as_str()) {
+                    return None;
+                }
+                if matches!(word.value.to_ascii_uppercase().as_str(), "NULL" | "TRUE" | "FALSE")
+                    && !token_is_ignored(word.value.as_str(), ignore_words, ignore_words_regex)
+                {
+                    out.push(word.value.clone());
+                }
+            }
+        }
+        Some(out)
     });
 
     if let Some(tokens) = from_document_tokens {
@@ -212,10 +196,6 @@ fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
     }
 
     None
-}
-
-fn has_template_markers(sql: &str) -> bool {
-    sql.contains("{{") || sql.contains("{%") || sql.contains("{#")
 }
 
 fn source_word_matches(sql: &str, start: usize, end: usize, value: &str) -> bool {

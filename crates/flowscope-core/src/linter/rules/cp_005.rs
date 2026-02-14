@@ -80,15 +80,6 @@ fn type_tokens_for_context(
     ignore_words: &HashSet<String>,
     ignore_words_regex: Option<&Regex>,
 ) -> Vec<String> {
-    if has_template_markers(ctx.statement_sql()) {
-        return type_tokens(
-            ctx.statement_sql(),
-            ignore_words,
-            ignore_words_regex,
-            ctx.dialect(),
-        );
-    }
-
     let from_document_tokens = ctx.with_document_tokens(|tokens| {
         if tokens.is_empty() {
             return None;
@@ -104,6 +95,9 @@ fn type_tokens_for_context(
                     return None;
                 }
                 if let Token::Word(word) = &token.token {
+                    // Document token spans are tied to rendered SQL. If the
+                    // source slice does not match the token text, fall back to
+                    // statement-local tokenization.
                     if !source_word_matches(ctx.sql, start, end, word.value.as_str()) {
                         return None;
                     }
@@ -209,10 +203,6 @@ fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
     }
 
     None
-}
-
-fn has_template_markers(sql: &str) -> bool {
-    sql.contains("{{") || sql.contains("{%") || sql.contains("{#")
 }
 
 fn source_word_matches(sql: &str, start: usize, end: usize, value: &str) -> bool {
