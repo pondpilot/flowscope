@@ -173,7 +173,9 @@ This plan covers three axes:
   - `JJ_001` moved from parity handling to a dedicated core rule module (`jj_001.rs`).
   - `JJ_001` was further upgraded from regex matching to tokenizer/span-aware delimiter checks for Jinja padding.
   - `JJ_001` now also checks statement/comment closing tags (`%}`/`#}`) and supports trim-marker-safe padding detection for tags like `{{- ... -}}`.
+  - `JJ_001` now consumes the shared document token stream for statement tokenization before fallback tokenization.
   - `AM_002` bare-`UNION` issue spans now use active-dialect tokenized `UNION` keyword spans aligned to AST set-operation traversal order, replacing SQL-text keyword searching.
+  - `AM_002` now consumes the shared document token stream for statement tokenization before fallback tokenization.
   - `LT_010` moved from parity handling to a dedicated core rule module (`lt_010.rs`).
   - `LT_010` was further upgraded from regex scanning to active-dialect tokenizer line-aware SELECT modifier checks.
   - `LT_010` now consumes the shared document token stream for statement tokenization before fallback tokenization.
@@ -211,6 +213,7 @@ This plan covers three axes:
   - `LT_006` moved from parity handling to a dedicated core rule module (`lt_006.rs`).
   - `LT_006` was further upgraded from regex masking to active-dialect token-stream function-call spacing checks with context guards.
   - `LT_006` spacing checks now derive candidate function names from AST expression traversal and apply token/span adjacency checks only to those function-call identifiers (plus cast-style function keywords), reducing non-function false positives from pure token heuristics.
+  - `LT_006` now consumes the shared document token stream for statement tokenization before fallback tokenization.
   - `LT_007` moved from parity handling to a dedicated core rule module (`lt_007.rs`).
   - `LT_007` now includes source-aware templating parity: when templating is enabled, lint evaluation uses untemplated source slices for CTE close-bracket checks so SQLFluff whitespace-consuming Jinja forms (`{{- ... -}}`, `{#- ... -#}`, `{%- ... -%}`) no longer produce false positives.
   - `LT_007` closing-bracket checks are now AST-first (`Query.with.cte_tables` closing-paren metadata) with tokenizer-span matching for multiline close placement, and now use tokenizer fallback scanning (raw byte fallback removed) when AST/token span mapping is unavailable.
@@ -257,6 +260,7 @@ This plan covers three axes:
   - Supported-dialect SQLFluff fixture replay for `CP02` now reports zero mismatches (44/44), and `CP02_LT01` now reports zero mismatches for CP02 expectations across supported templaters (4/4; one placeholder-templater case skipped).
   - `AM_005` now supports `fully_qualify_join_types` (`inner`/`outer`/`both`) through `lint.ruleConfigs`.
   - `AM_005` outer-mode qualification now uses AST join-operator variants for `LEFT`/`RIGHT` detection and keeps token-level fallback only for `FULL JOIN` vs `FULL OUTER JOIN` disambiguation.
+  - `AM_005` explicit `FULL OUTER` lexical checks now consume the shared document token stream for statement tokenization before fallback tokenization.
   - `AM_005` fixer now honors `fully_qualify_join_types` modes: `inner` rewrites bare `JOIN` to `INNER JOIN`; `outer`/`both` also qualify `LEFT`/`RIGHT` joins and rewrite bare `FULL JOIN` keywords to `FULL OUTER JOIN` outside string literals.
   - `AM_006` now supports `group_by_and_order_by_style` (`consistent`/`explicit`/`implicit`) through `lint.ruleConfigs`.
   - Legacy `parity.rs` monolith was retired; rule registration now points only to dedicated `rules/<code>.rs` modules.

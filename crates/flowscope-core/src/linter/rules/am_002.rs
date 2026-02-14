@@ -3,10 +3,10 @@
 //! `UNION` should be explicit (`UNION DISTINCT` or `UNION ALL`) to avoid ambiguous implicit behavior.
 
 use crate::linter::rule::{LintContext, LintRule};
-use crate::types::{issue_codes, Issue};
+use crate::types::{issue_codes, Dialect, Issue};
 use sqlparser::ast::*;
 use sqlparser::keywords::Keyword;
-use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer};
+use sqlparser::tokenizer::{Location, Span, Token, TokenWithSpan, Tokenizer};
 
 pub struct BareUnion;
 
@@ -25,8 +25,7 @@ impl LintRule for BareUnion {
 
     fn check(&self, stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
         let mut issues = Vec::new();
-        let stmt_sql = ctx.statement_sql();
-        let mut unions = union_keyword_ranges(stmt_sql, ctx.dialect());
+        let mut unions = union_keyword_ranges_for_context(ctx);
         match stmt {
             Statement::Query(query) => check_query(query, &mut unions, ctx, &mut issues),
             Statement::Insert(insert) => {
@@ -46,6 +45,11 @@ impl LintRule for BareUnion {
         }
         issues
     }
+}
+
+fn union_keyword_ranges_for_context(ctx: &LintContext) -> UnionKeywordRanges {
+    let tokens = tokenized_for_context(ctx);
+    union_keyword_ranges(ctx.statement_sql(), ctx.dialect(), tokens.as_deref())
 }
 
 fn check_query(
@@ -119,14 +123,25 @@ impl UnionKeywordRanges {
     }
 }
 
-fn union_keyword_ranges(sql: &str, dialect: crate::types::Dialect) -> UnionKeywordRanges {
-    let dialect = dialect.to_sqlparser_dialect();
-    let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
-    let Ok(tokens) = tokenizer.tokenize_with_location() else {
-        return UnionKeywordRanges {
-            ranges: Vec::new(),
-            index: 0,
+fn union_keyword_ranges(
+    sql: &str,
+    dialect: Dialect,
+    tokens: Option<&[TokenWithSpan]>,
+) -> UnionKeywordRanges {
+    let owned_tokens;
+    let tokens = if let Some(tokens) = tokens {
+        tokens
+    } else {
+        owned_tokens = match tokenized(sql, dialect) {
+            Some(tokens) => tokens,
+            None => {
+                return UnionKeywordRanges {
+                    ranges: Vec::new(),
+                    index: 0,
+                };
+            }
         };
+        &owned_tokens
     };
 
     let ranges = tokens
@@ -144,6 +159,57 @@ fn union_keyword_ranges(sql: &str, dialect: crate::types::Dialect) -> UnionKeywo
         .collect();
 
     UnionKeywordRanges { ranges, index: 0 }
+}
+
+fn tokenized(sql: &str, dialect: Dialect) -> Option<Vec<TokenWithSpan>> {
+    let dialect = dialect.to_sqlparser_dialect();
+    let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
+    tokenizer.tokenize_with_location().ok()
+}
+
+fn tokenized_for_context(ctx: &LintContext) -> Option<Vec<TokenWithSpan>> {
+    let (statement_start_line, statement_start_column) =
+        offset_to_line_col(ctx.sql, ctx.statement_range.start)?;
+
+    ctx.with_document_tokens(|tokens| {
+        if tokens.is_empty() {
+            return None;
+        }
+
+        let mut out = Vec::new();
+        for token in tokens {
+            let Some((start, end)) = token_offsets(ctx.sql, token) else {
+                continue;
+            };
+            if start < ctx.statement_range.start || end > ctx.statement_range.end {
+                continue;
+            }
+
+            let Some(start_loc) = relative_location(
+                token.span.start,
+                statement_start_line,
+                statement_start_column,
+            ) else {
+                continue;
+            };
+            let Some(end_loc) =
+                relative_location(token.span.end, statement_start_line, statement_start_column)
+            else {
+                continue;
+            };
+
+            out.push(TokenWithSpan::new(
+                token.token.clone(),
+                Span::new(start_loc, end_loc),
+            ));
+        }
+
+        if out.is_empty() {
+            None
+        } else {
+            Some(out)
+        }
+    })
 }
 
 fn token_offsets(sql: &str, token: &TokenWithSpan) -> Option<(usize, usize)> {
@@ -186,6 +252,68 @@ fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
     }
 
     None
+}
+
+fn offset_to_line_col(sql: &str, offset: usize) -> Option<(usize, usize)> {
+    if offset > sql.len() {
+        return None;
+    }
+    if offset == sql.len() {
+        let mut line = 1usize;
+        let mut column = 1usize;
+        for ch in sql.chars() {
+            if ch == '\n' {
+                line += 1;
+                column = 1;
+            } else {
+                column += 1;
+            }
+        }
+        return Some((line, column));
+    }
+
+    let mut line = 1usize;
+    let mut column = 1usize;
+    for (index, ch) in sql.char_indices() {
+        if index == offset {
+            return Some((line, column));
+        }
+        if ch == '\n' {
+            line += 1;
+            column = 1;
+        } else {
+            column += 1;
+        }
+    }
+
+    None
+}
+
+fn relative_location(
+    location: Location,
+    statement_start_line: usize,
+    statement_start_column: usize,
+) -> Option<Location> {
+    let line = location.line as usize;
+    let column = location.column as usize;
+    if line < statement_start_line {
+        return None;
+    }
+
+    if line == statement_start_line {
+        if column < statement_start_column {
+            return None;
+        }
+        return Some(Location::new(
+            1,
+            (column - statement_start_column + 1) as u64,
+        ));
+    }
+
+    Some(Location::new(
+        (line - statement_start_line + 1) as u64,
+        column as u64,
+    ))
 }
 
 #[cfg(test)]

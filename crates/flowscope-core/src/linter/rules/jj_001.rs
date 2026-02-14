@@ -24,8 +24,7 @@ impl LintRule for JinjaPadding {
     }
 
     fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
-        let Some((start, end)) = jinja_padding_violation_span(ctx.statement_sql(), ctx.dialect())
-        else {
+        let Some((start, end)) = jinja_padding_violation_span(ctx) else {
             return Vec::new();
         };
 
@@ -38,8 +37,9 @@ impl LintRule for JinjaPadding {
     }
 }
 
-fn jinja_padding_violation_span(sql: &str, dialect: Dialect) -> Option<(usize, usize)> {
-    let tokens = token_spans(sql, dialect)?;
+fn jinja_padding_violation_span(ctx: &LintContext) -> Option<(usize, usize)> {
+    let sql = ctx.statement_sql();
+    let tokens = token_spans_for_context(ctx).or_else(|| token_spans(sql, ctx.dialect()))?;
 
     for token in &tokens {
         if let Some(span) = token_text_violation(sql, token) {
@@ -103,6 +103,38 @@ fn token_spans(sql: &str, dialect: Dialect) -> Option<Vec<TokenSpan>> {
     }
 
     Some(out)
+}
+
+fn token_spans_for_context(ctx: &LintContext) -> Option<Vec<TokenSpan>> {
+    let offset = ctx.statement_range.start;
+    ctx.with_document_tokens(|tokens| {
+        if tokens.is_empty() {
+            return None;
+        }
+
+        let mut out = Vec::new();
+        for token in tokens {
+            let Some((start, end)) = token_with_span_offsets(ctx.sql, token) else {
+                continue;
+            };
+            if start < ctx.statement_range.start || end > ctx.statement_range.end {
+                continue;
+            }
+            if start < end {
+                out.push(TokenSpan {
+                    token: token.token.clone(),
+                    start: start - offset,
+                    end: end - offset,
+                });
+            }
+        }
+
+        if out.is_empty() {
+            None
+        } else {
+            Some(out)
+        }
+    })
 }
 
 fn token_text_violation(sql: &str, token: &TokenSpan) -> Option<(usize, usize)> {
@@ -202,6 +234,20 @@ fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
     }
 
     None
+}
+
+fn token_with_span_offsets(sql: &str, token: &TokenWithSpan) -> Option<(usize, usize)> {
+    let start = line_col_to_offset(
+        sql,
+        token.span.start.line as usize,
+        token.span.start.column as usize,
+    )?;
+    let end = line_col_to_offset(
+        sql,
+        token.span.end.line as usize,
+        token.span.end.column as usize,
+    )?;
+    Some((start, end))
 }
 
 #[cfg(test)]

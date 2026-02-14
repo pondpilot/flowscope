@@ -8,7 +8,7 @@ use crate::linter::rule::{LintContext, LintRule};
 use crate::types::{issue_codes, Dialect, Issue};
 use sqlparser::ast::{JoinOperator, Select, Statement};
 use sqlparser::keywords::Keyword;
-use sqlparser::tokenizer::{Token, Tokenizer, Whitespace};
+use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
 
 use super::semantic_helpers::visit_selects_in_statement;
 
@@ -80,8 +80,7 @@ impl LintRule for AmbiguousJoinStyle {
             }
         });
 
-        let outer_unqualified_count =
-            count_unqualified_outer_joins(statement, ctx.statement_sql(), ctx.dialect());
+        let outer_unqualified_count = count_unqualified_outer_joins(statement, ctx);
         let violation_count = match self.qualify_mode {
             FullyQualifyJoinTypes::Inner => plain_join_count,
             FullyQualifyJoinTypes::Outer => outer_unqualified_count,
@@ -100,9 +99,9 @@ impl LintRule for AmbiguousJoinStyle {
     }
 }
 
-fn count_unqualified_outer_joins(statement: &Statement, sql: &str, dialect: Dialect) -> usize {
+fn count_unqualified_outer_joins(statement: &Statement, ctx: &LintContext) -> usize {
     count_unqualified_left_right_outer_joins(statement)
-        + count_unqualified_full_outer_joins(statement, sql, dialect)
+        + count_unqualified_full_outer_joins(statement, ctx)
 }
 
 fn count_unqualified_left_right_outer_joins(statement: &Statement) -> usize {
@@ -134,13 +133,13 @@ fn select_unqualified_left_right_outer_join_count(select: &Select) -> usize {
         .sum()
 }
 
-fn count_unqualified_full_outer_joins(statement: &Statement, sql: &str, dialect: Dialect) -> usize {
+fn count_unqualified_full_outer_joins(statement: &Statement, ctx: &LintContext) -> usize {
     let full_outer_join_count = count_full_outer_joins(statement);
     if full_outer_join_count == 0 {
         return 0;
     }
 
-    let explicit_full_outer_count = count_explicit_full_outer_joins(sql, dialect);
+    let explicit_full_outer_count = count_explicit_full_outer_joins_for_context(ctx);
     full_outer_join_count.saturating_sub(explicit_full_outer_count)
 }
 
@@ -165,6 +164,39 @@ fn count_explicit_full_outer_joins(sql: &str, dialect: Dialect) -> usize {
         return 0;
     };
 
+    count_explicit_full_outer_joins_from_tokens(&tokens)
+}
+
+fn count_explicit_full_outer_joins_for_context(ctx: &LintContext) -> usize {
+    let from_document_tokens = ctx.with_document_tokens(|tokens| {
+        if tokens.is_empty() {
+            return None;
+        }
+
+        Some(
+            tokens
+                .iter()
+                .filter_map(|token| {
+                    let Some((start, end)) = token_with_span_offsets(ctx.sql, token) else {
+                        return None;
+                    };
+                    if start < ctx.statement_range.start || end > ctx.statement_range.end {
+                        return None;
+                    }
+                    Some(token.token.clone())
+                })
+                .collect::<Vec<_>>(),
+        )
+    });
+
+    if let Some(tokens) = from_document_tokens {
+        return count_explicit_full_outer_joins_from_tokens(&tokens);
+    }
+
+    count_explicit_full_outer_joins(ctx.statement_sql(), ctx.dialect())
+}
+
+fn count_explicit_full_outer_joins_from_tokens(tokens: &[Token]) -> usize {
     let significant: Vec<&Token> = tokens.iter().filter(|token| !is_trivia(token)).collect();
 
     let mut count = 0usize;
@@ -201,6 +233,48 @@ fn count_explicit_full_outer_joins(sql: &str, dialect: Dialect) -> usize {
     }
 
     count
+}
+
+fn token_with_span_offsets(sql: &str, token: &TokenWithSpan) -> Option<(usize, usize)> {
+    let start = line_col_to_offset(
+        sql,
+        token.span.start.line as usize,
+        token.span.start.column as usize,
+    )?;
+    let end = line_col_to_offset(
+        sql,
+        token.span.end.line as usize,
+        token.span.end.column as usize,
+    )?;
+    Some((start, end))
+}
+
+fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
+    if line == 0 || column == 0 {
+        return None;
+    }
+
+    let mut current_line = 1usize;
+    let mut current_col = 1usize;
+
+    for (offset, ch) in sql.char_indices() {
+        if current_line == line && current_col == column {
+            return Some(offset);
+        }
+
+        if ch == '\n' {
+            current_line += 1;
+            current_col = 1;
+        } else {
+            current_col += 1;
+        }
+    }
+
+    if current_line == line && current_col == column {
+        return Some(sql.len());
+    }
+
+    None
 }
 
 fn is_trivia(token: &Token) -> bool {
