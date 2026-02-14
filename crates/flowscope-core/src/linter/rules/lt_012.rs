@@ -29,8 +29,7 @@ impl LintRule for LayoutEndOfFile {
             .trim_end_matches(|ch: char| ch.is_ascii_whitespace())
             .len();
         let is_last_statement = ctx.statement_range.end >= content_end;
-        let trailing_newlines = trailing_newline_count_tokenized(ctx.sql, ctx.dialect())
-            .unwrap_or_else(|| trailing_newline_count(ctx.sql));
+        let trailing_newlines = trailing_newline_count_tokenized(ctx.sql, ctx.dialect());
         let has_violation = is_last_statement && ctx.sql.contains('\n') && trailing_newlines != 1;
 
         if has_violation {
@@ -51,20 +50,22 @@ struct LocatedToken {
     end: usize,
 }
 
-fn trailing_newline_count_tokenized(sql: &str, dialect: Dialect) -> Option<usize> {
-    let tokens = tokenize_with_offsets(sql, dialect)?;
+fn trailing_newline_count_tokenized(sql: &str, dialect: Dialect) -> usize {
+    let tokens = tokenize_with_offsets(sql, dialect);
     let content_end = tokens
         .iter()
         .rev()
         .find(|token| !is_whitespace_token(&token.token))
         .map_or(0, |token| token.end);
-    Some(trailing_newline_count(&sql[content_end..]))
+    trailing_newline_count(&sql[content_end..])
 }
 
-fn tokenize_with_offsets(sql: &str, dialect: Dialect) -> Option<Vec<LocatedToken>> {
+fn tokenize_with_offsets(sql: &str, dialect: Dialect) -> Vec<LocatedToken> {
     let dialect = dialect.to_sqlparser_dialect();
     let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
-    let tokens = tokenizer.tokenize_with_location().ok()?;
+    let tokens = tokenizer
+        .tokenize_with_location()
+        .expect("statement tokenization should mirror the successful parser run");
 
     let mut out = Vec::with_capacity(tokens.len());
     for token in tokens {
@@ -80,7 +81,7 @@ fn tokenize_with_offsets(sql: &str, dialect: Dialect) -> Option<Vec<LocatedToken
             end,
         });
     }
-    Some(out)
+    out
 }
 
 fn is_whitespace_token(token: &Token) -> bool {

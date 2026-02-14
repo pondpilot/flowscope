@@ -174,7 +174,7 @@ This plan covers three axes:
   - `LT_011` was further upgraded from regex scanning to active-dialect tokenizer line-aware set-operator placement checks.
   - `LT_011` now supports `line_position` (`alone:strict`/`leading`/`trailing`) through `lint.ruleConfigs`.
   - `LT_012` moved from parity handling to a dedicated core rule module (`lt_012.rs`).
-  - `LT_012` now enforces SQLFluff-style single trailing newline at EOF (flags both missing final newline and multiple trailing blank lines), and now derives trailing-content boundaries from tokenizer spans with fallback to raw-text counting.
+  - `LT_012` now enforces SQLFluff-style single trailing newline at EOF (flags both missing final newline and multiple trailing blank lines), and now derives trailing-content boundaries from tokenizer spans without raw-text fallback.
   - `LT_013` moved from parity handling to a dedicated core rule module (`lt_013.rs`).
   - `LT_013` was further upgraded from regex matching to direct leading-blank-line scanning.
   - `LT_013` now uses tokenizer-first start-of-file trivia detection without raw-text fallback for leading blank-line parity.
