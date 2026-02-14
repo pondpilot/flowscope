@@ -5,9 +5,8 @@
 
 use crate::linter::config::LintConfig;
 use crate::linter::rule::{LintContext, LintRule};
-use crate::types::{issue_codes, Issue};
+use crate::types::{issue_codes, Dialect, Issue};
 use sqlparser::ast::{JoinOperator, Select, Statement};
-use sqlparser::dialect::GenericDialect;
 use sqlparser::keywords::Keyword;
 use sqlparser::tokenizer::{Token, Tokenizer, Whitespace};
 
@@ -81,7 +80,8 @@ impl LintRule for AmbiguousJoinStyle {
             }
         });
 
-        let outer_unqualified_count = count_unqualified_outer_joins(statement, ctx.statement_sql());
+        let outer_unqualified_count =
+            count_unqualified_outer_joins(statement, ctx.statement_sql(), ctx.dialect());
         let violation_count = match self.qualify_mode {
             FullyQualifyJoinTypes::Inner => plain_join_count,
             FullyQualifyJoinTypes::Outer => outer_unqualified_count,
@@ -100,8 +100,9 @@ impl LintRule for AmbiguousJoinStyle {
     }
 }
 
-fn count_unqualified_outer_joins(statement: &Statement, sql: &str) -> usize {
-    count_unqualified_left_right_outer_joins(statement) + count_unqualified_full_outer_joins(sql)
+fn count_unqualified_outer_joins(statement: &Statement, sql: &str, dialect: Dialect) -> usize {
+    count_unqualified_left_right_outer_joins(statement)
+        + count_unqualified_full_outer_joins(statement, sql, dialect)
 }
 
 fn count_unqualified_left_right_outer_joins(statement: &Statement) -> usize {
@@ -133,9 +134,33 @@ fn select_unqualified_left_right_outer_join_count(select: &Select) -> usize {
         .sum()
 }
 
-fn count_unqualified_full_outer_joins(sql: &str) -> usize {
-    let dialect = GenericDialect {};
-    let mut tokenizer = Tokenizer::new(&dialect, sql);
+fn count_unqualified_full_outer_joins(statement: &Statement, sql: &str, dialect: Dialect) -> usize {
+    let full_outer_join_count = count_full_outer_joins(statement);
+    if full_outer_join_count == 0 {
+        return 0;
+    }
+
+    let explicit_full_outer_count = count_explicit_full_outer_joins(sql, dialect);
+    full_outer_join_count.saturating_sub(explicit_full_outer_count)
+}
+
+fn count_full_outer_joins(statement: &Statement) -> usize {
+    let mut count = 0usize;
+    visit_selects_in_statement(statement, &mut |select| {
+        for table in &select.from {
+            for join in &table.joins {
+                if matches!(join.join_operator, JoinOperator::FullOuter(_)) {
+                    count += 1;
+                }
+            }
+        }
+    });
+    count
+}
+
+fn count_explicit_full_outer_joins(sql: &str, dialect: Dialect) -> usize {
+    let dialect = dialect.to_sqlparser_dialect();
+    let mut tokenizer = Tokenizer::new(dialect.as_ref(), sql);
     let Ok(tokens) = tokenizer.tokenize() else {
         return 0;
     };
@@ -161,11 +186,15 @@ fn count_unqualified_full_outer_joins(sql: &str) -> usize {
 
         match next {
             Token::Word(next_word) if next_word.keyword == Keyword::OUTER => {
-                idx += 3;
-            }
-            Token::Word(next_word) if next_word.keyword == Keyword::JOIN => {
-                count += 1;
-                idx += 2;
+                if matches!(
+                    significant.get(idx + 2),
+                    Some(Token::Word(join_word)) if join_word.keyword == Keyword::JOIN
+                ) {
+                    count += 1;
+                    idx += 3;
+                } else {
+                    idx += 2;
+                }
             }
             _ => idx += 1,
         }
@@ -425,5 +454,30 @@ mod tests {
             },
         );
         assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn outer_mode_flags_only_unqualified_full_joins_in_mixed_chains() {
+        let config = LintConfig {
+            enabled: true,
+            disabled_rules: vec![],
+            rule_configs: std::collections::BTreeMap::from([(
+                "ambiguous.join".to_string(),
+                serde_json::json!({"fully_qualify_join_types": "outer"}),
+            )]),
+        };
+        let rule = AmbiguousJoinStyle::from_config(&config);
+        let sql = "SELECT * FROM a FULL JOIN b ON a.id = b.id FULL OUTER JOIN c ON b.id = c.id";
+        let statements = parse_sql(sql).expect("parse");
+        let issues = rule.check(
+            &statements[0],
+            &LintContext {
+                sql,
+                statement_range: 0..sql.len(),
+                statement_index: 0,
+            },
+        );
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, issue_codes::LINT_AM_005);
     }
 }
