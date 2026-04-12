@@ -27,13 +27,37 @@ expression: clean_result
           "id": "table_14fd3f715fc3ae74",
           "type": "table",
           "label": "B",
-          "qualifiedName": "B"
+          "qualifiedName": "B",
+          "nameSpans": [
+            {
+              "start": 130,
+              "end": 131
+            },
+            {
+              "start": 135,
+              "end": 136
+            },
+            {
+              "start": 185,
+              "end": 186
+            }
+          ]
         },
         {
           "id": "table_dd4853e04f0abbb5",
           "type": "table",
           "label": "A",
-          "qualifiedName": "A"
+          "qualifiedName": "A",
+          "nameSpans": [
+            {
+              "start": 109,
+              "end": 110
+            },
+            {
+              "start": 144,
+              "end": 145
+            }
+          ]
         }
       ],
       "edges": [

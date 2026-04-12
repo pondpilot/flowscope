@@ -39,13 +39,25 @@ expression: clean_result
           "id": "table_3c0b479aec754659",
           "type": "table",
           "label": "orders",
-          "qualifiedName": "my-company.sales.orders"
+          "qualifiedName": "my-company.sales.orders",
+          "nameSpans": [
+            {
+              "start": 188,
+              "end": 194
+            }
+          ]
         },
         {
           "id": "table_fdcf1c848327037a",
           "type": "table",
           "label": "users",
-          "qualifiedName": "my-company.core.users"
+          "qualifiedName": "my-company.core.users",
+          "nameSpans": [
+            {
+              "start": 148,
+              "end": 153
+            }
+          ]
         }
       ],
       "edges": [

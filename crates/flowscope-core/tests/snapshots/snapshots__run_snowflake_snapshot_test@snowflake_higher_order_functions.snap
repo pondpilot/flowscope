@@ -47,7 +47,13 @@ expression: clean_result
           "id": "table_59882a72c0b4f1ff",
           "type": "table",
           "label": "REF",
-          "qualifiedName": "REF"
+          "qualifiedName": "REF",
+          "nameSpans": [
+            {
+              "start": 210,
+              "end": 213
+            }
+          ]
         }
       ],
       "edges": [

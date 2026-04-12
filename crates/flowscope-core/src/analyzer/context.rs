@@ -385,6 +385,8 @@ impl StatementContext {
             qualified_name,
             expression: None,
             span: None,
+            name_spans: Vec::new(),
+            body_span: None,
             metadata: None,
             resolution_source: None,
             filters: Vec::new(),

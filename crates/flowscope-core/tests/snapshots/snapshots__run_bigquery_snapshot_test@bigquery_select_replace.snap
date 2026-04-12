@@ -17,7 +17,13 @@ expression: clean_result
           "id": "table_e500054d128e991c",
           "type": "table",
           "label": "customers",
-          "qualifiedName": "customers"
+          "qualifiedName": "customers",
+          "nameSpans": [
+            {
+              "start": 112,
+              "end": 121
+            }
+          ]
         }
       ],
       "edges": [

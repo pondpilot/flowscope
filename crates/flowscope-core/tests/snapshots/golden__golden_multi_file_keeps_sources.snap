@@ -18,7 +18,13 @@ expression: cleaned
           "id": "table_b1180f6188cee2e2",
           "type": "table",
           "label": "alpha_table",
-          "qualifiedName": "alpha_table"
+          "qualifiedName": "alpha_table",
+          "nameSpans": [
+            {
+              "start": 14,
+              "end": 25
+            }
+          ]
         }
       ],
       "edges": [
@@ -47,7 +53,13 @@ expression: cleaned
           "id": "table_8d1cecbc26a50f36",
           "type": "table",
           "label": "beta_table",
-          "qualifiedName": "beta_table"
+          "qualifiedName": "beta_table",
+          "nameSpans": [
+            {
+              "start": 14,
+              "end": 24
+            }
+          ]
         }
       ],
       "edges": [

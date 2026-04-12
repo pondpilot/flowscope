@@ -61,19 +61,37 @@ expression: clean_result
           "id": "table_4ce0fb06426c39fb",
           "type": "table",
           "label": "suppliers",
-          "qualifiedName": "suppliers"
+          "qualifiedName": "suppliers",
+          "nameSpans": [
+            {
+              "start": 458,
+              "end": 467
+            }
+          ]
         },
         {
           "id": "table_7253befe2c400508",
           "type": "table",
           "label": "products",
-          "qualifiedName": "products"
+          "qualifiedName": "products",
+          "nameSpans": [
+            {
+              "start": 377,
+              "end": 385
+            }
+          ]
         },
         {
           "id": "table_e500054d128e991c",
           "type": "table",
           "label": "customers",
           "qualifiedName": "customers",
+          "nameSpans": [
+            {
+              "start": 285,
+              "end": 294
+            }
+          ],
           "filters": [
             {
               "expression": "c.email = 'sample@example.com'",
@@ -85,7 +103,13 @@ expression: clean_result
           "id": "table_eaa6ebb8f158751f",
           "type": "table",
           "label": "orders",
-          "qualifiedName": "orders"
+          "qualifiedName": "orders",
+          "nameSpans": [
+            {
+              "start": 247,
+              "end": 253
+            }
+          ]
         }
       ],
       "edges": [

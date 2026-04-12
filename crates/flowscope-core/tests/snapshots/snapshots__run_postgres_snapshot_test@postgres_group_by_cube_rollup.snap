@@ -69,7 +69,13 @@ expression: clean_result
           "id": "table_2355d24e8d81e35c",
           "type": "table",
           "label": "locations",
-          "qualifiedName": "locations"
+          "qualifiedName": "locations",
+          "nameSpans": [
+            {
+              "start": 215,
+              "end": 224
+            }
+          ]
         }
       ],
       "edges": [

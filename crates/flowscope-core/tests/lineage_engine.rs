@@ -10043,3 +10043,88 @@ fn test_schema_type_normalization() {
         "bool should normalize to BOOLEAN"
     );
 }
+
+#[test]
+fn name_spans_single_table_reference() {
+    let sql = "SELECT * FROM users WHERE id = 1";
+    let result = run_analysis(sql, Dialect::Postgres, None);
+    let stmt = &result.statements[0];
+    let users = find_table_node(stmt, "users").expect("users table node");
+
+    assert_eq!(users.name_spans.len(), 1);
+    let span = users.name_spans[0];
+    assert_eq!(&sql[span.start..span.end], "users");
+    assert!(users.body_span.is_none());
+}
+
+#[test]
+fn name_spans_multiple_table_references() {
+    let sql = "SELECT u.id FROM users u WHERE u.id IN (SELECT id FROM users)";
+    let result = run_analysis(sql, Dialect::Postgres, None);
+    let stmt = &result.statements[0];
+    let users = find_table_node(stmt, "users").expect("users table node");
+
+    assert_eq!(
+        users.name_spans.len(),
+        2,
+        "expected both `users` references"
+    );
+    for span in &users.name_spans {
+        assert_eq!(&sql[span.start..span.end], "users");
+    }
+}
+
+#[test]
+fn name_spans_cte_with_body_and_references() {
+    let sql = "WITH active AS (SELECT id FROM users WHERE active) \
+               SELECT a.id FROM active a JOIN active b ON a.id = b.id";
+    let result = run_analysis(sql, Dialect::Postgres, None);
+    let stmt = &result.statements[0];
+    let cte = find_cte_node(stmt, "active").expect("active cte node");
+
+    // Declaration + two FROM/JOIN references = 3 spans.
+    assert_eq!(
+        cte.name_spans.len(),
+        3,
+        "expected 3 occurrences of `active`"
+    );
+    for span in &cte.name_spans {
+        assert_eq!(&sql[span.start..span.end], "active");
+    }
+
+    let body = cte.body_span.expect("cte body span should be populated");
+    let body_text = &sql[body.start..body.end];
+    assert!(body_text.starts_with('(') && body_text.ends_with(')'));
+    assert!(body_text.contains("SELECT id FROM users WHERE active"));
+}
+
+#[test]
+fn name_spans_ignores_matches_in_strings_and_comments() {
+    let sql = "-- users\nSELECT * FROM users WHERE note = 'see users'";
+    let result = run_analysis(sql, Dialect::Postgres, None);
+    let stmt = &result.statements[0];
+    let users = find_table_node(stmt, "users").expect("users table node");
+
+    assert_eq!(
+        users.name_spans.len(),
+        1,
+        "matches inside comments/strings must not count"
+    );
+    let span = users.name_spans[0];
+    assert_eq!(&sql[span.start..span.end], "users");
+}
+
+#[test]
+fn name_spans_empty_on_column_nodes() {
+    // Columns intentionally get empty name_spans in this release — accurate
+    // per-occurrence column spans require alias/scope resolution.
+    let sql = "SELECT id FROM users";
+    let result = run_analysis(sql, Dialect::Postgres, None);
+    let stmt = &result.statements[0];
+    let id_col = find_column_node(stmt, "id").expect("id column node");
+
+    assert!(
+        id_col.name_spans.is_empty(),
+        "column nodes should not populate name_spans in this release"
+    );
+}

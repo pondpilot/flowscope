@@ -60,7 +60,21 @@ expression: clean_result
           "id": "cte_13c6a0ce2ba7fbed",
           "type": "cte",
           "label": "subordinates",
-          "qualifiedName": "subordinates"
+          "qualifiedName": "subordinates",
+          "nameSpans": [
+            {
+              "start": 24,
+              "end": 36
+            },
+            {
+              "start": 364,
+              "end": 376
+            }
+          ],
+          "bodySpan": {
+            "start": 40,
+            "end": 341
+          }
         },
         {
           "id": "output_74d22f755ec62dbc",
@@ -72,6 +86,16 @@ expression: clean_result
           "type": "table",
           "label": "employees",
           "qualifiedName": "employees",
+          "nameSpans": [
+            {
+              "start": 108,
+              "end": 117
+            },
+            {
+              "start": 250,
+              "end": 259
+            }
+          ],
           "filters": [
             {
               "expression": "manager_id IS NULL",

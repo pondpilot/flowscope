@@ -438,6 +438,24 @@ export interface Node {
   expression?: string;
   /** Source location in original SQL */
   span?: Span;
+  /**
+   * All source locations where this node's name appears in the original SQL.
+   *
+   * Includes the declaration plus every reference (e.g., a CTE named after `WITH`
+   * and every `FROM cte_name` / `JOIN cte_name` usage). Enables bidirectional
+   * graph↔text navigation: the UI can cycle through occurrences of a node's name.
+   *
+   * Currently populated for table, view, and CTE nodes only. Column nodes receive
+   * an empty list and callers should fall back to `span`; accurate per-occurrence
+   * column spans require alias/scope resolution.
+   */
+  nameSpans?: Span[];
+  /**
+   * For CTE nodes: the source location of the CTE body (the parenthesized
+   * subquery after `AS`). Enables the UI to highlight the definition body
+   * separately from the CTE name.
+   */
+  bodySpan?: Span;
   /** Extensible metadata for future use */
   metadata?: Record<string, unknown>;
   /** How this table was resolved (imported, implied, or unknown) */

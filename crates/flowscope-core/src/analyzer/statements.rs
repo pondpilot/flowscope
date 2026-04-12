@@ -8,8 +8,8 @@ use super::complexity;
 use super::context::StatementContext;
 use super::expression::ExpressionAnalyzer;
 use super::helpers::{
-    classify_query_type, extract_simple_name, generate_edge_id, generate_node_id,
-    split_qualified_identifiers,
+    classify_query_type, extract_simple_name, find_all_identifier_spans, find_cte_body_span,
+    generate_edge_id, generate_node_id, split_qualified_identifiers,
 };
 use super::visitor::{LineageVisitor, Visitor};
 use super::Analyzer;
@@ -243,6 +243,8 @@ impl<'a> Analyzer<'a> {
         let join_count = complexity::count_joins(&ctx.joined_table_info);
         let complexity_score = complexity::calculate_complexity(&ctx.nodes, &ctx.joined_table_info);
 
+        self.populate_name_spans(&mut ctx.nodes, &source_range);
+
         Ok(StatementLineage {
             statement_index: index,
             statement_type,
@@ -254,6 +256,47 @@ impl<'a> Analyzer<'a> {
             complexity_score,
             resolved_sql,
         })
+    }
+
+    /// Populates `name_spans` (every occurrence of the node's name in the
+    /// statement source) and `body_span` (CTE/derived body) for table-like
+    /// nodes. Column nodes are skipped — accurate per-occurrence column spans
+    /// require alias/scope resolution.
+    fn populate_name_spans(&self, nodes: &mut [Node], source_range: &Range<usize>) {
+        let Some(source) = self.current_statement_source.as_ref() else {
+            return;
+        };
+        let sql = source.sql.as_ref();
+        let (scan_start, scan_end) = (source_range.start, source_range.end);
+        if scan_end > sql.len() || scan_start >= scan_end {
+            return;
+        }
+
+        for node in nodes.iter_mut() {
+            if !node.node_type.is_table_like() {
+                continue;
+            }
+            if node.label.is_empty() {
+                continue;
+            }
+
+            // Compute body_span first so we can exclude internal occurrences
+            // of the CTE's own name from name_spans. An identifier match that
+            // falls inside a CTE's body is an internal column reference, not
+            // a reference to the CTE itself — including it in name_spans
+            // would produce misleading occurrence counts in the UI.
+            if node.node_type == NodeType::Cte {
+                if let Some(name_span) = node.span {
+                    node.body_span = find_cte_body_span(sql, name_span);
+                }
+            }
+
+            let mut spans = find_all_identifier_spans(sql, &node.label, scan_start, scan_end);
+            if let Some(body) = node.body_span {
+                spans.retain(|s| s.start < body.start || s.start >= body.end);
+            }
+            node.name_spans = spans;
+        }
     }
 
     fn add_join_dependency_edges(&self, ctx: &mut StatementContext) {
@@ -428,6 +471,8 @@ impl<'a> Analyzer<'a> {
             qualified_name: Some(canonical.clone().into()),
             expression: None,
             span: None,
+            name_spans: Vec::new(),
+            body_span: None,
             metadata: None,
             resolution_source: None,
             filters: Vec::new(),
@@ -699,6 +744,8 @@ impl<'a> Analyzer<'a> {
                     qualified_name: Some(canonical.clone().into()),
                     expression: None,
                     span: None,
+                    name_spans: Vec::new(),
+                    body_span: None,
                     metadata: None,
                     resolution_source: None,
                     filters: Vec::new(),
@@ -750,6 +797,8 @@ impl<'a> Analyzer<'a> {
                     qualified_name: Some(canonical.clone().into()),
                     expression: None,
                     span: None,
+                    name_spans: Vec::new(),
+                    body_span: None,
                     metadata: None,
                     resolution_source: None,
                     filters: Vec::new(),
@@ -782,6 +831,8 @@ impl<'a> Analyzer<'a> {
                         qualified_name: Some(canonical.clone().into()),
                         expression: None,
                         span: None,
+                        name_spans: Vec::new(),
+                        body_span: None,
                         metadata: None,
                         resolution_source: None,
                         filters: Vec::new(),
@@ -854,6 +905,8 @@ impl<'a> Analyzer<'a> {
             qualified_name: Some(old_canonical.clone().into()),
             expression: None,
             span: None,
+            name_spans: Vec::new(),
+            body_span: None,
             metadata: None,
             resolution_source: None,
             filters: Vec::new(),
@@ -868,6 +921,8 @@ impl<'a> Analyzer<'a> {
             qualified_name: Some(new_canonical.clone().into()),
             expression: None,
             span: None,
+            name_spans: Vec::new(),
+            body_span: None,
             metadata: None,
             resolution_source: None,
             filters: Vec::new(),

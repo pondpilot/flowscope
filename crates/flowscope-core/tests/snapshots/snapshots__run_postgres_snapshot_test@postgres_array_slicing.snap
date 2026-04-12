@@ -41,7 +41,13 @@ expression: clean_result
           "id": "table_eb6f82b7323d024e",
           "type": "table",
           "label": "array_data",
-          "qualifiedName": "array_data"
+          "qualifiedName": "array_data",
+          "nameSpans": [
+            {
+              "start": 110,
+              "end": 120
+            }
+          ]
         }
       ],
       "edges": [

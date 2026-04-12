@@ -51,13 +51,25 @@ expression: cleaned
           "id": "table_10a0682dff76cdbc",
           "type": "table",
           "label": "users",
-          "qualifiedName": "users"
+          "qualifiedName": "users",
+          "nameSpans": [
+            {
+              "start": 21,
+              "end": 26
+            }
+          ]
         },
         {
           "id": "table_4381a9deb65a1136",
           "type": "table",
           "label": "admins",
-          "qualifiedName": "admins"
+          "qualifiedName": "admins",
+          "nameSpans": [
+            {
+              "start": 58,
+              "end": 64
+            }
+          ]
         }
       ],
       "edges": [

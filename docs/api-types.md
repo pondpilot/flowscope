@@ -106,6 +106,8 @@ export interface Node {
   qualifiedName?: string;
   expression?: string;
   span?: Span;
+  nameSpans?: Span[];
+  bodySpan?: Span;
   metadata?: Record<string, unknown>;
   resolutionSource?: 'imported' | 'implied' | 'unknown';
   filters?: FilterPredicate[];

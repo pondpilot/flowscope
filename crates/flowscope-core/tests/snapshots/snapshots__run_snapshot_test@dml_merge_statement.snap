@@ -12,13 +12,25 @@ expression: clean_result
           "id": "table_6888b8ab68491bd0",
           "type": "table",
           "label": "daily_shipments",
-          "qualifiedName": "daily_shipments"
+          "qualifiedName": "daily_shipments",
+          "nameSpans": [
+            {
+              "start": 46,
+              "end": 61
+            }
+          ]
         },
         {
           "id": "table_bc8c5d67293581e9",
           "type": "table",
           "label": "inventory",
-          "qualifiedName": "inventory"
+          "qualifiedName": "inventory",
+          "nameSpans": [
+            {
+              "start": 20,
+              "end": 29
+            }
+          ]
         }
       ],
       "edges": [

@@ -24,7 +24,13 @@ expression: cleaned
           "id": "table_7253befe2c400508",
           "type": "table",
           "label": "products",
-          "qualifiedName": "products"
+          "qualifiedName": "products",
+          "nameSpans": [
+            {
+              "start": 13,
+              "end": 21
+            }
+          ]
         }
       ],
       "edges": [

@@ -24,7 +24,13 @@ expression: cleaned
           "id": "table_eaa6ebb8f158751f",
           "type": "table",
           "label": "orders",
-          "qualifiedName": "orders"
+          "qualifiedName": "orders",
+          "nameSpans": [
+            {
+              "start": 26,
+              "end": 32
+            }
+          ]
         }
       ],
       "edges": [
@@ -81,6 +87,12 @@ expression: cleaned
           "type": "table",
           "label": "orders",
           "qualifiedName": "orders",
+          "nameSpans": [
+            {
+              "start": 133,
+              "end": 139
+            }
+          ],
           "resolutionSource": "implied",
           "filters": [
             {
@@ -93,7 +105,13 @@ expression: cleaned
           "id": "view_6dd7a41668993f4d",
           "type": "view",
           "label": "high_orders",
-          "qualifiedName": "high_orders"
+          "qualifiedName": "high_orders",
+          "nameSpans": [
+            {
+              "start": 89,
+              "end": 100
+            }
+          ]
         }
       ],
       "edges": [
@@ -185,6 +203,12 @@ expression: cleaned
           "type": "table",
           "label": "users",
           "qualifiedName": "users",
+          "nameSpans": [
+            {
+              "start": 186,
+              "end": 191
+            }
+          ],
           "resolutionSource": "imported"
         }
       ],

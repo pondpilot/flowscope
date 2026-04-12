@@ -29,6 +29,12 @@ expression: cleaned
           "type": "table",
           "label": "reports",
           "qualifiedName": "sales.analytics.reports",
+          "nameSpans": [
+            {
+              "start": 19,
+              "end": 26
+            }
+          ],
           "resolutionSource": "imported"
         }
       ],

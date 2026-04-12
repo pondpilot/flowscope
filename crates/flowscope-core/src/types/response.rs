@@ -151,6 +151,24 @@ pub struct Node {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub span: Option<Span>,
 
+    /// All source locations where this node's name appears in the original SQL.
+    ///
+    /// Includes the declaration plus every reference (e.g., a CTE named after `WITH`
+    /// and every `FROM cte_name` / `JOIN cte_name` usage). Enables bidirectional
+    /// graph↔text navigation: the UI can cycle through occurrences of a node's name.
+    ///
+    /// Currently populated for table, view, and CTE nodes only. Column nodes get an
+    /// empty list and callers should fall back to `span`; accurate per-occurrence
+    /// column spans require alias/scope resolution.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub name_spans: Vec<Span>,
+
+    /// For CTE nodes: the source location of the CTE body (the parenthesized
+    /// subquery after `AS`). Enables the UI to highlight the definition body
+    /// separately from the CTE name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub body_span: Option<Span>,
+
     /// Extensible metadata for future use
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, serde_json::Value>>,
@@ -179,6 +197,8 @@ impl Node {
             qualified_name: None,
             expression: None,
             span: None,
+            name_spans: Vec::new(),
+            body_span: None,
             metadata: None,
             resolution_source: None,
             filters: Vec::new(),
@@ -195,6 +215,8 @@ impl Node {
             qualified_name: None,
             expression: None,
             span: None,
+            name_spans: Vec::new(),
+            body_span: None,
             metadata: None,
             resolution_source: None,
             filters: Vec::new(),
@@ -211,6 +233,8 @@ impl Node {
             qualified_name: None,
             expression: None,
             span: None,
+            name_spans: Vec::new(),
+            body_span: None,
             metadata: None,
             resolution_source: None,
             filters: Vec::new(),
@@ -245,6 +269,18 @@ impl Node {
     /// Set the resolution source.
     pub fn with_resolution_source(mut self, source: ResolutionSource) -> Self {
         self.resolution_source = Some(source);
+        self
+    }
+
+    /// Set all source locations where the node's name appears.
+    pub fn with_name_spans(mut self, spans: Vec<Span>) -> Self {
+        self.name_spans = spans;
+        self
+    }
+
+    /// Set the CTE body span (the parenthesized subquery after `AS`).
+    pub fn with_body_span(mut self, span: Span) -> Self {
+        self.body_span = Some(span);
         self
     }
 }
@@ -758,6 +794,8 @@ mod tests {
                     qualified_name: Some("public.users".to_string().into()),
                     expression: None,
                     span: None,
+                    name_spans: Vec::new(),
+                    body_span: None,
                     metadata: None,
                     resolution_source: None,
                     filters: Vec::new(),

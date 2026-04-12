@@ -147,6 +147,8 @@ impl<'a> Analyzer<'a> {
                     qualified_name: Some(cte_name.to_string().into()),
                     expression: None,
                     span: None,
+                    name_spans: Vec::new(),
+                    body_span: None,
                     metadata: None,
                     resolution_source: None,
                     filters: Vec::new(),
@@ -209,6 +211,8 @@ impl<'a> Analyzer<'a> {
                 qualified_name: Some(format!("{cte_name}.{}", source_col.name).into()),
                 expression: None,
                 span: None,
+                name_spans: Vec::new(),
+                body_span: None,
                 metadata: source_col.data_type.as_ref().map(|dt| {
                     let mut m = HashMap::new();
                     m.insert("data_type".to_string(), json!(dt));
@@ -401,6 +405,8 @@ impl<'a> Analyzer<'a> {
             qualified_name: Some(canonical.to_string().into()),
             expression: None,
             span: None,
+            name_spans: Vec::new(),
+            body_span: None,
             metadata,
             resolution_source,
             filters: Vec::new(),
@@ -466,6 +472,8 @@ impl<'a> Analyzer<'a> {
                     qualified_name: Some(format!("{}.{}", table_canonical, col.name).into()),
                     expression: None,
                     span: None,
+                    name_spans: Vec::new(),
+                    body_span: None,
                     metadata: None,
                     resolution_source: None,
                     filters: Vec::new(),
@@ -960,6 +968,8 @@ impl<'a> Analyzer<'a> {
             qualified_name: None, // Will be set if we have target table
             expression: params.expression.as_deref().map(Into::into),
             span: None,
+            name_spans: Vec::new(),
+            body_span: None,
             metadata: params.data_type.as_ref().map(|dt| {
                 let mut m = HashMap::new();
                 m.insert("data_type".to_string(), json!(dt));
@@ -1058,6 +1068,8 @@ impl<'a> Analyzer<'a> {
                     qualified_name: Some(format!("{}.{}", table_canonical, source.column).into()),
                     expression: None,
                     span: None,
+                    name_spans: Vec::new(),
+                    body_span: None,
                     metadata: None,
                     resolution_source: None,
                     filters: Vec::new(),
@@ -1624,6 +1636,8 @@ impl<'a> Analyzer<'a> {
             qualified_name: Some(format!("{}.{}", source_canonical, column_name).into()),
             expression: None,
             span: None,
+            name_spans: Vec::new(),
+            body_span: None,
             metadata: None,
             resolution_source: Some(ResolutionSource::Implied),
             filters: Vec::new(),

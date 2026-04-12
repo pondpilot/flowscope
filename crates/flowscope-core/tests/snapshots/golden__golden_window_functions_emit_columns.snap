@@ -37,7 +37,13 @@ expression: cleaned
           "id": "table_1d63721b3610a67f",
           "type": "table",
           "label": "employees",
-          "qualifiedName": "employees"
+          "qualifiedName": "employees",
+          "nameSpans": [
+            {
+              "start": 60,
+              "end": 69
+            }
+          ]
         }
       ],
       "edges": [

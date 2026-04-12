@@ -40,6 +40,12 @@ expression: cleaned
           "type": "table",
           "label": "users",
           "qualifiedName": "public.users",
+          "nameSpans": [
+            {
+              "start": 22,
+              "end": 27
+            }
+          ],
           "resolutionSource": "imported"
         }
       ],

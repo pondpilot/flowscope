@@ -17,7 +17,13 @@ expression: clean_result
           "id": "table_dbbf4e60ff101c21",
           "type": "table",
           "label": "MY_TABLE",
-          "qualifiedName": "MY_TABLE"
+          "qualifiedName": "MY_TABLE",
+          "nameSpans": [
+            {
+              "start": 56,
+              "end": 64
+            }
+          ]
         }
       ],
       "edges": [

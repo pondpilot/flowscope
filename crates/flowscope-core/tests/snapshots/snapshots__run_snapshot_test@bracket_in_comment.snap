@@ -28,7 +28,13 @@ expression: clean_result
           "id": "table_36d2446b5916819d",
           "type": "table",
           "label": "b",
-          "qualifiedName": "b"
+          "qualifiedName": "b",
+          "nameSpans": [
+            {
+              "start": 146,
+              "end": 147
+            }
+          ]
         }
       ],
       "edges": [

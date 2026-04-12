@@ -112,13 +112,41 @@ expression: clean_result
           "id": "cte_0028784f1c3166c8",
           "type": "cte",
           "label": "active_users",
-          "qualifiedName": "active_users"
+          "qualifiedName": "active_users",
+          "nameSpans": [
+            {
+              "start": 14,
+              "end": 26
+            },
+            {
+              "start": 319,
+              "end": 331
+            }
+          ],
+          "bodySpan": {
+            "start": 30,
+            "end": 133
+          }
         },
         {
           "id": "cte_79d8a8cdfb0a2a16",
           "type": "cte",
           "label": "user_orders",
           "qualifiedName": "user_orders",
+          "nameSpans": [
+            {
+              "start": 143,
+              "end": 154
+            },
+            {
+              "start": 443,
+              "end": 454
+            }
+          ],
+          "bodySpan": {
+            "start": 158,
+            "end": 420
+          },
           "filters": [
             {
               "expression": "total_spend > 1000",
@@ -136,6 +164,12 @@ expression: clean_result
           "type": "table",
           "label": "users",
           "qualifiedName": "users",
+          "nameSpans": [
+            {
+              "start": 85,
+              "end": 90
+            }
+          ],
           "filters": [
             {
               "expression": "active = true",
@@ -147,7 +181,13 @@ expression: clean_result
           "id": "table_eaa6ebb8f158751f",
           "type": "table",
           "label": "orders",
-          "qualifiedName": "orders"
+          "qualifiedName": "orders",
+          "nameSpans": [
+            {
+              "start": 356,
+              "end": 362
+            }
+          ]
         }
       ],
       "edges": [

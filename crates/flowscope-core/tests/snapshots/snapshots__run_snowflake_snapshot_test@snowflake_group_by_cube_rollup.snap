@@ -52,7 +52,13 @@ expression: clean_result
           "id": "table_bdb8046950189433",
           "type": "table",
           "label": "PEOPLE",
-          "qualifiedName": "PEOPLE"
+          "qualifiedName": "PEOPLE",
+          "nameSpans": [
+            {
+              "start": 148,
+              "end": 154
+            }
+          ]
         }
       ],
       "edges": [

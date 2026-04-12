@@ -46,6 +46,194 @@ pub fn find_identifier_span(sql: &str, identifier: &str, search_start: usize) ->
     None
 }
 
+/// Finds every occurrence of an identifier in SQL text.
+///
+/// Returns all non-overlapping word-boundary matches (case-insensitive) within
+/// `[search_start, search_end)`. The `search_end` bound lets callers scope the
+/// scan to a single statement. Strings inside single-quoted SQL literals and
+/// inside block/line comments are skipped so `-- users` or `'users'` do not
+/// produce false positives.
+///
+/// This is intentionally a textual scan rather than an AST walk: sqlparser
+/// does not preserve per-occurrence source positions, and a text scan handles
+/// the common case (every spelling of a table/CTE/view name) correctly. Alias
+/// shadowing on column references is out of scope here and is handled by
+/// populating `name_spans` only on table-like node types.
+pub fn find_all_identifier_spans(
+    sql: &str,
+    identifier: &str,
+    search_start: usize,
+    search_end: usize,
+) -> Vec<Span> {
+    let mut spans = Vec::new();
+    if identifier.is_empty() || search_start >= search_end || search_end > sql.len() {
+        return spans;
+    }
+    if !sql.is_char_boundary(search_start) || !sql.is_char_boundary(search_end) {
+        return spans;
+    }
+
+    let scope = &sql[search_start..search_end];
+    let mut cursor = 0usize;
+    while cursor < scope.len() {
+        // Skip over string literals and comments so we don't match inside them.
+        if let Some(skip_to) = skip_string_or_comment(scope, cursor) {
+            cursor = skip_to;
+            continue;
+        }
+
+        let remaining = &scope[cursor..];
+        let Some((start, end)) = find_word_boundary_match(remaining, identifier) else {
+            break;
+        };
+        // The match is relative to `remaining`; translate into scope coordinates.
+        let match_start = cursor + start;
+        let match_end = cursor + end;
+
+        // Re-verify the match does not straddle a skip region (e.g., we entered
+        // the loop past a literal but the match landed before the next skip).
+        // `find_word_boundary_match` scans forward, so any literal between
+        // `cursor` and `match_start` would have been skipped on the next
+        // iteration — instead, we advance cursor to `match_start` and let the
+        // skip check run again before accepting the match.
+        if match_start > cursor {
+            // Check for an intervening literal/comment between cursor and match.
+            if let Some(skip_to) = first_skip_between(scope, cursor, match_start) {
+                cursor = skip_to;
+                continue;
+            }
+        }
+
+        spans.push(Span::new(
+            search_start + match_start,
+            search_start + match_end,
+        ));
+        // Advance past this match. `match_end > match_start` always (identifier non-empty).
+        cursor = match_end;
+    }
+    spans
+}
+
+/// Finds the span of a CTE body (the parenthesized subquery after `AS`) given
+/// the span of the CTE name.
+///
+/// Starting after `name_span.end`, skips whitespace/comments and an optional
+/// `AS` keyword, then locates the matching parenthesis pair and returns its
+/// span (including the parentheses themselves). Returns `None` if the body
+/// cannot be located — for example if the SQL has already been rewritten.
+pub fn find_cte_body_span(sql: &str, name_span: Span) -> Option<Span> {
+    if name_span.end > sql.len() || !sql.is_char_boundary(name_span.end) {
+        return None;
+    }
+
+    // Skip whitespace / comments after the name.
+    let mut pos = skip_whitespace_and_comments(sql, name_span.end);
+
+    // Optional AS keyword.
+    if pos + 2 <= sql.len() && sql[pos..].to_ascii_uppercase().starts_with("AS") {
+        let after_as = pos + 2;
+        let is_standalone = after_as >= sql.len()
+            || sql.as_bytes()[after_as].is_ascii_whitespace()
+            || sql[after_as..].starts_with("/*")
+            || sql[after_as..].starts_with("--")
+            || sql.as_bytes()[after_as] == b'(';
+        if is_standalone {
+            pos = skip_whitespace_and_comments(sql, after_as);
+        }
+    }
+
+    if pos >= sql.len() || sql.as_bytes()[pos] != b'(' {
+        return None;
+    }
+
+    let body_end = find_matching_paren(sql, pos)?;
+    Some(Span::new(pos, body_end + 1))
+}
+
+/// Given the byte offset of an opening `(`, finds the byte offset of its
+/// matching `)`. Respects string literals and comments so parentheses inside
+/// them do not affect depth.
+fn find_matching_paren(sql: &str, open: usize) -> Option<usize> {
+    let bytes = sql.as_bytes();
+    if open >= bytes.len() || bytes[open] != b'(' {
+        return None;
+    }
+    let mut depth = 0i32;
+    let mut i = open;
+    while i < bytes.len() {
+        if let Some(skip_to) = skip_string_or_comment(sql, i) {
+            i = skip_to;
+            continue;
+        }
+        match bytes[i] {
+            b'(' => depth += 1,
+            b')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(i);
+                }
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    None
+}
+
+/// If `pos` is the start of a string literal or SQL comment, returns the byte
+/// offset immediately after it. Otherwise returns `None`.
+fn skip_string_or_comment(sql: &str, pos: usize) -> Option<usize> {
+    let bytes = sql.as_bytes();
+    if pos >= bytes.len() {
+        return None;
+    }
+    // Block comment.
+    if sql[pos..].starts_with("/*") {
+        let after_open = pos + 2;
+        return match sql[after_open..].find("*/") {
+            Some(rel) => Some(after_open + rel + 2),
+            None => Some(bytes.len()),
+        };
+    }
+    // Line comment.
+    if sql[pos..].starts_with("--") {
+        return match sql[pos..].find('\n') {
+            Some(rel) => Some(pos + rel + 1),
+            None => Some(bytes.len()),
+        };
+    }
+    // Single-quoted string literal, with SQL '' escape.
+    if bytes[pos] == b'\'' {
+        let mut i = pos + 1;
+        while i < bytes.len() {
+            if bytes[i] == b'\'' {
+                if i + 1 < bytes.len() && bytes[i + 1] == b'\'' {
+                    i += 2;
+                    continue;
+                }
+                return Some(i + 1);
+            }
+            i += 1;
+        }
+        return Some(bytes.len());
+    }
+    None
+}
+
+/// Scans `[start, end)` looking for the first literal/comment and returns the
+/// offset past it. Used to re-check for intervening skip regions when a name
+/// match lands further downstream than the scan cursor.
+fn first_skip_between(sql: &str, start: usize, end: usize) -> Option<usize> {
+    let mut i = start;
+    while i < end {
+        if let Some(skip_to) = skip_string_or_comment(sql, i) {
+            return Some(skip_to);
+        }
+        i += 1;
+    }
+    None
+}
+
 /// Finds the span of a CTE definition name in SQL text.
 ///
 /// Matches `WITH name`, `WITH RECURSIVE name`, or `, name` patterns and returns the span for `name`.
@@ -891,5 +1079,102 @@ mod tests {
         assert!(span.is_some());
         let span = span.unwrap();
         assert_eq!(&sql[span.start..span.end], "a");
+    }
+
+    #[test]
+    fn test_find_all_identifier_spans_multiple_refs() {
+        let sql = "SELECT * FROM users u WHERE u.id IN (SELECT id FROM users)";
+        let spans = find_all_identifier_spans(sql, "users", 0, sql.len());
+        assert_eq!(spans.len(), 2);
+        for span in &spans {
+            assert_eq!(&sql[span.start..span.end], "users");
+        }
+    }
+
+    #[test]
+    fn test_find_all_identifier_spans_cte_declaration_and_refs() {
+        let sql = "WITH a AS (SELECT 1) SELECT a.x FROM a";
+        let spans = find_all_identifier_spans(sql, "a", 0, sql.len());
+        // `a` appears three times: declaration, qualifier in `a.x`, and `FROM a`.
+        assert_eq!(spans.len(), 3);
+        assert!(spans
+            .iter()
+            .all(|s| &sql[s.start..s.end] == "a" && s.end > s.start));
+    }
+
+    #[test]
+    fn test_find_all_identifier_spans_ignores_string_literals_and_comments() {
+        let sql = "SELECT * FROM users WHERE name = 'users' -- users\n/* users */";
+        let spans = find_all_identifier_spans(sql, "users", 0, sql.len());
+        // Only the `FROM users` occurrence should match.
+        assert_eq!(spans.len(), 1);
+        assert_eq!(spans[0].start, 14);
+        assert_eq!(spans[0].end, 19);
+    }
+
+    #[test]
+    fn test_find_all_identifier_spans_word_boundary() {
+        let sql = "SELECT * FROM users_archive, users";
+        let spans = find_all_identifier_spans(sql, "users", 0, sql.len());
+        // `users_archive` must not match.
+        assert_eq!(spans.len(), 1);
+        assert_eq!(&sql[spans[0].start..spans[0].end], "users");
+    }
+
+    #[test]
+    fn test_find_all_identifier_spans_case_insensitive() {
+        let sql = "SELECT * FROM Users JOIN USERS u ON u.id = Users.id";
+        let spans = find_all_identifier_spans(sql, "users", 0, sql.len());
+        assert_eq!(spans.len(), 3);
+    }
+
+    #[test]
+    fn test_find_all_identifier_spans_respects_search_bounds() {
+        let sql = "users users users";
+        let spans = find_all_identifier_spans(sql, "users", 6, 12);
+        assert_eq!(spans.len(), 1);
+        assert_eq!(spans[0].start, 6);
+        assert_eq!(spans[0].end, 11);
+    }
+
+    #[test]
+    fn test_find_cte_body_span_simple() {
+        let sql = "WITH a AS (SELECT 1) SELECT * FROM a";
+        // The name span for `a` at offset 5.
+        let name_span = Span::new(5, 6);
+        let body = find_cte_body_span(sql, name_span).expect("body span");
+        assert_eq!(&sql[body.start..body.end], "(SELECT 1)");
+    }
+
+    #[test]
+    fn test_find_cte_body_span_nested_parens() {
+        let sql = "WITH a AS (SELECT (1 + 2) AS x) SELECT * FROM a";
+        let name_span = Span::new(5, 6);
+        let body = find_cte_body_span(sql, name_span).expect("body span");
+        assert_eq!(&sql[body.start..body.end], "(SELECT (1 + 2) AS x)");
+    }
+
+    #[test]
+    fn test_find_cte_body_span_paren_in_string_literal() {
+        let sql = "WITH a AS (SELECT ')' AS c) SELECT * FROM a";
+        let name_span = Span::new(5, 6);
+        let body = find_cte_body_span(sql, name_span).expect("body span");
+        assert_eq!(&sql[body.start..body.end], "(SELECT ')' AS c)");
+    }
+
+    #[test]
+    fn test_find_cte_body_span_missing_paren_returns_none() {
+        // No parenthesized body after the name.
+        let sql = "WITH a AS SELECT 1";
+        let name_span = Span::new(5, 6);
+        assert_eq!(find_cte_body_span(sql, name_span), None);
+    }
+
+    #[test]
+    fn test_find_cte_body_span_with_whitespace_and_comment() {
+        let sql = "WITH a  /* note */ AS  (SELECT 1) SELECT * FROM a";
+        let name_span = Span::new(5, 6);
+        let body = find_cte_body_span(sql, name_span).expect("body span");
+        assert_eq!(&sql[body.start..body.end], "(SELECT 1)");
     }
 }

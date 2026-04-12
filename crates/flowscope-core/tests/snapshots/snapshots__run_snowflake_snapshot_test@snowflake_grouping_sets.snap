@@ -52,7 +52,13 @@ expression: clean_result
           "id": "table_ee2c0bd87d9925df",
           "type": "table",
           "label": "BAZ",
-          "qualifiedName": "BAZ"
+          "qualifiedName": "BAZ",
+          "nameSpans": [
+            {
+              "start": 154,
+              "end": 157
+            }
+          ]
         }
       ],
       "edges": [

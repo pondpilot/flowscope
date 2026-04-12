@@ -39,7 +39,13 @@ expression: clean_result
           "id": "table_2887bb8b48a3cf0e",
           "type": "table",
           "label": "users",
-          "qualifiedName": "project-a.dataset-b.users"
+          "qualifiedName": "project-a.dataset-b.users",
+          "nameSpans": [
+            {
+              "start": 118,
+              "end": 123
+            }
+          ]
         }
       ],
       "edges": [

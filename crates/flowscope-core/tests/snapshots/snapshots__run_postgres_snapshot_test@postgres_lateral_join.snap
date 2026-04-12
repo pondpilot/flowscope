@@ -66,7 +66,21 @@ expression: clean_result
           "id": "derived_d2c2134b1e39407f",
           "type": "cte",
           "label": "emp",
-          "qualifiedName": "emp"
+          "qualifiedName": "emp",
+          "nameSpans": [
+            {
+              "start": 137,
+              "end": 140
+            },
+            {
+              "start": 168,
+              "end": 171
+            },
+            {
+              "start": 428,
+              "end": 431
+            }
+          ]
         },
         {
           "id": "output_74d22f755ec62dbc",
@@ -77,13 +91,25 @@ expression: clean_result
           "id": "table_1d63721b3610a67f",
           "type": "table",
           "label": "employees",
-          "qualifiedName": "employees"
+          "qualifiedName": "employees",
+          "nameSpans": [
+            {
+              "start": 299,
+              "end": 308
+            }
+          ]
         },
         {
           "id": "table_e3d59f407f4557b4",
           "type": "table",
           "label": "departments",
-          "qualifiedName": "departments"
+          "qualifiedName": "departments",
+          "nameSpans": [
+            {
+              "start": 192,
+              "end": 203
+            }
+          ]
         }
       ],
       "edges": [

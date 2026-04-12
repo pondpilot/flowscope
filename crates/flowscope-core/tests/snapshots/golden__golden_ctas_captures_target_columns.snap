@@ -38,13 +38,25 @@ expression: cleaned
           "id": "table_10a0682dff76cdbc",
           "type": "table",
           "label": "users",
-          "qualifiedName": "users"
+          "qualifiedName": "users",
+          "nameSpans": [
+            {
+              "start": 62,
+              "end": 67
+            }
+          ]
         },
         {
           "id": "table_623e5f3551061424",
           "type": "table",
           "label": "tgt",
-          "qualifiedName": "tgt"
+          "qualifiedName": "tgt",
+          "nameSpans": [
+            {
+              "start": 13,
+              "end": 16
+            }
+          ]
         }
       ],
       "edges": [

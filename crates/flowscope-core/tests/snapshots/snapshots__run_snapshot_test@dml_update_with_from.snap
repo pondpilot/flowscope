@@ -12,13 +12,25 @@ expression: clean_result
           "id": "table_e500054d128e991c",
           "type": "table",
           "label": "customers",
-          "qualifiedName": "customers"
+          "qualifiedName": "customers",
+          "nameSpans": [
+            {
+              "start": 92,
+              "end": 101
+            }
+          ]
         },
         {
           "id": "table_eaa6ebb8f158751f",
           "type": "table",
           "label": "orders",
-          "qualifiedName": "orders"
+          "qualifiedName": "orders",
+          "nameSpans": [
+            {
+              "start": 16,
+              "end": 22
+            }
+          ]
         }
       ],
       "edges": [

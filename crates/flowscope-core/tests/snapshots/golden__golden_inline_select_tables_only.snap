@@ -39,13 +39,25 @@ expression: cleaned
           "id": "table_10a0682dff76cdbc",
           "type": "table",
           "label": "users",
-          "qualifiedName": "users"
+          "qualifiedName": "users",
+          "nameSpans": [
+            {
+              "start": 33,
+              "end": 38
+            }
+          ]
         },
         {
           "id": "table_eaa6ebb8f158751f",
           "type": "table",
           "label": "orders",
-          "qualifiedName": "orders"
+          "qualifiedName": "orders",
+          "nameSpans": [
+            {
+              "start": 46,
+              "end": 52
+            }
+          ]
         }
       ],
       "edges": [
