@@ -17,6 +17,7 @@ import type { AnalyzeResult, Node as LineageNode } from '@pondpilot/flowscope-co
 import { useLineage, useLineageStore } from '../store';
 import { useNodeFocus } from '../hooks/useNodeFocus';
 import { useGraphFiltering } from '../hooks/useGraphFiltering';
+import { useOccurrenceShortcuts } from '../hooks/useOccurrenceShortcuts';
 import type { GraphViewProps, TableNodeData, LayoutAlgorithm } from '../types';
 import {
   getLayoutedElements,
@@ -312,6 +313,7 @@ export function GraphView({
   namespaceFilter,
 }: GraphViewProps): JSX.Element {
   const { state, actions } = useLineage();
+  useOccurrenceShortcuts();
   const setLayoutMetrics = useLineageStore((store) => store.setLayoutMetrics);
   const setGraphMetrics = useLineageStore((store) => store.setGraphMetrics);
   const setIsLayouting = useLineageStore((store) => store.setIsLayouting);
