@@ -10080,19 +10080,39 @@ fn name_spans_cte_with_body_and_references() {
                SELECT a.id FROM active a JOIN active b ON a.id = b.id";
     let result = run_analysis(sql, Dialect::Postgres, None);
     let stmt = &result.statements[0];
-    let cte = find_cte_node(stmt, "active").expect("active cte node");
+    let active_nodes: Vec<_> = stmt
+        .nodes
+        .iter()
+        .filter(|node| {
+            node.node_type == NodeType::Cte && node.qualified_name.as_deref() == Some("active")
+        })
+        .collect();
 
-    // Declaration + two FROM/JOIN references = 3 spans.
-    assert_eq!(
-        cte.name_spans.len(),
-        3,
-        "expected 3 occurrences of `active`"
+    assert!(
+        !active_nodes.is_empty(),
+        "expected at least one CTE node for `active`"
     );
-    for span in &cte.name_spans {
+
+    let total_spans: Vec<_> = active_nodes
+        .iter()
+        .flat_map(|node| node.name_spans.iter().copied())
+        .collect();
+    assert_eq!(
+        total_spans.len(),
+        3,
+        "expected declaration plus two relation occurrences across CTE instances"
+    );
+    for span in &total_spans {
         assert_eq!(&sql[span.start..span.end], "active");
     }
 
-    let body = cte.body_span.expect("cte body span should be populated");
+    let cte_definition = active_nodes
+        .iter()
+        .find(|node| node.body_span.is_some())
+        .expect("cte definition node should retain body span");
+    let body = cte_definition
+        .body_span
+        .expect("cte body span should be populated");
     let body_text = &sql[body.start..body.end];
     assert!(body_text.starts_with('(') && body_text.ends_with(')'));
     assert!(body_text.contains("SELECT id FROM users WHERE active"));
@@ -10126,5 +10146,87 @@ fn name_spans_empty_on_column_nodes() {
     assert!(
         id_col.name_spans.is_empty(),
         "column nodes should not populate name_spans in this release"
+    );
+}
+
+#[test]
+fn name_spans_recursive_cte_include_recursive_reference() {
+    let sql = concat!(
+        "WITH RECURSIVE org AS (",
+        "SELECT id FROM employees ",
+        "UNION ALL ",
+        "SELECT e.id FROM employees e JOIN org ON e.manager_id = org.id",
+        ") SELECT * FROM org"
+    );
+    let result = run_analysis(sql, Dialect::Postgres, None);
+    let stmt = &result.statements[0];
+    let org = find_cte_node(stmt, "org").expect("org cte node");
+
+    assert_eq!(
+        org.name_spans.len(),
+        3,
+        "definition, recursive self-reference, and outer reference should all be tracked"
+    );
+    for span in &org.name_spans {
+        assert_eq!(&sql[span.start..span.end], "org");
+    }
+}
+
+#[test]
+fn name_spans_self_join_are_instance_specific() {
+    let sql =
+        "SELECT e1.name, e2.name FROM employees e1 JOIN employees e2 ON e1.manager_id = e2.id";
+    let result = run_analysis(sql, Dialect::Postgres, None);
+    let stmt = &result.statements[0];
+    let employee_nodes: Vec<_> = stmt
+        .nodes
+        .iter()
+        .filter(|node| {
+            node.node_type == NodeType::Table && node.qualified_name.as_deref() == Some("employees")
+        })
+        .collect();
+
+    assert_eq!(
+        employee_nodes.len(),
+        2,
+        "expected one node per self-join instance"
+    );
+    assert!(employee_nodes.iter().all(|node| node.name_spans.len() == 1));
+    assert_ne!(
+        employee_nodes[0].name_spans[0],
+        employee_nodes[1].name_spans[0]
+    );
+    for node in employee_nodes {
+        let span = node.name_spans[0];
+        assert_eq!(&sql[span.start..span.end], "employees");
+    }
+}
+
+#[test]
+fn name_spans_distinguish_same_label_qualified_relations() {
+    let sql = "SELECT * FROM sales.orders so JOIN archive.orders ao ON so.id = ao.id";
+    let result = run_analysis(sql, Dialect::Postgres, None);
+    let stmt = &result.statements[0];
+    let sales_orders = stmt
+        .nodes
+        .iter()
+        .find(|node| node.qualified_name.as_deref() == Some("sales.orders"))
+        .expect("sales.orders node");
+    let archive_orders = stmt
+        .nodes
+        .iter()
+        .find(|node| node.qualified_name.as_deref() == Some("archive.orders"))
+        .expect("archive.orders node");
+
+    assert_eq!(sales_orders.name_spans.len(), 1);
+    assert_eq!(archive_orders.name_spans.len(), 1);
+    assert_ne!(sales_orders.name_spans[0], archive_orders.name_spans[0]);
+    assert_eq!(
+        &sql[sales_orders.name_spans[0].start..sales_orders.name_spans[0].end],
+        "orders"
+    );
+    assert_eq!(
+        &sql[archive_orders.name_spans[0].start..archive_orders.name_spans[0].end],
+        "orders"
     );
 }

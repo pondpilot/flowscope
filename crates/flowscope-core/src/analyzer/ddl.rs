@@ -151,20 +151,17 @@ impl<'a> Analyzer<'a> {
         let canonical = self.normalize_table_name(&target_name);
 
         // Create target table node
+        let target_label = extract_simple_name(&target_name);
         let target_id = ctx.add_node(Node {
             id: generate_node_id("table", &canonical),
             node_type: NodeType::Table,
-            label: extract_simple_name(&target_name).into(),
+            label: target_label.clone().into(),
             qualified_name: Some(canonical.clone().into()),
-            expression: None,
-            span: None,
-            name_spans: Vec::new(),
-            body_span: None,
-            metadata: None,
-            resolution_source: None,
-            filters: Vec::new(),
-            aggregation: None,
+            ..Default::default()
         });
+        if let Some(span) = self.locate_relation_name_span(ctx, &target_name, &target_label) {
+            ctx.add_name_span(&target_id, span);
+        }
 
         self.tracker
             .record_produced(&canonical, ctx.statement_index);
@@ -233,20 +230,17 @@ impl<'a> Analyzer<'a> {
 
         let node_id = generate_node_id("table", &canonical);
 
+        let target_label = extract_simple_name(&target_name);
         ctx.add_node(Node {
             id: node_id.clone(),
             node_type: NodeType::Table,
-            label: extract_simple_name(&target_name).into(),
+            label: target_label.clone().into(),
             qualified_name: Some(canonical.clone().into()),
-            expression: None,
-            span: None,
-            name_spans: Vec::new(),
-            body_span: None,
-            metadata: None,
-            resolution_source: None,
-            filters: Vec::new(),
-            aggregation: None,
+            ..Default::default()
         });
+        if let Some(span) = self.locate_relation_name_span(ctx, &target_name, &target_label) {
+            ctx.add_name_span(&node_id, span);
+        }
 
         // Create column nodes immediately from schema (either imported or from CREATE TABLE)
         if self.schema.is_known(&canonical) {
@@ -268,20 +262,17 @@ impl<'a> Analyzer<'a> {
         let canonical = self.normalize_table_name(&target_name);
 
         // Create target view node
+        let target_label = extract_simple_name(&target_name);
         let target_id = ctx.add_node(Node {
             id: generate_node_id("view", &canonical),
             node_type: NodeType::View,
-            label: extract_simple_name(&target_name).into(),
+            label: target_label.clone().into(),
             qualified_name: Some(canonical.clone().into()),
-            expression: None,
-            span: None,
-            name_spans: Vec::new(),
-            body_span: None,
-            metadata: None,
-            resolution_source: None,
-            filters: Vec::new(),
-            aggregation: None,
+            ..Default::default()
         });
+        if let Some(span) = self.locate_relation_name_span(ctx, &target_name, &target_label) {
+            ctx.add_name_span(&target_id, span);
+        }
 
         self.tracker
             .record_view_produced(&canonical, ctx.statement_index);

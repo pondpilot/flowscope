@@ -1,5 +1,6 @@
 ---
 source: crates/flowscope-core/tests/snapshots.rs
+assertion_line: 278
 expression: clean_result
 ---
 {
@@ -32,14 +33,6 @@ expression: clean_result
             {
               "start": 130,
               "end": 131
-            },
-            {
-              "start": 135,
-              "end": 136
-            },
-            {
-              "start": 185,
-              "end": 186
             }
           ]
         },
@@ -52,10 +45,6 @@ expression: clean_result
             {
               "start": 109,
               "end": 110
-            },
-            {
-              "start": 144,
-              "end": 145
             }
           ]
         }

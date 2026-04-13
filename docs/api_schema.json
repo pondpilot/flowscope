@@ -592,7 +592,7 @@
             ]
           },
           "nameSpans": {
-            "description": "All source locations where this node's name appears in the original SQL.\n\nIncludes the declaration plus every reference (e.g., a CTE named after `WITH`\nand every `FROM cte_name` / `JOIN cte_name` usage). Enables bidirectional\ngraph↔text navigation: the UI can cycle through occurrences of a node's name.\n\nCurrently populated for table, view, and CTE nodes only. Column nodes get an\nempty list and callers should fall back to `span`; accurate per-occurrence\ncolumn spans require alias/scope resolution.",
+            "description": "Source locations for this node's own relation-name occurrences.\n\nIncludes the declaration plus relation occurrences we can associate with the\nnode (for example, a CTE name after `WITH` and each `FROM cte_name` /\n`JOIN cte_name` usage). Self-join instances are tracked independently so\nrepeated table names map to the correct node.\n\nPopulated for table, view, and CTE nodes only. Column qualifier occurrences\nare not yet included, so column nodes omit this field and callers should\nfall back to `span`.",
             "type": "array",
             "items": {
               "$ref": "#/definitions/Span"

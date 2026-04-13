@@ -110,15 +110,18 @@ pub(crate) struct StatementContext {
     pub(crate) cte_definitions: HashMap<String, Arc<str>>,
     /// Node ID -> CTE/derived alias name for reverse lookups
     pub(crate) cte_node_to_name: HashMap<Arc<str>, String>,
-    /// Cursor for sequential span searching across identifier definitions.
+    /// Cursor for sequential left-to-right name occurrence searching.
     ///
-    /// Used to locate spans for CTEs and derived table aliases by tracking the
-    /// current search position in the SQL text. Updated after each successful
-    /// span match to ensure subsequent searches find distinct occurrences.
+    /// Used to locate spans for relation occurrences (tables/views/CTEs), CTE
+    /// definitions, and derived-table aliases by tracking the current search
+    /// position in the statement text. Updated after each successful match so
+    /// repeated names (self-joins, multiple references) are assigned to the
+    /// correct node instance in lexical order.
     ///
     /// # Invariants
     /// - Reset to 0 when entering a new statement context
-    /// - Assumes AST traversal is roughly left-to-right in lexical order
+    /// - Assumes traversal is roughly left-to-right in lexical order for
+    ///   relation-bearing constructs
     pub(crate) span_search_cursor: usize,
     /// Alias -> canonical table name (global, for backwards compatibility)
     pub(crate) table_aliases: HashMap<String, String>,
@@ -360,6 +363,15 @@ impl StatementContext {
         }
     }
 
+    /// Attach a relation-name occurrence span to an existing node.
+    pub(crate) fn add_name_span(&mut self, node_id: &Arc<str>, span: crate::types::Span) {
+        if let Some(node) = self.nodes.iter_mut().find(|node| &node.id == node_id) {
+            if !node.name_spans.contains(&span) {
+                node.name_spans.push(span);
+            }
+        }
+    }
+
     /// Creates or returns the output node for this statement.
     ///
     /// When `model_name` is provided (e.g., for dbt models), the output node
@@ -383,14 +395,7 @@ impl StatementContext {
             node_type: NodeType::Output,
             label: label.into(),
             qualified_name,
-            expression: None,
-            span: None,
-            name_spans: Vec::new(),
-            body_span: None,
-            metadata: None,
-            resolution_source: None,
-            filters: Vec::new(),
-            aggregation: None,
+            ..Default::default()
         };
 
         self.add_node(output_node);

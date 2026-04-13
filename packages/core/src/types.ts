@@ -439,15 +439,15 @@ export interface Node {
   /** Source location in original SQL */
   span?: Span;
   /**
-   * All source locations where this node's name appears in the original SQL.
+   * Source locations for this node's own relation-name occurrences.
    *
-   * Includes the declaration plus every reference (e.g., a CTE named after `WITH`
-   * and every `FROM cte_name` / `JOIN cte_name` usage). Enables bidirectional
-   * graph↔text navigation: the UI can cycle through occurrences of a node's name.
+   * Includes the declaration plus relation occurrences we can associate with the
+   * node (for example, a CTE name after `WITH` and each `FROM cte_name` /
+   * `JOIN cte_name` usage). Self-join instances are tracked independently so
+   * repeated table names map to the correct node.
    *
-   * Currently populated for table, view, and CTE nodes only. Column nodes receive
-   * an empty list and callers should fall back to `span`; accurate per-occurrence
-   * column spans require alias/scope resolution.
+   * Populated for table, view, and CTE nodes only. Column qualifier occurrences
+   * are not yet included, so callers should fall back to `span`.
    */
   nameSpans?: Span[];
   /**

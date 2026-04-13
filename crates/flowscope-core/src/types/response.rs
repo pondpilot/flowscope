@@ -151,15 +151,16 @@ pub struct Node {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub span: Option<Span>,
 
-    /// All source locations where this node's name appears in the original SQL.
+    /// Source locations for this node's own relation-name occurrences.
     ///
-    /// Includes the declaration plus every reference (e.g., a CTE named after `WITH`
-    /// and every `FROM cte_name` / `JOIN cte_name` usage). Enables bidirectional
-    /// graph↔text navigation: the UI can cycle through occurrences of a node's name.
+    /// Includes the declaration plus relation occurrences we can associate with the
+    /// node (for example, a CTE name after `WITH` and each `FROM cte_name` /
+    /// `JOIN cte_name` usage). Self-join instances are tracked independently so
+    /// repeated table names map to the correct node.
     ///
-    /// Currently populated for table, view, and CTE nodes only. Column nodes get an
-    /// empty list and callers should fall back to `span`; accurate per-occurrence
-    /// column spans require alias/scope resolution.
+    /// Populated for table, view, and CTE nodes only. Column qualifier occurrences
+    /// are not yet included, so column nodes omit this field and callers should
+    /// fall back to `span`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub name_spans: Vec<Span>,
 
@@ -187,13 +188,12 @@ pub struct Node {
     pub aggregation: Option<AggregationInfo>,
 }
 
-impl Node {
-    /// Create a new table node with required fields.
-    pub fn table(id: impl Into<Arc<str>>, label: impl Into<Arc<str>>) -> Self {
+impl Default for Node {
+    fn default() -> Self {
         Self {
-            id: id.into(),
-            node_type: NodeType::Table,
-            label: label.into(),
+            id: Arc::from(""),
+            node_type: NodeType::default(),
+            label: Arc::from(""),
             qualified_name: None,
             expression: None,
             span: None,
@@ -203,6 +203,18 @@ impl Node {
             resolution_source: None,
             filters: Vec::new(),
             aggregation: None,
+        }
+    }
+}
+
+impl Node {
+    /// Create a new table node with required fields.
+    pub fn table(id: impl Into<Arc<str>>, label: impl Into<Arc<str>>) -> Self {
+        Self {
+            id: id.into(),
+            node_type: NodeType::Table,
+            label: label.into(),
+            ..Default::default()
         }
     }
 
@@ -212,15 +224,7 @@ impl Node {
             id: id.into(),
             node_type: NodeType::Cte,
             label: label.into(),
-            qualified_name: None,
-            expression: None,
-            span: None,
-            name_spans: Vec::new(),
-            body_span: None,
-            metadata: None,
-            resolution_source: None,
-            filters: Vec::new(),
-            aggregation: None,
+            ..Default::default()
         }
     }
 
@@ -230,15 +234,7 @@ impl Node {
             id: id.into(),
             node_type: NodeType::Column,
             label: label.into(),
-            qualified_name: None,
-            expression: None,
-            span: None,
-            name_spans: Vec::new(),
-            body_span: None,
-            metadata: None,
-            resolution_source: None,
-            filters: Vec::new(),
-            aggregation: None,
+            ..Default::default()
         }
     }
 
@@ -269,18 +265,6 @@ impl Node {
     /// Set the resolution source.
     pub fn with_resolution_source(mut self, source: ResolutionSource) -> Self {
         self.resolution_source = Some(source);
-        self
-    }
-
-    /// Set all source locations where the node's name appears.
-    pub fn with_name_spans(mut self, spans: Vec<Span>) -> Self {
-        self.name_spans = spans;
-        self
-    }
-
-    /// Set the CTE body span (the parenthesized subquery after `AS`).
-    pub fn with_body_span(mut self, span: Span) -> Self {
-        self.body_span = Some(span);
         self
     }
 }
@@ -466,10 +450,11 @@ pub struct AggregationInfo {
 }
 
 /// The type of a node in the lineage graph.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum NodeType {
     /// A database table
+    #[default]
     Table,
     /// A database view (CREATE VIEW)
     View,

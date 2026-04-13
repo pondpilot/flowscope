@@ -30,8 +30,12 @@ mod statements;
 mod transform;
 pub mod visitor;
 
+use context::StatementContext;
 use cross_statement::CrossStatementTracker;
-use helpers::{build_column_schemas_with_constraints, find_identifier_span};
+use helpers::{
+    build_column_schemas_with_constraints, find_all_identifier_spans, find_identifier_span,
+    split_qualified_identifiers, unquote_identifier,
+};
 use input::{collect_statements, StatementInput};
 use schema_registry::SchemaRegistry;
 
@@ -139,6 +143,81 @@ impl<'a> Analyzer<'a> {
         }
 
         find_identifier_span(&self.request.sql, identifier, 0)
+    }
+
+    /// Locates the next identifier span inside the current statement using the
+    /// statement-local search cursor stored on `ctx`.
+    pub(crate) fn locate_statement_span<F>(
+        &self,
+        ctx: &mut StatementContext,
+        identifier: &str,
+        finder: F,
+    ) -> Option<Span>
+    where
+        F: Fn(&str, &str, usize) -> Option<Span>,
+    {
+        let search_start = ctx.span_search_cursor;
+
+        let (sql, offset) = if let Some(source) = &self.current_statement_source {
+            (
+                &source.sql[source.range.start..source.range.end],
+                source.range.start,
+            )
+        } else {
+            (self.request.sql.as_str(), 0)
+        };
+
+        let span = finder(sql, identifier, search_start)?;
+        debug_assert!(
+            span.end >= ctx.span_search_cursor,
+            "Span cursor moved backward: {} -> {} (identifier: '{}')",
+            ctx.span_search_cursor,
+            span.end,
+            identifier
+        );
+
+        ctx.span_search_cursor = span.end;
+        Some(Span::new(offset + span.start, offset + span.end))
+    }
+
+    /// Locates the next occurrence of a relation name and narrows the match to
+    /// the node label token (the final identifier component).
+    ///
+    /// For example, `public.users` maps to the span of `users`, not the whole
+    /// qualified path. This preserves the existing `nameSpans` semantics while
+    /// still assigning occurrences per node instance in lexical order.
+    pub(crate) fn locate_relation_name_span(
+        &self,
+        ctx: &mut StatementContext,
+        raw_name: &str,
+        label: &str,
+    ) -> Option<Span> {
+        let search_identifier = searchable_identifier(raw_name);
+        let full_span =
+            self.locate_statement_span(ctx, &search_identifier, find_identifier_span)?;
+
+        let sql = if let Some(source) = &self.current_statement_source {
+            source.sql.as_ref()
+        } else {
+            self.request.sql.as_str()
+        };
+        let full_text = sql.get(full_span.start..full_span.end)?;
+
+        let tail_identifier = search_identifier
+            .rsplit('.')
+            .next()
+            .filter(|tail| !tail.is_empty())
+            .unwrap_or(label);
+
+        let mut label_spans =
+            find_all_identifier_spans(full_text, tail_identifier, 0, full_text.len());
+        let Some(tail) = label_spans.pop() else {
+            return Some(full_span);
+        };
+        Some(Span::new(
+            full_span.start + tail.start,
+            full_span.start + tail.end,
+        ))
     }
 
     /// Returns the correct node ID and type for a relation (view vs table).
@@ -266,6 +345,14 @@ impl<'a> Analyzer<'a> {
 struct StatementSourceSlice<'a> {
     sql: Cow<'a, str>,
     range: Range<usize>,
+}
+
+fn searchable_identifier(name: &str) -> String {
+    split_qualified_identifiers(name)
+        .into_iter()
+        .map(|part| unquote_identifier(&part))
+        .collect::<Vec<_>>()
+        .join(".")
 }
 
 impl<'a> Analyzer<'a> {

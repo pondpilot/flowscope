@@ -7,8 +7,8 @@
 use super::context::StatementContext;
 use super::expression::ExpressionAnalyzer;
 use super::helpers::{
-    alias_visibility_warning, find_cte_definition_span, find_derived_table_alias_span,
-    generate_statement_scoped_node_id,
+    alias_visibility_warning, find_cte_body_span, find_cte_definition_span,
+    find_derived_table_alias_span, generate_statement_scoped_node_id,
 };
 use super::select_analyzer::SelectAnalyzer;
 use super::Analyzer;
@@ -151,30 +151,8 @@ impl<'a, 'b> LineageVisitor<'a, 'b> {
     where
         F: Fn(&str, &str, usize) -> Option<Span>,
     {
-        let search_start = self.ctx.span_search_cursor;
-
-        let (sql, offset) = if let Some(source) = &self.analyzer.current_statement_source {
-            (
-                &source.sql[source.range.start..source.range.end],
-                source.range.start,
-            )
-        } else {
-            (self.analyzer.request.sql.as_str(), 0)
-        };
-
-        let span = finder(sql, identifier, search_start)?;
-
-        // Invariant: cursor should only move forward (left-to-right traversal)
-        debug_assert!(
-            span.end >= self.ctx.span_search_cursor,
-            "Span cursor moved backward: {} -> {} (identifier: '{}')",
-            self.ctx.span_search_cursor,
-            span.end,
-            identifier
-        );
-
-        self.ctx.span_search_cursor = span.end;
-        Some(Span::new(offset + span.start, offset + span.end))
+        self.analyzer
+            .locate_statement_span(self.ctx, identifier, finder)
     }
 
     fn locate_cte_definition_span(&mut self, identifier: &str) -> Option<Span> {
@@ -545,6 +523,14 @@ impl<'a, 'b> Visitor for LineageVisitor<'a, 'b> {
             for cte in &with.cte_tables {
                 let cte_name = cte.alias.name.to_string();
                 let cte_span = self.locate_cte_definition_span(&cte_name);
+                let body_span = cte_span.and_then(|span| {
+                    let sql = if let Some(source) = &self.analyzer.current_statement_source {
+                        source.sql.as_ref()
+                    } else {
+                        self.analyzer.request.sql.as_str()
+                    };
+                    find_cte_body_span(sql, span)
+                });
                 let cte_id = self.ctx.add_node(Node {
                     id: generate_statement_scoped_node_id(
                         "cte",
@@ -554,14 +540,10 @@ impl<'a, 'b> Visitor for LineageVisitor<'a, 'b> {
                     node_type: NodeType::Cte,
                     label: cte_name.clone().into(),
                     qualified_name: Some(cte_name.clone().into()),
-                    expression: None,
                     span: cte_span,
-                    name_spans: Vec::new(),
-                    body_span: None,
-                    metadata: None,
-                    resolution_source: None,
-                    filters: Vec::new(),
-                    aggregation: None,
+                    name_spans: cte_span.into_iter().collect(),
+                    body_span,
+                    ..Default::default()
                 });
 
                 self.ctx
@@ -707,14 +689,9 @@ impl<'a, 'b> Visitor for LineageVisitor<'a, 'b> {
                         node_type: NodeType::Cte,
                         label: name.clone().into(),
                         qualified_name: Some(name.clone().into()),
-                        expression: None,
                         span: derived_span,
-                        name_spans: Vec::new(),
-                        body_span: None,
-                        metadata: None,
-                        resolution_source: None,
-                        filters: Vec::new(),
-                        aggregation: None,
+                        name_spans: derived_span.into_iter().collect(),
+                        ..Default::default()
                     })
                 });
 

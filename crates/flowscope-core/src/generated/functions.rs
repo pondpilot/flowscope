@@ -264,8 +264,7 @@ pub struct FunctionSignature {
 impl FunctionSignature {
     /// Formats the function signature as "NAME(params) → TYPE"
     pub fn format_signature(&self) -> String {
-        let params_str = self
-            .params
+        let params_str = self.params
             .iter()
             .map(|p| {
                 if p.required {
@@ -277,22 +276,16 @@ impl FunctionSignature {
             .collect::<Vec<_>>()
             .join(", ");
 
-        let return_str = self
-            .return_type
-            .map(|rt| {
-                format!(
-                    " → {}",
-                    match rt {
-                        ReturnTypeRule::Integer => "INTEGER",
-                        ReturnTypeRule::Numeric => "NUMERIC",
-                        ReturnTypeRule::Text => "TEXT",
-                        ReturnTypeRule::Timestamp => "TIMESTAMP",
-                        ReturnTypeRule::Boolean => "BOOLEAN",
-                        ReturnTypeRule::Date => "DATE",
-                        ReturnTypeRule::MatchFirstArg => "T",
-                    }
-                )
-            })
+        let return_str = self.return_type
+            .map(|rt| format!(" → {}", match rt {
+                ReturnTypeRule::Integer => "INTEGER",
+                ReturnTypeRule::Numeric => "NUMERIC",
+                ReturnTypeRule::Text => "TEXT",
+                ReturnTypeRule::Timestamp => "TIMESTAMP",
+                ReturnTypeRule::Boolean => "BOOLEAN",
+                ReturnTypeRule::Date => "DATE",
+                ReturnTypeRule::MatchFirstArg => "T",
+            }))
             .unwrap_or_default();
 
         format!("{}({}){}", self.display_name, params_str, return_str)
@@ -300,4400 +293,1859 @@ impl FunctionSignature {
 }
 
 /// Static function parameter definitions.
-static PARAMS_ABS: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_ACOS: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_ACOSH: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_ADD_MONTHS: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+static PARAMS_ABS: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
 ];
-static PARAMS_AGG_FUNC: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_ACOS: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_ACOSH: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_ADD_MONTHS: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+];
+static PARAMS_AGG_FUNC: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_AI_AGG: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_AI_CLASSIFY: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "categories",
-        required: true,
-    },
-    FunctionParam {
-        name: "config",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "categories", required: true },
+    FunctionParam { name: "config", required: false },
 ];
-static PARAMS_AI_SUMMARIZE_AGG: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_AI_SUMMARIZE_AGG: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_AND: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
-static PARAMS_ANY_VALUE: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_ANY_VALUE: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_APPLY: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
-static PARAMS_APPROXIMATE_SIMILARITY: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_APPROXIMATE_SIMILARITY: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_APPROX_DISTINCT: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "accuracy",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "accuracy", required: false },
 ];
 static PARAMS_APPROX_QUANTILE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "quantile",
-        required: true,
-    },
-    FunctionParam {
-        name: "accuracy",
-        required: false,
-    },
-    FunctionParam {
-        name: "weight",
-        required: false,
-    },
-    FunctionParam {
-        name: "error_tolerance",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "quantile", required: true },
+    FunctionParam { name: "accuracy", required: false },
+    FunctionParam { name: "weight", required: false },
+    FunctionParam { name: "error_tolerance", required: false },
 ];
 static PARAMS_APPROX_QUANTILES: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: false },
 ];
 static PARAMS_APPROX_TOP_K: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: false,
-    },
-    FunctionParam {
-        name: "counters",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: false },
+    FunctionParam { name: "counters", required: false },
 ];
 static PARAMS_APPROX_TOP_K_ACCUMULATE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: false },
 ];
 static PARAMS_APPROX_TOP_K_COMBINE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: false },
 ];
 static PARAMS_APPROX_TOP_SUM: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "count",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "count", required: true },
 ];
 static PARAMS_ARG_MAX: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "count",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "count", required: false },
 ];
 static PARAMS_ARG_MIN: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "count",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "count", required: false },
 ];
-static PARAMS_ARRAY: &[FunctionParam] = &[FunctionParam {
-    name: "expressions",
-    required: false,
-}];
-static PARAMS_ARRAY_AGG: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_ARRAY: &[FunctionParam] = &[
+    FunctionParam { name: "expressions", required: false },
+];
+static PARAMS_ARRAY_AGG: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_ARRAY_ALL: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_ARRAY_ANY: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_ARRAY_CONCAT: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expressions",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expressions", required: false },
 ];
-static PARAMS_ARRAY_CONCAT_AGG: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_ARRAY_CONSTRUCT_COMPACT: &[FunctionParam] = &[FunctionParam {
-    name: "expressions",
-    required: true,
-}];
+static PARAMS_ARRAY_CONCAT_AGG: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_ARRAY_CONSTRUCT_COMPACT: &[FunctionParam] = &[
+    FunctionParam { name: "expressions", required: true },
+];
 static PARAMS_ARRAY_CONTAINS: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_ARRAY_CONTAINS_ALL: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_ARRAY_FILTER: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
-static PARAMS_ARRAY_FIRST: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_ARRAY_INTERSECT: &[FunctionParam] = &[FunctionParam {
-    name: "expressions",
-    required: true,
-}];
+static PARAMS_ARRAY_FIRST: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_ARRAY_INTERSECT: &[FunctionParam] = &[
+    FunctionParam { name: "expressions", required: true },
+];
 static PARAMS_ARRAY_TO_STRING: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "null",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "null", required: false },
 ];
-static PARAMS_ARRAY_LAST: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_ARRAY_LAST: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_ARRAY_SIZE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: false },
 ];
 static PARAMS_ARRAY_OVERLAPS: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_ARRAY_REMOVE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
-static PARAMS_ARRAY_REVERSE: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_ARRAY_REVERSE: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_ARRAY_SLICE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "start",
-        required: true,
-    },
-    FunctionParam {
-        name: "end",
-        required: false,
-    },
-    FunctionParam {
-        name: "step",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "start", required: true },
+    FunctionParam { name: "end", required: false },
+    FunctionParam { name: "step", required: false },
 ];
 static PARAMS_ARRAY_SORT: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: false },
 ];
 static PARAMS_ARRAY_SUM: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: false },
 ];
-static PARAMS_ARRAY_UNION_AGG: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_ARRAY_UNIQUE_AGG: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_ASCII: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_ASIN: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_ASINH: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_ARRAY_UNION_AGG: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_ARRAY_UNIQUE_AGG: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_ASCII: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_ASIN: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_ASINH: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_ATAN: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: false },
 ];
 static PARAMS_ATAN2: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
-static PARAMS_ATANH: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_AVG: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_ATANH: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_AVG: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_BASE64DECODE_BINARY: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "alphabet",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "alphabet", required: false },
 ];
 static PARAMS_BASE64DECODE_STRING: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "alphabet",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "alphabet", required: false },
 ];
 static PARAMS_BASE64ENCODE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "max_line_length",
-        required: false,
-    },
-    FunctionParam {
-        name: "alphabet",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "max_line_length", required: false },
+    FunctionParam { name: "alphabet", required: false },
 ];
-static PARAMS_BITMAP_BIT_POSITION: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_BITMAP_BUCKET_NUMBER: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_BITMAP_CONSTRUCT_AGG: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_BITMAP_COUNT: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_BITMAP_OR_AGG: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_BITWISE_AND_AGG: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_BITWISE_COUNT: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_BITWISE_OR_AGG: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_BITWISE_XOR_AGG: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_BIT_LENGTH: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_BITMAP_BIT_POSITION: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_BITMAP_BUCKET_NUMBER: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_BITMAP_CONSTRUCT_AGG: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_BITMAP_COUNT: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_BITMAP_OR_AGG: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_BITWISE_AND_AGG: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_BITWISE_COUNT: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_BITWISE_OR_AGG: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_BITWISE_XOR_AGG: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_BIT_LENGTH: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_BOOLAND: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
-static PARAMS_LOGICAL_AND: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_BOOLNOT: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_LOGICAL_AND: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_BOOLNOT: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_BOOLOR: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
-static PARAMS_LOGICAL_OR: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_BOOLXOR_AGG: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_BYTE_LENGTH: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_LOGICAL_OR: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_BOOLXOR_AGG: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_BYTE_LENGTH: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_CASE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: false,
-    },
-    FunctionParam {
-        name: "ifs",
-        required: true,
-    },
-    FunctionParam {
-        name: "default",
-        required: false,
-    },
+    FunctionParam { name: "this", required: false },
+    FunctionParam { name: "ifs", required: true },
+    FunctionParam { name: "default", required: false },
 ];
 static PARAMS_CAST: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "to",
-        required: true,
-    },
-    FunctionParam {
-        name: "format",
-        required: false,
-    },
-    FunctionParam {
-        name: "safe",
-        required: false,
-    },
-    FunctionParam {
-        name: "action",
-        required: false,
-    },
-    FunctionParam {
-        name: "default",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "to", required: true },
+    FunctionParam { name: "format", required: false },
+    FunctionParam { name: "safe", required: false },
+    FunctionParam { name: "action", required: false },
+    FunctionParam { name: "default", required: false },
 ];
 static PARAMS_CAST_TO_STR_TYPE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "to",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "to", required: true },
 ];
-static PARAMS_CBRT: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_CBRT: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_CEIL: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "decimals",
-        required: false,
-    },
-    FunctionParam {
-        name: "to",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "decimals", required: false },
+    FunctionParam { name: "to", required: false },
 ];
 static PARAMS_CHR: &[FunctionParam] = &[
-    FunctionParam {
-        name: "expressions",
-        required: true,
-    },
-    FunctionParam {
-        name: "charset",
-        required: false,
-    },
+    FunctionParam { name: "expressions", required: true },
+    FunctionParam { name: "charset", required: false },
 ];
 static PARAMS_LENGTH: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "binary",
-        required: false,
-    },
-    FunctionParam {
-        name: "encoding",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "binary", required: false },
+    FunctionParam { name: "encoding", required: false },
 ];
 static PARAMS_COALESCE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expressions",
-        required: false,
-    },
-    FunctionParam {
-        name: "is_nvl",
-        required: false,
-    },
-    FunctionParam {
-        name: "is_null",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expressions", required: false },
+    FunctionParam { name: "is_nvl", required: false },
+    FunctionParam { name: "is_null", required: false },
 ];
-static PARAMS_CODE_POINTS_TO_BYTES: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_CODE_POINTS_TO_STRING: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_CODE_POINTS_TO_BYTES: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_CODE_POINTS_TO_STRING: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_COLLATE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
-static PARAMS_COLLATION: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_COLLATION: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_COLUMNS: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "unpack",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "unpack", required: false },
 ];
 static PARAMS_COMBINED_AGG_FUNC: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expressions",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expressions", required: false },
 ];
 static PARAMS_COMBINED_PARAMETERIZED_AGG: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expressions",
-        required: true,
-    },
-    FunctionParam {
-        name: "params",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expressions", required: true },
+    FunctionParam { name: "params", required: true },
 ];
 static PARAMS_COMPRESS: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "method",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "method", required: false },
 ];
 static PARAMS_CONCAT: &[FunctionParam] = &[
-    FunctionParam {
-        name: "expressions",
-        required: true,
-    },
-    FunctionParam {
-        name: "safe",
-        required: false,
-    },
-    FunctionParam {
-        name: "coalesce",
-        required: false,
-    },
+    FunctionParam { name: "expressions", required: true },
+    FunctionParam { name: "safe", required: false },
+    FunctionParam { name: "coalesce", required: false },
 ];
 static PARAMS_CONCAT_WS: &[FunctionParam] = &[
-    FunctionParam {
-        name: "expressions",
-        required: true,
-    },
-    FunctionParam {
-        name: "safe",
-        required: false,
-    },
-    FunctionParam {
-        name: "coalesce",
-        required: false,
-    },
+    FunctionParam { name: "expressions", required: true },
+    FunctionParam { name: "safe", required: false },
+    FunctionParam { name: "coalesce", required: false },
 ];
-static PARAMS_CONNECT_BY_ROOT: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_CONNECT_BY_ROOT: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_CONTAINS: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "json_scope",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "json_scope", required: false },
 ];
 static PARAMS_CONVERT: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "style",
-        required: false,
-    },
-    FunctionParam {
-        name: "safe",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "style", required: false },
+    FunctionParam { name: "safe", required: false },
 ];
 static PARAMS_CONVERT_TIMEZONE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "source_tz",
-        required: false,
-    },
-    FunctionParam {
-        name: "target_tz",
-        required: true,
-    },
-    FunctionParam {
-        name: "timestamp",
-        required: true,
-    },
-    FunctionParam {
-        name: "options",
-        required: false,
-    },
+    FunctionParam { name: "source_tz", required: false },
+    FunctionParam { name: "target_tz", required: true },
+    FunctionParam { name: "timestamp", required: true },
+    FunctionParam { name: "options", required: false },
 ];
 static PARAMS_CONVERT_TO_CHARSET: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "dest",
-        required: true,
-    },
-    FunctionParam {
-        name: "source",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "dest", required: true },
+    FunctionParam { name: "source", required: false },
 ];
 static PARAMS_CORR: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
-static PARAMS_COS: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_COSH: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_COS: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_COSH: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_COSINE_DISTANCE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
-static PARAMS_COT: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_COTH: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_COT: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_COTH: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_COUNT: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: false,
-    },
-    FunctionParam {
-        name: "expressions",
-        required: false,
-    },
-    FunctionParam {
-        name: "big_int",
-        required: false,
-    },
+    FunctionParam { name: "this", required: false },
+    FunctionParam { name: "expressions", required: false },
+    FunctionParam { name: "big_int", required: false },
 ];
-static PARAMS_COUNT_IF: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_COUNT_IF: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_COVAR_POP: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_COVAR_SAMP: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
-static PARAMS_CSC: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_CSCH: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_CUME_DIST: &[FunctionParam] = &[FunctionParam {
-    name: "expressions",
-    required: false,
-}];
-static PARAMS_CURRENT_DATE: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: false,
-}];
-static PARAMS_CURRENT_DATETIME: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: false,
-}];
-static PARAMS_CURRENT_SCHEMA: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: false,
-}];
-static PARAMS_CURRENT_TIME: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: false,
-}];
+static PARAMS_CSC: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_CSCH: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_CUME_DIST: &[FunctionParam] = &[
+    FunctionParam { name: "expressions", required: false },
+];
+static PARAMS_CURRENT_DATE: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: false },
+];
+static PARAMS_CURRENT_DATETIME: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: false },
+];
+static PARAMS_CURRENT_SCHEMA: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: false },
+];
+static PARAMS_CURRENT_TIME: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: false },
+];
 static PARAMS_CURRENT_TIMESTAMP: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: false,
-    },
-    FunctionParam {
-        name: "sysdate",
-        required: false,
-    },
+    FunctionParam { name: "this", required: false },
+    FunctionParam { name: "sysdate", required: false },
 ];
-static PARAMS_CURRENT_USER: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: false,
-}];
+static PARAMS_CURRENT_USER: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: false },
+];
 static PARAMS_DATE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: false,
-    },
-    FunctionParam {
-        name: "zone",
-        required: false,
-    },
-    FunctionParam {
-        name: "expressions",
-        required: false,
-    },
+    FunctionParam { name: "this", required: false },
+    FunctionParam { name: "zone", required: false },
+    FunctionParam { name: "expressions", required: false },
 ];
 static PARAMS_DATE_DIFF: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "unit",
-        required: false,
-    },
-    FunctionParam {
-        name: "zone",
-        required: false,
-    },
-    FunctionParam {
-        name: "big_int",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "unit", required: false },
+    FunctionParam { name: "zone", required: false },
+    FunctionParam { name: "big_int", required: false },
 ];
 static PARAMS_DATE_FROM_PARTS: &[FunctionParam] = &[
-    FunctionParam {
-        name: "year",
-        required: true,
-    },
-    FunctionParam {
-        name: "month",
-        required: false,
-    },
-    FunctionParam {
-        name: "day",
-        required: false,
-    },
+    FunctionParam { name: "year", required: true },
+    FunctionParam { name: "month", required: false },
+    FunctionParam { name: "day", required: false },
 ];
 static PARAMS_DATETIME: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: false },
 ];
 static PARAMS_DATETIME_ADD: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "unit",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "unit", required: false },
 ];
 static PARAMS_DATETIME_DIFF: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "unit",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "unit", required: false },
 ];
 static PARAMS_DATETIME_SUB: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "unit",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "unit", required: false },
 ];
 static PARAMS_DATETIME_TRUNC: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "unit",
-        required: true,
-    },
-    FunctionParam {
-        name: "zone",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "unit", required: true },
+    FunctionParam { name: "zone", required: false },
 ];
 static PARAMS_DATE_ADD: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "unit",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "unit", required: false },
 ];
 static PARAMS_DATE_BIN: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "unit",
-        required: false,
-    },
-    FunctionParam {
-        name: "zone",
-        required: false,
-    },
-    FunctionParam {
-        name: "origin",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "unit", required: false },
+    FunctionParam { name: "zone", required: false },
+    FunctionParam { name: "origin", required: false },
 ];
-static PARAMS_DATE_FROM_UNIX_DATE: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_DATE_STR_TO_DATE: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_DATE_FROM_UNIX_DATE: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_DATE_STR_TO_DATE: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_DATE_SUB: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "unit",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "unit", required: false },
 ];
-static PARAMS_DATE_TO_DATE_STR: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_DATE_TO_DI: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_DATE_TO_DATE_STR: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_DATE_TO_DI: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_DATE_TRUNC: &[FunctionParam] = &[
-    FunctionParam {
-        name: "unit",
-        required: true,
-    },
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "zone",
-        required: false,
-    },
+    FunctionParam { name: "unit", required: true },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "zone", required: false },
 ];
-static PARAMS_DAY: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_DAY_OF_MONTH: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_DAY_OF_WEEK: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_DAY_OF_WEEK_ISO: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_DAY_OF_YEAR: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_DAY: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_DAY_OF_MONTH: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_DAY_OF_WEEK: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_DAY_OF_WEEK_ISO: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_DAY_OF_YEAR: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_DECODE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "charset",
-        required: true,
-    },
-    FunctionParam {
-        name: "replace",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "charset", required: true },
+    FunctionParam { name: "replace", required: false },
 ];
-static PARAMS_DECODE_CASE: &[FunctionParam] = &[FunctionParam {
-    name: "expressions",
-    required: true,
-}];
+static PARAMS_DECODE_CASE: &[FunctionParam] = &[
+    FunctionParam { name: "expressions", required: true },
+];
 static PARAMS_DECOMPRESS_BINARY: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "method",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "method", required: true },
 ];
 static PARAMS_DECOMPRESS_STRING: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "method",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "method", required: true },
 ];
-static PARAMS_DEGREES: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_DENSE_RANK: &[FunctionParam] = &[FunctionParam {
-    name: "expressions",
-    required: false,
-}];
-static PARAMS_DI_TO_DATE: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_DEGREES: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_DENSE_RANK: &[FunctionParam] = &[
+    FunctionParam { name: "expressions", required: false },
+];
+static PARAMS_DI_TO_DATE: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_ENCODE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "charset",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "charset", required: true },
 ];
 static PARAMS_ENDS_WITH: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_EQUAL_NULL: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_EUCLIDEAN_DISTANCE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_EXISTS: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: false },
 ];
-static PARAMS_EXP: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_EXP: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_EXPLODE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expressions",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expressions", required: false },
 ];
 static PARAMS_EXPLODE_OUTER: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expressions",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expressions", required: false },
 ];
 static PARAMS_EXPLODING_GENERATE_SERIES: &[FunctionParam] = &[
-    FunctionParam {
-        name: "start",
-        required: true,
-    },
-    FunctionParam {
-        name: "end",
-        required: true,
-    },
-    FunctionParam {
-        name: "step",
-        required: false,
-    },
-    FunctionParam {
-        name: "is_end_exclusive",
-        required: false,
-    },
+    FunctionParam { name: "start", required: true },
+    FunctionParam { name: "end", required: true },
+    FunctionParam { name: "step", required: false },
+    FunctionParam { name: "is_end_exclusive", required: false },
 ];
 static PARAMS_EXTRACT: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
-static PARAMS_FACTORIAL: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_FARM_FINGERPRINT: &[FunctionParam] = &[FunctionParam {
-    name: "expressions",
-    required: true,
-}];
+static PARAMS_FACTORIAL: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_FARM_FINGERPRINT: &[FunctionParam] = &[
+    FunctionParam { name: "expressions", required: true },
+];
 static PARAMS_FEATURES_AT_TIME: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "time",
-        required: false,
-    },
-    FunctionParam {
-        name: "num_rows",
-        required: false,
-    },
-    FunctionParam {
-        name: "ignore_feature_nulls",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "time", required: false },
+    FunctionParam { name: "num_rows", required: false },
+    FunctionParam { name: "ignore_feature_nulls", required: false },
 ];
 static PARAMS_FIRST: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: false },
 ];
-static PARAMS_FIRST_VALUE: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_FLATTEN: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_FIRST_VALUE: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_FLATTEN: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_FLOAT64: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: false },
 ];
 static PARAMS_FLOOR: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "decimals",
-        required: false,
-    },
-    FunctionParam {
-        name: "to",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "decimals", required: false },
+    FunctionParam { name: "to", required: false },
 ];
 static PARAMS_FORMAT: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expressions",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expressions", required: false },
 ];
 static PARAMS_FROM_BASE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
-static PARAMS_FROM_BASE32: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_FROM_BASE64: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_FROM_ISO8601TIMESTAMP: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_FROM_BASE32: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_FROM_BASE64: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_FROM_ISO8601TIMESTAMP: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_GAP_FILL: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "ts_column",
-        required: true,
-    },
-    FunctionParam {
-        name: "bucket_width",
-        required: true,
-    },
-    FunctionParam {
-        name: "partitioning_columns",
-        required: false,
-    },
-    FunctionParam {
-        name: "value_columns",
-        required: false,
-    },
-    FunctionParam {
-        name: "origin",
-        required: false,
-    },
-    FunctionParam {
-        name: "ignore_nulls",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "ts_column", required: true },
+    FunctionParam { name: "bucket_width", required: true },
+    FunctionParam { name: "partitioning_columns", required: false },
+    FunctionParam { name: "value_columns", required: false },
+    FunctionParam { name: "origin", required: false },
+    FunctionParam { name: "ignore_nulls", required: false },
 ];
 static PARAMS_GENERATE_DATE_ARRAY: &[FunctionParam] = &[
-    FunctionParam {
-        name: "start",
-        required: true,
-    },
-    FunctionParam {
-        name: "end",
-        required: true,
-    },
-    FunctionParam {
-        name: "step",
-        required: false,
-    },
+    FunctionParam { name: "start", required: true },
+    FunctionParam { name: "end", required: true },
+    FunctionParam { name: "step", required: false },
 ];
 static PARAMS_GENERATE_EMBEDDING: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "params_struct",
-        required: false,
-    },
-    FunctionParam {
-        name: "is_text",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "params_struct", required: false },
+    FunctionParam { name: "is_text", required: false },
 ];
 static PARAMS_GENERATE_SERIES: &[FunctionParam] = &[
-    FunctionParam {
-        name: "start",
-        required: true,
-    },
-    FunctionParam {
-        name: "end",
-        required: true,
-    },
-    FunctionParam {
-        name: "step",
-        required: false,
-    },
-    FunctionParam {
-        name: "is_end_exclusive",
-        required: false,
-    },
+    FunctionParam { name: "start", required: true },
+    FunctionParam { name: "end", required: true },
+    FunctionParam { name: "step", required: false },
+    FunctionParam { name: "is_end_exclusive", required: false },
 ];
 static PARAMS_GENERATE_TIMESTAMP_ARRAY: &[FunctionParam] = &[
-    FunctionParam {
-        name: "start",
-        required: true,
-    },
-    FunctionParam {
-        name: "end",
-        required: true,
-    },
-    FunctionParam {
-        name: "step",
-        required: true,
-    },
+    FunctionParam { name: "start", required: true },
+    FunctionParam { name: "end", required: true },
+    FunctionParam { name: "step", required: true },
 ];
 static PARAMS_UUID: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: false,
-    },
-    FunctionParam {
-        name: "name",
-        required: false,
-    },
-    FunctionParam {
-        name: "is_string",
-        required: false,
-    },
+    FunctionParam { name: "this", required: false },
+    FunctionParam { name: "name", required: false },
+    FunctionParam { name: "is_string", required: false },
 ];
 static PARAMS_GETBIT: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_GET_EXTRACT: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_GREATEST: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expressions",
-        required: false,
-    },
-    FunctionParam {
-        name: "null_if_any_null",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expressions", required: false },
+    FunctionParam { name: "null_if_any_null", required: false },
 ];
-static PARAMS_GREATEST_IGNORE_NULLS: &[FunctionParam] = &[FunctionParam {
-    name: "expressions",
-    required: true,
-}];
-static PARAMS_GROUPING: &[FunctionParam] = &[FunctionParam {
-    name: "expressions",
-    required: true,
-}];
-static PARAMS_GROUPING_ID: &[FunctionParam] = &[FunctionParam {
-    name: "expressions",
-    required: true,
-}];
+static PARAMS_GREATEST_IGNORE_NULLS: &[FunctionParam] = &[
+    FunctionParam { name: "expressions", required: true },
+];
+static PARAMS_GROUPING: &[FunctionParam] = &[
+    FunctionParam { name: "expressions", required: true },
+];
+static PARAMS_GROUPING_ID: &[FunctionParam] = &[
+    FunctionParam { name: "expressions", required: true },
+];
 static PARAMS_GROUP_CONCAT: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "separator",
-        required: false,
-    },
-    FunctionParam {
-        name: "on_overflow",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "separator", required: false },
+    FunctionParam { name: "on_overflow", required: false },
 ];
-static PARAMS_HEX: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_HEX_DECODE_STRING: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_HEX: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_HEX_DECODE_STRING: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_HEX_ENCODE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "case",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "case", required: false },
 ];
 static PARAMS_HLL: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expressions",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expressions", required: false },
 ];
-static PARAMS_HOUR: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_HOUR: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_IF: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "true",
-        required: true,
-    },
-    FunctionParam {
-        name: "false",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "true", required: true },
+    FunctionParam { name: "false", required: false },
 ];
 static PARAMS_INITCAP: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: false },
 ];
-static PARAMS_INLINE: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_INLINE: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_STUFF: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "start",
-        required: true,
-    },
-    FunctionParam {
-        name: "length",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "start", required: true },
+    FunctionParam { name: "length", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
-static PARAMS_INT64: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_IS_INF: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_IS_NAN: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_IS_ASCII: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_IS_NULL_VALUE: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_INT64: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_IS_INF: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_IS_NAN: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_IS_ASCII: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_IS_NULL_VALUE: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_JAROWINKLER_SIMILARITY: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_JSONB_CONTAINS: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_JSONB_EXISTS: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "path",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "path", required: true },
 ];
 static PARAMS_JSONB_EXTRACT: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_JSONB_EXTRACT_SCALAR: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "json_type",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "json_type", required: false },
 ];
 static PARAMS_JSON_ARRAY_APPEND: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expressions",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expressions", required: true },
 ];
 static PARAMS_JSON_ARRAY_CONTAINS: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "json_type",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "json_type", required: false },
 ];
 static PARAMS_JSON_ARRAY_INSERT: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expressions",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expressions", required: true },
 ];
 static PARAMS_JSON_EXTRACT: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "only_json_types",
-        required: false,
-    },
-    FunctionParam {
-        name: "expressions",
-        required: false,
-    },
-    FunctionParam {
-        name: "variant_extract",
-        required: false,
-    },
-    FunctionParam {
-        name: "json_query",
-        required: false,
-    },
-    FunctionParam {
-        name: "option",
-        required: false,
-    },
-    FunctionParam {
-        name: "quote",
-        required: false,
-    },
-    FunctionParam {
-        name: "on_condition",
-        required: false,
-    },
-    FunctionParam {
-        name: "requires_json",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "only_json_types", required: false },
+    FunctionParam { name: "expressions", required: false },
+    FunctionParam { name: "variant_extract", required: false },
+    FunctionParam { name: "json_query", required: false },
+    FunctionParam { name: "option", required: false },
+    FunctionParam { name: "quote", required: false },
+    FunctionParam { name: "on_condition", required: false },
+    FunctionParam { name: "requires_json", required: false },
 ];
 static PARAMS_JSON_EXTRACT_ARRAY: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: false },
 ];
 static PARAMS_JSON_EXTRACT_SCALAR: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "only_json_types",
-        required: false,
-    },
-    FunctionParam {
-        name: "expressions",
-        required: false,
-    },
-    FunctionParam {
-        name: "json_type",
-        required: false,
-    },
-    FunctionParam {
-        name: "scalar_only",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "only_json_types", required: false },
+    FunctionParam { name: "expressions", required: false },
+    FunctionParam { name: "json_type", required: false },
+    FunctionParam { name: "scalar_only", required: false },
 ];
 static PARAMS_JSON_FORMAT: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: false,
-    },
-    FunctionParam {
-        name: "options",
-        required: false,
-    },
-    FunctionParam {
-        name: "is_json",
-        required: false,
-    },
-    FunctionParam {
-        name: "to_json",
-        required: false,
-    },
+    FunctionParam { name: "this", required: false },
+    FunctionParam { name: "options", required: false },
+    FunctionParam { name: "is_json", required: false },
+    FunctionParam { name: "to_json", required: false },
 ];
 static PARAMS_PARSE_JSON: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: false,
-    },
-    FunctionParam {
-        name: "safe",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: false },
+    FunctionParam { name: "safe", required: false },
 ];
 static PARAMS_JSON_REMOVE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expressions",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expressions", required: true },
 ];
 static PARAMS_JSON_SET: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expressions",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expressions", required: true },
 ];
 static PARAMS_JSON_STRIP_NULLS: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: false,
-    },
-    FunctionParam {
-        name: "include_arrays",
-        required: false,
-    },
-    FunctionParam {
-        name: "remove_empty",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: false },
+    FunctionParam { name: "include_arrays", required: false },
+    FunctionParam { name: "remove_empty", required: false },
 ];
 static PARAMS_JSON_TYPE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: false },
 ];
-static PARAMS_JUSTIFY_DAYS: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_JUSTIFY_HOURS: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_JUSTIFY_INTERVAL: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_JUSTIFY_DAYS: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_JUSTIFY_HOURS: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_JUSTIFY_INTERVAL: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_JSON_ARRAY: &[FunctionParam] = &[
-    FunctionParam {
-        name: "expressions",
-        required: false,
-    },
-    FunctionParam {
-        name: "null_handling",
-        required: false,
-    },
-    FunctionParam {
-        name: "return_type",
-        required: false,
-    },
-    FunctionParam {
-        name: "strict",
-        required: false,
-    },
+    FunctionParam { name: "expressions", required: false },
+    FunctionParam { name: "null_handling", required: false },
+    FunctionParam { name: "return_type", required: false },
+    FunctionParam { name: "strict", required: false },
 ];
 static PARAMS_JSON_ARRAY_AGG: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "order",
-        required: false,
-    },
-    FunctionParam {
-        name: "null_handling",
-        required: false,
-    },
-    FunctionParam {
-        name: "return_type",
-        required: false,
-    },
-    FunctionParam {
-        name: "strict",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "order", required: false },
+    FunctionParam { name: "null_handling", required: false },
+    FunctionParam { name: "return_type", required: false },
+    FunctionParam { name: "strict", required: false },
 ];
-static PARAMS_JSON_BOOL: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_JSON_BOOL: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_JSONB_CONTAINS_ALL_TOP_KEYS: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_JSONB_CONTAINS_ANY_TOP_KEYS: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_JSONB_DELETE_AT_PATH: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_JSONB_OBJECT_AGG: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_JSON_CAST: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "to",
-        required: true,
-    },
-    FunctionParam {
-        name: "format",
-        required: false,
-    },
-    FunctionParam {
-        name: "safe",
-        required: false,
-    },
-    FunctionParam {
-        name: "action",
-        required: false,
-    },
-    FunctionParam {
-        name: "default",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "to", required: true },
+    FunctionParam { name: "format", required: false },
+    FunctionParam { name: "safe", required: false },
+    FunctionParam { name: "action", required: false },
+    FunctionParam { name: "default", required: false },
 ];
 static PARAMS_JSON_EXISTS: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "path",
-        required: true,
-    },
-    FunctionParam {
-        name: "passing",
-        required: false,
-    },
-    FunctionParam {
-        name: "on_condition",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "path", required: true },
+    FunctionParam { name: "passing", required: false },
+    FunctionParam { name: "on_condition", required: false },
 ];
 static PARAMS_JSON_KEYS_AT_DEPTH: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: false,
-    },
-    FunctionParam {
-        name: "mode",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: false },
+    FunctionParam { name: "mode", required: false },
 ];
 static PARAMS_JSON_OBJECT: &[FunctionParam] = &[
-    FunctionParam {
-        name: "expressions",
-        required: false,
-    },
-    FunctionParam {
-        name: "null_handling",
-        required: false,
-    },
-    FunctionParam {
-        name: "unique_keys",
-        required: false,
-    },
-    FunctionParam {
-        name: "return_type",
-        required: false,
-    },
-    FunctionParam {
-        name: "encoding",
-        required: false,
-    },
+    FunctionParam { name: "expressions", required: false },
+    FunctionParam { name: "null_handling", required: false },
+    FunctionParam { name: "unique_keys", required: false },
+    FunctionParam { name: "return_type", required: false },
+    FunctionParam { name: "encoding", required: false },
 ];
 static PARAMS_JSON_OBJECT_AGG: &[FunctionParam] = &[
-    FunctionParam {
-        name: "expressions",
-        required: false,
-    },
-    FunctionParam {
-        name: "null_handling",
-        required: false,
-    },
-    FunctionParam {
-        name: "unique_keys",
-        required: false,
-    },
-    FunctionParam {
-        name: "return_type",
-        required: false,
-    },
-    FunctionParam {
-        name: "encoding",
-        required: false,
-    },
+    FunctionParam { name: "expressions", required: false },
+    FunctionParam { name: "null_handling", required: false },
+    FunctionParam { name: "unique_keys", required: false },
+    FunctionParam { name: "return_type", required: false },
+    FunctionParam { name: "encoding", required: false },
 ];
 static PARAMS_JSON_TABLE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "schema",
-        required: true,
-    },
-    FunctionParam {
-        name: "path",
-        required: false,
-    },
-    FunctionParam {
-        name: "error_handling",
-        required: false,
-    },
-    FunctionParam {
-        name: "empty_handling",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "schema", required: true },
+    FunctionParam { name: "path", required: false },
+    FunctionParam { name: "error_handling", required: false },
+    FunctionParam { name: "empty_handling", required: false },
 ];
 static PARAMS_JSON_VALUE_ARRAY: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: false },
 ];
 static PARAMS_LAG: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "offset",
-        required: false,
-    },
-    FunctionParam {
-        name: "default",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "offset", required: false },
+    FunctionParam { name: "default", required: false },
 ];
 static PARAMS_LAST: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: false },
 ];
 static PARAMS_LAST_DAY: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "unit",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "unit", required: false },
 ];
-static PARAMS_LAST_VALUE: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_LAX_BOOL: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_LAX_FLOAT64: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_LAX_INT64: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_LAX_STRING: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_LOWER: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_LAST_VALUE: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_LAX_BOOL: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_LAX_FLOAT64: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_LAX_INT64: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_LAX_STRING: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_LOWER: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_LEAD: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "offset",
-        required: false,
-    },
-    FunctionParam {
-        name: "default",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "offset", required: false },
+    FunctionParam { name: "default", required: false },
 ];
 static PARAMS_LEAST: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expressions",
-        required: false,
-    },
-    FunctionParam {
-        name: "null_if_any_null",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expressions", required: false },
+    FunctionParam { name: "null_if_any_null", required: false },
 ];
-static PARAMS_LEAST_IGNORE_NULLS: &[FunctionParam] = &[FunctionParam {
-    name: "expressions",
-    required: true,
-}];
+static PARAMS_LEAST_IGNORE_NULLS: &[FunctionParam] = &[
+    FunctionParam { name: "expressions", required: true },
+];
 static PARAMS_LEFT: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_LEVENSHTEIN: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: false,
-    },
-    FunctionParam {
-        name: "ins_cost",
-        required: false,
-    },
-    FunctionParam {
-        name: "del_cost",
-        required: false,
-    },
-    FunctionParam {
-        name: "sub_cost",
-        required: false,
-    },
-    FunctionParam {
-        name: "max_dist",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: false },
+    FunctionParam { name: "ins_cost", required: false },
+    FunctionParam { name: "del_cost", required: false },
+    FunctionParam { name: "sub_cost", required: false },
+    FunctionParam { name: "max_dist", required: false },
 ];
-static PARAMS_LIST: &[FunctionParam] = &[FunctionParam {
-    name: "expressions",
-    required: false,
-}];
-static PARAMS_LN: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_LIST: &[FunctionParam] = &[
+    FunctionParam { name: "expressions", required: false },
+];
+static PARAMS_LN: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_LOG: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: false },
 ];
-static PARAMS_LOWER_HEX: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_LOWER_HEX: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_MAKE_INTERVAL: &[FunctionParam] = &[
-    FunctionParam {
-        name: "year",
-        required: false,
-    },
-    FunctionParam {
-        name: "month",
-        required: false,
-    },
-    FunctionParam {
-        name: "day",
-        required: false,
-    },
-    FunctionParam {
-        name: "hour",
-        required: false,
-    },
-    FunctionParam {
-        name: "minute",
-        required: false,
-    },
-    FunctionParam {
-        name: "second",
-        required: false,
-    },
+    FunctionParam { name: "year", required: false },
+    FunctionParam { name: "month", required: false },
+    FunctionParam { name: "day", required: false },
+    FunctionParam { name: "hour", required: false },
+    FunctionParam { name: "minute", required: false },
+    FunctionParam { name: "second", required: false },
 ];
 static PARAMS_MAP: &[FunctionParam] = &[
-    FunctionParam {
-        name: "keys",
-        required: false,
-    },
-    FunctionParam {
-        name: "values",
-        required: false,
-    },
+    FunctionParam { name: "keys", required: false },
+    FunctionParam { name: "values", required: false },
 ];
-static PARAMS_MAP_FROM_ENTRIES: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_MAP_FROM_ENTRIES: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_MATCH_AGAINST: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expressions",
-        required: true,
-    },
-    FunctionParam {
-        name: "modifier",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expressions", required: true },
+    FunctionParam { name: "modifier", required: false },
 ];
 static PARAMS_MAX: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expressions",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expressions", required: false },
 ];
-static PARAMS_MD5: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_MD5DIGEST: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_MEDIAN: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_MD5: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_MD5DIGEST: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_MEDIAN: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_MIN: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expressions",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expressions", required: false },
 ];
 static PARAMS_MINHASH: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expressions",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expressions", required: true },
 ];
-static PARAMS_MINHASH_COMBINE: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_MINUTE: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_MONTH: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_MONTHNAME: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_MINHASH_COMBINE: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_MINUTE: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_MONTH: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_MONTHNAME: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_MONTHS_BETWEEN: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "roundoff",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "roundoff", required: false },
 ];
-static PARAMS_MD5NUMBER_LOWER64: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_MD5NUMBER_UPPER64: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_MD5NUMBER_LOWER64: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_MD5NUMBER_UPPER64: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_ML_FORECAST: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: false,
-    },
-    FunctionParam {
-        name: "params_struct",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: false },
+    FunctionParam { name: "params_struct", required: false },
 ];
 static PARAMS_ML_TRANSLATE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "params_struct",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "params_struct", required: true },
 ];
 static PARAMS_NEXT_DAY: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_NEXT_VALUE_FOR: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "order",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "order", required: false },
 ];
 static PARAMS_NORMALIZE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "form",
-        required: false,
-    },
-    FunctionParam {
-        name: "is_casefold",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "form", required: false },
+    FunctionParam { name: "is_casefold", required: false },
 ];
 static PARAMS_NTH_VALUE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "offset",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "offset", required: true },
 ];
-static PARAMS_NTILE: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: false,
-}];
+static PARAMS_NTILE: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: false },
+];
 static PARAMS_NULLIF: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_NUMBER_TO_STR: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "format",
-        required: true,
-    },
-    FunctionParam {
-        name: "culture",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "format", required: true },
+    FunctionParam { name: "culture", required: false },
 ];
 static PARAMS_NVL2: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "true",
-        required: true,
-    },
-    FunctionParam {
-        name: "false",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "true", required: true },
+    FunctionParam { name: "false", required: false },
 ];
 static PARAMS_OBJECT_AGG: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_OBJECT_INSERT: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "key",
-        required: true,
-    },
-    FunctionParam {
-        name: "value",
-        required: true,
-    },
-    FunctionParam {
-        name: "update_flag",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "key", required: true },
+    FunctionParam { name: "value", required: true },
+    FunctionParam { name: "update_flag", required: false },
 ];
 static PARAMS_OPEN_JSON: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "path",
-        required: false,
-    },
-    FunctionParam {
-        name: "expressions",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "path", required: false },
+    FunctionParam { name: "expressions", required: false },
 ];
 static PARAMS_OR: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_OVERLAY: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "from_",
-        required: true,
-    },
-    FunctionParam {
-        name: "for_",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "from_", required: true },
+    FunctionParam { name: "for_", required: false },
 ];
 static PARAMS_PAD: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "fill_pattern",
-        required: false,
-    },
-    FunctionParam {
-        name: "is_left",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "fill_pattern", required: false },
+    FunctionParam { name: "is_left", required: true },
 ];
 static PARAMS_PARAMETERIZED_AGG: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expressions",
-        required: true,
-    },
-    FunctionParam {
-        name: "params",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expressions", required: true },
+    FunctionParam { name: "params", required: true },
 ];
-static PARAMS_PARSE_BIGNUMERIC: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_PARSE_BIGNUMERIC: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_PARSE_DATETIME: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "format",
-        required: false,
-    },
-    FunctionParam {
-        name: "zone",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "format", required: false },
+    FunctionParam { name: "zone", required: false },
 ];
 static PARAMS_PARSE_IP: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "type",
-        required: true,
-    },
-    FunctionParam {
-        name: "permissive",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "type", required: true },
+    FunctionParam { name: "permissive", required: false },
 ];
-static PARAMS_PARSE_NUMERIC: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_PARSE_NUMERIC: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_PARSE_TIME: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "format",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "format", required: true },
 ];
 static PARAMS_PARSE_URL: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "part_to_extract",
-        required: false,
-    },
-    FunctionParam {
-        name: "key",
-        required: false,
-    },
-    FunctionParam {
-        name: "permissive",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "part_to_extract", required: false },
+    FunctionParam { name: "key", required: false },
+    FunctionParam { name: "permissive", required: false },
 ];
 static PARAMS_PERCENTILE_CONT: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: false },
 ];
 static PARAMS_PERCENTILE_DISC: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: false },
 ];
-static PARAMS_PERCENT_RANK: &[FunctionParam] = &[FunctionParam {
-    name: "expressions",
-    required: false,
-}];
+static PARAMS_PERCENT_RANK: &[FunctionParam] = &[
+    FunctionParam { name: "expressions", required: false },
+];
 static PARAMS_POSEXPLODE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expressions",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expressions", required: false },
 ];
 static PARAMS_POSEXPLODE_OUTER: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expressions",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expressions", required: false },
 ];
 static PARAMS_POW: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_PREDICT: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "params_struct",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "params_struct", required: false },
 ];
 static PARAMS_PREVIOUS_DAY: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_QUANTILE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "quantile",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "quantile", required: true },
 ];
-static PARAMS_QUARTER: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_RADIANS: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_QUARTER: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_RADIANS: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_RAND: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: false,
-    },
-    FunctionParam {
-        name: "lower",
-        required: false,
-    },
-    FunctionParam {
-        name: "upper",
-        required: false,
-    },
+    FunctionParam { name: "this", required: false },
+    FunctionParam { name: "lower", required: false },
+    FunctionParam { name: "upper", required: false },
 ];
-static PARAMS_RANDN: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: false,
-}];
+static PARAMS_RANDN: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: false },
+];
 static PARAMS_RANGE_BUCKET: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_RANGE_N: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expressions",
-        required: true,
-    },
-    FunctionParam {
-        name: "each",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expressions", required: true },
+    FunctionParam { name: "each", required: false },
 ];
-static PARAMS_RANK: &[FunctionParam] = &[FunctionParam {
-    name: "expressions",
-    required: false,
-}];
+static PARAMS_RANK: &[FunctionParam] = &[
+    FunctionParam { name: "expressions", required: false },
+];
 static PARAMS_READ_CSV: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expressions",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expressions", required: false },
 ];
-static PARAMS_READ_PARQUET: &[FunctionParam] = &[FunctionParam {
-    name: "expressions",
-    required: true,
-}];
+static PARAMS_READ_PARQUET: &[FunctionParam] = &[
+    FunctionParam { name: "expressions", required: true },
+];
 static PARAMS_REDUCE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "initial",
-        required: true,
-    },
-    FunctionParam {
-        name: "merge",
-        required: true,
-    },
-    FunctionParam {
-        name: "finish",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "initial", required: true },
+    FunctionParam { name: "merge", required: true },
+    FunctionParam { name: "finish", required: false },
 ];
 static PARAMS_REGEXP_COUNT: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "position",
-        required: false,
-    },
-    FunctionParam {
-        name: "parameters",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "position", required: false },
+    FunctionParam { name: "parameters", required: false },
 ];
 static PARAMS_REGEXP_EXTRACT: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "position",
-        required: false,
-    },
-    FunctionParam {
-        name: "occurrence",
-        required: false,
-    },
-    FunctionParam {
-        name: "parameters",
-        required: false,
-    },
-    FunctionParam {
-        name: "group",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "position", required: false },
+    FunctionParam { name: "occurrence", required: false },
+    FunctionParam { name: "parameters", required: false },
+    FunctionParam { name: "group", required: false },
 ];
 static PARAMS_REGEXP_EXTRACT_ALL: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "group",
-        required: false,
-    },
-    FunctionParam {
-        name: "parameters",
-        required: false,
-    },
-    FunctionParam {
-        name: "position",
-        required: false,
-    },
-    FunctionParam {
-        name: "occurrence",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "group", required: false },
+    FunctionParam { name: "parameters", required: false },
+    FunctionParam { name: "position", required: false },
+    FunctionParam { name: "occurrence", required: false },
 ];
 static PARAMS_REGEXP_FULL_MATCH: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "options",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "options", required: false },
 ];
 static PARAMS_REGEXP_INSTR: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "position",
-        required: false,
-    },
-    FunctionParam {
-        name: "occurrence",
-        required: false,
-    },
-    FunctionParam {
-        name: "option",
-        required: false,
-    },
-    FunctionParam {
-        name: "parameters",
-        required: false,
-    },
-    FunctionParam {
-        name: "group",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "position", required: false },
+    FunctionParam { name: "occurrence", required: false },
+    FunctionParam { name: "option", required: false },
+    FunctionParam { name: "parameters", required: false },
+    FunctionParam { name: "group", required: false },
 ];
 static PARAMS_REGEXP_I_LIKE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "flag",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "flag", required: false },
 ];
 static PARAMS_REGEXP_LIKE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "flag",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "flag", required: false },
 ];
 static PARAMS_REGEXP_REPLACE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "replacement",
-        required: false,
-    },
-    FunctionParam {
-        name: "position",
-        required: false,
-    },
-    FunctionParam {
-        name: "occurrence",
-        required: false,
-    },
-    FunctionParam {
-        name: "modifiers",
-        required: false,
-    },
-    FunctionParam {
-        name: "single_replace",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "replacement", required: false },
+    FunctionParam { name: "position", required: false },
+    FunctionParam { name: "occurrence", required: false },
+    FunctionParam { name: "modifiers", required: false },
+    FunctionParam { name: "single_replace", required: false },
 ];
 static PARAMS_REGEXP_SPLIT: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "limit",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "limit", required: false },
 ];
 static PARAMS_REGR_AVGX: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_REGR_AVGY: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_REGR_VALX: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_REGR_VALY: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_REPEAT: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "times",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "times", required: true },
 ];
 static PARAMS_REPLACE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "replacement",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "replacement", required: false },
 ];
-static PARAMS_REVERSE: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_REVERSE: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_RIGHT: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_ROUND: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "decimals",
-        required: false,
-    },
-    FunctionParam {
-        name: "truncate",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "decimals", required: false },
+    FunctionParam { name: "truncate", required: false },
 ];
-static PARAMS_ROW_NUMBER: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: false,
-}];
-static PARAMS_RTRIMMED_LENGTH: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_ROW_NUMBER: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: false },
+];
+static PARAMS_RTRIMMED_LENGTH: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_SAFE_ADD: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
-static PARAMS_SAFE_CONVERT_BYTES_TO_STRING: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_SAFE_CONVERT_BYTES_TO_STRING: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_SAFE_DIVIDE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_SAFE_MULTIPLY: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
-static PARAMS_SAFE_NEGATE: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_SAFE_NEGATE: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_SAFE_SUBTRACT: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_SEARCH: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "json_scope",
-        required: false,
-    },
-    FunctionParam {
-        name: "analyzer",
-        required: false,
-    },
-    FunctionParam {
-        name: "analyzer_options",
-        required: false,
-    },
-    FunctionParam {
-        name: "search_mode",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "json_scope", required: false },
+    FunctionParam { name: "analyzer", required: false },
+    FunctionParam { name: "analyzer_options", required: false },
+    FunctionParam { name: "search_mode", required: false },
 ];
-static PARAMS_SEC: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_SECH: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_SECOND: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_SHA: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_SEC: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_SECH: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_SECOND: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_SHA: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_SHA2: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "length",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "length", required: false },
 ];
-static PARAMS_SIGN: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_SIN: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_SINH: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_SKEWNESS: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_SIGN: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_SIN: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_SINH: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_SKEWNESS: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_SORT_ARRAY: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "asc",
-        required: false,
-    },
-    FunctionParam {
-        name: "nulls_first",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "asc", required: false },
+    FunctionParam { name: "nulls_first", required: false },
 ];
-static PARAMS_SOUNDEX: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_SOUNDEX_P123: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_SPACE: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_SOUNDEX: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_SOUNDEX_P123: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_SPACE: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_SPLIT: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "limit",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "limit", required: false },
 ];
 static PARAMS_STRING_TO_ARRAY: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: false,
-    },
-    FunctionParam {
-        name: "null",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: false },
+    FunctionParam { name: "null", required: false },
 ];
 static PARAMS_SPLIT_PART: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "delimiter",
-        required: false,
-    },
-    FunctionParam {
-        name: "part_index",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "delimiter", required: false },
+    FunctionParam { name: "part_index", required: false },
 ];
-static PARAMS_SQRT: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_SQRT: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_STANDARD_HASH: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: false },
 ];
 static PARAMS_STARTS_WITH: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
-static PARAMS_STAR_MAP: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_STDDEV: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_STDDEV_POP: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_STDDEV_SAMP: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_STAR_MAP: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_STDDEV: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_STDDEV_POP: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_STDDEV_SAMP: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_STRING: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "zone",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "zone", required: false },
 ];
-static PARAMS_STRUCT: &[FunctionParam] = &[FunctionParam {
-    name: "expressions",
-    required: false,
-}];
+static PARAMS_STRUCT: &[FunctionParam] = &[
+    FunctionParam { name: "expressions", required: false },
+];
 static PARAMS_STRUCT_EXTRACT: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_STR_POSITION: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "substr",
-        required: true,
-    },
-    FunctionParam {
-        name: "position",
-        required: false,
-    },
-    FunctionParam {
-        name: "occurrence",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "substr", required: true },
+    FunctionParam { name: "position", required: false },
+    FunctionParam { name: "occurrence", required: false },
 ];
 static PARAMS_STR_TO_DATE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "format",
-        required: false,
-    },
-    FunctionParam {
-        name: "safe",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "format", required: false },
+    FunctionParam { name: "safe", required: false },
 ];
 static PARAMS_STR_TO_MAP: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "pair_delim",
-        required: false,
-    },
-    FunctionParam {
-        name: "key_value_delim",
-        required: false,
-    },
-    FunctionParam {
-        name: "duplicate_resolution_callback",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "pair_delim", required: false },
+    FunctionParam { name: "key_value_delim", required: false },
+    FunctionParam { name: "duplicate_resolution_callback", required: false },
 ];
 static PARAMS_STR_TO_TIME: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "format",
-        required: true,
-    },
-    FunctionParam {
-        name: "zone",
-        required: false,
-    },
-    FunctionParam {
-        name: "safe",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "format", required: true },
+    FunctionParam { name: "zone", required: false },
+    FunctionParam { name: "safe", required: false },
 ];
 static PARAMS_STR_TO_UNIX: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: false,
-    },
-    FunctionParam {
-        name: "format",
-        required: false,
-    },
+    FunctionParam { name: "this", required: false },
+    FunctionParam { name: "format", required: false },
 ];
 static PARAMS_ST_DISTANCE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "use_spheroid",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "use_spheroid", required: false },
 ];
 static PARAMS_ST_POINT: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "null",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "null", required: false },
 ];
 static PARAMS_SUBSTRING: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "start",
-        required: false,
-    },
-    FunctionParam {
-        name: "length",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "start", required: false },
+    FunctionParam { name: "length", required: false },
 ];
 static PARAMS_SUBSTRING_INDEX: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "delimiter",
-        required: true,
-    },
-    FunctionParam {
-        name: "count",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "delimiter", required: true },
+    FunctionParam { name: "count", required: true },
 ];
-static PARAMS_SUM: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_SHA1DIGEST: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_SUM: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_SHA1DIGEST: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_SHA2DIGEST: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "length",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "length", required: false },
 ];
-static PARAMS_TAN: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_TANH: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_TAN: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_TANH: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_TIME: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: false,
-    },
-    FunctionParam {
-        name: "zone",
-        required: false,
-    },
+    FunctionParam { name: "this", required: false },
+    FunctionParam { name: "zone", required: false },
 ];
 static PARAMS_TIME_FROM_PARTS: &[FunctionParam] = &[
-    FunctionParam {
-        name: "hour",
-        required: true,
-    },
-    FunctionParam {
-        name: "min",
-        required: true,
-    },
-    FunctionParam {
-        name: "sec",
-        required: true,
-    },
-    FunctionParam {
-        name: "nano",
-        required: false,
-    },
-    FunctionParam {
-        name: "fractions",
-        required: false,
-    },
-    FunctionParam {
-        name: "precision",
-        required: false,
-    },
+    FunctionParam { name: "hour", required: true },
+    FunctionParam { name: "min", required: true },
+    FunctionParam { name: "sec", required: true },
+    FunctionParam { name: "nano", required: false },
+    FunctionParam { name: "fractions", required: false },
+    FunctionParam { name: "precision", required: false },
 ];
 static PARAMS_TIMESTAMP: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: false,
-    },
-    FunctionParam {
-        name: "zone",
-        required: false,
-    },
-    FunctionParam {
-        name: "with_tz",
-        required: false,
-    },
+    FunctionParam { name: "this", required: false },
+    FunctionParam { name: "zone", required: false },
+    FunctionParam { name: "with_tz", required: false },
 ];
 static PARAMS_TIMESTAMP_DIFF: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "unit",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "unit", required: false },
 ];
 static PARAMS_TIMESTAMP_FROM_PARTS: &[FunctionParam] = &[
-    FunctionParam {
-        name: "year",
-        required: false,
-    },
-    FunctionParam {
-        name: "month",
-        required: false,
-    },
-    FunctionParam {
-        name: "day",
-        required: false,
-    },
-    FunctionParam {
-        name: "hour",
-        required: false,
-    },
-    FunctionParam {
-        name: "min",
-        required: false,
-    },
-    FunctionParam {
-        name: "sec",
-        required: false,
-    },
-    FunctionParam {
-        name: "nano",
-        required: false,
-    },
-    FunctionParam {
-        name: "zone",
-        required: false,
-    },
-    FunctionParam {
-        name: "milli",
-        required: false,
-    },
-    FunctionParam {
-        name: "this",
-        required: false,
-    },
-    FunctionParam {
-        name: "expression",
-        required: false,
-    },
+    FunctionParam { name: "year", required: false },
+    FunctionParam { name: "month", required: false },
+    FunctionParam { name: "day", required: false },
+    FunctionParam { name: "hour", required: false },
+    FunctionParam { name: "min", required: false },
+    FunctionParam { name: "sec", required: false },
+    FunctionParam { name: "nano", required: false },
+    FunctionParam { name: "zone", required: false },
+    FunctionParam { name: "milli", required: false },
+    FunctionParam { name: "this", required: false },
+    FunctionParam { name: "expression", required: false },
 ];
 static PARAMS_TIMESTAMP_LTZ_FROM_PARTS: &[FunctionParam] = &[
-    FunctionParam {
-        name: "year",
-        required: false,
-    },
-    FunctionParam {
-        name: "month",
-        required: false,
-    },
-    FunctionParam {
-        name: "day",
-        required: false,
-    },
-    FunctionParam {
-        name: "hour",
-        required: false,
-    },
-    FunctionParam {
-        name: "min",
-        required: false,
-    },
-    FunctionParam {
-        name: "sec",
-        required: false,
-    },
-    FunctionParam {
-        name: "nano",
-        required: false,
-    },
+    FunctionParam { name: "year", required: false },
+    FunctionParam { name: "month", required: false },
+    FunctionParam { name: "day", required: false },
+    FunctionParam { name: "hour", required: false },
+    FunctionParam { name: "min", required: false },
+    FunctionParam { name: "sec", required: false },
+    FunctionParam { name: "nano", required: false },
 ];
 static PARAMS_TIMESTAMP_TZ_FROM_PARTS: &[FunctionParam] = &[
-    FunctionParam {
-        name: "year",
-        required: false,
-    },
-    FunctionParam {
-        name: "month",
-        required: false,
-    },
-    FunctionParam {
-        name: "day",
-        required: false,
-    },
-    FunctionParam {
-        name: "hour",
-        required: false,
-    },
-    FunctionParam {
-        name: "min",
-        required: false,
-    },
-    FunctionParam {
-        name: "sec",
-        required: false,
-    },
-    FunctionParam {
-        name: "nano",
-        required: false,
-    },
-    FunctionParam {
-        name: "zone",
-        required: false,
-    },
+    FunctionParam { name: "year", required: false },
+    FunctionParam { name: "month", required: false },
+    FunctionParam { name: "day", required: false },
+    FunctionParam { name: "hour", required: false },
+    FunctionParam { name: "min", required: false },
+    FunctionParam { name: "sec", required: false },
+    FunctionParam { name: "nano", required: false },
+    FunctionParam { name: "zone", required: false },
 ];
 static PARAMS_TIMESTAMP_ADD: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "unit",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "unit", required: false },
 ];
 static PARAMS_TIMESTAMP_SUB: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "unit",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "unit", required: false },
 ];
 static PARAMS_TIMESTAMP_TRUNC: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "unit",
-        required: true,
-    },
-    FunctionParam {
-        name: "zone",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "unit", required: true },
+    FunctionParam { name: "zone", required: false },
 ];
 static PARAMS_TIME_ADD: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "unit",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "unit", required: false },
 ];
 static PARAMS_TIME_DIFF: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "unit",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "unit", required: false },
 ];
 static PARAMS_TIME_SLICE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "unit",
-        required: true,
-    },
-    FunctionParam {
-        name: "kind",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "unit", required: true },
+    FunctionParam { name: "kind", required: false },
 ];
-static PARAMS_TIME_STR_TO_DATE: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_TIME_STR_TO_DATE: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_TIME_STR_TO_TIME: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "zone",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "zone", required: false },
 ];
-static PARAMS_TIME_STR_TO_UNIX: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_TIME_STR_TO_UNIX: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_TIME_SUB: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "unit",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "unit", required: false },
 ];
 static PARAMS_TIME_TO_STR: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "format",
-        required: true,
-    },
-    FunctionParam {
-        name: "culture",
-        required: false,
-    },
-    FunctionParam {
-        name: "zone",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "format", required: true },
+    FunctionParam { name: "culture", required: false },
+    FunctionParam { name: "zone", required: false },
 ];
-static PARAMS_TIME_TO_TIME_STR: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_TIME_TO_UNIX: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_TIME_TO_TIME_STR: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_TIME_TO_UNIX: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_TIME_TRUNC: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "unit",
-        required: true,
-    },
-    FunctionParam {
-        name: "zone",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "unit", required: true },
+    FunctionParam { name: "zone", required: false },
 ];
-static PARAMS_TO_ARRAY: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_TO_BASE32: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_TO_BASE64: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_TO_ARRAY: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_TO_BASE32: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_TO_BASE64: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_TO_CHAR: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "format",
-        required: false,
-    },
-    FunctionParam {
-        name: "nlsparam",
-        required: false,
-    },
-    FunctionParam {
-        name: "is_numeric",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "format", required: false },
+    FunctionParam { name: "nlsparam", required: false },
+    FunctionParam { name: "is_numeric", required: false },
 ];
-static PARAMS_TO_CODE_POINTS: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_TO_DAYS: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_TO_CODE_POINTS: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_TO_DAYS: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_TO_DOUBLE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "format",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "format", required: false },
 ];
-static PARAMS_TO_MAP: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_TO_MAP: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_TO_NUMBER: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "format",
-        required: false,
-    },
-    FunctionParam {
-        name: "nlsparam",
-        required: false,
-    },
-    FunctionParam {
-        name: "precision",
-        required: false,
-    },
-    FunctionParam {
-        name: "scale",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "format", required: false },
+    FunctionParam { name: "nlsparam", required: false },
+    FunctionParam { name: "precision", required: false },
+    FunctionParam { name: "scale", required: false },
 ];
 static PARAMS_TRANSFORM: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
 ];
 static PARAMS_TRANSLATE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "from_",
-        required: true,
-    },
-    FunctionParam {
-        name: "to",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "from_", required: true },
+    FunctionParam { name: "to", required: true },
 ];
 static PARAMS_TRIM: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: false,
-    },
-    FunctionParam {
-        name: "position",
-        required: false,
-    },
-    FunctionParam {
-        name: "collation",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: false },
+    FunctionParam { name: "position", required: false },
+    FunctionParam { name: "collation", required: false },
 ];
-static PARAMS_TRY: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_TRY: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_TRY_BASE64DECODE_BINARY: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "alphabet",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "alphabet", required: false },
 ];
 static PARAMS_TRY_BASE64DECODE_STRING: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "alphabet",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "alphabet", required: false },
 ];
 static PARAMS_TRY_CAST: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "to",
-        required: true,
-    },
-    FunctionParam {
-        name: "format",
-        required: false,
-    },
-    FunctionParam {
-        name: "safe",
-        required: false,
-    },
-    FunctionParam {
-        name: "action",
-        required: false,
-    },
-    FunctionParam {
-        name: "default",
-        required: false,
-    },
-    FunctionParam {
-        name: "requires_string",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "to", required: true },
+    FunctionParam { name: "format", required: false },
+    FunctionParam { name: "safe", required: false },
+    FunctionParam { name: "action", required: false },
+    FunctionParam { name: "default", required: false },
+    FunctionParam { name: "requires_string", required: false },
 ];
-static PARAMS_TRY_HEX_DECODE_BINARY: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_TRY_HEX_DECODE_STRING: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_TS_OR_DI_TO_DI: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_TRY_HEX_DECODE_BINARY: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_TRY_HEX_DECODE_STRING: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_TS_OR_DI_TO_DI: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_TS_OR_DS_ADD: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "unit",
-        required: false,
-    },
-    FunctionParam {
-        name: "return_type",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "unit", required: false },
+    FunctionParam { name: "return_type", required: false },
 ];
 static PARAMS_TS_OR_DS_DIFF: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: true,
-    },
-    FunctionParam {
-        name: "unit",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: true },
+    FunctionParam { name: "unit", required: false },
 ];
 static PARAMS_TS_OR_DS_TO_DATE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "format",
-        required: false,
-    },
-    FunctionParam {
-        name: "safe",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "format", required: false },
+    FunctionParam { name: "safe", required: false },
 ];
-static PARAMS_TS_OR_DS_TO_DATETIME: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_TS_OR_DS_TO_DATE_STR: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_TS_OR_DS_TO_DATETIME: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_TS_OR_DS_TO_DATE_STR: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_TS_OR_DS_TO_TIME: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "format",
-        required: false,
-    },
-    FunctionParam {
-        name: "safe",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "format", required: false },
+    FunctionParam { name: "safe", required: false },
 ];
-static PARAMS_TS_OR_DS_TO_TIMESTAMP: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_TYPEOF: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_UPPER: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_TS_OR_DS_TO_TIMESTAMP: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_TYPEOF: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_UPPER: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_UNHEX: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expression",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expression", required: false },
 ];
-static PARAMS_UNICODE: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_UNIX_DATE: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_UNIX_MICROS: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_UNIX_MILLIS: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_UNIX_SECONDS: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_UNICODE: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_UNIX_DATE: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_UNIX_MICROS: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_UNIX_MILLIS: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_UNIX_SECONDS: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_UNIX_TO_STR: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "format",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "format", required: false },
 ];
 static PARAMS_UNIX_TO_TIME: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "scale",
-        required: false,
-    },
-    FunctionParam {
-        name: "zone",
-        required: false,
-    },
-    FunctionParam {
-        name: "hours",
-        required: false,
-    },
-    FunctionParam {
-        name: "minutes",
-        required: false,
-    },
-    FunctionParam {
-        name: "format",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "scale", required: false },
+    FunctionParam { name: "zone", required: false },
+    FunctionParam { name: "hours", required: false },
+    FunctionParam { name: "minutes", required: false },
+    FunctionParam { name: "format", required: false },
 ];
-static PARAMS_UNIX_TO_TIME_STR: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_UNIX_TO_TIME_STR: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_UNNEST: &[FunctionParam] = &[
-    FunctionParam {
-        name: "expressions",
-        required: true,
-    },
-    FunctionParam {
-        name: "alias",
-        required: false,
-    },
-    FunctionParam {
-        name: "offset",
-        required: false,
-    },
-    FunctionParam {
-        name: "explode_array",
-        required: false,
-    },
+    FunctionParam { name: "expressions", required: true },
+    FunctionParam { name: "alias", required: false },
+    FunctionParam { name: "offset", required: false },
+    FunctionParam { name: "explode_array", required: false },
 ];
-static PARAMS_UTC_TIME: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: false,
-}];
-static PARAMS_UTC_TIMESTAMP: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: false,
-}];
-static PARAMS_VARIANCE: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_VARIANCE_POP: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_UTC_TIME: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: false },
+];
+static PARAMS_UTC_TIMESTAMP: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: false },
+];
+static PARAMS_VARIANCE: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_VARIANCE_POP: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_VAR_MAP: &[FunctionParam] = &[
-    FunctionParam {
-        name: "keys",
-        required: true,
-    },
-    FunctionParam {
-        name: "values",
-        required: true,
-    },
+    FunctionParam { name: "keys", required: true },
+    FunctionParam { name: "values", required: true },
 ];
 static PARAMS_VECTOR_SEARCH: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "column_to_search",
-        required: true,
-    },
-    FunctionParam {
-        name: "query_table",
-        required: true,
-    },
-    FunctionParam {
-        name: "query_column_to_search",
-        required: false,
-    },
-    FunctionParam {
-        name: "top_k",
-        required: false,
-    },
-    FunctionParam {
-        name: "distance_type",
-        required: false,
-    },
-    FunctionParam {
-        name: "options",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "column_to_search", required: true },
+    FunctionParam { name: "query_table", required: true },
+    FunctionParam { name: "query_column_to_search", required: false },
+    FunctionParam { name: "top_k", required: false },
+    FunctionParam { name: "distance_type", required: false },
+    FunctionParam { name: "options", required: false },
 ];
 static PARAMS_WEEK: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "mode",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "mode", required: false },
 ];
-static PARAMS_WEEK_OF_YEAR: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_WEEK_OF_YEAR: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 static PARAMS_WIDTH_BUCKET: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "min_value",
-        required: true,
-    },
-    FunctionParam {
-        name: "max_value",
-        required: true,
-    },
-    FunctionParam {
-        name: "num_buckets",
-        required: true,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "min_value", required: true },
+    FunctionParam { name: "max_value", required: true },
+    FunctionParam { name: "num_buckets", required: true },
 ];
 static PARAMS_XML_ELEMENT: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "expressions",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "expressions", required: false },
 ];
 static PARAMS_XOR: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: false,
-    },
-    FunctionParam {
-        name: "expression",
-        required: false,
-    },
-    FunctionParam {
-        name: "expressions",
-        required: false,
-    },
+    FunctionParam { name: "this", required: false },
+    FunctionParam { name: "expression", required: false },
+    FunctionParam { name: "expressions", required: false },
 ];
 static PARAMS_XML_TABLE: &[FunctionParam] = &[
-    FunctionParam {
-        name: "this",
-        required: true,
-    },
-    FunctionParam {
-        name: "namespaces",
-        required: false,
-    },
-    FunctionParam {
-        name: "passing",
-        required: false,
-    },
-    FunctionParam {
-        name: "columns",
-        required: false,
-    },
-    FunctionParam {
-        name: "by_ref",
-        required: false,
-    },
+    FunctionParam { name: "this", required: true },
+    FunctionParam { name: "namespaces", required: false },
+    FunctionParam { name: "passing", required: false },
+    FunctionParam { name: "columns", required: false },
+    FunctionParam { name: "by_ref", required: false },
 ];
-static PARAMS_YEAR: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_YEAR_OF_WEEK: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
-static PARAMS_YEAR_OF_WEEK_ISO: &[FunctionParam] = &[FunctionParam {
-    name: "this",
-    required: true,
-}];
+static PARAMS_YEAR: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_YEAR_OF_WEEK: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
+static PARAMS_YEAR_OF_WEEK_ISO: &[FunctionParam] = &[
+    FunctionParam { name: "this", required: true },
+];
 
 /// Looks up a function signature by name.
 ///

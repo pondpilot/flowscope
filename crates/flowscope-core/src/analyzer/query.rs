@@ -88,6 +88,16 @@ impl<'a> Analyzer<'a> {
         // Create edge to target if specified
         self.create_source_edge(ctx, &node_id, target_node);
 
+        let label = ctx
+            .nodes
+            .iter()
+            .find(|node| node.id == node_id)
+            .map(|node| node.label.to_string())
+            .unwrap_or_else(|| crate::analyzer::helpers::extract_simple_name(table_name));
+        if let Some(span) = self.locate_relation_name_span(ctx, table_name, &label) {
+            ctx.add_name_span(&node_id, span);
+        }
+
         Some(canonical)
     }
 
@@ -145,14 +155,7 @@ impl<'a> Analyzer<'a> {
                     node_type: NodeType::Cte,
                     label: cte_name.to_string().into(),
                     qualified_name: Some(cte_name.to_string().into()),
-                    expression: None,
-                    span: None,
-                    name_spans: Vec::new(),
-                    body_span: None,
-                    metadata: None,
-                    resolution_source: None,
-                    filters: Vec::new(),
-                    aggregation: None,
+                    ..Default::default()
                 });
                 if ctx.current_join_info.join_type.is_some() {
                     ctx.joined_table_info
@@ -209,18 +212,12 @@ impl<'a> Analyzer<'a> {
                 node_type: NodeType::Column,
                 label: source_col.name.clone().into(),
                 qualified_name: Some(format!("{cte_name}.{}", source_col.name).into()),
-                expression: None,
-                span: None,
-                name_spans: Vec::new(),
-                body_span: None,
                 metadata: source_col.data_type.as_ref().map(|dt| {
                     let mut m = HashMap::new();
                     m.insert("data_type".to_string(), json!(dt));
                     m
                 }),
-                resolution_source: None,
-                filters: Vec::new(),
-                aggregation: None,
+                ..Default::default()
             };
             ctx.add_node(column_node);
 
@@ -403,14 +400,9 @@ impl<'a> Analyzer<'a> {
             node_type,
             label: crate::analyzer::helpers::extract_simple_name(canonical).into(),
             qualified_name: Some(canonical.to_string().into()),
-            expression: None,
-            span: None,
-            name_spans: Vec::new(),
-            body_span: None,
             metadata,
             resolution_source,
-            filters: Vec::new(),
-            aggregation: None,
+            ..Default::default()
         });
 
         // Record join metadata in context map (not on the node)
@@ -470,14 +462,7 @@ impl<'a> Analyzer<'a> {
                     node_type: NodeType::Column,
                     label: col.name.clone().into(),
                     qualified_name: Some(format!("{}.{}", table_canonical, col.name).into()),
-                    expression: None,
-                    span: None,
-                    name_spans: Vec::new(),
-                    body_span: None,
-                    metadata: None,
-                    resolution_source: None,
-                    filters: Vec::new(),
-                    aggregation: None,
+                    ..Default::default()
                 };
                 ctx.add_node(col_node);
 
@@ -967,17 +952,13 @@ impl<'a> Analyzer<'a> {
             label: normalized_name.clone().into(),
             qualified_name: None, // Will be set if we have target table
             expression: params.expression.as_deref().map(Into::into),
-            span: None,
-            name_spans: Vec::new(),
-            body_span: None,
             metadata: params.data_type.as_ref().map(|dt| {
                 let mut m = HashMap::new();
                 m.insert("data_type".to_string(), json!(dt));
                 m
             }),
-            resolution_source: None,
-            filters: Vec::new(),
             aggregation: params.aggregation,
+            ..Default::default()
         };
         ctx.add_node(col_node);
 
@@ -1066,14 +1047,7 @@ impl<'a> Analyzer<'a> {
                     node_type: NodeType::Column,
                     label: source.column.clone().into(),
                     qualified_name: Some(format!("{}.{}", table_canonical, source.column).into()),
-                    expression: None,
-                    span: None,
-                    name_spans: Vec::new(),
-                    body_span: None,
-                    metadata: None,
-                    resolution_source: None,
-                    filters: Vec::new(),
-                    aggregation: None,
+                    ..Default::default()
                 };
                 ctx.add_node(source_col_node);
 
@@ -1634,14 +1608,8 @@ impl<'a> Analyzer<'a> {
             node_type: NodeType::Column,
             label: column_name.to_string().into(),
             qualified_name: Some(format!("{}.{}", source_canonical, column_name).into()),
-            expression: None,
-            span: None,
-            name_spans: Vec::new(),
-            body_span: None,
-            metadata: None,
             resolution_source: Some(ResolutionSource::Implied),
-            filters: Vec::new(),
-            aggregation: None,
+            ..Default::default()
         });
 
         // Create ownership edge: table -> column

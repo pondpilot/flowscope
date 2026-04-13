@@ -1,5 +1,6 @@
 ---
 source: crates/flowscope-core/tests/snapshots.rs
+assertion_line: 50
 expression: clean_result
 ---
 {
@@ -69,14 +70,6 @@ expression: clean_result
           "qualifiedName": "emp",
           "nameSpans": [
             {
-              "start": 137,
-              "end": 140
-            },
-            {
-              "start": 168,
-              "end": 171
-            },
-            {
               "start": 428,
               "end": 431
             }
@@ -91,13 +84,7 @@ expression: clean_result
           "id": "table_1d63721b3610a67f",
           "type": "table",
           "label": "employees",
-          "qualifiedName": "employees",
-          "nameSpans": [
-            {
-              "start": 299,
-              "end": 308
-            }
-          ]
+          "qualifiedName": "employees"
         },
         {
           "id": "table_e3d59f407f4557b4",

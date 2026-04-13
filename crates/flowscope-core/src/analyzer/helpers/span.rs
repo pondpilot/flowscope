@@ -70,14 +70,22 @@ pub fn find_all_identifier_spans(
         return spans;
     }
     if !sql.is_char_boundary(search_start) || !sql.is_char_boundary(search_end) {
+        #[cfg(feature = "tracing")]
+        tracing::warn!(
+            search_start,
+            search_end,
+            sql_len = sql.len(),
+            "find_all_identifier_spans: search range is not on UTF-8 char boundaries"
+        );
         return spans;
     }
 
     let scope = &sql[search_start..search_end];
+    let scope_bytes = scope.as_bytes();
     let mut cursor = 0usize;
-    while cursor < scope.len() {
+    while cursor < scope_bytes.len() {
         // Skip over string literals and comments so we don't match inside them.
-        if let Some(skip_to) = skip_string_or_comment(scope, cursor) {
+        if let Some(skip_to) = skip_string_or_comment(scope_bytes, cursor) {
             cursor = skip_to;
             continue;
         }
@@ -98,7 +106,7 @@ pub fn find_all_identifier_spans(
         // skip check run again before accepting the match.
         if match_start > cursor {
             // Check for an intervening literal/comment between cursor and match.
-            if let Some(skip_to) = first_skip_between(scope, cursor, match_start) {
+            if let Some(skip_to) = first_skip_between(scope_bytes, cursor, match_start) {
                 cursor = skip_to;
                 continue;
             }
@@ -123,45 +131,61 @@ pub fn find_all_identifier_spans(
 /// cannot be located — for example if the SQL has already been rewritten.
 pub fn find_cte_body_span(sql: &str, name_span: Span) -> Option<Span> {
     if name_span.end > sql.len() || !sql.is_char_boundary(name_span.end) {
+        #[cfg(feature = "tracing")]
+        tracing::warn!(
+            end = name_span.end,
+            sql_len = sql.len(),
+            "find_cte_body_span: name_span.end is not on a UTF-8 char boundary"
+        );
         return None;
     }
+
+    let bytes = sql.as_bytes();
 
     // Skip whitespace / comments after the name.
     let mut pos = skip_whitespace_and_comments(sql, name_span.end);
 
-    // Optional AS keyword.
-    if pos + 2 <= sql.len() && sql[pos..].to_ascii_uppercase().starts_with("AS") {
+    // Optional AS keyword (checked via ASCII byte comparison).
+    if pos + 2 <= bytes.len()
+        && bytes[pos].eq_ignore_ascii_case(&b'A')
+        && bytes[pos + 1].eq_ignore_ascii_case(&b'S')
+    {
         let after_as = pos + 2;
-        let is_standalone = after_as >= sql.len()
-            || sql.as_bytes()[after_as].is_ascii_whitespace()
-            || sql[after_as..].starts_with("/*")
-            || sql[after_as..].starts_with("--")
-            || sql.as_bytes()[after_as] == b'(';
+        let is_standalone = after_as >= bytes.len()
+            || bytes[after_as].is_ascii_whitespace()
+            || (after_as + 1 < bytes.len()
+                && bytes[after_as] == b'/'
+                && bytes[after_as + 1] == b'*')
+            || (after_as + 1 < bytes.len()
+                && bytes[after_as] == b'-'
+                && bytes[after_as + 1] == b'-')
+            || bytes[after_as] == b'(';
         if is_standalone {
             pos = skip_whitespace_and_comments(sql, after_as);
         }
     }
 
-    if pos >= sql.len() || sql.as_bytes()[pos] != b'(' {
+    if pos >= bytes.len() || bytes[pos] != b'(' {
         return None;
     }
 
-    let body_end = find_matching_paren(sql, pos)?;
+    let body_end = find_matching_paren(bytes, pos)?;
     Some(Span::new(pos, body_end + 1))
 }
 
 /// Given the byte offset of an opening `(`, finds the byte offset of its
 /// matching `)`. Respects string literals and comments so parentheses inside
-/// them do not affect depth.
-fn find_matching_paren(sql: &str, open: usize) -> Option<usize> {
-    let bytes = sql.as_bytes();
+/// them do not affect depth. Operates on bytes so non-ASCII content in the
+/// SQL (identifiers, comments, string literals) does not cause panics on
+/// UTF-8 boundary slicing.
+fn find_matching_paren(bytes: &[u8], open: usize) -> Option<usize> {
     if open >= bytes.len() || bytes[open] != b'(' {
         return None;
     }
     let mut depth = 0i32;
     let mut i = open;
     while i < bytes.len() {
-        if let Some(skip_to) = skip_string_or_comment(sql, i) {
+        if let Some(skip_to) = skip_string_or_comment(bytes, i) {
             i = skip_to;
             continue;
         }
@@ -182,27 +206,37 @@ fn find_matching_paren(sql: &str, open: usize) -> Option<usize> {
 
 /// If `pos` is the start of a string literal or SQL comment, returns the byte
 /// offset immediately after it. Otherwise returns `None`.
-fn skip_string_or_comment(sql: &str, pos: usize) -> Option<usize> {
-    let bytes = sql.as_bytes();
+///
+/// All tokens checked are ASCII (`/*`, `--`, `'`), so operating on raw bytes
+/// is safe and sidesteps any UTF-8 char-boundary concerns when the caller's
+/// cursor is advancing byte-by-byte.
+fn skip_string_or_comment(bytes: &[u8], pos: usize) -> Option<usize> {
     if pos >= bytes.len() {
         return None;
     }
-    // Block comment.
-    if sql[pos..].starts_with("/*") {
-        let after_open = pos + 2;
-        return match sql[after_open..].find("*/") {
-            Some(rel) => Some(after_open + rel + 2),
-            None => Some(bytes.len()),
-        };
+    // Block comment `/* ... */`.
+    if pos + 1 < bytes.len() && bytes[pos] == b'/' && bytes[pos + 1] == b'*' {
+        let mut i = pos + 2;
+        while i + 1 < bytes.len() {
+            if bytes[i] == b'*' && bytes[i + 1] == b'/' {
+                return Some(i + 2);
+            }
+            i += 1;
+        }
+        return Some(bytes.len());
     }
-    // Line comment.
-    if sql[pos..].starts_with("--") {
-        return match sql[pos..].find('\n') {
-            Some(rel) => Some(pos + rel + 1),
-            None => Some(bytes.len()),
-        };
+    // Line comment `-- ... \n`.
+    if pos + 1 < bytes.len() && bytes[pos] == b'-' && bytes[pos + 1] == b'-' {
+        let mut i = pos + 2;
+        while i < bytes.len() {
+            if bytes[i] == b'\n' {
+                return Some(i + 1);
+            }
+            i += 1;
+        }
+        return Some(bytes.len());
     }
-    // Single-quoted string literal, with SQL '' escape.
+    // Single-quoted string literal, with SQL `''` escape.
     if bytes[pos] == b'\'' {
         let mut i = pos + 1;
         while i < bytes.len() {
@@ -223,10 +257,10 @@ fn skip_string_or_comment(sql: &str, pos: usize) -> Option<usize> {
 /// Scans `[start, end)` looking for the first literal/comment and returns the
 /// offset past it. Used to re-check for intervening skip regions when a name
 /// match lands further downstream than the scan cursor.
-fn first_skip_between(sql: &str, start: usize, end: usize) -> Option<usize> {
+fn first_skip_between(bytes: &[u8], start: usize, end: usize) -> Option<usize> {
     let mut i = start;
     while i < end {
-        if let Some(skip_to) = skip_string_or_comment(sql, i) {
+        if let Some(skip_to) = skip_string_or_comment(bytes, i) {
             return Some(skip_to);
         }
         i += 1;
@@ -1176,5 +1210,59 @@ mod tests {
         let name_span = Span::new(5, 6);
         let body = find_cte_body_span(sql, name_span).expect("body span");
         assert_eq!(&sql[body.start..body.end], "(SELECT 1)");
+    }
+
+    // ============================================================================
+    // UTF-8 safety regression tests: multi-byte characters in comments, string
+    // literals, and around the scan region must not cause panics. Prior to the
+    // byte-based refactor, the helpers would `sql[pos..]` with a cursor advancing
+    // one byte at a time, which panics when `pos` lands inside a multi-byte char.
+    // ============================================================================
+
+    #[test]
+    fn test_find_all_identifier_spans_skips_non_ascii_comment() {
+        // A block comment containing a multi-byte character (µ, 2 bytes in UTF-8)
+        // previously caused a panic because the byte-indexed cursor slicing into
+        // `sql[pos..]` would land inside the multi-byte sequence.
+        let sql = "SELECT * /* µ µµµ */ FROM users WHERE id = 1";
+        let spans = find_all_identifier_spans(sql, "users", 0, sql.len());
+        assert_eq!(spans.len(), 1);
+        assert_eq!(&sql[spans[0].start..spans[0].end], "users");
+    }
+
+    #[test]
+    fn test_find_all_identifier_spans_skips_non_ascii_line_comment() {
+        let sql = "SELECT * FROM users -- é comment\nJOIN users u";
+        let spans = find_all_identifier_spans(sql, "users", 0, sql.len());
+        assert_eq!(spans.len(), 2);
+    }
+
+    #[test]
+    fn test_find_all_identifier_spans_skips_non_ascii_string_literal() {
+        // Multi-byte char inside a string literal.
+        let sql = "SELECT 'héllo users' FROM users";
+        let spans = find_all_identifier_spans(sql, "users", 0, sql.len());
+        // The `users` inside the string literal must not match; only the real FROM reference.
+        assert_eq!(spans.len(), 1);
+        assert_eq!(&sql[spans[0].start..spans[0].end], "users");
+    }
+
+    #[test]
+    fn test_find_cte_body_span_with_non_ascii_body_contents() {
+        let sql = "WITH a AS (SELECT 'µ' AS x, (1 + 2) AS y) SELECT * FROM a";
+        let name_span = Span::new(5, 6);
+        let body = find_cte_body_span(sql, name_span).expect("body span");
+        assert_eq!(
+            &sql[body.start..body.end],
+            "(SELECT 'µ' AS x, (1 + 2) AS y)"
+        );
+    }
+
+    #[test]
+    fn test_find_all_identifier_spans_non_ascii_between_occurrences() {
+        // Multi-byte chars between identifier occurrences stress the scan cursor.
+        let sql = "SELECT users.id -- µ\nFROM users /* ñ */ JOIN users";
+        let spans = find_all_identifier_spans(sql, "users", 0, sql.len());
+        assert_eq!(spans.len(), 3);
     }
 }
