@@ -545,6 +545,10 @@ impl<'a, 'b> Visitor for LineageVisitor<'a, 'b> {
                     body_span,
                     ..Default::default()
                 });
+                if let Some(span) = cte_span {
+                    let cursor = self.ctx.relation_span_cursor(&cte_name);
+                    *cursor = (*cursor).max(span.end);
+                }
 
                 self.ctx
                     .cte_definitions

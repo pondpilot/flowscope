@@ -88,13 +88,7 @@ impl<'a> Analyzer<'a> {
         // Create edge to target if specified
         self.create_source_edge(ctx, &node_id, target_node);
 
-        let label = ctx
-            .nodes
-            .iter()
-            .find(|node| node.id == node_id)
-            .map(|node| node.label.to_string())
-            .unwrap_or_else(|| crate::analyzer::helpers::extract_simple_name(table_name));
-        if let Some(span) = self.locate_relation_name_span(ctx, table_name, &label) {
+        if let Some(span) = self.locate_relation_name_span(ctx, table_name) {
             ctx.add_name_span(&node_id, span);
         }
 

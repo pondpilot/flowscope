@@ -127,23 +127,35 @@ impl<'a> Analyzer<'a> {
         }
     }
 
+    /// Returns the current statement SQL slice plus its absolute offset.
+    fn current_sql_slice(&self, _caller: &'static str) -> Option<(&str, usize)> {
+        if let Some(source) = &self.current_statement_source {
+            return match source.sql.get(source.range.start..source.range.end) {
+                Some(slice) => Some((slice, source.range.start)),
+                None => {
+                    #[cfg(feature = "tracing")]
+                    tracing::warn!(
+                        caller = _caller,
+                        start = source.range.start,
+                        end = source.range.end,
+                        sql_len = source.sql.len(),
+                        "current statement source range is invalid"
+                    );
+                    None
+                }
+            };
+        }
+
+        Some((self.request.sql.as_str(), 0))
+    }
+
     /// Finds the span of an identifier in the SQL text.
     ///
     /// This is used to attach source locations to issues for better error reporting.
     pub(crate) fn find_span(&self, identifier: &str) -> Option<Span> {
-        if let Some(source) = &self.current_statement_source {
-            if let Some(statement_sql) = source.sql.get(source.range.start..source.range.end) {
-                return find_identifier_span(statement_sql, identifier, 0).map(|span| {
-                    Span::new(
-                        source.range.start + span.start,
-                        source.range.start + span.end,
-                    )
-                });
-            }
-            return None;
-        }
-
-        find_identifier_span(&self.request.sql, identifier, 0)
+        let (sql, offset) = self.current_sql_slice("find_span")?;
+        find_identifier_span(sql, identifier, 0)
+            .map(|span| Span::new(offset + span.start, offset + span.end))
     }
 
     /// Locates the next identifier span inside the current statement using the
@@ -171,27 +183,27 @@ impl<'a> Analyzer<'a> {
     {
         let search_start = ctx.span_search_cursor;
 
-        let (sql, offset) = if let Some(source) = &self.current_statement_source {
-            // Use `.get()` so a malformed range or non-char-boundary endpoint
-            // degrades to `None` instead of panicking on the slice.
-            match source.sql.get(source.range.start..source.range.end) {
-                Some(slice) => (slice, source.range.start),
-                None => {
-                    #[cfg(feature = "tracing")]
-                    tracing::warn!(
-                        start = source.range.start,
-                        end = source.range.end,
-                        sql_len = source.sql.len(),
-                        "locate_statement_span: statement source range is invalid"
-                    );
-                    return None;
+        let (sql, offset) = self.current_sql_slice("locate_statement_span")?;
+
+        let span = if let Some(span) = finder(sql, identifier, search_start) {
+            span
+        } else {
+            if search_start > 0 {
+                if let Some(earlier) = finder(sql, identifier, 0) {
+                    if earlier.end <= search_start {
+                        #[cfg(feature = "tracing")]
+                        tracing::warn!(
+                            identifier,
+                            search_start,
+                            earlier_start = earlier.start,
+                            earlier_end = earlier.end,
+                            "locate_statement_span exhausted its cursor before matching; traversal may be out of lexical order"
+                        );
+                    }
                 }
             }
-        } else {
-            (self.request.sql.as_str(), 0)
+            return None;
         };
-
-        let span = finder(sql, identifier, search_start)?;
         debug_assert!(
             span.end >= ctx.span_search_cursor,
             "Span cursor moved backward: {} -> {} (identifier: '{}')",
@@ -214,38 +226,13 @@ impl<'a> Analyzer<'a> {
         &self,
         ctx: &mut StatementContext,
         raw_name: &str,
-        _label: &str,
     ) -> Option<Span> {
-        let search_start = ctx.span_search_cursor;
+        let search_start = *ctx.relation_span_cursor(raw_name);
 
-        let (sql, offset) = if let Some(source) = &self.current_statement_source {
-            match source.sql.get(source.range.start..source.range.end) {
-                Some(slice) => (slice, source.range.start),
-                None => {
-                    #[cfg(feature = "tracing")]
-                    tracing::warn!(
-                        start = source.range.start,
-                        end = source.range.end,
-                        sql_len = source.sql.len(),
-                        "locate_relation_name_span: statement source range is invalid"
-                    );
-                    return None;
-                }
-            }
-        } else {
-            (self.request.sql.as_str(), 0)
-        };
+        let (sql, offset) = self.current_sql_slice("locate_relation_name_span")?;
 
         let (full_span, name_span) = find_relation_occurrence_spans(sql, raw_name, search_start)?;
-        debug_assert!(
-            full_span.end >= ctx.span_search_cursor,
-            "Span cursor moved backward: {} -> {} (relation: '{}')",
-            ctx.span_search_cursor,
-            full_span.end,
-            raw_name
-        );
-
-        ctx.span_search_cursor = full_span.end;
+        *ctx.relation_span_cursor(raw_name) = full_span.end;
         Some(Span::new(offset + name_span.start, offset + name_span.end))
     }
 

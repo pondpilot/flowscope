@@ -429,7 +429,7 @@ impl<'a> Analyzer<'a> {
             qualified_name: Some(canonical.clone().into()),
             ..Default::default()
         });
-        if let Some(span) = self.locate_relation_name_span(ctx, &target_name, &target_label) {
+        if let Some(span) = self.locate_relation_name_span(ctx, &target_name) {
             ctx.add_name_span(&target_id, span);
         }
 
@@ -699,7 +699,7 @@ impl<'a> Analyzer<'a> {
                     qualified_name: Some(canonical.clone().into()),
                     ..Default::default()
                 });
-                if let Some(span) = self.locate_relation_name_span(ctx, &name, &label) {
+                if let Some(span) = self.locate_relation_name_span(ctx, &name) {
                     ctx.add_name_span(&node_id, span);
                 }
 
@@ -749,7 +749,7 @@ impl<'a> Analyzer<'a> {
                     qualified_name: Some(canonical.clone().into()),
                     ..Default::default()
                 });
-                if let Some(span) = self.locate_relation_name_span(ctx, &name, &label) {
+                if let Some(span) = self.locate_relation_name_span(ctx, &name) {
                     ctx.add_name_span(&target_id, span);
                 }
 
@@ -780,7 +780,7 @@ impl<'a> Analyzer<'a> {
                         qualified_name: Some(canonical.clone().into()),
                         ..Default::default()
                     });
-                    if let Some(span) = self.locate_relation_name_span(ctx, &name, &label) {
+                    if let Some(span) = self.locate_relation_name_span(ctx, &name) {
                         ctx.add_name_span(&node_id, span);
                     }
 
@@ -851,7 +851,7 @@ impl<'a> Analyzer<'a> {
             qualified_name: Some(old_canonical.clone().into()),
             ..Default::default()
         });
-        if let Some(span) = self.locate_relation_name_span(ctx, &old_name_str, &old_label) {
+        if let Some(span) = self.locate_relation_name_span(ctx, &old_name_str) {
             ctx.add_name_span(&old_node_id, span);
         }
 
@@ -864,7 +864,7 @@ impl<'a> Analyzer<'a> {
             qualified_name: Some(new_canonical.clone().into()),
             ..Default::default()
         });
-        if let Some(span) = self.locate_relation_name_span(ctx, &new_name_str, &new_label) {
+        if let Some(span) = self.locate_relation_name_span(ctx, &new_name_str) {
             ctx.add_name_span(&new_node_id, span);
         }
 

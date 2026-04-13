@@ -165,6 +165,12 @@ expression: clean_result
           "type": "table",
           "label": "users",
           "qualifiedName": "users",
+          "nameSpans": [
+            {
+              "start": 85,
+              "end": 90
+            }
+          ],
           "filters": [
             {
               "expression": "active = true",

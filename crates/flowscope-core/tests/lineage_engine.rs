@@ -10151,6 +10151,35 @@ fn name_spans_skip_string_literals_before_relation_occurrence() {
 }
 
 #[test]
+fn name_spans_skip_hash_comments_in_mysql() {
+    let sql = "SELECT 1 # users\nFROM users";
+    let result = run_analysis(sql, Dialect::Mysql, None);
+    let stmt = &result.statements[0];
+    let users = find_table_node(stmt, "users").expect("users table node");
+
+    assert_eq!(users.name_spans.len(), 1);
+    let span = users.name_spans[0];
+    assert_eq!(&sql[span.start..span.end], "users");
+    assert_eq!(span.start, 22, "should bind to FROM users, not the hash comment");
+}
+
+#[test]
+fn name_spans_skip_dollar_quoted_string_literals() {
+    let sql = "SELECT $$users$$ AS x FROM users";
+    let result = run_analysis(sql, Dialect::Postgres, None);
+    let stmt = &result.statements[0];
+    let users = find_table_node(stmt, "users").expect("users table node");
+
+    assert_eq!(users.name_spans.len(), 1);
+    let span = users.name_spans[0];
+    assert_eq!(&sql[span.start..span.end], "users");
+    assert_eq!(
+        span.start, 27,
+        "should bind to FROM users, not the dollar-quoted literal"
+    );
+}
+
+#[test]
 fn name_spans_empty_on_column_nodes() {
     // Columns intentionally get empty name_spans in this release — accurate
     // per-occurrence column spans require alias/scope resolution.
@@ -10291,4 +10320,17 @@ fn cte_body_span_skips_materialization_modifiers() {
         .body_span
         .expect("cte body span should be populated");
     assert_eq!(&sql[body.start..body.end], "(SELECT id FROM orders)");
+}
+
+#[test]
+fn cte_body_span_skips_dollar_quoted_strings() {
+    let sql = "WITH metrics AS (SELECT $$)$$ AS x) SELECT * FROM metrics";
+    let result = run_analysis(sql, Dialect::Postgres, None);
+    let stmt = &result.statements[0];
+    let metrics = find_cte_node(stmt, "metrics").expect("metrics cte node");
+
+    let body = metrics
+        .body_span
+        .expect("cte body span should be populated");
+    assert_eq!(&sql[body.start..body.end], "(SELECT $$)$$ AS x)");
 }

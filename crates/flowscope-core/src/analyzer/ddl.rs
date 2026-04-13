@@ -159,7 +159,7 @@ impl<'a> Analyzer<'a> {
             qualified_name: Some(canonical.clone().into()),
             ..Default::default()
         });
-        if let Some(span) = self.locate_relation_name_span(ctx, &target_name, &target_label) {
+        if let Some(span) = self.locate_relation_name_span(ctx, &target_name) {
             ctx.add_name_span(&target_id, span);
         }
 
@@ -238,7 +238,7 @@ impl<'a> Analyzer<'a> {
             qualified_name: Some(canonical.clone().into()),
             ..Default::default()
         });
-        if let Some(span) = self.locate_relation_name_span(ctx, &target_name, &target_label) {
+        if let Some(span) = self.locate_relation_name_span(ctx, &target_name) {
             ctx.add_name_span(&node_id, span);
         }
 
@@ -270,7 +270,7 @@ impl<'a> Analyzer<'a> {
             qualified_name: Some(canonical.clone().into()),
             ..Default::default()
         });
-        if let Some(span) = self.locate_relation_name_span(ctx, &target_name, &target_label) {
+        if let Some(span) = self.locate_relation_name_span(ctx, &target_name) {
             ctx.add_name_span(&target_id, span);
         }
 

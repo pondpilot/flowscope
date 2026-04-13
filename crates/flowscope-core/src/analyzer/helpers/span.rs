@@ -48,9 +48,9 @@ pub fn find_identifier_span(sql: &str, identifier: &str, search_start: usize) ->
 ///
 /// Returns all non-overlapping word-boundary matches (case-insensitive) within
 /// `[search_start, search_end)`. The `search_end` bound lets callers scope the
-/// scan to a single statement. Strings inside single-quoted SQL literals and
-/// inside block/line comments are skipped so `-- users` or `'users'` do not
-/// produce false positives.
+/// scan to a single statement. Strings inside single-quoted or dollar-quoted
+/// SQL literals and inside block/line/hash comments are skipped so `-- users`,
+/// `# users`, or `'users'` do not produce false positives.
 ///
 /// This is intentionally a textual scan rather than an AST walk: sqlparser
 /// does not preserve per-occurrence source positions, and a text scan handles
@@ -79,55 +79,13 @@ pub fn find_all_identifier_spans(
     }
 
     let scope = &sql[search_start..search_end];
-    let scope_bytes = scope.as_bytes();
     let mut cursor = 0usize;
-    while cursor < scope_bytes.len() {
-        // Skip over string literals and comments so we don't match inside them.
-        if let Some(skip_to) = skip_string_or_comment(scope_bytes, cursor) {
-            debug_assert!(
-                skip_to > cursor,
-                "skip_string_or_comment must advance past the current cursor"
-            );
-            if skip_to <= cursor {
-                break;
-            }
-            cursor = skip_to;
-            continue;
-        }
-
-        let remaining = &scope[cursor..];
-        let Some((start, end)) = find_word_boundary_match(remaining, identifier) else {
-            break;
-        };
-        // `find_word_boundary_match` returns byte offsets on char boundaries;
-        // assert that contract so any future change breaks tests loudly
-        // instead of corrupting cursor advancement on multi-byte input.
-        debug_assert!(remaining.is_char_boundary(start));
-        debug_assert!(remaining.is_char_boundary(end));
-        // The match is relative to `remaining`; translate into scope coordinates.
-        let match_start = cursor + start;
-        let match_end = cursor + end;
-
-        // Re-verify the match does not straddle a skip region (e.g., we entered
-        // the loop past a literal but the match landed before the next skip).
-        // `find_word_boundary_match` scans forward, so any literal between
-        // `cursor` and `match_start` would have been skipped on the next
-        // iteration — instead, we advance cursor to `match_start` and let the
-        // skip check run again before accepting the match.
-        if match_start > cursor {
-            // Check for an intervening literal/comment between cursor and match.
-            if let Some(skip_to) = first_skip_between(scope_bytes, cursor, match_start) {
-                cursor = skip_to;
-                continue;
-            }
-        }
-
+    while let Some(occurrence) = find_identifier_occurrence(scope, identifier, cursor) {
         spans.push(Span::new(
-            search_start + match_start,
-            search_start + match_end,
+            search_start + occurrence.full_start,
+            search_start + occurrence.full_end,
         ));
-        // Advance past this match. `match_end > match_start` always (identifier non-empty).
-        cursor = match_end;
+        cursor = occurrence.full_end;
     }
     spans
 }
@@ -263,9 +221,10 @@ fn find_matching_paren(bytes: &[u8], open: usize) -> Option<usize> {
 /// If `pos` is the start of a string literal or SQL comment, returns the byte
 /// offset immediately after it. Otherwise returns `None`.
 ///
-/// All tokens checked are ASCII (`/*`, `--`, `'`), so operating on raw bytes
-/// is safe and sidesteps any UTF-8 char-boundary concerns when the caller's
-/// cursor is advancing byte-by-byte.
+/// Handles block comments (`/* */`), line comments (`--`, `#`), single-quoted
+/// strings, and PostgreSQL dollar-quoted strings (`$$...$$`, `$tag$...$tag$`).
+/// All delimiters are ASCII, so operating on raw bytes is safe and sidesteps
+/// any UTF-8 char-boundary concerns when the caller's cursor advances bytewise.
 fn skip_string_or_comment(bytes: &[u8], pos: usize) -> Option<usize> {
     if pos >= bytes.len() {
         return None;
@@ -292,6 +251,17 @@ fn skip_string_or_comment(bytes: &[u8], pos: usize) -> Option<usize> {
         }
         return Some(bytes.len());
     }
+    // MySQL/Hive hash comment `# ... \n`.
+    if bytes[pos] == b'#' {
+        let mut i = pos + 1;
+        while i < bytes.len() {
+            if bytes[i] == b'\n' {
+                return Some(i + 1);
+            }
+            i += 1;
+        }
+        return Some(bytes.len());
+    }
     // Single-quoted string literal, with SQL `''` escape.
     if bytes[pos] == b'\'' {
         let mut i = pos + 1;
@@ -307,19 +277,36 @@ fn skip_string_or_comment(bytes: &[u8], pos: usize) -> Option<usize> {
         }
         return Some(bytes.len());
     }
+    // PostgreSQL dollar-quoted string literal.
+    if bytes[pos] == b'$' {
+        return skip_dollar_quoted_string(bytes, pos);
+    }
     None
 }
 
-/// Scans `[start, end)` looking for the first literal/comment and returns the
-/// offset past it. Used to re-check for intervening skip regions when a name
-/// match lands further downstream than the scan cursor.
-fn first_skip_between(bytes: &[u8], start: usize, end: usize) -> Option<usize> {
-    let mut i = start;
-    while i < end {
-        if let Some(skip_to) = skip_string_or_comment(bytes, i) {
-            return Some(skip_to);
+fn skip_dollar_quoted_string(bytes: &[u8], pos: usize) -> Option<usize> {
+    if pos >= bytes.len() || bytes[pos] != b'$' {
+        return None;
+    }
+
+    let mut tag_end = pos + 1;
+    while tag_end < bytes.len() {
+        match bytes[tag_end] {
+            b'$' => {
+                let delimiter = &bytes[pos..=tag_end];
+                let search_start = tag_end + 1;
+                let mut i = search_start;
+                while i + delimiter.len() <= bytes.len() {
+                    if &bytes[i..i + delimiter.len()] == delimiter {
+                        return Some(i + delimiter.len());
+                    }
+                    i += 1;
+                }
+                return Some(bytes.len());
+            }
+            b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'_' => tag_end += 1,
+            _ => return None,
         }
-        i += 1;
     }
     None
 }
@@ -555,44 +542,6 @@ fn match_identifier_at(text: &str, pos: usize, identifier: &str) -> Option<(usiz
     None
 }
 
-/// Finds an identifier at a word boundary (not part of another word).
-/// Word boundaries consider underscores as part of identifiers (SQL convention).
-///
-/// Returns `(start, end)` as **byte offsets** into `text` (not character
-/// indices), both of which are guaranteed to lie on UTF-8 char boundaries.
-/// Callers rely on this contract when slicing the original SQL.
-fn find_word_boundary_match(text: &str, identifier: &str) -> Option<(usize, usize)> {
-    if identifier.is_empty() {
-        return None;
-    }
-
-    let text_bytes = text.as_bytes();
-    let ident_bytes = identifier.as_bytes();
-    if ident_bytes.len() > text_bytes.len() {
-        return None;
-    }
-
-    for start in 0..=text_bytes.len() - ident_bytes.len() {
-        let end = start + ident_bytes.len();
-        if !text.is_char_boundary(start) || !text.is_char_boundary(end) {
-            continue;
-        }
-
-        if !starts_with_ascii_case_insensitive(text_bytes, start, ident_bytes) {
-            continue;
-        }
-
-        let before_ok = start == 0 || !is_identifier_char_before(text, start);
-        let after_ok = end == text_bytes.len() || !is_identifier_char_at(text, end);
-
-        if before_ok && after_ok {
-            return Some((start, end));
-        }
-    }
-
-    None
-}
-
 /// Finds an identifier occurrence in text, skipping comments and string literals.
 fn find_qualified_name(text: &str, qualified_name: &str) -> Option<(usize, usize)> {
     find_identifier_occurrence(text, qualified_name, 0)
@@ -623,14 +572,7 @@ fn find_identifier_occurrence(
         return None;
     }
 
-    let target_parts: Vec<String> = split_qualified_identifiers(identifier)
-        .into_iter()
-        .map(|part| unquote_identifier(&part))
-        .collect();
-    if target_parts.is_empty() || target_parts.iter().any(|part| part.is_empty()) {
-        return None;
-    }
-
+    let target_parts = parse_identifier_target_parts(identifier)?;
     let bytes = text.as_bytes();
     let mut cursor = search_start;
     while cursor < bytes.len() {
@@ -643,32 +585,55 @@ fn find_identifier_occurrence(
             continue;
         }
 
-        if !text.is_char_boundary(cursor) {
-            cursor += 1;
-            continue;
+        if let Some(occurrence) = match_identifier_occurrence_at(text, cursor, &target_parts) {
+            return Some(occurrence);
         }
 
-        let before_ok = cursor == 0 || !is_identifier_char_before(text, cursor);
-        if before_ok {
-            if let Some((full_end, tail_start, tail_end)) =
-                match_identifier_sequence_at(text, cursor, &target_parts)
-            {
-                let after_ok = full_end == bytes.len() || !is_identifier_char_at(text, full_end);
-                if after_ok {
-                    return Some(IdentifierOccurrence {
-                        full_start: cursor,
-                        full_end,
-                        tail_start,
-                        tail_end,
-                    });
-                }
-            }
-        }
-
-        cursor += 1;
+        cursor = advance_scan_cursor(text, cursor)?;
     }
 
     None
+}
+
+fn parse_identifier_target_parts(identifier: &str) -> Option<Vec<String>> {
+    let target_parts: Vec<String> = split_qualified_identifiers(identifier)
+        .into_iter()
+        .map(|part| unquote_identifier(&part))
+        .collect();
+    (!target_parts.is_empty() && target_parts.iter().all(|part| !part.is_empty()))
+        .then_some(target_parts)
+}
+
+fn match_identifier_occurrence_at(
+    text: &str,
+    start: usize,
+    target_parts: &[String],
+) -> Option<IdentifierOccurrence> {
+    if !text.is_char_boundary(start) {
+        return None;
+    }
+
+    let before_ok = start == 0 || !is_identifier_char_before(text, start);
+    if !before_ok {
+        return None;
+    }
+
+    let (full_end, tail_start, tail_end) = match_identifier_sequence_at(text, start, target_parts)?;
+    let after_ok = full_end == text.len() || !is_identifier_char_at(text, full_end);
+    after_ok.then_some(IdentifierOccurrence {
+        full_start: start,
+        full_end,
+        tail_start,
+        tail_end,
+    })
+}
+
+fn advance_scan_cursor(text: &str, cursor: usize) -> Option<usize> {
+    if !text.is_char_boundary(cursor) {
+        return Some(cursor + 1);
+    }
+    let ch = text.get(cursor..)?.chars().next()?;
+    Some(cursor + ch.len_utf8())
 }
 
 fn match_identifier_sequence_at(
@@ -800,19 +765,6 @@ fn is_identifier_char_at(text: &str, byte_offset: usize) -> bool {
     text.get(byte_offset..)
         .and_then(|suffix| suffix.chars().next())
         .is_some_and(is_identifier_char)
-}
-
-fn starts_with_ascii_case_insensitive(haystack: &[u8], start: usize, needle: &[u8]) -> bool {
-    if start + needle.len() > haystack.len() {
-        return false;
-    }
-
-    for (idx, needle_byte) in needle.iter().enumerate() {
-        if !haystack[start + idx].eq_ignore_ascii_case(needle_byte) {
-            return false;
-        }
-    }
-    true
 }
 
 /// Calculates the byte offset for a given line and column in SQL text.
@@ -1479,5 +1431,30 @@ mod tests {
         let sql = "SELECT users.id -- µ\nFROM users /* ñ */ JOIN users";
         let spans = find_all_identifier_spans(sql, "users", 0, sql.len());
         assert_eq!(spans.len(), 3);
+    }
+
+    #[test]
+    fn test_find_all_identifier_spans_ignores_hash_comments() {
+        let sql = "SELECT 1 # users\nFROM users";
+        let spans = find_all_identifier_spans(sql, "users", 0, sql.len());
+        assert_eq!(spans.len(), 1);
+        assert_eq!(&sql[spans[0].start..spans[0].end], "users");
+        assert_eq!(spans[0], Span::new(22, 27));
+    }
+
+    #[test]
+    fn test_find_identifier_span_skips_dollar_quoted_string_literal() {
+        let sql = "SELECT $$users$$ AS x FROM users";
+        let span = find_identifier_span(sql, "users", 0).expect("users span");
+        assert_eq!(&sql[span.start..span.end], "users");
+        assert_eq!(span, Span::new(27, 32));
+    }
+
+    #[test]
+    fn test_find_cte_body_span_with_dollar_quoted_string() {
+        let sql = "WITH a AS (SELECT $$)$$ AS x) SELECT * FROM a";
+        let name_span = Span::new(5, 6);
+        let body = find_cte_body_span(sql, name_span).expect("body span");
+        assert_eq!(&sql[body.start..body.end], "(SELECT $$)$$ AS x)");
     }
 }

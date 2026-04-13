@@ -84,7 +84,13 @@ expression: clean_result
           "id": "table_1d63721b3610a67f",
           "type": "table",
           "label": "employees",
-          "qualifiedName": "employees"
+          "qualifiedName": "employees",
+          "nameSpans": [
+            {
+              "start": 299,
+              "end": 308
+            }
+          ]
         },
         {
           "id": "table_e3d59f407f4557b4",
