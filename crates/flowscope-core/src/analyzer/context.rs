@@ -105,6 +105,10 @@ pub(crate) struct StatementContext {
     pub(crate) nodes: Vec<Node>,
     pub(crate) edges: Vec<Edge>,
     pub(crate) node_ids: HashSet<Arc<str>>,
+    /// Fast lookup from node ID to index in `nodes`, kept in sync with
+    /// `add_node` / `remove_node_by_id`. Used by hot paths like
+    /// `add_name_span` to avoid O(n) linear scans per call.
+    node_index: HashMap<Arc<str>, usize>,
     pub(crate) edge_ids: HashSet<Arc<str>>,
     /// CTE name -> node ID
     pub(crate) cte_definitions: HashMap<String, Arc<str>>,
@@ -206,6 +210,7 @@ impl StatementContext {
             nodes: Vec::new(),
             edges: Vec::new(),
             node_ids: HashSet::new(),
+            node_index: HashMap::new(),
             edge_ids: HashSet::new(),
             cte_definitions: HashMap::new(),
             cte_node_to_name: HashMap::new(),
@@ -351,9 +356,23 @@ impl StatementContext {
     pub(crate) fn add_node(&mut self, node: Node) -> Arc<str> {
         let id = node.id.clone();
         if self.node_ids.insert(id.clone()) {
+            self.node_index.insert(id.clone(), self.nodes.len());
             self.nodes.push(node);
         }
         id
+    }
+
+    /// Remove a node (and its index entry) by ID. Rebuilds `node_index`
+    /// since positions shift after the removal — rare path, so this is fine.
+    pub(crate) fn remove_node_by_id(&mut self, node_id: &Arc<str>) {
+        if !self.node_ids.remove(node_id) {
+            return;
+        }
+        self.nodes.retain(|node| &node.id != node_id);
+        self.node_index.clear();
+        for (idx, node) in self.nodes.iter().enumerate() {
+            self.node_index.insert(node.id.clone(), idx);
+        }
     }
 
     pub(crate) fn add_edge(&mut self, edge: Edge) {
@@ -365,7 +384,14 @@ impl StatementContext {
 
     /// Attach a relation-name occurrence span to an existing node.
     pub(crate) fn add_name_span(&mut self, node_id: &Arc<str>, span: crate::types::Span) {
-        if let Some(node) = self.nodes.iter_mut().find(|node| &node.id == node_id) {
+        let Some(&idx) = self.node_index.get(node_id) else {
+            return;
+        };
+        // `node_index` is maintained by add_node/remove_node_by_id and is
+        // always within bounds; debug-assert the invariant for safety.
+        debug_assert!(idx < self.nodes.len());
+        if let Some(node) = self.nodes.get_mut(idx) {
+            debug_assert_eq!(&node.id, node_id);
             if !node.name_spans.contains(&span) {
                 node.name_spans.push(span);
             }

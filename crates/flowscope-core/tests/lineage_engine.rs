@@ -10135,6 +10135,22 @@ fn name_spans_ignores_matches_in_strings_and_comments() {
 }
 
 #[test]
+fn name_spans_skip_string_literals_before_relation_occurrence() {
+    let sql = "SELECT 'users' AS label FROM users";
+    let result = run_analysis(sql, Dialect::Postgres, None);
+    let stmt = &result.statements[0];
+    let users = find_table_node(stmt, "users").expect("users table node");
+
+    assert_eq!(users.name_spans.len(), 1);
+    let span = users.name_spans[0];
+    assert_eq!(&sql[span.start..span.end], "users");
+    assert_eq!(
+        span.start, 29,
+        "should bind to FROM users, not the string literal"
+    );
+}
+
+#[test]
 fn name_spans_empty_on_column_nodes() {
     // Columns intentionally get empty name_spans in this release — accurate
     // per-occurrence column spans require alias/scope resolution.
@@ -10229,4 +10245,50 @@ fn name_spans_distinguish_same_label_qualified_relations() {
         &sql[archive_orders.name_spans[0].start..archive_orders.name_spans[0].end],
         "orders"
     );
+}
+
+#[test]
+fn name_spans_preserve_quoted_identifier_parts_with_embedded_dots() {
+    let sql = "SELECT * FROM \"my.schema\".\"my.table\"";
+    let result = run_analysis(sql, Dialect::Postgres, None);
+    let stmt = &result.statements[0];
+    let table = stmt
+        .nodes
+        .iter()
+        .find(|node| node.node_type == NodeType::Table)
+        .expect("quoted table node");
+
+    assert_eq!(table.name_spans.len(), 1);
+    let span = table.name_spans[0];
+    assert_eq!(&sql[span.start..span.end], "my.table");
+}
+
+#[test]
+fn cte_body_span_skips_optional_column_list() {
+    let sql =
+        "WITH metrics(user_id, total) AS (SELECT id, amount FROM orders) SELECT * FROM metrics";
+    let result = run_analysis(sql, Dialect::Postgres, None);
+    let stmt = &result.statements[0];
+    let metrics = find_cte_node(stmt, "metrics").expect("metrics cte node");
+
+    let body = metrics
+        .body_span
+        .expect("cte body span should be populated");
+    assert_eq!(
+        &sql[body.start..body.end],
+        "(SELECT id, amount FROM orders)"
+    );
+}
+
+#[test]
+fn cte_body_span_skips_materialization_modifiers() {
+    let sql = "WITH metrics AS NOT MATERIALIZED (SELECT id FROM orders) SELECT * FROM metrics";
+    let result = run_analysis(sql, Dialect::Postgres, None);
+    let stmt = &result.statements[0];
+    let metrics = find_cte_node(stmt, "metrics").expect("metrics cte node");
+
+    let body = metrics
+        .body_span
+        .expect("cte body span should be populated");
+    assert_eq!(&sql[body.start..body.end], "(SELECT id FROM orders)");
 }

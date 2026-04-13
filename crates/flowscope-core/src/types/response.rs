@@ -153,14 +153,17 @@ pub struct Node {
 
     /// Source locations for this node's own relation-name occurrences.
     ///
-    /// Includes the declaration plus relation occurrences we can associate with the
+    /// Ordered by lexical occurrence (left-to-right in the SQL text). Includes
+    /// the declaration plus relation occurrences we can associate with the
     /// node (for example, a CTE name after `WITH` and each `FROM cte_name` /
-    /// `JOIN cte_name` usage). Self-join instances are tracked independently so
-    /// repeated table names map to the correct node.
+    /// `JOIN cte_name` usage). Self-joins intentionally produce distinct node
+    /// instances (one per lexical occurrence), each carrying its own
+    /// single-entry `name_spans`, so repeated table names map to the correct
+    /// node.
     ///
     /// Populated for table, view, and CTE nodes only. Column qualifier occurrences
     /// are not yet included, so column nodes omit this field and callers should
-    /// fall back to `span`.
+    /// fall back to `span` (use `Node::all_name_spans` for a unified view).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub name_spans: Vec<Span>,
 
@@ -235,6 +238,19 @@ impl Node {
             node_type: NodeType::Column,
             label: label.into(),
             ..Default::default()
+        }
+    }
+
+    /// Returns all name occurrence spans, falling back to `span` for node
+    /// types that don't populate `name_spans` (currently column nodes). This
+    /// lets callers treat the two fields uniformly without branching on
+    /// `node_type`.
+    #[must_use]
+    pub fn all_name_spans(&self) -> Vec<Span> {
+        if !self.name_spans.is_empty() {
+            self.name_spans.clone()
+        } else {
+            self.span.into_iter().collect()
         }
     }
 

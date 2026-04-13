@@ -4,6 +4,7 @@
 //! for error reporting. Since sqlparser doesn't expose AST node locations,
 //! we use text search to find approximate positions.
 
+use super::{split_qualified_identifiers, unquote_identifier};
 use crate::types::Span;
 
 /// Finds the byte offset span of an identifier in SQL text.
@@ -28,22 +29,19 @@ pub fn find_identifier_span(sql: &str, identifier: &str, search_start: usize) ->
     if identifier.is_empty() || search_start >= sql.len() {
         return None;
     }
+    if !sql.is_char_boundary(search_start) {
+        #[cfg(feature = "tracing")]
+        tracing::warn!(
+            search_start,
+            sql_len = sql.len(),
+            "find_identifier_span: search_start is not on a UTF-8 char boundary"
+        );
+        return None;
+    }
 
     let search_text = &sql[search_start..];
-
-    // Try exact match first (case-insensitive, word boundary)
-    if let Some((start, end)) = find_word_boundary_match(search_text, identifier) {
-        return Some(Span::new(search_start + start, search_start + end));
-    }
-
-    // For qualified names like "schema.table", try to find the full pattern
-    if identifier.contains('.') {
-        if let Some((start, end)) = find_qualified_name(search_text, identifier) {
-            return Some(Span::new(search_start + start, search_start + end));
-        }
-    }
-
-    None
+    find_qualified_name(search_text, identifier)
+        .map(|(start, end)| Span::new(search_start + start, search_start + end))
 }
 
 /// Finds every occurrence of an identifier in SQL text.
@@ -86,6 +84,13 @@ pub fn find_all_identifier_spans(
     while cursor < scope_bytes.len() {
         // Skip over string literals and comments so we don't match inside them.
         if let Some(skip_to) = skip_string_or_comment(scope_bytes, cursor) {
+            debug_assert!(
+                skip_to > cursor,
+                "skip_string_or_comment must advance past the current cursor"
+            );
+            if skip_to <= cursor {
+                break;
+            }
             cursor = skip_to;
             continue;
         }
@@ -94,6 +99,11 @@ pub fn find_all_identifier_spans(
         let Some((start, end)) = find_word_boundary_match(remaining, identifier) else {
             break;
         };
+        // `find_word_boundary_match` returns byte offsets on char boundaries;
+        // assert that contract so any future change breaks tests loudly
+        // instead of corrupting cursor advancement on multi-byte input.
+        debug_assert!(remaining.is_char_boundary(start));
+        debug_assert!(remaining.is_char_boundary(end));
         // The match is relative to `remaining`; translate into scope coordinates.
         let match_start = cursor + start;
         let match_end = cursor + end;
@@ -122,6 +132,46 @@ pub fn find_all_identifier_spans(
     spans
 }
 
+/// Finds the next relation occurrence and returns both its full span and the
+/// span of the final identifier component.
+///
+/// The full span includes any qualification and quoting as written in the SQL.
+/// The returned name span points at the inner content of the final identifier
+/// component so callers can highlight just the node name (for example, `orders`
+/// in `sales.orders`, or `my.table` in `"my.schema"."my.table"`). String
+/// literals and comments are skipped.
+pub fn find_relation_occurrence_spans(
+    sql: &str,
+    identifier: &str,
+    search_start: usize,
+) -> Option<(Span, Span)> {
+    if identifier.is_empty() || search_start >= sql.len() {
+        return None;
+    }
+    if !sql.is_char_boundary(search_start) {
+        #[cfg(feature = "tracing")]
+        tracing::warn!(
+            search_start,
+            sql_len = sql.len(),
+            "find_relation_occurrence_spans: search_start is not on a UTF-8 char boundary"
+        );
+        return None;
+    }
+
+    let search_text = &sql[search_start..];
+    let occurrence = find_identifier_occurrence(search_text, identifier, 0)?;
+    Some((
+        Span::new(
+            search_start + occurrence.full_start,
+            search_start + occurrence.full_end,
+        ),
+        Span::new(
+            search_start + occurrence.tail_start,
+            search_start + occurrence.tail_end,
+        ),
+    ))
+}
+
 /// Finds the span of a CTE body (the parenthesized subquery after `AS`) given
 /// the span of the CTE name.
 ///
@@ -142,27 +192,26 @@ pub fn find_cte_body_span(sql: &str, name_span: Span) -> Option<Span> {
 
     let bytes = sql.as_bytes();
 
-    // Skip whitespace / comments after the name.
+    // Skip whitespace / comments after the CTE name.
     let mut pos = skip_whitespace_and_comments(sql, name_span.end);
 
-    // Optional AS keyword (checked via ASCII byte comparison).
-    if pos + 2 <= bytes.len()
-        && bytes[pos].eq_ignore_ascii_case(&b'A')
-        && bytes[pos + 1].eq_ignore_ascii_case(&b'S')
-    {
-        let after_as = pos + 2;
-        let is_standalone = after_as >= bytes.len()
-            || bytes[after_as].is_ascii_whitespace()
-            || (after_as + 1 < bytes.len()
-                && bytes[after_as] == b'/'
-                && bytes[after_as + 1] == b'*')
-            || (after_as + 1 < bytes.len()
-                && bytes[after_as] == b'-'
-                && bytes[after_as + 1] == b'-')
-            || bytes[after_as] == b'(';
-        if is_standalone {
-            pos = skip_whitespace_and_comments(sql, after_as);
+    // Optional column list: `cte_name(col1, col2) AS (...)`.
+    if pos < bytes.len() && bytes[pos] == b'(' {
+        let list_end = find_matching_paren(bytes, pos)?;
+        pos = skip_whitespace_and_comments(sql, list_end + 1);
+    }
+
+    // Required `AS` keyword.
+    pos = consume_ascii_keyword(sql, pos, "AS")?;
+
+    // PostgreSQL materialization modifiers:
+    // `AS MATERIALIZED (...)` / `AS NOT MATERIALIZED (...)`.
+    if let Some(after_not) = consume_ascii_keyword(sql, pos, "NOT") {
+        if let Some(after_materialized) = consume_ascii_keyword(sql, after_not, "MATERIALIZED") {
+            pos = after_materialized;
         }
+    } else if let Some(after_materialized) = consume_ascii_keyword(sql, pos, "MATERIALIZED") {
+        pos = after_materialized;
     }
 
     if pos >= bytes.len() || bytes[pos] != b'(' {
@@ -186,6 +235,13 @@ fn find_matching_paren(bytes: &[u8], open: usize) -> Option<usize> {
     let mut i = open;
     while i < bytes.len() {
         if let Some(skip_to) = skip_string_or_comment(bytes, i) {
+            debug_assert!(
+                skip_to > i,
+                "skip_string_or_comment must advance past the current index"
+            );
+            if skip_to <= i {
+                return None;
+            }
             i = skip_to;
             continue;
         }
@@ -501,6 +557,10 @@ fn match_identifier_at(text: &str, pos: usize, identifier: &str) -> Option<(usiz
 
 /// Finds an identifier at a word boundary (not part of another word).
 /// Word boundaries consider underscores as part of identifiers (SQL convention).
+///
+/// Returns `(start, end)` as **byte offsets** into `text` (not character
+/// indices), both of which are guaranteed to lie on UTF-8 char boundaries.
+/// Callers rely on this contract when slicing the original SQL.
 fn find_word_boundary_match(text: &str, identifier: &str) -> Option<(usize, usize)> {
     if identifier.is_empty() {
         return None;
@@ -533,58 +593,197 @@ fn find_word_boundary_match(text: &str, identifier: &str) -> Option<(usize, usiz
     None
 }
 
-/// Finds a qualified identifier (e.g., "schema.table") in text.
+/// Finds an identifier occurrence in text, skipping comments and string literals.
 fn find_qualified_name(text: &str, qualified_name: &str) -> Option<(usize, usize)> {
-    let parts: Vec<&str> = qualified_name.split('.').collect();
-    if parts.is_empty() || parts.iter().any(|part| part.is_empty()) {
+    find_identifier_occurrence(text, qualified_name, 0)
+        .map(|occurrence| (occurrence.full_start, occurrence.full_end))
+}
+
+#[derive(Debug, Clone, Copy)]
+struct IdentifierOccurrence {
+    full_start: usize,
+    full_end: usize,
+    tail_start: usize,
+    tail_end: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ParsedIdentifierPart {
+    content_start: usize,
+    content_end: usize,
+    full_end: usize,
+}
+
+fn find_identifier_occurrence(
+    text: &str,
+    identifier: &str,
+    search_start: usize,
+) -> Option<IdentifierOccurrence> {
+    if identifier.is_empty() || search_start >= text.len() || !text.is_char_boundary(search_start) {
         return None;
     }
 
-    let text_bytes = text.as_bytes();
-    for start in 0..text_bytes.len() {
-        if !text.is_char_boundary(start) {
+    let target_parts: Vec<String> = split_qualified_identifiers(identifier)
+        .into_iter()
+        .map(|part| unquote_identifier(&part))
+        .collect();
+    if target_parts.is_empty() || target_parts.iter().any(|part| part.is_empty()) {
+        return None;
+    }
+
+    let bytes = text.as_bytes();
+    let mut cursor = search_start;
+    while cursor < bytes.len() {
+        if let Some(skip_to) = skip_string_or_comment(bytes, cursor) {
+            debug_assert!(skip_to > cursor);
+            if skip_to <= cursor {
+                return None;
+            }
+            cursor = skip_to;
             continue;
         }
 
-        let before_ok = start == 0 || !is_identifier_char_before(text, start);
-        if !before_ok {
+        if !text.is_char_boundary(cursor) {
+            cursor += 1;
             continue;
         }
 
-        let mut current = start;
-        let mut matched = true;
-
-        for (idx, part) in parts.iter().enumerate() {
-            let Some(next) = match_qualified_part_at(text_bytes, current, part.as_bytes()) else {
-                matched = false;
-                break;
-            };
-
-            current = next;
-            if idx < parts.len() - 1 {
-                if current >= text_bytes.len() || text_bytes[current] != b'.' {
-                    matched = false;
-                    break;
+        let before_ok = cursor == 0 || !is_identifier_char_before(text, cursor);
+        if before_ok {
+            if let Some((full_end, tail_start, tail_end)) =
+                match_identifier_sequence_at(text, cursor, &target_parts)
+            {
+                let after_ok = full_end == bytes.len() || !is_identifier_char_at(text, full_end);
+                if after_ok {
+                    return Some(IdentifierOccurrence {
+                        full_start: cursor,
+                        full_end,
+                        tail_start,
+                        tail_end,
+                    });
                 }
-                current += 1;
             }
         }
 
-        if !matched {
-            continue;
-        }
-
-        if current < text_bytes.len() && !text.is_char_boundary(current) {
-            continue;
-        }
-
-        let after_ok = current == text_bytes.len() || !is_identifier_char_at(text, current);
-        if after_ok {
-            return Some((start, current));
-        }
+        cursor += 1;
     }
 
     None
+}
+
+fn match_identifier_sequence_at(
+    text: &str,
+    start: usize,
+    parts: &[String],
+) -> Option<(usize, usize, usize)> {
+    if parts.is_empty() {
+        return None;
+    }
+
+    let bytes = text.as_bytes();
+    let mut current = start;
+    let mut tail = None;
+
+    for (idx, part) in parts.iter().enumerate() {
+        let parsed = match_identifier_part_at(text, current, part)?;
+
+        if idx == parts.len() - 1 {
+            tail = Some((parsed.content_start, parsed.content_end));
+        }
+
+        current = parsed.full_end;
+        if idx < parts.len() - 1 {
+            current = skip_whitespace_and_comments(text, current);
+            if current >= bytes.len() || bytes[current] != b'.' {
+                return None;
+            }
+            current = skip_whitespace_and_comments(text, current + 1);
+        }
+    }
+
+    let (tail_start, tail_end) = tail?;
+    Some((current, tail_start, tail_end))
+}
+
+fn match_identifier_part_at(
+    text: &str,
+    start: usize,
+    target_part: &str,
+) -> Option<ParsedIdentifierPart> {
+    if start >= text.len() || !text.is_char_boundary(start) || target_part.is_empty() {
+        return None;
+    }
+
+    let bytes = text.as_bytes();
+    match bytes[start] {
+        b'"' | b'`' | b'[' | b'\'' => {
+            let (close_quote, content_start) = match bytes[start] {
+                b'"' => (b'"', start + 1),
+                b'`' => (b'`', start + 1),
+                b'[' => (b']', start + 1),
+                b'\'' => (b'\'', start + 1),
+                _ => unreachable!(),
+            };
+
+            let mut i = content_start;
+            while i < bytes.len() {
+                if bytes[i] == close_quote {
+                    if i + 1 < bytes.len() && bytes[i + 1] == close_quote {
+                        i += 2;
+                        continue;
+                    }
+                    let candidate = text.get(content_start..i)?;
+                    if !candidate.eq_ignore_ascii_case(target_part) {
+                        return None;
+                    }
+                    return Some(ParsedIdentifierPart {
+                        content_start,
+                        content_end: i,
+                        full_end: i + 1,
+                    });
+                }
+                i += 1;
+            }
+            None
+        }
+        _ if target_part.chars().all(is_identifier_char) => {
+            let mut end = start;
+            for ch in text.get(start..)?.chars() {
+                if !is_identifier_char(ch) {
+                    break;
+                }
+                end += ch.len_utf8();
+            }
+            let candidate = text.get(start..end)?;
+            candidate
+                .eq_ignore_ascii_case(target_part)
+                .then_some(ParsedIdentifierPart {
+                    content_start: start,
+                    content_end: end,
+                    full_end: end,
+                })
+        }
+        _ => {
+            let end = start + target_part.len();
+            let candidate = text.get(start..end)?;
+            candidate
+                .eq_ignore_ascii_case(target_part)
+                .then_some(ParsedIdentifierPart {
+                    content_start: start,
+                    content_end: end,
+                    full_end: end,
+                })
+        }
+    }
+}
+
+fn consume_ascii_keyword(text: &str, pos: usize, keyword: &str) -> Option<usize> {
+    let pos = skip_whitespace_and_comments(text, pos);
+    let remaining = text.get(pos..)?;
+    if find_keyword_case_insensitive(remaining, keyword) != Some(0) {
+        return None;
+    }
+    Some(skip_whitespace_and_comments(text, pos + keyword.len()))
 }
 
 fn is_identifier_char(ch: char) -> bool {
@@ -614,35 +813,6 @@ fn starts_with_ascii_case_insensitive(haystack: &[u8], start: usize, needle: &[u
         }
     }
     true
-}
-
-fn match_qualified_part_at(text: &[u8], start: usize, part: &[u8]) -> Option<usize> {
-    if part.is_empty() || start >= text.len() {
-        return None;
-    }
-
-    let (content_start, close_quote) = match text[start] {
-        b'"' => (start + 1, Some(b'"')),
-        b'`' => (start + 1, Some(b'`')),
-        b'[' => (start + 1, Some(b']')),
-        _ => (start, None),
-    };
-
-    if !starts_with_ascii_case_insensitive(text, content_start, part) {
-        return None;
-    }
-
-    let end = content_start + part.len();
-    match close_quote {
-        Some(quote) => {
-            if end < text.len() && text[end] == quote {
-                Some(end + 1)
-            } else {
-                None
-            }
-        }
-        None => Some(end),
-    }
 }
 
 /// Calculates the byte offset for a given line and column in SQL text.
@@ -1210,6 +1380,51 @@ mod tests {
         let name_span = Span::new(5, 6);
         let body = find_cte_body_span(sql, name_span).expect("body span");
         assert_eq!(&sql[body.start..body.end], "(SELECT 1)");
+    }
+
+    #[test]
+    fn test_find_cte_body_span_with_column_list() {
+        let sql = "WITH a(x, y) AS (SELECT 1, 2) SELECT * FROM a";
+        let name_span = Span::new(5, 6);
+        let body = find_cte_body_span(sql, name_span).expect("body span");
+        assert_eq!(&sql[body.start..body.end], "(SELECT 1, 2)");
+    }
+
+    #[test]
+    fn test_find_cte_body_span_with_materialized_modifier() {
+        let sql = "WITH a AS MATERIALIZED (SELECT 1) SELECT * FROM a";
+        let name_span = Span::new(5, 6);
+        let body = find_cte_body_span(sql, name_span).expect("body span");
+        assert_eq!(&sql[body.start..body.end], "(SELECT 1)");
+    }
+
+    #[test]
+    fn test_find_cte_body_span_with_not_materialized_modifier() {
+        let sql = "WITH a AS NOT MATERIALIZED (SELECT 1) SELECT * FROM a";
+        let name_span = Span::new(5, 6);
+        let body = find_cte_body_span(sql, name_span).expect("body span");
+        assert_eq!(&sql[body.start..body.end], "(SELECT 1)");
+    }
+
+    #[test]
+    fn test_find_identifier_span_skips_string_literal_before_match() {
+        let sql = "SELECT 'users' AS x FROM users";
+        let span = find_identifier_span(sql, "users", 0).expect("users span");
+        assert_eq!(&sql[span.start..span.end], "users");
+        assert_eq!(span, Span::new(25, 30));
+    }
+
+    #[test]
+    fn test_find_relation_occurrence_spans_quoted_identifier_with_embedded_dots() {
+        let sql = "SELECT * FROM \"my.schema\".\"my.table\"";
+        let (full_span, name_span) =
+            find_relation_occurrence_spans(sql, "\"my.schema\".\"my.table\"", 0)
+                .expect("relation span");
+        assert_eq!(
+            &sql[full_span.start..full_span.end],
+            "\"my.schema\".\"my.table\""
+        );
+        assert_eq!(&sql[name_span.start..name_span.end], "my.table");
     }
 
     // ============================================================================

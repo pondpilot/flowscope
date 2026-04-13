@@ -1169,8 +1169,7 @@ impl<'a> Analyzer<'a> {
                 node_id = %node_id,
                 "dropping ambiguous unqualified column from output (no resolved sources)"
             );
-            ctx.nodes.retain(|node| node.id != node_id);
-            ctx.node_ids.remove(&node_id);
+            ctx.remove_node_by_id(&node_id);
 
             if let Some(edge_id) = ownership_edge_id {
                 ctx.edges.retain(|edge| edge.id != edge_id);

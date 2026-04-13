@@ -441,10 +441,13 @@ export interface Node {
   /**
    * Source locations for this node's own relation-name occurrences.
    *
-   * Includes the declaration plus relation occurrences we can associate with the
-   * node (for example, a CTE name after `WITH` and each `FROM cte_name` /
-   * `JOIN cte_name` usage). Self-join instances are tracked independently so
-   * repeated table names map to the correct node.
+   * Ordered by lexical occurrence (left-to-right in the SQL text). Includes
+   * the declaration plus relation occurrences we can associate with the node
+   * (for example, a CTE name after `WITH` and each `FROM cte_name` /
+   * `JOIN cte_name` usage). Self-joins intentionally produce distinct node
+   * instances (one per lexical occurrence), each carrying its own
+   * single-entry `nameSpans`, so repeated table names map to the correct
+   * node.
    *
    * Populated for table, view, and CTE nodes only. Column qualifier occurrences
    * are not yet included, so callers should fall back to `span`.

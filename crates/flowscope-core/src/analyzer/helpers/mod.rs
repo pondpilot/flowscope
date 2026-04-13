@@ -23,7 +23,8 @@ pub use naming::{
 pub use query::{classify_query_type, is_simple_column_ref};
 pub use span::{
     find_all_identifier_spans, find_cte_body_span, find_cte_definition_span,
-    find_derived_table_alias_span, find_identifier_span, line_col_to_offset,
+    find_derived_table_alias_span, find_identifier_span, find_relation_occurrence_spans,
+    line_col_to_offset,
 };
 pub use type_check::check_expr_types;
 pub use types::{canonical_type_from_data_type, infer_expr_type, normalize_schema_type};

@@ -592,7 +592,7 @@
             ]
           },
           "nameSpans": {
-            "description": "Source locations for this node's own relation-name occurrences.\n\nIncludes the declaration plus relation occurrences we can associate with the\nnode (for example, a CTE name after `WITH` and each `FROM cte_name` /\n`JOIN cte_name` usage). Self-join instances are tracked independently so\nrepeated table names map to the correct node.\n\nPopulated for table, view, and CTE nodes only. Column qualifier occurrences\nare not yet included, so column nodes omit this field and callers should\nfall back to `span`.",
+            "description": "Source locations for this node's own relation-name occurrences.\n\nOrdered by lexical occurrence (left-to-right in the SQL text). Includes\nthe declaration plus relation occurrences we can associate with the\nnode (for example, a CTE name after `WITH` and each `FROM cte_name` /\n`JOIN cte_name` usage). Self-joins intentionally produce distinct node\ninstances (one per lexical occurrence), each carrying its own\nsingle-entry `name_spans`, so repeated table names map to the correct\nnode.\n\nPopulated for table, view, and CTE nodes only. Column qualifier occurrences\nare not yet included, so column nodes omit this field and callers should\nfall back to `span` (use `Node::all_name_spans` for a unified view).",
             "type": "array",
             "items": {
               "$ref": "#/definitions/Span"

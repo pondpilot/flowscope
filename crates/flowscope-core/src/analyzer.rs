@@ -33,8 +33,7 @@ pub mod visitor;
 use context::StatementContext;
 use cross_statement::CrossStatementTracker;
 use helpers::{
-    build_column_schemas_with_constraints, find_all_identifier_spans, find_identifier_span,
-    split_qualified_identifiers, unquote_identifier,
+    build_column_schemas_with_constraints, find_identifier_span, find_relation_occurrence_spans,
 };
 use input::{collect_statements, StatementInput};
 use schema_registry::SchemaRegistry;
@@ -133,13 +132,15 @@ impl<'a> Analyzer<'a> {
     /// This is used to attach source locations to issues for better error reporting.
     pub(crate) fn find_span(&self, identifier: &str) -> Option<Span> {
         if let Some(source) = &self.current_statement_source {
-            let statement_sql = &source.sql[source.range.clone()];
-            return find_identifier_span(statement_sql, identifier, 0).map(|span| {
-                Span::new(
-                    source.range.start + span.start,
-                    source.range.start + span.end,
-                )
-            });
+            if let Some(statement_sql) = source.sql.get(source.range.start..source.range.end) {
+                return find_identifier_span(statement_sql, identifier, 0).map(|span| {
+                    Span::new(
+                        source.range.start + span.start,
+                        source.range.start + span.end,
+                    )
+                });
+            }
+            return None;
         }
 
         find_identifier_span(&self.request.sql, identifier, 0)
@@ -147,6 +148,18 @@ impl<'a> Analyzer<'a> {
 
     /// Locates the next identifier span inside the current statement using the
     /// statement-local search cursor stored on `ctx`.
+    ///
+    /// # Traversal-order contract
+    ///
+    /// Callers must invoke this in roughly left-to-right lexical order within a
+    /// single statement. Each successful call advances `ctx.span_search_cursor`
+    /// past the matched span, so a caller that processes AST nodes out of text
+    /// order will either skip matches or associate them with the wrong node
+    /// instance (notably for self-joins and repeated names). The
+    /// `debug_assert!` below catches backward movement in debug builds; it is
+    /// intentionally silent in release so a mildly-out-of-order visitor does
+    /// not panic in production — but callers should still treat left-to-right
+    /// traversal as an invariant.
     pub(crate) fn locate_statement_span<F>(
         &self,
         ctx: &mut StatementContext,
@@ -159,10 +172,21 @@ impl<'a> Analyzer<'a> {
         let search_start = ctx.span_search_cursor;
 
         let (sql, offset) = if let Some(source) = &self.current_statement_source {
-            (
-                &source.sql[source.range.start..source.range.end],
-                source.range.start,
-            )
+            // Use `.get()` so a malformed range or non-char-boundary endpoint
+            // degrades to `None` instead of panicking on the slice.
+            match source.sql.get(source.range.start..source.range.end) {
+                Some(slice) => (slice, source.range.start),
+                None => {
+                    #[cfg(feature = "tracing")]
+                    tracing::warn!(
+                        start = source.range.start,
+                        end = source.range.end,
+                        sql_len = source.sql.len(),
+                        "locate_statement_span: statement source range is invalid"
+                    );
+                    return None;
+                }
+            }
         } else {
             (self.request.sql.as_str(), 0)
         };
@@ -190,34 +214,39 @@ impl<'a> Analyzer<'a> {
         &self,
         ctx: &mut StatementContext,
         raw_name: &str,
-        label: &str,
+        _label: &str,
     ) -> Option<Span> {
-        let search_identifier = searchable_identifier(raw_name);
-        let full_span =
-            self.locate_statement_span(ctx, &search_identifier, find_identifier_span)?;
+        let search_start = ctx.span_search_cursor;
 
-        let sql = if let Some(source) = &self.current_statement_source {
-            source.sql.as_ref()
+        let (sql, offset) = if let Some(source) = &self.current_statement_source {
+            match source.sql.get(source.range.start..source.range.end) {
+                Some(slice) => (slice, source.range.start),
+                None => {
+                    #[cfg(feature = "tracing")]
+                    tracing::warn!(
+                        start = source.range.start,
+                        end = source.range.end,
+                        sql_len = source.sql.len(),
+                        "locate_relation_name_span: statement source range is invalid"
+                    );
+                    return None;
+                }
+            }
         } else {
-            self.request.sql.as_str()
+            (self.request.sql.as_str(), 0)
         };
-        let full_text = sql.get(full_span.start..full_span.end)?;
 
-        let tail_identifier = search_identifier
-            .rsplit('.')
-            .next()
-            .filter(|tail| !tail.is_empty())
-            .unwrap_or(label);
+        let (full_span, name_span) = find_relation_occurrence_spans(sql, raw_name, search_start)?;
+        debug_assert!(
+            full_span.end >= ctx.span_search_cursor,
+            "Span cursor moved backward: {} -> {} (relation: '{}')",
+            ctx.span_search_cursor,
+            full_span.end,
+            raw_name
+        );
 
-        let mut label_spans =
-            find_all_identifier_spans(full_text, tail_identifier, 0, full_text.len());
-        let Some(tail) = label_spans.pop() else {
-            return Some(full_span);
-        };
-        Some(Span::new(
-            full_span.start + tail.start,
-            full_span.start + tail.end,
-        ))
+        ctx.span_search_cursor = full_span.end;
+        Some(Span::new(offset + name_span.start, offset + name_span.end))
     }
 
     /// Returns the correct node ID and type for a relation (view vs table).
@@ -345,14 +374,6 @@ impl<'a> Analyzer<'a> {
 struct StatementSourceSlice<'a> {
     sql: Cow<'a, str>,
     range: Range<usize>,
-}
-
-fn searchable_identifier(name: &str) -> String {
-    split_qualified_identifiers(name)
-        .into_iter()
-        .map(|part| unquote_identifier(&part))
-        .collect::<Vec<_>>()
-        .join(".")
 }
 
 impl<'a> Analyzer<'a> {
