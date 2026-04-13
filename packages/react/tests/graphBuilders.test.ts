@@ -1012,15 +1012,13 @@ describe('graphBuilders DML handling', () => {
     expect(nodes.find((node) => node.id === 'table:scratchpad')).toBeDefined();
     expect(
       edges.find(
-        (edge) =>
-          edge.source === 'script:scratchpad.sql' && edge.target === 'table:scratchpad'
+        (edge) => edge.source === 'script:scratchpad.sql' && edge.target === 'table:scratchpad'
       )
     ).toBeDefined();
     expect(
       edges.find(
         (edge) =>
-          edge.source === 'table:jaffle_shop.raw_orders' &&
-          edge.target === 'script:scratchpad.sql'
+          edge.source === 'table:jaffle_shop.raw_orders' && edge.target === 'script:scratchpad.sql'
       )
     ).toBeDefined();
   });

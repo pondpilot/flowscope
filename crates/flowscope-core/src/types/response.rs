@@ -466,10 +466,15 @@ pub struct AggregationInfo {
 }
 
 /// The type of a node in the lineage graph.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum NodeType {
-    /// A database table
+    /// A database table.
+    ///
+    /// This is also the `Default` variant used by `Node::default()`, so callers
+    /// using `Node { node_type: ..., ..Default::default() }` must explicitly set
+    /// `node_type` or they will silently get a table node.
+    #[default]
     Table,
     /// A database view (CREATE VIEW)
     View,
@@ -479,15 +484,6 @@ pub enum NodeType {
     Output,
     /// A column
     Column,
-}
-
-impl Default for NodeType {
-    fn default() -> Self {
-        // `Node::default()` uses `Table` as a placeholder so callers can write
-        // `Node { node_type: ..., ..Default::default() }`. Be careful: forgetting
-        // to override `node_type` will silently produce a table node.
-        Self::Table
-    }
 }
 
 impl NodeType {

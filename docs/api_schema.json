@@ -657,7 +657,7 @@
         "description": "The type of a node in the lineage graph.",
         "oneOf": [
           {
-            "description": "A database table",
+            "description": "A database table.\n\nThis is also the `Default` variant used by `Node::default()`, so callers\nusing `Node { node_type: ..., ..Default::default() }` must explicitly set\n`node_type` or they will silently get a table node.",
             "type": "string",
             "const": "table"
           },

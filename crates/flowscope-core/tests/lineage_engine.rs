@@ -10160,7 +10160,10 @@ fn name_spans_skip_hash_comments_in_mysql() {
     assert_eq!(users.name_spans.len(), 1);
     let span = users.name_spans[0];
     assert_eq!(&sql[span.start..span.end], "users");
-    assert_eq!(span.start, 22, "should bind to FROM users, not the hash comment");
+    assert_eq!(
+        span.start, 22,
+        "should bind to FROM users, not the hash comment"
+    );
 }
 
 #[test]
