@@ -903,9 +903,13 @@ export function GraphView({
       // 2. Try to get lineage info for table/column nodes
       const lineageNode = lineageNodeMapRef.current.get(node.id);
       if (lineageNode) {
-        if (lineageNode.span) {
-          actions.highlightSpan(lineageNode.span);
-          span = lineageNode.span;
+        // Prefer the first occurrence from `nameSpans` (per-occurrence list
+        // shipped in #20). Fall back to the legacy `span` for column nodes
+        // and any future node type that doesn't yet populate `nameSpans`.
+        const targetSpan = lineageNode.nameSpans?.[0] ?? lineageNode.span;
+        if (targetSpan) {
+          actions.highlightSpan(targetSpan);
+          span = targetSpan;
         }
         onNodeClick?.(lineageNode);
 
@@ -954,6 +958,20 @@ export function GraphView({
     [actions]
   );
 
+  const handleNodeDoubleClick = useCallback(
+    (_event: React.MouseEvent, node: FlowNode) => {
+      // Double-click jumps to the CTE body for CTE nodes; for other node
+      // types the single-click handler already focused the first occurrence,
+      // so we have no extra work to do.
+      const lineageNode = lineageNodeMapRef.current.get(node.id);
+      if (lineageNode?.bodySpan) {
+        actions.selectNode(node.id);
+        actions.highlightSpan(lineageNode.bodySpan);
+      }
+    },
+    [actions]
+  );
+
   const handlePaneClick = useCallback(() => {
     actions.selectNode(null);
   }, [actions]);
@@ -983,6 +1001,7 @@ export function GraphView({
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={handleNodeClick}
+        onNodeDoubleClick={handleNodeDoubleClick}
         onEdgeClick={handleEdgeClick}
         onPaneClick={handlePaneClick}
         nodeTypes={nodeTypes}

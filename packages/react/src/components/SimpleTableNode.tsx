@@ -5,12 +5,13 @@ import type { TableNodeData } from '../types';
 import { sanitizeIdentifier } from '../utils/sanitize';
 import { useColors, useIsDarkMode } from '../hooks/useColors';
 import { getNamespaceColor } from '../constants';
+import { OccurrenceCycler } from './OccurrenceCycler';
 
 /**
  * A simplified Table Node for the Script/Hybrid view.
  * Displays icon and name only, with fixed handles.
  */
-function SimpleTableNodeComponent({ data, selected }: NodeProps): JSX.Element {
+function SimpleTableNodeComponent({ id, data, selected }: NodeProps): JSX.Element {
   const colors = useColors();
   const isDark = useIsDarkMode();
   const nodeData = data as TableNodeData;
@@ -90,6 +91,8 @@ function SimpleTableNodeComponent({ data, selected }: NodeProps): JSX.Element {
           </div>
         )}
       </div>
+
+      <OccurrenceCycler nodeId={id} />
 
       {/* Right Handle (Source) */}
       <Handle

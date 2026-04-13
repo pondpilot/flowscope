@@ -4,9 +4,22 @@ import { sql } from '@codemirror/lang-sql';
 import { EditorView, Decoration, type DecorationSet } from '@codemirror/view';
 import { StateField, StateEffect } from '@codemirror/state';
 import { oneDark } from '@codemirror/theme-one-dark';
+import { byteOffsetToCharOffset, type Span } from '@pondpilot/flowscope-core';
 
 import { useLineage } from '../store';
 import type { SqlViewProps } from '../types';
+
+/**
+ * Convert a span's UTF-8 byte offsets (the analyzer's coordinate system) to
+ * character offsets (CodeMirror's coordinate system). For ASCII-only SQL the
+ * two coordinate systems coincide and the conversion is effectively a no-op.
+ */
+function spanToCharRange(sql: string, span: Span): { from: number; to: number } {
+  return {
+    from: byteOffsetToCharOffset(sql, span.start),
+    to: byteOffsetToCharOffset(sql, span.end),
+  };
+}
 
 type HighlightRange = { from: number; to: number; className: string };
 
@@ -91,13 +104,10 @@ export function SqlView({
             : issue.severity === 'warning'
               ? 'flowscope-sql-highlight-warning'
               : 'flowscope-sql-highlight-info';
-        return {
-          from: issue.span!.start,
-          to: issue.span!.end,
-          className,
-        };
+        const { from, to } = spanToCharRange(sqlText, issue.span!);
+        return { from, to, className };
       });
-  }, [state.result, isControlled]);
+  }, [state.result, isControlled, sqlText]);
 
   const editorRef = useRef<ReactCodeMirrorRef>(null);
 
@@ -132,10 +142,11 @@ export function SqlView({
     if (!isControlled) {
       ranges.push(...issueHighlights);
     }
-    if (highlightedSpan) {
+    const activeRange = highlightedSpan ? spanToCharRange(sqlText, highlightedSpan) : null;
+    if (activeRange) {
       ranges.push({
-        from: highlightedSpan.start,
-        to: highlightedSpan.end,
+        from: activeRange.from,
+        to: activeRange.to,
         className: 'flowscope-sql-highlight-active',
       });
     }
@@ -144,13 +155,13 @@ export function SqlView({
       effects: setHighlights.of(ranges),
     });
 
-    if (highlightedSpan) {
+    if (activeRange) {
       view.dispatch({
-        selection: { anchor: highlightedSpan.start },
+        selection: { anchor: activeRange.from },
         scrollIntoView: true,
       });
     }
-  }, [highlightedSpan, issueHighlights, isControlled]);
+  }, [highlightedSpan, issueHighlights, isControlled, sqlText]);
 
   return (
     <div className={`flowscope-sql-view ${className || ''}`}>

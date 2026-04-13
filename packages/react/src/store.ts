@@ -1,7 +1,7 @@
 import { createContext, createElement, useContext, type ReactNode } from 'react';
 import { useStore } from 'zustand';
 import { createStore, type StoreApi } from 'zustand/vanilla';
-import type { AnalyzeResult, Span } from '@pondpilot/flowscope-core';
+import type { AnalyzeResult, Node, Span } from '@pondpilot/flowscope-core';
 import type {
   LineageViewMode,
   LayoutAlgorithm,
@@ -145,6 +145,23 @@ function saveHideCTEs(hide: boolean): void {
   saveToStorage(STORAGE_KEYS.hideCTEs, String(hide));
 }
 
+/**
+ * Locates a node by id across all statements in the analyze result.
+ * Returns `null` when the id is not found. The lookup is linear; lineage
+ * graphs are typically small enough that an index is unwarranted, but if
+ * `result.statements` grows large this is the obvious place to memoize.
+ */
+function findNodeById(result: AnalyzeResult, nodeId: string): Node | null {
+  for (const statement of result.statements) {
+    for (const node of statement.nodes) {
+      if (node.id === nodeId) {
+        return node;
+      }
+    }
+  }
+  return null;
+}
+
 export interface LineageState {
   // Data
   result: AnalyzeResult | null;
@@ -154,6 +171,13 @@ export interface LineageState {
   selectedNodeId: string | null;
   selectedStatementIndex: number;
   highlightedSpan: Span | null;
+  /**
+   * Index into the selected node's `nameSpans` (or `bodySpan` followed by name
+   * occurrences for CTE nodes) currently highlighted in the editor. Resets to 0
+   * whenever a new node is selected. Used by the per-node ◀ n/total ▶ controls
+   * and the keyboard `n` / `Shift+n` shortcuts.
+   */
+  focusedOccurrenceIndex: number;
   searchTerm: string;
   viewMode: LineageViewMode;
   matrixSubMode: MatrixSubMode;
@@ -178,6 +202,17 @@ export interface LineageState {
   setResult: (result: AnalyzeResult | null) => void;
   setSql: (sql: string) => void;
   selectNode: (nodeId: string | null) => void;
+  /**
+   * Cycle the highlighted occurrence of the currently selected node.
+   * Wraps around at the ends. No-op if no node is selected, the node has
+   * fewer than 2 occurrences, or the node has no `nameSpans`.
+   */
+  cycleOccurrence: (direction: 'next' | 'prev') => void;
+  /**
+   * Focus a specific occurrence of the currently selected node by index.
+   * No-op if the index is out of range.
+   */
+  focusOccurrence: (index: number) => void;
   toggleNodeCollapse: (nodeId: string) => void;
   toggleTableExpansion: (tableId: string) => void;
   /**
@@ -229,6 +264,7 @@ export function createLineageStore(
     selectedNodeId: null,
     selectedStatementIndex: 0,
     highlightedSpan: null,
+    focusedOccurrenceIndex: 0,
     searchTerm: '',
     viewMode: initialViewMode,
     matrixSubMode: 'tables',
@@ -272,6 +308,7 @@ export function createLineageStore(
           result,
           selectedNodeId: null,
           highlightedSpan: null,
+          focusedOccurrenceIndex: 0,
           collapsedNodeIds: new Set(),
           expandedTableIds: new Set(),
           selectedStatementIndex: statementCount === 0 ? 0 : newSelectedStatementIndex,
@@ -284,6 +321,41 @@ export function createLineageStore(
       set({
         selectedNodeId: nodeId,
         highlightedSpan: nodeId === null ? null : undefined,
+        focusedOccurrenceIndex: 0,
+      }),
+
+    cycleOccurrence: (direction) =>
+      set((state) => {
+        if (state.selectedNodeId === null || state.result === null) {
+          return state;
+        }
+        const node = findNodeById(state.result, state.selectedNodeId);
+        const spans = node?.nameSpans ?? [];
+        if (spans.length < 2) {
+          return state;
+        }
+        const delta = direction === 'next' ? 1 : -1;
+        const nextIndex = (state.focusedOccurrenceIndex + delta + spans.length) % spans.length;
+        return {
+          focusedOccurrenceIndex: nextIndex,
+          highlightedSpan: spans[nextIndex],
+        };
+      }),
+
+    focusOccurrence: (index) =>
+      set((state) => {
+        if (state.selectedNodeId === null || state.result === null) {
+          return state;
+        }
+        const node = findNodeById(state.result, state.selectedNodeId);
+        const spans = node?.nameSpans ?? [];
+        if (index < 0 || index >= spans.length) {
+          return state;
+        }
+        return {
+          focusedOccurrenceIndex: index,
+          highlightedSpan: spans[index],
+        };
       }),
 
     toggleNodeCollapse: (nodeId) =>
@@ -321,6 +393,7 @@ export function createLineageStore(
         selectedStatementIndex: index,
         selectedNodeId: null,
         highlightedSpan: null,
+        focusedOccurrenceIndex: 0,
         collapsedNodeIds: new Set(),
       }),
 
@@ -438,6 +511,7 @@ export function useLineage() {
       selectedNodeId: store.selectedNodeId,
       selectedStatementIndex: store.selectedStatementIndex,
       highlightedSpan: store.highlightedSpan,
+      focusedOccurrenceIndex: store.focusedOccurrenceIndex,
       searchTerm: store.searchTerm,
       viewMode: store.viewMode,
       matrixSubMode: store.matrixSubMode,
@@ -459,6 +533,8 @@ export function useLineage() {
       setResult: store.setResult,
       setSql: store.setSql,
       selectNode: store.selectNode,
+      cycleOccurrence: store.cycleOccurrence,
+      focusOccurrence: store.focusOccurrence,
       toggleNodeCollapse: store.toggleNodeCollapse,
       toggleTableExpansion: store.toggleTableExpansion,
       setAllNodesCollapsed: store.setAllNodesCollapsed,
@@ -495,6 +571,7 @@ export function useLineageState() {
   const selectedNodeId = useLineageStore((state) => state.selectedNodeId);
   const selectedStatementIndex = useLineageStore((state) => state.selectedStatementIndex);
   const highlightedSpan = useLineageStore((state) => state.highlightedSpan);
+  const focusedOccurrenceIndex = useLineageStore((state) => state.focusedOccurrenceIndex);
   const searchTerm = useLineageStore((state) => state.searchTerm);
   const viewMode = useLineageStore((state) => state.viewMode);
   const matrixSubMode = useLineageStore((state) => state.matrixSubMode);
@@ -518,6 +595,7 @@ export function useLineageState() {
     selectedNodeId,
     selectedStatementIndex,
     highlightedSpan,
+    focusedOccurrenceIndex,
     searchTerm,
     viewMode,
     matrixSubMode,
@@ -544,6 +622,8 @@ export function useLineageActions() {
   const setResult = useLineageStore((state) => state.setResult);
   const setSql = useLineageStore((state) => state.setSql);
   const selectNode = useLineageStore((state) => state.selectNode);
+  const cycleOccurrence = useLineageStore((state) => state.cycleOccurrence);
+  const focusOccurrence = useLineageStore((state) => state.focusOccurrence);
   const toggleNodeCollapse = useLineageStore((state) => state.toggleNodeCollapse);
   const toggleTableExpansion = useLineageStore((state) => state.toggleTableExpansion);
   const setAllNodesCollapsed = useLineageStore((state) => state.setAllNodesCollapsed);
@@ -570,6 +650,8 @@ export function useLineageActions() {
     setResult,
     setSql,
     selectNode,
+    cycleOccurrence,
+    focusOccurrence,
     toggleNodeCollapse,
     toggleTableExpansion,
     setAllNodesCollapsed,

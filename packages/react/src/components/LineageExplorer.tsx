@@ -1,6 +1,7 @@
 import { useEffect, type JSX } from 'react';
 import { useLineage } from '../store';
 import { LineageProvider } from '../context';
+import { useOccurrenceShortcuts } from '../hooks/useOccurrenceShortcuts';
 import { GraphView } from './GraphView';
 import { SqlView } from './SqlView';
 import { IssuesPanel } from './IssuesPanel';
@@ -26,6 +27,8 @@ function LineageExplorerInner({
   useEffect(() => {
     actions.setSql(sql);
   }, [sql, actions]);
+
+  useOccurrenceShortcuts();
 
   return (
     <div className="flowscope-explorer-inner">
