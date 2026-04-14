@@ -106,14 +106,31 @@ impl<'a> Analyzer<'a> {
         let mut local_to_global_id: HashMap<Arc<str>, Arc<str>> = HashMap::new();
 
         for lineage in lineages {
-            // Detect CTE-scoped ownership edges so their columns stay
-            // statement-scoped (mirrors the original merge logic).
-            let statement_scoped_relation_ids: HashSet<Arc<str>> = lineage
+            // Identify nodes whose IDs must stay statement-scoped:
+            // - CTEs and derived tables (their IDs encode the statement index)
+            // - Self-join instance nodes (their IDs hash canonical+alias+scope,
+            //   so they differ from the canonical-only `relation_identity` ID).
+            //   Without preserving these, two self-join instances of the same
+            //   table collapse into one node, losing the distinction between
+            //   `users a` and `users b` in `FROM users a JOIN users b`.
+            let mut statement_scoped_relation_ids: HashSet<Arc<str>> = lineage
                 .nodes
                 .iter()
                 .filter(|node| node.node_type == NodeType::Cte)
                 .map(|node| node.id.clone())
                 .collect();
+            for node in &lineage.nodes {
+                if matches!(node.node_type, NodeType::Table | NodeType::View) {
+                    let canonical = node
+                        .qualified_name
+                        .clone()
+                        .unwrap_or_else(|| node.label.clone());
+                    let canonical_id = self.tracker.relation_identity(&canonical).0;
+                    if node.id != canonical_id {
+                        statement_scoped_relation_ids.insert(node.id.clone());
+                    }
+                }
+            }
             let statement_scoped_column_ids: HashSet<Arc<str>> = lineage
                 .edges
                 .iter()
@@ -278,14 +295,26 @@ impl<'a> Analyzer<'a> {
         preserve_statement_scope: bool,
     ) -> Arc<str> {
         match node.node_type {
-            NodeType::Table | NodeType::View => self.tracker.relation_identity(canonical).0,
+            NodeType::Table | NodeType::View => {
+                let canonical_id = self.tracker.relation_identity(canonical).0;
+                // Self-join instance nodes have IDs hashed from canonical+alias+scope
+                // and differ from the canonical-only ID. Keep their local ID so
+                // the two instances of `users a` / `users b` stay as separate
+                // nodes in the flat graph.
+                if node.id == canonical_id {
+                    canonical_id
+                } else {
+                    node.id.clone()
+                }
+            }
             // CTEs and derived tables are statement-scoped in the global graph.
             // Their IDs already encode the statement index (via generate_statement_scoped_node_id),
             // so same-named CTEs in different statements remain distinct global nodes.
             NodeType::Cte => node.id.clone(),
-            // Columns owned by statement-scoped CTE/derived-table nodes must stay local too.
-            // Otherwise identical qualified names (e.g. `org.id`) reconnect distinct statements
-            // through a shared global column node.
+            // Columns owned by statement-scoped CTE/derived-table nodes (or
+            // self-join instance nodes) must stay local too. Otherwise
+            // identical qualified names (e.g. `org.id`) reconnect distinct
+            // statements/instances through a shared global column node.
             NodeType::Column if preserve_statement_scope => node.id.clone(),
             NodeType::Column if node.qualified_name.is_some() => {
                 generate_node_id("column", canonical)

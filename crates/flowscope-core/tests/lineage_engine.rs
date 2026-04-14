@@ -1876,7 +1876,7 @@ fn schema_qualified_unaliased_self_join_reference_uses_distinct_instance() {
 }
 
 #[test]
-fn self_join_global_lineage_merges_by_canonical() {
+fn self_join_preserves_distinct_instances_in_flat_lineage() {
     let sql = r#"
         SELECT e1.name, e2.name
         FROM employees e1
@@ -1885,7 +1885,7 @@ fn self_join_global_lineage_merges_by_canonical() {
 
     let result = run_analysis(sql, Dialect::Generic, None);
 
-    // Statement-level: 2 distinct nodes
+    // Statement-level: 2 distinct instance nodes for the same canonical table
     let stmt = first_statement(&result);
     let stmt_table_nodes: Vec<_> = stmt
         .nodes
@@ -1894,30 +1894,30 @@ fn self_join_global_lineage_merges_by_canonical() {
         .collect();
     assert_eq!(stmt_table_nodes.len(), 2);
 
-    // Global lineage should still have a single "employees" entry
-    let global = &result;
-    let global_employees: Vec<_> = global
+    // Flat top-level lineage preserves the same two instances. The new model
+    // keeps self-join distinctness so the graph can render both branches.
+    let employees_nodes: Vec<_> = result
         .nodes
         .iter()
         .filter(|n| n.canonical_name.as_ref().unwrap().name == "employees")
         .collect();
     assert_eq!(
-        global_employees.len(),
-        1,
-        "global lineage should merge self-join instances into one canonical node"
+        employees_nodes.len(),
+        2,
+        "flat lineage should preserve both self-join instances of employees"
     );
 
-    let global_node_ids: HashSet<_> = global.nodes.iter().map(|n| n.id.clone()).collect();
-    for edge in &global.edges {
+    let global_node_ids: HashSet<_> = result.nodes.iter().map(|n| n.id.clone()).collect();
+    for edge in &result.edges {
         assert!(
             global_node_ids.contains(&edge.from),
-            "global edge {} has missing source node {}",
+            "edge {} has missing source node {}",
             edge.id,
             edge.from
         );
         assert!(
             global_node_ids.contains(&edge.to),
-            "global edge {} has missing target node {}",
+            "edge {} has missing target node {}",
             edge.id,
             edge.to
         );
@@ -1925,7 +1925,7 @@ fn self_join_global_lineage_merges_by_canonical() {
 }
 
 #[test]
-fn self_join_global_lineage_merges_source_columns_by_canonical() {
+fn self_join_keeps_per_instance_source_columns_in_flat_lineage() {
     let sql = r#"
         SELECT
             e1.name AS employee_name,
@@ -1937,18 +1937,23 @@ fn self_join_global_lineage_merges_source_columns_by_canonical() {
     "#;
 
     let result = run_analysis(sql, Dialect::Generic, None);
-    let global = &result;
 
-    let employees_node = global
+    // Three distinct table instances (e1, e2, e3) — each with its own node.
+    let employees_nodes: Vec<_> = result
         .nodes
         .iter()
-        .find(|node| {
+        .filter(|node| {
             node.node_type == NodeType::Table
                 && node.canonical_name.as_ref().unwrap().name == "employees"
         })
-        .expect("employees table should exist in global lineage");
+        .collect();
+    assert_eq!(employees_nodes.len(), 3, "one node per self-join instance");
 
-    let source_name_nodes: Vec<_> = global
+    // The three `name` source columns each belong to a different instance and
+    // remain distinct (one per instance). Each has its own ownership edge
+    // from the corresponding employees instance and one DataFlow edge to its
+    // output column.
+    let source_name_nodes: Vec<_> = result
         .nodes
         .iter()
         .filter(|node| {
@@ -1960,42 +1965,40 @@ fn self_join_global_lineage_merges_source_columns_by_canonical() {
 
     assert_eq!(
         source_name_nodes.len(),
-        1,
-        "self-join source columns should collapse into one global canonical node"
-    );
-
-    let source_name_node = source_name_nodes[0];
-    assert_eq!(
-        source_name_node.statement_ids.len(),
         3,
-        "merged source column should retain refs to all three statement-local instances"
+        "each self-join instance owns its own `name` source column"
     );
 
-    let ownership_edges: Vec<_> = global
+    for employees_node in &employees_nodes {
+        let owned_name_columns: Vec<_> = result
+            .edges
+            .iter()
+            .filter(|edge| {
+                edge.edge_type == EdgeType::Ownership
+                    && edge.from == employees_node.id
+                    && source_name_nodes.iter().any(|n| n.id == edge.to)
+            })
+            .collect();
+        assert_eq!(
+            owned_name_columns.len(),
+            1,
+            "each instance owns exactly one `name` source column"
+        );
+    }
+
+    let output_targets: HashSet<_> = result
         .edges
         .iter()
         .filter(|edge| {
-            edge.edge_type == EdgeType::Ownership
-                && edge.from == employees_node.id
-                && edge.to == source_name_node.id
+            edge.edge_type == EdgeType::DataFlow
+                && source_name_nodes.iter().any(|n| n.id == edge.from)
         })
-        .collect();
-    assert_eq!(
-        ownership_edges.len(),
-        1,
-        "merged global source column should have one ownership edge from employees"
-    );
-
-    let output_targets: HashSet<_> = global
-        .edges
-        .iter()
-        .filter(|edge| edge.edge_type == EdgeType::DataFlow && edge.from == source_name_node.id)
         .map(|edge| edge.to.clone())
         .collect();
     assert_eq!(
         output_targets.len(),
         3,
-        "merged source column should feed all three output aliases"
+        "each instance's source column feeds its own output alias"
     );
 }
 
@@ -2048,9 +2051,10 @@ fn global_lineage_merges_qualified_columns_across_self_joins_and_cte_instances()
     };
 
     let result = run_analysis(sql, Dialect::Generic, Some(schema));
-    let global = &result;
 
-    let employees_name_nodes: Vec<_> = global
+    // First statement self-joins employees three times → 3 distinct
+    // employees.name source columns (one per instance).
+    let employees_name_nodes: Vec<_> = result
         .nodes
         .iter()
         .filter(|node| {
@@ -2061,16 +2065,16 @@ fn global_lineage_merges_qualified_columns_across_self_joins_and_cte_instances()
         .collect();
     assert_eq!(
         employees_name_nodes.len(),
-        1,
-        "global lineage should contain one canonical employees.name node"
-    );
-    assert_eq!(
-        employees_name_nodes[0].statement_ids.len(),
         3,
-        "employees.name should retain all three self-join source refs"
+        "each self-join instance contributes its own employees.name node"
     );
 
-    let org_employee_id_nodes: Vec<_> = global
+    // Second statement self-joins the `org` CTE. CTE columns share a single
+    // statement-scoped node (the analyzer does not synthesize per-instance
+    // column nodes for CTE self-joins the way it does for base-table
+    // self-joins), so org.employee_id collapses to one node belonging to
+    // statement 1 only.
+    let org_employee_id_nodes: Vec<_> = result
         .nodes
         .iter()
         .filter(|node| {
@@ -2079,11 +2083,8 @@ fn global_lineage_merges_qualified_columns_across_self_joins_and_cte_instances()
                 && node.canonical_name.as_ref().unwrap().name == "employee_id"
         })
         .collect();
-    assert_eq!(
-        org_employee_id_nodes.len(),
-        1,
-        "global lineage should contain one canonical org.employee_id node"
-    );
+    assert_eq!(org_employee_id_nodes.len(), 1);
+    assert_eq!(org_employee_id_nodes[0].statement_ids, vec![1]);
 }
 
 #[test]
@@ -2415,7 +2416,7 @@ fn self_join_in_subquery_produces_distinct_nodes() {
         );
     }
 
-    // Global lineage should merge them
+    // Flat lineage preserves both subquery self-join instances.
     let global_employees: Vec<_> = result
         .nodes
         .iter()
@@ -2423,8 +2424,8 @@ fn self_join_in_subquery_produces_distinct_nodes() {
         .collect();
     assert_eq!(
         global_employees.len(),
-        1,
-        "global lineage should merge subquery self-join instances"
+        2,
+        "flat lineage preserves both subquery self-join instances"
     );
 }
 
@@ -3135,9 +3136,9 @@ fn self_join_with_subquery_alias_conflict() {
 }
 
 #[test]
-fn self_join_global_edges_resolve_correctly() {
-    // Verify that global lineage edges for self-join scenarios
-    // properly resolve through the local-to-global ID mapping.
+fn self_join_flat_edges_resolve_correctly() {
+    // Verify that flat lineage edges for self-join scenarios reference
+    // existing nodes after the per-instance ID preservation.
     let sql = r#"
         SELECT e1.name AS emp_name, e2.name AS mgr_name
         FROM employees e1
@@ -3145,47 +3146,44 @@ fn self_join_global_edges_resolve_correctly() {
     "#;
 
     let result = run_analysis(sql, Dialect::Generic, None);
-    let global = &result;
 
-    // Global employees should be a single node
-    let global_employees: Vec<_> = global
+    // Flat lineage preserves both instances.
+    let employees_nodes: Vec<_> = result
         .nodes
         .iter()
         .filter(|n| {
             n.canonical_name.as_ref().unwrap().name == "employees" && n.node_type == NodeType::Table
         })
         .collect();
-    assert_eq!(
-        global_employees.len(),
-        1,
-        "global lineage should have exactly 1 employees node"
-    );
+    assert_eq!(employees_nodes.len(), 2, "one node per self-join instance");
 
-    // All global edges should reference existing global nodes
-    let global_node_ids: HashSet<_> = global.nodes.iter().map(|n| n.id.clone()).collect();
-    for edge in &global.edges {
+    // All edges should reference existing nodes.
+    let node_ids: HashSet<_> = result.nodes.iter().map(|n| n.id.clone()).collect();
+    for edge in &result.edges {
         assert!(
-            global_node_ids.contains(&edge.from),
-            "global edge from={} not found in global nodes",
+            node_ids.contains(&edge.from),
+            "edge from={} not found in nodes",
             edge.from
         );
         assert!(
-            global_node_ids.contains(&edge.to),
-            "global edge to={} not found in global nodes",
+            node_ids.contains(&edge.to),
+            "edge to={} not found in nodes",
             edge.to
         );
     }
 
-    // Ownership edges from employees should point to column nodes
-    let ownership_edges: Vec<_> = global
-        .edges
-        .iter()
-        .filter(|e| e.edge_type == EdgeType::Ownership && e.from == global_employees[0].id)
-        .collect();
-    assert!(
-        !ownership_edges.is_empty(),
-        "global employees node should own column nodes"
-    );
+    // Each instance should own its own column node(s).
+    for employees_node in &employees_nodes {
+        let ownership_edges: Vec<_> = result
+            .edges
+            .iter()
+            .filter(|e| e.edge_type == EdgeType::Ownership && e.from == employees_node.id)
+            .collect();
+        assert!(
+            !ownership_edges.is_empty(),
+            "each employees instance should own column nodes"
+        );
+    }
 }
 
 #[test]
