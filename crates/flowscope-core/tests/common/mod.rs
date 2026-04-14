@@ -9,26 +9,24 @@ pub fn prepare_for_snapshot(mut result: AnalyzeResult) -> AnalyzeResult {
         }
     }
 
-    // 2. Clear spans and sort nodes/edges in statements
+    // 2. Clear per-statement spans
     for stmt in &mut result.statements {
         stmt.span = None;
-        for node in &mut stmt.nodes {
-            node.span = None;
-        }
-        // Sort nodes by ID for deterministic output
-        stmt.nodes.sort_by(|a, b| a.id.cmp(&b.id));
-        stmt.edges.sort_by(|a, b| a.id.cmp(&b.id));
     }
 
-    // 3. Sort global lineage
-    result.global_lineage.nodes.sort_by(|a, b| a.id.cmp(&b.id));
-    result.global_lineage.edges.sort_by(|a, b| a.id.cmp(&b.id));
+    // 3. Clear node spans and sort the flat graph for deterministic output.
+    for node in &mut result.nodes {
+        node.span = None;
+        node.name_spans.clear();
+        node.body_span = None;
+    }
+    result.nodes.sort_by(|a, b| a.id.cmp(&b.id));
+    result.edges.sort_by(|a, b| a.id.cmp(&b.id));
 
     // 4. Sort issues
     for issue in &mut result.issues {
         issue.span = None;
     }
-    // Sort issues by code then message
     result
         .issues
         .sort_by(|a, b| a.code.cmp(&b.code).then_with(|| a.message.cmp(&b.message)));

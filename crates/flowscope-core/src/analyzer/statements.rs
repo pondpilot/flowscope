@@ -351,6 +351,7 @@ impl<'a> Analyzer<'a> {
                 join_condition,
                 metadata: None,
                 approximate: None,
+                statement_ids: Vec::new(),
             });
         }
     }
@@ -881,6 +882,7 @@ impl<'a> Analyzer<'a> {
             join_condition: None,
             metadata: None,
             approximate: None,
+            statement_ids: Vec::new(),
         });
 
         // Track that the old table is consumed and the new table is produced

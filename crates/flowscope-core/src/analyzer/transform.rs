@@ -267,6 +267,7 @@ pub fn filter_cte_nodes(lineage: &mut StatementLineage) {
                             join_condition,
                             metadata,
                             approximate,
+                            statement_ids: Vec::new(),
                         });
                     }
                 }
@@ -570,6 +571,7 @@ mod tests {
                     join_condition: None,
                     metadata: None,
                     approximate: Some(true),
+                    statement_ids: Vec::new(),
                 },
             ],
             span: None,

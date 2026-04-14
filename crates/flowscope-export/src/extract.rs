@@ -89,14 +89,14 @@ pub fn extract_script_info(result: &AnalyzeResult) -> Vec<ScriptInfo> {
         let mut tables_read: BTreeSet<String> = entry.tables_read.iter().cloned().collect();
         let mut tables_written: BTreeSet<String> = entry.tables_written.iter().cloned().collect();
 
-        for node in &stmt.nodes {
+        let stmt_edges: Vec<_> = result.edges_in_statement(stmt.statement_index).collect();
+
+        for node in result.nodes_in_statement(stmt.statement_index) {
             if matches!(node.node_type, NodeType::Table | NodeType::View) {
-                let is_written = stmt
-                    .edges
+                let is_written = stmt_edges
                     .iter()
                     .any(|edge| edge.to == node.id && edge.edge_type == EdgeType::DataFlow);
-                let is_read = stmt
-                    .edges
+                let is_read = stmt_edges
                     .iter()
                     .any(|edge| edge.from == node.id && edge.edge_type == EdgeType::DataFlow);
 
@@ -129,56 +129,53 @@ pub fn extract_script_info(result: &AnalyzeResult) -> Vec<ScriptInfo> {
 pub fn extract_table_info(result: &AnalyzeResult) -> Vec<TableInfo> {
     let mut table_map: BTreeMap<String, TableInfo> = BTreeMap::new();
 
-    for stmt in &result.statements {
-        let table_nodes: Vec<_> = stmt
-            .nodes
+    let column_labels: HashMap<&str, &str> = result
+        .nodes
+        .iter()
+        .filter(|node| node.node_type == NodeType::Column)
+        .map(|col| (col.id.as_ref(), col.label.as_ref()))
+        .collect();
+
+    for table_node in result.nodes.iter().filter(|n| n.node_type.is_table_like()) {
+        let key = table_node
+            .qualified_name
+            .as_deref()
+            .unwrap_or(&table_node.label)
+            .to_string();
+
+        let columns: BTreeSet<String> = result
+            .edges
             .iter()
-            .filter(|node| node.node_type.is_table_like())
-            .collect();
-        let column_nodes: Vec<_> = stmt
-            .nodes
-            .iter()
-            .filter(|node| node.node_type == NodeType::Column)
+            .filter(|edge| edge.edge_type == EdgeType::Ownership && edge.from == table_node.id)
+            .filter_map(|edge| column_labels.get(edge.to.as_ref()).map(|s| s.to_string()))
             .collect();
 
-        for table_node in table_nodes {
-            let key = table_node
-                .qualified_name
-                .as_deref()
-                .unwrap_or(&table_node.label)
-                .to_string();
+        let table_type = match table_node.node_type {
+            NodeType::View => TableType::View,
+            NodeType::Cte => TableType::Cte,
+            _ => TableType::Table,
+        };
 
-            let owned_column_ids: BTreeSet<_> = stmt
-                .edges
-                .iter()
-                .filter(|edge| edge.edge_type == EdgeType::Ownership && edge.from == table_node.id)
-                .map(|edge| edge.to.as_ref())
-                .collect();
+        // A merged node may participate in multiple statements with different
+        // source names. Pick the source name of the first statement it belongs
+        // to so the result remains deterministic.
+        let source_name = table_node
+            .statement_ids
+            .first()
+            .and_then(|sid| result.statements.iter().find(|s| s.statement_index == *sid))
+            .and_then(|s| s.source_name.clone());
 
-            let columns: BTreeSet<String> = column_nodes
-                .iter()
-                .filter(|col| owned_column_ids.contains(col.id.as_ref()))
-                .map(|col| col.label.to_string())
-                .collect();
+        let entry = table_map.entry(key.clone()).or_insert_with(|| TableInfo {
+            name: table_node.label.to_string(),
+            qualified_name: key.clone(),
+            table_type,
+            columns: Vec::new(),
+            source_name,
+        });
 
-            let table_type = match table_node.node_type {
-                NodeType::View => TableType::View,
-                NodeType::Cte => TableType::Cte,
-                _ => TableType::Table,
-            };
-
-            let entry = table_map.entry(key.clone()).or_insert_with(|| TableInfo {
-                name: table_node.label.to_string(),
-                qualified_name: key.clone(),
-                table_type,
-                columns: Vec::new(),
-                source_name: stmt.source_name.clone(),
-            });
-
-            let mut merged: BTreeSet<String> = entry.columns.iter().cloned().collect();
-            merged.extend(columns);
-            entry.columns = merged.into_iter().collect();
-        }
+        let mut merged: BTreeSet<String> = entry.columns.iter().cloned().collect();
+        merged.extend(columns);
+        entry.columns = merged.into_iter().collect();
     }
 
     table_map.into_values().collect()
@@ -187,61 +184,59 @@ pub fn extract_table_info(result: &AnalyzeResult) -> Vec<TableInfo> {
 pub fn extract_column_mappings(result: &AnalyzeResult) -> Vec<ColumnMapping> {
     let mut mappings = Vec::new();
 
-    for stmt in &result.statements {
-        let table_nodes: Vec<_> = stmt
-            .nodes
-            .iter()
-            .filter(|node| node.node_type.is_table_like())
-            .collect();
-        let column_nodes: Vec<_> = stmt
-            .nodes
-            .iter()
-            .filter(|node| node.node_type == NodeType::Column)
-            .collect();
+    let table_nodes: Vec<_> = result
+        .nodes
+        .iter()
+        .filter(|node| node.node_type.is_table_like())
+        .collect();
+    let column_nodes: Vec<_> = result
+        .nodes
+        .iter()
+        .filter(|node| node.node_type == NodeType::Column)
+        .collect();
 
-        let mut column_to_table: HashMap<&str, &str> = HashMap::new();
-        for edge in &stmt.edges {
-            if edge.edge_type == EdgeType::Ownership {
-                if let Some(table_node) = table_nodes.iter().find(|node| node.id == edge.from) {
-                    let table_name = table_node
-                        .qualified_name
-                        .as_deref()
-                        .unwrap_or(&table_node.label);
-                    column_to_table.insert(edge.to.as_ref(), table_name);
-                }
+    let mut column_to_table: HashMap<&str, &str> = HashMap::new();
+    for edge in &result.edges {
+        if edge.edge_type == EdgeType::Ownership {
+            if let Some(table_node) = table_nodes.iter().find(|node| node.id == edge.from) {
+                let table_name = table_node
+                    .qualified_name
+                    .as_deref()
+                    .unwrap_or(&table_node.label);
+                column_to_table.insert(edge.to.as_ref(), table_name);
             }
         }
+    }
 
-        for edge in &stmt.edges {
-            if edge.edge_type == EdgeType::Derivation || edge.edge_type == EdgeType::DataFlow {
-                let source_col = column_nodes.iter().find(|col| col.id == edge.from);
-                let target_col = column_nodes.iter().find(|col| col.id == edge.to);
+    for edge in &result.edges {
+        if edge.edge_type == EdgeType::Derivation || edge.edge_type == EdgeType::DataFlow {
+            let source_col = column_nodes.iter().find(|col| col.id == edge.from);
+            let target_col = column_nodes.iter().find(|col| col.id == edge.to);
 
-                if let (Some(source), Some(target)) = (source_col, target_col) {
-                    let source_table = column_to_table
-                        .get(edge.from.as_ref())
-                        .copied()
-                        .unwrap_or("Output");
-                    let target_table = column_to_table
-                        .get(edge.to.as_ref())
-                        .copied()
-                        .unwrap_or("Output");
+            if let (Some(source), Some(target)) = (source_col, target_col) {
+                let source_table = column_to_table
+                    .get(edge.from.as_ref())
+                    .copied()
+                    .unwrap_or("Output");
+                let target_table = column_to_table
+                    .get(edge.to.as_ref())
+                    .copied()
+                    .unwrap_or("Output");
 
-                    let expression = edge
-                        .expression
-                        .as_ref()
-                        .map(|value| value.to_string())
-                        .or_else(|| target.expression.as_ref().map(|value| value.to_string()));
+                let expression: Option<String> = edge
+                    .expression
+                    .as_ref()
+                    .map(|value| value.to_string())
+                    .or_else(|| target.expression.as_ref().map(|value| value.to_string()));
 
-                    mappings.push(ColumnMapping {
-                        source_table: source_table.to_string(),
-                        source_column: source.label.to_string(),
-                        target_table: target_table.to_string(),
-                        target_column: target.label.to_string(),
-                        expression,
-                        edge_type: edge_type_label(edge.edge_type).to_string(),
-                    });
-                }
+                mappings.push(ColumnMapping {
+                    source_table: source_table.to_string(),
+                    source_column: source.label.to_string(),
+                    target_table: target_table.to_string(),
+                    target_column: target.label.to_string(),
+                    expression,
+                    edge_type: edge_type_label(edge.edge_type).to_string(),
+                });
             }
         }
     }
@@ -253,37 +248,35 @@ pub fn extract_table_dependencies(result: &AnalyzeResult) -> Vec<TableDependency
     let mut dependencies = Vec::new();
     let mut seen: BTreeSet<String> = BTreeSet::new();
 
-    for stmt in &result.statements {
-        let relation_nodes: Vec<_> = stmt
-            .nodes
-            .iter()
-            .filter(|node| node.node_type.is_relation())
-            .collect();
+    let relation_nodes: Vec<_> = result
+        .nodes
+        .iter()
+        .filter(|node| node.node_type.is_relation())
+        .collect();
 
-        for edge in &stmt.edges {
-            if edge.edge_type == EdgeType::DataFlow || edge.edge_type == EdgeType::JoinDependency {
-                let source_node = relation_nodes.iter().find(|node| node.id == edge.from);
-                let target_node = relation_nodes.iter().find(|node| node.id == edge.to);
+    for edge in &result.edges {
+        if edge.edge_type == EdgeType::DataFlow || edge.edge_type == EdgeType::JoinDependency {
+            let source_node = relation_nodes.iter().find(|node| node.id == edge.from);
+            let target_node = relation_nodes.iter().find(|node| node.id == edge.to);
 
-                if let (Some(source), Some(target)) = (source_node, target_node) {
-                    let source_key = source
-                        .qualified_name
-                        .as_deref()
-                        .unwrap_or(&source.label)
-                        .to_string();
-                    let target_key = target
-                        .qualified_name
-                        .as_deref()
-                        .unwrap_or(&target.label)
-                        .to_string();
-                    let dep_key = format!("{source_key}->{target_key}");
+            if let (Some(source), Some(target)) = (source_node, target_node) {
+                let source_key = source
+                    .qualified_name
+                    .as_deref()
+                    .unwrap_or(&source.label)
+                    .to_string();
+                let target_key = target
+                    .qualified_name
+                    .as_deref()
+                    .unwrap_or(&target.label)
+                    .to_string();
+                let dep_key = format!("{source_key}->{target_key}");
 
-                    if source_key != target_key && seen.insert(dep_key) {
-                        dependencies.push(TableDependency {
-                            source_table: source_key,
-                            target_table: target_key,
-                        });
-                    }
+                if source_key != target_key && seen.insert(dep_key) {
+                    dependencies.push(TableDependency {
+                        source_table: source_key,
+                        target_table: target_key,
+                    });
                 }
             }
         }

@@ -1041,7 +1041,7 @@ GROUP BY 1, 2, 3
     );
 
     // Verify cross-statement edges exist (table->CTE and column DataFlow edges)
-    let cross_edges = &result.global_lineage.edges;
+    let cross_edges = &result.edges;
     assert!(!cross_edges.is_empty(), "Should have cross-statement edges");
 
     // Verify DataFlow edges exist (column lineage across files)
@@ -1188,7 +1188,7 @@ LEFT JOIN customer_orders USING (customer_id)
     assert!(has_table(&result, "int_orders_payments"));
 
     // Verify cross-statement lineage exists
-    let cross_edges = &result.global_lineage.edges;
+    let cross_edges = &result.edges;
     assert!(
         !cross_edges.is_empty(),
         "Should have cross-statement edges in full DAG"

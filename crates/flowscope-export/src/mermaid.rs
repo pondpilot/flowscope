@@ -90,14 +90,14 @@ fn extract_script_info(result: &AnalyzeResult) -> Vec<ScriptInfo> {
                 tables_written: HashSet::new(),
             });
 
-        for node in &stmt.nodes {
+        let stmt_edges: Vec<_> = result.edges_in_statement(stmt.statement_index).collect();
+
+        for node in result.nodes_in_statement(stmt.statement_index) {
             if matches!(node.node_type, NodeType::Table | NodeType::View) {
-                let is_written = stmt
-                    .edges
+                let is_written = stmt_edges
                     .iter()
                     .any(|edge| edge.to == node.id && edge.edge_type == EdgeType::DataFlow);
-                let is_read = stmt
-                    .edges
+                let is_read = stmt_edges
                     .iter()
                     .any(|edge| edge.from == node.id && edge.edge_type == EdgeType::DataFlow);
 
@@ -177,63 +177,61 @@ fn generate_table_view(result: &AnalyzeResult) -> String {
     let mut table_ids: HashMap<String, String> = HashMap::new();
     let mut edges = HashSet::new();
 
-    for stmt in &result.statements {
-        let table_nodes: Vec<_> = stmt
-            .nodes
-            .iter()
-            .filter(|node| node.node_type.is_table_like())
-            .collect();
+    let table_nodes: Vec<_> = result
+        .nodes
+        .iter()
+        .filter(|node| node.node_type.is_table_like())
+        .collect();
 
-        for node in &table_nodes {
-            let key = node
-                .qualified_name
-                .as_deref()
-                .unwrap_or(&node.label)
-                .to_string();
-            if !table_ids.contains_key(&key) {
-                let id = sanitize_id(&key);
-                table_ids.insert(key.clone(), id.clone());
-                let escaped_label = escape_label(&node.label);
-                let shape = match node.node_type {
-                    NodeType::Cte => format!("([\"{escaped_label}\"])"),
-                    NodeType::View => format!("[/\"{escaped_label}\"/]"),
-                    _ => format!("[\"{escaped_label}\"]"),
-                };
-                lines.push(format!("    {id}{shape}"));
-            }
+    for node in &table_nodes {
+        let key = node
+            .qualified_name
+            .as_deref()
+            .unwrap_or(&node.label)
+            .to_string();
+        if !table_ids.contains_key(&key) {
+            let id = sanitize_id(&key);
+            table_ids.insert(key.clone(), id.clone());
+            let escaped_label = escape_label(&node.label);
+            let shape = match node.node_type {
+                NodeType::Cte => format!("([\"{escaped_label}\"])"),
+                NodeType::View => format!("[/\"{escaped_label}\"/]"),
+                _ => format!("[\"{escaped_label}\"]"),
+            };
+            lines.push(format!("    {id}{shape}"));
         }
+    }
 
-        for edge in &stmt.edges {
-            if edge.edge_type == EdgeType::DataFlow || edge.edge_type == EdgeType::Derivation {
-                let source_node = table_nodes.iter().find(|node| node.id == edge.from);
-                let target_node = table_nodes.iter().find(|node| node.id == edge.to);
+    for edge in &result.edges {
+        if edge.edge_type == EdgeType::DataFlow || edge.edge_type == EdgeType::Derivation {
+            let source_node = table_nodes.iter().find(|node| node.id == edge.from);
+            let target_node = table_nodes.iter().find(|node| node.id == edge.to);
 
-                if let (Some(source), Some(target)) = (source_node, target_node) {
-                    let source_key = source
-                        .qualified_name
-                        .as_deref()
-                        .unwrap_or(&source.label)
-                        .to_string();
-                    let target_key = target
-                        .qualified_name
-                        .as_deref()
-                        .unwrap_or(&target.label)
-                        .to_string();
-                    let edge_key = format!("{source_key}->{target_key}");
+            if let (Some(source), Some(target)) = (source_node, target_node) {
+                let source_key = source
+                    .qualified_name
+                    .as_deref()
+                    .unwrap_or(&source.label)
+                    .to_string();
+                let target_key = target
+                    .qualified_name
+                    .as_deref()
+                    .unwrap_or(&target.label)
+                    .to_string();
+                let edge_key = format!("{source_key}->{target_key}");
 
-                    if source_key != target_key && edges.insert(edge_key) {
-                        let source_id = table_ids.get(&source_key).cloned().unwrap_or_else(|| {
-                            let id = sanitize_id(&source_key);
-                            table_ids.insert(source_key.clone(), id.clone());
-                            id
-                        });
-                        let target_id = table_ids.get(&target_key).cloned().unwrap_or_else(|| {
-                            let id = sanitize_id(&target_key);
-                            table_ids.insert(target_key.clone(), id.clone());
-                            id
-                        });
-                        lines.push(format!("    {source_id} --> {target_id}"));
-                    }
+                if source_key != target_key && edges.insert(edge_key) {
+                    let source_id = table_ids.get(&source_key).cloned().unwrap_or_else(|| {
+                        let id = sanitize_id(&source_key);
+                        table_ids.insert(source_key.clone(), id.clone());
+                        id
+                    });
+                    let target_id = table_ids.get(&target_key).cloned().unwrap_or_else(|| {
+                        let id = sanitize_id(&target_key);
+                        table_ids.insert(target_key.clone(), id.clone());
+                        id
+                    });
+                    lines.push(format!("    {source_id} --> {target_id}"));
                 }
             }
         }
@@ -254,54 +252,52 @@ struct ColumnMapping {
 fn extract_column_mappings(result: &AnalyzeResult) -> Vec<ColumnMapping> {
     let mut mappings = Vec::new();
 
-    for stmt in &result.statements {
-        let table_nodes: Vec<_> = stmt
-            .nodes
-            .iter()
-            .filter(|node| node.node_type.is_table_like())
-            .collect();
-        let column_nodes: Vec<_> = stmt
-            .nodes
-            .iter()
-            .filter(|node| node.node_type == NodeType::Column)
-            .collect();
+    let table_nodes: Vec<_> = result
+        .nodes
+        .iter()
+        .filter(|node| node.node_type.is_table_like())
+        .collect();
+    let column_nodes: Vec<_> = result
+        .nodes
+        .iter()
+        .filter(|node| node.node_type == NodeType::Column)
+        .collect();
 
-        let mut column_to_table: HashMap<&str, &str> = HashMap::new();
-        for edge in &stmt.edges {
-            if edge.edge_type == EdgeType::Ownership {
-                if let Some(table_node) = table_nodes.iter().find(|node| node.id == edge.from) {
-                    let table_name = table_node
-                        .qualified_name
-                        .as_deref()
-                        .unwrap_or(&table_node.label);
-                    column_to_table.insert(edge.to.as_ref(), table_name);
-                }
+    let mut column_to_table: HashMap<&str, &str> = HashMap::new();
+    for edge in &result.edges {
+        if edge.edge_type == EdgeType::Ownership {
+            if let Some(table_node) = table_nodes.iter().find(|node| node.id == edge.from) {
+                let table_name = table_node
+                    .qualified_name
+                    .as_deref()
+                    .unwrap_or(&table_node.label);
+                column_to_table.insert(edge.to.as_ref(), table_name);
             }
         }
+    }
 
-        for edge in &stmt.edges {
-            if edge.edge_type == EdgeType::Derivation || edge.edge_type == EdgeType::DataFlow {
-                let source_col = column_nodes.iter().find(|col| col.id == edge.from);
-                let target_col = column_nodes.iter().find(|col| col.id == edge.to);
+    for edge in &result.edges {
+        if edge.edge_type == EdgeType::Derivation || edge.edge_type == EdgeType::DataFlow {
+            let source_col = column_nodes.iter().find(|col| col.id == edge.from);
+            let target_col = column_nodes.iter().find(|col| col.id == edge.to);
 
-                if let (Some(source), Some(target)) = (source_col, target_col) {
-                    let source_table = column_to_table
-                        .get(edge.from.as_ref())
-                        .copied()
-                        .unwrap_or("Output");
-                    let target_table = column_to_table
-                        .get(edge.to.as_ref())
-                        .copied()
-                        .unwrap_or("Output");
+            if let (Some(source), Some(target)) = (source_col, target_col) {
+                let source_table = column_to_table
+                    .get(edge.from.as_ref())
+                    .copied()
+                    .unwrap_or("Output");
+                let target_table = column_to_table
+                    .get(edge.to.as_ref())
+                    .copied()
+                    .unwrap_or("Output");
 
-                    mappings.push(ColumnMapping {
-                        source_table: source_table.to_string(),
-                        source_column: source.label.to_string(),
-                        target_table: target_table.to_string(),
-                        target_column: target.label.to_string(),
-                        edge_type: edge.edge_type,
-                    });
-                }
+                mappings.push(ColumnMapping {
+                    source_table: source_table.to_string(),
+                    source_column: source.label.to_string(),
+                    target_table: target_table.to_string(),
+                    target_column: target.label.to_string(),
+                    edge_type: edge.edge_type,
+                });
             }
         }
     }
@@ -368,19 +364,17 @@ fn generate_hybrid_view(result: &AnalyzeResult) -> String {
     }
 
     let mut table_ids = HashMap::new();
-    for stmt in &result.statements {
-        for node in &stmt.nodes {
-            if node.node_type.is_table_like() {
-                let key = node
-                    .qualified_name
-                    .as_deref()
-                    .unwrap_or(&node.label)
-                    .to_string();
-                if !table_ids.contains_key(&key) {
-                    let id = sanitize_id(&format!("table_{}", key));
-                    table_ids.insert(key.clone(), id.clone());
-                    lines.push(format!("    {id}[\"{}\"]", escape_label(&node.label)));
-                }
+    for node in &result.nodes {
+        if node.node_type.is_table_like() {
+            let key = node
+                .qualified_name
+                .as_deref()
+                .unwrap_or(&node.label)
+                .to_string();
+            if !table_ids.contains_key(&key) {
+                let id = sanitize_id(&format!("table_{}", key));
+                table_ids.insert(key.clone(), id.clone());
+                lines.push(format!("    {id}[\"{}\"]", escape_label(&node.label)));
             }
         }
     }

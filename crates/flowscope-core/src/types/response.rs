@@ -10,16 +10,27 @@ use super::request::ForeignKeyRef;
 
 /// The result of analyzing SQL for data lineage.
 ///
-/// Contains per-statement lineage graphs, a global lineage graph spanning all statements,
-/// any issues encountered during analysis, and summary statistics.
+/// Contains a single flat lineage graph spanning all statements, per-statement
+/// metadata, any issues encountered during analysis, and summary statistics.
+/// Each `Node` / `Edge` records the `statementIds` it participates in, so
+/// consumers can filter down to a single statement or aggregate across all of
+/// them without maintaining parallel collections.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AnalyzeResult {
-    /// Per-statement lineage analysis results
-    pub statements: Vec<StatementLineage>,
+    /// Per-statement metadata (type, span, complexity, resolved SQL).
+    /// The graph itself lives in the top-level `nodes` / `edges`.
+    pub statements: Vec<StatementMeta>,
 
-    /// Global lineage graph spanning all statements
-    pub global_lineage: GlobalLineage,
+    /// All nodes in the lineage graph. Nodes shared across statements
+    /// (for example, a table read by two queries) appear once with
+    /// `statementIds` listing every statement they participate in.
+    pub nodes: Vec<Node>,
+
+    /// All edges in the lineage graph. Intra-statement edges carry a single
+    /// entry in `statementIds`; `EdgeType::CrossStatement` edges connect nodes
+    /// whose statement groups differ.
+    pub edges: Vec<Edge>,
 
     /// All issues encountered during analysis
     pub issues: Vec<Issue>,
@@ -53,12 +64,27 @@ impl StatementSplitResult {
 }
 
 impl AnalyzeResult {
+    /// Iterate over nodes that participate in the given statement index.
+    pub fn nodes_in_statement(&self, statement_index: usize) -> impl Iterator<Item = &Node> {
+        self.nodes
+            .iter()
+            .filter(move |n| n.statement_ids.contains(&statement_index))
+    }
+
+    /// Iterate over edges that participate in the given statement index.
+    pub fn edges_in_statement(&self, statement_index: usize) -> impl Iterator<Item = &Edge> {
+        self.edges
+            .iter()
+            .filter(move |e| e.statement_ids.contains(&statement_index))
+    }
+
     /// Create an error result with a single issue.
     /// Useful for returning errors from WASM boundary or other entry points.
     pub fn from_error(code: impl Into<String>, message: impl Into<String>) -> Self {
         Self {
             statements: Vec::new(),
-            global_lineage: GlobalLineage::default(),
+            nodes: Vec::new(),
+            edges: Vec::new(),
             issues: vec![Issue::error(code, message)],
             summary: Summary {
                 statement_count: 0,
@@ -78,10 +104,12 @@ impl AnalyzeResult {
     }
 }
 
-/// Lineage information for a single SQL statement.
+/// Per-statement metadata. The lineage graph itself is shared in
+/// `AnalyzeResult.nodes` / `.edges`; this struct only carries facts about the
+/// statement as a whole.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct StatementLineage {
+pub struct StatementMeta {
     /// Zero-based index of the statement in the input SQL
     pub statement_index: usize,
 
@@ -91,12 +119,6 @@ pub struct StatementLineage {
     /// Optional source name (file path or script identifier) for grouping
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_name: Option<String>,
-
-    /// All nodes in the lineage graph for this statement
-    pub nodes: Vec<Node>,
-
-    /// All edges connecting nodes in the lineage graph
-    pub edges: Vec<Edge>,
 
     /// Optional span of the entire statement in source SQL
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -113,6 +135,54 @@ pub struct StatementLineage {
     /// values from template variables (e.g., database credentials).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub resolved_sql: Option<String>,
+}
+
+/// Crate-private per-statement analysis intermediate.
+///
+/// Populated during analysis and merged into `AnalyzeResult.nodes` / `.edges`
+/// by `Analyzer::build_result`. Not part of the public API.
+#[derive(Debug, Clone)]
+pub(crate) struct StatementLineage {
+    pub statement_index: usize,
+    pub statement_type: String,
+    pub source_name: Option<String>,
+    pub nodes: Vec<Node>,
+    pub edges: Vec<Edge>,
+    pub span: Option<Span>,
+    pub join_count: usize,
+    pub complexity_score: u8,
+    pub resolved_sql: Option<String>,
+}
+
+impl StatementLineage {
+    /// Split this per-statement container into its public metadata and the
+    /// graph fragment (nodes, edges) that will be merged at the top level.
+    pub(crate) fn into_meta_and_graph(self) -> (StatementMeta, Vec<Node>, Vec<Edge>) {
+        let Self {
+            statement_index,
+            statement_type,
+            source_name,
+            nodes,
+            edges,
+            span,
+            join_count,
+            complexity_score,
+            resolved_sql,
+        } = self;
+        (
+            StatementMeta {
+                statement_index,
+                statement_type,
+                source_name,
+                span,
+                join_count,
+                complexity_score,
+                resolved_sql,
+            },
+            nodes,
+            edges,
+        )
+    }
 }
 
 /// A node in the lineage graph (table, CTE, or column).
@@ -138,6 +208,20 @@ pub struct Node {
         deserialize_with = "super::serde_utils::deserialize_option_arc_str"
     )]
     pub qualified_name: Option<Arc<str>>,
+
+    /// Structured canonical identity (catalog.schema.name[.column]) used to
+    /// match the same entity across statements. Only populated for nodes
+    /// whose identity is globally meaningful — table-likes and columns owned
+    /// by them. Statement-scoped nodes (CTEs, CTE columns) omit this.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub canonical_name: Option<CanonicalName>,
+
+    /// Zero-based indices of every statement this node participates in.
+    /// Always has at least one entry. For nodes shared across statements
+    /// (e.g. a table referenced by two queries) this lists all of them in
+    /// ascending order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub statement_ids: Vec<usize>,
 
     /// SQL expression text for computed columns
     #[serde(
@@ -198,6 +282,8 @@ impl Default for Node {
             node_type: NodeType::default(),
             label: Arc::from(""),
             qualified_name: None,
+            canonical_name: None,
+            statement_ids: Vec::new(),
             expression: None,
             span: None,
             name_spans: Vec::new(),
@@ -340,6 +426,12 @@ pub struct Edge {
     /// True if this edge represents approximate/uncertain lineage
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub approximate: Option<bool>,
+
+    /// Zero-based indices of the statement(s) this edge participates in.
+    /// Intra-statement edges carry a single entry; `EdgeType::CrossStatement`
+    /// edges carry `[producer, consumer]` in that order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub statement_ids: Vec<usize>,
 }
 
 impl Edge {
@@ -361,6 +453,7 @@ impl Edge {
             join_condition: None,
             metadata: None,
             approximate: None,
+            statement_ids: Vec::new(),
         }
     }
 
@@ -556,48 +649,6 @@ pub enum EdgeType {
     CrossStatement,
 }
 
-/// Global lineage graph spanning all statements in the analyzed SQL.
-///
-/// Provides a unified view of data flow across multiple statements.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct GlobalLineage {
-    /// All unique nodes across all statements
-    pub nodes: Vec<GlobalNode>,
-    /// All edges representing cross-statement data flow
-    pub edges: Vec<GlobalEdge>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct GlobalNode {
-    /// Stable ID derived from canonical identifier
-    #[serde(deserialize_with = "super::serde_utils::deserialize_arc_str")]
-    pub id: Arc<str>,
-
-    /// Node type
-    #[serde(rename = "type")]
-    pub node_type: NodeType,
-
-    /// Human-readable label
-    #[serde(deserialize_with = "super::serde_utils::deserialize_arc_str")]
-    pub label: Arc<str>,
-
-    /// Canonical name for cross-statement matching
-    pub canonical_name: CanonicalName,
-
-    /// References to statements that use this node
-    pub statement_refs: Vec<StatementRef>,
-
-    /// Extensible metadata
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<HashMap<String, serde_json::Value>>,
-
-    /// How this table was resolved (imported, implied, or unknown)
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub resolution_source: Option<ResolutionSource>,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]
 pub struct CanonicalName {
@@ -634,39 +685,6 @@ impl CanonicalName {
         }
         parts.join(".")
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct StatementRef {
-    /// Statement index in the original request
-    pub statement_index: usize,
-    /// ID of the local node inside that statement graph (if available)
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        deserialize_with = "super::serde_utils::deserialize_option_arc_str"
-    )]
-    pub node_id: Option<Arc<str>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct GlobalEdge {
-    #[serde(deserialize_with = "super::serde_utils::deserialize_arc_str")]
-    pub id: Arc<str>,
-    #[serde(deserialize_with = "super::serde_utils::deserialize_arc_str")]
-    pub from: Arc<str>,
-    #[serde(deserialize_with = "super::serde_utils::deserialize_arc_str")]
-    pub to: Arc<str>,
-    #[serde(rename = "type")]
-    pub edge_type: EdgeType,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub producer_statement: Option<StatementRef>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub consumer_statement: Option<StatementRef>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<HashMap<String, serde_json::Value>>,
 }
 
 /// Resolved schema metadata showing the effective schema used during analysis.
@@ -788,31 +806,29 @@ mod tests {
     #[test]
     fn test_analyze_result_serialization() {
         let result = AnalyzeResult {
-            statements: vec![StatementLineage {
+            statements: vec![StatementMeta {
                 statement_index: 0,
                 statement_type: "SELECT".to_string(),
                 source_name: None,
-                nodes: vec![Node {
-                    id: "tbl_123".to_string().into(),
-                    node_type: NodeType::Table,
-                    label: "users".to_string().into(),
-                    qualified_name: Some("public.users".to_string().into()),
-                    expression: None,
-                    span: None,
-                    name_spans: Vec::new(),
-                    body_span: None,
-                    metadata: None,
-                    resolution_source: None,
-                    filters: Vec::new(),
-                    aggregation: None,
-                }],
-                edges: vec![],
                 span: None,
                 join_count: 0,
                 complexity_score: 5,
                 resolved_sql: None,
             }],
-            global_lineage: GlobalLineage::default(),
+            nodes: vec![Node {
+                id: "tbl_123".to_string().into(),
+                node_type: NodeType::Table,
+                label: "users".to_string().into(),
+                qualified_name: Some("public.users".to_string().into()),
+                canonical_name: Some(CanonicalName::table(
+                    None,
+                    Some("public".to_string()),
+                    "users".to_string(),
+                )),
+                statement_ids: vec![0],
+                ..Default::default()
+            }],
+            edges: vec![],
             issues: vec![],
             summary: Summary::default(),
             resolved_schema: None,
@@ -827,10 +843,9 @@ mod tests {
 
         let deserialized: AnalyzeResult = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.statements.len(), 1);
-        assert_eq!(
-            deserialized.statements[0].nodes[0].node_type,
-            NodeType::Table
-        );
+        assert_eq!(deserialized.nodes.len(), 1);
+        assert_eq!(deserialized.nodes[0].node_type, NodeType::Table);
+        assert_eq!(deserialized.nodes[0].statement_ids, vec![0]);
     }
 
     #[test]

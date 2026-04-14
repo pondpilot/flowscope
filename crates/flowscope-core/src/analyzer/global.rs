@@ -1,8 +1,8 @@
 use super::helpers::{generate_node_id, parse_canonical_name};
 use super::Analyzer;
 use crate::types::{
-    EdgeType, GlobalEdge, GlobalLineage, GlobalNode, IssueCount, Node, NodeType,
-    ResolvedColumnSchema, ResolvedSchemaMetadata, ResolvedSchemaTable, StatementRef, Summary,
+    Edge, EdgeType, IssueCount, Node, NodeType, ResolvedColumnSchema, ResolvedSchemaMetadata,
+    ResolvedSchemaTable, Span, StatementMeta, Summary,
 };
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -19,7 +19,7 @@ impl<'a> Analyzer<'a> {
             .and_then(|o| o.hide_ctes)
             .unwrap_or(false);
 
-        let statements = if hide_ctes {
+        let statement_lineages = if hide_ctes {
             let mut filtered = self.statement_lineages.clone();
             for lineage in &mut filtered {
                 super::transform::filter_cte_nodes(lineage);
@@ -29,13 +29,14 @@ impl<'a> Analyzer<'a> {
             self.statement_lineages.clone()
         };
 
-        let global_lineage = self.build_global_lineage_from(&statements);
-        let summary = self.build_summary(&global_lineage);
+        let (statements, nodes, edges) = self.flatten_lineages(statement_lineages);
+        let summary = self.build_summary(&nodes, &edges);
         let resolved_schema = self.build_resolved_schema();
 
         crate::AnalyzeResult {
             statements,
-            global_lineage,
+            nodes,
+            edges,
             issues: self.issues.clone(),
             summary,
             resolved_schema,
@@ -84,72 +85,79 @@ impl<'a> Analyzer<'a> {
         Some(ResolvedSchemaMetadata { tables })
     }
 
-    fn build_global_lineage_from(
+    /// Flatten per-statement lineages into a single top-level graph.
+    ///
+    /// Nodes that share a canonical identity across statements (e.g. the same
+    /// table read by two queries) are merged into a single `Node` whose
+    /// `statement_ids` lists every statement that references it. Self-join
+    /// instances remain distinct (their local IDs already encode the lexical
+    /// occurrence) so their `name_spans` map back to the correct relation use.
+    /// Edges are deduplicated by `(from, to, kind)` with `statement_ids`
+    /// accumulating every statement that produced the edge.
+    fn flatten_lineages(
         &self,
-        statements: &[crate::types::StatementLineage],
-    ) -> GlobalLineage {
-        let mut global_nodes: HashMap<Arc<str>, GlobalNode> = HashMap::new();
-        let mut global_edges: Vec<GlobalEdge> = Vec::new();
+        lineages: Vec<crate::types::StatementLineage>,
+    ) -> (Vec<StatementMeta>, Vec<Node>, Vec<Edge>) {
+        let mut statement_metas: Vec<StatementMeta> = Vec::with_capacity(lineages.len());
+        let mut flat_nodes: HashMap<Arc<str>, Node> = HashMap::new();
+        let mut node_insertion_order: Vec<Arc<str>> = Vec::new();
+        let mut flat_edges: Vec<Edge> = Vec::new();
+        let mut edge_index: HashMap<(Arc<str>, Arc<str>, &'static str), usize> = HashMap::new();
         let mut local_to_global_id: HashMap<Arc<str>, Arc<str>> = HashMap::new();
-        let mut seen_global_edges: HashSet<(Arc<str>, Arc<str>, &'static str)> = HashSet::new();
 
-        // Collect all nodes from all statements.
-        // For table-like nodes, merge by qualified_name (canonical) so that
-        // self-join instances (same canonical, different node IDs) collapse
-        // into a single global node.
-        for lineage in statements {
-            let statement_scoped_relation_ids: HashSet<&Arc<str>> = lineage
+        for lineage in lineages {
+            // Detect CTE-scoped ownership edges so their columns stay
+            // statement-scoped (mirrors the original merge logic).
+            let statement_scoped_relation_ids: HashSet<Arc<str>> = lineage
                 .nodes
                 .iter()
                 .filter(|node| node.node_type == NodeType::Cte)
-                .map(|node| &node.id)
+                .map(|node| node.id.clone())
                 .collect();
-            let statement_scoped_column_ids: HashSet<&Arc<str>> = lineage
+            let statement_scoped_column_ids: HashSet<Arc<str>> = lineage
                 .edges
                 .iter()
                 .filter(|edge| {
                     edge.edge_type == EdgeType::Ownership
                         && statement_scoped_relation_ids.contains(&edge.from)
                 })
-                .map(|edge| &edge.to)
+                .map(|edge| edge.to.clone())
                 .collect();
 
-            for node in &lineage.nodes {
-                let canonical = node.qualified_name.clone().unwrap_or(node.label.clone());
+            let statement_index = lineage.statement_index;
+            let (meta, lineage_nodes, lineage_edges) = lineage.into_meta_and_graph();
+
+            for node in lineage_nodes {
+                let canonical = node
+                    .qualified_name
+                    .clone()
+                    .unwrap_or_else(|| node.label.clone());
                 let canonical_name = parse_canonical_name(&canonical);
                 let preserve_statement_scope = statement_scoped_column_ids.contains(&node.id);
-
-                let global_id = self.global_node_id(node, &canonical, preserve_statement_scope);
+                let global_id = self.global_node_id(&node, &canonical, preserve_statement_scope);
                 local_to_global_id.insert(node.id.clone(), global_id.clone());
 
-                global_nodes
-                    .entry(global_id.clone())
-                    .and_modify(|existing| {
-                        existing.statement_refs.push(StatementRef {
-                            statement_index: lineage.statement_index,
-                            node_id: Some(node.id.clone()),
-                        });
-                    })
-                    .or_insert_with(|| GlobalNode {
-                        id: global_id,
-                        node_type: node.node_type,
-                        label: node.label.clone(),
-                        canonical_name,
-                        statement_refs: vec![StatementRef {
-                            statement_index: lineage.statement_index,
-                            node_id: Some(node.id.clone()),
-                        }],
-                        metadata: None,
-                        resolution_source: node.resolution_source,
-                    });
+                match flat_nodes.entry(global_id.clone()) {
+                    std::collections::hash_map::Entry::Occupied(mut e) => {
+                        merge_node_into(e.get_mut(), node, statement_index);
+                    }
+                    std::collections::hash_map::Entry::Vacant(slot) => {
+                        let mut initial = Node {
+                            id: global_id.clone(),
+                            statement_ids: vec![statement_index],
+                            canonical_name: Some(canonical_name),
+                            ..node
+                        };
+                        // name_spans / filters / resolution_source / aggregation
+                        // all travel from the source node via the spread above.
+                        normalize_name_spans(&mut initial);
+                        slot.insert(initial);
+                        node_insertion_order.push(global_id);
+                    }
+                }
             }
 
-            // Collect edges, remapping local node IDs to their global equivalents.
-            // If a local ID is missing from the mapping (e.g., the node was pruned
-            // during ambiguous column resolution, or belongs to a table function with
-            // dialect-provided columns), the original local ID is used as fallback.
-            // The post-build validation step below removes any resulting orphaned edges.
-            for edge in &lineage.edges {
+            for edge in lineage_edges {
                 let from = local_to_global_id
                     .get(&edge.from)
                     .cloned()
@@ -158,7 +166,7 @@ impl<'a> Analyzer<'a> {
                         debug!(
                             edge_id = %edge.id,
                             node_id = %edge.from,
-                            "global edge source not in local-to-global mapping, using local ID"
+                            "edge source not in local-to-global mapping, using local ID"
                         );
                         edge.from.clone()
                     });
@@ -170,71 +178,97 @@ impl<'a> Analyzer<'a> {
                         debug!(
                             edge_id = %edge.id,
                             node_id = %edge.to,
-                            "global edge target not in local-to-global mapping, using local ID"
+                            "edge target not in local-to-global mapping, using local ID"
                         );
                         edge.to.clone()
                     });
 
-                if seen_global_edges.insert((
-                    from.clone(),
-                    to.clone(),
-                    Self::global_edge_kind(edge.edge_type),
-                )) {
-                    global_edges.push(GlobalEdge {
-                        id: edge.id.clone(),
-                        from,
-                        to,
-                        edge_type: edge.edge_type,
-                        producer_statement: Some(StatementRef {
-                            statement_index: lineage.statement_index,
-                            node_id: None,
-                        }),
-                        consumer_statement: None,
-                        metadata: None,
-                    });
+                let kind = edge_kind(edge.edge_type);
+                let key = (from.clone(), to.clone(), kind);
+                if let Some(&idx) = edge_index.get(&key) {
+                    let existing = &mut flat_edges[idx];
+                    if !existing.statement_ids.contains(&statement_index) {
+                        existing.statement_ids.push(statement_index);
+                    }
+                } else {
+                    let mut remapped = Edge {
+                        from: from.clone(),
+                        to: to.clone(),
+                        statement_ids: vec![statement_index],
+                        ..edge
+                    };
+                    // Preserve the edge's local ID. Nothing persistent depends on
+                    // statement-local IDs post-build, so reuse is safe.
+                    // Clear any stale statement_ids carried over from `edge`.
+                    remapped.statement_ids = vec![statement_index];
+                    edge_index.insert(key, flat_edges.len());
+                    flat_edges.push(remapped);
                 }
+            }
+
+            statement_metas.push(meta);
+            // local_to_global mapping is valid only within the current
+            // statement; clear it between statements so local IDs from
+            // statement N don't bleed into statement N+1.
+            local_to_global_id.clear();
+        }
+
+        // Append tracker-derived cross-statement edges (producer/consumer).
+        for edge in self.tracker.build_cross_statement_edges() {
+            let kind = edge_kind(edge.edge_type);
+            let key = (edge.from.clone(), edge.to.clone(), kind);
+            if let Some(&idx) = edge_index.get(&key) {
+                // Already present (shouldn't happen for CrossStatement kind,
+                // but merge statement_ids defensively).
+                let existing = &mut flat_edges[idx];
+                for sid in &edge.statement_ids {
+                    if !existing.statement_ids.contains(sid) {
+                        existing.statement_ids.push(*sid);
+                    }
+                }
+            } else {
+                edge_index.insert(key, flat_edges.len());
+                flat_edges.push(edge);
             }
         }
 
-        // Detect cross-statement edges using the tracker
-        global_edges.extend(self.tracker.build_cross_statement_edges());
+        // Build the ordered node list and drop edges that reference nodes we
+        // discarded (e.g. ambiguous-column pruning may leave an edge whose
+        // target has no matching node in the flat set).
+        let mut nodes: Vec<Node> = node_insertion_order
+            .into_iter()
+            .filter_map(|id| flat_nodes.remove(&id))
+            .collect();
 
-        let nodes: Vec<GlobalNode> = global_nodes.into_values().collect();
+        // Sort name_spans and statement_ids for stable output.
+        for node in &mut nodes {
+            node.statement_ids.sort_unstable();
+            node.statement_ids.dedup();
+            node.name_spans.sort_by_key(|s: &Span| (s.start, s.end));
+            node.name_spans.dedup();
+        }
 
-        // Remove edges that reference nodes not present in the global graph.
-        // This can happen when statement-level analysis removes a node (e.g.,
-        // ambiguous column pruning) without cleaning up all referencing edges.
-        let global_node_ids: HashSet<&Arc<str>> = nodes.iter().map(|n| &n.id).collect();
+        let node_ids: HashSet<&Arc<str>> = nodes.iter().map(|n| &n.id).collect();
 
         #[cfg(feature = "tracing")]
-        let edges_before = global_edges.len();
+        let edges_before = flat_edges.len();
 
-        global_edges.retain(|edge| {
-            global_node_ids.contains(&edge.from) && global_node_ids.contains(&edge.to)
-        });
+        flat_edges.retain(|edge| node_ids.contains(&edge.from) && node_ids.contains(&edge.to));
 
         #[cfg(feature = "tracing")]
-        if global_edges.len() < edges_before {
+        if flat_edges.len() < edges_before {
             debug!(
-                removed = edges_before - global_edges.len(),
-                "removed orphaned edges from global lineage"
+                removed = edges_before - flat_edges.len(),
+                "removed orphaned edges from flattened lineage"
             );
         }
 
-        GlobalLineage {
-            nodes,
-            edges: global_edges,
+        for edge in &mut flat_edges {
+            edge.statement_ids.sort_unstable();
+            edge.statement_ids.dedup();
         }
-    }
 
-    fn global_edge_kind(edge_type: crate::types::EdgeType) -> &'static str {
-        match edge_type {
-            crate::types::EdgeType::Ownership => "ownership",
-            crate::types::EdgeType::DataFlow => "data_flow",
-            crate::types::EdgeType::Derivation => "derivation",
-            crate::types::EdgeType::JoinDependency => "join_dependency",
-            crate::types::EdgeType::CrossStatement => "cross_statement",
-        }
+        (statement_metas, nodes, flat_edges)
     }
 
     fn global_node_id(
@@ -260,7 +294,7 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    pub(super) fn build_summary(&self, global_lineage: &GlobalLineage) -> Summary {
+    pub(super) fn build_summary(&self, nodes: &[Node], _edges: &[Edge]) -> Summary {
         let error_count = self
             .issues
             .iter()
@@ -277,20 +311,15 @@ impl<'a> Analyzer<'a> {
             .filter(|i| i.severity == crate::Severity::Info)
             .count();
 
-        let table_count = global_lineage
-            .nodes
+        let table_count = nodes
             .iter()
             .filter(|n| n.node_type.is_table_or_view())
             .count();
-
-        let cte_count = global_lineage
-            .nodes
+        let cte_count = nodes
             .iter()
             .filter(|n| n.node_type == NodeType::Cte)
             .count();
-
-        let column_count = global_lineage
-            .nodes
+        let column_count = nodes
             .iter()
             .filter(|n| n.node_type == NodeType::Column)
             .count();
@@ -298,8 +327,7 @@ impl<'a> Analyzer<'a> {
         // Aggregate join count from all statements
         let join_count: usize = self.statement_lineages.iter().map(|s| s.join_count).sum();
 
-        // Calculate project-level complexity from global lineage
-        // Uses table/CTE counts since GlobalNode doesn't track per-node join info
+        // Calculate project-level complexity from flat lineage.
         let filter_count: usize = self
             .statement_lineages
             .iter()
@@ -324,6 +352,69 @@ impl<'a> Analyzer<'a> {
             has_errors: error_count > 0,
         }
     }
+}
+
+fn edge_kind(edge_type: crate::types::EdgeType) -> &'static str {
+    match edge_type {
+        crate::types::EdgeType::Ownership => "ownership",
+        crate::types::EdgeType::DataFlow => "data_flow",
+        crate::types::EdgeType::Derivation => "derivation",
+        crate::types::EdgeType::JoinDependency => "join_dependency",
+        crate::types::EdgeType::CrossStatement => "cross_statement",
+    }
+}
+
+/// Merge an additional statement's worth of node data into an already-inserted
+/// flat node. The first-inserted node wins for scalar fields (type, label,
+/// qualified_name, resolution_source, aggregation, body_span, metadata).
+/// Accumulated fields — statement_ids, name_spans, filters — take every
+/// non-duplicate entry from the incoming node.
+fn merge_node_into(existing: &mut Node, incoming: Node, statement_index: usize) {
+    if !existing.statement_ids.contains(&statement_index) {
+        existing.statement_ids.push(statement_index);
+    }
+
+    for span in incoming.name_spans {
+        if !existing.name_spans.iter().any(|s| *s == span) {
+            existing.name_spans.push(span);
+        }
+    }
+    // If the incoming node carries a plain `span` but existing has no
+    // name_spans yet, preserve it as a fallback occurrence. This keeps
+    // parity with `Node::all_name_spans` for types that only populate
+    // `span` (e.g., columns).
+    if existing.span.is_none() {
+        existing.span = incoming.span;
+    }
+    if existing.body_span.is_none() {
+        existing.body_span = incoming.body_span;
+    }
+    if existing.qualified_name.is_none() {
+        existing.qualified_name = incoming.qualified_name;
+    }
+    if existing.resolution_source.is_none() {
+        existing.resolution_source = incoming.resolution_source;
+    }
+    if existing.aggregation.is_none() {
+        existing.aggregation = incoming.aggregation;
+    }
+    for filter in incoming.filters {
+        if !existing
+            .filters
+            .iter()
+            .any(|f| f.expression == filter.expression && f.clause_type == filter.clause_type)
+        {
+            existing.filters.push(filter);
+        }
+    }
+    if existing.metadata.is_none() {
+        existing.metadata = incoming.metadata;
+    }
+}
+
+fn normalize_name_spans(node: &mut Node) {
+    node.name_spans.sort_by_key(|s: &Span| (s.start, s.end));
+    node.name_spans.dedup();
 }
 
 /// Calculate complexity score for project-level summary.

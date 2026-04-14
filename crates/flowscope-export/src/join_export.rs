@@ -1,21 +1,22 @@
 use std::collections::{HashMap, HashSet};
 
-use flowscope_core::{EdgeType, NodeType, StatementLineage};
+use flowscope_core::{Edge, EdgeType, Node, NodeType};
 
-/// Return the statement-local edge indexes that should be exported as join rows.
+/// Return the IDs of edges in the flat graph that should be exported as join rows.
 ///
 /// Join metadata may now appear on column-level lineage edges as well as relation-level
 /// edges. To keep exported join views stable, collapse those tagged edges down to one
 /// representative row per logical relation pair and join metadata tuple.
-pub(crate) fn representative_join_edge_indexes(statement: &StatementLineage) -> Vec<usize> {
-    let node_types: HashMap<&str, NodeType> = statement
-        .nodes
+pub(crate) fn representative_join_edge_ids<'a>(
+    nodes: &'a [Node],
+    edges: &'a [Edge],
+) -> HashSet<&'a str> {
+    let node_types: HashMap<&str, NodeType> = nodes
         .iter()
         .map(|node| (node.id.as_ref(), node.node_type))
         .collect();
 
-    let owned_node_to_relation: HashMap<&str, &str> = statement
-        .edges
+    let owned_node_to_relation: HashMap<&str, &str> = edges
         .iter()
         .filter(|edge| edge.edge_type == EdgeType::Ownership)
         .filter_map(|edge| {
@@ -27,9 +28,9 @@ pub(crate) fn representative_join_edge_indexes(statement: &StatementLineage) -> 
         .collect();
 
     let mut seen = HashSet::new();
-    let mut indexes = Vec::new();
+    let mut representatives: HashSet<&str> = HashSet::new();
 
-    for (edge_idx, edge) in statement.edges.iter().enumerate() {
+    for edge in edges {
         let Some(join_type) = edge.join_type else {
             continue;
         };
@@ -49,6 +50,12 @@ pub(crate) fn representative_join_edge_indexes(statement: &StatementLineage) -> 
             continue;
         }
 
+        // Include the producing statement(s) in the dedup key so the same
+        // logical join appearing in two different statements is exported as
+        // two rows (matching what users expect when inspecting per-statement
+        // joins).
+        let statements_key: Vec<usize> = edge.statement_ids.clone();
+
         let key = (
             from_relation_id.to_owned(),
             to_relation_id.to_owned(),
@@ -57,14 +64,15 @@ pub(crate) fn representative_join_edge_indexes(statement: &StatementLineage) -> 
                 .as_deref()
                 .unwrap_or_default()
                 .to_owned(),
+            statements_key,
         );
 
         if seen.insert(key) {
-            indexes.push(edge_idx);
+            representatives.insert(edge.id.as_ref());
         }
     }
 
-    indexes
+    representatives
 }
 
 fn resolve_relation_node_id<'a>(

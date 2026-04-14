@@ -75,7 +75,7 @@ fn write_lineage(out: &mut String, result: &AnalyzeResult, colored: bool) {
     // a complete picture of data dependencies for queries that don't write to tables.
     let mut source_tables: HashMap<String, HashSet<String>> = HashMap::new();
 
-    for edge in &result.global_lineage.edges {
+    for edge in &result.edges {
         if !matches!(
             edge.edge_type,
             flowscope_core::EdgeType::DataFlow
@@ -85,12 +85,8 @@ fn write_lineage(out: &mut String, result: &AnalyzeResult, colored: bool) {
             continue;
         }
 
-        let from_node = result
-            .global_lineage
-            .nodes
-            .iter()
-            .find(|n| n.id == edge.from);
-        let to_node = result.global_lineage.nodes.iter().find(|n| n.id == edge.to);
+        let from_node = result.nodes.iter().find(|n| n.id == edge.from);
+        let to_node = result.nodes.iter().find(|n| n.id == edge.to);
 
         if let (Some(from), Some(to)) = (from_node, to_node) {
             // Include Output nodes as relation-like targets to show SELECT dependencies
@@ -106,7 +102,6 @@ fn write_lineage(out: &mut String, result: &AnalyzeResult, colored: bool) {
     if source_tables.is_empty() {
         // Just list tables/views if no relationships found
         let tables: Vec<_> = result
-            .global_lineage
             .nodes
             .iter()
             .filter(|n| matches!(n.node_type, NodeType::Table | NodeType::View))

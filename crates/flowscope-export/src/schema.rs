@@ -24,64 +24,85 @@ CREATE TABLE {prefix}statements (
     complexity_score INTEGER
 );
 
--- Graph nodes (tables, CTEs, columns, outputs)
--- Composite key allows same logical node to appear in multiple statements
+-- Graph nodes (tables, CTEs, columns, outputs).
+-- Each node appears once. Statement participation is tracked via
+-- {prefix}node_statements.
 CREATE TABLE {prefix}nodes (
-    id TEXT NOT NULL,
-    statement_id INTEGER NOT NULL REFERENCES {prefix}statements(id),
+    id TEXT PRIMARY KEY,
     node_type TEXT NOT NULL,
     label TEXT NOT NULL,
     qualified_name TEXT,
+    canonical_catalog TEXT,
+    canonical_schema TEXT,
+    canonical_name TEXT,
+    canonical_column TEXT,
     expression TEXT,
     span_start INTEGER,
     span_end INTEGER,
-    resolution_source TEXT,
-    PRIMARY KEY (id, statement_id)
+    body_span_start INTEGER,
+    body_span_end INTEGER,
+    resolution_source TEXT
 );
 
--- Graph edges (data flow relationships)
-CREATE TABLE {prefix}edges (
-    id INTEGER PRIMARY KEY,
+-- Junction: which statements each node participates in.
+CREATE TABLE {prefix}node_statements (
+    node_id TEXT NOT NULL REFERENCES {prefix}nodes(id),
     statement_id INTEGER NOT NULL REFERENCES {prefix}statements(id),
+    PRIMARY KEY (node_id, statement_id)
+);
+
+-- All name-occurrence spans for a node, accumulated across every statement
+-- the node appears in. Ordered by (span_start, span_end) at write time.
+CREATE TABLE {prefix}node_name_spans (
+    id INTEGER PRIMARY KEY,
+    node_id TEXT NOT NULL REFERENCES {prefix}nodes(id),
+    span_start INTEGER NOT NULL,
+    span_end INTEGER NOT NULL
+);
+
+-- Graph edges (data flow relationships). Each edge is unique by id.
+CREATE TABLE {prefix}edges (
+    id TEXT PRIMARY KEY,
     edge_type TEXT NOT NULL,
-    from_node_id TEXT NOT NULL,
-    to_node_id TEXT NOT NULL,
+    from_node_id TEXT NOT NULL REFERENCES {prefix}nodes(id),
+    to_node_id TEXT NOT NULL REFERENCES {prefix}nodes(id),
     expression TEXT,
     operation TEXT,
-    is_approximate BOOLEAN DEFAULT FALSE,
-    FOREIGN KEY (from_node_id, statement_id) REFERENCES {prefix}nodes(id, statement_id),
-    FOREIGN KEY (to_node_id, statement_id) REFERENCES {prefix}nodes(id, statement_id)
+    is_approximate BOOLEAN DEFAULT FALSE
+);
+
+-- Junction: which statements each edge participates in. Cross-statement
+-- edges (`edge_type = 'cross_statement'`) carry both producer and consumer.
+CREATE TABLE {prefix}edge_statements (
+    edge_id TEXT NOT NULL REFERENCES {prefix}edges(id),
+    statement_id INTEGER NOT NULL REFERENCES {prefix}statements(id),
+    PRIMARY KEY (edge_id, statement_id)
 );
 
 -- Join metadata attached to edges (not nodes) to support both table-level
 -- and column-level join semantics.
 CREATE TABLE {prefix}joins (
     id INTEGER PRIMARY KEY,
-    edge_id INTEGER NOT NULL REFERENCES {prefix}edges(id),
-    statement_id INTEGER NOT NULL REFERENCES {prefix}statements(id),
+    edge_id TEXT NOT NULL REFERENCES {prefix}edges(id),
     join_type TEXT NOT NULL,
     join_condition TEXT
 );
 
--- Filter predicates on nodes
+-- Filter predicates on nodes. Filters are flat properties of the node
+-- (deduplicated across statements at analysis time).
 CREATE TABLE {prefix}filters (
     id INTEGER PRIMARY KEY,
-    node_id TEXT NOT NULL,
-    statement_id INTEGER NOT NULL,
+    node_id TEXT NOT NULL REFERENCES {prefix}nodes(id),
     predicate TEXT NOT NULL,
-    filter_type TEXT,
-    FOREIGN KEY (node_id, statement_id) REFERENCES {prefix}nodes(id, statement_id)
+    filter_type TEXT
 );
 
--- Aggregation info on column nodes
+-- Aggregation info on column nodes.
 CREATE TABLE {prefix}aggregations (
-    node_id TEXT NOT NULL,
-    statement_id INTEGER NOT NULL,
+    node_id TEXT PRIMARY KEY REFERENCES {prefix}nodes(id),
     is_grouping_key BOOLEAN NOT NULL,
     function TEXT,
-    is_distinct BOOLEAN DEFAULT FALSE,
-    PRIMARY KEY (node_id, statement_id),
-    FOREIGN KEY (node_id, statement_id) REFERENCES {prefix}nodes(id, statement_id)
+    is_distinct BOOLEAN DEFAULT FALSE
 );
 
 -- Analysis issues
@@ -114,34 +135,6 @@ CREATE TABLE {prefix}schema_columns (
     is_nullable BOOLEAN,
     is_primary_key BOOLEAN DEFAULT FALSE
 );
-
--- Global nodes (cross-statement)
-CREATE TABLE {prefix}global_nodes (
-    id TEXT PRIMARY KEY,
-    node_type TEXT NOT NULL,
-    label TEXT NOT NULL,
-    canonical_catalog TEXT,
-    canonical_schema TEXT,
-    canonical_name TEXT NOT NULL,
-    canonical_column TEXT,
-    resolution_source TEXT
-);
-
--- Global edges (cross-statement)
-CREATE TABLE {prefix}global_edges (
-    id TEXT PRIMARY KEY,
-    from_node_id TEXT NOT NULL,
-    to_node_id TEXT NOT NULL,
-    edge_type TEXT NOT NULL
-);
-
--- Statement references for global nodes
-CREATE TABLE {prefix}global_node_statement_refs (
-    id INTEGER PRIMARY KEY,
-    global_node_id TEXT NOT NULL REFERENCES {prefix}global_nodes(id),
-    statement_index INTEGER NOT NULL,
-    local_node_id TEXT
-);
 "#,
         prefix = prefix
     )
@@ -172,9 +165,10 @@ SELECT
     e.operation,
     e.is_approximate
 FROM {prefix}edges e
-JOIN {prefix}nodes fn ON e.from_node_id = fn.id AND e.statement_id = fn.statement_id
-JOIN {prefix}nodes tn ON e.to_node_id = tn.id AND e.statement_id = tn.statement_id
-JOIN {prefix}statements s ON e.statement_id = s.id
+JOIN {prefix}edge_statements es ON es.edge_id = e.id
+JOIN {prefix}statements s ON es.statement_id = s.id
+JOIN {prefix}nodes fn ON e.from_node_id = fn.id
+JOIN {prefix}nodes tn ON e.to_node_id = tn.id
 WHERE fn.node_type = 'column'
   AND tn.node_type = 'column'
   AND e.edge_type IN ('data_flow', 'derivation');
@@ -187,9 +181,10 @@ SELECT DISTINCT
     tn.qualified_name AS target_table,
     e.edge_type
 FROM {prefix}edges e
-JOIN {prefix}nodes fn ON e.from_node_id = fn.id AND e.statement_id = fn.statement_id
-JOIN {prefix}nodes tn ON e.to_node_id = tn.id AND e.statement_id = tn.statement_id
-JOIN {prefix}statements s ON e.statement_id = s.id
+JOIN {prefix}edge_statements es ON es.edge_id = e.id
+JOIN {prefix}statements s ON es.statement_id = s.id
+JOIN {prefix}nodes fn ON e.from_node_id = fn.id
+JOIN {prefix}nodes tn ON e.to_node_id = tn.id
 WHERE fn.node_type IN ('table', 'view', 'cte')
   AND tn.node_type IN ('table', 'view', 'cte');
 
@@ -269,11 +264,11 @@ WHERE n1.node_type = 'column'
 -- GRAPH VIEWS
 -- ============================================================================
 
--- Denormalized node details
+-- Denormalized node details (one row per node × statement participation)
 CREATE VIEW {prefix}node_details AS
 SELECT
     n.id,
-    n.statement_id,
+    ns.statement_id,
     n.node_type,
     n.label,
     n.qualified_name,
@@ -286,10 +281,11 @@ SELECT
     a.function AS aggregation_function,
     a.is_distinct AS aggregation_distinct
 FROM {prefix}nodes n
-LEFT JOIN {prefix}statements s ON n.statement_id = s.id
-LEFT JOIN {prefix}aggregations a ON n.id = a.node_id AND n.statement_id = a.statement_id;
+JOIN {prefix}node_statements ns ON ns.node_id = n.id
+LEFT JOIN {prefix}statements s ON ns.statement_id = s.id
+LEFT JOIN {prefix}aggregations a ON n.id = a.node_id;
 
--- Denormalized edge details
+-- Denormalized edge details (one row per edge × statement participation)
 CREATE VIEW {prefix}edge_details AS
 SELECT
     e.id,
@@ -308,10 +304,11 @@ SELECT
     s.statement_index,
     s.source_name
 FROM {prefix}edges e
-JOIN {prefix}nodes fn ON e.from_node_id = fn.id AND e.statement_id = fn.statement_id
-JOIN {prefix}nodes tn ON e.to_node_id = tn.id AND e.statement_id = tn.statement_id
-LEFT JOIN {prefix}joins j ON e.id = j.edge_id AND e.statement_id = j.statement_id
-LEFT JOIN {prefix}statements s ON e.statement_id = s.id;
+JOIN {prefix}edge_statements es ON es.edge_id = e.id
+JOIN {prefix}statements s ON es.statement_id = s.id
+JOIN {prefix}nodes fn ON e.from_node_id = fn.id
+JOIN {prefix}nodes tn ON e.to_node_id = tn.id
+LEFT JOIN {prefix}joins j ON e.id = j.edge_id;
 
 -- All joins with context
 CREATE VIEW {prefix}join_graph AS
@@ -325,20 +322,19 @@ SELECT
     COALESCE(tr.qualified_name, tn.qualified_name) AS to_table,
     COALESCE(tr.label, tn.label) AS to_label
 FROM {prefix}joins j
-JOIN {prefix}edges e ON j.edge_id = e.id AND j.statement_id = e.statement_id
-JOIN {prefix}nodes fn ON e.from_node_id = fn.id AND e.statement_id = fn.statement_id
-JOIN {prefix}nodes tn ON e.to_node_id = tn.id AND e.statement_id = tn.statement_id
+JOIN {prefix}edges e ON j.edge_id = e.id
+JOIN {prefix}edge_statements es ON es.edge_id = e.id
+JOIN {prefix}statements s ON es.statement_id = s.id
+JOIN {prefix}nodes fn ON e.from_node_id = fn.id
+JOIN {prefix}nodes tn ON e.to_node_id = tn.id
 LEFT JOIN {prefix}edges feo
-    ON feo.statement_id = e.statement_id
-   AND feo.edge_type = 'ownership'
+    ON feo.edge_type = 'ownership'
    AND feo.to_node_id = e.from_node_id
-LEFT JOIN {prefix}nodes fr ON feo.from_node_id = fr.id AND feo.statement_id = fr.statement_id
+LEFT JOIN {prefix}nodes fr ON feo.from_node_id = fr.id
 LEFT JOIN {prefix}edges teo
-    ON teo.statement_id = e.statement_id
-   AND teo.edge_type = 'ownership'
+    ON teo.edge_type = 'ownership'
    AND teo.to_node_id = e.to_node_id
-LEFT JOIN {prefix}nodes tr ON teo.from_node_id = tr.id AND teo.statement_id = tr.statement_id
-LEFT JOIN {prefix}statements s ON e.statement_id = s.id;
+LEFT JOIN {prefix}nodes tr ON teo.from_node_id = tr.id;
 
 -- Filters applied to nodes
 CREATE VIEW {prefix}node_filters AS
@@ -351,8 +347,9 @@ SELECT
     s.source_name,
     s.statement_index
 FROM {prefix}filters f
-JOIN {prefix}nodes n ON f.node_id = n.id AND f.statement_id = n.statement_id
-LEFT JOIN {prefix}statements s ON n.statement_id = s.id;
+JOIN {prefix}nodes n ON f.node_id = n.id
+JOIN {prefix}node_statements ns ON ns.node_id = n.id
+LEFT JOIN {prefix}statements s ON ns.statement_id = s.id;
 
 -- ============================================================================
 -- METRICS VIEWS
@@ -370,8 +367,10 @@ SELECT
     COUNT(DISTINCT CASE WHEN n.node_type = 'column' THEN n.id END) AS column_count,
     COUNT(DISTINCT e.id) AS edge_count
 FROM {prefix}statements s
-LEFT JOIN {prefix}nodes n ON n.statement_id = s.id
-LEFT JOIN {prefix}edges e ON e.statement_id = s.id
+LEFT JOIN {prefix}node_statements ns ON ns.statement_id = s.id
+LEFT JOIN {prefix}nodes n ON n.id = ns.node_id
+LEFT JOIN {prefix}edge_statements es ON es.statement_id = s.id
+LEFT JOIN {prefix}edges e ON e.id = es.edge_id
 GROUP BY s.id, s.source_name, s.statement_index, s.statement_type,
          s.complexity_score, s.join_count;
 
@@ -395,10 +394,11 @@ SELECT
     n.qualified_name AS table_name,
     n.node_type,
     n.resolution_source,
-    COUNT(DISTINCT n.statement_id) AS statement_count,
+    COUNT(DISTINCT ns.statement_id) AS statement_count,
     COUNT(DISTINCT e_in.id) AS incoming_edges,
     COUNT(DISTINCT e_out.id) AS outgoing_edges
 FROM {prefix}nodes n
+LEFT JOIN {prefix}node_statements ns ON ns.node_id = n.id
 LEFT JOIN {prefix}edges e_in ON n.id = e_in.to_node_id
 LEFT JOIN {prefix}edges e_out ON n.id = e_out.from_node_id
 WHERE n.node_type IN ('table', 'view', 'cte')
@@ -451,9 +451,10 @@ SELECT
     tn.label AS target_column,
     CASE WHEN e.is_approximate THEN 'APPROXIMATE' ELSE 'EXACT' END AS lineage_confidence
 FROM {prefix}edges e
-JOIN {prefix}nodes fn ON e.from_node_id = fn.id AND e.statement_id = fn.statement_id
-JOIN {prefix}nodes tn ON e.to_node_id = tn.id AND e.statement_id = tn.statement_id
-JOIN {prefix}statements s ON e.statement_id = s.id
+JOIN {prefix}edge_statements es ON es.edge_id = e.id
+JOIN {prefix}statements s ON es.statement_id = s.id
+JOIN {prefix}nodes fn ON e.from_node_id = fn.id
+JOIN {prefix}nodes tn ON e.to_node_id = tn.id
 WHERE e.edge_type IN ('data_flow', 'derivation');
 
 -- Impact analysis: columns by source table
@@ -479,10 +480,11 @@ SELECT
     tn.label AS output_column,
     a.function AS aggregation_applied
 FROM {prefix}edges e
-JOIN {prefix}nodes fn ON e.from_node_id = fn.id AND e.statement_id = fn.statement_id
-JOIN {prefix}nodes tn ON e.to_node_id = tn.id AND e.statement_id = tn.statement_id
-JOIN {prefix}statements s ON e.statement_id = s.id
-LEFT JOIN {prefix}aggregations a ON tn.id = a.node_id AND tn.statement_id = a.statement_id
+JOIN {prefix}edge_statements es ON es.edge_id = e.id
+JOIN {prefix}statements s ON es.statement_id = s.id
+JOIN {prefix}nodes fn ON e.from_node_id = fn.id
+JOIN {prefix}nodes tn ON e.to_node_id = tn.id
+LEFT JOIN {prefix}aggregations a ON tn.id = a.node_id
 WHERE e.expression IS NOT NULL
    OR a.function IS NOT NULL;
 
@@ -496,11 +498,13 @@ SELECT
     fn.qualified_name AS shared_object,
     e.edge_type
 FROM {prefix}edges e
-JOIN {prefix}nodes fn ON e.from_node_id = fn.id AND e.statement_id = fn.statement_id
-JOIN {prefix}nodes tn ON e.to_node_id = tn.id AND e.statement_id = tn.statement_id
-JOIN {prefix}statements s1 ON fn.statement_id = s1.id
-JOIN {prefix}statements s2 ON tn.statement_id = s2.id
-WHERE s1.id != s2.id;
+JOIN {prefix}edge_statements es1 ON es1.edge_id = e.id
+JOIN {prefix}edge_statements es2 ON es2.edge_id = e.id
+JOIN {prefix}statements s1 ON es1.statement_id = s1.id
+JOIN {prefix}statements s2 ON es2.statement_id = s2.id
+JOIN {prefix}nodes fn ON e.from_node_id = fn.id
+JOIN {prefix}nodes tn ON e.to_node_id = tn.id
+WHERE s1.id < s2.id;
 
 -- Schema coverage
 CREATE VIEW {prefix}schema_coverage AS
@@ -510,10 +514,11 @@ SELECT
     st.name AS table_name,
     st.resolution_source,
     CASE WHEN COUNT(n.id) > 0 THEN TRUE ELSE FALSE END AS is_referenced,
-    COUNT(DISTINCT n.statement_id) AS reference_count
+    COUNT(DISTINCT ns.statement_id) AS reference_count
 FROM {prefix}schema_tables st
 LEFT JOIN {prefix}nodes n ON n.qualified_name LIKE '%' || st.name || '%'
     AND n.node_type IN ('table', 'view')
+LEFT JOIN {prefix}node_statements ns ON ns.node_id = n.id
 GROUP BY st.id, st.catalog, st.schema_name, st.name, st.resolution_source;
 "#,
         prefix = prefix
@@ -531,10 +536,11 @@ mod tests {
         assert!(ddl.contains("CREATE TABLE statements"));
         assert!(ddl.contains("CREATE TABLE nodes"));
         assert!(ddl.contains("CREATE TABLE edges"));
-        assert!(ddl.contains("edge_id INTEGER NOT NULL REFERENCES edges(id)"));
+        assert!(ddl.contains("CREATE TABLE node_statements"));
+        assert!(ddl.contains("CREATE TABLE edge_statements"));
         assert!(ddl.contains("CREATE TABLE issues"));
         assert!(ddl.contains("REFERENCES statements(id)"));
-        assert!(ddl.contains("REFERENCES nodes(id, statement_id)"));
+        assert!(ddl.contains("REFERENCES nodes(id)"));
     }
 
     #[test]
@@ -546,22 +552,20 @@ mod tests {
         assert!(ddl.contains("CREATE TABLE lineage.statements"));
         assert!(ddl.contains("CREATE TABLE lineage.nodes"));
         assert!(ddl.contains("CREATE TABLE lineage.edges"));
+        assert!(ddl.contains("CREATE TABLE lineage.node_statements"));
+        assert!(ddl.contains("CREATE TABLE lineage.edge_statements"));
+        assert!(ddl.contains("CREATE TABLE lineage.node_name_spans"));
         assert!(ddl.contains("CREATE TABLE lineage.joins"));
-        assert!(ddl.contains("edge_id INTEGER NOT NULL REFERENCES lineage.edges(id)"));
         assert!(ddl.contains("CREATE TABLE lineage.filters"));
         assert!(ddl.contains("CREATE TABLE lineage.aggregations"));
         assert!(ddl.contains("CREATE TABLE lineage.issues"));
         assert!(ddl.contains("CREATE TABLE lineage.schema_tables"));
         assert!(ddl.contains("CREATE TABLE lineage.schema_columns"));
-        assert!(ddl.contains("CREATE TABLE lineage.global_nodes"));
-        assert!(ddl.contains("CREATE TABLE lineage.global_edges"));
-        assert!(ddl.contains("CREATE TABLE lineage.global_node_statement_refs"));
 
         // Foreign key references should be prefixed
         assert!(ddl.contains("REFERENCES lineage.statements(id)"));
-        assert!(ddl.contains("REFERENCES lineage.nodes(id, statement_id)"));
+        assert!(ddl.contains("REFERENCES lineage.nodes(id)"));
         assert!(ddl.contains("REFERENCES lineage.schema_tables(id)"));
-        assert!(ddl.contains("REFERENCES lineage.global_nodes(id)"));
 
         // No unprefixed table names in CREATE statements
         assert!(!ddl.contains("CREATE TABLE _meta "));

@@ -338,7 +338,7 @@ fn multi_stage_pipeline_emits_cross_statement_edges() {
     assert!(
         cross_edges.len() >= 2,
         "expected cross-statement edges, got {:?}",
-        result.global_lineage.edges
+        result.edges
     );
 }
 
@@ -2735,7 +2735,7 @@ fn cte_self_join_produces_distinct_nodes() {
     );
 
     assert!(
-        result.global_lineage.edges.iter().all(|edge| {
+        result.edges.iter().all(|edge| {
             !(edge.edge_type == EdgeType::DataFlow
                 && edge.from == edge.to
                 && global_emp.iter().any(|node| node.id == edge.from))
@@ -3104,7 +3104,7 @@ fn self_join_with_subquery_alias_conflict() {
         .iter()
         .map(|n| n.id.clone())
         .collect();
-    for edge in &result.global_lineage.edges {
+    for edge in &result.edges {
         assert!(
             global_node_ids.contains(&edge.from),
             "global edge {} has missing source node {}",
@@ -4045,7 +4045,7 @@ fn mixed_table_view_cte_in_pipeline() {
     let mut view_count = 0;
     let mut cte_count = 0;
 
-    for node in &result.global_lineage.nodes {
+    for node in &result.nodes {
         match node.node_type {
             NodeType::Table => table_count += 1,
             NodeType::View => view_count += 1,

@@ -35,7 +35,9 @@ pub use request::{
 pub use request::{TemplateConfig, TemplateError, TemplateMode};
 pub use response::{
     AggregationInfo, AnalyzeResult, CanonicalName, ConstraintType, Edge, EdgeType,
-    FilterClauseType, FilterPredicate, GlobalEdge, GlobalLineage, GlobalNode, JoinType, Node,
-    NodeType, ResolutionSource, ResolvedColumnSchema, ResolvedSchemaMetadata, ResolvedSchemaTable,
-    SchemaOrigin, StatementLineage, StatementRef, StatementSplitResult, TableConstraintInfo,
+    FilterClauseType, FilterPredicate, JoinType, Node, NodeType, ResolutionSource,
+    ResolvedColumnSchema, ResolvedSchemaMetadata, ResolvedSchemaTable, SchemaOrigin, StatementMeta,
+    StatementSplitResult, TableConstraintInfo,
 };
+// Crate-internal intermediate used during analysis; not exposed to API consumers.
+pub(crate) use response::StatementLineage;

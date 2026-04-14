@@ -83,7 +83,7 @@ proptest! {
 
         // Check the table name in global lineage reflects case handling
         // Find the table node (skip output nodes)
-        if let Some(node) = result.global_lineage.nodes.iter().find(|n| n.node_type == NodeType::Table) {
+        if let Some(node) = result.nodes.iter().find(|n| n.node_type == NodeType::Table) {
             let expected = match dialect {
                 Dialect::Snowflake => table_name.to_uppercase(),
                 Dialect::Mysql => table_name.clone(), // preserves exact case
@@ -144,7 +144,7 @@ proptest! {
 
         // The resolved table should have the correct schema and name
         // Find the table node (skip output nodes)
-        if let Some(node) = result.global_lineage.nodes.iter().find(|n| n.node_type == NodeType::Table) {
+        if let Some(node) = result.nodes.iter().find(|n| n.node_type == NodeType::Table) {
             let got_schema = node.canonical_name.schema.as_deref();
             let got_name = &node.canonical_name.name;
             prop_assert_eq!(got_schema, Some(target_schema.as_str()), "Schema mismatch");
@@ -198,7 +198,7 @@ proptest! {
 
         // Should resolve to the explicitly qualified name
         // Find the table node (skip output nodes)
-        if let Some(node) = result.global_lineage.nodes.iter().find(|n| n.node_type == NodeType::Table) {
+        if let Some(node) = result.nodes.iter().find(|n| n.node_type == NodeType::Table) {
             let got_schema = node.canonical_name.schema.as_deref();
             let got_name = &node.canonical_name.name;
             prop_assert_eq!(got_schema, Some(schema.as_str()), "Schema mismatch");

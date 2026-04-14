@@ -29,7 +29,7 @@
 //! `CrossStatementTracker` is designed for single-threaded use within an analysis pass.
 //! Each analysis pass should create a fresh tracker instance.
 
-use crate::types::{EdgeType, GlobalEdge, NodeType, StatementRef};
+use crate::types::{Edge, EdgeType, NodeType};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
@@ -237,7 +237,8 @@ impl CrossStatementTracker {
     /// # Edge Direction
     ///
     /// Cross-statement edges are self-referential on the table node (from/to are the same),
-    /// with `producer_statement` and `consumer_statement` metadata indicating the flow direction.
+    /// Each edge records the producing and consuming statement indices in
+    /// `statement_ids` (order: `[producer, consumer]`).
     ///
     /// # Edge ID Generation
     ///
@@ -249,7 +250,7 @@ impl CrossStatementTracker {
     /// The hash uses `DefaultHasher` which is fast but not guaranteed to be stable across
     /// Rust versions. This is acceptable because edge IDs are ephemeral within a single
     /// analysis run and are not persisted or compared across runs.
-    pub(crate) fn build_cross_statement_edges(&self) -> Vec<GlobalEdge> {
+    pub(crate) fn build_cross_statement_edges(&self) -> Vec<Edge> {
         let mut edges = Vec::new();
 
         for (table_name, consumers) in &self.consumed_tables {
@@ -266,21 +267,10 @@ impl CrossStatementTracker {
                         let edge_id = format!("cross_{:016x}", hasher.finish());
                         let node_id = self.relation_node_id(table_name);
 
-                        edges.push(GlobalEdge {
-                            id: edge_id.into(),
-                            from: node_id.clone(),
-                            to: node_id,
-                            edge_type: EdgeType::CrossStatement,
-                            producer_statement: Some(StatementRef {
-                                statement_index: producer_idx,
-                                node_id: None,
-                            }),
-                            consumer_statement: Some(StatementRef {
-                                statement_index: consumer_idx,
-                                node_id: None,
-                            }),
-                            metadata: None,
-                        });
+                        let mut edge =
+                            Edge::new(edge_id, node_id.clone(), node_id, EdgeType::CrossStatement);
+                        edge.statement_ids = vec![producer_idx, consumer_idx];
+                        edges.push(edge);
                     }
                 }
             }
@@ -349,14 +339,12 @@ mod tests {
         assert!(edges
             .iter()
             .all(|e| e.edge_type == EdgeType::CrossStatement));
-        assert!(edges.iter().any(
-            |e| e.producer_statement.as_ref().unwrap().statement_index == 0
-                && e.consumer_statement.as_ref().unwrap().statement_index == 1
-        ));
-        assert!(edges.iter().any(
-            |e| e.producer_statement.as_ref().unwrap().statement_index == 0
-                && e.consumer_statement.as_ref().unwrap().statement_index == 2
-        ));
+        assert!(edges
+            .iter()
+            .any(|e| e.statement_ids == vec![0usize, 1usize]));
+        assert!(edges
+            .iter()
+            .any(|e| e.statement_ids == vec![0usize, 2usize]));
     }
 
     #[test]
@@ -482,8 +470,7 @@ mod tests {
         let edge = &edges[0];
         assert!(edge.id.starts_with("cross_"));
         assert_eq!(edge.from, edge.to); // Self-referencing edge on the table node
-        assert!(edge.producer_statement.is_some());
-        assert!(edge.consumer_statement.is_some());
+        assert_eq!(edge.statement_ids, vec![0usize, 1usize]);
         assert!(edge.metadata.is_none());
     }
 
@@ -585,22 +572,7 @@ mod tests {
         assert!(cleaned_edge.is_some());
 
         let raw_edge = raw_edge.unwrap();
-        assert_eq!(
-            raw_edge
-                .producer_statement
-                .as_ref()
-                .unwrap()
-                .statement_index,
-            0
-        );
-        assert_eq!(
-            raw_edge
-                .consumer_statement
-                .as_ref()
-                .unwrap()
-                .statement_index,
-            1
-        );
+        assert_eq!(raw_edge.statement_ids, vec![0usize, 1usize]);
     }
 
     #[test]
@@ -616,9 +588,9 @@ mod tests {
         // Should have 3 edges (one for each consumer)
         assert_eq!(edges.len(), 3);
 
-        // All edges should have producer_statement.statement_index == 0
+        // All edges should have producer (first entry) == 0
         for edge in &edges {
-            assert_eq!(edge.producer_statement.as_ref().unwrap().statement_index, 0);
+            assert_eq!(edge.statement_ids.first().copied(), Some(0usize));
         }
     }
 

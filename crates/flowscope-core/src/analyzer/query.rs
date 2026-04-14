@@ -228,6 +228,7 @@ impl<'a> Analyzer<'a> {
                     join_condition: None,
                     metadata: None,
                     approximate: None,
+                    statement_ids: Vec::new(),
                 });
             }
 
@@ -244,6 +245,7 @@ impl<'a> Analyzer<'a> {
                     join_condition: None,
                     metadata: None,
                     approximate: None,
+                    statement_ids: Vec::new(),
                 });
             }
 
@@ -435,6 +437,7 @@ impl<'a> Analyzer<'a> {
                 .map(Into::into),
             metadata: None,
             approximate: None,
+            statement_ids: Vec::new(),
         });
     }
 
@@ -474,6 +477,7 @@ impl<'a> Analyzer<'a> {
                         join_condition: None,
                         metadata: None,
                         approximate: None,
+                        statement_ids: Vec::new(),
                     });
                 }
             }
@@ -654,6 +658,7 @@ impl<'a> Analyzer<'a> {
                                 join_condition: None,
                                 metadata: None,
                                 approximate: Some(true),
+                                statement_ids: Vec::new(),
                             });
                         }
 
@@ -973,6 +978,7 @@ impl<'a> Analyzer<'a> {
                     join_condition: None,
                     metadata: None,
                     approximate: None,
+                    statement_ids: Vec::new(),
                 });
             }
         }
@@ -1059,6 +1065,7 @@ impl<'a> Analyzer<'a> {
                         join_condition: None,
                         metadata: None,
                         approximate: None,
+                        statement_ids: Vec::new(),
                     });
                 }
 
@@ -1081,6 +1088,7 @@ impl<'a> Analyzer<'a> {
                         join_condition: None,
                         metadata: None,
                         approximate: params.approximate.then_some(true),
+                        statement_ids: Vec::new(),
                     });
                 }
             }
@@ -1130,6 +1138,7 @@ impl<'a> Analyzer<'a> {
                         join_condition: None,
                         metadata: None,
                         approximate: params.approximate.then_some(true),
+                        statement_ids: Vec::new(),
                     });
                 }
             }
@@ -1568,6 +1577,7 @@ impl<'a> Analyzer<'a> {
                 join_condition: None,
                 metadata: None,
                 approximate: None,
+                statement_ids: Vec::new(),
             });
         }
 
@@ -1619,6 +1629,7 @@ impl<'a> Analyzer<'a> {
                 join_condition: None,
                 metadata: None,
                 approximate: None,
+                statement_ids: Vec::new(),
             });
         }
 
