@@ -767,9 +767,9 @@ fn test_lateral_column_alias_lineage_snowflake() {
     let col_first = result
         .nodes_in_statement(0)
         .find(|n| n.node_type == flowscope_core::types::NodeType::Column && &*n.label == "FIRST");
-    let col_doubled = result.nodes_in_statement(0).find(|n| {
-        n.node_type == flowscope_core::types::NodeType::Column && &*n.label == "DOUBLED"
-    });
+    let col_doubled = result
+        .nodes_in_statement(0)
+        .find(|n| n.node_type == flowscope_core::types::NodeType::Column && &*n.label == "DOUBLED");
     // Source column 'x' from table may be lowercase
     let col_x = result.nodes_in_statement(0).find(|n| {
         n.node_type == flowscope_core::types::NodeType::Column

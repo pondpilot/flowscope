@@ -2,7 +2,7 @@
  * Service for communicating with the matrix Web Worker.
  * Offloads matrix computation to keep the UI responsive.
  */
-import type { StatementLineage } from '@pondpilot/flowscope-core';
+import type { StatementLineage } from '../types';
 import type { MatrixData } from './matrixUtils';
 import type {
   MatrixBuildRequest,

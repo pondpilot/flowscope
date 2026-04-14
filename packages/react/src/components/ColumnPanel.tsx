@@ -50,23 +50,33 @@ export function ColumnPanel({ className }: ColumnPanelProps): JSX.Element {
 
   const statement = result?.statements[selectedStatementIndex];
 
+  const statementNodes = useMemo(() => {
+    if (!result || !statement) return [] as Node[];
+    return result.nodes.filter((n) => n.statementIds.includes(statement.statementIndex));
+  }, [result, statement]);
+
+  const statementEdges = useMemo(() => {
+    if (!result || !statement) return [] as Edge[];
+    return result.edges.filter((e) => e.statementIds.includes(statement.statementIndex));
+  }, [result, statement]);
+
   const selectedNode = useMemo(() => {
     if (!statement || !selectedNodeId) return null;
-    return statement.nodes.find((n) => n.id === selectedNodeId) || null;
-  }, [statement, selectedNodeId]);
+    return statementNodes.find((n) => n.id === selectedNodeId) || null;
+  }, [statement, selectedNodeId, statementNodes]);
 
   const columnInfo = useMemo(() => {
     if (!statement || !selectedNodeId) return null;
-    return findColumnInfo(statement.nodes, statement.edges, selectedNodeId);
-  }, [statement, selectedNodeId]);
+    return findColumnInfo(statementNodes, statementEdges, selectedNodeId);
+  }, [statement, selectedNodeId, statementNodes, statementEdges]);
 
   const tableColumns = useMemo(() => {
     if (!statement || !selectedNode) return [];
     if (isTableLikeType(selectedNode.type)) {
-      return findTableColumns(statement.nodes, statement.edges, selectedNode.id);
+      return findTableColumns(statementNodes, statementEdges, selectedNode.id);
     }
     return [];
-  }, [statement, selectedNode]);
+  }, [statement, selectedNode, statementNodes, statementEdges]);
 
   const flowPath = useMemo(() => {
     if (!selectedNode || !columnInfo) return [];

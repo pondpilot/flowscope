@@ -5,12 +5,8 @@
  * This service offloads the CPU-intensive graph building (buildFlowNodes, buildFlowEdges)
  * to a Web Worker, preventing UI blocking when processing large SQL files.
  */
-import type {
-  StatementLineage,
-  ResolvedSchemaMetadata,
-  GlobalLineage,
-  Node as LineageNode,
-} from '@pondpilot/flowscope-core';
+import type { ResolvedSchemaMetadata, Node as LineageNode } from '@pondpilot/flowscope-core';
+import type { StatementLineage } from '../types';
 import type { Node as FlowNode, Edge as FlowEdge } from '@xyflow/react';
 import type {
   GraphBuildRequest,
@@ -115,7 +111,6 @@ export interface TableGraphBuildOptions {
   expandedTableIds: Set<string>;
   resolvedSchema: ResolvedSchemaMetadata | null | undefined;
   defaultCollapsed: boolean;
-  globalLineage: GlobalLineage | null | undefined;
   showColumnEdges: boolean;
 }
 
@@ -150,7 +145,6 @@ export async function buildTableGraphInWorker(
     expandedTableIds: Array.from(options.expandedTableIds),
     resolvedSchema: options.resolvedSchema ?? null,
     defaultCollapsed: options.defaultCollapsed,
-    globalLineage: options.globalLineage ?? null,
     showColumnEdges: options.showColumnEdges,
   };
 

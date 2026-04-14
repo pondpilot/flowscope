@@ -40,33 +40,31 @@ export function useGraphSearch(searchTerm: string) {
     });
 
     // 2. Index Nodes (Tables, CTEs, Columns)
-    if (result.globalLineage) {
-      result.globalLineage.nodes.forEach((node) => {
-        // Determine type and label
-        let type: SearchResultItem['type'] = 'table';
-        if (node.type === 'cte') type = 'cte';
-        if (node.type === 'column') type = 'column';
+    result.nodes.forEach((node) => {
+      // Determine type and label
+      let type: SearchResultItem['type'] = 'table';
+      if (node.type === 'cte') type = 'cte';
+      if (node.type === 'column') type = 'column';
 
-        // Build context/subtitle (e.g. "in users" for a column)
-        let subtitle: string | undefined = undefined;
-        if (type === 'column' && node.canonicalName) {
-          const parts: string[] = [];
-          if (node.canonicalName.schema) parts.push(node.canonicalName.schema);
-          if (node.canonicalName.name) parts.push(node.canonicalName.name);
-          if (parts.length > 0) subtitle = `in ${parts.join('.')}`;
-        } else if (isTableLikeType(node.type)) {
-          subtitle = node.type?.toUpperCase();
-        }
+      // Build context/subtitle (e.g. "in users" for a column)
+      let subtitle: string | undefined = undefined;
+      if (type === 'column' && node.canonicalName) {
+        const parts: string[] = [];
+        if (node.canonicalName.schema) parts.push(node.canonicalName.schema);
+        if (node.canonicalName.name) parts.push(node.canonicalName.name);
+        if (parts.length > 0) subtitle = `in ${parts.join('.')}`;
+      } else if (isTableLikeType(node.type)) {
+        subtitle = node.type?.toUpperCase();
+      }
 
-        searchItems.push({
-          id: node.id,
-          type,
-          title: node.label,
-          subtitle,
-          nodeId: node.id,
-        });
+      searchItems.push({
+        id: node.id,
+        type,
+        title: node.label,
+        subtitle,
+        nodeId: node.id,
       });
-    }
+    });
 
     return searchItems;
   }, [result]);

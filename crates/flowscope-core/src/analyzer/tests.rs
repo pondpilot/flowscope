@@ -420,10 +420,8 @@ fn hide_ctes_customer_360_preserves_relationships() {
         .iter()
         .map(|node| (node.id.as_ref(), node.label.as_ref()))
         .collect();
-    let node_by_id: HashMap<&str, &Node> = nodes
-        .iter()
-        .map(|node| (node.id.as_ref(), *node))
-        .collect();
+    let node_by_id: HashMap<&str, &Node> =
+        nodes.iter().map(|node| (node.id.as_ref(), *node)).collect();
     let node_ids: HashSet<&str> = node_types.keys().copied().collect();
 
     for edge in &edges {

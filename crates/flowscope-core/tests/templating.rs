@@ -1710,8 +1710,7 @@ FROM hierarchy
         .nodes
         .iter()
         .filter(|n| {
-            n.node_type == NodeType::Cte
-                && n.canonical_name.as_ref().unwrap().name == "hierarchy"
+            n.node_type == NodeType::Cte && n.canonical_name.as_ref().unwrap().name == "hierarchy"
         })
         .collect();
 

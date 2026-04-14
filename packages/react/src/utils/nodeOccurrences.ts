@@ -1,4 +1,5 @@
-import type { AnalyzeResult, Node, Span, StatementLineage } from '@pondpilot/flowscope-core';
+import type { AnalyzeResult, Node, Span } from '@pondpilot/flowscope-core';
+import type { StatementLineage } from '../types';
 
 const OCCURRENCE_SOURCE_NAMES_METADATA_KEY = 'occurrenceSourceNames';
 const BODY_SPANS_METADATA_KEY = 'bodySpans';

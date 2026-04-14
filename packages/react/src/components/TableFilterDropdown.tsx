@@ -76,13 +76,13 @@ export function TableFilterDropdown(): JSX.Element | null {
   const hideCTEs = useLineageStore((state) => state.hideCTEs);
   const toggleHideCTEs = useLineageStore((state) => state.toggleHideCTEs);
 
-  // Build list of all tables/views/CTEs from global lineage
+  // Build list of all tables/views/CTEs from the flat lineage graph
   const allTables = useMemo((): TableItem[] => {
-    if (!result?.globalLineage?.nodes) return [];
+    if (!result?.nodes) return [];
 
     const tableMap = new Map<string, TableItem>();
 
-    for (const node of result.globalLineage.nodes) {
+    for (const node of result.nodes) {
       if (node.type === 'table' || node.type === 'view' || node.type === 'cte') {
         const existing = tableMap.get(node.label.toLowerCase());
         if (existing) {

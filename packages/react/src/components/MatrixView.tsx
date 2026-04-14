@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { useLineage } from '../store';
 import type { MatrixSubMode } from '../types';
+import { hydrateStatements } from '../types';
 import { PANEL_STYLES } from '../constants';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -736,7 +737,7 @@ export function MatrixView({
     setMatrixPayload(null);
     matrixBuildStartRef.current = performance.now();
 
-    buildMatrixInWorker(result.statements, { maxItems: MAX_MATRIX_ITEMS })
+    buildMatrixInWorker(hydrateStatements(result), { maxItems: MAX_MATRIX_ITEMS })
       .then((payload) => {
         if (cancelled) return;
         const receivedAt = performance.now();
