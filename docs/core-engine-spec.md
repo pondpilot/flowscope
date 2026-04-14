@@ -42,13 +42,23 @@ If a statement parses but is not supported, the engine emits `UNSUPPORTED_SYNTAX
 
 ## Lineage Graph Output
 
-Each statement yields:
+Analysis produces a single flat graph in `AnalyzeResult.nodes` /
+`.edges`. Per-statement metadata (type, span, complexity) lives in
+`AnalyzeResult.statements`; the graph itself is shared.
 
-- **Nodes**: `table`, `view`, `cte`, `output`, `column`.
-- **Edges**: `ownership`, `data_flow`, `derivation`, `join_dependency`.
-- **Metadata**: join conditions, aggregation info, filter predicates, approximate flags.
-
-The global graph (`GlobalLineage`) deduplicates table/column identifiers across statements and adds `cross_statement` edges.
+- **Nodes**: `table`, `view`, `cte`, `output`, `column`. Each carries a
+  `statementIds: number[]` listing every statement it appears in. Tables
+  and views referenced across statements collapse to one node by
+  canonical identity; self-join instances within a statement remain
+  distinct (their IDs encode `canonical+alias+scope`).
+- **Edges**: `ownership`, `data_flow`, `derivation`, `join_dependency`,
+  and `cross_statement`. Each carries `statementIds: number[]` —
+  `cross_statement` edges hold `[producer, consumer]`; other kinds list
+  every statement that produced an edge with the same
+  `(from, to, type)` triple.
+- **Metadata**: join conditions, aggregation info, filter predicates,
+  approximate flags. `canonicalName` (`{catalog?, schema?, name,
+  column?}`) is folded onto each node for cross-statement matching.
 
 ## Issues & Summary
 

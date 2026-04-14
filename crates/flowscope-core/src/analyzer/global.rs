@@ -404,7 +404,7 @@ fn merge_node_into(existing: &mut Node, incoming: Node, statement_index: usize) 
     }
 
     for span in incoming.name_spans {
-        if !existing.name_spans.iter().any(|s| *s == span) {
+        if !existing.name_spans.contains(&span) {
             existing.name_spans.push(span);
         }
     }

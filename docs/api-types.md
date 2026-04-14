@@ -69,28 +69,33 @@ export interface ColumnSchema {
 
 ### AnalyzeResult
 
+The lineage graph is flat: a single top-level `nodes` / `edges` pair spans
+every statement. Each `Node` / `Edge` carries `statementIds` listing every
+statement it participates in. Per-statement metadata (type, span,
+complexity) lives in `statements: StatementMeta[]`.
+
 ```typescript
 export interface AnalyzeResult {
-  statements: StatementLineage[];
-  globalLineage: GlobalLineage;
+  statements: StatementMeta[];
+  nodes: Node[];
+  edges: Edge[];
   issues: Issue[];
   summary: Summary;
   resolvedSchema?: ResolvedSchemaMetadata;
 }
 ```
 
-### StatementLineage
+### StatementMeta
 
 ```typescript
-export interface StatementLineage {
+export interface StatementMeta {
   statementIndex: number;
   statementType: string;
   sourceName?: string;
-  nodes: Node[];
-  edges: Edge[];
   span?: Span;
   joinCount: number;
   complexityScore: number;
+  resolvedSql?: string;
 }
 ```
 
@@ -104,6 +109,8 @@ export interface Node {
   type: NodeType;
   label: string;
   qualifiedName?: string;
+  canonicalName?: CanonicalName;
+  statementIds: number[];
   expression?: string;
   span?: Span;
   nameSpans?: Span[];
@@ -111,9 +118,14 @@ export interface Node {
   metadata?: Record<string, unknown>;
   resolutionSource?: 'imported' | 'implied' | 'unknown';
   filters?: FilterPredicate[];
-  joinType?: JoinType;
-  joinCondition?: string;
   aggregation?: AggregationInfo;
+}
+
+export interface CanonicalName {
+  catalog?: string;
+  schema?: string;
+  name: string;
+  column?: string;
 }
 
 export type EdgeType =
@@ -128,6 +140,7 @@ export interface Edge {
   from: string;
   to: string;
   type: EdgeType;
+  statementIds: number[];
   expression?: string;
   operation?: string;
   joinType?: JoinType;
@@ -136,6 +149,10 @@ export interface Edge {
   approximate?: boolean;
 }
 ```
+
+`cross_statement` edges carry `statementIds: [producer, consumer]` in
+that order. Other edge kinds list every statement that produced an
+edge with the same `(from, to, edgeType)` triple.
 
 ### Issues & Summary
 

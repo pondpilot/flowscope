@@ -336,18 +336,14 @@ export function buildFlowNodes(
       id: node.id,
       type: 'tableNode',
       position: { x: 0, y: 0 },
-      data: buildTableNodeData(
-        node,
-        columns,
-        {
-          selectedNodeId,
-          searchTerm,
-          isCollapsed: computeIsCollapsed(node.id, defaultCollapsed, collapsedNodeIds),
-          hiddenColumnCount,
-          isRecursive: recursiveNodeIds.has(node.id),
-          isBaseTable: baseTableIds.has(node.id),
-        }
-      ),
+      data: buildTableNodeData(node, columns, {
+        selectedNodeId,
+        searchTerm,
+        isCollapsed: computeIsCollapsed(node.id, defaultCollapsed, collapsedNodeIds),
+        hiddenColumnCount,
+        isRecursive: recursiveNodeIds.has(node.id),
+        isBaseTable: baseTableIds.has(node.id),
+      }),
     });
   }
 
