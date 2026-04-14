@@ -145,11 +145,11 @@ export class LineagePanel {
     }
 
     const targetStatementIndex = statement.statementIndex;
-    const globalNodes = result.globalLineage.nodes.filter((node) =>
-      node.statementRefs.some((ref) => ref.statementIndex === targetStatementIndex)
+    const scopedNodes = result.nodes.filter((node) =>
+      node.statementIds.includes(targetStatementIndex)
     );
-    const relevantNodeIds = new Set(globalNodes.map((node) => node.id));
-    const globalEdges = result.globalLineage.edges.filter(
+    const relevantNodeIds = new Set(scopedNodes.map((node) => node.id));
+    const scopedEdges = result.edges.filter(
       (edge) => relevantNodeIds.has(edge.from) && relevantNodeIds.has(edge.to)
     );
     const filteredIssues = result.issues.filter(
@@ -172,18 +172,16 @@ export class LineagePanel {
       },
       { errors: 0, warnings: 0, infos: 0 }
     );
-    const tableCount = statement.nodes.filter(
+    const tableCount = scopedNodes.filter(
       (node) => node.type === 'table' || node.type === 'cte'
     ).length;
-    const columnCount = statement.nodes.filter((node) => node.type === 'column').length;
+    const columnCount = scopedNodes.filter((node) => node.type === 'column').length;
 
     return {
       ...result,
       statements: [statement],
-      globalLineage: {
-        nodes: globalNodes,
-        edges: globalEdges,
-      },
+      nodes: scopedNodes,
+      edges: scopedEdges,
       summary: {
         statementCount: 1,
         tableCount,

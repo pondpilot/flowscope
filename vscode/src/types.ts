@@ -30,18 +30,17 @@ export interface AnalysisOptions {
 }
 
 export interface AnalyzeResult {
-  statements: StatementLineage[];
-  globalLineage: GlobalLineage;
+  statements: StatementMeta[];
+  nodes: Node[];
+  edges: Edge[];
   issues: Issue[];
   summary: Summary;
 }
 
-export interface StatementLineage {
+export interface StatementMeta {
   statementIndex: number;
   statementType: string;
   sourceName?: string;
-  nodes: Node[];
-  edges: Edge[];
   span?: Span;
   joinCount: number;
   complexityScore: number;
@@ -52,6 +51,8 @@ export interface Node {
   type: NodeType;
   label: string;
   qualifiedName?: string;
+  canonicalName?: CanonicalName;
+  statementIds: number[];
   expression?: string;
   span?: Span;
   filters?: FilterPredicate[];
@@ -83,6 +84,7 @@ export interface Edge {
   joinType?: JoinType;
   joinCondition?: string;
   approximate?: boolean;
+  statementIds: number[];
 }
 
 export type EdgeType = 'ownership' | 'data_flow' | 'derivation' | 'cross_statement';
@@ -101,38 +103,11 @@ export type JoinType =
   | 'OUTER_APPLY'
   | 'AS_OF';
 
-export interface GlobalLineage {
-  nodes: GlobalNode[];
-  edges: GlobalEdge[];
-}
-
-export interface GlobalNode {
-  id: string;
-  type: NodeType;
-  label: string;
-  canonicalName: CanonicalName;
-  statementRefs: StatementRef[];
-}
-
 export interface CanonicalName {
   catalog?: string;
   schema?: string;
   name: string;
   column?: string;
-}
-
-export interface StatementRef {
-  statementIndex: number;
-  nodeId?: string;
-}
-
-export interface GlobalEdge {
-  id: string;
-  from: string;
-  to: string;
-  type: EdgeType;
-  producerStatement?: StatementRef;
-  consumerStatement?: StatementRef;
 }
 
 export interface Issue {

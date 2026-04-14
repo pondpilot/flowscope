@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { analyzeSql, isWasmInitialized } from '../analysis';
-import type { Dialect, StatementLineage } from '../types';
+import type { AnalyzeResult, Dialect } from '../types';
 
 /**
  * Provides CodeLens annotations showing complexity, table count, and join count
@@ -10,8 +10,7 @@ export class FlowScopeCodeLensProvider implements vscode.CodeLensProvider {
   private _onDidChangeCodeLenses = new vscode.EventEmitter<void>();
   public readonly onDidChangeCodeLenses = this._onDidChangeCodeLenses.event;
 
-  private cachedResults: Map<string, { statements: StatementLineage[]; version: number }> =
-    new Map();
+  private cachedResults: Map<string, { result: AnalyzeResult; version: number }> = new Map();
 
   constructor() {
     // Refresh CodeLenses when document changes
@@ -45,7 +44,7 @@ export class FlowScopeCodeLensProvider implements vscode.CodeLensProvider {
     const cached = this.cachedResults.get(uri);
 
     if (cached && cached.version === document.version) {
-      return this.createCodeLenses(document, cached.statements);
+      return this.createCodeLenses(document, cached.result);
     }
 
     // Analyze the document
@@ -61,11 +60,11 @@ export class FlowScopeCodeLensProvider implements vscode.CodeLensProvider {
 
       // Cache the results
       this.cachedResults.set(uri, {
-        statements: result.statements,
+        result,
         version: document.version,
       });
 
-      return this.createCodeLenses(document, result.statements);
+      return this.createCodeLenses(document, result);
     } catch (error) {
       console.error('FlowScope analysis error:', error);
       return [];
@@ -74,12 +73,12 @@ export class FlowScopeCodeLensProvider implements vscode.CodeLensProvider {
 
   private createCodeLenses(
     document: vscode.TextDocument,
-    statements: StatementLineage[]
+    result: AnalyzeResult
   ): vscode.CodeLens[] {
     const codeLenses: vscode.CodeLens[] = [];
     const text = document.getText();
 
-    for (const stmt of statements) {
+    for (const stmt of result.statements) {
       if (!stmt.span) {
         continue;
       }
@@ -89,8 +88,10 @@ export class FlowScopeCodeLensProvider implements vscode.CodeLensProvider {
       const range = new vscode.Range(startPos, startPos);
 
       // Count tables/views/CTEs (excluding columns)
-      const tableCount = stmt.nodes.filter(
-        (n) => n.type === 'table' || n.type === 'view' || n.type === 'cte'
+      const tableCount = result.nodes.filter(
+        (n) =>
+          n.statementIds.includes(stmt.statementIndex) &&
+          (n.type === 'table' || n.type === 'view' || n.type === 'cte')
       ).length;
 
       // Build the annotation text
