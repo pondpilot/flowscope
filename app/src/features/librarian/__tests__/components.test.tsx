@@ -1,0 +1,480 @@
+/// <reference types="@testing-library/jest-dom" />
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { MAX_MESSAGE_LENGTH, MAX_PDF_SIZE_MB } from '../constants';
+import { useLibrarianStore } from '../store';
+import type { ChatMessage, PdfFile } from '../types';
+
+// ---------- Mocks ----------
+
+vi.mock('../services/ai-service', () => ({
+  loadAIConfig: vi.fn(() => ({
+    provider: 'openai',
+    apiKey: 'sk-test',
+    model: 'gpt-4o',
+  })),
+  saveAIConfig: vi.fn(),
+  sendChatMessage: vi.fn(() => Promise.resolve('ok')),
+  getDefaultModel: vi.fn((p: string) => (p === 'openai' ? 'gpt-4o' : 'claude-sonnet-4-20250514')),
+}));
+
+import {
+  getDefaultModel,
+  loadAIConfig,
+  saveAIConfig,
+  sendChatMessage,
+} from '../services/ai-service';
+
+// ---------- Helpers ----------
+
+function makeMessage(overrides: Partial<ChatMessage> = {}): ChatMessage {
+  return {
+    id: crypto.randomUUID(),
+    role: 'user',
+    content: 'hello',
+    timestamp: Date.now(),
+    ...overrides,
+  };
+}
+
+function makePdfFile(overrides: Partial<PdfFile> = {}): PdfFile {
+  return {
+    id: 'file-1',
+    name: 'test.pdf',
+    size: 1024,
+    status: 'ready',
+    uploadedAt: Date.now(),
+    ...overrides,
+  };
+}
+
+// ---------- Components under test ----------
+
+import { AISettingsDialog } from '../components/ai-settings-dialog';
+import { ChatInput } from '../components/chat-input';
+import { ChatMessages } from '../components/chat-messages';
+import { PdfUpload } from '../components/pdf-upload';
+
+// ---------- Shared setup ----------
+
+beforeEach(() => {
+  localStorage.clear();
+  useLibrarianStore.setState({
+    messages: [],
+    isLoading: false,
+    pdfFiles: [],
+    pdfChunks: [],
+    hasConfig: true,
+  });
+  vi.clearAllMocks();
+  // Restore default mock return values after clearAllMocks
+  vi.mocked(loadAIConfig).mockReturnValue({
+    provider: 'openai',
+    apiKey: 'sk-test',
+    model: 'gpt-4o',
+  });
+  vi.mocked(sendChatMessage).mockResolvedValue('ok');
+  vi.mocked(getDefaultModel).mockImplementation((p: string) =>
+    p === 'openai' ? 'gpt-4o' : 'claude-sonnet-4-20250514'
+  );
+});
+
+afterEach(() => {
+  cleanup();
+});
+
+// ============================================================================
+// AISettingsDialog
+// ============================================================================
+
+describe('AISettingsDialog', () => {
+  it('renders when open', () => {
+    render(<AISettingsDialog open={true} onOpenChange={vi.fn()} />);
+    expect(screen.getByText('AI Settings')).toBeInTheDocument();
+  });
+
+  it('does not render when closed', () => {
+    render(<AISettingsDialog open={false} onOpenChange={vi.fn()} />);
+    expect(screen.queryByText('AI Settings')).not.toBeInTheDocument();
+  });
+
+  it('shows provider selector', () => {
+    render(<AISettingsDialog open={true} onOpenChange={vi.fn()} />);
+    expect(screen.getByText('Provider')).toBeInTheDocument();
+  });
+
+  it('shows API key input', () => {
+    render(<AISettingsDialog open={true} onOpenChange={vi.fn()} />);
+    expect(screen.getByLabelText('API Key')).toBeInTheDocument();
+  });
+
+  it('shows model input', () => {
+    render(<AISettingsDialog open={true} onOpenChange={vi.fn()} />);
+    expect(screen.getByLabelText('Model')).toBeInTheDocument();
+  });
+
+  it('loads existing config on open', () => {
+    render(<AISettingsDialog open={true} onOpenChange={vi.fn()} />);
+    const apiKeyInput = screen.getByLabelText('API Key') as HTMLInputElement;
+    expect(apiKeyInput.value).toBe('sk-test');
+  });
+
+  it('calls saveAIConfig on save', () => {
+    render(<AISettingsDialog open={true} onOpenChange={vi.fn()} />);
+    fireEvent.click(screen.getByText('Save'));
+    expect(saveAIConfig).toHaveBeenCalled();
+  });
+
+  it('calls refreshConfig after save to update store', () => {
+    vi.mocked(loadAIConfig).mockReturnValue({
+      provider: 'openai',
+      apiKey: 'sk-new-key',
+      model: 'gpt-4o',
+    });
+    useLibrarianStore.setState({ hasConfig: false });
+    render(<AISettingsDialog open={true} onOpenChange={vi.fn()} />);
+    fireEvent.click(screen.getByText('Save'));
+    expect(useLibrarianStore.getState().hasConfig).toBe(true);
+  });
+
+  it('disables save when API key is empty', () => {
+    vi.mocked(loadAIConfig).mockReturnValue(null);
+    render(<AISettingsDialog open={true} onOpenChange={vi.fn()} />);
+    expect(screen.getByText('Save')).toBeDisabled();
+  });
+
+  it('tests connection', async () => {
+    render(<AISettingsDialog open={true} onOpenChange={vi.fn()} />);
+    // Wait for useEffect to load config and enable button
+    await waitFor(() => {
+      expect(screen.getByText('Test Connection')).not.toBeDisabled();
+    });
+    fireEvent.click(screen.getByText('Test Connection'));
+    await waitFor(() => {
+      expect(screen.getByTestId('test-result')).toHaveTextContent('Connection successful');
+    });
+  });
+
+  it('shows error on failed connection test', async () => {
+    vi.mocked(sendChatMessage).mockRejectedValueOnce(new Error('Invalid API key'));
+    render(<AISettingsDialog open={true} onOpenChange={vi.fn()} />);
+    await waitFor(() => {
+      expect(screen.getByText('Test Connection')).not.toBeDisabled();
+    });
+    fireEvent.click(screen.getByText('Test Connection'));
+    await waitFor(() => {
+      expect(screen.getByTestId('test-result')).toHaveTextContent('Invalid API key');
+    });
+  });
+});
+
+// ============================================================================
+// ChatMessages
+// ============================================================================
+
+describe('ChatMessages', () => {
+  it('renders empty state when no messages', () => {
+    render(<ChatMessages messages={[]} isLoading={false} />);
+    expect(screen.getByTestId('empty-state')).toBeInTheDocument();
+    expect(screen.getByText(/Ask questions about your data/)).toBeInTheDocument();
+  });
+
+  it('does not show empty state when loading', () => {
+    render(<ChatMessages messages={[]} isLoading={true} />);
+    expect(screen.queryByTestId('empty-state')).not.toBeInTheDocument();
+  });
+
+  it('renders user messages', () => {
+    const messages = [makeMessage({ role: 'user', content: 'Hello there' })];
+    render(<ChatMessages messages={messages} isLoading={false} />);
+    expect(screen.getByText('Hello there')).toBeInTheDocument();
+    expect(screen.getByTestId('message-user')).toBeInTheDocument();
+  });
+
+  it('renders assistant messages', () => {
+    const messages = [makeMessage({ role: 'assistant', content: 'Hi back' })];
+    render(<ChatMessages messages={messages} isLoading={false} />);
+    expect(screen.getByText('Hi back')).toBeInTheDocument();
+    expect(screen.getByTestId('message-assistant')).toBeInTheDocument();
+  });
+
+  it('renders loading indicator', () => {
+    render(<ChatMessages messages={[]} isLoading={true} />);
+    expect(screen.getByTestId('loading-indicator')).toBeInTheDocument();
+  });
+
+  it('renders code blocks', () => {
+    const messages = [
+      makeMessage({
+        role: 'assistant',
+        content: 'Here is code:\n```sql\nSELECT * FROM t\n```',
+      }),
+    ];
+    render(<ChatMessages messages={messages} isLoading={false} />);
+    expect(screen.getByText('SELECT * FROM t')).toBeInTheDocument();
+  });
+
+  it('renders multiple messages in order', () => {
+    const messages = [
+      makeMessage({ id: '1', role: 'user', content: 'Question' }),
+      makeMessage({ id: '2', role: 'assistant', content: 'Answer' }),
+    ];
+    render(<ChatMessages messages={messages} isLoading={false} />);
+    expect(screen.getByText('Question')).toBeInTheDocument();
+    expect(screen.getByText('Answer')).toBeInTheDocument();
+  });
+});
+
+// ============================================================================
+// ChatInput
+// ============================================================================
+
+describe('ChatInput', () => {
+  it('renders textarea', () => {
+    render(<ChatInput onSend={vi.fn()} disabled={false} />);
+    expect(screen.getByTestId('chat-textarea')).toBeInTheDocument();
+  });
+
+  it('renders send button', () => {
+    render(<ChatInput onSend={vi.fn()} disabled={false} />);
+    expect(screen.getByLabelText('Send message')).toBeInTheDocument();
+  });
+
+  it('calls onSend when clicking send button', () => {
+    const onSend = vi.fn();
+    render(<ChatInput onSend={onSend} disabled={false} />);
+    const textarea = screen.getByTestId('chat-textarea');
+    fireEvent.change(textarea, { target: { value: 'test message' } });
+    fireEvent.click(screen.getByLabelText('Send message'));
+    expect(onSend).toHaveBeenCalledWith('test message');
+  });
+
+  it('calls onSend on Enter key', () => {
+    const onSend = vi.fn();
+    render(<ChatInput onSend={onSend} disabled={false} />);
+    const textarea = screen.getByTestId('chat-textarea');
+    fireEvent.change(textarea, { target: { value: 'enter test' } });
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+    expect(onSend).toHaveBeenCalledWith('enter test');
+  });
+
+  it('does not send on Shift+Enter', () => {
+    const onSend = vi.fn();
+    render(<ChatInput onSend={onSend} disabled={false} />);
+    const textarea = screen.getByTestId('chat-textarea');
+    fireEvent.change(textarea, { target: { value: 'shift enter' } });
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: true });
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it('clears input after sending', () => {
+    const onSend = vi.fn();
+    render(<ChatInput onSend={onSend} disabled={false} />);
+    const textarea = screen.getByTestId('chat-textarea') as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: 'clear me' } });
+    fireEvent.click(screen.getByLabelText('Send message'));
+    expect(textarea.value).toBe('');
+  });
+
+  it('does not send empty messages', () => {
+    const onSend = vi.fn();
+    render(<ChatInput onSend={onSend} disabled={false} />);
+    fireEvent.click(screen.getByLabelText('Send message'));
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it('does not send whitespace-only messages', () => {
+    const onSend = vi.fn();
+    render(<ChatInput onSend={onSend} disabled={false} />);
+    const textarea = screen.getByTestId('chat-textarea');
+    fireEvent.change(textarea, { target: { value: '   ' } });
+    fireEvent.click(screen.getByLabelText('Send message'));
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it('disables textarea when disabled prop is true', () => {
+    render(<ChatInput onSend={vi.fn()} disabled={true} />);
+    expect(screen.getByTestId('chat-textarea')).toBeDisabled();
+  });
+
+  it('shows hint when AI is not configured', () => {
+    useLibrarianStore.setState({ hasConfig: false });
+    render(<ChatInput onSend={vi.fn()} disabled={false} />);
+    expect(screen.getByTestId('config-hint')).toBeInTheDocument();
+  });
+
+  it('enables send when hasConfig becomes true in store', () => {
+    useLibrarianStore.setState({ hasConfig: false });
+    const { rerender } = render(<ChatInput onSend={vi.fn()} disabled={false} />);
+    expect(screen.getByTestId('chat-textarea')).toBeDisabled();
+
+    useLibrarianStore.setState({ hasConfig: true });
+    rerender(<ChatInput onSend={vi.fn()} disabled={false} />);
+    expect(screen.getByTestId('chat-textarea')).not.toBeDisabled();
+  });
+
+  it('truncates input to MAX_MESSAGE_LENGTH', () => {
+    render(<ChatInput onSend={vi.fn()} disabled={false} />);
+    const textarea = screen.getByTestId('chat-textarea') as HTMLTextAreaElement;
+    const longText = 'a'.repeat(MAX_MESSAGE_LENGTH + 100);
+    fireEvent.change(textarea, { target: { value: longText } });
+    expect(textarea.value.length).toBe(MAX_MESSAGE_LENGTH);
+  });
+});
+
+// ============================================================================
+// PdfUpload
+// ============================================================================
+
+describe('PdfUpload', () => {
+  it('renders drop zone', () => {
+    render(<PdfUpload onUpload={vi.fn()} />);
+    expect(screen.getByTestId('drop-zone')).toBeInTheDocument();
+    expect(screen.getByText(/Drop a PDF/)).toBeInTheDocument();
+  });
+
+  it('calls onUpload for valid PDF file', () => {
+    const onUpload = vi.fn();
+    render(<PdfUpload onUpload={onUpload} />);
+    const input = screen.getByTestId('file-input');
+    const file = new File(['content'], 'test.pdf', { type: 'application/pdf' });
+    fireEvent.change(input, { target: { files: [file] } });
+    expect(onUpload).toHaveBeenCalledWith(file);
+  });
+
+  it('rejects non-PDF files', () => {
+    const onUpload = vi.fn();
+    render(<PdfUpload onUpload={onUpload} />);
+    const input = screen.getByTestId('file-input');
+    const file = new File(['content'], 'test.txt', { type: 'text/plain' });
+    fireEvent.change(input, { target: { files: [file] } });
+    expect(onUpload).not.toHaveBeenCalled();
+    expect(screen.getByTestId('upload-error')).toHaveTextContent('Only PDF files');
+  });
+
+  it('rejects files exceeding size limit', () => {
+    const onUpload = vi.fn();
+    render(<PdfUpload onUpload={onUpload} />);
+    const input = screen.getByTestId('file-input');
+    const bigContent = new ArrayBuffer(MAX_PDF_SIZE_MB * 1024 * 1024 + 1);
+    const file = new File([bigContent], 'big.pdf', { type: 'application/pdf' });
+    fireEvent.change(input, { target: { files: [file] } });
+    expect(onUpload).not.toHaveBeenCalled();
+    expect(screen.getByTestId('upload-error')).toHaveTextContent(`${MAX_PDF_SIZE_MB} MB`);
+  });
+
+  it('allows uploading many files (no file count limit)', () => {
+    const files = Array.from({ length: 20 }, (_, i) =>
+      makePdfFile({ id: `f-${i}`, name: `file-${i}.pdf` })
+    );
+    useLibrarianStore.setState({ pdfFiles: files });
+
+    const onUpload = vi.fn();
+    render(<PdfUpload onUpload={onUpload} />);
+    const input = screen.getByTestId('file-input');
+    const file = new File(['content'], 'extra.pdf', { type: 'application/pdf' });
+    fireEvent.change(input, { target: { files: [file] } });
+    expect(onUpload).toHaveBeenCalledWith(file);
+  });
+
+  it('rejects duplicate file names', () => {
+    useLibrarianStore.setState({ pdfFiles: [makePdfFile({ name: 'dup.pdf' })] });
+
+    const onUpload = vi.fn();
+    render(<PdfUpload onUpload={onUpload} />);
+    const input = screen.getByTestId('file-input');
+    const file = new File(['content'], 'dup.pdf', { type: 'application/pdf' });
+    fireEvent.change(input, { target: { files: [file] } });
+    expect(onUpload).not.toHaveBeenCalled();
+    expect(screen.getByTestId('upload-error')).toHaveTextContent('already uploaded');
+  });
+
+  it('renders file list with status', () => {
+    useLibrarianStore.setState({
+      pdfFiles: [
+        makePdfFile({ id: 'f1', name: 'ready.pdf', status: 'ready' }),
+        makePdfFile({ id: 'f2', name: 'processing.pdf', status: 'processing' }),
+      ],
+    });
+
+    render(<PdfUpload onUpload={vi.fn()} />);
+    const items = screen.getAllByTestId('pdf-file-item');
+    expect(items).toHaveLength(2);
+    expect(screen.getByText('ready.pdf')).toBeInTheDocument();
+    expect(screen.getByText('processing.pdf')).toBeInTheDocument();
+  });
+
+  it('removes file when clicking remove button', () => {
+    useLibrarianStore.setState({
+      pdfFiles: [makePdfFile({ id: 'f1', name: 'remove-me.pdf' })],
+    });
+
+    render(<PdfUpload onUpload={vi.fn()} />);
+    fireEvent.click(screen.getByLabelText('Remove remove-me.pdf'));
+    expect(useLibrarianStore.getState().pdfFiles).toHaveLength(0);
+  });
+
+  it('handles drag and drop', () => {
+    const onUpload = vi.fn();
+    render(<PdfUpload onUpload={onUpload} />);
+    const dropZone = screen.getByTestId('drop-zone');
+
+    const file = new File(['content'], 'dropped.pdf', { type: 'application/pdf' });
+    const dataTransfer = { files: [file] };
+
+    fireEvent.dragOver(dropZone, { dataTransfer });
+    fireEvent.drop(dropZone, { dataTransfer });
+
+    expect(onUpload).toHaveBeenCalledWith(file);
+  });
+
+  it('renders ScrollArea with max-h-[200px] when many files are uploaded', () => {
+    const files = Array.from({ length: 6 }, (_, i) =>
+      makePdfFile({ id: `scroll-${i}`, name: `doc-${i}.pdf` })
+    );
+    useLibrarianStore.setState({ pdfFiles: files });
+
+    const { container } = render(<PdfUpload onUpload={vi.fn()} />);
+    const items = screen.getAllByTestId('pdf-file-item');
+    expect(items).toHaveLength(6);
+
+    const scrollArea = container.querySelector('.max-h-\\[64px\\]');
+    expect(scrollArea).toBeInTheDocument();
+  });
+
+  it('has data-librarian-dropzone attribute on drop zone', () => {
+    render(<PdfUpload onUpload={vi.fn()} />);
+    const dropZone = screen.getByTestId('drop-zone');
+    expect(dropZone).toHaveAttribute('data-librarian-dropzone');
+  });
+
+  it('calls stopPropagation on drop to prevent global handler', () => {
+    const onUpload = vi.fn();
+    render(<PdfUpload onUpload={onUpload} />);
+    const dropZone = screen.getByTestId('drop-zone');
+
+    const file = new File(['content'], 'stopped.pdf', { type: 'application/pdf' });
+    const stopPropagation = vi.fn();
+    const dropEvent = new Event('drop', { bubbles: true });
+    Object.defineProperty(dropEvent, 'dataTransfer', { value: { files: [file] } });
+    Object.defineProperty(dropEvent, 'stopPropagation', { value: stopPropagation });
+    Object.defineProperty(dropEvent, 'preventDefault', { value: vi.fn() });
+
+    fireEvent(dropZone, dropEvent);
+    expect(stopPropagation).toHaveBeenCalled();
+  });
+
+  it('calls stopPropagation on dragOver to prevent global handler', () => {
+    render(<PdfUpload onUpload={vi.fn()} />);
+    const dropZone = screen.getByTestId('drop-zone');
+
+    const stopPropagation = vi.fn();
+    const dragOverEvent = new Event('dragover', { bubbles: true });
+    Object.defineProperty(dragOverEvent, 'stopPropagation', { value: stopPropagation });
+    Object.defineProperty(dragOverEvent, 'preventDefault', { value: vi.fn() });
+
+    fireEvent(dropZone, dragOverEvent);
+    expect(stopPropagation).toHaveBeenCalled();
+  });
+});

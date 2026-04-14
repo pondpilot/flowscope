@@ -1,0 +1,158 @@
+/// <reference types="@testing-library/jest-dom" />
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { useLibrarianStore } from '../store';
+
+// ---------- Mocks ----------
+
+const mockSendMessage = vi.fn();
+const mockCancel = vi.fn();
+vi.mock('../hooks/use-librarian-chat', () => ({
+  useLibrarianChat: () => ({
+    sendMessage: mockSendMessage,
+    cancel: mockCancel,
+  }),
+}));
+
+vi.mock('../services/ai-service', () => ({
+  loadAIConfig: vi.fn(() => ({
+    provider: 'openai',
+    apiKey: 'sk-test',
+    model: 'gpt-4o',
+  })),
+  saveAIConfig: vi.fn(),
+  sendChatMessage: vi.fn(() => Promise.resolve('ok')),
+  getDefaultModel: vi.fn((p: string) => (p === 'openai' ? 'gpt-4o' : 'claude-sonnet-4-20250514')),
+}));
+
+vi.mock('../services/pdf-processor', () => ({
+  processPdf: vi.fn(() => Promise.resolve([])),
+}));
+
+vi.mock('../services/embedding-service', () => ({
+  embedTexts: vi.fn(() => Promise.resolve([[0.1, 0.2]])),
+}));
+
+vi.mock('@pondpilot/flowscope-react', () => ({
+  useLineageState: () => ({ result: null }),
+}));
+
+vi.mock('@/lib/project-store', () => ({
+  useProject: () => ({ currentProject: null }),
+}));
+
+import { LibrarianPanel } from '../components/librarian-panel';
+
+// ---------- Setup ----------
+
+beforeEach(() => {
+  useLibrarianStore.setState({
+    messages: [],
+    isLoading: false,
+    pdfFiles: [],
+    pdfChunks: [],
+  });
+  vi.clearAllMocks();
+});
+
+afterEach(() => {
+  cleanup();
+});
+
+// ---------- Tests ----------
+
+describe('LibrarianPanel', () => {
+  it('renders the panel with header', () => {
+    render(<LibrarianPanel onClose={vi.fn()} />);
+    expect(screen.getByTestId('librarian-panel')).toBeInTheDocument();
+    expect(screen.getByText('Librarian')).toBeInTheDocument();
+  });
+
+  it('renders settings button', () => {
+    render(<LibrarianPanel onClose={vi.fn()} />);
+    expect(screen.getByTestId('settings-button')).toBeInTheDocument();
+  });
+
+  it('renders close button', () => {
+    render(<LibrarianPanel onClose={vi.fn()} />);
+    expect(screen.getByTestId('close-button')).toBeInTheDocument();
+  });
+
+  it('calls onClose when close button is clicked', () => {
+    const onClose = vi.fn();
+    render(<LibrarianPanel onClose={onClose} />);
+    fireEvent.click(screen.getByTestId('close-button'));
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('opens settings dialog when settings button is clicked', () => {
+    render(<LibrarianPanel onClose={vi.fn()} />);
+    fireEvent.click(screen.getByTestId('settings-button'));
+    expect(screen.getByText('AI Settings')).toBeInTheDocument();
+  });
+
+  it('renders empty chat state initially', () => {
+    render(<LibrarianPanel onClose={vi.fn()} />);
+    expect(screen.getByTestId('empty-state')).toBeInTheDocument();
+  });
+
+  it('renders chat input', () => {
+    render(<LibrarianPanel onClose={vi.fn()} />);
+    expect(screen.getByTestId('chat-textarea')).toBeInTheDocument();
+  });
+
+  it('renders documentation toggle', () => {
+    render(<LibrarianPanel onClose={vi.fn()} />);
+    expect(screen.getByTestId('docs-toggle')).toBeInTheDocument();
+    expect(screen.getByText('Documentation')).toBeInTheDocument();
+  });
+
+  it('expands documentation section when toggle is clicked', () => {
+    render(<LibrarianPanel onClose={vi.fn()} />);
+    expect(screen.queryByTestId('docs-section')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('docs-toggle'));
+    expect(screen.getByTestId('docs-section')).toBeInTheDocument();
+    expect(screen.getByTestId('drop-zone')).toBeInTheDocument();
+  });
+
+  it('collapses documentation section when toggle is clicked again', () => {
+    render(<LibrarianPanel onClose={vi.fn()} />);
+
+    fireEvent.click(screen.getByTestId('docs-toggle'));
+    expect(screen.getByTestId('docs-section')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('docs-toggle'));
+    expect(screen.queryByTestId('docs-section')).not.toBeInTheDocument();
+  });
+
+  it('renders messages from store', () => {
+    useLibrarianStore.setState({
+      messages: [
+        {
+          id: '1',
+          role: 'user',
+          content: 'What tables exist?',
+          timestamp: Date.now(),
+        },
+        {
+          id: '2',
+          role: 'assistant',
+          content: 'There are 3 tables.',
+          timestamp: Date.now(),
+        },
+      ],
+    });
+
+    render(<LibrarianPanel onClose={vi.fn()} />);
+    expect(screen.getByText('What tables exist?')).toBeInTheDocument();
+    expect(screen.getByText('There are 3 tables.')).toBeInTheDocument();
+  });
+
+  it('renders loading indicator when loading', () => {
+    useLibrarianStore.setState({ isLoading: true });
+    render(<LibrarianPanel onClose={vi.fn()} />);
+    expect(screen.getByTestId('loading-indicator')).toBeInTheDocument();
+  });
+});

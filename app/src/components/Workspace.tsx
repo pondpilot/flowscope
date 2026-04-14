@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { Share2, Github } from 'lucide-react';
+import { Share2, Github, BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLineageActions, useLineageState } from '@pondpilot/flowscope-react';
 import { Button } from './ui/button';
@@ -25,6 +25,7 @@ import { useThemeStore, type Theme } from '@/lib/theme-store';
 import { useViewStateStore } from '@/lib/view-state-store';
 import { getShortcutDisplay } from '@/lib/shortcuts';
 import { useBackend } from '@/lib/backend-context';
+import { LibrarianPanel } from '@/features/librarian';
 
 interface WorkspaceProps {
   backendReady: boolean;
@@ -70,6 +71,11 @@ export function Workspace({ backendReady, error, onRetry, isRetrying }: Workspac
     setTheme(nextTheme);
     toast.success(`Theme: ${nextTheme.charAt(0).toUpperCase() + nextTheme.slice(1)}`);
   }, [theme, setTheme]);
+
+  // Librarian panel state
+  const librarianOpen = useViewStateStore((s) => s.librarianOpen);
+  const toggleLibrarian = useViewStateStore((s) => s.toggleLibrarian);
+  const setLibrarianOpen = useViewStateStore((s) => s.setLibrarianOpen);
 
   const editorPanelRef = useRef<ImperativePanelHandle>(null);
   const graphContainerRef = useRef<HTMLDivElement>(null);
@@ -206,8 +212,14 @@ export function Workspace({ backendReady, error, onRetry, isRetrying }: Workspac
         cmdOrCtrl: true,
         handler: () => setCommandPaletteOpen(true),
       },
+      // Toggle Librarian panel
+      {
+        key: 'l',
+        cmdOrCtrl: true,
+        handler: toggleLibrarian,
+      },
     ],
-    [toggleEditorPanel, currentProject, cycleTheme, isBackendMode]
+    [toggleEditorPanel, currentProject, cycleTheme, isBackendMode, toggleLibrarian]
   );
 
   useGlobalShortcuts(shortcuts);
@@ -236,6 +248,9 @@ export function Workspace({ backendReady, error, onRetry, isRetrying }: Workspac
           break;
         case 'toggle-editor':
           toggleEditorPanel();
+          break;
+        case 'toggle-librarian':
+          toggleLibrarian();
           break;
 
         // Tab switching
@@ -295,6 +310,7 @@ export function Workspace({ backendReady, error, onRetry, isRetrying }: Workspac
     },
     [
       toggleEditorPanel,
+      toggleLibrarian,
       activeProjectId,
       setActiveTab,
       currentProject,
@@ -379,6 +395,23 @@ export function Workspace({ backendReady, error, onRetry, isRetrying }: Workspac
               </TooltipTrigger>
               <TooltipContent>
                 <p>View on GitHub</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={librarianOpen ? 'secondary' : 'ghost'}
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={toggleLibrarian}
+                >
+                  <BookOpen className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Librarian ({getShortcutDisplay('toggle-librarian') ?? '⌘L'})</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -468,6 +501,21 @@ export function Workspace({ backendReady, error, onRetry, isRetrying }: Workspac
                   isAnalyzing={analysis.isAnalyzing}
                 />
               </ResizablePanel>
+
+              {/* Right: Librarian Panel */}
+              {librarianOpen && (
+                <>
+                  <ResizableHandle withHandle />
+                  <ResizablePanel
+                    defaultSize={25}
+                    minSize={20}
+                    maxSize={40}
+                    data-testid="librarian-panel"
+                  >
+                    <LibrarianPanel onClose={() => setLibrarianOpen(false)} />
+                  </ResizablePanel>
+                </>
+              )}
             </ResizablePanelGroup>
           </div>
         </FocusRegistryProvider>

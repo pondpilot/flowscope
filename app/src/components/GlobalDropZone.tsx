@@ -125,6 +125,10 @@ export function GlobalDropZone() {
 
   const handleDragEnter = useCallback(
     (e: DragEvent) => {
+      // Ignore drag events inside the Librarian PDF dropzone
+      const target = e.target as HTMLElement | null;
+      if (target?.closest?.('[data-librarian-dropzone]')) return;
+
       e.preventDefault();
       e.stopPropagation();
 
@@ -147,6 +151,10 @@ export function GlobalDropZone() {
 
   const handleDragLeave = useCallback(
     (e: DragEvent) => {
+      // Ignore drag events inside the Librarian PDF dropzone
+      const target = e.target as HTMLElement | null;
+      if (target?.closest?.('[data-librarian-dropzone]')) return;
+
       e.preventDefault();
       e.stopPropagation();
 
@@ -167,6 +175,13 @@ export function GlobalDropZone() {
 
   const handleDragOver = useCallback(
     (e: DragEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest?.('[data-librarian-dropzone]')) {
+        setIsDragOver(false);
+        dragCounter.current = 0;
+        return;
+      }
+
       e.preventDefault();
       e.stopPropagation();
 
@@ -179,8 +194,13 @@ export function GlobalDropZone() {
 
   const handleDrop = useCallback(
     async (e: DragEvent) => {
+      // Ignore drops inside the Librarian PDF dropzone
+      const target = e.target as HTMLElement | null;
+      if (target?.closest?.('[data-librarian-dropzone]')) return;
+
       e.preventDefault();
       e.stopPropagation();
+
       setIsDragOver(false);
       dragCounter.current = 0;
       setRejectedFiles([]);
@@ -326,10 +346,10 @@ export function GlobalDropZone() {
       role="region"
       aria-label="File drop zone"
       className={cn(
-        'fixed inset-0 z-50 flex items-center justify-center',
+        'fixed inset-0 z-50 flex items-center justify-center pointer-events-none',
         'bg-background/80 backdrop-blur-xs',
         'transition-opacity duration-200',
-        isDragOver ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        isDragOver ? 'opacity-100' : 'opacity-0'
       )}
     >
       <div

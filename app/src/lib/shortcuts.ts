@@ -155,6 +155,15 @@ export const SHORTCUTS: ShortcutDefinition[] = [
     category: 'navigation',
     context: 'global',
   },
+  {
+    id: 'toggle-librarian',
+    key: 'l',
+    cmdOrCtrl: true,
+    label: 'Toggle Librarian',
+    description: 'Open or close the Librarian AI assistant panel',
+    category: 'navigation',
+    context: 'global',
+  },
 
   // Navigation - Tabs
   {

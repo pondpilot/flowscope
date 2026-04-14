@@ -136,7 +136,7 @@ const DEFAULT_ISSUES_STATE: IssuesViewState = {
   severity: 'all',
   codes: [],
   sourceFiles: [],
-  showLintIssues: false,
+  showLintIssues: true,
 };
 
 const DEFAULT_NAMESPACE_FILTER_STATE: NamespaceFilterState = {
@@ -163,6 +163,9 @@ function getDefaultProjectViewStates(): ProjectViewStates {
 interface ViewStateStore {
   viewStates: Record<string, ProjectViewStates>;
 
+  /** Whether the Librarian panel is open (global, not per-project) */
+  librarianOpen: boolean;
+
   // Getters
   getProjectState: (projectId: string) => ProjectViewStates | undefined;
   getViewState: <K extends keyof Omit<ProjectViewStates, 'activeTab'>>(
@@ -178,6 +181,8 @@ interface ViewStateStore {
     view: K,
     state: Partial<ProjectViewStates[K]>
   ) => void;
+  toggleLibrarian: () => void;
+  setLibrarianOpen: (open: boolean) => void;
 
   // Cleanup
   clearProjectState: (projectId: string) => void;
@@ -187,6 +192,7 @@ export const useViewStateStore = create<ViewStateStore>()(
   persist(
     (set, get) => ({
       viewStates: {},
+      librarianOpen: false,
 
       getProjectState: (projectId) => get().viewStates[projectId],
 
@@ -221,6 +227,9 @@ export const useViewStateStore = create<ViewStateStore>()(
           },
         })),
 
+      toggleLibrarian: () => set((state) => ({ librarianOpen: !state.librarianOpen })),
+      setLibrarianOpen: (open) => set({ librarianOpen: open }),
+
       clearProjectState: (projectId) =>
         set((state) => {
           const { [projectId]: _removed, ...rest } = state.viewStates;
@@ -231,7 +240,7 @@ export const useViewStateStore = create<ViewStateStore>()(
     {
       name: 'flowscope-view-states',
       storage: createJSONStorage(() => localStorage),
-      partialize: (state) => ({ viewStates: state.viewStates }),
+      partialize: (state) => ({ viewStates: state.viewStates, librarianOpen: state.librarianOpen }),
     }
   )
 );
