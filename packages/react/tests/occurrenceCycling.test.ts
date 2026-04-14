@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import type { AnalyzeResult, StoreApi } from '@pondpilot/flowscope-core';
+import type { StoreApi } from 'zustand/vanilla';
+import type { AnalyzeResult } from '@pondpilot/flowscope-core';
 
 import { createLineageStore, type LineageState } from '../src/store';
 
@@ -41,6 +42,61 @@ function buildResult(): AnalyzeResult {
     issues: [],
     summary: {
       statementCount: 1,
+      tableCount: 1,
+      columnCount: 0,
+      joinCount: 0,
+      complexityScore: 1,
+      issueCount: { errors: 0, warnings: 0, infos: 0 },
+      hasErrors: false,
+    },
+  };
+}
+
+function buildMultiStatementResult(): AnalyzeResult {
+  return {
+    statements: [
+      {
+        statementIndex: 0,
+        statementType: 'SELECT',
+        sourceName: 'models/users_a.sql',
+        nodes: [
+          {
+            id: 'table:users',
+            type: 'table',
+            label: 'users',
+            span: { start: 10, end: 15 },
+            nameSpans: [{ start: 10, end: 15 }],
+          },
+        ],
+        edges: [],
+        joinCount: 0,
+        complexityScore: 1,
+      },
+      {
+        statementIndex: 1,
+        statementType: 'SELECT',
+        sourceName: 'models/users_b.sql',
+        nodes: [
+          {
+            id: 'table:users',
+            type: 'table',
+            label: 'users',
+            span: { start: 40, end: 45 },
+            nameSpans: [
+              { start: 40, end: 45 },
+              { start: 70, end: 75 },
+            ],
+          },
+        ],
+        edges: [],
+        joinCount: 0,
+        complexityScore: 1,
+      },
+    ],
+    globalLineage: { nodes: [], edges: [] },
+    issues: [],
+    summary: {
+      statementCount: 2,
       tableCount: 1,
       columnCount: 0,
       joinCount: 0,
@@ -130,5 +186,18 @@ describe('occurrence cycling', () => {
     // selectNode leaves highlightedSpan untouched (null on a fresh store);
     // a rejected focusOccurrence must not alter that.
     expect(state.highlightedSpan ?? null).toBe(null);
+  });
+
+  it('cycles across occurrences merged from multiple statements', () => {
+    store.getState().setResult(buildMultiStatementResult());
+    store.getState().selectNode('table:users');
+
+    store.getState().cycleOccurrence('next');
+    expect(store.getState().highlightedSpan).toEqual({ start: 40, end: 45 });
+
+    store.getState().cycleOccurrence('next');
+    const state = store.getState();
+    expect(state.focusedOccurrenceIndex).toBe(2);
+    expect(state.highlightedSpan).toEqual({ start: 70, end: 75 });
   });
 });

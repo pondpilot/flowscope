@@ -28,6 +28,7 @@ import {
   createStatementScope,
   withStatementScope,
 } from '../utils/lineageHelpers';
+import { mergeNodesForNavigation } from '../utils/nodeOccurrences';
 
 // =============================================================================
 // Types for worker communication (all serializable - no Sets, no functions)
@@ -882,21 +883,12 @@ function mergeStatements(statements: StatementLineage[]): StatementLineage {
     const statementScope = createStatementScope(stmt.statementIndex, sourceName);
     stmt.nodes.forEach((node) => {
       const nodeWithSource = withStatementScope(withSourceName(node, sourceName), statementScope);
-      const existing = mergedNodes.get(node.id);
-      if (!existing) {
-        mergedNodes.set(node.id, nodeWithSource);
-        return;
-      }
-
-      if (node.filters && node.filters.length > 0) {
-        existing.filters = [...(existing.filters || []), ...node.filters];
-      }
-      if (!existing.metadata?.sourceName && nodeWithSource.metadata?.sourceName) {
-        existing.metadata = {
-          ...(existing.metadata || {}),
-          sourceName: nodeWithSource.metadata.sourceName,
-        };
-      }
+      const mergedNode = mergeNodesForNavigation(
+        mergedNodes.get(node.id) ?? null,
+        nodeWithSource,
+        sourceName
+      );
+      mergedNodes.set(node.id, mergedNode);
     });
 
     stmt.edges.forEach((edge) => {

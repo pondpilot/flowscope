@@ -30,6 +30,7 @@ import {
   createStatementScope,
   withStatementScope,
 } from './lineageHelpers';
+import { mergeNodesForNavigation } from './nodeOccurrences';
 
 const SELECT_STATEMENT_TYPES = new Set([
   'SELECT',
@@ -71,23 +72,24 @@ export function mergeStatements(statements: StatementLineage[]): StatementLineag
     const sourceName = stmt.sourceName;
     const statementScope = createStatementScope(stmt.statementIndex, sourceName);
     stmt.nodes.forEach((node) => {
-      const existing = mergedNodes.get(node.id);
-      if (!existing) {
-        let nodeWithSource = { ...node };
-        if (sourceName) {
-          nodeWithSource.metadata = {
-            ...node.metadata,
-            sourceName,
-          };
-        }
-        nodeWithSource = withStatementScope(nodeWithSource, statementScope);
-        mergedNodes.set(node.id, nodeWithSource);
-        return;
-      }
-
-      if (node.filters && node.filters.length > 0) {
-        existing.filters = [...(existing.filters || []), ...node.filters];
-      }
+      const nodeWithScope = withStatementScope(
+        sourceName
+          ? {
+              ...node,
+              metadata: {
+                ...(node.metadata || {}),
+                sourceName,
+              },
+            }
+          : { ...node },
+        statementScope
+      );
+      const mergedNode = mergeNodesForNavigation(
+        mergedNodes.get(node.id) ?? null,
+        nodeWithScope,
+        sourceName
+      );
+      mergedNodes.set(node.id, mergedNode);
     });
 
     stmt.edges.forEach((edge) => {

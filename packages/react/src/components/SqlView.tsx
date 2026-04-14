@@ -4,22 +4,10 @@ import { sql } from '@codemirror/lang-sql';
 import { EditorView, Decoration, type DecorationSet } from '@codemirror/view';
 import { StateField, StateEffect } from '@codemirror/state';
 import { oneDark } from '@codemirror/theme-one-dark';
-import { byteOffsetToCharOffset, type Span } from '@pondpilot/flowscope-core';
 
 import { useLineage } from '../store';
 import type { SqlViewProps } from '../types';
-
-/**
- * Convert a span's UTF-8 byte offsets (the analyzer's coordinate system) to
- * character offsets (CodeMirror's coordinate system). For ASCII-only SQL the
- * two coordinate systems coincide and the conversion is effectively a no-op.
- */
-function spanToCharRange(sql: string, span: Span): { from: number; to: number } {
-  return {
-    from: byteOffsetToCharOffset(sql, span.start),
-    to: byteOffsetToCharOffset(sql, span.end),
-  };
-}
+import { trySpanToCharRange } from '../utils/sqlSpans';
 
 type HighlightRange = { from: number; to: number; className: string };
 
@@ -95,21 +83,21 @@ export function SqlView({
       return [];
     }
     const issues = state.result?.issues ?? [];
-    return issues
-      .filter((issue) => issue.span)
-      .map((issue) => {
-        const className =
-          issue.severity === 'error'
-            ? 'flowscope-sql-highlight-error'
-            : issue.severity === 'warning'
-              ? 'flowscope-sql-highlight-warning'
-              : 'flowscope-sql-highlight-info';
-        const { from, to } = spanToCharRange(sqlText, issue.span!);
-        return { from, to, className };
-      });
+    return issues.flatMap((issue) => {
+      if (!issue.span) return [];
+      const className =
+        issue.severity === 'error'
+          ? 'flowscope-sql-highlight-error'
+          : issue.severity === 'warning'
+            ? 'flowscope-sql-highlight-warning'
+            : 'flowscope-sql-highlight-info';
+      const range = trySpanToCharRange(sqlText, issue.span, 'issue highlight');
+      return range ? [{ ...range, className }] : [];
+    });
   }, [state.result, isControlled, sqlText]);
 
   const editorRef = useRef<ReactCodeMirrorRef>(null);
+  const lastAutoScrolledHighlightKeyRef = useRef<string | null>(null);
 
   const extensions = useMemo(
     () => [
@@ -142,7 +130,9 @@ export function SqlView({
     if (!isControlled) {
       ranges.push(...issueHighlights);
     }
-    const activeRange = highlightedSpan ? spanToCharRange(sqlText, highlightedSpan) : null;
+    const activeRange = highlightedSpan
+      ? trySpanToCharRange(sqlText, highlightedSpan, 'active highlight')
+      : null;
     if (activeRange) {
       ranges.push({
         from: activeRange.from,
@@ -155,11 +145,20 @@ export function SqlView({
       effects: setHighlights.of(ranges),
     });
 
-    if (activeRange) {
+    const highlightKey = highlightedSpan ? `${highlightedSpan.start}:${highlightedSpan.end}` : null;
+    if (!activeRange) {
+      lastAutoScrolledHighlightKeyRef.current = null;
+      return;
+    }
+
+    const shouldAutoScroll =
+      lastAutoScrolledHighlightKeyRef.current !== highlightKey || !view.hasFocus;
+    if (shouldAutoScroll) {
       view.dispatch({
         selection: { anchor: activeRange.from },
         scrollIntoView: true,
       });
+      lastAutoScrolledHighlightKeyRef.current = highlightKey;
     }
   }, [highlightedSpan, issueHighlights, isControlled, sqlText]);
 

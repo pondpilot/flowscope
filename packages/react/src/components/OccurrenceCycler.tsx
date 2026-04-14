@@ -1,8 +1,8 @@
 import { type JSX, type MouseEvent } from 'react';
-import type { AnalyzeResult, Node } from '@pondpilot/flowscope-core';
 
 import { useLineageActions, useLineageStore } from '../store';
 import { useColors } from '../hooks/useColors';
+import { findMergedNodeById } from '../utils/nodeOccurrences';
 
 interface OccurrenceCyclerProps {
   /** The graph node id this cycler belongs to. */
@@ -31,7 +31,7 @@ export function OccurrenceCycler({ nodeId }: OccurrenceCyclerProps): JSX.Element
     return null;
   }
 
-  const node = findNodeById(result, nodeId);
+  const node = findMergedNodeById(result, nodeId);
   const total = node?.nameSpans?.length ?? 0;
   if (total < 2) {
     return null;
@@ -77,6 +77,9 @@ export function OccurrenceCycler({ nodeId }: OccurrenceCyclerProps): JSX.Element
       }}
       title={`Cycle through ${total} occurrences of this name in the SQL (n / Shift+n)`}
       aria-label={`Occurrence ${displayIndex} of ${total}`}
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
     >
       <button type="button" onClick={handlePrev} style={buttonStyle} aria-label="Previous occurrence">
         ◀
@@ -89,15 +92,4 @@ export function OccurrenceCycler({ nodeId }: OccurrenceCyclerProps): JSX.Element
       </button>
     </span>
   );
-}
-
-function findNodeById(result: AnalyzeResult, nodeId: string): Node | null {
-  for (const statement of result.statements) {
-    for (const node of statement.nodes) {
-      if (node.id === nodeId) {
-        return node;
-      }
-    }
-  }
-  return null;
 }

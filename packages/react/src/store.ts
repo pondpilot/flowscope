@@ -1,7 +1,7 @@
 import { createContext, createElement, useContext, type ReactNode } from 'react';
 import { useStore } from 'zustand';
 import { createStore, type StoreApi } from 'zustand/vanilla';
-import type { AnalyzeResult, Node, Span } from '@pondpilot/flowscope-core';
+import type { AnalyzeResult, Span } from '@pondpilot/flowscope-core';
 import type {
   LineageViewMode,
   LayoutAlgorithm,
@@ -12,6 +12,7 @@ import type {
   TableFilterDirection,
   TableFilter,
 } from './types';
+import { findMergedNodeById } from './utils/nodeOccurrences';
 
 const DEFAULT_LAYOUT_ALGORITHM: LayoutAlgorithm = 'dagre';
 
@@ -145,23 +146,6 @@ function saveHideCTEs(hide: boolean): void {
   saveToStorage(STORAGE_KEYS.hideCTEs, String(hide));
 }
 
-/**
- * Locates a node by id across all statements in the analyze result.
- * Returns `null` when the id is not found. The lookup is linear; lineage
- * graphs are typically small enough that an index is unwarranted, but if
- * `result.statements` grows large this is the obvious place to memoize.
- */
-function findNodeById(result: AnalyzeResult, nodeId: string): Node | null {
-  for (const statement of result.statements) {
-    for (const node of statement.nodes) {
-      if (node.id === nodeId) {
-        return node;
-      }
-    }
-  }
-  return null;
-}
-
 export interface LineageState {
   // Data
   result: AnalyzeResult | null;
@@ -172,10 +156,11 @@ export interface LineageState {
   selectedStatementIndex: number;
   highlightedSpan: Span | null;
   /**
-   * Index into the selected node's `nameSpans` (or `bodySpan` followed by name
-   * occurrences for CTE nodes) currently highlighted in the editor. Resets to 0
-   * whenever a new node is selected. Used by the per-node ◀ n/total ▶ controls
-   * and the keyboard `n` / `Shift+n` shortcuts.
+   * Index into the selected node's `nameSpans` currently highlighted in the
+   * editor. Resets to 0 whenever a new node is selected. Used by the per-node
+   * ◀ n/total ▶ controls and the keyboard `n` / `Shift+n` shortcuts. CTE
+   * `bodySpan` is handled separately (via double-click) and is not part of
+   * this cycle.
    */
   focusedOccurrenceIndex: number;
   searchTerm: string;
@@ -318,18 +303,22 @@ export function createLineageStore(
     setSql: (sql) => set({ sql }),
 
     selectNode: (nodeId) =>
-      set({
+      set((state) => ({
         selectedNodeId: nodeId,
-        highlightedSpan: nodeId === null ? null : undefined,
+        // Clearing selection also clears the highlight; selecting a node
+        // preserves whatever span the caller just highlighted (e.g. the
+        // GraphView click handler sets `highlightedSpan` right before
+        // calling `selectNode`).
+        highlightedSpan: nodeId === null ? null : state.highlightedSpan,
         focusedOccurrenceIndex: 0,
-      }),
+      })),
 
     cycleOccurrence: (direction) =>
       set((state) => {
         if (state.selectedNodeId === null || state.result === null) {
           return state;
         }
-        const node = findNodeById(state.result, state.selectedNodeId);
+        const node = findMergedNodeById(state.result, state.selectedNodeId);
         const spans = node?.nameSpans ?? [];
         if (spans.length < 2) {
           return state;
@@ -347,7 +336,7 @@ export function createLineageStore(
         if (state.selectedNodeId === null || state.result === null) {
           return state;
         }
-        const node = findNodeById(state.result, state.selectedNodeId);
+        const node = findMergedNodeById(state.result, state.selectedNodeId);
         const spans = node?.nameSpans ?? [];
         if (index < 0 || index >= spans.length) {
           return state;

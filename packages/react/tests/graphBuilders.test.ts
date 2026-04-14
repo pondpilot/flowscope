@@ -137,6 +137,61 @@ describe('mergeStatements', () => {
     expect(joinEdge?.joinType).toBe('LEFT');
     expect(joinEdge?.joinCondition).toBe('u.id = o.user_id');
   });
+
+  it('merges occurrence spans and source names for same-id nodes', () => {
+    const firstStmt: StatementLineage = {
+      statementIndex: 0,
+      statementType: 'SELECT',
+      sourceName: 'models/a.sql',
+      nodes: [
+        {
+          id: 'table:users',
+          type: 'table',
+          label: 'users',
+          qualifiedName: 'users',
+          nameSpans: [{ start: 5, end: 10 }],
+        },
+      ],
+      edges: [],
+      joinCount: 0,
+      complexityScore: 1,
+    };
+
+    const secondStmt: StatementLineage = {
+      statementIndex: 1,
+      statementType: 'SELECT',
+      sourceName: 'models/b.sql',
+      nodes: [
+        {
+          id: 'table:users',
+          type: 'table',
+          label: 'users',
+          qualifiedName: 'users',
+          nameSpans: [
+            { start: 20, end: 25 },
+            { start: 40, end: 45 },
+          ],
+        },
+      ],
+      edges: [],
+      joinCount: 0,
+      complexityScore: 1,
+    };
+
+    const merged = mergeStatements([firstStmt, secondStmt]);
+    const mergedNode = merged.nodes.find((node) => node.id === 'table:users');
+
+    expect(mergedNode?.nameSpans).toEqual([
+      { start: 5, end: 10 },
+      { start: 20, end: 25 },
+      { start: 40, end: 45 },
+    ]);
+    expect(mergedNode?.metadata?.occurrenceSourceNames).toEqual([
+      'models/a.sql',
+      'models/b.sql',
+      'models/b.sql',
+    ]);
+  });
 });
 
 /**
