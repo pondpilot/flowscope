@@ -42,7 +42,7 @@ async function getEmbeddingPipeline() {
       // from intercepting model file requests and returning HTML instead of JSON
       env.allowLocalModels = false;
       env.allowRemoteModels = true;
-      env.useBrowserCache = false;
+      env.useBrowserCache = true;
       env.backends.onnx.wasm.wasmPaths =
         'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/';
       const p = await createPipeline('feature-extraction', EMBEDDING_MODEL);

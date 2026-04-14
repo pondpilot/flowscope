@@ -48,11 +48,11 @@ State the answer as compactly as possible using the most natural notation for th
 - For "where is X stored?" questions: "<column> in <table> (exposed as <output name>)".
 - For join/relationship questions: write the join condition directly, e.g. "rseg.EBELN = ekko.EBELN and rseg.EBELP = ekpo.EBELP".
 - For transformation questions: "<source> → <output>" is fine.
-- If lineage is not relevant, write "No information."
+- If lineage is not relevant, write exactly: "No information." — nothing else.
 - 1-2 sentences. No commentary, no qualifiers ("only", "directly"), no statements about what other tables do or don't contain, no explanation of why.
 
 **Documentation**
-1-2 sentences based on uploaded PDFs. Write "No information." if no PDFs are provided or relevant.
+1-2 sentences based on uploaded PDFs. If no PDFs are provided or relevant, write exactly: "No information." — nothing else.
 
 Keep all sections concise.
 
