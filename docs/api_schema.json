@@ -418,23 +418,29 @@
   "AnalyzeResult": {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "AnalyzeResult",
-    "description": "The result of analyzing SQL for data lineage.\n\nContains per-statement lineage graphs, a global lineage graph spanning all statements,\nany issues encountered during analysis, and summary statistics.",
+    "description": "The result of analyzing SQL for data lineage.\n\nContains a single flat lineage graph spanning all statements, per-statement\nmetadata, any issues encountered during analysis, and summary statistics.\nEach `Node` / `Edge` records the `statementIds` it participates in, so\nconsumers can filter down to a single statement or aggregate across all of\nthem without maintaining parallel collections.",
     "type": "object",
     "properties": {
       "statements": {
-        "description": "Per-statement lineage analysis results",
+        "description": "Per-statement metadata (type, span, complexity, resolved SQL).\nThe graph itself lives in the top-level `nodes` / `edges`.",
         "type": "array",
         "items": {
-          "$ref": "#/definitions/StatementLineage"
+          "$ref": "#/definitions/StatementMeta"
         }
       },
-      "globalLineage": {
-        "description": "Global lineage graph spanning all statements",
-        "allOf": [
-          {
-            "$ref": "#/definitions/GlobalLineage"
-          }
-        ]
+      "nodes": {
+        "description": "All nodes in the lineage graph. Nodes shared across statements\n(for example, a table read by two queries) appear once with\n`statementIds` listing every statement they participate in.",
+        "type": "array",
+        "items": {
+          "$ref": "#/definitions/Node"
+        }
+      },
+      "edges": {
+        "description": "All edges in the lineage graph. Intra-statement edges carry a single\nentry in `statementIds`; `EdgeType::CrossStatement` edges connect nodes\nwhose statement groups differ.",
+        "type": "array",
+        "items": {
+          "$ref": "#/definitions/Edge"
+        }
       },
       "issues": {
         "description": "All issues encountered during analysis",
@@ -465,13 +471,14 @@
     },
     "required": [
       "statements",
-      "globalLineage",
+      "nodes",
+      "edges",
       "issues",
       "summary"
     ],
     "definitions": {
-      "StatementLineage": {
-        "description": "Lineage information for a single SQL statement.",
+      "StatementMeta": {
+        "description": "Per-statement metadata. The lineage graph itself is shared in\n`AnalyzeResult.nodes` / `.edges`; this struct only carries facts about the\nstatement as a whole.",
         "type": "object",
         "properties": {
           "statementIndex": {
@@ -490,20 +497,6 @@
               "string",
               "null"
             ]
-          },
-          "nodes": {
-            "description": "All nodes in the lineage graph for this statement",
-            "type": "array",
-            "items": {
-              "$ref": "#/definitions/Node"
-            }
-          },
-          "edges": {
-            "description": "All edges connecting nodes in the lineage graph",
-            "type": "array",
-            "items": {
-              "$ref": "#/definitions/Edge"
-            }
           },
           "span": {
             "description": "Optional span of the entire statement in source SQL",
@@ -540,10 +533,30 @@
         "required": [
           "statementIndex",
           "statementType",
-          "nodes",
-          "edges",
           "joinCount",
           "complexityScore"
+        ]
+      },
+      "Span": {
+        "description": "A byte range in the source SQL string.",
+        "type": "object",
+        "properties": {
+          "start": {
+            "description": "Byte offset from start of SQL string (inclusive)",
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          },
+          "end": {
+            "description": "Byte offset from start of SQL string (exclusive)",
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "start",
+          "end"
         ]
       },
       "Node": {
@@ -572,6 +585,26 @@
               "string",
               "null"
             ]
+          },
+          "canonicalName": {
+            "description": "Structured canonical identity (catalog.schema.name[.column]) used to\nmatch the same entity across statements. Only populated for nodes\nwhose identity is globally meaningful — table-likes and columns owned\nby them. Statement-scoped nodes (CTEs, CTE columns) omit this.",
+            "anyOf": [
+              {
+                "$ref": "#/definitions/CanonicalName"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "statementIds": {
+            "description": "Zero-based indices of every statement this node participates in.\nAlways has at least one entry. For nodes shared across statements\n(e.g. a table referenced by two queries) this lists all of them in\nascending order.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint",
+              "minimum": 0
+            }
           },
           "expression": {
             "description": "SQL expression text for computed columns",
@@ -683,26 +716,33 @@
           }
         ]
       },
-      "Span": {
-        "description": "A byte range in the source SQL string.",
+      "CanonicalName": {
         "type": "object",
         "properties": {
-          "start": {
-            "description": "Byte offset from start of SQL string (inclusive)",
-            "type": "integer",
-            "format": "uint",
-            "minimum": 0
+          "catalog": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
-          "end": {
-            "description": "Byte offset from start of SQL string (exclusive)",
-            "type": "integer",
-            "format": "uint",
-            "minimum": 0
+          "schema": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "column": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
-          "start",
-          "end"
+          "name"
         ]
       },
       "ResolutionSource": {
@@ -864,6 +904,15 @@
               "boolean",
               "null"
             ]
+          },
+          "statementIds": {
+            "description": "Zero-based indices of the statement(s) this edge participates in.\nIntra-statement edges carry a single entry; `EdgeType::CrossStatement`\nedges carry `[producer, consumer]` in that order.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint",
+              "minimum": 0
+            }
           }
         },
         "required": [
@@ -965,192 +1014,6 @@
             "type": "string",
             "const": "AS_OF"
           }
-        ]
-      },
-      "GlobalLineage": {
-        "description": "Global lineage graph spanning all statements in the analyzed SQL.\n\nProvides a unified view of data flow across multiple statements.",
-        "type": "object",
-        "properties": {
-          "nodes": {
-            "description": "All unique nodes across all statements",
-            "type": "array",
-            "items": {
-              "$ref": "#/definitions/GlobalNode"
-            }
-          },
-          "edges": {
-            "description": "All edges representing cross-statement data flow",
-            "type": "array",
-            "items": {
-              "$ref": "#/definitions/GlobalEdge"
-            }
-          }
-        },
-        "required": [
-          "nodes",
-          "edges"
-        ]
-      },
-      "GlobalNode": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "description": "Stable ID derived from canonical identifier",
-            "type": "string"
-          },
-          "type": {
-            "description": "Node type",
-            "allOf": [
-              {
-                "$ref": "#/definitions/NodeType"
-              }
-            ]
-          },
-          "label": {
-            "description": "Human-readable label",
-            "type": "string"
-          },
-          "canonicalName": {
-            "description": "Canonical name for cross-statement matching",
-            "allOf": [
-              {
-                "$ref": "#/definitions/CanonicalName"
-              }
-            ]
-          },
-          "statementRefs": {
-            "description": "References to statements that use this node",
-            "type": "array",
-            "items": {
-              "$ref": "#/definitions/StatementRef"
-            }
-          },
-          "metadata": {
-            "description": "Extensible metadata",
-            "type": [
-              "object",
-              "null"
-            ],
-            "additionalProperties": true
-          },
-          "resolutionSource": {
-            "description": "How this table was resolved (imported, implied, or unknown)",
-            "anyOf": [
-              {
-                "$ref": "#/definitions/ResolutionSource"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "id",
-          "type",
-          "label",
-          "canonicalName",
-          "statementRefs"
-        ]
-      },
-      "CanonicalName": {
-        "type": "object",
-        "properties": {
-          "catalog": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "schema": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "name": {
-            "type": "string"
-          },
-          "column": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "name"
-        ]
-      },
-      "StatementRef": {
-        "type": "object",
-        "properties": {
-          "statementIndex": {
-            "description": "Statement index in the original request",
-            "type": "integer",
-            "format": "uint",
-            "minimum": 0
-          },
-          "nodeId": {
-            "description": "ID of the local node inside that statement graph (if available)",
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "statementIndex"
-        ]
-      },
-      "GlobalEdge": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "from": {
-            "type": "string"
-          },
-          "to": {
-            "type": "string"
-          },
-          "type": {
-            "$ref": "#/definitions/EdgeType"
-          },
-          "producerStatement": {
-            "anyOf": [
-              {
-                "$ref": "#/definitions/StatementRef"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "consumerStatement": {
-            "anyOf": [
-              {
-                "$ref": "#/definitions/StatementRef"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "metadata": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "additionalProperties": true
-          }
-        },
-        "required": [
-          "id",
-          "from",
-          "to",
-          "type"
         ]
       },
       "Issue": {

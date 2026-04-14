@@ -52,7 +52,7 @@ export type {
   TemplateConfig,
   // Response types
   AnalyzeResult,
-  StatementLineage,
+  StatementMeta,
   Node,
   NodeType,
   TableLikeNodeType,
@@ -62,11 +62,7 @@ export type {
   FilterPredicate,
   FilterClauseType,
   AggregationInfo,
-  GlobalLineage,
-  GlobalNode,
-  GlobalEdge,
   CanonicalName,
-  StatementRef,
   Issue,
   IssueAutofix,
   IssueAutofixApplicability,
@@ -92,4 +88,6 @@ export {
   charOffsetToByteOffset,
   byteOffsetToCharOffset,
   applyEdits,
+  nodesInStatement,
+  edgesInStatement,
 } from './types';

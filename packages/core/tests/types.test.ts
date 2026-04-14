@@ -42,12 +42,15 @@ describe('Types', () => {
     it('should have correct structure', () => {
       const result: AnalyzeResult = {
         statements: [],
-        globalLineage: { nodes: [], edges: [] },
+        nodes: [],
+        edges: [],
         issues: [],
         summary: {
           statementCount: 0,
           tableCount: 0,
           columnCount: 0,
+          joinCount: 0,
+          complexityScore: 0,
           issueCount: { errors: 0, warnings: 0, infos: 0 },
           hasErrors: false,
         },
@@ -89,6 +92,7 @@ describe('Types', () => {
         type: 'table',
         label: 'users',
         qualifiedName: 'public.users',
+        statementIds: [0],
       };
 
       expect(node.type).toBe('table');
@@ -100,6 +104,7 @@ describe('Types', () => {
         id: 'cte_12345',
         type: 'cte',
         label: 'active_users',
+        statementIds: [0],
       };
 
       expect(node.type).toBe('cte');
@@ -113,6 +118,7 @@ describe('Types', () => {
         from: 'table_a',
         to: 'table_b',
         type: 'data_flow',
+        statementIds: [0],
       };
 
       expect(edge.type).toBe('data_flow');
@@ -127,6 +133,7 @@ describe('Types', () => {
         to: 'table_b',
         type: 'data_flow',
         operation: 'INNER_JOIN',
+        statementIds: [0],
       };
 
       expect(edge.operation).toBe('INNER_JOIN');

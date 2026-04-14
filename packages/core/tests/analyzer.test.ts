@@ -3,7 +3,8 @@ import type { AnalyzeResult } from '../src/types';
 
 const baseResult: AnalyzeResult = {
   statements: [],
-  globalLineage: { nodes: [], edges: [] },
+  nodes: [],
+  edges: [],
   issues: [],
   summary: {
     statementCount: 0,

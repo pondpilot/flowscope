@@ -383,14 +383,30 @@ export interface StatementSplitResult {
 /**
  * The result of analyzing SQL for data lineage.
  *
- * Contains per-statement lineage graphs, a global lineage graph spanning all statements,
- * any issues encountered during analysis, and summary statistics.
+ * Contains a single flat lineage graph spanning all statements, per-statement
+ * metadata, any issues encountered during analysis, and summary statistics.
+ * Each `Node` / `Edge` records the `statementIds` it participates in, so
+ * consumers can filter down to a single statement or aggregate across all of
+ * them without maintaining parallel collections.
  */
 export interface AnalyzeResult {
-  /** Per-statement lineage analysis results */
-  statements: StatementLineage[];
-  /** Global lineage graph spanning all statements */
-  globalLineage: GlobalLineage;
+  /**
+   * Per-statement metadata (type, span, complexity, resolved SQL).
+   * The graph itself lives in the top-level `nodes` / `edges`.
+   */
+  statements: StatementMeta[];
+  /**
+   * All nodes in the lineage graph. Nodes shared across statements
+   * (for example, a table read by two queries) appear once with
+   * `statementIds` listing every statement they participate in.
+   */
+  nodes: Node[];
+  /**
+   * All edges in the lineage graph. Intra-statement edges carry a single
+   * entry in `statementIds`; `cross_statement` edges connect nodes whose
+   * statement groups differ.
+   */
+  edges: Edge[];
   /** All issues encountered during analysis */
   issues: Issue[];
   /** Summary statistics */
@@ -399,18 +415,18 @@ export interface AnalyzeResult {
   resolvedSchema?: ResolvedSchemaMetadata;
 }
 
-/** Lineage information for a single SQL statement. */
-export interface StatementLineage {
+/**
+ * Per-statement metadata. The lineage graph itself is shared in
+ * `AnalyzeResult.nodes` / `.edges`; this struct only carries facts about the
+ * statement as a whole.
+ */
+export interface StatementMeta {
   /** Zero-based index of the statement in the input SQL */
   statementIndex: number;
   /** Type of SQL statement */
   statementType: string;
   /** Optional source name (file path or script identifier) for grouping */
   sourceName?: string;
-  /** All nodes in the lineage graph for this statement */
-  nodes: Node[];
-  /** All edges connecting nodes in the lineage graph */
-  edges: Edge[];
   /** Optional span of the entire statement in source SQL */
   span?: Span;
   /** Number of JOIN operations in this statement */
@@ -434,6 +450,20 @@ export interface Node {
   label: string;
   /** Fully qualified name when available */
   qualifiedName?: string;
+  /**
+   * Structured canonical identity (catalog.schema.name[.column]) used to
+   * match the same entity across statements. Only populated for nodes
+   * whose identity is globally meaningful — table-likes and columns owned
+   * by them. Statement-scoped nodes (CTEs, CTE columns) omit this.
+   */
+  canonicalName?: CanonicalName;
+  /**
+   * Zero-based indices of every statement this node participates in.
+   * Always has at least one entry. For nodes shared across statements
+   * (e.g. a table referenced by two queries) this lists all of them in
+   * ascending order.
+   */
+  statementIds: number[];
   /** SQL expression text for computed columns */
   expression?: string;
   /** Source location in original SQL */
@@ -528,6 +558,12 @@ export interface Edge {
   metadata?: Record<string, unknown>;
   /** True if this edge represents approximate/uncertain lineage */
   approximate?: boolean;
+  /**
+   * Zero-based indices of the statement(s) this edge participates in.
+   * Intra-statement edges carry a single entry; `cross_statement` edges
+   * carry `[producer, consumer]` in that order.
+   */
+  statementIds: number[];
 }
 
 /** The type of an edge in the lineage graph. */
@@ -553,57 +589,12 @@ export type JoinType =
   | 'OUTER_APPLY'
   | 'AS_OF';
 
-/**
- * Global lineage graph spanning all statements in the analyzed SQL.
- *
- * Provides a unified view of data flow across multiple statements.
- */
-export interface GlobalLineage {
-  /** All unique nodes across all statements */
-  nodes: GlobalNode[];
-  /** All edges representing cross-statement data flow */
-  edges: GlobalEdge[];
-}
-
-export interface GlobalNode {
-  /** Stable ID derived from canonical identifier */
-  id: string;
-  /** Node type */
-  type: NodeType;
-  /** Human-readable label */
-  label: string;
-  /** Canonical name for cross-statement matching */
-  canonicalName: CanonicalName;
-  /** References to statements that use this node */
-  statementRefs: StatementRef[];
-  /** Extensible metadata */
-  metadata?: Record<string, unknown>;
-  /** How this table was resolved (imported, implied, or unknown) */
-  resolutionSource?: ResolutionSource;
-}
-
+/** Structured canonical identity for a node (table or column). */
 export interface CanonicalName {
   catalog?: string;
   schema?: string;
   name: string;
   column?: string;
-}
-
-export interface StatementRef {
-  /** Statement index in the original request */
-  statementIndex: number;
-  /** ID of the local node inside that statement graph (if available) */
-  nodeId?: string;
-}
-
-export interface GlobalEdge {
-  id: string;
-  from: string;
-  to: string;
-  type: EdgeType;
-  producerStatement?: StatementRef;
-  consumerStatement?: StatementRef;
-  metadata?: Record<string, unknown>;
 }
 
 /** Lint execution engine category. */
@@ -791,6 +782,24 @@ export type SchemaOrigin = 'imported' | 'implied';
 export type ResolutionSource = 'imported' | 'implied' | 'unknown';
 
 // Utility Functions
+
+/**
+ * Return the nodes from an `AnalyzeResult` that participate in the given
+ * statement index. Uses the flat `result.nodes` collection; matching is
+ * by `statementIds.includes(statementIndex)`.
+ */
+export function nodesInStatement(result: AnalyzeResult, statementIndex: number): Node[] {
+  return result.nodes.filter((n) => n.statementIds.includes(statementIndex));
+}
+
+/**
+ * Return the edges from an `AnalyzeResult` that participate in the given
+ * statement index. Uses the flat `result.edges` collection; matching is
+ * by `statementIds.includes(statementIndex)`.
+ */
+export function edgesInStatement(result: AnalyzeResult, statementIndex: number): Edge[] {
+  return result.edges.filter((e) => e.statementIds.includes(statementIndex));
+}
 
 // Shared TextEncoder instance for performance (avoid creating per-call)
 const utf8Encoder = new TextEncoder();
