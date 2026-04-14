@@ -81,7 +81,12 @@ export function OccurrenceCycler({ nodeId }: OccurrenceCyclerProps): JSX.Element
       aria-live="polite"
       aria-atomic="true"
     >
-      <button type="button" onClick={handlePrev} style={buttonStyle} aria-label="Previous occurrence">
+      <button
+        type="button"
+        onClick={handlePrev}
+        style={buttonStyle}
+        aria-label="Previous occurrence"
+      >
         ◀
       </button>
       <span style={{ minWidth: 22, textAlign: 'center' }}>

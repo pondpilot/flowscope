@@ -970,10 +970,10 @@ export function GraphView({
       // so we have no extra work to do.
       const lineageNode = lineageNodeMapRef.current.get(node.id);
       const sourceName = lineageNode
-        ? getOccurrenceSourceName(lineageNode, focusedOccurrenceIndex) ??
+        ? (getOccurrenceSourceName(lineageNode, focusedOccurrenceIndex) ??
           (typeof lineageNode.metadata?.sourceName === 'string'
             ? lineageNode.metadata.sourceName
-            : undefined)
+            : undefined))
         : undefined;
       const bodySpan = lineageNode ? getBodySpanForSourceName(lineageNode, sourceName) : undefined;
       if (lineageNode && bodySpan) {
