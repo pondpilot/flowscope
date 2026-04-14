@@ -7,81 +7,47 @@ expression: clean_result
     {
       "statementIndex": 0,
       "statementType": "SELECT",
-      "nodes": [
-        {
-          "id": "output_74d22f755ec62dbc",
-          "type": "output",
-          "label": "Output"
-        },
-        {
-          "id": "table_e500054d128e991c",
-          "type": "table",
-          "label": "customers",
-          "qualifiedName": "customers",
-          "nameSpans": [
-            {
-              "start": 112,
-              "end": 121
-            }
-          ]
-        }
-      ],
-      "edges": [
-        {
-          "id": "edge_50493991250b335e",
-          "from": "table_e500054d128e991c",
-          "to": "output_74d22f755ec62dbc",
-          "type": "data_flow",
-          "approximate": true
-        }
-      ],
       "joinCount": 0,
       "complexityScore": 5
     }
   ],
-  "globalLineage": {
-    "nodes": [
-      {
-        "id": "output_74d22f755ec62dbc",
-        "type": "output",
-        "label": "Output",
-        "canonicalName": {
-          "name": "Output"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "output_74d22f755ec62dbc"
-          }
-        ]
+  "nodes": [
+    {
+      "id": "output_74d22f755ec62dbc",
+      "type": "output",
+      "label": "Output",
+      "canonicalName": {
+        "name": "Output"
       },
-      {
-        "id": "table_e500054d128e991c",
-        "type": "table",
-        "label": "customers",
-        "canonicalName": {
-          "name": "customers"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "table_e500054d128e991c"
-          }
-        ]
-      }
-    ],
-    "edges": [
-      {
-        "id": "edge_50493991250b335e",
-        "from": "table_e500054d128e991c",
-        "to": "output_74d22f755ec62dbc",
-        "type": "data_flow",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      }
-    ]
-  },
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "table_e500054d128e991c",
+      "type": "table",
+      "label": "customers",
+      "qualifiedName": "customers",
+      "canonicalName": {
+        "name": "customers"
+      },
+      "statementIds": [
+        0
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_50493991250b335e",
+      "from": "table_e500054d128e991c",
+      "to": "output_74d22f755ec62dbc",
+      "type": "data_flow",
+      "approximate": true,
+      "statementIds": [
+        0
+      ]
+    }
+  ],
   "issues": [
     {
       "severity": "info",

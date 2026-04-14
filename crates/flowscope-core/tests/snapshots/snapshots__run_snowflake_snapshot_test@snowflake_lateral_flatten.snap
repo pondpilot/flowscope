@@ -1,6 +1,5 @@
 ---
 source: crates/flowscope-core/tests/snapshots.rs
-assertion_line: 278
 expression: clean_result
 ---
 {
@@ -8,176 +7,100 @@ expression: clean_result
     {
       "statementIndex": 0,
       "statementType": "SELECT",
-      "nodes": [
-        {
-          "id": "column_9312b887682fcd76",
-          "type": "column",
-          "label": "P_ID"
-        },
-        {
-          "id": "column_ffa7c99c403f959a",
-          "type": "column",
-          "label": "NAME"
-        },
-        {
-          "id": "output_74d22f755ec62dbc",
-          "type": "output",
-          "label": "Output"
-        },
-        {
-          "id": "table_14fd3f715fc3ae74",
-          "type": "table",
-          "label": "B",
-          "qualifiedName": "B",
-          "nameSpans": [
-            {
-              "start": 130,
-              "end": 131
-            }
-          ]
-        },
-        {
-          "id": "table_dd4853e04f0abbb5",
-          "type": "table",
-          "label": "A",
-          "qualifiedName": "A",
-          "nameSpans": [
-            {
-              "start": 109,
-              "end": 110
-            }
-          ]
-        }
-      ],
-      "edges": [
-        {
-          "id": "edge_671cdc7a5a898ccd",
-          "from": "output_74d22f755ec62dbc",
-          "to": "column_ffa7c99c403f959a",
-          "type": "ownership"
-        },
-        {
-          "id": "edge_7f6d7c7173448b60",
-          "from": "table_14fd3f715fc3ae74",
-          "to": "output_74d22f755ec62dbc",
-          "type": "join_dependency",
-          "joinType": "INNER",
-          "joinCondition": "b.c_id = a.c_id"
-        },
-        {
-          "id": "edge_8d1b60030155f6f4",
-          "from": "output_74d22f755ec62dbc",
-          "to": "column_9312b887682fcd76",
-          "type": "ownership"
-        }
-      ],
       "joinCount": 1,
       "complexityScore": 20
     }
   ],
-  "globalLineage": {
-    "nodes": [
-      {
-        "id": "column_9312b887682fcd76",
-        "type": "column",
-        "label": "P_ID",
-        "canonicalName": {
-          "name": "P_ID"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "column_9312b887682fcd76"
-          }
-        ]
+  "nodes": [
+    {
+      "id": "column_9312b887682fcd76",
+      "type": "column",
+      "label": "P_ID",
+      "canonicalName": {
+        "name": "P_ID"
       },
-      {
-        "id": "column_ffa7c99c403f959a",
-        "type": "column",
-        "label": "NAME",
-        "canonicalName": {
-          "name": "NAME"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "column_ffa7c99c403f959a"
-          }
-        ]
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "column_ffa7c99c403f959a",
+      "type": "column",
+      "label": "NAME",
+      "canonicalName": {
+        "name": "NAME"
       },
-      {
-        "id": "output_74d22f755ec62dbc",
-        "type": "output",
-        "label": "Output",
-        "canonicalName": {
-          "name": "Output"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "output_74d22f755ec62dbc"
-          }
-        ]
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "output_74d22f755ec62dbc",
+      "type": "output",
+      "label": "Output",
+      "canonicalName": {
+        "name": "Output"
       },
-      {
-        "id": "table_14fd3f715fc3ae74",
-        "type": "table",
-        "label": "B",
-        "canonicalName": {
-          "name": "B"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "table_14fd3f715fc3ae74"
-          }
-        ]
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "table_14fd3f715fc3ae74",
+      "type": "table",
+      "label": "B",
+      "qualifiedName": "B",
+      "canonicalName": {
+        "name": "B"
       },
-      {
-        "id": "table_dd4853e04f0abbb5",
-        "type": "table",
-        "label": "A",
-        "canonicalName": {
-          "name": "A"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "table_dd4853e04f0abbb5"
-          }
-        ]
-      }
-    ],
-    "edges": [
-      {
-        "id": "edge_671cdc7a5a898ccd",
-        "from": "output_74d22f755ec62dbc",
-        "to": "column_ffa7c99c403f959a",
-        "type": "ownership",
-        "producerStatement": {
-          "statementIndex": 0
-        }
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "table_dd4853e04f0abbb5",
+      "type": "table",
+      "label": "A",
+      "qualifiedName": "A",
+      "canonicalName": {
+        "name": "A"
       },
-      {
-        "id": "edge_7f6d7c7173448b60",
-        "from": "table_14fd3f715fc3ae74",
-        "to": "output_74d22f755ec62dbc",
-        "type": "join_dependency",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      },
-      {
-        "id": "edge_8d1b60030155f6f4",
-        "from": "output_74d22f755ec62dbc",
-        "to": "column_9312b887682fcd76",
-        "type": "ownership",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      }
-    ]
-  },
+      "statementIds": [
+        0
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_671cdc7a5a898ccd",
+      "from": "output_74d22f755ec62dbc",
+      "to": "column_ffa7c99c403f959a",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_7f6d7c7173448b60",
+      "from": "table_14fd3f715fc3ae74",
+      "to": "output_74d22f755ec62dbc",
+      "type": "join_dependency",
+      "joinType": "INNER",
+      "joinCondition": "b.c_id = a.c_id",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_8d1b60030155f6f4",
+      "from": "output_74d22f755ec62dbc",
+      "to": "column_9312b887682fcd76",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    }
+  ],
   "issues": [
     {
       "severity": "warning",

@@ -7,118 +7,70 @@ expression: cleaned
     {
       "statementIndex": 0,
       "statementType": "CREATE_TABLE",
-      "nodes": [
-        {
-          "id": "column_a60e9184e00ef36f",
-          "type": "column",
-          "label": "imported_col",
-          "qualifiedName": "products.imported_col"
-        },
-        {
-          "id": "column_d2d29e8cbc95061a",
-          "type": "column",
-          "label": "product_id",
-          "qualifiedName": "products.product_id"
-        },
-        {
-          "id": "table_7253befe2c400508",
-          "type": "table",
-          "label": "products",
-          "qualifiedName": "products",
-          "nameSpans": [
-            {
-              "start": 13,
-              "end": 21
-            }
-          ]
-        }
-      ],
-      "edges": [
-        {
-          "id": "edge_482576f33e20c7f7",
-          "from": "table_7253befe2c400508",
-          "to": "column_a60e9184e00ef36f",
-          "type": "ownership"
-        },
-        {
-          "id": "edge_5c1c64b7a9ef59e5",
-          "from": "table_7253befe2c400508",
-          "to": "column_d2d29e8cbc95061a",
-          "type": "ownership"
-        }
-      ],
       "joinCount": 0,
       "complexityScore": 5
     }
   ],
-  "globalLineage": {
-    "nodes": [
-      {
-        "id": "column_0e392201e6a91e55",
-        "type": "column",
-        "label": "imported_col",
-        "canonicalName": {
-          "schema": "products",
-          "name": "imported_col"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "column_a60e9184e00ef36f"
-          }
-        ]
+  "nodes": [
+    {
+      "id": "column_0e392201e6a91e55",
+      "type": "column",
+      "label": "imported_col",
+      "qualifiedName": "products.imported_col",
+      "canonicalName": {
+        "schema": "products",
+        "name": "imported_col"
       },
-      {
-        "id": "column_59f6b8bb067f6ec4",
-        "type": "column",
-        "label": "product_id",
-        "canonicalName": {
-          "schema": "products",
-          "name": "product_id"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "column_d2d29e8cbc95061a"
-          }
-        ]
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "column_59f6b8bb067f6ec4",
+      "type": "column",
+      "label": "product_id",
+      "qualifiedName": "products.product_id",
+      "canonicalName": {
+        "schema": "products",
+        "name": "product_id"
       },
-      {
-        "id": "table_7253befe2c400508",
-        "type": "table",
-        "label": "products",
-        "canonicalName": {
-          "name": "products"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "table_7253befe2c400508"
-          }
-        ]
-      }
-    ],
-    "edges": [
-      {
-        "id": "edge_482576f33e20c7f7",
-        "from": "table_7253befe2c400508",
-        "to": "column_0e392201e6a91e55",
-        "type": "ownership",
-        "producerStatement": {
-          "statementIndex": 0
-        }
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "table_7253befe2c400508",
+      "type": "table",
+      "label": "products",
+      "qualifiedName": "products",
+      "canonicalName": {
+        "name": "products"
       },
-      {
-        "id": "edge_5c1c64b7a9ef59e5",
-        "from": "table_7253befe2c400508",
-        "to": "column_59f6b8bb067f6ec4",
-        "type": "ownership",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      }
-    ]
-  },
+      "statementIds": [
+        0
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_482576f33e20c7f7",
+      "from": "table_7253befe2c400508",
+      "to": "column_0e392201e6a91e55",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_5c1c64b7a9ef59e5",
+      "from": "table_7253befe2c400508",
+      "to": "column_59f6b8bb067f6ec4",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    }
+  ],
   "issues": [
     {
       "severity": "warning",

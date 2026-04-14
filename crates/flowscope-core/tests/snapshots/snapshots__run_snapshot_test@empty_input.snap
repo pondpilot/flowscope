@@ -4,10 +4,8 @@ expression: clean_result
 ---
 {
   "statements": [],
-  "globalLineage": {
-    "nodes": [],
-    "edges": []
-  },
+  "nodes": [],
+  "edges": [],
   "issues": [
     {
       "severity": "error",

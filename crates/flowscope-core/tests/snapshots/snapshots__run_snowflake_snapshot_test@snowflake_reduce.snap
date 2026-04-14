@@ -7,74 +7,46 @@ expression: clean_result
     {
       "statementIndex": 0,
       "statementType": "SELECT",
-      "nodes": [
-        {
-          "id": "column_e936b87eb12ba397",
-          "type": "column",
-          "label": "SUM_RESULT",
-          "expression": "REDUCE([1, 2, 3], 0, (acc, val) -> acc + val)"
-        },
-        {
-          "id": "output_74d22f755ec62dbc",
-          "type": "output",
-          "label": "Output"
-        }
-      ],
-      "edges": [
-        {
-          "id": "edge_8214e5c3760fd049",
-          "from": "output_74d22f755ec62dbc",
-          "to": "column_e936b87eb12ba397",
-          "type": "ownership"
-        }
-      ],
       "joinCount": 0,
       "complexityScore": 1
     }
   ],
-  "globalLineage": {
-    "nodes": [
-      {
-        "id": "column_e936b87eb12ba397",
-        "type": "column",
-        "label": "SUM_RESULT",
-        "canonicalName": {
-          "name": "SUM_RESULT"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "column_e936b87eb12ba397"
-          }
-        ]
+  "nodes": [
+    {
+      "id": "column_e936b87eb12ba397",
+      "type": "column",
+      "label": "SUM_RESULT",
+      "canonicalName": {
+        "name": "SUM_RESULT"
       },
-      {
-        "id": "output_74d22f755ec62dbc",
-        "type": "output",
-        "label": "Output",
-        "canonicalName": {
-          "name": "Output"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "output_74d22f755ec62dbc"
-          }
-        ]
-      }
-    ],
-    "edges": [
-      {
-        "id": "edge_8214e5c3760fd049",
-        "from": "output_74d22f755ec62dbc",
-        "to": "column_e936b87eb12ba397",
-        "type": "ownership",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      }
-    ]
-  },
+      "statementIds": [
+        0
+      ],
+      "expression": "REDUCE([1, 2, 3], 0, (acc, val) -> acc + val)"
+    },
+    {
+      "id": "output_74d22f755ec62dbc",
+      "type": "output",
+      "label": "Output",
+      "canonicalName": {
+        "name": "Output"
+      },
+      "statementIds": [
+        0
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_8214e5c3760fd049",
+      "from": "output_74d22f755ec62dbc",
+      "to": "column_e936b87eb12ba397",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    }
+  ],
   "issues": [
     {
       "severity": "warning",

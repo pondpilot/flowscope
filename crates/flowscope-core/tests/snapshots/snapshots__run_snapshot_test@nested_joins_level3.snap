@@ -7,495 +7,289 @@ expression: clean_result
     {
       "statementIndex": 0,
       "statementType": "SELECT",
-      "nodes": [
-        {
-          "id": "column_1d50481fe9fc4322",
-          "type": "column",
-          "label": "supplier_name"
-        },
-        {
-          "id": "column_294e2368a65dc2b2",
-          "type": "column",
-          "label": "order_id",
-          "qualifiedName": "orders.order_id"
-        },
-        {
-          "id": "column_52f3cd32be0b3d40",
-          "type": "column",
-          "label": "product_name",
-          "qualifiedName": "products.product_name"
-        },
-        {
-          "id": "column_557432d8eb43380f",
-          "type": "column",
-          "label": "order_id"
-        },
-        {
-          "id": "column_68824a617e7c7079",
-          "type": "column",
-          "label": "supplier_name",
-          "qualifiedName": "suppliers.supplier_name"
-        },
-        {
-          "id": "column_c7ce485a3125265a",
-          "type": "column",
-          "label": "email",
-          "qualifiedName": "customers.email"
-        },
-        {
-          "id": "column_d2e94eda4ba76b6c",
-          "type": "column",
-          "label": "product_name"
-        },
-        {
-          "id": "column_dacc241e355a2303",
-          "type": "column",
-          "label": "email"
-        },
-        {
-          "id": "output_74d22f755ec62dbc",
-          "type": "output",
-          "label": "Output"
-        },
-        {
-          "id": "table_4ce0fb06426c39fb",
-          "type": "table",
-          "label": "suppliers",
-          "qualifiedName": "suppliers",
-          "nameSpans": [
-            {
-              "start": 458,
-              "end": 467
-            }
-          ]
-        },
-        {
-          "id": "table_7253befe2c400508",
-          "type": "table",
-          "label": "products",
-          "qualifiedName": "products",
-          "nameSpans": [
-            {
-              "start": 377,
-              "end": 385
-            }
-          ]
-        },
-        {
-          "id": "table_e500054d128e991c",
-          "type": "table",
-          "label": "customers",
-          "qualifiedName": "customers",
-          "nameSpans": [
-            {
-              "start": 285,
-              "end": 294
-            }
-          ],
-          "filters": [
-            {
-              "expression": "c.email = 'sample@example.com'",
-              "clauseType": "WHERE"
-            }
-          ]
-        },
-        {
-          "id": "table_eaa6ebb8f158751f",
-          "type": "table",
-          "label": "orders",
-          "qualifiedName": "orders",
-          "nameSpans": [
-            {
-              "start": 247,
-              "end": 253
-            }
-          ]
-        }
-      ],
-      "edges": [
-        {
-          "id": "edge_474dbb9f7be1aa81",
-          "from": "table_7253befe2c400508",
-          "to": "column_52f3cd32be0b3d40",
-          "type": "ownership"
-        },
-        {
-          "id": "edge_672b1257db7bb55c",
-          "from": "output_74d22f755ec62dbc",
-          "to": "column_dacc241e355a2303",
-          "type": "ownership"
-        },
-        {
-          "id": "edge_6899d8991ef56e64",
-          "from": "column_52f3cd32be0b3d40",
-          "to": "column_d2e94eda4ba76b6c",
-          "type": "data_flow",
-          "joinType": "INNER",
-          "joinCondition": "p.product_id = o.product_id"
-        },
-        {
-          "id": "edge_707e70b886824bbf",
-          "from": "column_294e2368a65dc2b2",
-          "to": "column_557432d8eb43380f",
-          "type": "data_flow"
-        },
-        {
-          "id": "edge_76313beeb97b6460",
-          "from": "column_68824a617e7c7079",
-          "to": "column_1d50481fe9fc4322",
-          "type": "data_flow",
-          "joinType": "INNER",
-          "joinCondition": "s.supplier_id = p.supplier_id"
-        },
-        {
-          "id": "edge_7cd923168b222fa0",
-          "from": "table_4ce0fb06426c39fb",
-          "to": "column_68824a617e7c7079",
-          "type": "ownership"
-        },
-        {
-          "id": "edge_a7182fb351dec0c4",
-          "from": "output_74d22f755ec62dbc",
-          "to": "column_d2e94eda4ba76b6c",
-          "type": "ownership"
-        },
-        {
-          "id": "edge_b2c886eb23cb3433",
-          "from": "table_e500054d128e991c",
-          "to": "column_c7ce485a3125265a",
-          "type": "ownership"
-        },
-        {
-          "id": "edge_cb8e18cdab2f8c9a",
-          "from": "column_c7ce485a3125265a",
-          "to": "column_dacc241e355a2303",
-          "type": "data_flow",
-          "joinType": "INNER",
-          "joinCondition": "c.customer_id = o.customer_id"
-        },
-        {
-          "id": "edge_d041cc00a4519f5a",
-          "from": "output_74d22f755ec62dbc",
-          "to": "column_557432d8eb43380f",
-          "type": "ownership"
-        },
-        {
-          "id": "edge_d7ff732c218506d8",
-          "from": "output_74d22f755ec62dbc",
-          "to": "column_1d50481fe9fc4322",
-          "type": "ownership"
-        },
-        {
-          "id": "edge_fa057b597723c73b",
-          "from": "table_eaa6ebb8f158751f",
-          "to": "column_294e2368a65dc2b2",
-          "type": "ownership"
-        }
-      ],
       "joinCount": 3,
       "complexityScore": 52
     }
   ],
-  "globalLineage": {
-    "nodes": [
-      {
-        "id": "column_10b89c08da4a69f9",
-        "type": "column",
-        "label": "email",
-        "canonicalName": {
-          "schema": "customers",
-          "name": "email"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "column_c7ce485a3125265a"
-          }
-        ]
+  "nodes": [
+    {
+      "id": "column_10b89c08da4a69f9",
+      "type": "column",
+      "label": "email",
+      "qualifiedName": "customers.email",
+      "canonicalName": {
+        "schema": "customers",
+        "name": "email"
       },
-      {
-        "id": "column_1d50481fe9fc4322",
-        "type": "column",
-        "label": "supplier_name",
-        "canonicalName": {
-          "name": "supplier_name"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "column_1d50481fe9fc4322"
-          }
-        ]
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "column_1d50481fe9fc4322",
+      "type": "column",
+      "label": "supplier_name",
+      "canonicalName": {
+        "name": "supplier_name"
       },
-      {
-        "id": "column_254d51867a59ee98",
-        "type": "column",
-        "label": "order_id",
-        "canonicalName": {
-          "schema": "orders",
-          "name": "order_id"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "column_294e2368a65dc2b2"
-          }
-        ]
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "column_254d51867a59ee98",
+      "type": "column",
+      "label": "order_id",
+      "qualifiedName": "orders.order_id",
+      "canonicalName": {
+        "schema": "orders",
+        "name": "order_id"
       },
-      {
-        "id": "column_557432d8eb43380f",
-        "type": "column",
-        "label": "order_id",
-        "canonicalName": {
-          "name": "order_id"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "column_557432d8eb43380f"
-          }
-        ]
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "column_557432d8eb43380f",
+      "type": "column",
+      "label": "order_id",
+      "canonicalName": {
+        "name": "order_id"
       },
-      {
-        "id": "column_b7366b6ec23914f7",
-        "type": "column",
-        "label": "supplier_name",
-        "canonicalName": {
-          "schema": "suppliers",
-          "name": "supplier_name"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "column_68824a617e7c7079"
-          }
-        ]
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "column_b7366b6ec23914f7",
+      "type": "column",
+      "label": "supplier_name",
+      "qualifiedName": "suppliers.supplier_name",
+      "canonicalName": {
+        "schema": "suppliers",
+        "name": "supplier_name"
       },
-      {
-        "id": "column_c76022f9d4427ec3",
-        "type": "column",
-        "label": "product_name",
-        "canonicalName": {
-          "schema": "products",
-          "name": "product_name"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "column_52f3cd32be0b3d40"
-          }
-        ]
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "column_c76022f9d4427ec3",
+      "type": "column",
+      "label": "product_name",
+      "qualifiedName": "products.product_name",
+      "canonicalName": {
+        "schema": "products",
+        "name": "product_name"
       },
-      {
-        "id": "column_d2e94eda4ba76b6c",
-        "type": "column",
-        "label": "product_name",
-        "canonicalName": {
-          "name": "product_name"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "column_d2e94eda4ba76b6c"
-          }
-        ]
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "column_d2e94eda4ba76b6c",
+      "type": "column",
+      "label": "product_name",
+      "canonicalName": {
+        "name": "product_name"
       },
-      {
-        "id": "column_dacc241e355a2303",
-        "type": "column",
-        "label": "email",
-        "canonicalName": {
-          "name": "email"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "column_dacc241e355a2303"
-          }
-        ]
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "column_dacc241e355a2303",
+      "type": "column",
+      "label": "email",
+      "canonicalName": {
+        "name": "email"
       },
-      {
-        "id": "output_74d22f755ec62dbc",
-        "type": "output",
-        "label": "Output",
-        "canonicalName": {
-          "name": "Output"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "output_74d22f755ec62dbc"
-          }
-        ]
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "output_74d22f755ec62dbc",
+      "type": "output",
+      "label": "Output",
+      "canonicalName": {
+        "name": "Output"
       },
-      {
-        "id": "table_4ce0fb06426c39fb",
-        "type": "table",
-        "label": "suppliers",
-        "canonicalName": {
-          "name": "suppliers"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "table_4ce0fb06426c39fb"
-          }
-        ]
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "table_4ce0fb06426c39fb",
+      "type": "table",
+      "label": "suppliers",
+      "qualifiedName": "suppliers",
+      "canonicalName": {
+        "name": "suppliers"
       },
-      {
-        "id": "table_7253befe2c400508",
-        "type": "table",
-        "label": "products",
-        "canonicalName": {
-          "name": "products"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "table_7253befe2c400508"
-          }
-        ]
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "table_7253befe2c400508",
+      "type": "table",
+      "label": "products",
+      "qualifiedName": "products",
+      "canonicalName": {
+        "name": "products"
       },
-      {
-        "id": "table_e500054d128e991c",
-        "type": "table",
-        "label": "customers",
-        "canonicalName": {
-          "name": "customers"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "table_e500054d128e991c"
-          }
-        ]
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "table_e500054d128e991c",
+      "type": "table",
+      "label": "customers",
+      "qualifiedName": "customers",
+      "canonicalName": {
+        "name": "customers"
       },
-      {
-        "id": "table_eaa6ebb8f158751f",
-        "type": "table",
-        "label": "orders",
-        "canonicalName": {
-          "name": "orders"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "table_eaa6ebb8f158751f"
-          }
-        ]
-      }
-    ],
-    "edges": [
-      {
-        "id": "edge_474dbb9f7be1aa81",
-        "from": "table_7253befe2c400508",
-        "to": "column_c76022f9d4427ec3",
-        "type": "ownership",
-        "producerStatement": {
-          "statementIndex": 0
+      "statementIds": [
+        0
+      ],
+      "filters": [
+        {
+          "expression": "c.email = 'sample@example.com'",
+          "clauseType": "WHERE"
         }
+      ]
+    },
+    {
+      "id": "table_eaa6ebb8f158751f",
+      "type": "table",
+      "label": "orders",
+      "qualifiedName": "orders",
+      "canonicalName": {
+        "name": "orders"
       },
-      {
-        "id": "edge_672b1257db7bb55c",
-        "from": "output_74d22f755ec62dbc",
-        "to": "column_dacc241e355a2303",
-        "type": "ownership",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      },
-      {
-        "id": "edge_6899d8991ef56e64",
-        "from": "column_c76022f9d4427ec3",
-        "to": "column_d2e94eda4ba76b6c",
-        "type": "data_flow",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      },
-      {
-        "id": "edge_707e70b886824bbf",
-        "from": "column_254d51867a59ee98",
-        "to": "column_557432d8eb43380f",
-        "type": "data_flow",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      },
-      {
-        "id": "edge_76313beeb97b6460",
-        "from": "column_b7366b6ec23914f7",
-        "to": "column_1d50481fe9fc4322",
-        "type": "data_flow",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      },
-      {
-        "id": "edge_7cd923168b222fa0",
-        "from": "table_4ce0fb06426c39fb",
-        "to": "column_b7366b6ec23914f7",
-        "type": "ownership",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      },
-      {
-        "id": "edge_a7182fb351dec0c4",
-        "from": "output_74d22f755ec62dbc",
-        "to": "column_d2e94eda4ba76b6c",
-        "type": "ownership",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      },
-      {
-        "id": "edge_b2c886eb23cb3433",
-        "from": "table_e500054d128e991c",
-        "to": "column_10b89c08da4a69f9",
-        "type": "ownership",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      },
-      {
-        "id": "edge_cb8e18cdab2f8c9a",
-        "from": "column_10b89c08da4a69f9",
-        "to": "column_dacc241e355a2303",
-        "type": "data_flow",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      },
-      {
-        "id": "edge_d041cc00a4519f5a",
-        "from": "output_74d22f755ec62dbc",
-        "to": "column_557432d8eb43380f",
-        "type": "ownership",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      },
-      {
-        "id": "edge_d7ff732c218506d8",
-        "from": "output_74d22f755ec62dbc",
-        "to": "column_1d50481fe9fc4322",
-        "type": "ownership",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      },
-      {
-        "id": "edge_fa057b597723c73b",
-        "from": "table_eaa6ebb8f158751f",
-        "to": "column_254d51867a59ee98",
-        "type": "ownership",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      }
-    ]
-  },
+      "statementIds": [
+        0
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_474dbb9f7be1aa81",
+      "from": "table_7253befe2c400508",
+      "to": "column_c76022f9d4427ec3",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_672b1257db7bb55c",
+      "from": "output_74d22f755ec62dbc",
+      "to": "column_dacc241e355a2303",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_6899d8991ef56e64",
+      "from": "column_c76022f9d4427ec3",
+      "to": "column_d2e94eda4ba76b6c",
+      "type": "data_flow",
+      "joinType": "INNER",
+      "joinCondition": "p.product_id = o.product_id",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_707e70b886824bbf",
+      "from": "column_254d51867a59ee98",
+      "to": "column_557432d8eb43380f",
+      "type": "data_flow",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_76313beeb97b6460",
+      "from": "column_b7366b6ec23914f7",
+      "to": "column_1d50481fe9fc4322",
+      "type": "data_flow",
+      "joinType": "INNER",
+      "joinCondition": "s.supplier_id = p.supplier_id",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_7cd923168b222fa0",
+      "from": "table_4ce0fb06426c39fb",
+      "to": "column_b7366b6ec23914f7",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_a7182fb351dec0c4",
+      "from": "output_74d22f755ec62dbc",
+      "to": "column_d2e94eda4ba76b6c",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_b2c886eb23cb3433",
+      "from": "table_e500054d128e991c",
+      "to": "column_10b89c08da4a69f9",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_cb8e18cdab2f8c9a",
+      "from": "column_10b89c08da4a69f9",
+      "to": "column_dacc241e355a2303",
+      "type": "data_flow",
+      "joinType": "INNER",
+      "joinCondition": "c.customer_id = o.customer_id",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_d041cc00a4519f5a",
+      "from": "output_74d22f755ec62dbc",
+      "to": "column_557432d8eb43380f",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_d7ff732c218506d8",
+      "from": "output_74d22f755ec62dbc",
+      "to": "column_1d50481fe9fc4322",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_fa057b597723c73b",
+      "from": "table_eaa6ebb8f158751f",
+      "to": "column_254d51867a59ee98",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    }
+  ],
   "issues": [],
   "summary": {
     "statementCount": 1,

@@ -7,81 +7,47 @@ expression: clean_result
     {
       "statementIndex": 0,
       "statementType": "SELECT",
-      "nodes": [
-        {
-          "id": "output_74d22f755ec62dbc",
-          "type": "output",
-          "label": "Output"
-        },
-        {
-          "id": "table_7253befe2c400508",
-          "type": "table",
-          "label": "products",
-          "qualifiedName": "products",
-          "nameSpans": [
-            {
-              "start": 153,
-              "end": 161
-            }
-          ]
-        }
-      ],
-      "edges": [
-        {
-          "id": "edge_cc7cd87e6a43680f",
-          "from": "table_7253befe2c400508",
-          "to": "output_74d22f755ec62dbc",
-          "type": "data_flow",
-          "approximate": true
-        }
-      ],
       "joinCount": 0,
       "complexityScore": 5
     }
   ],
-  "globalLineage": {
-    "nodes": [
-      {
-        "id": "output_74d22f755ec62dbc",
-        "type": "output",
-        "label": "Output",
-        "canonicalName": {
-          "name": "Output"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "output_74d22f755ec62dbc"
-          }
-        ]
+  "nodes": [
+    {
+      "id": "output_74d22f755ec62dbc",
+      "type": "output",
+      "label": "Output",
+      "canonicalName": {
+        "name": "Output"
       },
-      {
-        "id": "table_7253befe2c400508",
-        "type": "table",
-        "label": "products",
-        "canonicalName": {
-          "name": "products"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "table_7253befe2c400508"
-          }
-        ]
-      }
-    ],
-    "edges": [
-      {
-        "id": "edge_cc7cd87e6a43680f",
-        "from": "table_7253befe2c400508",
-        "to": "output_74d22f755ec62dbc",
-        "type": "data_flow",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      }
-    ]
-  },
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "table_7253befe2c400508",
+      "type": "table",
+      "label": "products",
+      "qualifiedName": "products",
+      "canonicalName": {
+        "name": "products"
+      },
+      "statementIds": [
+        0
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_cc7cd87e6a43680f",
+      "from": "table_7253befe2c400508",
+      "to": "output_74d22f755ec62dbc",
+      "type": "data_flow",
+      "approximate": true,
+      "statementIds": [
+        0
+      ]
+    }
+  ],
   "issues": [
     {
       "severity": "info",

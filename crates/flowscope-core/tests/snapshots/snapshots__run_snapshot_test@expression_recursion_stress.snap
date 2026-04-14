@@ -7,326 +7,196 @@ expression: clean_result
     {
       "statementIndex": 0,
       "statementType": "SELECT",
-      "nodes": [
-        {
-          "id": "column_26ff2069a4a4ecea",
-          "type": "column",
-          "label": "id",
-          "qualifiedName": "items.id"
-        },
-        {
-          "id": "column_361b9a09c1aeebfe",
-          "type": "column",
-          "label": "status"
-        },
-        {
-          "id": "column_7c34a6214f1a3e24",
-          "type": "column",
-          "label": "name",
-          "qualifiedName": "items.name"
-        },
-        {
-          "id": "column_9152ce8e79d43b79",
-          "type": "column",
-          "label": "status",
-          "qualifiedName": "items.status"
-        },
-        {
-          "id": "column_b6281afcdfda23f6",
-          "type": "column",
-          "label": "name"
-        },
-        {
-          "id": "column_e38d78c338bac387",
-          "type": "column",
-          "label": "id"
-        },
-        {
-          "id": "output_74d22f755ec62dbc",
-          "type": "output",
-          "label": "Output"
-        },
-        {
-          "id": "table_7ae83469200f360a",
-          "type": "table",
-          "label": "items",
-          "qualifiedName": "items",
-          "nameSpans": [
-            {
-              "start": 46,
-              "end": 51
-            }
-          ],
-          "filters": [
-            {
-              "expression": "status = 'a' OR status = 'b' OR status = 'c' OR status = 'd' OR status = 'e' OR status = 'f' OR status = 'g' OR status = 'h' OR status = 'i' OR status = 'j' OR status = 'k' OR status = 'l' OR status = 'm' OR status = 'n' OR status = 'o' OR status = 'p' OR status = 'q' OR status = 'r' OR status = 's' OR status = 't' OR status = 'u' OR status = 'v' OR status = 'w' OR status = 'x' OR status = 'y' OR status = 'z' OR status = 'aa' OR status = 'ab' OR status = 'ac' OR status = 'ad' OR status = 'ae' OR status = 'af' OR status = 'ag' OR status = 'ah' OR status = 'ai' OR status = 'aj' OR status = 'ak' OR status = 'al' OR status = 'am' OR status = 'an' OR status = 'ao' OR status = 'ap'",
-              "clauseType": "WHERE"
-            }
-          ]
-        }
-      ],
-      "edges": [
-        {
-          "id": "edge_0390765de4d1ae1c",
-          "from": "table_7ae83469200f360a",
-          "to": "column_9152ce8e79d43b79",
-          "type": "ownership"
-        },
-        {
-          "id": "edge_1b9821fee8e2fed3",
-          "from": "output_74d22f755ec62dbc",
-          "to": "column_b6281afcdfda23f6",
-          "type": "ownership"
-        },
-        {
-          "id": "edge_2e5f868669b24f75",
-          "from": "table_7ae83469200f360a",
-          "to": "column_26ff2069a4a4ecea",
-          "type": "ownership"
-        },
-        {
-          "id": "edge_49241049f6307f47",
-          "from": "column_26ff2069a4a4ecea",
-          "to": "column_e38d78c338bac387",
-          "type": "data_flow"
-        },
-        {
-          "id": "edge_71ba7d46ce21d164",
-          "from": "output_74d22f755ec62dbc",
-          "to": "column_361b9a09c1aeebfe",
-          "type": "ownership"
-        },
-        {
-          "id": "edge_9b5441461589fa16",
-          "from": "output_74d22f755ec62dbc",
-          "to": "column_e38d78c338bac387",
-          "type": "ownership"
-        },
-        {
-          "id": "edge_a40caf72e676eec3",
-          "from": "column_9152ce8e79d43b79",
-          "to": "column_361b9a09c1aeebfe",
-          "type": "data_flow"
-        },
-        {
-          "id": "edge_d4a322cc1a33a67e",
-          "from": "table_7ae83469200f360a",
-          "to": "column_7c34a6214f1a3e24",
-          "type": "ownership"
-        },
-        {
-          "id": "edge_f097ce68d45504d9",
-          "from": "column_7c34a6214f1a3e24",
-          "to": "column_b6281afcdfda23f6",
-          "type": "data_flow"
-        }
-      ],
       "joinCount": 0,
       "complexityScore": 7
     }
   ],
-  "globalLineage": {
-    "nodes": [
-      {
-        "id": "column_2ef9551111d8842c",
-        "type": "column",
-        "label": "id",
-        "canonicalName": {
-          "schema": "items",
-          "name": "id"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "column_26ff2069a4a4ecea"
-          }
-        ]
+  "nodes": [
+    {
+      "id": "column_2ef9551111d8842c",
+      "type": "column",
+      "label": "id",
+      "qualifiedName": "items.id",
+      "canonicalName": {
+        "schema": "items",
+        "name": "id"
       },
-      {
-        "id": "column_361b9a09c1aeebfe",
-        "type": "column",
-        "label": "status",
-        "canonicalName": {
-          "name": "status"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "column_361b9a09c1aeebfe"
-          }
-        ]
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "column_361b9a09c1aeebfe",
+      "type": "column",
+      "label": "status",
+      "canonicalName": {
+        "name": "status"
       },
-      {
-        "id": "column_7039ab623f118fbb",
-        "type": "column",
-        "label": "name",
-        "canonicalName": {
-          "schema": "items",
-          "name": "name"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "column_7c34a6214f1a3e24"
-          }
-        ]
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "column_7039ab623f118fbb",
+      "type": "column",
+      "label": "name",
+      "qualifiedName": "items.name",
+      "canonicalName": {
+        "schema": "items",
+        "name": "name"
       },
-      {
-        "id": "column_b6281afcdfda23f6",
-        "type": "column",
-        "label": "name",
-        "canonicalName": {
-          "name": "name"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "column_b6281afcdfda23f6"
-          }
-        ]
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "column_b6281afcdfda23f6",
+      "type": "column",
+      "label": "name",
+      "canonicalName": {
+        "name": "name"
       },
-      {
-        "id": "column_c095de271d35a1af",
-        "type": "column",
-        "label": "status",
-        "canonicalName": {
-          "schema": "items",
-          "name": "status"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "column_9152ce8e79d43b79"
-          }
-        ]
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "column_c095de271d35a1af",
+      "type": "column",
+      "label": "status",
+      "qualifiedName": "items.status",
+      "canonicalName": {
+        "schema": "items",
+        "name": "status"
       },
-      {
-        "id": "column_e38d78c338bac387",
-        "type": "column",
-        "label": "id",
-        "canonicalName": {
-          "name": "id"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "column_e38d78c338bac387"
-          }
-        ]
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "column_e38d78c338bac387",
+      "type": "column",
+      "label": "id",
+      "canonicalName": {
+        "name": "id"
       },
-      {
-        "id": "output_74d22f755ec62dbc",
-        "type": "output",
-        "label": "Output",
-        "canonicalName": {
-          "name": "Output"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "output_74d22f755ec62dbc"
-          }
-        ]
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "output_74d22f755ec62dbc",
+      "type": "output",
+      "label": "Output",
+      "canonicalName": {
+        "name": "Output"
       },
-      {
-        "id": "table_7ae83469200f360a",
-        "type": "table",
-        "label": "items",
-        "canonicalName": {
-          "name": "items"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "table_7ae83469200f360a"
-          }
-        ]
-      }
-    ],
-    "edges": [
-      {
-        "id": "edge_0390765de4d1ae1c",
-        "from": "table_7ae83469200f360a",
-        "to": "column_c095de271d35a1af",
-        "type": "ownership",
-        "producerStatement": {
-          "statementIndex": 0
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "table_7ae83469200f360a",
+      "type": "table",
+      "label": "items",
+      "qualifiedName": "items",
+      "canonicalName": {
+        "name": "items"
+      },
+      "statementIds": [
+        0
+      ],
+      "filters": [
+        {
+          "expression": "status = 'a' OR status = 'b' OR status = 'c' OR status = 'd' OR status = 'e' OR status = 'f' OR status = 'g' OR status = 'h' OR status = 'i' OR status = 'j' OR status = 'k' OR status = 'l' OR status = 'm' OR status = 'n' OR status = 'o' OR status = 'p' OR status = 'q' OR status = 'r' OR status = 's' OR status = 't' OR status = 'u' OR status = 'v' OR status = 'w' OR status = 'x' OR status = 'y' OR status = 'z' OR status = 'aa' OR status = 'ab' OR status = 'ac' OR status = 'ad' OR status = 'ae' OR status = 'af' OR status = 'ag' OR status = 'ah' OR status = 'ai' OR status = 'aj' OR status = 'ak' OR status = 'al' OR status = 'am' OR status = 'an' OR status = 'ao' OR status = 'ap'",
+          "clauseType": "WHERE"
         }
-      },
-      {
-        "id": "edge_1b9821fee8e2fed3",
-        "from": "output_74d22f755ec62dbc",
-        "to": "column_b6281afcdfda23f6",
-        "type": "ownership",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      },
-      {
-        "id": "edge_2e5f868669b24f75",
-        "from": "table_7ae83469200f360a",
-        "to": "column_2ef9551111d8842c",
-        "type": "ownership",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      },
-      {
-        "id": "edge_49241049f6307f47",
-        "from": "column_2ef9551111d8842c",
-        "to": "column_e38d78c338bac387",
-        "type": "data_flow",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      },
-      {
-        "id": "edge_71ba7d46ce21d164",
-        "from": "output_74d22f755ec62dbc",
-        "to": "column_361b9a09c1aeebfe",
-        "type": "ownership",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      },
-      {
-        "id": "edge_9b5441461589fa16",
-        "from": "output_74d22f755ec62dbc",
-        "to": "column_e38d78c338bac387",
-        "type": "ownership",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      },
-      {
-        "id": "edge_a40caf72e676eec3",
-        "from": "column_c095de271d35a1af",
-        "to": "column_361b9a09c1aeebfe",
-        "type": "data_flow",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      },
-      {
-        "id": "edge_d4a322cc1a33a67e",
-        "from": "table_7ae83469200f360a",
-        "to": "column_7039ab623f118fbb",
-        "type": "ownership",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      },
-      {
-        "id": "edge_f097ce68d45504d9",
-        "from": "column_7039ab623f118fbb",
-        "to": "column_b6281afcdfda23f6",
-        "type": "data_flow",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      }
-    ]
-  },
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_0390765de4d1ae1c",
+      "from": "table_7ae83469200f360a",
+      "to": "column_c095de271d35a1af",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_1b9821fee8e2fed3",
+      "from": "output_74d22f755ec62dbc",
+      "to": "column_b6281afcdfda23f6",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_2e5f868669b24f75",
+      "from": "table_7ae83469200f360a",
+      "to": "column_2ef9551111d8842c",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_49241049f6307f47",
+      "from": "column_2ef9551111d8842c",
+      "to": "column_e38d78c338bac387",
+      "type": "data_flow",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_71ba7d46ce21d164",
+      "from": "output_74d22f755ec62dbc",
+      "to": "column_361b9a09c1aeebfe",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_9b5441461589fa16",
+      "from": "output_74d22f755ec62dbc",
+      "to": "column_e38d78c338bac387",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_a40caf72e676eec3",
+      "from": "column_c095de271d35a1af",
+      "to": "column_361b9a09c1aeebfe",
+      "type": "data_flow",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_d4a322cc1a33a67e",
+      "from": "table_7ae83469200f360a",
+      "to": "column_7039ab623f118fbb",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_f097ce68d45504d9",
+      "from": "column_7039ab623f118fbb",
+      "to": "column_b6281afcdfda23f6",
+      "type": "data_flow",
+      "statementIds": [
+        0
+      ]
+    }
+  ],
   "issues": [],
   "summary": {
     "statementCount": 1,

@@ -7,153 +7,90 @@ expression: cleaned
     {
       "statementIndex": 0,
       "statementType": "SELECT",
-      "nodes": [
-        {
-          "id": "column_5d649ea55ab526b5",
-          "type": "column",
-          "label": "amount"
-        },
-        {
-          "id": "column_6bd816528de45ddd",
-          "type": "column",
-          "label": "amount",
-          "qualifiedName": "sales.analytics.reports.amount"
-        },
-        {
-          "id": "output_74d22f755ec62dbc",
-          "type": "output",
-          "label": "Output"
-        },
-        {
-          "id": "table_b6822030e61daaf4",
-          "type": "table",
-          "label": "reports",
-          "qualifiedName": "sales.analytics.reports",
-          "nameSpans": [
-            {
-              "start": 19,
-              "end": 26
-            }
-          ],
-          "resolutionSource": "imported"
-        }
-      ],
-      "edges": [
-        {
-          "id": "edge_122ec0ec87f112d1",
-          "from": "column_6bd816528de45ddd",
-          "to": "column_5d649ea55ab526b5",
-          "type": "data_flow"
-        },
-        {
-          "id": "edge_53109492fbd471a4",
-          "from": "table_b6822030e61daaf4",
-          "to": "column_6bd816528de45ddd",
-          "type": "ownership"
-        },
-        {
-          "id": "edge_e758a5bc5d93f3d3",
-          "from": "output_74d22f755ec62dbc",
-          "to": "column_5d649ea55ab526b5",
-          "type": "ownership"
-        }
-      ],
       "joinCount": 0,
       "complexityScore": 5
     }
   ],
-  "globalLineage": {
-    "nodes": [
-      {
-        "id": "column_431258e4507321e5",
-        "type": "column",
-        "label": "amount",
-        "canonicalName": {
-          "name": "sales.analytics.reports.amount"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "column_6bd816528de45ddd"
-          }
-        ]
+  "nodes": [
+    {
+      "id": "column_431258e4507321e5",
+      "type": "column",
+      "label": "amount",
+      "qualifiedName": "sales.analytics.reports.amount",
+      "canonicalName": {
+        "name": "sales.analytics.reports.amount"
       },
-      {
-        "id": "column_5d649ea55ab526b5",
-        "type": "column",
-        "label": "amount",
-        "canonicalName": {
-          "name": "amount"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "column_5d649ea55ab526b5"
-          }
-        ]
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "column_5d649ea55ab526b5",
+      "type": "column",
+      "label": "amount",
+      "canonicalName": {
+        "name": "amount"
       },
-      {
-        "id": "output_74d22f755ec62dbc",
-        "type": "output",
-        "label": "Output",
-        "canonicalName": {
-          "name": "Output"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "output_74d22f755ec62dbc"
-          }
-        ]
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "output_74d22f755ec62dbc",
+      "type": "output",
+      "label": "Output",
+      "canonicalName": {
+        "name": "Output"
       },
-      {
-        "id": "table_b6822030e61daaf4",
-        "type": "table",
-        "label": "reports",
-        "canonicalName": {
-          "catalog": "sales",
-          "schema": "analytics",
-          "name": "reports"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "table_b6822030e61daaf4"
-          }
-        ],
-        "resolutionSource": "imported"
-      }
-    ],
-    "edges": [
-      {
-        "id": "edge_122ec0ec87f112d1",
-        "from": "column_431258e4507321e5",
-        "to": "column_5d649ea55ab526b5",
-        "type": "data_flow",
-        "producerStatement": {
-          "statementIndex": 0
-        }
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "table_b6822030e61daaf4",
+      "type": "table",
+      "label": "reports",
+      "qualifiedName": "sales.analytics.reports",
+      "canonicalName": {
+        "catalog": "sales",
+        "schema": "analytics",
+        "name": "reports"
       },
-      {
-        "id": "edge_53109492fbd471a4",
-        "from": "table_b6822030e61daaf4",
-        "to": "column_431258e4507321e5",
-        "type": "ownership",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      },
-      {
-        "id": "edge_e758a5bc5d93f3d3",
-        "from": "output_74d22f755ec62dbc",
-        "to": "column_5d649ea55ab526b5",
-        "type": "ownership",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      }
-    ]
-  },
+      "statementIds": [
+        0
+      ],
+      "resolutionSource": "imported"
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_122ec0ec87f112d1",
+      "from": "column_431258e4507321e5",
+      "to": "column_5d649ea55ab526b5",
+      "type": "data_flow",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_53109492fbd471a4",
+      "from": "table_b6822030e61daaf4",
+      "to": "column_431258e4507321e5",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_e758a5bc5d93f3d3",
+      "from": "output_74d22f755ec62dbc",
+      "to": "column_5d649ea55ab526b5",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    }
+  ],
   "issues": [],
   "summary": {
     "statementCount": 1,

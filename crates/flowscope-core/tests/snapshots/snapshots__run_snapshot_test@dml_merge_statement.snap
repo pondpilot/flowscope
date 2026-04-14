@@ -7,87 +7,47 @@ expression: clean_result
     {
       "statementIndex": 0,
       "statementType": "MERGE",
-      "nodes": [
-        {
-          "id": "table_6888b8ab68491bd0",
-          "type": "table",
-          "label": "daily_shipments",
-          "qualifiedName": "daily_shipments",
-          "nameSpans": [
-            {
-              "start": 46,
-              "end": 61
-            }
-          ]
-        },
-        {
-          "id": "table_bc8c5d67293581e9",
-          "type": "table",
-          "label": "inventory",
-          "qualifiedName": "inventory",
-          "nameSpans": [
-            {
-              "start": 20,
-              "end": 29
-            }
-          ]
-        }
-      ],
-      "edges": [
-        {
-          "id": "edge_ff51b4993f7e0196",
-          "from": "table_6888b8ab68491bd0",
-          "to": "table_bc8c5d67293581e9",
-          "type": "data_flow"
-        }
-      ],
       "joinCount": 0,
       "complexityScore": 10
     }
   ],
-  "globalLineage": {
-    "nodes": [
-      {
-        "id": "table_6888b8ab68491bd0",
-        "type": "table",
-        "label": "daily_shipments",
-        "canonicalName": {
-          "name": "daily_shipments"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "table_6888b8ab68491bd0"
-          }
-        ]
+  "nodes": [
+    {
+      "id": "table_6888b8ab68491bd0",
+      "type": "table",
+      "label": "daily_shipments",
+      "qualifiedName": "daily_shipments",
+      "canonicalName": {
+        "name": "daily_shipments"
       },
-      {
-        "id": "table_bc8c5d67293581e9",
-        "type": "table",
-        "label": "inventory",
-        "canonicalName": {
-          "name": "inventory"
-        },
-        "statementRefs": [
-          {
-            "statementIndex": 0,
-            "nodeId": "table_bc8c5d67293581e9"
-          }
-        ]
-      }
-    ],
-    "edges": [
-      {
-        "id": "edge_ff51b4993f7e0196",
-        "from": "table_6888b8ab68491bd0",
-        "to": "table_bc8c5d67293581e9",
-        "type": "data_flow",
-        "producerStatement": {
-          "statementIndex": 0
-        }
-      }
-    ]
-  },
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "table_bc8c5d67293581e9",
+      "type": "table",
+      "label": "inventory",
+      "qualifiedName": "inventory",
+      "canonicalName": {
+        "name": "inventory"
+      },
+      "statementIds": [
+        0
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_ff51b4993f7e0196",
+      "from": "table_6888b8ab68491bd0",
+      "to": "table_bc8c5d67293581e9",
+      "type": "data_flow",
+      "statementIds": [
+        0
+      ]
+    }
+  ],
   "issues": [],
   "summary": {
     "statementCount": 1,
