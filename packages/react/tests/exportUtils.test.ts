@@ -6,7 +6,8 @@ describe('exportUtils', () => {
   it('surfaces wasm availability errors', async () => {
     const dummyResult = {
       statements: [],
-      globalLineage: { nodes: [], edges: [] },
+      nodes: [],
+      edges: [],
       issues: [],
       summary: {
         statementCount: 0,

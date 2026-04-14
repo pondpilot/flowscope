@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { StatementLineage } from '@pondpilot/flowscope-core';
+import type { StatementLineage } from '../src/types';
 import {
   extractTableDependenciesWithDetails,
   extractScriptDependencies,
