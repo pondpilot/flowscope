@@ -144,9 +144,8 @@ async fn analyze_endpoint_processes_complex_query() {
     assert!(!statements.is_empty());
 
     // The result should contain lineage information (nodes and edges arrays)
-    let first_stmt = &statements[0];
-    assert!(first_stmt["nodes"].is_array());
-    assert!(first_stmt["edges"].is_array());
+    assert!(body["nodes"].is_array());
+    assert!(body["edges"].is_array());
 
     server_handle.abort();
 }

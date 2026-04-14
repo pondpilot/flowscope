@@ -1,0 +1,158 @@
+---
+source: crates/flowscope-core/tests/snapshots.rs
+assertion_line: 391
+expression: clean_result
+---
+{
+  "statements": [
+    {
+      "statementIndex": 0,
+      "statementType": "SELECT",
+      "joinCount": 0,
+      "complexityScore": 5
+    }
+  ],
+  "nodes": [
+    {
+      "id": "column_26289b33f575fdbb",
+      "type": "column",
+      "label": "user_id",
+      "canonicalName": {
+        "name": "user_id"
+      },
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "column_5235f558f510c25e",
+      "type": "column",
+      "label": "user_id",
+      "qualifiedName": "users.user_id",
+      "canonicalName": {
+        "schema": "users",
+        "name": "user_id"
+      },
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "column_6f92d9546d1c3291",
+      "type": "column",
+      "label": "tag",
+      "canonicalName": {
+        "name": "tag"
+      },
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "column_d6db6b522d1f61b3",
+      "type": "column",
+      "label": "tag",
+      "qualifiedName": "users.tag",
+      "canonicalName": {
+        "schema": "users",
+        "name": "tag"
+      },
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "output_74d22f755ec62dbc",
+      "type": "output",
+      "label": "Output",
+      "canonicalName": {
+        "name": "Output"
+      },
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "table_10a0682dff76cdbc",
+      "type": "table",
+      "label": "users",
+      "qualifiedName": "users",
+      "canonicalName": {
+        "name": "users"
+      },
+      "statementIds": [
+        0
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_139ec018c5a2cebf",
+      "from": "column_d6db6b522d1f61b3",
+      "to": "column_6f92d9546d1c3291",
+      "type": "data_flow",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_50898ea23b79c9f1",
+      "from": "column_5235f558f510c25e",
+      "to": "column_26289b33f575fdbb",
+      "type": "data_flow",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_86955ab0ed5de3e8",
+      "from": "output_74d22f755ec62dbc",
+      "to": "column_6f92d9546d1c3291",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_e5a9dfe8f279b310",
+      "from": "output_74d22f755ec62dbc",
+      "to": "column_26289b33f575fdbb",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_f430e6d5281a1dfc",
+      "from": "table_10a0682dff76cdbc",
+      "to": "column_5235f558f510c25e",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_fbb0cefa72e20652",
+      "from": "table_10a0682dff76cdbc",
+      "to": "column_d6db6b522d1f61b3",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    }
+  ],
+  "issues": [],
+  "summary": {
+    "statementCount": 1,
+    "tableCount": 1,
+    "columnCount": 4,
+    "joinCount": 0,
+    "complexityScore": 5,
+    "issueCount": {
+      "errors": 0,
+      "warnings": 0,
+      "infos": 0
+    },
+    "hasErrors": false
+  }
+}

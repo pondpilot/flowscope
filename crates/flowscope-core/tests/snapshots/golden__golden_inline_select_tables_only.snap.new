@@ -1,0 +1,236 @@
+---
+source: crates/flowscope-core/tests/golden.rs
+assertion_line: 23
+expression: cleaned
+---
+{
+  "statements": [
+    {
+      "statementIndex": 0,
+      "statementType": "SELECT",
+      "joinCount": 1,
+      "complexityScore": 20
+    }
+  ],
+  "nodes": [
+    {
+      "id": "column_1fafa75822fcf49b",
+      "type": "column",
+      "label": "id",
+      "qualifiedName": "users.id",
+      "canonicalName": {
+        "schema": "users",
+        "name": "id"
+      },
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "column_46d6a4af3105be79",
+      "type": "column",
+      "label": "total_amount",
+      "qualifiedName": "orders.total_amount",
+      "canonicalName": {
+        "schema": "orders",
+        "name": "total_amount"
+      },
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "column_9313e55aab51e2b5",
+      "type": "column",
+      "label": "total_amount",
+      "canonicalName": {
+        "name": "total_amount"
+      },
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "column_e38d78c338bac387",
+      "type": "column",
+      "label": "id",
+      "canonicalName": {
+        "name": "id"
+      },
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "output_74d22f755ec62dbc",
+      "type": "output",
+      "label": "Output",
+      "canonicalName": {
+        "name": "Output"
+      },
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "table_10a0682dff76cdbc",
+      "type": "table",
+      "label": "users",
+      "qualifiedName": "users",
+      "canonicalName": {
+        "name": "users"
+      },
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "table_eaa6ebb8f158751f",
+      "type": "table",
+      "label": "orders",
+      "qualifiedName": "orders",
+      "canonicalName": {
+        "name": "orders"
+      },
+      "statementIds": [
+        0
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_3dcd4a29cda63cba",
+      "from": "column_1fafa75822fcf49b",
+      "to": "column_e38d78c338bac387",
+      "type": "data_flow",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_818d89eeb879caf6",
+      "from": "column_46d6a4af3105be79",
+      "to": "column_9313e55aab51e2b5",
+      "type": "data_flow",
+      "joinType": "INNER",
+      "joinCondition": "u.id = o.user_id",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_9b5441461589fa16",
+      "from": "output_74d22f755ec62dbc",
+      "to": "column_e38d78c338bac387",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_a12016fed9425216",
+      "from": "table_eaa6ebb8f158751f",
+      "to": "column_46d6a4af3105be79",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_a92e0d09881d5676",
+      "from": "table_10a0682dff76cdbc",
+      "to": "column_1fafa75822fcf49b",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_f331a37aefb084b8",
+      "from": "output_74d22f755ec62dbc",
+      "to": "column_9313e55aab51e2b5",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    }
+  ],
+  "issues": [],
+  "summary": {
+    "statementCount": 1,
+    "tableCount": 2,
+    "columnCount": 4,
+    "joinCount": 1,
+    "complexityScore": 20,
+    "issueCount": {
+      "errors": 0,
+      "warnings": 0,
+      "infos": 0
+    },
+    "hasErrors": false
+  },
+  "resolvedSchema": {
+    "tables": [
+      {
+        "name": "orders",
+        "columns": [
+          {
+            "name": "total_amount",
+            "origin": "implied"
+          },
+          {
+            "name": "user_id",
+            "origin": "implied",
+            "foreignKey": {
+              "table": "users",
+              "column": "id"
+            }
+          }
+        ],
+        "origin": "implied",
+        "sourceStatementIndex": 0,
+        "updatedAt": "2024-01-01T00:00:00Z",
+        "constraints": [
+          {
+            "constraintType": "foreign_key",
+            "columns": [
+              "user_id"
+            ],
+            "referencedTable": "users",
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "users",
+        "columns": [
+          {
+            "name": "id",
+            "origin": "implied",
+            "foreignKey": {
+              "table": "orders",
+              "column": "user_id"
+            }
+          }
+        ],
+        "origin": "implied",
+        "sourceStatementIndex": 0,
+        "updatedAt": "2024-01-01T00:00:00Z",
+        "constraints": [
+          {
+            "constraintType": "foreign_key",
+            "columns": [
+              "id"
+            ],
+            "referencedTable": "orders",
+            "referencedColumns": [
+              "user_id"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

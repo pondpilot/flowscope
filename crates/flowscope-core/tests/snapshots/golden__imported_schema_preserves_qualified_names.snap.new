@@ -1,0 +1,190 @@
+---
+source: crates/flowscope-core/tests/golden.rs
+assertion_line: 246
+expression: cleaned
+---
+{
+  "statements": [
+    {
+      "statementIndex": 0,
+      "statementType": "SELECT",
+      "joinCount": 0,
+      "complexityScore": 5
+    }
+  ],
+  "nodes": [
+    {
+      "id": "column_422dbff9bab1c4b2",
+      "type": "column",
+      "label": "id",
+      "qualifiedName": "public.users.id",
+      "canonicalName": {
+        "catalog": "public",
+        "schema": "users",
+        "name": "id"
+      },
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "column_9cf31ab8333dc87c",
+      "type": "column",
+      "label": "email",
+      "qualifiedName": "public.users.email",
+      "canonicalName": {
+        "catalog": "public",
+        "schema": "users",
+        "name": "email"
+      },
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "column_dacc241e355a2303",
+      "type": "column",
+      "label": "email",
+      "canonicalName": {
+        "name": "email"
+      },
+      "statementIds": [
+        0
+      ],
+      "metadata": {
+        "data_type": "TEXT"
+      }
+    },
+    {
+      "id": "column_e38d78c338bac387",
+      "type": "column",
+      "label": "id",
+      "canonicalName": {
+        "name": "id"
+      },
+      "statementIds": [
+        0
+      ],
+      "metadata": {
+        "data_type": "INTEGER"
+      }
+    },
+    {
+      "id": "output_74d22f755ec62dbc",
+      "type": "output",
+      "label": "Output",
+      "canonicalName": {
+        "name": "Output"
+      },
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "table_61860e36618f6e44",
+      "type": "table",
+      "label": "users",
+      "qualifiedName": "public.users",
+      "canonicalName": {
+        "schema": "public",
+        "name": "users"
+      },
+      "statementIds": [
+        0
+      ],
+      "resolutionSource": "imported"
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_0fd7c9d999a9289c",
+      "from": "table_61860e36618f6e44",
+      "to": "column_9cf31ab8333dc87c",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_672b1257db7bb55c",
+      "from": "output_74d22f755ec62dbc",
+      "to": "column_dacc241e355a2303",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_686fd17f81858f87",
+      "from": "table_61860e36618f6e44",
+      "to": "column_422dbff9bab1c4b2",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_90404cb72e70cc3e",
+      "from": "column_9cf31ab8333dc87c",
+      "to": "column_dacc241e355a2303",
+      "type": "data_flow",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_9b5441461589fa16",
+      "from": "output_74d22f755ec62dbc",
+      "to": "column_e38d78c338bac387",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_abf4e6de48add9f9",
+      "from": "column_422dbff9bab1c4b2",
+      "to": "column_e38d78c338bac387",
+      "type": "data_flow",
+      "statementIds": [
+        0
+      ]
+    }
+  ],
+  "issues": [],
+  "summary": {
+    "statementCount": 1,
+    "tableCount": 1,
+    "columnCount": 4,
+    "joinCount": 0,
+    "complexityScore": 5,
+    "issueCount": {
+      "errors": 0,
+      "warnings": 0,
+      "infos": 0
+    },
+    "hasErrors": false
+  },
+  "resolvedSchema": {
+    "tables": [
+      {
+        "schema": "public",
+        "name": "users",
+        "columns": [
+          {
+            "name": "id",
+            "dataType": "INT",
+            "origin": "imported"
+          },
+          {
+            "name": "email",
+            "dataType": "TEXT",
+            "origin": "imported"
+          }
+        ],
+        "origin": "imported",
+        "updatedAt": "2024-01-01T00:00:00Z"
+      }
+    ]
+  }
+}

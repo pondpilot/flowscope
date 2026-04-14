@@ -1,0 +1,196 @@
+---
+source: crates/flowscope-core/tests/snapshots.rs
+assertion_line: 278
+expression: clean_result
+---
+{
+  "statements": [
+    {
+      "statementIndex": 0,
+      "statementType": "SELECT",
+      "joinCount": 0,
+      "complexityScore": 5
+    }
+  ],
+  "nodes": [
+    {
+      "id": "column_0548992745ab357b",
+      "type": "column",
+      "label": "age",
+      "qualifiedName": "PEOPLE.age",
+      "canonicalName": {
+        "schema": "PEOPLE",
+        "name": "age"
+      },
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "column_0be6f431ab4acd37",
+      "type": "column",
+      "label": "AGE",
+      "canonicalName": {
+        "name": "AGE"
+      },
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "column_6ee5e5f27cc4ee3b",
+      "type": "column",
+      "label": "name",
+      "qualifiedName": "PEOPLE.name",
+      "canonicalName": {
+        "schema": "PEOPLE",
+        "name": "name"
+      },
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "column_7ceb220ce305d666",
+      "type": "column",
+      "label": "RECORD_COUNT",
+      "canonicalName": {
+        "name": "RECORD_COUNT"
+      },
+      "statementIds": [
+        0
+      ],
+      "expression": "COUNT(*)",
+      "metadata": {
+        "data_type": "INTEGER"
+      },
+      "aggregation": {
+        "isGroupingKey": false,
+        "function": "COUNT"
+      }
+    },
+    {
+      "id": "column_ffa7c99c403f959a",
+      "type": "column",
+      "label": "NAME",
+      "canonicalName": {
+        "name": "NAME"
+      },
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "output_74d22f755ec62dbc",
+      "type": "output",
+      "label": "Output",
+      "canonicalName": {
+        "name": "Output"
+      },
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "table_bdb8046950189433",
+      "type": "table",
+      "label": "PEOPLE",
+      "qualifiedName": "PEOPLE",
+      "canonicalName": {
+        "name": "PEOPLE"
+      },
+      "statementIds": [
+        0
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_06033fd1596541e8",
+      "from": "column_0548992745ab357b",
+      "to": "column_0be6f431ab4acd37",
+      "type": "data_flow",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_2c74ad5e18afd5b3",
+      "from": "table_bdb8046950189433",
+      "to": "column_6ee5e5f27cc4ee3b",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_33e9980a3eaa63db",
+      "from": "table_bdb8046950189433",
+      "to": "column_0548992745ab357b",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_671cdc7a5a898ccd",
+      "from": "output_74d22f755ec62dbc",
+      "to": "column_ffa7c99c403f959a",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_6d5aeb845ddc9c63",
+      "from": "output_74d22f755ec62dbc",
+      "to": "column_0be6f431ab4acd37",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_73c36a54e2c489de",
+      "from": "output_74d22f755ec62dbc",
+      "to": "column_7ceb220ce305d666",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_9e212837aa080900",
+      "from": "column_6ee5e5f27cc4ee3b",
+      "to": "column_ffa7c99c403f959a",
+      "type": "data_flow",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_f0562ba125581844",
+      "from": "table_bdb8046950189433",
+      "to": "column_7ceb220ce305d666",
+      "type": "derivation",
+      "expression": "COUNT(*)",
+      "statementIds": [
+        0
+      ]
+    }
+  ],
+  "issues": [],
+  "summary": {
+    "statementCount": 1,
+    "tableCount": 1,
+    "columnCount": 5,
+    "joinCount": 0,
+    "complexityScore": 5,
+    "issueCount": {
+      "errors": 0,
+      "warnings": 0,
+      "infos": 0
+    },
+    "hasErrors": false
+  }
+}

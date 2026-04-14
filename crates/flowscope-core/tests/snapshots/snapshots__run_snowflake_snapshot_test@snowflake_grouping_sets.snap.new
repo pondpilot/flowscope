@@ -1,0 +1,196 @@
+---
+source: crates/flowscope-core/tests/snapshots.rs
+assertion_line: 278
+expression: clean_result
+---
+{
+  "statements": [
+    {
+      "statementIndex": 0,
+      "statementType": "SELECT",
+      "joinCount": 0,
+      "complexityScore": 5
+    }
+  ],
+  "nodes": [
+    {
+      "id": "column_7aed304dee77a680",
+      "type": "column",
+      "label": "foo",
+      "qualifiedName": "BAZ.foo",
+      "canonicalName": {
+        "schema": "BAZ",
+        "name": "foo"
+      },
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "column_854f1a8964602bc6",
+      "type": "column",
+      "label": "bar",
+      "qualifiedName": "BAZ.bar",
+      "canonicalName": {
+        "schema": "BAZ",
+        "name": "bar"
+      },
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "column_92b4fedae9da7400",
+      "type": "column",
+      "label": "FOO",
+      "canonicalName": {
+        "name": "FOO"
+      },
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "column_dbc579d5c4a0a3f3",
+      "type": "column",
+      "label": "BAR",
+      "canonicalName": {
+        "name": "BAR"
+      },
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "column_f0a1bcda1cfea975",
+      "type": "column",
+      "label": "CNT",
+      "canonicalName": {
+        "name": "CNT"
+      },
+      "statementIds": [
+        0
+      ],
+      "expression": "COUNT(*)",
+      "metadata": {
+        "data_type": "INTEGER"
+      },
+      "aggregation": {
+        "isGroupingKey": false,
+        "function": "COUNT"
+      }
+    },
+    {
+      "id": "output_74d22f755ec62dbc",
+      "type": "output",
+      "label": "Output",
+      "canonicalName": {
+        "name": "Output"
+      },
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "table_ee2c0bd87d9925df",
+      "type": "table",
+      "label": "BAZ",
+      "qualifiedName": "BAZ",
+      "canonicalName": {
+        "name": "BAZ"
+      },
+      "statementIds": [
+        0
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_2bb1d8f40bc571ec",
+      "from": "table_ee2c0bd87d9925df",
+      "to": "column_f0a1bcda1cfea975",
+      "type": "derivation",
+      "expression": "COUNT(*)",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_57c4eee53c03e641",
+      "from": "output_74d22f755ec62dbc",
+      "to": "column_92b4fedae9da7400",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_676245bd8b3d3f50",
+      "from": "output_74d22f755ec62dbc",
+      "to": "column_f0a1bcda1cfea975",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_793b100a179072a7",
+      "from": "table_ee2c0bd87d9925df",
+      "to": "column_854f1a8964602bc6",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_8f8e276d1a26821c",
+      "from": "table_ee2c0bd87d9925df",
+      "to": "column_7aed304dee77a680",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_94badfcfb9f8a9ea",
+      "from": "output_74d22f755ec62dbc",
+      "to": "column_dbc579d5c4a0a3f3",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_b96d84237f2537dc",
+      "from": "column_7aed304dee77a680",
+      "to": "column_92b4fedae9da7400",
+      "type": "data_flow",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_e4f1b5e0b6563a07",
+      "from": "column_854f1a8964602bc6",
+      "to": "column_dbc579d5c4a0a3f3",
+      "type": "data_flow",
+      "statementIds": [
+        0
+      ]
+    }
+  ],
+  "issues": [],
+  "summary": {
+    "statementCount": 1,
+    "tableCount": 1,
+    "columnCount": 5,
+    "joinCount": 0,
+    "complexityScore": 5,
+    "issueCount": {
+      "errors": 0,
+      "warnings": 0,
+      "infos": 0
+    },
+    "hasErrors": false
+  }
+}

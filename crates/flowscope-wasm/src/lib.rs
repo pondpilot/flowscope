@@ -545,7 +545,7 @@ mod tests {
         assert_eq!(parsed["statements"].as_array().unwrap().len(), 1);
 
         // Should have users table
-        let nodes = &parsed["statements"][0]["nodes"];
+        let nodes = &parsed["nodes"];
         assert!(nodes.is_array());
 
         // Should not have errors
@@ -592,8 +592,7 @@ mod tests {
         assert!(!parsed["summary"]["hasErrors"].as_bool().unwrap());
 
         // Should have nodes and edges
-        let statement = &parsed["statements"][0];
-        assert!(!statement["nodes"].as_array().unwrap().is_empty());
+        assert!(!parsed["nodes"].as_array().unwrap().is_empty());
     }
 
     #[test]

@@ -1,0 +1,192 @@
+---
+source: crates/flowscope-core/tests/snapshots.rs
+assertion_line: 278
+expression: clean_result
+---
+{
+  "statements": [
+    {
+      "statementIndex": 0,
+      "statementType": "SELECT",
+      "joinCount": 1,
+      "complexityScore": 20
+    }
+  ],
+  "nodes": [
+    {
+      "id": "column_9312b887682fcd76",
+      "type": "column",
+      "label": "P_ID",
+      "canonicalName": {
+        "name": "P_ID"
+      },
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "column_ffa7c99c403f959a",
+      "type": "column",
+      "label": "NAME",
+      "canonicalName": {
+        "name": "NAME"
+      },
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "output_74d22f755ec62dbc",
+      "type": "output",
+      "label": "Output",
+      "canonicalName": {
+        "name": "Output"
+      },
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "table_14fd3f715fc3ae74",
+      "type": "table",
+      "label": "B",
+      "qualifiedName": "B",
+      "canonicalName": {
+        "name": "B"
+      },
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "table_dd4853e04f0abbb5",
+      "type": "table",
+      "label": "A",
+      "qualifiedName": "A",
+      "canonicalName": {
+        "name": "A"
+      },
+      "statementIds": [
+        0
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_671cdc7a5a898ccd",
+      "from": "output_74d22f755ec62dbc",
+      "to": "column_ffa7c99c403f959a",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_7f6d7c7173448b60",
+      "from": "table_14fd3f715fc3ae74",
+      "to": "output_74d22f755ec62dbc",
+      "type": "join_dependency",
+      "joinType": "INNER",
+      "joinCondition": "b.c_id = a.c_id",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_8d1b60030155f6f4",
+      "from": "output_74d22f755ec62dbc",
+      "to": "column_9312b887682fcd76",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    }
+  ],
+  "issues": [
+    {
+      "severity": "warning",
+      "code": "UNRESOLVED_REFERENCE",
+      "message": "Column 'name' is ambiguous across tables in scope: A, B",
+      "statementIndex": 0
+    },
+    {
+      "severity": "warning",
+      "code": "UNRESOLVED_REFERENCE",
+      "message": "Column 'value' is ambiguous across tables in scope: A, B",
+      "statementIndex": 0
+    }
+  ],
+  "summary": {
+    "statementCount": 1,
+    "tableCount": 2,
+    "columnCount": 2,
+    "joinCount": 1,
+    "complexityScore": 20,
+    "issueCount": {
+      "errors": 0,
+      "warnings": 2,
+      "infos": 0
+    },
+    "hasErrors": false
+  },
+  "resolvedSchema": {
+    "tables": [
+      {
+        "name": "A",
+        "columns": [
+          {
+            "name": "c_id",
+            "origin": "implied",
+            "foreignKey": {
+              "table": "B",
+              "column": "c_id"
+            }
+          }
+        ],
+        "origin": "implied",
+        "sourceStatementIndex": 0,
+        "updatedAt": "2024-01-01T00:00:00Z",
+        "constraints": [
+          {
+            "constraintType": "foreign_key",
+            "columns": [
+              "c_id"
+            ],
+            "referencedTable": "B",
+            "referencedColumns": [
+              "c_id"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "B",
+        "columns": [
+          {
+            "name": "c_id",
+            "origin": "implied",
+            "foreignKey": {
+              "table": "A",
+              "column": "c_id"
+            }
+          }
+        ],
+        "origin": "implied",
+        "sourceStatementIndex": 0,
+        "updatedAt": "2024-01-01T00:00:00Z",
+        "constraints": [
+          {
+            "constraintType": "foreign_key",
+            "columns": [
+              "c_id"
+            ],
+            "referencedTable": "A",
+            "referencedColumns": [
+              "c_id"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

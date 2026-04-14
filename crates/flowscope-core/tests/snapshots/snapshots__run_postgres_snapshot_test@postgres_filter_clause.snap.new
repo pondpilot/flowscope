@@ -1,0 +1,246 @@
+---
+source: crates/flowscope-core/tests/snapshots.rs
+assertion_line: 50
+expression: clean_result
+---
+{
+  "statements": [
+    {
+      "statementIndex": 0,
+      "statementType": "SELECT",
+      "joinCount": 0,
+      "complexityScore": 5
+    }
+  ],
+  "nodes": [
+    {
+      "id": "column_31b13094ac5619c4",
+      "type": "column",
+      "label": "total_salary",
+      "canonicalName": {
+        "name": "total_salary"
+      },
+      "statementIds": [
+        0
+      ],
+      "expression": "SUM(salary)",
+      "metadata": {
+        "data_type": "FLOAT"
+      },
+      "aggregation": {
+        "isGroupingKey": false,
+        "function": "SUM"
+      }
+    },
+    {
+      "id": "column_9a0ca2442c2dc4da",
+      "type": "column",
+      "label": "department_id",
+      "canonicalName": {
+        "name": "department_id"
+      },
+      "statementIds": [
+        0
+      ],
+      "aggregation": {
+        "isGroupingKey": true
+      }
+    },
+    {
+      "id": "column_da4cb22277640373",
+      "type": "column",
+      "label": "department_id",
+      "qualifiedName": "employees.department_id",
+      "canonicalName": {
+        "schema": "employees",
+        "name": "department_id"
+      },
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "column_e660585562e73fcd",
+      "type": "column",
+      "label": "high_performer_avg",
+      "canonicalName": {
+        "name": "high_performer_avg"
+      },
+      "statementIds": [
+        0
+      ],
+      "expression": "AVG(salary) FILTER (WHERE performance_rating >= 4)",
+      "metadata": {
+        "data_type": "FLOAT"
+      },
+      "aggregation": {
+        "isGroupingKey": false,
+        "function": "AVG"
+      }
+    },
+    {
+      "id": "column_e88d1dc46e107574",
+      "type": "column",
+      "label": "senior_salary",
+      "canonicalName": {
+        "name": "senior_salary"
+      },
+      "statementIds": [
+        0
+      ],
+      "expression": "SUM(salary) FILTER (WHERE years_employed > 5)",
+      "metadata": {
+        "data_type": "FLOAT"
+      },
+      "aggregation": {
+        "isGroupingKey": false,
+        "function": "SUM"
+      }
+    },
+    {
+      "id": "column_fc7fc7c46a855c0c",
+      "type": "column",
+      "label": "salary",
+      "qualifiedName": "employees.salary",
+      "canonicalName": {
+        "schema": "employees",
+        "name": "salary"
+      },
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "output_74d22f755ec62dbc",
+      "type": "output",
+      "label": "Output",
+      "canonicalName": {
+        "name": "Output"
+      },
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "table_1d63721b3610a67f",
+      "type": "table",
+      "label": "employees",
+      "qualifiedName": "employees",
+      "canonicalName": {
+        "name": "employees"
+      },
+      "statementIds": [
+        0
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_0b99e9e96319ac3f",
+      "from": "output_74d22f755ec62dbc",
+      "to": "column_e88d1dc46e107574",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_1bb9f818e49b0ceb",
+      "from": "output_74d22f755ec62dbc",
+      "to": "column_9a0ca2442c2dc4da",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_2e4c60ca89b2506f",
+      "from": "column_fc7fc7c46a855c0c",
+      "to": "column_e88d1dc46e107574",
+      "type": "derivation",
+      "expression": "SUM(salary) FILTER (WHERE years_employed > 5)",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_4635f7dab6e1e8ad",
+      "from": "column_fc7fc7c46a855c0c",
+      "to": "column_31b13094ac5619c4",
+      "type": "derivation",
+      "expression": "SUM(salary)",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_4942f2cbce2e9856",
+      "from": "table_1d63721b3610a67f",
+      "to": "column_fc7fc7c46a855c0c",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_5b915d8b19715428",
+      "from": "column_fc7fc7c46a855c0c",
+      "to": "column_e660585562e73fcd",
+      "type": "derivation",
+      "expression": "AVG(salary) FILTER (WHERE performance_rating >= 4)",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_ab57ac36639eb56e",
+      "from": "column_da4cb22277640373",
+      "to": "column_9a0ca2442c2dc4da",
+      "type": "data_flow",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_b766e8cbcb82abde",
+      "from": "table_1d63721b3610a67f",
+      "to": "column_da4cb22277640373",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_c2f168db8af94a2f",
+      "from": "output_74d22f755ec62dbc",
+      "to": "column_31b13094ac5619c4",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    },
+    {
+      "id": "edge_f84da893c27f2b5a",
+      "from": "output_74d22f755ec62dbc",
+      "to": "column_e660585562e73fcd",
+      "type": "ownership",
+      "statementIds": [
+        0
+      ]
+    }
+  ],
+  "issues": [],
+  "summary": {
+    "statementCount": 1,
+    "tableCount": 1,
+    "columnCount": 6,
+    "joinCount": 0,
+    "complexityScore": 5,
+    "issueCount": {
+      "errors": 0,
+      "warnings": 0,
+      "infos": 0
+    },
+    "hasErrors": false
+  }
+}
