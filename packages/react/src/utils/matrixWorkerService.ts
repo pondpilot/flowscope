@@ -2,7 +2,7 @@
  * Service for communicating with the matrix Web Worker.
  * Offloads matrix computation to keep the UI responsive.
  */
-import type { StatementLineage } from '../types';
+import type { AnalyzeResult } from '@pondpilot/flowscope-core';
 import type { MatrixData } from './matrixUtils';
 import type {
   MatrixBuildRequest,
@@ -95,7 +95,7 @@ function getWorker(): Worker {
 }
 
 export async function buildMatrixInWorker(
-  statements: StatementLineage[],
+  result: AnalyzeResult,
   options?: { maxItems?: number }
 ): Promise<MatrixBuildResult> {
   const requestId = `matrix-${++requestIdCounter}`;
@@ -104,7 +104,7 @@ export async function buildMatrixInWorker(
   const request: MatrixBuildRequest = {
     type: 'build-matrix',
     requestId,
-    statements,
+    result,
     maxItems: options?.maxItems,
   };
 

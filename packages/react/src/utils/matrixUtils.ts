@@ -3,9 +3,8 @@
  * These functions analyze lineage data to build dependency matrices.
  */
 
-import type { Span } from '@pondpilot/flowscope-core';
-import { isTableLikeType } from '@pondpilot/flowscope-core';
-import type { StatementLineage } from '../types';
+import type { AnalyzeResult, Span } from '@pondpilot/flowscope-core';
+import { isTableLikeType, nodesInStatement, edgesInStatement } from '@pondpilot/flowscope-core';
 import {
   getCreatedRelationNodeIds,
   OUTPUT_NODE_TYPE,
@@ -46,16 +45,14 @@ export interface MatrixData {
 // ============================================================================
 
 /**
- * Extracts all unique column names from lineage statements.
+ * Extracts all unique column names from the lineage graph.
  * Used for search autocomplete.
  */
-export function extractAllColumnNames(statements: StatementLineage[]): string[] {
+export function extractAllColumnNames(result: AnalyzeResult): string[] {
   const columnNames = new Set<string>();
-  for (const stmt of statements) {
-    for (const node of stmt.nodes) {
-      if (node.type === 'column') {
-        columnNames.add(node.label);
-      }
+  for (const node of result.nodes) {
+    if (node.type === 'column') {
+      columnNames.add(node.label);
     }
   }
   return Array.from(columnNames).sort();
@@ -66,23 +63,25 @@ export function extractAllColumnNames(statements: StatementLineage[]): string[] 
  * Tracks which columns flow between tables and captures source spans for navigation.
  */
 export function extractTableDependenciesWithDetails(
-  statements: StatementLineage[]
+  result: AnalyzeResult
 ): TableDependencyWithDetails[] {
   const depMap = new Map<string, TableDependencyWithDetails>();
 
-  for (const stmt of statements) {
-    const tableNodes = stmt.nodes.filter((n) => isTableLikeType(n.type));
-    const outputNodes = stmt.nodes.filter((n) => n.type === OUTPUT_NODE_TYPE);
+  for (const stmt of result.statements) {
+    const stmtNodes = nodesInStatement(result, stmt.statementIndex);
+    const stmtEdges = edgesInStatement(result, stmt.statementIndex);
+    const tableNodes = stmtNodes.filter((n) => isTableLikeType(n.type));
+    const outputNodes = stmtNodes.filter((n) => n.type === OUTPUT_NODE_TYPE);
     const relationNodes = [...tableNodes, ...outputNodes];
-    const columnNodes = stmt.nodes.filter((n) => n.type === 'column');
+    const columnNodes = stmtNodes.filter((n) => n.type === 'column');
 
     const columnToTable = buildColumnOwnershipMap(
-      stmt.edges,
+      stmtEdges,
       relationNodes,
       (n) => n.qualifiedName || n.label
     );
 
-    for (const edge of stmt.edges) {
+    for (const edge of stmtEdges) {
       if (edge.type === 'data_flow' || edge.type === JOIN_DEPENDENCY_EDGE_TYPE) {
         const sourceNode = relationNodes.find((n) => n.id === edge.from);
         const targetNode = relationNodes.find((n) => n.id === edge.to);
@@ -155,19 +154,21 @@ export interface ScriptDependencyResult {
  * A dependency exists when one script writes to a table that another script reads.
  * Returns both dependencies and all script names (for showing scripts with no dependencies).
  */
-export function extractScriptDependencies(statements: StatementLineage[]): ScriptDependencyResult {
+export function extractScriptDependencies(result: AnalyzeResult): ScriptDependencyResult {
   const scriptMap = new Map<string, { tablesRead: Set<string>; tablesWritten: Set<string> }>();
 
-  for (const stmt of statements) {
+  for (const stmt of result.statements) {
     const sourceName = stmt.sourceName || 'default';
     if (!scriptMap.has(sourceName)) {
       scriptMap.set(sourceName, { tablesRead: new Set(), tablesWritten: new Set() });
     }
     const scriptData = scriptMap.get(sourceName)!;
 
-    const tableNodes = stmt.nodes.filter((n) => n.type === 'table' || n.type === 'view');
-    const outputNodes = stmt.nodes.filter((n) => n.type === OUTPUT_NODE_TYPE);
-    const createdRelationIds = getCreatedRelationNodeIds(stmt);
+    const stmtNodes = nodesInStatement(result, stmt.statementIndex);
+    const stmtEdges = edgesInStatement(result, stmt.statementIndex);
+    const tableNodes = stmtNodes.filter((n) => n.type === 'table' || n.type === 'view');
+    const outputNodes = stmtNodes.filter((n) => n.type === OUTPUT_NODE_TYPE);
+    const createdRelationIds = getCreatedRelationNodeIds(stmt.statementType, stmtNodes, stmtEdges);
 
     for (const node of outputNodes) {
       scriptData.tablesWritten.add(node.qualifiedName || node.label);
@@ -176,9 +177,9 @@ export function extractScriptDependencies(statements: StatementLineage[]): Scrip
     for (const node of tableNodes) {
       const tableName = node.qualifiedName || node.label;
       const isWritten =
-        stmt.edges.some((e) => e.to === node.id && e.type === 'data_flow') ||
+        stmtEdges.some((e) => e.to === node.id && e.type === 'data_flow') ||
         createdRelationIds.has(node.id);
-      const isRead = stmt.edges.some((e) => e.from === node.id && e.type === 'data_flow');
+      const isRead = stmtEdges.some((e) => e.from === node.id && e.type === 'data_flow');
 
       if (isWritten) {
         scriptData.tablesWritten.add(tableName);

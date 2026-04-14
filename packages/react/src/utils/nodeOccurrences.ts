@@ -1,5 +1,4 @@
 import type { AnalyzeResult, Node, Span } from '@pondpilot/flowscope-core';
-import type { StatementLineage } from '../types';
 
 const OCCURRENCE_SOURCE_NAMES_METADATA_KEY = 'occurrenceSourceNames';
 const BODY_SPANS_METADATA_KEY = 'bodySpans';
@@ -171,21 +170,4 @@ export function findMergedNodeById(
   }
 
   return mergedNode;
-}
-
-export function mergeStatementNodesForNavigation(statements: StatementLineage[]): Node[] {
-  const mergedNodes = new Map<string, Node>();
-
-  statements.forEach((statement) => {
-    statement.nodes.forEach((node) => {
-      const mergedNode = mergeNodesForNavigation(
-        mergedNodes.get(node.id) ?? null,
-        node,
-        statement.sourceName
-      );
-      mergedNodes.set(node.id, mergedNode);
-    });
-  });
-
-  return Array.from(mergedNodes.values());
 }

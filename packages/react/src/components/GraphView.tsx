@@ -18,7 +18,6 @@ import { useLineage, useLineageStore } from '../store';
 import { useNodeFocus } from '../hooks/useNodeFocus';
 import { useGraphFiltering } from '../hooks/useGraphFiltering';
 import { useOccurrenceShortcuts } from '../hooks/useOccurrenceShortcuts';
-import { hydrateStatements } from '../types';
 import type { GraphViewProps, TableNodeData, LayoutAlgorithm } from '../types';
 import {
   getLayoutedElements,
@@ -399,14 +398,6 @@ export function GraphView({
   // Direction is always LR for now
   const direction = 'LR' as const;
 
-  // Rehydrate per-statement lineage (nodes/edges) from the flat result so that
-  // the existing graph builders can consume the legacy shape without changing
-  // every call site.
-  const hydratedStatements = useMemo(
-    () => (analysisResult ? hydrateStatements(analysisResult) : []),
-    [analysisResult]
-  );
-
   // Build the raw graph asynchronously in Web Worker (before filtering)
   useEffect(() => {
     if (!analysisResult || !analysisResult.statements) {
@@ -441,13 +432,13 @@ export function GraphView({
       const buildPromise =
         viewMode === 'script'
           ? buildScriptGraphInWorker({
-              statements: hydratedStatements,
+              result: analysisResult,
               selectedNodeId,
               searchTerm: effectiveSearchTerm,
               showTables: showScriptTables,
             })
           : buildTableGraphInWorker({
-              statements: hydratedStatements,
+              result: analysisResult,
               selectedNodeId,
               searchTerm: effectiveSearchTerm,
               collapsedNodeIds,
@@ -507,7 +498,6 @@ export function GraphView({
     };
   }, [
     analysisResult,
-    hydratedStatements,
     selectedNodeId,
     effectiveSearchTerm,
     viewMode,

@@ -2,7 +2,7 @@
  * Web Worker for matrix computation.
  * Builds table/script matrices and autocomplete data off the main thread.
  */
-import type { StatementLineage } from '../types';
+import type { AnalyzeResult } from '@pondpilot/flowscope-core';
 import type {
   MatrixData,
   TableDependencyWithDetails,
@@ -18,7 +18,7 @@ import {
 export interface MatrixBuildRequest {
   type: 'build-matrix';
   requestId: string;
-  statements: StatementLineage[];
+  result: AnalyzeResult;
   maxItems?: number;
 }
 
@@ -187,7 +187,7 @@ self.onmessage = (event: MessageEvent<MatrixBuildRequest>) => {
     const maxItems = request.maxItems ?? 0;
 
     const tableDepsStart = performance.now();
-    const tableDeps = extractTableDependenciesWithDetails(request.statements);
+    const tableDeps = extractTableDependenciesWithDetails(request.result);
     const tableDepsMs = performance.now() - tableDepsStart;
 
     const tableCounts = new Map<string, number>();
@@ -219,7 +219,7 @@ self.onmessage = (event: MessageEvent<MatrixBuildRequest>) => {
     const tableMetricsMs = performance.now() - tableMetricsStart;
 
     const scriptDepsStart = performance.now();
-    const scriptDeps = extractScriptDependencies(request.statements);
+    const scriptDeps = extractScriptDependencies(request.result);
     const scriptDepsMs = performance.now() - scriptDepsStart;
 
     const scriptCounts = new Map<string, number>();
@@ -250,7 +250,7 @@ self.onmessage = (event: MessageEvent<MatrixBuildRequest>) => {
     const scriptMetricsMs = performance.now() - scriptMetricsStart;
 
     const columnNamesStart = performance.now();
-    const allColumnNames = extractAllColumnNames(request.statements);
+    const allColumnNames = extractAllColumnNames(request.result);
     const columnNamesMs = performance.now() - columnNamesStart;
 
     const duration = performance.now() - startTime;

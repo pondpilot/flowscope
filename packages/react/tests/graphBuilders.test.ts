@@ -1,13 +1,63 @@
 import { describe, it, expect } from 'vitest';
-import type { StatementLineage } from '../src/types';
+import type { AnalyzeResult, Node, Edge, StatementMeta } from '@pondpilot/flowscope-core';
 import {
   buildFlowEdges,
   buildFlowNodes,
-  mergeStatements,
+  mergeAnalyzeResult,
   computeIsCollapsed,
   buildScriptLevelGraph,
+  type MergedLineage,
 } from '../src/utils/graphBuilders';
 import { GRAPH_CONFIG } from '../src/constants';
+
+/**
+ * Test fixture shape mirroring the legacy per-statement lineage — statement
+ * metadata plus the nodes/edges that participate in that statement. `toResult`
+ * flattens these fixtures into the shared `AnalyzeResult` shape consumed by
+ * the refactored graph builders.
+ */
+type TestStatement = StatementMeta & { nodes: Node[]; edges: Edge[] };
+
+function toResult(statements: TestStatement[]): AnalyzeResult {
+  const nodes: Node[] = [];
+  const edges: Edge[] = [];
+  const meta: StatementMeta[] = [];
+
+  // Preserve per-statement node/edge instances verbatim: the flat analyzer
+  // output usually dedupes same-id entries across statements, but tests that
+  // exercise the merge logic intentionally emit distinct Node objects per
+  // statement to carry statement-specific spans. See occurrenceCycling tests.
+  for (const stmt of statements) {
+    const { nodes: stmtNodes, edges: stmtEdges, ...m } = stmt;
+    meta.push(m);
+    for (const node of stmtNodes) {
+      nodes.push({ ...node, statementIds: [stmt.statementIndex] } as Node);
+    }
+    for (const edge of stmtEdges) {
+      edges.push({ ...edge, statementIds: [stmt.statementIndex] } as Edge);
+    }
+  }
+
+  return {
+    statements: meta,
+    nodes,
+    edges,
+    issues: [],
+    summary: {
+      statementCount: meta.length,
+      tableCount: 0,
+      columnCount: 0,
+      joinCount: 0,
+      complexityScore: 0,
+      issueCount: { errors: 0, warnings: 0, infos: 0 },
+      hasErrors: false,
+    },
+  };
+}
+
+function mergedFrom(statements: TestStatement[]): MergedLineage {
+  return mergeAnalyzeResult(toResult(statements));
+}
 
 describe('computeIsCollapsed', () => {
   it('returns true when defaultCollapsed is true and node is not in overrides', () => {
@@ -31,7 +81,7 @@ describe('computeIsCollapsed', () => {
   });
 });
 
-const createInsertLineage = (): StatementLineage => ({
+const createInsertLineage = (): TestStatement => ({
   statementIndex: 0,
   statementType: 'INSERT',
   joinCount: 0,
@@ -96,9 +146,9 @@ const createInsertLineage = (): StatementLineage => ({
   ],
 });
 
-describe('mergeStatements', () => {
+describe('mergeAnalyzeResult', () => {
   it('preserves edge join metadata from later statements', () => {
-    const firstStmt: StatementLineage = {
+    const firstStmt: TestStatement = {
       statementIndex: 0,
       statementType: 'SELECT',
       nodes: [{ id: 'table:users', type: 'table', label: 'users', qualifiedName: 'users' }],
@@ -107,7 +157,7 @@ describe('mergeStatements', () => {
       complexityScore: 1,
     };
 
-    const secondStmt: StatementLineage = {
+    const secondStmt: TestStatement = {
       statementIndex: 1,
       statementType: 'SELECT',
       nodes: [
@@ -132,14 +182,14 @@ describe('mergeStatements', () => {
       complexityScore: 1,
     };
 
-    const merged = mergeStatements([firstStmt, secondStmt]);
+    const merged = mergeAnalyzeResult(toResult([firstStmt, secondStmt]));
     const joinEdge = merged.edges.find((e) => e.id === 'edge:join');
     expect(joinEdge?.joinType).toBe('LEFT');
     expect(joinEdge?.joinCondition).toBe('u.id = o.user_id');
   });
 
   it('merges occurrence spans and source names for same-id nodes', () => {
-    const firstStmt: StatementLineage = {
+    const firstStmt: TestStatement = {
       statementIndex: 0,
       statementType: 'SELECT',
       sourceName: 'models/a.sql',
@@ -157,7 +207,7 @@ describe('mergeStatements', () => {
       complexityScore: 1,
     };
 
-    const secondStmt: StatementLineage = {
+    const secondStmt: TestStatement = {
       statementIndex: 1,
       statementType: 'SELECT',
       sourceName: 'models/b.sql',
@@ -178,7 +228,7 @@ describe('mergeStatements', () => {
       complexityScore: 1,
     };
 
-    const merged = mergeStatements([firstStmt, secondStmt]);
+    const merged = mergeAnalyzeResult(toResult([firstStmt, secondStmt]));
     const mergedNode = merged.nodes.find((node) => node.id === 'table:users');
 
     expect(mergedNode?.nameSpans).toEqual([
@@ -200,7 +250,7 @@ describe('mergeStatements', () => {
  * - Final SELECT joins users with both CTEs
  * - Represents: CREATE VIEW customer_360 AS WITH ... SELECT ... FROM users LEFT JOIN user_ltv LEFT JOIN user_engagement
  */
-const createCustomer360Lineage = (): StatementLineage => ({
+const createCustomer360Lineage = (): TestStatement => ({
   statementIndex: 0,
   statementType: 'CREATE_VIEW',
   joinCount: 2,
@@ -455,8 +505,8 @@ describe('buildFlowEdges table consistency', () => {
     const statement = createCustomer360Lineage();
 
     // Build edges in both modes
-    const tableEdges = buildFlowEdges(statement, false);
-    const columnEdges = buildFlowEdges(statement, true);
+    const tableEdges = buildFlowEdges(mergedFrom([statement]), false);
+    const columnEdges = buildFlowEdges(mergedFrom([statement]), true);
 
     // Extract unique table pairs from each (source->target)
     const tableModePairs = new Set(tableEdges.map((e) => `${e.source}->${e.target}`));
@@ -478,7 +528,7 @@ describe('buildFlowEdges table consistency', () => {
 
   it('should include expected table relationships for customer_360', () => {
     const statement = createCustomer360Lineage();
-    const edges = buildFlowEdges(statement, false);
+    const edges = buildFlowEdges(mergedFrom([statement]), false);
 
     const tablePairs = edges.map((e) => `${e.source}->${e.target}`);
 
@@ -491,7 +541,7 @@ describe('buildFlowEdges table consistency', () => {
   });
 
   it('retains join-only table edges in column view', () => {
-    const statement: StatementLineage = {
+    const statement: TestStatement = {
       statementIndex: 0,
       statementType: 'CREATE_VIEW',
       joinCount: 1,
@@ -546,7 +596,7 @@ describe('buildFlowEdges table consistency', () => {
       ],
     };
 
-    const columnEdges = buildFlowEdges(statement, true);
+    const columnEdges = buildFlowEdges(mergedFrom([statement]), true);
     const tablePairs = columnEdges.map((edge) => `${edge.source}->${edge.target}`);
 
     expect(tablePairs).toContain('table:table2->view:report');
@@ -557,20 +607,26 @@ describe('graphBuilders DML handling', () => {
   it('renders INSERT lineage into the real target even with unqualified columns present', () => {
     const statement = createInsertLineage();
 
-    const flowEdges = buildFlowEdges(statement);
+    const flowEdges = buildFlowEdges(mergedFrom([statement]));
     expect(flowEdges).toHaveLength(1);
     expect(flowEdges[0]).toMatchObject({
       source: 'table:staging.orders',
       target: 'table:analytics.tgt_orders',
     });
 
-    const flowNodes = buildFlowNodes(statement, null, '', new Set<string>(), new Set<string>());
+    const flowNodes = buildFlowNodes(
+      mergedFrom([statement]),
+      null,
+      '',
+      new Set<string>(),
+      new Set<string>()
+    );
     const outputNode = flowNodes.find((node) => node.id === GRAPH_CONFIG.VIRTUAL_OUTPUT_NODE_ID);
     expect(outputNode).toBeUndefined();
   });
 
   it('keeps SELECT-style output edges even when other statements introduce table-level edges', () => {
-    const statement: StatementLineage = {
+    const statement: TestStatement = {
       statementIndex: 0,
       statementType: 'SELECT',
       joinCount: 0,
@@ -610,7 +666,7 @@ describe('graphBuilders DML handling', () => {
       ],
     };
 
-    const edges = buildFlowEdges(statement);
+    const edges = buildFlowEdges(mergedFrom([statement]));
     const dmlEdge = edges.find(
       (edge) => edge.source === 'table:source' && edge.target === 'table:target'
     );
@@ -622,13 +678,19 @@ describe('graphBuilders DML handling', () => {
     );
     expect(selectEdge, 'should add SELECT output edge').toBeDefined();
 
-    const nodes = buildFlowNodes(statement, null, '', new Set<string>(), new Set<string>());
+    const nodes = buildFlowNodes(
+      mergedFrom([statement]),
+      null,
+      '',
+      new Set<string>(),
+      new Set<string>()
+    );
     const outputNode = nodes.find((node) => node.id === GRAPH_CONFIG.VIRTUAL_OUTPUT_NODE_ID);
     expect(outputNode, 'virtual Output node should exist for SELECT projections').toBeDefined();
   });
 
   it('renders relation-to-output-column lineage as a table-to-output edge', () => {
-    const statement: StatementLineage = {
+    const statement: TestStatement = {
       statementIndex: 0,
       statementType: 'SELECT',
       joinCount: 1,
@@ -664,8 +726,8 @@ describe('graphBuilders DML handling', () => {
       ],
     };
 
-    const tableEdges = buildFlowEdges(statement, false);
-    const columnEdges = buildFlowEdges(statement, true);
+    const tableEdges = buildFlowEdges(mergedFrom([statement]), false);
+    const columnEdges = buildFlowEdges(mergedFrom([statement]), true);
 
     expect(
       tableEdges.find((edge) => edge.source === 'table:users' && edge.target === 'output:1'),
@@ -682,7 +744,7 @@ describe('graphBuilders DML handling', () => {
   });
 
   it('keeps separate explicit output nodes when merged statements include multiple models', () => {
-    const customersStmt: StatementLineage = {
+    const customersStmt: TestStatement = {
       statementIndex: 0,
       statementType: 'SELECT',
       joinCount: 0,
@@ -712,7 +774,7 @@ describe('graphBuilders DML handling', () => {
       ],
     };
 
-    const ordersStmt: StatementLineage = {
+    const ordersStmt: TestStatement = {
       statementIndex: 1,
       statementType: 'SELECT',
       joinCount: 0,
@@ -742,7 +804,7 @@ describe('graphBuilders DML handling', () => {
       ],
     };
 
-    const merged = mergeStatements([customersStmt, ordersStmt]);
+    const merged = mergeAnalyzeResult(toResult([customersStmt, ordersStmt]));
     const nodes = buildFlowNodes(merged, null, '', new Set<string>(), new Set<string>());
 
     const outputNodes = nodes.filter((node) => node.data.nodeType === 'virtualOutput');
@@ -759,7 +821,7 @@ describe('graphBuilders DML handling', () => {
   });
 
   it('preserves virtual output fallback when merged with an explicit-output statement', () => {
-    const explicitStmt: StatementLineage = {
+    const explicitStmt: TestStatement = {
       statementIndex: 0,
       statementType: 'SELECT',
       joinCount: 0,
@@ -807,7 +869,7 @@ describe('graphBuilders DML handling', () => {
       ],
     };
 
-    const fallbackStmt: StatementLineage = {
+    const fallbackStmt: TestStatement = {
       statementIndex: 1,
       statementType: 'SELECT',
       joinCount: 0,
@@ -848,7 +910,7 @@ describe('graphBuilders DML handling', () => {
       ],
     };
 
-    const merged = mergeStatements([explicitStmt, fallbackStmt]);
+    const merged = mergeAnalyzeResult(toResult([explicitStmt, fallbackStmt]));
     const nodes = buildFlowNodes(merged, null, '', new Set<string>(), new Set<string>());
     const edges = buildFlowEdges(merged);
 
@@ -864,7 +926,7 @@ describe('graphBuilders DML handling', () => {
   });
 
   it('does not create a virtual output node when an explicit output node lacks ownership edges', () => {
-    const statement: StatementLineage = {
+    const statement: TestStatement = {
       statementIndex: 0,
       statementType: 'SELECT',
       joinCount: 0,
@@ -891,8 +953,14 @@ describe('graphBuilders DML handling', () => {
       ],
     };
 
-    const nodes = buildFlowNodes(statement, null, '', new Set<string>(), new Set<string>());
-    const edges = buildFlowEdges(statement);
+    const nodes = buildFlowNodes(
+      mergedFrom([statement]),
+      null,
+      '',
+      new Set<string>(),
+      new Set<string>()
+    );
+    const edges = buildFlowEdges(mergedFrom([statement]));
 
     expect(nodes.find((node) => node.id === 'output:legacy')).toBeDefined();
     expect(nodes.find((node) => node.id === GRAPH_CONFIG.VIRTUAL_OUTPUT_NODE_ID)).toBeUndefined();
@@ -902,7 +970,7 @@ describe('graphBuilders DML handling', () => {
   });
 
   it('only marks physical tables as base tables when joins exist', () => {
-    const statement: StatementLineage = {
+    const statement: TestStatement = {
       statementIndex: 0,
       statementType: 'SELECT',
       nodes: [
@@ -957,7 +1025,13 @@ describe('graphBuilders DML handling', () => {
       complexityScore: 1,
     };
 
-    const nodes = buildFlowNodes(statement, null, '', new Set<string>(), new Set<string>());
+    const nodes = buildFlowNodes(
+      mergedFrom([statement]),
+      null,
+      '',
+      new Set<string>(),
+      new Set<string>()
+    );
     const usersNode = nodes.find((node) => node.id === 'table:users');
     const ordersNode = nodes.find((node) => node.id === 'table:orders');
     const recentOrdersNode = nodes.find((node) => node.id === 'cte:recent_orders');
@@ -970,7 +1044,7 @@ describe('graphBuilders DML handling', () => {
   });
 
   it('emits distinct synthetic edge ids for distinct relation pairs containing _to_', () => {
-    const statement: StatementLineage = {
+    const statement: TestStatement = {
       statementIndex: 0,
       statementType: 'INSERT',
       joinCount: 0,
@@ -1025,7 +1099,7 @@ describe('graphBuilders DML handling', () => {
       ],
     };
 
-    const edges = buildFlowEdges(statement);
+    const edges = buildFlowEdges(mergedFrom([statement]));
     const edgeIds = edges.map((edge) => edge.id);
 
     expect(edges).toHaveLength(2);
@@ -1037,7 +1111,7 @@ describe('graphBuilders DML handling', () => {
   });
 
   it('includes explicit output nodes as written relations in script graph mode', () => {
-    const statements: StatementLineage[] = [
+    const statements: TestStatement[] = [
       {
         statementIndex: 0,
         statementType: 'WITH',
@@ -1062,7 +1136,7 @@ describe('graphBuilders DML handling', () => {
       },
     ];
 
-    const { nodes, edges } = buildScriptLevelGraph(statements, null, '', true);
+    const { nodes, edges } = buildScriptLevelGraph(toResult(statements), null, '', true);
 
     expect(nodes.find((node) => node.id === 'table:scratchpad')).toBeDefined();
     expect(

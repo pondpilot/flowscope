@@ -5,38 +5,10 @@ import type {
   Edge,
   Issue,
   Span,
-  StatementMeta,
   SchemaTable,
   FilterPredicate,
   AggregationInfo,
 } from '@pondpilot/flowscope-core';
-
-/**
- * A statement metadata record hydrated with the subset of the flat
- * `AnalyzeResult.nodes` / `.edges` that participate in that statement.
- *
- * The core API exposes lineage as a single flat graph keyed by
- * `statementIds`; many UI helpers were written against the legacy
- * per-statement shape, and this rehydration lets them keep working
- * without restructuring every consumer.
- */
-export interface StatementLineage extends StatementMeta {
-  nodes: Node[];
-  edges: Edge[];
-}
-
-/**
- * Rehydrate the legacy per-statement shape from a flat `AnalyzeResult`.
- * Each entry carries the statement metadata plus the nodes/edges whose
- * `statementIds` include that statement index.
- */
-export function hydrateStatements(result: AnalyzeResult): StatementLineage[] {
-  return result.statements.map((meta) => ({
-    ...meta,
-    nodes: result.nodes.filter((n) => n.statementIds.includes(meta.statementIndex)),
-    edges: result.edges.filter((e) => e.statementIds.includes(meta.statementIndex)),
-  }));
-}
 
 /**
  * View mode for the lineage graph visualization.
@@ -409,11 +381,5 @@ export interface ColumnNodeData extends Record<string, unknown> {
   /** Optional source file name */
   sourceName?: string;
 }
-
-/**
- * Extended StatementLineage type with optional source_name field.
- * The core StatementLineage may include source_name when analyzing multiple files.
- */
-export type StatementLineageWithSource = StatementLineage;
 
 export type { AnalyzeResult, Node, Edge, Issue, Span };

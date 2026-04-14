@@ -1,5 +1,4 @@
 import type { Node, Edge, AggregationInfo } from '@pondpilot/flowscope-core';
-import type { StatementLineage } from '../types';
 import { JOIN_TYPE_LABELS } from '../constants';
 
 const CREATE_STATEMENT_TYPES = new Set(['CREATE_TABLE', 'CREATE_TABLE_AS', 'CREATE_VIEW']);
@@ -18,17 +17,25 @@ const STATEMENT_SCOPE_METADATA_KEY = 'statementScope';
  * For CREATE statements we prefer nodes that receive data_flow edges; when lineage
  * does not include explicit flows (simple CREATE TABLE), we fall back to the sole
  * relation node or one that matches the statement type.
+ *
+ * Operates on a per-statement view of the flat `AnalyzeResult`: pass the statement
+ * type together with the nodes and edges that participate in that statement
+ * (see `nodesInStatement` / `edgesInStatement`).
  */
-export function getCreatedRelationNodeIds(stmt: StatementLineage): Set<string> {
-  if (!CREATE_STATEMENT_TYPES.has(stmt.statementType)) {
+export function getCreatedRelationNodeIds(
+  statementType: string,
+  nodes: Node[],
+  edges: Edge[]
+): Set<string> {
+  if (!CREATE_STATEMENT_TYPES.has(statementType)) {
     return new Set();
   }
 
-  const relationNodes = stmt.nodes.filter((n) => n.type === 'table' || n.type === 'view');
+  const relationNodes = nodes.filter((n) => n.type === 'table' || n.type === 'view');
   const relationNodeIds = new Set(relationNodes.map((n) => n.id));
 
   const createdNodeIds = new Set<string>();
-  for (const edge of stmt.edges) {
+  for (const edge of edges) {
     if (edge.type === 'data_flow' && relationNodeIds.has(edge.to)) {
       createdNodeIds.add(edge.to);
     }
@@ -44,7 +51,7 @@ export function getCreatedRelationNodeIds(stmt: StatementLineage): Set<string> {
   }
 
   // When lineage data does not include flows, fall back to the relation type that matches the statement.
-  const targetType = stmt.statementType === 'CREATE_VIEW' ? 'view' : 'table';
+  const targetType = statementType === 'CREATE_VIEW' ? 'view' : 'table';
   const matchingNodes = relationNodes.filter((node) => node.type === targetType);
   if (matchingNodes.length === 1) {
     createdNodeIds.add(matchingNodes[0].id);

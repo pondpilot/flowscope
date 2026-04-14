@@ -61,7 +61,7 @@ export type {
 } from './types';
 
 // Re-export core types for convenience
-export type { AnalyzeResult, Node, Edge, Issue, Span, StatementLineage } from './types';
+export type { AnalyzeResult, Node, Edge, Issue, Span } from './types';
 
 // Utilities
 export {

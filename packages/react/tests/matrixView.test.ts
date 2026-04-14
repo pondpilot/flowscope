@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { StatementLineage } from '../src/types';
+import type { AnalyzeResult, Node, Edge, StatementMeta } from '@pondpilot/flowscope-core';
 import {
   extractTableDependenciesWithDetails,
   extractScriptDependencies,
@@ -8,8 +8,53 @@ import {
   type TableDependencyWithDetails,
 } from '../src/utils/matrixUtils';
 
+/**
+ * Test fixture shape mirroring the legacy per-statement lineage — statement
+ * metadata plus the nodes/edges that participate in that statement. `toResult`
+ * below flattens these fixtures into the shared `AnalyzeResult` shape the
+ * matrix utilities consume.
+ */
+type TestStatement = StatementMeta & { nodes: Node[]; edges: Edge[] };
+
+function toResult(statements: TestStatement[]): AnalyzeResult {
+  const nodes: Node[] = [];
+  const edges: Edge[] = [];
+  const meta: StatementMeta[] = [];
+
+  // Preserve per-statement node/edge instances verbatim: the flat analyzer
+  // output usually dedupes same-id entries across statements, but tests emit
+  // distinct instances so `nodesInStatement` / `edgesInStatement` return the
+  // right per-statement subset.
+  for (const stmt of statements) {
+    const { nodes: stmtNodes, edges: stmtEdges, ...m } = stmt;
+    meta.push(m);
+    for (const node of stmtNodes) {
+      nodes.push({ ...node, statementIds: [stmt.statementIndex] } as Node);
+    }
+    for (const edge of stmtEdges) {
+      edges.push({ ...edge, statementIds: [stmt.statementIndex] } as Edge);
+    }
+  }
+
+  return {
+    statements: meta,
+    nodes,
+    edges,
+    issues: [],
+    summary: {
+      statementCount: meta.length,
+      tableCount: 0,
+      columnCount: 0,
+      joinCount: 0,
+      complexityScore: 0,
+      issueCount: { errors: 0, warnings: 0, infos: 0 },
+      hasErrors: false,
+    },
+  };
+}
+
 // Test data
-const createMockStatements = (): StatementLineage[] => [
+const createMockStatements = (): TestStatement[] => [
   {
     statementIndex: 0,
     statementType: 'SELECT',
@@ -46,7 +91,7 @@ const createMockStatements = (): StatementLineage[] => [
 describe('extractTableDependenciesWithDetails', () => {
   it('extracts table-to-table dependencies', () => {
     const statements = createMockStatements();
-    const deps = extractTableDependenciesWithDetails(statements);
+    const deps = extractTableDependenciesWithDetails(toResult(statements));
 
     expect(deps.length).toBeGreaterThan(0);
 
@@ -65,7 +110,7 @@ describe('extractTableDependenciesWithDetails', () => {
 
   it('tracks column mappings within dependencies', () => {
     const statements = createMockStatements();
-    const deps = extractTableDependenciesWithDetails(statements);
+    const deps = extractTableDependenciesWithDetails(toResult(statements));
 
     const usersToOrders = deps.find(
       (d) => d.sourceTable === 'public.users' && d.targetTable === 'public.orders'
@@ -78,12 +123,12 @@ describe('extractTableDependenciesWithDetails', () => {
   });
 
   it('handles empty statements', () => {
-    const deps = extractTableDependenciesWithDetails([]);
+    const deps = extractTableDependenciesWithDetails(toResult([]));
     expect(deps).toHaveLength(0);
   });
 
   it('ignores self-references', () => {
-    const statements: StatementLineage[] = [
+    const statements: TestStatement[] = [
       {
         statementIndex: 0,
         statementType: 'SELECT',
@@ -94,12 +139,12 @@ describe('extractTableDependenciesWithDetails', () => {
       },
     ];
 
-    const deps = extractTableDependenciesWithDetails(statements);
+    const deps = extractTableDependenciesWithDetails(toResult(statements));
     expect(deps).toHaveLength(0);
   });
 
   it('captures spans from source nodes', () => {
-    const statements: StatementLineage[] = [
+    const statements: TestStatement[] = [
       {
         statementIndex: 0,
         statementType: 'SELECT',
@@ -113,17 +158,17 @@ describe('extractTableDependenciesWithDetails', () => {
       },
     ];
 
-    const deps = extractTableDependenciesWithDetails(statements);
+    const deps = extractTableDependenciesWithDetails(toResult(statements));
     expect(deps).toHaveLength(1);
     expect(deps[0].spans).toHaveLength(1);
     expect(deps[0].spans[0]).toEqual({ start: 10, end: 20 });
   });
 
   it('includes join-only dependencies to output', () => {
-    const outputNodeType = 'output' as StatementLineage['nodes'][number]['type'];
-    const joinDependencyType = 'join_dependency' as StatementLineage['edges'][number]['type'];
+    const outputNodeType = 'output' as TestStatement['nodes'][number]['type'];
+    const joinDependencyType = 'join_dependency' as TestStatement['edges'][number]['type'];
 
-    const statements: StatementLineage[] = [
+    const statements: TestStatement[] = [
       {
         statementIndex: 0,
         statementType: 'SELECT',
@@ -137,7 +182,7 @@ describe('extractTableDependenciesWithDetails', () => {
       },
     ];
 
-    const deps = extractTableDependenciesWithDetails(statements);
+    const deps = extractTableDependenciesWithDetails(toResult(statements));
     const joinDep = deps.find(
       (dep) => dep.sourceTable === 'table1' && dep.targetTable === 'Output'
     );
@@ -149,7 +194,7 @@ describe('extractTableDependenciesWithDetails', () => {
 describe('extractScriptDependencies', () => {
   it('extracts script-to-script dependencies via shared tables', () => {
     const statements = createMockStatements();
-    const { dependencies } = extractScriptDependencies(statements);
+    const { dependencies } = extractScriptDependencies(toResult(statements));
 
     // script1 writes to orders (via data_flow), script2 reads from orders
     // Actually in our mock, script1 has users->orders flow (orders is target = written)
@@ -160,7 +205,7 @@ describe('extractScriptDependencies', () => {
   });
 
   it('handles statements without sourceName', () => {
-    const statements: StatementLineage[] = [
+    const statements: TestStatement[] = [
       {
         statementIndex: 0,
         statementType: 'SELECT',
@@ -171,14 +216,14 @@ describe('extractScriptDependencies', () => {
       },
     ];
 
-    const { dependencies, allScripts } = extractScriptDependencies(statements);
+    const { dependencies, allScripts } = extractScriptDependencies(toResult(statements));
     // Should use 'default' as script name
     expect(allScripts).toContain('default');
     expect(dependencies).toHaveLength(0); // No dependencies with single script
   });
 
   it('finds shared tables between scripts', () => {
-    const statements: StatementLineage[] = [
+    const statements: TestStatement[] = [
       {
         statementIndex: 0,
         statementType: 'INSERT',
@@ -205,7 +250,7 @@ describe('extractScriptDependencies', () => {
       },
     ];
 
-    const { dependencies } = extractScriptDependencies(statements);
+    const { dependencies } = extractScriptDependencies(toResult(statements));
 
     // producer writes to db.target, consumer reads from db.target
     const producerToConsumer = dependencies.find(
@@ -217,7 +262,7 @@ describe('extractScriptDependencies', () => {
   });
 
   it('returns all scripts including those with no dependencies', () => {
-    const statements: StatementLineage[] = [
+    const statements: TestStatement[] = [
       {
         statementIndex: 0,
         statementType: 'SELECT',
@@ -238,14 +283,14 @@ describe('extractScriptDependencies', () => {
       },
     ];
 
-    const { dependencies, allScripts } = extractScriptDependencies(statements);
+    const { dependencies, allScripts } = extractScriptDependencies(toResult(statements));
     expect(allScripts).toContain('isolated.sql');
     expect(allScripts).toContain('another.sql');
     expect(dependencies).toHaveLength(0);
   });
 
   it('treats only created relations as writes for CREATE statements', () => {
-    const statements: StatementLineage[] = [
+    const statements: TestStatement[] = [
       {
         statementIndex: 0,
         statementType: 'CREATE_VIEW',
@@ -296,7 +341,7 @@ describe('extractScriptDependencies', () => {
       },
     ];
 
-    const { dependencies } = extractScriptDependencies(statements);
+    const { dependencies } = extractScriptDependencies(toResult(statements));
 
     const falsePositive = dependencies.find(
       (d) => d.sourceScript === 'creator.sql' && d.targetScript === 'orders-reader.sql'
@@ -311,7 +356,7 @@ describe('extractScriptDependencies', () => {
   });
 
   it('treats explicit output nodes as written relations for script dependencies', () => {
-    const statements: StatementLineage[] = [
+    const statements: TestStatement[] = [
       {
         statementIndex: 0,
         statementType: 'WITH',
@@ -358,7 +403,7 @@ describe('extractScriptDependencies', () => {
       },
     ];
 
-    const { dependencies } = extractScriptDependencies(statements);
+    const { dependencies } = extractScriptDependencies(toResult(statements));
     const producerToConsumer = dependencies.find(
       (d) => d.sourceScript === 'producer.sql' && d.targetScript === 'consumer.sql'
     );
