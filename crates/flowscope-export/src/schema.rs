@@ -504,7 +504,8 @@ JOIN {prefix}statements s1 ON es1.statement_id = s1.id
 JOIN {prefix}statements s2 ON es2.statement_id = s2.id
 JOIN {prefix}nodes fn ON e.from_node_id = fn.id
 JOIN {prefix}nodes tn ON e.to_node_id = tn.id
-WHERE s1.id < s2.id;
+WHERE e.edge_type = 'cross_statement'
+  AND s1.id < s2.id;
 
 -- Schema coverage
 CREATE VIEW {prefix}schema_coverage AS

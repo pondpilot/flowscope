@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { analyzeSql, isWasmInitialized } from '../analysis';
+import { scopeNodesToStatement } from '../statementScopedLineage';
 import type { AnalyzeResult, Dialect, IssueCount } from '../types';
 
 /**
@@ -145,9 +146,7 @@ export class LineagePanel {
     }
 
     const targetStatementIndex = statement.statementIndex;
-    const scopedNodes = result.nodes.filter((node) =>
-      node.statementIds.includes(targetStatementIndex)
-    );
+    const scopedNodes = scopeNodesToStatement(result, targetStatementIndex);
     const relevantNodeIds = new Set(scopedNodes.map((node) => node.id));
     const scopedEdges = result.edges.filter(
       (edge) => relevantNodeIds.has(edge.from) && relevantNodeIds.has(edge.to)

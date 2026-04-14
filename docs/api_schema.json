@@ -509,11 +509,11 @@
             "type": "string"
           },
           "qualifiedName": {
-            "description": "Fully qualified name when available",
+            "description": "Fully qualified display name when available.\n\nThis is a cosmetic string intended for UI rendering. It is **not** a\nstable identity — prefer `canonical_name` for cross-statement matching,\nschema joins, or any equality comparison that must survive dialect\nquoting, casing, or alias differences.",
             "type": ["string", "null"]
           },
           "canonicalName": {
-            "description": "Structured canonical identity (catalog.schema.name[.column]) used to\nmatch the same entity across statements. Only populated for nodes\nwhose identity is globally meaningful — table-likes and columns owned\nby them. Statement-scoped nodes (CTEs, CTE columns) omit this.",
+            "description": "Structured canonical identity (catalog.schema.name[.column]) used to\nmatch the same entity across statements. Only populated for nodes\nwhose identity is globally meaningful — table-likes and columns owned\nby them. Statement-scoped nodes (CTEs, CTE columns, self-join instance\ncolumns) omit this.\n\nThis is the authoritative identity for cross-statement matching.",
             "anyOf": [
               {
                 "$ref": "#/definitions/CanonicalName"
@@ -524,7 +524,7 @@
             ]
           },
           "statementIds": {
-            "description": "Zero-based indices of every statement this node participates in.\nAlways has at least one entry. For nodes shared across statements\n(e.g. a table referenced by two queries) this lists all of them in\nascending order.",
+            "description": "Zero-based indices of every statement this node participates in.\n\nInvariants:\n- Always has at least one entry.\n- Sorted ascending and deduplicated.\n- A node shared across statements (e.g. a table referenced by two\n  queries) lists every statement that references it.",
             "type": "array",
             "items": {
               "type": "integer",
@@ -785,7 +785,7 @@
             "type": ["boolean", "null"]
           },
           "statementIds": {
-            "description": "Zero-based indices of the statement(s) this edge participates in.\nIntra-statement edges carry a single entry; `EdgeType::CrossStatement`\nedges carry `[producer, consumer]` in that order.",
+            "description": "Zero-based indices of the statement(s) this edge participates in.\n\nInvariants:\n- Intra-statement edges (Ownership, DataFlow, Derivation, JoinDependency)\n  list every statement in which the same structural `(from, to, kind)`\n  edge appears, sorted ascending and deduplicated.\n- `EdgeType::CrossStatement` edges are not merged across\n  producer/consumer pairs: each edge carries exactly\n  `[producer_index, consumer_index]` in that order, and the same\n  `(from, to)` self-loop may appear multiple times with different\n  pairs.",
             "type": "array",
             "items": {
               "type": "integer",

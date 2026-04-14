@@ -201,7 +201,12 @@ pub struct Node {
     #[serde(deserialize_with = "super::serde_utils::deserialize_arc_str")]
     pub label: Arc<str>,
 
-    /// Fully qualified name when available
+    /// Fully qualified display name when available.
+    ///
+    /// This is a cosmetic string intended for UI rendering. It is **not** a
+    /// stable identity — prefer `canonical_name` for cross-statement matching,
+    /// schema joins, or any equality comparison that must survive dialect
+    /// quoting, casing, or alias differences.
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -212,14 +217,20 @@ pub struct Node {
     /// Structured canonical identity (catalog.schema.name[.column]) used to
     /// match the same entity across statements. Only populated for nodes
     /// whose identity is globally meaningful — table-likes and columns owned
-    /// by them. Statement-scoped nodes (CTEs, CTE columns) omit this.
+    /// by them. Statement-scoped nodes (CTEs, CTE columns, self-join instance
+    /// columns) omit this.
+    ///
+    /// This is the authoritative identity for cross-statement matching.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub canonical_name: Option<CanonicalName>,
 
     /// Zero-based indices of every statement this node participates in.
-    /// Always has at least one entry. For nodes shared across statements
-    /// (e.g. a table referenced by two queries) this lists all of them in
-    /// ascending order.
+    ///
+    /// Invariants:
+    /// - Always has at least one entry.
+    /// - Sorted ascending and deduplicated.
+    /// - A node shared across statements (e.g. a table referenced by two
+    ///   queries) lists every statement that references it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub statement_ids: Vec<usize>,
 
@@ -428,8 +439,16 @@ pub struct Edge {
     pub approximate: Option<bool>,
 
     /// Zero-based indices of the statement(s) this edge participates in.
-    /// Intra-statement edges carry a single entry; `EdgeType::CrossStatement`
-    /// edges carry `[producer, consumer]` in that order.
+    ///
+    /// Invariants:
+    /// - Intra-statement edges (Ownership, DataFlow, Derivation, JoinDependency)
+    ///   list every statement in which the same structural `(from, to, kind)`
+    ///   edge appears, sorted ascending and deduplicated.
+    /// - `EdgeType::CrossStatement` edges are not merged across
+    ///   producer/consumer pairs: each edge carries exactly
+    ///   `[producer_index, consumer_index]` in that order, and the same
+    ///   `(from, to)` self-loop may appear multiple times with different
+    ///   pairs.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub statement_ids: Vec<usize>,
 }

@@ -4,10 +4,13 @@ use crate::types::{
     Edge, EdgeType, IssueCount, Node, NodeType, ResolvedColumnSchema, ResolvedSchemaMetadata,
     ResolvedSchemaTable, Span, StatementMeta, Summary,
 };
+use serde_json::{Map as JsonMap, Value};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 #[cfg(feature = "tracing")]
 use tracing::debug;
+
+const STATEMENT_FILTERS_METADATA_KEY: &str = "statementFilters";
 
 impl<'a> Analyzer<'a> {
     pub(super) fn build_result(&self) -> crate::AnalyzeResult {
@@ -30,7 +33,7 @@ impl<'a> Analyzer<'a> {
         };
 
         let (statements, nodes, edges) = self.flatten_lineages(statement_lineages);
-        let summary = self.build_summary(&nodes, &edges);
+        let summary = self.build_summary(&nodes);
         let resolved_schema = self.build_resolved_schema();
 
         crate::AnalyzeResult {
@@ -165,6 +168,7 @@ impl<'a> Analyzer<'a> {
                             canonical_name: Some(canonical_name),
                             ..node
                         };
+                        record_statement_filters(&mut initial, statement_index);
                         // name_spans / filters / resolution_source / aggregation
                         // all travel from the source node via the spread above.
                         normalize_name_spans(&mut initial);
@@ -231,20 +235,17 @@ impl<'a> Analyzer<'a> {
         }
 
         // Append tracker-derived cross-statement edges (producer/consumer).
+        //
+        // Unlike intra-statement edges, cross-statement edges are not deduped
+        // by `(from, to, kind)`: a self-loop on a shared table may appear in
+        // multiple distinct producer/consumer pairs, and collapsing them would
+        // lose the ordered `[producer, consumer]` semantics advertised by
+        // `CrossStatementTracker::build_cross_statement_edges`. Each tracker
+        // edge already has a unique ID derived from `(table, producer, consumer)`;
+        // dedup by that ID only to guard against accidental re-emission.
+        let mut cross_edge_ids: HashSet<Arc<str>> = HashSet::new();
         for edge in self.tracker.build_cross_statement_edges() {
-            let kind = edge_kind(edge.edge_type);
-            let key = (edge.from.clone(), edge.to.clone(), kind);
-            if let Some(&idx) = edge_index.get(&key) {
-                // Already present (shouldn't happen for CrossStatement kind,
-                // but merge statement_ids defensively).
-                let existing = &mut flat_edges[idx];
-                for sid in &edge.statement_ids {
-                    if !existing.statement_ids.contains(sid) {
-                        existing.statement_ids.push(*sid);
-                    }
-                }
-            } else {
-                edge_index.insert(key, flat_edges.len());
+            if cross_edge_ids.insert(edge.id.clone()) {
                 flat_edges.push(edge);
             }
         }
@@ -323,7 +324,7 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    pub(super) fn build_summary(&self, nodes: &[Node], _edges: &[Edge]) -> Summary {
+    pub(super) fn build_summary(&self, nodes: &[Node]) -> Summary {
         let error_count = self
             .issues
             .iter()
@@ -394,14 +395,26 @@ fn edge_kind(edge_type: crate::types::EdgeType) -> &'static str {
 }
 
 /// Merge an additional statement's worth of node data into an already-inserted
-/// flat node. The first-inserted node wins for scalar fields (type, label,
-/// qualified_name, resolution_source, aggregation, body_span, metadata).
-/// Accumulated fields — statement_ids, name_spans, filters — take every
-/// non-duplicate entry from the incoming node.
+/// flat node.
+///
+/// Precedence rules:
+/// - **First-wins** for `node_type`, `label`, and `expression`: the earliest
+///   statement to emit the node defines these and incoming values are
+///   discarded.
+/// - **None-fill** for `qualified_name`, `span`, `body_span`,
+///   `resolution_source`, `aggregation`, and `metadata`: existing non-`None`
+///   values are preserved, but incoming values fill in gaps when the
+///   existing slot is still `None`.
+/// - **Accumulate** for `statement_ids`, `name_spans`, and `filters`: every
+///   non-duplicate entry from the incoming node is appended. Final ordering
+///   and de-duplication for `statement_ids` / `name_spans` is applied in
+///   `flatten_lineages`.
 fn merge_node_into(existing: &mut Node, incoming: Node, statement_index: usize) {
     if !existing.statement_ids.contains(&statement_index) {
         existing.statement_ids.push(statement_index);
     }
+
+    record_statement_filters_from_slice(existing, statement_index, &incoming.filters);
 
     for span in incoming.name_spans {
         if !existing.name_spans.contains(&span) {
@@ -444,6 +457,35 @@ fn merge_node_into(existing: &mut Node, incoming: Node, statement_index: usize) 
 fn normalize_name_spans(node: &mut Node) {
     node.name_spans.sort_by_key(|s: &Span| (s.start, s.end));
     node.name_spans.dedup();
+}
+
+fn record_statement_filters(node: &mut Node, statement_index: usize) {
+    let filters = node.filters.clone();
+    record_statement_filters_from_slice(node, statement_index, &filters);
+}
+
+fn record_statement_filters_from_slice(
+    node: &mut Node,
+    statement_index: usize,
+    filters: &[crate::types::FilterPredicate],
+) {
+    if filters.is_empty() {
+        return;
+    }
+
+    let metadata = node.metadata.get_or_insert_with(HashMap::new);
+    let entry = metadata
+        .entry(STATEMENT_FILTERS_METADATA_KEY.to_string())
+        .or_insert_with(|| Value::Object(JsonMap::new()));
+
+    if !entry.is_object() {
+        *entry = Value::Object(JsonMap::new());
+    }
+
+    if let Value::Object(statement_filters) = entry {
+        let serialized = serde_json::to_value(filters).unwrap_or(Value::Array(Vec::new()));
+        statement_filters.insert(statement_index.to_string(), serialized);
+    }
 }
 
 /// Calculate complexity score for project-level summary.

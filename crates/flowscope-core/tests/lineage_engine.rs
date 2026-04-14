@@ -358,6 +358,57 @@ fn multi_stage_pipeline_emits_cross_statement_edges() {
 }
 
 #[test]
+fn flatten_preserves_distinct_cross_statement_pairs() {
+    // One producer feeding two distinct consumers must yield two
+    // cross-statement edges in the flattened AnalyzeResult, each with an
+    // ordered `[producer, consumer]` pair. Collapsing these into a single
+    // edge with a union of statement indices would erase which statement is
+    // the producer and which are the consumers.
+    let sql = r#"
+        CREATE TABLE staging.shared AS SELECT 1 AS x;
+        SELECT x FROM staging.shared;
+        SELECT x + 1 FROM staging.shared;
+    "#;
+
+    let result = run_analysis(sql, Dialect::Postgres, None);
+    let cross_edges: Vec<_> = result
+        .edges
+        .iter()
+        .filter(|e| e.edge_type == EdgeType::CrossStatement)
+        .collect();
+
+    assert_eq!(
+        cross_edges.len(),
+        2,
+        "expected one cross-statement edge per consumer, got {cross_edges:#?}"
+    );
+
+    let pairs: std::collections::HashSet<(usize, usize)> = cross_edges
+        .iter()
+        .map(|e| {
+            assert_eq!(
+                e.statement_ids.len(),
+                2,
+                "cross-statement edge should carry [producer, consumer]"
+            );
+            (e.statement_ids[0], e.statement_ids[1])
+        })
+        .collect();
+
+    assert!(
+        pairs.contains(&(0, 1)),
+        "missing producer=0 consumer=1 pair"
+    );
+    assert!(
+        pairs.contains(&(0, 2)),
+        "missing producer=0 consumer=2 pair"
+    );
+
+    let ids: std::collections::HashSet<_> = cross_edges.iter().map(|e| &e.id).collect();
+    assert_eq!(ids.len(), cross_edges.len(), "edge IDs must remain unique");
+}
+
+#[test]
 fn recursive_ctes_produce_lineage_without_warnings() {
     let sql = r#"
         WITH RECURSIVE org_hierarchy AS (
@@ -1666,6 +1717,42 @@ fn self_join_filters_attach_to_correct_instance() {
         filtered_node.filters[0].expression.contains("active"),
         "filter should reference 'active'"
     );
+}
+
+#[test]
+fn shared_nodes_preserve_filters_per_statement_in_metadata() {
+    let sql = r#"
+        SELECT id FROM users WHERE active = true;
+        SELECT id FROM users WHERE deleted = false
+    "#;
+
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let users = result
+        .nodes
+        .iter()
+        .find(|node| node.node_type == NodeType::Table && node.label.as_ref() == "users")
+        .expect("shared users table node should exist");
+
+    let statement_filters = users
+        .metadata
+        .as_ref()
+        .and_then(|metadata| metadata.get("statementFilters"))
+        .and_then(|value| value.as_object())
+        .expect("statementFilters metadata should be present");
+
+    let first_filters = statement_filters
+        .get("0")
+        .and_then(|value| value.as_array())
+        .expect("statement 0 filters should be recorded");
+    let second_filters = statement_filters
+        .get("1")
+        .and_then(|value| value.as_array())
+        .expect("statement 1 filters should be recorded");
+
+    assert_eq!(first_filters.len(), 1);
+    assert_eq!(second_filters.len(), 1);
+    assert!(first_filters[0]["expression"].as_str().unwrap().contains("active"));
+    assert!(second_filters[0]["expression"].as_str().unwrap().contains("deleted"));
 }
 
 #[test]

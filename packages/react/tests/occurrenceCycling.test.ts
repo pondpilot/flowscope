@@ -110,6 +110,51 @@ function buildMultiStatementResult(): AnalyzeResult {
   };
 }
 
+function buildSharedNodeResult(): AnalyzeResult {
+  return {
+    statements: [
+      {
+        statementIndex: 0,
+        statementType: 'SELECT',
+        sourceName: 'models/users_a.sql',
+        joinCount: 0,
+        complexityScore: 1,
+      },
+      {
+        statementIndex: 1,
+        statementType: 'SELECT',
+        sourceName: 'models/users_b.sql',
+        joinCount: 0,
+        complexityScore: 1,
+      },
+    ],
+    nodes: [
+      {
+        id: 'table:users',
+        type: 'table',
+        label: 'users',
+        statementIds: [0, 1],
+        span: { start: 10, end: 15 },
+        nameSpans: [
+          { start: 10, end: 15 },
+          { start: 40, end: 45 },
+        ],
+      },
+    ],
+    edges: [],
+    issues: [],
+    summary: {
+      statementCount: 2,
+      tableCount: 1,
+      columnCount: 0,
+      joinCount: 0,
+      complexityScore: 1,
+      issueCount: { errors: 0, warnings: 0, infos: 0 },
+      hasErrors: false,
+    },
+  };
+}
+
 describe('occurrence cycling', () => {
   let store: StoreApi<LineageState>;
 
@@ -202,5 +247,18 @@ describe('occurrence cycling', () => {
     const state = store.getState();
     expect(state.focusedOccurrenceIndex).toBe(2);
     expect(state.highlightedSpan).toEqual({ start: 70, end: 75 });
+  });
+
+  it('does not duplicate occurrences when a flat node is already shared across statements', () => {
+    store.getState().setResult(buildSharedNodeResult());
+    store.getState().selectNode('table:users');
+
+    store.getState().cycleOccurrence('next');
+    expect(store.getState().highlightedSpan).toEqual({ start: 40, end: 45 });
+
+    store.getState().cycleOccurrence('next');
+    const state = store.getState();
+    expect(state.focusedOccurrenceIndex).toBe(0);
+    expect(state.highlightedSpan).toEqual({ start: 10, end: 15 });
   });
 });

@@ -57,6 +57,7 @@ export interface Node {
   span?: Span;
   filters?: FilterPredicate[];
   aggregation?: AggregationInfo;
+  metadata?: Record<string, unknown>;
 }
 
 export type NodeType = 'table' | 'view' | 'cte' | 'column';

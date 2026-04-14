@@ -27,7 +27,7 @@ import {
   createStatementScope,
   withStatementScope,
 } from '../utils/lineageHelpers';
-import { mergeNodesForNavigation } from '../utils/nodeOccurrences';
+import { mergeNodesForNavigation, resolveNodeSourceName } from '../utils/nodeOccurrences';
 
 // =============================================================================
 // Types for worker communication (all serializable - no Sets, no functions)
@@ -265,6 +265,7 @@ interface MergedLineage {
 function mergeAnalyzeResult(result: AnalyzeResult): MergedLineage {
   const mergedNodes = new Map<string, Node>();
   const mergedEdges = new Map<string, Edge>();
+  const statementById = new Map(result.statements.map((stmt) => [stmt.statementIndex, stmt]));
   let anySelect = false;
 
   for (const stmt of result.statements) {
@@ -275,29 +276,38 @@ function mergeAnalyzeResult(result: AnalyzeResult): MergedLineage {
     const statementScope = createStatementScope(stmt.statementIndex, sourceName);
 
     for (const node of nodesInStatement(result, stmt.statementIndex)) {
-      const nodeWithScope = withStatementScope(
-        sourceName
-          ? {
-              ...node,
-              metadata: {
-                ...(node.metadata || {}),
-                sourceName,
-              },
-            }
-          : { ...node },
-        statementScope
-      );
+      if (node.statementIds.length > 1 && mergedNodes.has(node.id)) {
+        continue;
+      }
+
+      const resolvedSourceName = resolveNodeSourceName(node, statementById);
+      const nodeWithSource = resolvedSourceName
+        ? {
+            ...node,
+            metadata: {
+              ...(node.metadata || {}),
+              sourceName: resolvedSourceName,
+            },
+          }
+        : { ...node };
+      const nodeWithScope =
+        node.statementIds.length === 1
+          ? withStatementScope(nodeWithSource, statementScope)
+          : nodeWithSource;
       const mergedNode = mergeNodesForNavigation(
         mergedNodes.get(node.id) ?? null,
         nodeWithScope,
-        sourceName
+        resolvedSourceName
       );
       mergedNodes.set(node.id, mergedNode);
     }
 
     for (const edge of edgesInStatement(result, stmt.statementIndex)) {
       if (!mergedEdges.has(edge.id)) {
-        mergedEdges.set(edge.id, withStatementScope(edge, statementScope));
+        mergedEdges.set(
+          edge.id,
+          edge.statementIds.length === 1 ? withStatementScope(edge, statementScope) : edge
+        );
       }
     }
   }

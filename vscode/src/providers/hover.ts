@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { analyzeSql, isWasmInitialized } from '../analysis';
+import { getFiltersForStatement, scopeNodesToStatement } from '../statementScopedLineage';
 import type { AnalyzeResult, Dialect, Edge, Node, StatementMeta } from '../types';
 
 /**
@@ -63,7 +64,7 @@ export class FlowScopeHoverProvider implements vscode.HoverProvider {
         continue;
       }
 
-      const stmtNodes = result.nodes.filter((n) => n.statementIds.includes(stmt.statementIndex));
+      const stmtNodes = scopeNodesToStatement(result, stmt.statementIndex);
       const stmtEdges = result.edges.filter((e) => e.statementIds.includes(stmt.statementIndex));
 
       // Find matching table/view/CTE node
@@ -109,9 +110,10 @@ export class FlowScopeHoverProvider implements vscode.HoverProvider {
     }
 
     // Filters
-    if (node.filters && node.filters.length > 0) {
+    const filters = getFiltersForStatement(node, stmt.statementIndex);
+    if (filters.length > 0) {
       lines.push(`\n**Filters:**`);
-      for (const filter of node.filters) {
+      for (const filter of filters) {
         lines.push(`- \`${filter.expression}\` (${filter.clauseType})`);
       }
     }

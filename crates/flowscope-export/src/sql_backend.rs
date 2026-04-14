@@ -630,4 +630,34 @@ mod integration_tests {
         assert_eq!(from_label, "orders");
         assert_eq!(to_label, "Output");
     }
+
+    #[test]
+    fn test_cross_statement_flow_excludes_shared_intra_statement_edges() {
+        let request = AnalyzeRequest {
+            sql: "SELECT id FROM users; SELECT id FROM users".to_string(),
+            files: None,
+            dialect: Dialect::Generic,
+            source_name: None,
+            options: None,
+            schema: None,
+            #[cfg(feature = "templating")]
+            template_config: None,
+        };
+        let result = analyze(&request);
+        let sql = export_sql(&result, None).expect("Export should succeed");
+
+        let conn = Connection::open_in_memory().expect("Failed to create DuckDB connection");
+        conn.execute_batch(&sql)
+            .expect("Generated SQL should execute without errors");
+
+        let flow_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM cross_statement_flow", [], |row| {
+                row.get(0)
+            })
+            .expect("Should query cross_statement_flow view");
+        assert_eq!(
+            flow_count, 0,
+            "shared statement-local edges must not appear as cross-statement flow"
+        );
+    }
 }

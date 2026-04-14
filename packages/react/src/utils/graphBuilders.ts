@@ -24,7 +24,7 @@ import {
   createStatementScope,
   withStatementScope,
 } from './lineageHelpers';
-import { mergeNodesForNavigation } from './nodeOccurrences';
+import { mergeNodesForNavigation, resolveNodeSourceName } from './nodeOccurrences';
 
 const SELECT_STATEMENT_TYPES = new Set([
   'SELECT',
@@ -49,16 +49,23 @@ export interface MergedLineage {
 /**
  * Produce the merged lineage view over all statements in an `AnalyzeResult`.
  *
- * The flat model already dedupes nodes/edges across statements, but the output
- * resolution logic relies on per-statement scope metadata to keep explicit
- * output nodes distinct. We replay the original per-statement merge by
- * iterating `result.statements` and applying `withStatementScope` so the
- * downstream helpers see the same shape they did under the legacy per-statement
- * model.
+ * This is a **visualization-only** merge layered on top of the already-flat
+ * core result, and is distinct from the canonical merge performed by
+ * `Analyzer::flatten_lineages` in `flowscope-core` (which yields the
+ * project-wide graph consumers see). The graph builders still depend on
+ * per-statement scope metadata — virtual output nodes, `statementScope` tags
+ * for navigation, and `sourceName` annotations — so we re-project the flat
+ * graph through `result.statements` and re-apply `withStatementScope` here.
+ *
+ * Keep these two merges in sync at a semantic level: `flatten_lineages` owns
+ * cross-statement identity and `statement_ids` accumulation; this function
+ * owns only UI-scope decorations. Do not let visualization concerns leak back
+ * into the core merge, and do not duplicate identity logic here.
  */
 export function mergeAnalyzeResult(result: AnalyzeResult): MergedLineage {
   const mergedNodes = new Map<string, Node>();
   const mergedEdges = new Map<string, Edge>();
+  const statementById = new Map(result.statements.map((stmt) => [stmt.statementIndex, stmt]));
   let anySelect = false;
 
   for (const stmt of result.statements) {
@@ -69,29 +76,38 @@ export function mergeAnalyzeResult(result: AnalyzeResult): MergedLineage {
     const statementScope = createStatementScope(stmt.statementIndex, sourceName);
 
     for (const node of nodesInStatement(result, stmt.statementIndex)) {
-      const nodeWithScope = withStatementScope(
-        sourceName
-          ? {
-              ...node,
-              metadata: {
-                ...(node.metadata || {}),
-                sourceName,
-              },
-            }
-          : { ...node },
-        statementScope
-      );
+      if (node.statementIds.length > 1 && mergedNodes.has(node.id)) {
+        continue;
+      }
+
+      const resolvedSourceName = resolveNodeSourceName(node, statementById);
+      const nodeWithSource = resolvedSourceName
+        ? {
+            ...node,
+            metadata: {
+              ...(node.metadata || {}),
+              sourceName: resolvedSourceName,
+            },
+          }
+        : { ...node };
+      const nodeWithScope =
+        node.statementIds.length === 1
+          ? withStatementScope(nodeWithSource, statementScope)
+          : nodeWithSource;
       const mergedNode = mergeNodesForNavigation(
         mergedNodes.get(node.id) ?? null,
         nodeWithScope,
-        sourceName
+        resolvedSourceName
       );
       mergedNodes.set(node.id, mergedNode);
     }
 
     for (const edge of edgesInStatement(result, stmt.statementIndex)) {
       if (!mergedEdges.has(edge.id)) {
-        mergedEdges.set(edge.id, withStatementScope(edge, statementScope));
+        mergedEdges.set(
+          edge.id,
+          edge.statementIds.length === 1 ? withStatementScope(edge, statementScope) : edge
+        );
       }
     }
   }

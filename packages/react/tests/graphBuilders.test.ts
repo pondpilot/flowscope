@@ -242,6 +242,59 @@ describe('mergeAnalyzeResult', () => {
       'models/b.sql',
     ]);
   });
+
+  it('does not duplicate occurrences when the flat result already shares a node across statements', () => {
+    const result: AnalyzeResult = {
+      statements: [
+        {
+          statementIndex: 0,
+          statementType: 'SELECT',
+          sourceName: 'models/a.sql',
+          joinCount: 0,
+          complexityScore: 1,
+        },
+        {
+          statementIndex: 1,
+          statementType: 'SELECT',
+          sourceName: 'models/b.sql',
+          joinCount: 0,
+          complexityScore: 1,
+        },
+      ],
+      nodes: [
+        {
+          id: 'table:users',
+          type: 'table',
+          label: 'users',
+          qualifiedName: 'users',
+          statementIds: [0, 1],
+          nameSpans: [
+            { start: 5, end: 10 },
+            { start: 20, end: 25 },
+          ],
+        },
+      ],
+      edges: [],
+      issues: [],
+      summary: {
+        statementCount: 2,
+        tableCount: 1,
+        columnCount: 0,
+        joinCount: 0,
+        complexityScore: 1,
+        issueCount: { errors: 0, warnings: 0, infos: 0 },
+        hasErrors: false,
+      },
+    };
+
+    const merged = mergeAnalyzeResult(result);
+    const mergedNode = merged.nodes.find((node) => node.id === 'table:users');
+
+    expect(mergedNode?.nameSpans).toEqual([
+      { start: 5, end: 10 },
+      { start: 20, end: 25 },
+    ]);
+  });
 });
 
 /**
