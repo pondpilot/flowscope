@@ -57,16 +57,14 @@ fn test_simple_select() {
     assert_eq!(result.statements.len(), 1);
     assert_eq!(result.statements[0].statement_type, "SELECT");
     // Expect 2 nodes: table + output
-    assert_eq!(result.statements[0].nodes.len(), 2);
-    let table_node = result.statements[0]
-        .nodes
-        .iter()
+    assert_eq!(result.nodes_in_statement(0).count(), 2);
+    let table_node = result
+        .nodes_in_statement(0)
         .find(|n| n.node_type == NodeType::Table)
         .expect("should have a table node");
     assert_eq!(&*table_node.label, "users");
-    assert!(result.statements[0]
-        .nodes
-        .iter()
+    assert!(result
+        .nodes_in_statement(0)
         .any(|n| n.node_type == NodeType::Output));
     assert!(!result.summary.has_errors);
 }
@@ -78,9 +76,8 @@ fn test_select_with_join() {
 
     assert_eq!(result.statements.len(), 1);
     // Expect 2 tables
-    let tables: Vec<_> = result.statements[0]
-        .nodes
-        .iter()
+    let tables: Vec<_> = result
+        .nodes_in_statement(0)
         .filter(|n| n.node_type == NodeType::Table)
         .collect();
     assert_eq!(tables.len(), 2);
@@ -104,18 +101,15 @@ fn test_dml_insert() {
 fn ctas_edges_only_from_relations() {
     let request = make_request("CREATE TABLE tgt AS SELECT id FROM src");
     let result = analyze(&request);
-    let statement = &result.statements[0];
-    let target = statement
-        .nodes
-        .iter()
+    let target = result
+        .nodes_in_statement(0)
         .find(|node| node.node_type == NodeType::Table && &*node.label == "tgt")
         .expect("target node");
 
-    for edge in &statement.edges {
+    for edge in result.edges_in_statement(0) {
         if edge.edge_type == EdgeType::DataFlow && edge.to == target.id {
-            let source = statement
-                .nodes
-                .iter()
+            let source = result
+                .nodes_in_statement(0)
                 .find(|node| node.id == edge.from)
                 .expect("source node");
             assert!(
@@ -159,9 +153,8 @@ fn cte_nodes_have_spans() {
     let request = make_request(sql);
     let result = analyze(&request);
 
-    let cte_node = result.statements[0]
-        .nodes
-        .iter()
+    let cte_node = result
+        .nodes_in_statement(0)
         .find(|node| node.node_type == NodeType::Cte && node.label.as_ref() == "my_cte")
         .expect("cte node");
 
@@ -177,7 +170,7 @@ fn multiple_cte_nodes_have_distinct_spans() {
     let result = analyze(&request);
 
     let mut cte_spans: HashMap<&str, Span> = HashMap::new();
-    for node in &result.statements[0].nodes {
+    for node in result.nodes_in_statement(0) {
         if node.node_type == NodeType::Cte {
             cte_spans.insert(node.label.as_ref(), node.span.expect("cte span"));
         }
@@ -193,15 +186,12 @@ fn nested_cte_nodes_have_spans() {
     let request = make_request(sql);
     let result = analyze(&request);
 
-    let statement = &result.statements[0];
-    let outer_node = statement
-        .nodes
-        .iter()
+    let outer_node = result
+        .nodes_in_statement(0)
         .find(|node| node.node_type == NodeType::Cte && node.label.as_ref() == "outer_cte")
         .expect("outer cte node");
-    let inner_node = statement
-        .nodes
-        .iter()
+    let inner_node = result
+        .nodes_in_statement(0)
         .find(|node| node.node_type == NodeType::Cte && node.label.as_ref() == "inner_cte")
         .expect("inner cte node");
 
@@ -223,9 +213,8 @@ fn derived_table_nodes_have_spans() {
     let request = make_request(sql);
     let result = analyze(&request);
 
-    let derived_node = result.statements[0]
-        .nodes
-        .iter()
+    let derived_node = result
+        .nodes_in_statement(0)
         .find(|node| node.node_type == NodeType::Cte && node.label.as_ref() == "derived")
         .expect("derived node");
 
@@ -241,15 +230,13 @@ fn combined_cte_and_derived_table_spans() {
     let request = make_request(sql);
     let result = analyze(&request);
 
-    let cte_node = result.statements[0]
-        .nodes
-        .iter()
+    let cte_node = result
+        .nodes_in_statement(0)
         .find(|node| node.node_type == NodeType::Cte && node.label.as_ref() == "my_cte")
         .expect("cte node");
 
-    let derived_node = result.statements[0]
-        .nodes
-        .iter()
+    let derived_node = result
+        .nodes_in_statement(0)
         .find(|node| node.node_type == NodeType::Cte && node.label.as_ref() == "derived")
         .expect("derived node");
 
@@ -369,31 +356,28 @@ fn hide_ctes_option_filters_statement_and_global_lineage() {
     let without_hiding = analyze(&make_request_with_options(sql, false, false));
     let with_hiding = analyze(&make_request_with_options(sql, true, false));
 
-    let stmt_without = &without_hiding.statements[0];
     assert!(
-        stmt_without
-            .nodes
-            .iter()
+        without_hiding
+            .nodes_in_statement(0)
             .any(|n| n.node_type == NodeType::Cte),
         "expected CTE nodes when hide_ctes is disabled"
     );
     assert!(
         without_hiding
-            .global_lineage
             .nodes
             .iter()
             .any(|n| n.node_type == NodeType::Cte),
         "global lineage should include CTE nodes when not hidden"
     );
 
-    let stmt_with = &with_hiding.statements[0];
     assert!(
-        stmt_with.nodes.iter().all(|n| n.node_type != NodeType::Cte),
+        with_hiding
+            .nodes_in_statement(0)
+            .all(|n| n.node_type != NodeType::Cte),
         "CTE nodes should be filtered when hide_ctes is enabled"
     );
     assert!(
         with_hiding
-            .global_lineage
             .nodes
             .iter()
             .all(|n| n.node_type != NodeType::Cte),
@@ -401,7 +385,7 @@ fn hide_ctes_option_filters_statement_and_global_lineage() {
     );
 
     assert!(
-        stmt_with.nodes.len() < stmt_without.nodes.len(),
+        with_hiding.nodes_in_statement(0).count() < without_hiding.nodes_in_statement(0).count(),
         "hiding CTEs should reduce statement node count"
     );
     assert!(
@@ -423,43 +407,36 @@ fn hide_ctes_customer_360_preserves_relationships() {
     request.schema = Some(schema);
 
     let result = analyze(&request);
-    let statement = &result.statements[0];
+    let nodes: Vec<&Node> = result.nodes_in_statement(0).collect();
+    let edges: Vec<&Edge> = result.edges_in_statement(0).collect();
 
-    assert!(statement
-        .nodes
-        .iter()
-        .all(|node| node.node_type != NodeType::Cte));
+    assert!(nodes.iter().all(|node| node.node_type != NodeType::Cte));
 
-    let node_types: HashMap<&str, NodeType> = statement
-        .nodes
+    let node_types: HashMap<&str, NodeType> = nodes
         .iter()
         .map(|node| (node.id.as_ref(), node.node_type))
         .collect();
-    let node_labels: HashMap<&str, &str> = statement
-        .nodes
+    let node_labels: HashMap<&str, &str> = nodes
         .iter()
         .map(|node| (node.id.as_ref(), node.label.as_ref()))
         .collect();
-    let node_by_id: HashMap<&str, &Node> = statement
-        .nodes
+    let node_by_id: HashMap<&str, &Node> = nodes
         .iter()
-        .map(|node| (node.id.as_ref(), node))
+        .map(|node| (node.id.as_ref(), *node))
         .collect();
     let node_ids: HashSet<&str> = node_types.keys().copied().collect();
 
-    for edge in &statement.edges {
+    for edge in &edges {
         assert!(node_ids.contains(edge.from.as_ref()));
         assert!(node_ids.contains(edge.to.as_ref()));
     }
 
     let forbidden_labels: HashSet<&str> = ["user_ltv", "user_engagement"].into_iter().collect();
-    assert!(statement
-        .nodes
+    assert!(nodes
         .iter()
         .all(|node| !forbidden_labels.contains(node.label.as_ref())));
 
-    let table_pairs: HashSet<String> = statement
-        .edges
+    let table_pairs: HashSet<String> = edges
         .iter()
         .filter(|edge| {
             matches!(
@@ -488,8 +465,7 @@ fn hide_ctes_customer_360_preserves_relationships() {
 
     assert_eq!(table_pairs, expected_table_pairs);
 
-    let view_id = statement
-        .nodes
+    let view_id = nodes
         .iter()
         .find(|node| node.node_type == NodeType::View && node.label.as_ref() == "customer_360")
         .expect("customer_360 view node")
@@ -497,8 +473,7 @@ fn hide_ctes_customer_360_preserves_relationships() {
         .to_string();
 
     let base_column_id = |qualified_name: &str| -> String {
-        statement
-            .nodes
+        nodes
             .iter()
             .find(|node| {
                 node.node_type == NodeType::Column
@@ -513,8 +488,7 @@ fn hide_ctes_customer_360_preserves_relationships() {
     };
 
     let view_column_id = |column_name: &str| -> String {
-        statement
-            .edges
+        edges
             .iter()
             .find(|edge| {
                 edge.edge_type == EdgeType::Ownership
@@ -528,8 +502,7 @@ fn hide_ctes_customer_360_preserves_relationships() {
             .to_string()
     };
 
-    let view_column_labels: HashSet<&str> = statement
-        .edges
+    let view_column_labels: HashSet<&str> = edges
         .iter()
         .filter(|edge| {
             edge.edge_type == EdgeType::Ownership && edge.from.as_ref() == view_id.as_str()
@@ -557,8 +530,7 @@ fn hide_ctes_customer_360_preserves_relationships() {
 
     assert_eq!(view_column_labels, expected_view_columns);
 
-    let edges: HashSet<(String, String)> = statement
-        .edges
+    let edge_pairs: HashSet<(String, String)> = edges
         .iter()
         .map(|edge| (edge.from.to_string(), edge.to.to_string()))
         .collect();
@@ -653,8 +625,7 @@ fn hide_ctes_customer_360_preserves_relationships() {
             .get(view_column)
             .expect("view column id")
             .clone();
-        let incoming_edges: Vec<_> = statement
-            .edges
+        let incoming_edges: Vec<_> = edges
             .iter()
             .filter(|edge| {
                 edge.to.as_ref() == view_column_id.as_str()
@@ -711,7 +682,7 @@ fn hide_ctes_customer_360_preserves_relationships() {
 
     for (base_col, view_col) in expected_column_edges {
         assert!(
-            edges.contains(&(
+            edge_pairs.contains(&(
                 base_columns[base_col].clone(),
                 view_columns[view_col].clone()
             )),

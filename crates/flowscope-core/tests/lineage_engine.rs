@@ -1886,7 +1886,7 @@ fn self_join_global_lineage_merges_by_canonical() {
     let global_employees: Vec<_> = global
         .nodes
         .iter()
-        .filter(|n| n.canonical_name.name == "employees")
+        .filter(|n| n.canonical_name.as_ref().unwrap().name == "employees")
         .collect();
     assert_eq!(
         global_employees.len(),
@@ -1929,7 +1929,7 @@ fn self_join_global_lineage_merges_source_columns_by_canonical() {
     let employees_node = global
         .nodes
         .iter()
-        .find(|node| node.node_type == NodeType::Table && node.canonical_name.name == "employees")
+        .find(|node| node.node_type == NodeType::Table && node.canonical_name.as_ref().unwrap().name == "employees")
         .expect("employees table should exist in global lineage");
 
     let source_name_nodes: Vec<_> = global
@@ -1937,8 +1937,8 @@ fn self_join_global_lineage_merges_source_columns_by_canonical() {
         .iter()
         .filter(|node| {
             node.node_type == NodeType::Column
-                && node.canonical_name.schema.as_deref() == Some("employees")
-                && node.canonical_name.name == "name"
+                && node.canonical_name.as_ref().unwrap().schema.as_deref() == Some("employees")
+                && node.canonical_name.as_ref().unwrap().name == "name"
         })
         .collect();
 
@@ -1950,7 +1950,7 @@ fn self_join_global_lineage_merges_source_columns_by_canonical() {
 
     let source_name_node = source_name_nodes[0];
     assert_eq!(
-        source_name_node.statement_refs.len(),
+        source_name_node.statement_ids.len(),
         3,
         "merged source column should retain refs to all three statement-local instances"
     );
@@ -2039,8 +2039,8 @@ fn global_lineage_merges_qualified_columns_across_self_joins_and_cte_instances()
         .iter()
         .filter(|node| {
             node.node_type == NodeType::Column
-                && node.canonical_name.schema.as_deref() == Some("employees")
-                && node.canonical_name.name == "name"
+                && node.canonical_name.as_ref().unwrap().schema.as_deref() == Some("employees")
+                && node.canonical_name.as_ref().unwrap().name == "name"
         })
         .collect();
     assert_eq!(
@@ -2059,8 +2059,8 @@ fn global_lineage_merges_qualified_columns_across_self_joins_and_cte_instances()
         .iter()
         .filter(|node| {
             node.node_type == NodeType::Column
-                && node.canonical_name.schema.as_deref() == Some("org")
-                && node.canonical_name.name == "employee_id"
+                && node.canonical_name.as_ref().unwrap().schema.as_deref() == Some("org")
+                && node.canonical_name.as_ref().unwrap().name == "employee_id"
         })
         .collect();
     assert_eq!(
@@ -2231,7 +2231,7 @@ fn repeated_cte_aliases_across_statements_keep_distinct_global_instance_nodes() 
         .global_lineage
         .nodes
         .iter()
-        .filter(|node| node.node_type == NodeType::Cte && node.canonical_name.name == "org")
+        .filter(|node| node.node_type == NodeType::Cte && node.canonical_name.as_ref().unwrap().name == "org")
         .collect();
 
     assert_eq!(
@@ -2242,7 +2242,7 @@ fn repeated_cte_aliases_across_statements_keep_distinct_global_instance_nodes() 
 
     let statement_scoped_instances = global_org_nodes
         .iter()
-        .filter(|node| node.statement_refs.len() == 1)
+        .filter(|node| node.statement_ids.len() == 1)
         .count();
     assert_eq!(
         statement_scoped_instances, 4,
@@ -2255,8 +2255,8 @@ fn repeated_cte_aliases_across_statements_keep_distinct_global_instance_nodes() 
         .iter()
         .filter(|node| {
             node.node_type == NodeType::Column
-                && node.canonical_name.schema.as_deref() == Some("org")
-                && matches!(node.canonical_name.name.as_str(), "id" | "manager_id")
+                && node.canonical_name.as_ref().unwrap().schema.as_deref() == Some("org")
+                && matches!(node.canonical_name.as_ref().unwrap().name.as_str(), "id" | "manager_id")
         })
         .collect();
 
@@ -2268,7 +2268,7 @@ fn repeated_cte_aliases_across_statements_keep_distinct_global_instance_nodes() 
     let cross_statement_org_columns: Vec<_> = global_org_columns
         .iter()
         .filter(|node| {
-            node.statement_refs
+            node.statement_ids
                 .iter()
                 .map(|r| r.statement_index)
                 .collect::<HashSet<_>>()
@@ -2401,7 +2401,7 @@ fn self_join_in_subquery_produces_distinct_nodes() {
         .global_lineage
         .nodes
         .iter()
-        .filter(|n| n.canonical_name.name == "employees")
+        .filter(|n| n.canonical_name.as_ref().unwrap().name == "employees")
         .collect();
     assert_eq!(
         global_employees.len(),
@@ -2727,7 +2727,7 @@ fn cte_self_join_produces_distinct_nodes() {
         .global_lineage
         .nodes
         .iter()
-        .filter(|n| n.node_type == NodeType::Cte && n.canonical_name.name == "emp")
+        .filter(|n| n.node_type == NodeType::Cte && n.canonical_name.as_ref().unwrap().name == "emp")
         .collect();
     assert!(
         global_emp.len() >= 2,
@@ -3137,7 +3137,7 @@ fn self_join_global_edges_resolve_correctly() {
     let global_employees: Vec<_> = global
         .nodes
         .iter()
-        .filter(|n| n.canonical_name.name == "employees" && n.node_type == NodeType::Table)
+        .filter(|n| n.canonical_name.as_ref().unwrap().name == "employees" && n.node_type == NodeType::Table)
         .collect();
     assert_eq!(
         global_employees.len(),
@@ -4134,7 +4134,7 @@ fn view_referenced_multiple_times() {
     // But it should have multiple statement refs
     let view_node = view_nodes[0];
     assert!(
-        view_node.statement_refs.len() >= 2,
+        view_node.statement_ids.len() >= 2,
         "View should be referenced by multiple statements"
     );
 }

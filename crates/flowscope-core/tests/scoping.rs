@@ -486,14 +486,12 @@ fn test_alias_shadowing_in_subquery() {
     let result = analyze(&request);
 
     // Check that we have nodes for t1 and t2
-    let t1_nodes: Vec<_> = result.statements[0]
-        .nodes
-        .iter()
+    let t1_nodes: Vec<_> = result
+        .nodes_in_statement(0)
         .filter(|n| &*n.label == "t1")
         .collect();
-    let t2_nodes: Vec<_> = result.statements[0]
-        .nodes
-        .iter()
+    let t2_nodes: Vec<_> = result
+        .nodes_in_statement(0)
         .filter(|n| &*n.label == "t2")
         .collect();
 
@@ -513,7 +511,7 @@ fn test_alias_shadowing_in_subquery() {
     // The result.statements[0] is StatementLineage.
     // We can check edges.
 
-    let edges = &result.statements[0].edges;
+    let edges: Vec<_> = result.edges_in_statement(0).collect();
     let t1_id = &t1_nodes[0].id;
 
     // Find ownership edge from t1 to a column
@@ -591,9 +589,8 @@ fn new_tables_are_known_when_implied_schema_disabled() {
         result.issues
     );
 
-    let select_tables: Vec<_> = result.statements[1]
-        .nodes
-        .iter()
+    let select_tables: Vec<_> = result
+        .nodes_in_statement(1)
         .filter(|n| n.node_type == flowscope_core::types::NodeType::Table)
         .collect();
 
@@ -701,18 +698,14 @@ fn test_lateral_column_alias_lineage_bigquery() {
     );
 
     // Find column nodes
-    let stmt = &result.statements[0];
-    let col_b = stmt
-        .nodes
-        .iter()
+    let col_b = result
+        .nodes_in_statement(0)
         .find(|n| n.node_type == flowscope_core::types::NodeType::Column && &*n.label == "b");
-    let col_c = stmt
-        .nodes
-        .iter()
+    let col_c = result
+        .nodes_in_statement(0)
         .find(|n| n.node_type == flowscope_core::types::NodeType::Column && &*n.label == "c");
-    let col_a = stmt
-        .nodes
-        .iter()
+    let col_a = result
+        .nodes_in_statement(0)
         .find(|n| n.node_type == flowscope_core::types::NodeType::Column && &*n.label == "a");
 
     assert!(col_b.is_some(), "Column 'b' should exist");
@@ -726,7 +719,8 @@ fn test_lateral_column_alias_lineage_bigquery() {
     // Verify lineage: c should derive from a (transitively through b)
     // Since lateral alias resolution substitutes b's sources for b references,
     // c should have a Derivation edge from a
-    let c_derives_from_a = stmt.edges.iter().any(|e| {
+    let edges: Vec<_> = result.edges_in_statement(0).collect();
+    let c_derives_from_a = edges.iter().any(|e| {
         e.from == col_a.id
             && e.to == col_c.id
             && e.edge_type == flowscope_core::types::EdgeType::Derivation
@@ -735,7 +729,7 @@ fn test_lateral_column_alias_lineage_bigquery() {
     assert!(
         c_derives_from_a,
         "Column 'c' should derive from 'a' (via lateral alias 'b'). Edges: {:?}",
-        stmt.edges
+        edges
     );
 }
 
@@ -770,18 +764,14 @@ fn test_lateral_column_alias_lineage_snowflake() {
     // Find column nodes
     // Note: Output columns (FIRST, DOUBLED) are normalized per dialect, but source columns
     // from table references may retain original case in their labels.
-    let stmt = &result.statements[0];
-
-    let col_first = stmt
-        .nodes
-        .iter()
+    let col_first = result
+        .nodes_in_statement(0)
         .find(|n| n.node_type == flowscope_core::types::NodeType::Column && &*n.label == "FIRST");
-    let col_doubled = stmt
-        .nodes
-        .iter()
-        .find(|n| n.node_type == flowscope_core::types::NodeType::Column && &*n.label == "DOUBLED");
+    let col_doubled = result.nodes_in_statement(0).find(|n| {
+        n.node_type == flowscope_core::types::NodeType::Column && &*n.label == "DOUBLED"
+    });
     // Source column 'x' from table may be lowercase
-    let col_x = stmt.nodes.iter().find(|n| {
+    let col_x = result.nodes_in_statement(0).find(|n| {
         n.node_type == flowscope_core::types::NodeType::Column
             && (n.label.eq_ignore_ascii_case("x"))
     });
@@ -794,7 +784,8 @@ fn test_lateral_column_alias_lineage_snowflake() {
     let col_doubled = col_doubled.unwrap();
 
     // 'DOUBLED' should derive from 'X' (transitively through 'FIRST')
-    let doubled_derives_from_x = stmt.edges.iter().any(|e| {
+    let edges: Vec<_> = result.edges_in_statement(0).collect();
+    let doubled_derives_from_x = edges.iter().any(|e| {
         e.from == col_x.id
             && e.to == col_doubled.id
             && e.edge_type == flowscope_core::types::EdgeType::Derivation
@@ -803,7 +794,7 @@ fn test_lateral_column_alias_lineage_snowflake() {
     assert!(
         doubled_derives_from_x,
         "Column 'DOUBLED' should derive from 'X' (via lateral alias 'FIRST'). Edges: {:?}",
-        stmt.edges
+        edges
     );
 }
 
@@ -841,14 +832,11 @@ fn test_lateral_column_alias_no_lineage_postgres() {
     );
 
     // Find column nodes
-    let stmt = &result.statements[0];
-    let col_c = stmt
-        .nodes
-        .iter()
+    let col_c = result
+        .nodes_in_statement(0)
         .find(|n| n.node_type == flowscope_core::types::NodeType::Column && &*n.label == "c");
-    let col_a = stmt
-        .nodes
-        .iter()
+    let col_a = result
+        .nodes_in_statement(0)
         .find(|n| n.node_type == flowscope_core::types::NodeType::Column && &*n.label == "a");
 
     assert!(col_c.is_some(), "Column 'c' should exist");
@@ -860,7 +848,8 @@ fn test_lateral_column_alias_no_lineage_postgres() {
 
     // In PostgreSQL (no lateral alias support), 'c' should NOT derive from 'a'
     // because we don't resolve the lateral alias reference
-    let c_derives_from_a = stmt.edges.iter().any(|e| {
+    let edges: Vec<_> = result.edges_in_statement(0).collect();
+    let c_derives_from_a = edges.iter().any(|e| {
         e.from == col_a.id
             && e.to == col_c.id
             && (e.edge_type == flowscope_core::types::EdgeType::Derivation
@@ -870,7 +859,7 @@ fn test_lateral_column_alias_no_lineage_postgres() {
     assert!(
         !c_derives_from_a,
         "In PostgreSQL, 'c' should NOT derive from 'a' (lateral alias not resolved). Edges: {:?}",
-        stmt.edges
+        edges
     );
 }
 
@@ -902,14 +891,11 @@ fn test_lateral_column_alias_chain_lineage() {
     assert_eq!(lateral_warnings, 0, "BigQuery supports lateral aliases");
 
     // Find nodes
-    let stmt = &result.statements[0];
-    let col_a = stmt
-        .nodes
-        .iter()
+    let col_a = result
+        .nodes_in_statement(0)
         .find(|n| n.node_type == flowscope_core::types::NodeType::Column && &*n.label == "a");
-    let col_z = stmt
-        .nodes
-        .iter()
+    let col_z = result
+        .nodes_in_statement(0)
         .find(|n| n.node_type == flowscope_core::types::NodeType::Column && &*n.label == "z");
 
     assert!(col_a.is_some(), "Column 'a' should exist");
@@ -919,7 +905,8 @@ fn test_lateral_column_alias_chain_lineage() {
     let col_z = col_z.unwrap();
 
     // 'z' should ultimately derive from 'a' (through the chain x -> y -> z)
-    let z_derives_from_a = stmt.edges.iter().any(|e| {
+    let edges: Vec<_> = result.edges_in_statement(0).collect();
+    let z_derives_from_a = edges.iter().any(|e| {
         e.from == col_a.id
             && e.to == col_z.id
             && e.edge_type == flowscope_core::types::EdgeType::Derivation
@@ -928,6 +915,6 @@ fn test_lateral_column_alias_chain_lineage() {
     assert!(
         z_derives_from_a,
         "Column 'z' should derive from 'a' (via chain x -> y -> z). Edges: {:?}",
-        stmt.edges
+        edges
     );
 }

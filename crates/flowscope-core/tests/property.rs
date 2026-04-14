@@ -145,8 +145,8 @@ proptest! {
         // The resolved table should have the correct schema and name
         // Find the table node (skip output nodes)
         if let Some(node) = result.nodes.iter().find(|n| n.node_type == NodeType::Table) {
-            let got_schema = node.canonical_name.schema.as_deref();
-            let got_name = &node.canonical_name.name;
+            let got_schema = node.canonical_name.as_ref().unwrap().schema.as_deref();
+            let got_name = &node.canonical_name.as_ref().unwrap().name;
             prop_assert_eq!(got_schema, Some(target_schema.as_str()), "Schema mismatch");
             prop_assert_eq!(got_name, &table, "Table name mismatch");
         }
@@ -199,8 +199,8 @@ proptest! {
         // Should resolve to the explicitly qualified name
         // Find the table node (skip output nodes)
         if let Some(node) = result.nodes.iter().find(|n| n.node_type == NodeType::Table) {
-            let got_schema = node.canonical_name.schema.as_deref();
-            let got_name = &node.canonical_name.name;
+            let got_schema = node.canonical_name.as_ref().unwrap().schema.as_deref();
+            let got_name = &node.canonical_name.as_ref().unwrap().name;
             prop_assert_eq!(got_schema, Some(schema.as_str()), "Schema mismatch");
             prop_assert_eq!(got_name, &table, "Table name mismatch");
         }
@@ -239,10 +239,8 @@ mod function_arg_handling {
 
     /// Helper to check if any column node in the result contains a specific label.
     fn has_column_with_label(result: &flowscope_core::AnalyzeResult, label: &str) -> bool {
-        result.statements.iter().any(|stmt| {
-            stmt.nodes.iter().any(|node| {
-                node.node_type == NodeType::Column && node.label.eq_ignore_ascii_case(label)
-            })
+        result.nodes.iter().any(|node| {
+            node.node_type == NodeType::Column && node.label.eq_ignore_ascii_case(label)
         })
     }
 

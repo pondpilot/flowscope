@@ -29,21 +29,19 @@ fn analyze_with_template(
 /// Helper to check if a table with the given name exists in the result.
 /// Checks both the label and qualified_name fields.
 fn has_table(result: &flowscope_core::AnalyzeResult, table_name: &str) -> bool {
-    result.statements.iter().any(|stmt| {
-        stmt.nodes.iter().any(|node| {
-            if node.node_type != NodeType::Table {
-                return false;
-            }
-            // Check label first
-            if &*node.label == table_name {
-                return true;
-            }
-            // Check qualified_name if present
-            if let Some(ref qn) = node.qualified_name {
-                return &**qn == table_name;
-            }
-            false
-        })
+    result.nodes.iter().any(|node| {
+        if node.node_type != NodeType::Table {
+            return false;
+        }
+        // Check label first
+        if &*node.label == table_name {
+            return true;
+        }
+        // Check qualified_name if present
+        if let Some(ref qn) = node.qualified_name {
+            return &**qn == table_name;
+        }
+        false
     })
 }
 
@@ -190,7 +188,7 @@ fn dbt_ref_two_args() {
     assert!(
         has_table(&result, "analytics.users"),
         "Should detect 'analytics.users' table from ref(): {:?}",
-        result.statements.first().map(|s| &s.nodes)
+        &result.nodes
     );
 }
 
@@ -211,7 +209,7 @@ fn dbt_source_macro() {
     assert!(
         has_table(&result, "raw.events"),
         "Should detect 'raw.events' table from source(): {:?}",
-        result.statements.first().map(|s| &s.nodes)
+        &result.nodes
     );
 }
 
@@ -248,7 +246,7 @@ fn dbt_var_with_default() {
     assert!(
         has_table(&result, "public.users"),
         "Should detect 'public.users' table: {:?}",
-        result.statements.first().map(|s| &s.nodes)
+        &result.nodes
     );
 }
 
@@ -273,7 +271,7 @@ fn dbt_var_from_context() {
     assert!(
         has_table(&result, "analytics.users"),
         "Should detect 'analytics.users' table: {:?}",
-        result.statements.first().map(|s| &s.nodes)
+        &result.nodes
     );
 }
 
@@ -949,9 +947,8 @@ fn analyze_dbt_files(files: Vec<FileSource>) -> flowscope_core::AnalyzeResult {
 #[cfg(feature = "templating")]
 fn count_derivation_edges(result: &flowscope_core::AnalyzeResult) -> usize {
     result
-        .statements
+        .edges
         .iter()
-        .flat_map(|stmt| &stmt.edges)
         .filter(|edge| edge.edge_type == EdgeType::Derivation)
         .count()
 }
@@ -1249,9 +1246,8 @@ FROM {{ ref('stg_orders') }}
         .expect("Should find orders_mart statement");
 
     // Check for output columns
-    let output_columns: Vec<_> = mart_stmt
-        .nodes
-        .iter()
+    let output_columns: Vec<_> = result
+        .nodes_in_statement(mart_stmt.statement_index)
         .filter(|n| n.node_type == NodeType::Column)
         .map(|n| n.label.as_ref())
         .collect();
@@ -1266,9 +1262,8 @@ FROM {{ ref('stg_orders') }}
     );
 
     // Verify derivation edges exist for the derived column
-    let derivations: Vec<_> = mart_stmt
-        .edges
-        .iter()
+    let derivations: Vec<_> = result
+        .edges_in_statement(mart_stmt.statement_index)
         .filter(|e| e.edge_type == EdgeType::Derivation)
         .collect();
 
@@ -1309,9 +1304,8 @@ WHERE order_date >= '{{ var("min_date", "2020-01-01") }}'
 
     // Verify output columns are captured
     let stmt = result.statements.first().expect("Should have statement");
-    let columns: Vec<_> = stmt
-        .nodes
-        .iter()
+    let columns: Vec<_> = result
+        .nodes_in_statement(stmt.statement_index)
         .filter(|n| n.node_type == NodeType::Column)
         .collect();
 
@@ -1369,9 +1363,8 @@ FROM {{ ref('orders') }}
         .expect("Should find orders_ranked statement");
 
     // Check for window function derived columns
-    let columns: Vec<_> = ranked_stmt
-        .nodes
-        .iter()
+    let columns: Vec<_> = result
+        .nodes_in_statement(ranked_stmt.statement_index)
         .filter(|n| n.node_type == NodeType::Column)
         .map(|n| n.label.as_ref())
         .collect();
@@ -1387,9 +1380,8 @@ FROM {{ ref('orders') }}
 
     // Verify derivation edges for window functions
     // Window functions produce derivation edges when they transform columns
-    let derivations: Vec<_> = ranked_stmt
-        .edges
-        .iter()
+    let derivations: Vec<_> = result
+        .edges_in_statement(ranked_stmt.statement_index)
         .filter(|e| e.edge_type == EdgeType::Derivation)
         .collect();
 
@@ -1445,9 +1437,8 @@ GROUP BY order_date
         .expect("Should find daily_revenue statement");
 
     // Check for aggregated columns
-    let columns: Vec<_> = revenue_stmt
-        .nodes
-        .iter()
+    let columns: Vec<_> = result
+        .nodes_in_statement(revenue_stmt.statement_index)
         .filter(|n| n.node_type == NodeType::Column)
         .map(|n| n.label.as_ref())
         .collect();
@@ -1463,9 +1454,8 @@ GROUP BY order_date
     );
 
     // Verify aggregation creates derivation edges
-    let derivations: Vec<_> = revenue_stmt
-        .edges
-        .iter()
+    let derivations: Vec<_> = result
+        .edges_in_statement(revenue_stmt.statement_index)
         .filter(|e| e.edge_type == EdgeType::Derivation)
         .collect();
 
@@ -1525,7 +1515,6 @@ GROUP BY customer_id
 
     // Verify cross-statement edges exist
     let cross_edges: Vec<_> = result
-        .global_lineage
         .edges
         .iter()
         .filter(|e| e.edge_type == EdgeType::CrossStatement)
@@ -1541,9 +1530,8 @@ GROUP BY customer_id
         .statements
         .first()
         .expect("Should have first statement");
-    let output_node = first_stmt
-        .nodes
-        .iter()
+    let output_node = result
+        .nodes_in_statement(first_stmt.statement_index)
         .find(|n| n.node_type == NodeType::Output);
 
     assert!(
@@ -1605,10 +1593,12 @@ FROM scoped_data
     );
 
     let cte_nodes: Vec<_> = result
-        .global_lineage
         .nodes
         .iter()
-        .filter(|node| node.node_type == NodeType::Cte && node.canonical_name.name == "scoped_data")
+        .filter(|node| {
+            node.node_type == NodeType::Cte
+                && node.canonical_name.as_ref().unwrap().name == "scoped_data"
+        })
         .collect();
 
     assert_eq!(
@@ -1617,7 +1607,7 @@ FROM scoped_data
         "same-named CTEs from different dbt models should stay distinct in global lineage"
     );
     assert!(
-        cte_nodes.iter().all(|node| node.statement_refs.len() == 1),
+        cte_nodes.iter().all(|node| node.statement_ids.len() == 1),
         "dbt model-local CTEs should remain statement-local"
     );
 
@@ -1625,9 +1615,8 @@ FROM scoped_data
         .statements
         .iter()
         .filter_map(|statement| {
-            statement
-                .nodes
-                .iter()
+            result
+                .nodes_in_statement(statement.statement_index)
                 .find(|node| node.node_type == NodeType::Output)
                 .map(|node| node.label.to_string())
         })
@@ -1669,9 +1658,8 @@ JOIN team t2 ON t1.manager_id = t2.id
         .first()
         .expect("should have at least one statement");
 
-    let cte_nodes: Vec<_> = stmt
-        .nodes
-        .iter()
+    let cte_nodes: Vec<_> = result
+        .nodes_in_statement(stmt.statement_index)
         .filter(|n| n.node_type == NodeType::Cte && n.label.as_ref() == "team")
         .collect();
 
@@ -1719,10 +1707,12 @@ FROM hierarchy
     );
 
     let cte_nodes: Vec<_> = result
-        .global_lineage
         .nodes
         .iter()
-        .filter(|n| n.node_type == NodeType::Cte && n.canonical_name.name == "hierarchy")
+        .filter(|n| {
+            n.node_type == NodeType::Cte
+                && n.canonical_name.as_ref().unwrap().name == "hierarchy"
+        })
         .collect();
 
     assert!(
@@ -1731,7 +1721,7 @@ FROM hierarchy
     );
 
     assert!(
-        cte_nodes.iter().all(|n| n.statement_refs.len() == 1),
+        cte_nodes.iter().all(|n| n.statement_ids.len() == 1),
         "recursive CTE should remain statement-scoped"
     );
 }
@@ -1748,10 +1738,11 @@ fn dbt_model_name_extraction_from_path() {
         content: model.to_string(),
     }]);
 
-    let output_node = result
-        .statements
-        .first()
-        .and_then(|s| s.nodes.iter().find(|n| n.node_type == NodeType::Output));
+    let output_node = result.statements.first().and_then(|s| {
+        result
+            .nodes_in_statement(s.statement_index)
+            .find(|n| n.node_type == NodeType::Output)
+    });
 
     assert!(output_node.is_some(), "Should have output node");
     assert_eq!(

@@ -8,14 +8,12 @@
 import type {
   Node,
   Edge,
-  StatementLineage,
   ResolvedSchemaMetadata,
-  GlobalLineage,
-  GlobalNode,
   FilterPredicate,
   AggregationInfo,
 } from '@pondpilot/flowscope-core';
 import { isTableLikeType } from '@pondpilot/flowscope-core';
+import type { StatementLineage } from '../types';
 import { GRAPH_CONFIG } from '../constants';
 import {
   buildJoinedTableIds,
@@ -137,7 +135,6 @@ export interface GraphBuildRequest {
   expandedTableIds: string[]; // Array instead of Set for serialization
   resolvedSchema: ResolvedSchemaMetadata | null;
   defaultCollapsed: boolean;
-  globalLineage: GlobalLineage | null;
   showColumnEdges: boolean;
 }
 
@@ -317,8 +314,7 @@ interface TableNodeBuilderOptions extends NodeBuilderOptions {
 function buildTableNodeData(
   node: Node,
   columns: SerializedColumnInfo[],
-  options: TableNodeBuilderOptions,
-  globalNodeMap?: Map<string, GlobalNode>
+  options: TableNodeBuilderOptions
 ): SerializedTableNodeData {
   let nodeType: 'table' | 'view' | 'cte' | 'virtualOutput' = 'table';
   if (node.type === 'cte') {
@@ -327,8 +323,8 @@ function buildTableNodeData(
     nodeType = 'view';
   }
 
-  const globalNode = globalNodeMap?.get(node.id);
-  const canonical = globalNode?.canonicalName;
+  // Canonical info is carried on the node itself in the flat model.
+  const canonical = node.canonicalName;
 
   const qualifiedName = canonical
     ? [canonical.catalog, canonical.schema, canonical.name].filter(Boolean).join('.')
@@ -380,16 +376,8 @@ function buildFlowNodes(
   collapsedNodeIds: Set<string>,
   expandedTableIds: Set<string>,
   resolvedSchema: ResolvedSchemaMetadata | null | undefined,
-  defaultCollapsed: boolean,
-  globalLineage: GlobalLineage | null | undefined
+  defaultCollapsed: boolean
 ): SerializedFlowNode[] {
-  const globalNodeMap = new Map<string, GlobalNode>();
-  if (globalLineage?.nodes) {
-    for (const gn of globalLineage.nodes) {
-      globalNodeMap.set(gn.id, gn);
-    }
-  }
-
   const tableNodes = statement.nodes.filter((n) => isTableLikeType(n.type));
   const columnNodes = statement.nodes.filter((n) => n.type === 'column');
   const outputNodes = statement.nodes.filter((n) => n.type === OUTPUT_NODE_TYPE);
@@ -459,19 +447,14 @@ function buildFlowNodes(
       id: node.id,
       type: 'tableNode',
       position: { x: 0, y: 0 },
-      data: buildTableNodeData(
-        node,
-        columns,
-        {
-          selectedNodeId,
-          searchTerm,
-          isCollapsed: computeIsCollapsed(node.id, defaultCollapsed, collapsedNodeIds),
-          hiddenColumnCount,
-          isRecursive: recursiveNodeIds.has(node.id),
-          isBaseTable: baseTableIds.has(node.id),
-        },
-        globalNodeMap
-      ),
+      data: buildTableNodeData(node, columns, {
+        selectedNodeId,
+        searchTerm,
+        isCollapsed: computeIsCollapsed(node.id, defaultCollapsed, collapsedNodeIds),
+        hiddenColumnCount,
+        isRecursive: recursiveNodeIds.has(node.id),
+        isBaseTable: baseTableIds.has(node.id),
+      }),
     });
   }
 
@@ -1187,8 +1170,7 @@ self.onmessage = (event: MessageEvent<GraphBuildRequest | ScriptGraphBuildReques
         collapsedNodeIds,
         expandedTableIds,
         request.resolvedSchema,
-        request.defaultCollapsed,
-        request.globalLineage
+        request.defaultCollapsed
       );
 
       edges = buildFlowEdges(
