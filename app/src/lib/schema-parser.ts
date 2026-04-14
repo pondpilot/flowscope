@@ -10,9 +10,8 @@ import type {
   AnalyzeRequest,
   AnalyzeResult,
   ColumnSchema,
-  StatementLineage,
+  StatementMeta,
   Issue,
-  StatementRef,
 } from '@pondpilot/flowscope-core';
 import { SCHEMA_LIMITS } from './constants';
 
@@ -86,23 +85,23 @@ export async function parseSchemaSQL(
         });
       }
     } else {
-      // Fallback: Extract from global lineage nodes (includes canonical names) when resolvedSchema is absent
+      // Fallback: Extract from flat lineage nodes (which carry canonical names)
+      // when resolvedSchema is absent.
       const createStatementIndexes = new Set(
         (result.statements || [])
-          .filter((stmt: StatementLineage) => stmt.statementType === 'CREATE_TABLE')
-          .map((stmt: StatementLineage) => stmt.statementIndex)
+          .filter((stmt: StatementMeta) => stmt.statementType === 'CREATE_TABLE')
+          .map((stmt: StatementMeta) => stmt.statementIndex)
       );
 
       const tableMap = new Map<string, SchemaTable>();
 
-      for (const node of result.globalLineage?.nodes || []) {
+      for (const node of result.nodes || []) {
         // Only consider nodes that belong to CREATE TABLE statements from the schema SQL
-        const isFromSchemaDDL = node.statementRefs?.some((ref: StatementRef) =>
-          createStatementIndexes.has(ref.statementIndex)
-        );
+        const isFromSchemaDDL = node.statementIds?.some((idx) => createStatementIndexes.has(idx));
         if (!isFromSchemaDDL) continue;
 
         const canonical = node.canonicalName;
+        if (!canonical) continue;
         const key = [canonical.catalog, canonical.schema, canonical.name].filter(Boolean).join('.');
 
         if (node.type === 'table') {

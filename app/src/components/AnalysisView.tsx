@@ -144,16 +144,16 @@ export function AnalysisView({
     [storedNamespaceFilter]
   );
 
-  // Extract unique schemas and databases from globalLineage nodes
+  // Extract unique schemas and databases from the flat lineage nodes
   const { availableSchemas, availableDatabases } = useMemo(() => {
-    if (!result?.globalLineage?.nodes) {
+    if (!result?.nodes) {
       return { availableSchemas: [], availableDatabases: [] };
     }
 
     const schemas = new Set<string>();
     const databases = new Set<string>();
 
-    for (const node of result.globalLineage.nodes) {
+    for (const node of result.nodes) {
       // Skip column nodes - their canonicalName structure differs:
       // columns have qualified_name like "schema.table.column" which
       // parse_canonical_name incorrectly interprets as "catalog.schema.table"

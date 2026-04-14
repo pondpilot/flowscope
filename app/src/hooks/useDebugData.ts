@@ -125,9 +125,9 @@ export function useDebugData(): DebugData {
           workerTimings: metrics?.workerTimings ?? null,
         },
         globalLineage: {
-          nodeCount: lineageState.result?.globalLineage?.nodes?.length ?? 0,
-          edgeCount: lineageState.result?.globalLineage?.edges?.length ?? 0,
-          tableNodes: (lineageState.result?.globalLineage?.nodes ?? [])
+          nodeCount: lineageState.result?.nodes?.length ?? 0,
+          edgeCount: lineageState.result?.edges?.length ?? 0,
+          tableNodes: (lineageState.result?.nodes ?? [])
             .filter(
               (n: { type: string }) => n.type === 'table' || n.type === 'view' || n.type === 'cte'
             )

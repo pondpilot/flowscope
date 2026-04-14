@@ -1,5 +1,5 @@
 import { useMemo, useCallback } from 'react';
-import type { Issue, StatementLineage } from '@pondpilot/flowscope-core';
+import type { Issue, StatementMeta } from '@pondpilot/flowscope-core';
 import { byteOffsetToLineColumn } from '@/lib/utils';
 
 export interface FileInfo {
@@ -20,7 +20,7 @@ export interface IssueLocation {
  * Handles the mapping between issues, statements, and source files to provide
  * line:column locations for display in the UI.
  */
-export function useIssueLocations(files: FileInfo[], statements: StatementLineage[]) {
+export function useIssueLocations(files: FileInfo[], statements: StatementMeta[]) {
   // Memoized file lookup map for O(1) access by name or path
   const fileMap = useMemo(() => {
     const map = new Map<string, FileInfo>();

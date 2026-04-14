@@ -96,8 +96,8 @@ export const HierarchyView = forwardRef<HierarchyViewRef, HierarchyViewProps>(
     const { state, actions } = useLineage();
     const { result } = state;
     const { navigateTo, navigateToEditor } = useNavigation();
-    const nodes = result?.globalLineage?.nodes || [];
-    const edges = result?.globalLineage?.edges || [];
+    const nodes = result?.nodes || [];
+    const edges = result?.edges || [];
     const statements = result?.statements || [];
 
     // Build a lookup map for O(1) node access instead of O(n) find() calls
@@ -200,10 +200,10 @@ export const HierarchyView = forwardRef<HierarchyViewRef, HierarchyViewProps>(
       });
 
       nodes.forEach((node) => {
-        if (['table', 'view', 'cte'].includes(node.type) && node.statementRefs) {
+        if (['table', 'view', 'cte'].includes(node.type) && node.statementIds?.length) {
           const scripts: string[] = [];
-          node.statementRefs.forEach((ref) => {
-            const stmt = statements[ref.statementIndex];
+          node.statementIds.forEach((idx) => {
+            const stmt = statements[idx];
             if (stmt?.sourceName && !scripts.includes(stmt.sourceName)) {
               scripts.push(stmt.sourceName);
             }
