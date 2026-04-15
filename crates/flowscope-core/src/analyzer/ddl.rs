@@ -12,7 +12,7 @@ use super::Analyzer;
 use crate::types::{
     ColumnSchema, ConstraintType, ForeignKeyRef, Node, NodeType, TableConstraintInfo,
 };
-use sqlparser::ast::{ObjectName, Query, TableConstraint};
+use sqlparser::ast::{ObjectName, Query, TableConstraint, ViewColumnDef};
 use std::collections::BTreeMap;
 
 /// Statement type used when registering source tables (tables being read from).
@@ -256,6 +256,7 @@ impl<'a> Analyzer<'a> {
         ctx: &mut StatementContext,
         name: &ObjectName,
         query: &Query,
+        view_columns: &[ViewColumnDef],
         is_temporary: bool,
     ) {
         let target_name = name.to_string();
@@ -283,10 +284,36 @@ impl<'a> Analyzer<'a> {
 
         // Capture output columns from the query to store as implied schema
         let projection_columns = ctx.take_output_columns_since(projection_checkpoint);
+
+        // If the view has an explicit column list (e.g., CREATE VIEW v (a, b) AS ...),
+        // rename the output columns and their corresponding nodes to match.
+        let renamed_names: Option<Vec<String>> =
+            if !view_columns.is_empty() && view_columns.len() == projection_columns.len() {
+                Some(
+                    view_columns
+                        .iter()
+                        .map(|vc| self.normalize_identifier(&vc.name.value))
+                        .collect(),
+                )
+            } else {
+                None
+            };
+
+        if let Some(ref names) = renamed_names {
+            for (proj_col, new_name) in projection_columns.iter().zip(names.iter()) {
+                if let Some(node) = ctx.nodes.iter_mut().find(|n| n.id == proj_col.node_id) {
+                    node.label = new_name.clone().into();
+                }
+            }
+        }
+
         let output_columns: Vec<ColumnSchema> = projection_columns
             .iter()
-            .map(|col| ColumnSchema {
-                name: col.name.clone(),
+            .enumerate()
+            .map(|(i, col)| ColumnSchema {
+                name: renamed_names
+                    .as_ref()
+                    .map_or_else(|| col.name.clone(), |names| names[i].clone()),
                 data_type: col.data_type.clone(),
                 is_primary_key: None,
                 foreign_key: None,

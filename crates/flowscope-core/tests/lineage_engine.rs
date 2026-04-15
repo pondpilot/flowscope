@@ -10337,3 +10337,1834 @@ fn cte_body_span_skips_dollar_quoted_strings() {
         .expect("cte body span should be populated");
     assert_eq!(&sql[body.start..body.end], "(SELECT $$)$$ AS x)");
 }
+
+// ── Oracle smoke tests ──────────────────────────────────────────────────────
+
+#[test]
+fn oracle_insert_simple() {
+    let sql = load_sql_fixture("oracle", "01_insert_simple.sql");
+    let result = run_analysis(&sql, Dialect::Oracle, None);
+
+    assert!(
+        !result.summary.has_errors,
+        "oracle insert_simple should parse without errors: {:?}",
+        result.issues
+    );
+
+    let stmt = first_statement(&result);
+    let tables = collect_table_names(&result);
+    assert!(
+        tables.contains("CORE.REG_SUBJECT"),
+        "should find target table CORE.REG_SUBJECT"
+    );
+    assert!(
+        tables.contains("IDM.REG_SUBJECT"),
+        "should find source table IDM.REG_SUBJECT"
+    );
+    assert!(
+        tables.contains("IDM.REG_SUBJECTTYPE"),
+        "should find source table IDM.REG_SUBJECTTYPE"
+    );
+    assert!(!stmt.edges.is_empty(), "should have lineage edges");
+}
+
+#[test]
+fn oracle_select_only() {
+    let sql = load_sql_fixture("oracle", "02_select_only.sql");
+    let result = run_analysis(&sql, Dialect::Oracle, None);
+
+    assert!(
+        !result.summary.has_errors,
+        "oracle select_only should parse without errors: {:?}",
+        result.issues
+    );
+
+    let tables = collect_table_names(&result);
+    assert!(
+        tables.contains("IDM.REG_SUBJECT"),
+        "should find source table IDM.REG_SUBJECT"
+    );
+}
+
+#[test]
+fn oracle_update_alias() {
+    let sql = load_sql_fixture("oracle", "03_update_alias.sql");
+    let result = run_analysis(&sql, Dialect::Oracle, None);
+
+    assert!(
+        !result.summary.has_errors,
+        "oracle update_alias should parse without errors: {:?}",
+        result.issues
+    );
+
+    let tables = collect_table_names(&result);
+    assert!(
+        tables.contains("CORE.REG_SUBJECT"),
+        "should find target table CORE.REG_SUBJECT"
+    );
+}
+
+#[test]
+fn oracle_delete_exists() {
+    let sql = load_sql_fixture("oracle", "04_delete_exists.sql");
+    let result = run_analysis(&sql, Dialect::Oracle, None);
+
+    assert!(
+        !result.summary.has_errors,
+        "oracle delete_exists should parse without errors: {:?}",
+        result.issues
+    );
+
+    let tables = collect_table_names(&result);
+    assert!(
+        tables.contains("CORE.REG_SUBJECT"),
+        "should find target table CORE.REG_SUBJECT"
+    );
+}
+
+#[test]
+fn oracle_merge_minimal() {
+    let sql = load_sql_fixture("oracle", "05_merge_minimal.sql");
+    let result = run_analysis(&sql, Dialect::Oracle, None);
+
+    assert!(
+        !result.summary.has_errors,
+        "oracle merge_minimal should parse without errors: {:?}",
+        result.issues
+    );
+
+    let tables = collect_table_names(&result);
+    assert!(
+        tables.contains("CORE.REG_SUBJECT"),
+        "should find target table CORE.REG_SUBJECT"
+    );
+    assert!(
+        tables.contains("IDM.REG_SUBJECT"),
+        "should find source table IDM.REG_SUBJECT"
+    );
+}
+
+#[test]
+fn oracle_view_simple() {
+    let sql = load_sql_fixture("oracle", "06_view_simple.sql");
+    let result = run_analysis(&sql, Dialect::Oracle, None);
+
+    assert!(
+        !result.summary.has_errors,
+        "oracle view_simple should parse without errors: {:?}",
+        result.issues
+    );
+
+    let stmt = first_statement(&result);
+    let tables = collect_table_names(&result);
+    assert!(
+        tables.contains("IDM.REG_SUBJECT"),
+        "should find source table IDM.REG_SUBJECT"
+    );
+    assert!(!stmt.edges.is_empty(), "should have lineage edges");
+}
+
+// ── Oracle bulk test suite ──────────────────────────────────────────────────
+// Tests all Oracle fixture files imported from sql-parser-service.
+// Each test validates: (1) parsing succeeds, (2) expected tables found, (3) edges present where expected.
+
+/// Helper: run Oracle fixture and return (fixture_name, parse_ok, has_tables, has_edges, error_detail)
+fn oracle_fixture_result(fixture: &str) -> (bool, usize, usize, String) {
+    let sql = load_sql_fixture("oracle", fixture);
+    let result = run_analysis(&sql, Dialect::Oracle, None);
+    let parse_ok = !result.summary.has_errors;
+    let tables = collect_table_names(&result);
+    let edge_count: usize = result.statements.iter().map(|s| s.edges.len()).sum();
+    let error_detail = if !parse_ok {
+        result
+            .issues
+            .iter()
+            .map(|i| format!("{}: {}", i.code, i.message))
+            .collect::<Vec<_>>()
+            .join("; ")
+    } else {
+        String::new()
+    };
+    (parse_ok, tables.len(), edge_count, error_detail)
+}
+
+// --- DELETE ---
+
+#[test]
+fn oracle_bulk_delete_simple() {
+    let (ok, tables, _, err) = oracle_fixture_result("delete_simple.sql");
+    assert!(ok, "delete_simple parse failed: {err}");
+    assert!(tables >= 1, "should find at least 1 table");
+}
+
+#[test]
+fn oracle_bulk_delete_in() {
+    let (ok, tables, _, err) = oracle_fixture_result("delete_in.sql");
+    assert!(ok, "delete_in parse failed: {err}");
+    assert!(tables >= 2, "should find at least 2 tables");
+}
+
+#[test]
+fn oracle_bulk_delete_exists() {
+    let (ok, tables, _, err) = oracle_fixture_result("delete_exists.sql");
+    assert!(ok, "delete_exists parse failed: {err}");
+    assert!(tables >= 2, "should find at least 2 tables");
+}
+
+// --- INSERT ---
+
+#[test]
+fn oracle_bulk_insert_simple() {
+    let (ok, tables, edges, err) = oracle_fixture_result("insert_simple.sql");
+    assert!(ok, "insert_simple parse failed: {err}");
+    assert!(tables >= 3, "should find target + 2 sources");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_insert_values() {
+    let (ok, tables, _, err) = oracle_fixture_result("insert_values.sql");
+    assert!(ok, "insert_values parse failed: {err}");
+    assert!(tables >= 1, "should find target table");
+}
+
+#[test]
+fn oracle_bulk_insert_select_literals() {
+    let (ok, tables, _, err) = oracle_fixture_result("insert_select_literals.sql");
+    assert!(ok, "insert_select_literals parse failed: {err}");
+    assert!(tables >= 1, "should find at least target table");
+}
+
+#[test]
+fn oracle_bulk_insert_target_source() {
+    let (ok, tables, edges, err) = oracle_fixture_result("insert_target_source.sql");
+    assert!(ok, "insert_target_source parse failed: {err}");
+    assert!(tables >= 2, "should find target + source");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_insert_cte_chain_deep() {
+    let (ok, tables, edges, err) = oracle_fixture_result("insert_cte_chain_deep.sql");
+    assert!(ok, "insert_cte_chain_deep parse failed: {err}");
+    assert!(tables >= 2, "should find target + source");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_insert_cte_sum_case() {
+    let (ok, tables, edges, err) = oracle_fixture_result("insert_cte_sum_case.sql");
+    assert!(ok, "insert_cte_sum_case parse failed: {err}");
+    assert!(tables >= 2, "should find target + source");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_insert_from_one_subquery() {
+    let (ok, tables, edges, err) = oracle_fixture_result("insert_from_one_subquery.sql");
+    assert!(ok, "insert_from_one_subquery parse failed: {err}");
+    assert!(tables >= 2, "should find target + source");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_insert_into_subquery_target() {
+    let (ok, tables, edges, err) = oracle_fixture_result("insert_into_subquery_target.sql");
+    assert!(ok, "insert_into_subquery_target parse failed: {err}");
+    assert!(tables >= 2, "should find target + source");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_insert_subquery_chain() {
+    let (ok, tables, edges, err) = oracle_fixture_result("insert_subquery_chain.sql");
+    assert!(ok, "insert_subquery_chain parse failed: {err}");
+    assert!(tables >= 3, "should find target + 2 sources");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_insert_union_all_sources() {
+    let (ok, tables, edges, err) = oracle_fixture_result("insert_union_all_sources.sql");
+    assert!(ok, "insert_union_all_sources parse failed: {err}");
+    assert!(tables >= 3, "should find target + 2 source tables");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_insert_case_expr() {
+    let (ok, tables, edges, err) = oracle_fixture_result("insert_case_expr.sql");
+    assert!(ok, "insert_case_expr parse failed: {err}");
+    assert!(tables >= 2, "should find target + source");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_insert_window_rn() {
+    let (ok, tables, edges, err) = oracle_fixture_result("insert_window_rn.sql");
+    assert!(ok, "insert_window_rn parse failed: {err}");
+    assert!(tables >= 2, "should find target + source");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_insert_values_with_subquery() {
+    let (ok, tables, _, err) = oracle_fixture_result("insert_values_with_subquery.sql");
+    assert!(ok, "insert_values_with_subquery parse failed: {err}");
+    assert!(tables >= 1, "should find at least target table");
+}
+
+#[test]
+fn oracle_bulk_insert_bare_star() {
+    let (ok, tables, edges, err) = oracle_fixture_result("insert_bare_star.sql");
+    assert!(ok, "insert_bare_star parse failed: {err}");
+    assert!(tables >= 2, "should find target + source");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_insert_table_star() {
+    let (ok, tables, edges, err) = oracle_fixture_result("insert_table_star.sql");
+    assert!(ok, "insert_table_star parse failed: {err}");
+    assert!(tables >= 2, "should find target + source");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_insert_from_subquery_star() {
+    let (ok, tables, edges, err) = oracle_fixture_result("insert_from_subquery_star.sql");
+    assert!(ok, "insert_from_subquery_star parse failed: {err}");
+    assert!(tables >= 2, "should find target + source");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_insert_from_view() {
+    let (ok, tables, edges, err) = oracle_fixture_result("insert_from_view.sql");
+    assert!(ok, "insert_from_view parse failed: {err}");
+    assert!(tables >= 2, "should find target + view source");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_insert_join_subquery_stars() {
+    let (ok, tables, edges, err) = oracle_fixture_result("insert_join_subquery_stars.sql");
+    assert!(ok, "insert_join_subquery_stars parse failed: {err}");
+    assert!(tables >= 3, "should find target + 2 sources");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_insert_cte_mixed() {
+    let (ok, tables, _, err) = oracle_fixture_result("insert_cte_mixed.sql");
+    assert!(ok, "insert_cte_mixed parse failed: {err}");
+    assert!(tables >= 3, "should find target + 2 CTE source tables");
+}
+
+#[test]
+fn oracle_bulk_insert_table_star_join_meta() {
+    let (ok, tables, edges, err) = oracle_fixture_result("insert_table_star_join_meta.sql");
+    assert!(ok, "insert_table_star_join_meta parse failed: {err}");
+    assert!(tables >= 3, "should find target + 2 sources");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_insert_star_source() {
+    let (ok, tables, edges, err) = oracle_fixture_result("insert_star_source.sql");
+    assert!(ok, "insert_star_source parse failed: {err}");
+    assert!(tables >= 2, "should find target + source");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_insert_no_target_fields() {
+    let (ok, tables, edges, err) = oracle_fixture_result("insert_no_target_fields.sql");
+    assert!(ok, "insert_no_target_fields parse failed: {err}");
+    assert!(tables >= 3, "should find target + 2 sources");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_insert_positional_no_aliases() {
+    let (ok, tables, edges, err) = oracle_fixture_result("insert_positional_no_aliases_oracle.sql");
+    assert!(ok, "insert_positional_no_aliases parse failed: {err}");
+    assert!(tables >= 2, "should find target + source");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_insert_scalar_agg_multi_tables() {
+    let (ok, tables, edges, err) =
+        oracle_fixture_result("insert_scalar_agg_multi_tables_oracle.sql");
+    assert!(ok, "insert_scalar_agg_multi_tables parse failed: {err}");
+    assert!(tables >= 4, "should find target + multiple source tables");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_insert_star_minus() {
+    let (ok, tables, edges, err) = oracle_fixture_result("insert_star_minus_oracle.sql");
+    assert!(ok, "insert_star_minus parse failed: {err}");
+    assert!(tables >= 3, "should find target + 2 source tables");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_insert_rms_fct_segment() {
+    let (ok, tables, _, err) = oracle_fixture_result("insert_rms_fct_segment.sql");
+    assert!(ok, "insert_rms_fct_segment parse failed: {err}");
+    assert!(tables >= 2, "should find target + sources");
+}
+
+#[test]
+fn oracle_bulk_insert_bm_det_customer() {
+    let (ok, tables, _, err) = oracle_fixture_result("insert_bm_det_customer.sql");
+    assert!(ok, "insert_bm_det_customer parse failed: {err}");
+    assert!(tables >= 2, "should find target + sources");
+}
+
+// --- MERGE ---
+
+#[test]
+fn oracle_bulk_merge_minimal() {
+    let (ok, tables, edges, err) = oracle_fixture_result("merge_minimal.sql");
+    assert!(ok, "merge_minimal parse failed: {err}");
+    assert!(tables >= 2, "should find target + source");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_merge_when_matched_only() {
+    let (ok, tables, edges, err) = oracle_fixture_result("merge_when_matched_only.sql");
+    assert!(ok, "merge_when_matched_only parse failed: {err}");
+    assert!(tables >= 2, "should find target + source");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_merge_when_not_matched_only() {
+    let (ok, tables, edges, err) = oracle_fixture_result("merge_when_not_matched_only.sql");
+    assert!(ok, "merge_when_not_matched_only parse failed: {err}");
+    assert!(tables >= 2, "should find target + source");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_merge_using_join() {
+    let (ok, tables, edges, err) = oracle_fixture_result("merge_using_join.sql");
+    assert!(ok, "merge_using_join parse failed: {err}");
+    assert!(tables >= 3, "should find target + 2 sources");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_merge_using_direct_table() {
+    let (ok, tables, edges, err) = oracle_fixture_result("merge_using_direct_table.sql");
+    assert!(ok, "merge_using_direct_table parse failed: {err}");
+    assert!(tables >= 2, "should find target + source");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_merge_union_all() {
+    let (ok, tables, _, err) = oracle_fixture_result("merge_union_all.sql");
+    assert!(ok, "merge_union_all parse failed: {err}");
+    assert!(tables >= 3, "should find target + 2 source tables");
+}
+
+#[test]
+fn oracle_bulk_merge_into_subquery_target() {
+    let (ok, tables, _, err) = oracle_fixture_result("merge_into_subquery_target.sql");
+    assert!(ok, "merge_into_subquery_target parse failed: {err}");
+    assert!(tables >= 2, "should find target + source");
+}
+
+#[test]
+fn oracle_bulk_merge_using_star_subquery() {
+    let (ok, tables, edges, err) = oracle_fixture_result("merge_using_star_subquery.sql");
+    assert!(ok, "merge_using_star_subquery parse failed: {err}");
+    assert!(tables >= 2, "should find target + source");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_merge_using_table_star() {
+    let (ok, tables, edges, err) = oracle_fixture_result("merge_using_table_star.sql");
+    assert!(ok, "merge_using_table_star parse failed: {err}");
+    assert!(tables >= 2, "should find target + source");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_merge_using_star_join_meta() {
+    let (ok, tables, _, err) = oracle_fixture_result("merge_using_star_join_meta.sql");
+    assert!(ok, "merge_using_star_join_meta parse failed: {err}");
+    assert!(tables >= 3, "should find target + 2 sources");
+}
+
+#[test]
+fn oracle_bulk_merge_using_cte_star_meta() {
+    let (ok, tables, _, err) = oracle_fixture_result("merge_using_cte_star_meta.sql");
+    assert!(ok, "merge_using_cte_star_meta parse failed: {err}");
+    assert!(tables >= 3, "should find target + 2 sources");
+}
+
+#[test]
+fn oracle_bulk_merge_complex_unqualified() {
+    let (ok, tables, _, err) = oracle_fixture_result("merge_complex_unqualified_oracle.sql");
+    assert!(ok, "merge_complex_unqualified parse failed: {err}");
+    assert!(tables >= 4, "should find target + multiple sources");
+}
+
+#[test]
+fn oracle_bulk_merge_rms_agg_overdue() {
+    let (ok, tables, _, err) = oracle_fixture_result("merge_rms_agg_overdue.sql");
+    assert!(ok, "merge_rms_agg_overdue parse failed: {err}");
+    assert!(tables >= 2, "should find target + sources");
+}
+
+#[test]
+fn oracle_bulk_merge_rms_det_overdue() {
+    let (ok, tables, _, err) = oracle_fixture_result("merge_rms_det_overdue.sql");
+    assert!(ok, "merge_rms_det_overdue parse failed: {err}");
+    assert!(tables >= 2, "should find target + sources");
+}
+
+// --- SELECT ---
+
+#[test]
+fn oracle_bulk_select_only() {
+    let (ok, tables, _, err) = oracle_fixture_result("select_only.sql");
+    assert!(ok, "select_only parse failed: {err}");
+    assert!(tables >= 1, "should find source table");
+}
+
+#[test]
+fn oracle_bulk_select_complex() {
+    let (ok, tables, _, err) = oracle_fixture_result("select_complex.sql");
+    assert!(ok, "select_complex parse failed: {err}");
+    assert!(tables >= 1, "should find source table");
+}
+
+#[test]
+fn oracle_bulk_ctas_cte_star_using() {
+    let (ok, tables, _, err) = oracle_fixture_result("ctas_cte_star_using_oracle.sql");
+    assert!(ok, "ctas_cte_star_using parse failed: {err}");
+    assert!(tables >= 2, "should find target + sources");
+}
+
+#[test]
+fn oracle_bulk_ctas_exists_star_subquery() {
+    let (ok, tables, _, err) = oracle_fixture_result("ctas_exists_star_subquery_oracle.sql");
+    assert!(ok, "ctas_exists_star_subquery parse failed: {err}");
+    assert!(tables >= 2, "should find target + sources");
+}
+
+// --- UPDATE ---
+
+#[test]
+fn oracle_bulk_update_simple() {
+    let (ok, tables, _, err) = oracle_fixture_result("update_simple.sql");
+    assert!(ok, "update_simple parse failed: {err}");
+    assert!(tables >= 1, "should find target table");
+}
+
+#[test]
+fn oracle_bulk_update_alias() {
+    let (ok, tables, _, err) = oracle_fixture_result("update_alias.sql");
+    assert!(ok, "update_alias parse failed: {err}");
+    assert!(tables >= 1, "should find target table");
+}
+
+#[test]
+fn oracle_bulk_update_no_where() {
+    let (ok, tables, _, err) = oracle_fixture_result("update_no_where.sql");
+    assert!(ok, "update_no_where parse failed: {err}");
+    assert!(tables >= 1, "should find target table");
+}
+
+#[test]
+fn oracle_bulk_update_case() {
+    let (ok, tables, _, err) = oracle_fixture_result("update_case.sql");
+    assert!(ok, "update_case parse failed: {err}");
+    assert!(tables >= 1, "should find target table");
+}
+
+#[test]
+fn oracle_bulk_update_where_exists() {
+    let (ok, tables, _, err) = oracle_fixture_result("update_where_exists.sql");
+    assert!(ok, "update_where_exists parse failed: {err}");
+    assert!(tables >= 2, "should find target + source");
+}
+
+#[test]
+fn oracle_bulk_update_one_subquery() {
+    let (ok, tables, edges, err) = oracle_fixture_result("update_one_subquery.sql");
+    assert!(ok, "update_one_subquery parse failed: {err}");
+    assert!(tables >= 2, "should find target + source");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_update_subqueries() {
+    let (ok, tables, edges, err) = oracle_fixture_result("update_subqueries.sql");
+    assert!(ok, "update_subqueries parse failed: {err}");
+    assert!(tables >= 2, "should find target + source");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_update_from_table_subquery() {
+    let (ok, tables, edges, err) = oracle_fixture_result("update_from_table_subquery.sql");
+    assert!(ok, "update_from_table_subquery parse failed: {err}");
+    assert!(tables >= 2, "should find target + source");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_update_from_view() {
+    let (ok, tables, edges, err) = oracle_fixture_result("update_from_view.sql");
+    assert!(ok, "update_from_view parse failed: {err}");
+    assert!(tables >= 2, "should find target + view source");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_update_join_correlated() {
+    let (ok, tables, edges, err) = oracle_fixture_result("update_join_correlated.sql");
+    assert!(ok, "update_join_correlated parse failed: {err}");
+    assert!(tables >= 3, "should find target + 2 source tables");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_update_star_inner_subquery() {
+    let (ok, tables, edges, err) = oracle_fixture_result("update_star_inner_subquery.sql");
+    assert!(ok, "update_star_inner_subquery parse failed: {err}");
+    assert!(tables >= 2, "should find target + source");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_update_star_join_subquery_meta() {
+    let (ok, tables, _, err) = oracle_fixture_result("update_star_join_subquery_meta.sql");
+    assert!(ok, "update_star_join_subquery_meta parse failed: {err}");
+    assert!(tables >= 3, "should find target + 2 sources");
+}
+
+#[test]
+fn oracle_bulk_update_correlated_subquery() {
+    let (ok, tables, _, err) = oracle_fixture_result("update_correlated_subquery_oracle.sql");
+    assert!(ok, "update_correlated_subquery parse failed: {err}");
+    assert!(tables >= 2, "should find target + source");
+}
+
+// --- VIEW ---
+
+#[test]
+fn oracle_bulk_view_simple() {
+    let (ok, tables, edges, err) = oracle_fixture_result("view_simple.sql");
+    assert!(ok, "view_simple parse failed: {err}");
+    assert!(tables >= 2, "should find source tables");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_view_bare_star() {
+    let (ok, tables, edges, err) = oracle_fixture_result("view_bare_star.sql");
+    assert!(ok, "view_bare_star parse failed: {err}");
+    assert!(tables >= 1, "should find source table");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_view_table_star() {
+    let (ok, tables, edges, err) = oracle_fixture_result("view_table_star.sql");
+    assert!(ok, "view_table_star parse failed: {err}");
+    assert!(tables >= 1, "should find source table");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_view_column_list() {
+    let (ok, tables, edges, err) = oracle_fixture_result("view_column_list.sql");
+    assert!(ok, "view_column_list parse failed: {err}");
+    assert!(tables >= 1, "should find source table");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_view_or_replace() {
+    let (ok, tables, edges, err) = oracle_fixture_result("view_or_replace.sql");
+    assert!(ok, "view_or_replace parse failed: {err}");
+    assert!(tables >= 1, "should find source table");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_view_where_only() {
+    let (ok, tables, edges, err) = oracle_fixture_result("view_where_only.sql");
+    assert!(ok, "view_where_only parse failed: {err}");
+    assert!(tables >= 1, "should find source table");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_view_distinct() {
+    let (ok, tables, edges, err) = oracle_fixture_result("view_distinct.sql");
+    assert!(ok, "view_distinct parse failed: {err}");
+    assert!(tables >= 1, "should find source table");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_view_left_join() {
+    let (ok, tables, edges, err) = oracle_fixture_result("view_left_join.sql");
+    assert!(ok, "view_left_join parse failed: {err}");
+    assert!(tables >= 2, "should find 2 source tables");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_view_group_by() {
+    let (ok, tables, edges, err) = oracle_fixture_result("view_group_by.sql");
+    assert!(ok, "view_group_by parse failed: {err}");
+    assert!(tables >= 1, "should find source table");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_view_having() {
+    let (ok, tables, edges, err) = oracle_fixture_result("view_having.sql");
+    assert!(ok, "view_having parse failed: {err}");
+    assert!(tables >= 1, "should find source table");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_view_expr() {
+    let (ok, tables, edges, err) = oracle_fixture_result("view_expr.sql");
+    assert!(ok, "view_expr parse failed: {err}");
+    assert!(tables >= 1, "should find source table");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_view_row_number() {
+    let (ok, tables, edges, err) = oracle_fixture_result("view_row_number.sql");
+    assert!(ok, "view_row_number parse failed: {err}");
+    assert!(tables >= 1, "should find source table");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_view_correlated_subquery() {
+    let (ok, tables, edges, err) = oracle_fixture_result("view_correlated_subquery.sql");
+    assert!(ok, "view_correlated_subquery parse failed: {err}");
+    assert!(tables >= 1, "should find at least main source table");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_view_subquery_chain_explicit() {
+    let (ok, tables, edges, err) = oracle_fixture_result("view_subquery_chain_explicit.sql");
+    assert!(ok, "view_subquery_chain_explicit parse failed: {err}");
+    assert!(tables >= 1, "should find source table");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_view_union_all() {
+    let (ok, tables, edges, err) = oracle_fixture_result("view_union_all.sql");
+    assert!(ok, "view_union_all parse failed: {err}");
+    assert!(tables >= 2, "should find 2 source tables");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_view_union_all_diff() {
+    let (ok, tables, edges, err) = oracle_fixture_result("view_union_all_diff.sql");
+    assert!(ok, "view_union_all_diff parse failed: {err}");
+    assert!(tables >= 2, "should find 2 source tables");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_view_cte_union() {
+    let (ok, tables, edges, err) = oracle_fixture_result("view_cte_union.sql");
+    assert!(ok, "view_cte_union parse failed: {err}");
+    assert!(tables >= 2, "should find 2 source tables");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_view_literals_only() {
+    let (ok, _, _, err) = oracle_fixture_result("view_literals_only.sql");
+    assert!(ok, "view_literals_only parse failed: {err}");
+}
+
+#[test]
+fn oracle_bulk_view_quoted() {
+    let (ok, tables, edges, err) = oracle_fixture_result("view_quoted.sql");
+    assert!(ok, "view_quoted parse failed: {err}");
+    assert!(tables >= 1, "should find source table");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_view_from_view() {
+    let (ok, tables, edges, err) = oracle_fixture_result("view_from_view.sql");
+    assert!(ok, "view_from_view parse failed: {err}");
+    assert!(tables >= 1, "should find source view");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_view_star_join() {
+    let (ok, tables, edges, err) = oracle_fixture_result("view_star_join.sql");
+    assert!(ok, "view_star_join parse failed: {err}");
+    assert!(tables >= 2, "should find 2 source tables");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_view_join_subquery_stars() {
+    let (ok, tables, edges, err) = oracle_fixture_result("view_join_subquery_stars.sql");
+    assert!(ok, "view_join_subquery_stars parse failed: {err}");
+    assert!(tables >= 2, "should find 2 source tables");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_view_scalar_subquery() {
+    let (ok, tables, edges, err) = oracle_fixture_result("view_scalar_subquery_oracle.sql");
+    assert!(ok, "view_scalar_subquery parse failed: {err}");
+    assert!(tables >= 1, "should find at least main source table");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+#[test]
+fn oracle_bulk_view_unqualified_cols() {
+    let (ok, tables, edges, err) = oracle_fixture_result("view_unqualified_cols_oracle.sql");
+    assert!(ok, "view_unqualified_cols parse failed: {err}");
+    assert!(tables >= 2, "should find 2 source tables");
+    assert!(edges > 0, "should have lineage edges");
+}
+
+// --- Oracle column-level lineage tests ---
+// These tests validate that the fixes for INSERT...WITH CTE recognition,
+// SYSDATE pseudocolumn handling, and column-level lineage accuracy work.
+
+#[test]
+fn oracle_insert_with_cte_chain_recognises_ctes() {
+    let sql = load_sql_fixture("oracle", "insert_cte_chain_deep.sql");
+    let result = run_analysis(&sql, Dialect::Oracle, None);
+    let stmt = first_statement(&result);
+
+    // CTEs c1 and c2 should be recognised as CTE nodes (not tables)
+    let ctes = collect_cte_names(&result);
+    assert!(ctes.contains("c1"), "c1 should be a CTE node: {ctes:?}");
+    assert!(ctes.contains("c2"), "c2 should be a CTE node: {ctes:?}");
+
+    // Base table IDM.REG_SUBJECT should be visible through the CTE chain
+    let tables = collect_table_names(&result);
+    assert!(
+        tables.iter().any(|t| t.contains("REG_SUBJECT")),
+        "base table IDM.REG_SUBJECT should appear in lineage: {tables:?}"
+    );
+
+    // Column-level lineage should trace through CTEs
+    let cols = column_labels(stmt);
+    assert!(
+        cols.iter().any(|c| c == "ID_SUBJECT" || c == "id_subject"),
+        "should have id_subject column: {cols:?}"
+    );
+}
+
+#[test]
+fn oracle_insert_with_cte_sum_case_recognises_cte() {
+    let sql = load_sql_fixture("oracle", "insert_cte_sum_case.sql");
+    let result = run_analysis(&sql, Dialect::Oracle, None);
+    let stmt = first_statement(&result);
+
+    let ctes = collect_cte_names(&result);
+    assert!(ctes.contains("s"), "CTE 's' should be recognised: {ctes:?}");
+
+    // Base table should be visible
+    let tables = collect_table_names(&result);
+    assert!(
+        tables.iter().any(|t| t.contains("REG_SUBJECT")),
+        "base table should appear: {tables:?}"
+    );
+
+    // Should have derivation edge for SUM(CASE...) expression
+    let derivations = edges_by_type(stmt, EdgeType::Derivation);
+    assert!(
+        !derivations.is_empty(),
+        "SUM(CASE...) should produce a derivation edge"
+    );
+}
+
+#[test]
+fn oracle_insert_with_cte_mixed_recognises_ctes() {
+    let sql = load_sql_fixture("oracle", "insert_cte_mixed.sql");
+    let result = run_analysis(&sql, Dialect::Oracle, None);
+
+    let ctes = collect_cte_names(&result);
+    assert!(
+        ctes.contains("temp"),
+        "CTE 'temp' should be recognised: {ctes:?}"
+    );
+    assert!(
+        ctes.contains("temp2"),
+        "CTE 'temp2' should be recognised: {ctes:?}"
+    );
+
+    // Both base tables should be visible through CTEs
+    let tables = collect_table_names(&result);
+    assert!(
+        tables.iter().any(|t| t.contains("REG_SUBJECT")),
+        "base table REG_SUBJECT should appear: {tables:?}"
+    );
+    assert!(
+        tables.iter().any(|t| t.contains("REG_SUBJECTTYPE")),
+        "base table REG_SUBJECTTYPE should appear: {tables:?}"
+    );
+}
+
+#[test]
+fn oracle_sysdate_not_treated_as_column() {
+    // SYSDATE should be recognised as an Oracle pseudocolumn, not a column reference.
+    // Previously this caused "Column 'sysdate' is ambiguous across tables" warnings.
+    let sql = load_sql_fixture("oracle", "insert_bm_det_customer.sql");
+    let result = run_analysis(&sql, Dialect::Oracle, None);
+
+    let sysdate_issues: Vec<_> = result
+        .issues
+        .iter()
+        .filter(|i| i.message.to_lowercase().contains("sysdate"))
+        .collect();
+    assert!(
+        sysdate_issues.is_empty(),
+        "SYSDATE should not trigger unresolved reference issues: {:?}",
+        sysdate_issues
+            .iter()
+            .map(|i| &i.message)
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn oracle_insert_simple_column_lineage() {
+    let sql = load_sql_fixture("oracle", "insert_simple.sql");
+    let result = run_analysis(&sql, Dialect::Oracle, None);
+    let stmt = first_statement(&result);
+
+    // Should have column-level dataflow edges
+    let dataflow = edges_by_type(stmt, EdgeType::DataFlow);
+    let col_flows: Vec<_> = dataflow
+        .iter()
+        .filter(|e| {
+            let from = stmt.nodes.iter().find(|n| n.id == e.from);
+            from.map(|n| n.node_type == NodeType::Column)
+                .unwrap_or(false)
+        })
+        .collect();
+    assert!(
+        col_flows.len() >= 2,
+        "should have at least 2 column-level dataflow edges (id_subject, id_subjecttype): found {}",
+        col_flows.len()
+    );
+}
+
+#[test]
+fn oracle_insert_case_expr_has_derivation() {
+    let sql = load_sql_fixture("oracle", "insert_case_expr.sql");
+    let result = run_analysis(&sql, Dialect::Oracle, None);
+    let stmt = first_statement(&result);
+
+    // The CASE expression should create a derivation edge
+    let derivations = edges_by_type(stmt, EdgeType::Derivation);
+    assert!(
+        derivations.iter().any(|e| e
+            .expression
+            .as_deref()
+            .map(|expr| expr.contains("CASE"))
+            .unwrap_or(false)),
+        "should have a derivation edge with CASE expression"
+    );
+
+    // Direct column flows should also exist
+    let cols = column_labels(stmt);
+    assert!(
+        cols.iter().any(|c| c == "CODE_NORM"),
+        "derived column CODE_NORM should appear: {cols:?}"
+    );
+}
+
+#[test]
+fn oracle_view_group_by_has_count_derivation() {
+    let sql = load_sql_fixture("oracle", "view_group_by.sql");
+    let result = run_analysis(&sql, Dialect::Oracle, None);
+    let stmt = first_statement(&result);
+
+    let derivations = edges_by_type(stmt, EdgeType::Derivation);
+    assert!(
+        derivations.iter().any(|e| e
+            .expression
+            .as_deref()
+            .map(|expr| expr.contains("COUNT"))
+            .unwrap_or(false)),
+        "should have COUNT(*) derivation edge"
+    );
+
+    let cols = column_labels(stmt);
+    assert!(
+        cols.iter().any(|c| c == "CNT"),
+        "aggregated column CNT should appear: {cols:?}"
+    );
+}
+
+#[test]
+fn oracle_view_row_number_has_window_derivation() {
+    let sql = load_sql_fixture("oracle", "view_row_number.sql");
+    let result = run_analysis(&sql, Dialect::Oracle, None);
+    let stmt = first_statement(&result);
+
+    let derivations = edges_by_type(stmt, EdgeType::Derivation);
+    assert!(
+        derivations.iter().any(|e| e
+            .expression
+            .as_deref()
+            .map(|expr| expr.contains("ROW_NUMBER"))
+            .unwrap_or(false)),
+        "should have ROW_NUMBER() OVER derivation edge"
+    );
+}
+
+#[test]
+fn oracle_view_expr_has_function_derivations() {
+    let sql = load_sql_fixture("oracle", "view_expr.sql");
+    let result = run_analysis(&sql, Dialect::Oracle, None);
+    let stmt = first_statement(&result);
+
+    let derivations = edges_by_type(stmt, EdgeType::Derivation);
+    assert!(
+        derivations.iter().any(|e| e
+            .expression
+            .as_deref()
+            .map(|expr| expr.contains("UPPER"))
+            .unwrap_or(false)),
+        "should have UPPER() derivation edge"
+    );
+    assert!(
+        derivations.iter().any(|e| e
+            .expression
+            .as_deref()
+            .map(|expr| expr.contains("COALESCE"))
+            .unwrap_or(false)),
+        "should have COALESCE() derivation edge"
+    );
+}
+
+#[test]
+fn oracle_view_cte_union_traces_through_cte() {
+    let sql = load_sql_fixture("oracle", "view_cte_union.sql");
+    let result = run_analysis(&sql, Dialect::Oracle, None);
+
+    let ctes = collect_cte_names(&result);
+    assert!(ctes.contains("u"), "CTE 'u' should be present: {ctes:?}");
+
+    let tables = collect_table_names(&result);
+    assert!(
+        tables.iter().any(|t| t.contains("REG_SUBJECT")),
+        "base table REG_SUBJECT visible through CTE: {tables:?}"
+    );
+    assert!(
+        tables.iter().any(|t| t.contains("REG_SUBJECTTYPE")),
+        "base table REG_SUBJECTTYPE visible through CTE: {tables:?}"
+    );
+}
+
+#[test]
+fn oracle_merge_minimal_column_lineage() {
+    let sql = load_sql_fixture("oracle", "merge_minimal.sql");
+    let result = run_analysis(&sql, Dialect::Oracle, None);
+    let stmt = first_statement(&result);
+
+    let ctes = collect_cte_names(&result);
+    assert!(
+        ctes.contains("src"),
+        "MERGE USING subquery should create 'src' CTE: {ctes:?}"
+    );
+
+    let cols = column_labels(stmt);
+    assert!(
+        cols.iter().any(|c| c == "ID_SUBJECT" || c == "id_subject"),
+        "should have id_subject in column lineage: {cols:?}"
+    );
+}
+
+#[test]
+fn oracle_select_complex_cte_lineage() {
+    let sql = load_sql_fixture("oracle", "select_complex.sql");
+    let result = run_analysis(&sql, Dialect::Oracle, None);
+
+    let ctes = collect_cte_names(&result);
+    assert!(ctes.contains("a"), "CTE 'a' should be present");
+    assert!(ctes.contains("b"), "CTE 'b' should be present");
+
+    let stmt = first_statement(&result);
+    let derivations = edges_by_type(stmt, EdgeType::Derivation);
+    assert!(
+        derivations.len() >= 2,
+        "should have derivations for COUNT(*), CASE, ROW_NUMBER: found {}",
+        derivations.len()
+    );
+}
+
+// ── View column list renaming ───────────────────────────────────────────────
+
+#[test]
+fn oracle_view_column_list_renames_columns() {
+    let sql = load_sql_fixture("oracle", "view_column_list.sql");
+    let result = run_analysis(&sql, Dialect::Oracle, None);
+    let stmt = first_statement(&result);
+
+    let cols = column_labels(stmt);
+    // The view defines (SID, TYP) as output column names
+    assert!(
+        cols.iter().any(|c| c == "SID"),
+        "view column list should rename ID_SUBJECT to SID: {cols:?}"
+    );
+    assert!(
+        cols.iter().any(|c| c == "TYP"),
+        "view column list should rename ID_SUBJECTTYPE to TYP: {cols:?}"
+    );
+    // The original query column names should NOT appear as output column labels
+    assert!(
+        !cols.iter().any(|c| c == "ID_SUBJECT"),
+        "original column name ID_SUBJECT should be renamed: {cols:?}"
+    );
+    assert!(
+        !cols.iter().any(|c| c == "ID_SUBJECTTYPE"),
+        "original column name ID_SUBJECTTYPE should be renamed: {cols:?}"
+    );
+}
+
+#[test]
+fn generic_view_column_list_renames_columns() {
+    let sql = "CREATE VIEW my_view (a, b) AS SELECT x, y FROM my_table;";
+    let result = run_analysis(sql, Dialect::Generic, None);
+    let stmt = first_statement(&result);
+
+    let cols = column_labels(stmt);
+    assert!(
+        cols.iter().any(|c| c == "a"),
+        "view column list should rename x to a: {cols:?}"
+    );
+    assert!(
+        cols.iter().any(|c| c == "b"),
+        "view column list should rename y to b: {cols:?}"
+    );
+}
+
+// ── MERGE column-level lineage ──────────────────────────────────────────────
+
+#[test]
+fn oracle_merge_update_set_target_columns() {
+    let sql = load_sql_fixture("oracle", "merge_minimal.sql");
+    let result = run_analysis(&sql, Dialect::Oracle, None);
+    let stmt = first_statement(&result);
+
+    let cols = column_labels(stmt);
+    // The MERGE UPDATE SET clause targets DST.ID_SUBJECTTYPE
+    // Both source and target column refs should appear
+    assert!(
+        cols.iter().any(|c| c == "ID_SUBJECTTYPE"),
+        "MERGE UPDATE SET target column should appear: {cols:?}"
+    );
+    assert!(
+        cols.iter().any(|c| c == "ID_SUBJECT"),
+        "MERGE ON/INSERT columns should appear: {cols:?}"
+    );
+}
+
+#[test]
+fn oracle_merge_insert_target_columns() {
+    // Test that MERGE INSERT target columns are captured
+    let sql = "MERGE INTO target_t dst
+USING (SELECT id, name FROM source_t) src
+ON (dst.id = src.id)
+WHEN NOT MATCHED THEN INSERT (id, name) VALUES (src.id, src.name);";
+    let result = run_analysis(sql, Dialect::Oracle, None);
+    let stmt = first_statement(&result);
+
+    let cols = column_labels(stmt);
+    assert!(
+        cols.iter().any(|c| c == "ID"),
+        "MERGE INSERT target column ID should appear: {cols:?}"
+    );
+    assert!(
+        cols.iter().any(|c| c == "NAME"),
+        "MERGE INSERT target column NAME should appear: {cols:?}"
+    );
+}
+
+#[test]
+fn oracle_merge_direct_table_has_column_nodes() {
+    // merge_using_direct_table uses USING <table> (no subquery),
+    // so column nodes come entirely from SET/INSERT targets
+    let sql = load_sql_fixture("oracle", "merge_using_direct_table.sql");
+    let result = run_analysis(&sql, Dialect::Oracle, None);
+    let stmt = first_statement(&result);
+
+    let cols = column_labels(stmt);
+    assert!(
+        cols.iter().any(|c| c == "ID_SUBJECTTYPE"),
+        "MERGE SET target column should appear: {cols:?}"
+    );
+    assert!(
+        cols.iter().any(|c| c == "ID_SUBJECT"),
+        "MERGE INSERT target column should appear: {cols:?}"
+    );
+
+    let ownership = edges_by_type(stmt, EdgeType::Ownership);
+    assert!(
+        ownership.len() >= 2,
+        "should have ownership edges for target columns: found {}",
+        ownership.len()
+    );
+}
+
+#[test]
+fn oracle_merge_matched_only_has_set_column_nodes() {
+    let sql = load_sql_fixture("oracle", "merge_when_matched_only.sql");
+    let result = run_analysis(&sql, Dialect::Oracle, None);
+    let stmt = first_statement(&result);
+
+    let cols = column_labels(stmt);
+    // WHEN MATCHED THEN UPDATE SET targets should have Column nodes
+    assert!(
+        !cols.is_empty(),
+        "MERGE matched-only should have column nodes from SET targets: {cols:?}"
+    );
+
+    let ownership = edges_by_type(stmt, EdgeType::Ownership);
+    assert!(
+        !ownership.is_empty(),
+        "should have ownership edges for SET target columns"
+    );
+}
+
+#[test]
+fn oracle_merge_not_matched_only_has_insert_column_nodes() {
+    let sql = load_sql_fixture("oracle", "merge_when_not_matched_only.sql");
+    let result = run_analysis(&sql, Dialect::Oracle, None);
+    let stmt = first_statement(&result);
+
+    let cols = column_labels(stmt);
+    // WHEN NOT MATCHED THEN INSERT targets should have Column nodes
+    assert!(
+        !cols.is_empty(),
+        "MERGE not-matched-only should have column nodes from INSERT targets: {cols:?}"
+    );
+
+    let ownership = edges_by_type(stmt, EdgeType::Ownership);
+    assert!(
+        !ownership.is_empty(),
+        "should have ownership edges for INSERT target columns"
+    );
+}
+
+// ── Schema-aware unresolved reference tests ─────────────────────────────────
+
+#[test]
+fn oracle_insert_no_target_fields_with_schema() {
+    assert_oracle_no_unresolved_with_schema("insert_no_target_fields.sql");
+}
+
+#[test]
+fn oracle_insert_positional_no_aliases_with_schema() {
+    assert_oracle_no_unresolved_with_schema("insert_positional_no_aliases_oracle.sql");
+}
+
+#[test]
+fn oracle_insert_target_source_with_schema() {
+    assert_oracle_no_unresolved_with_schema("insert_target_source.sql");
+}
+
+// ── Oracle star expansion with metadata ─────────────────────────────────────
+// These tests verify that providing SchemaMetadata resolves SELECT * into
+// individual column-level lineage instead of approximate table-level edges.
+
+fn oracle_schema() -> SchemaMetadata {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("schemas")
+        .join("oracle_sample.json");
+    let content =
+        fs::read_to_string(&path).unwrap_or_else(|e| panic!("failed to read {path:?}: {e}"));
+    serde_json::from_str(&content).unwrap_or_else(|e| panic!("failed to parse {path:?}: {e}"))
+}
+
+fn issue_codes_set(result: &AnalyzeResult) -> HashSet<String> {
+    result.issues.iter().map(|i| i.code.clone()).collect()
+}
+
+#[test]
+fn oracle_star_without_schema_is_approximate() {
+    // Baseline: without metadata, bare star produces APPROXIMATE_LINEAGE
+    let sql = load_sql_fixture("oracle", "insert_bare_star.sql");
+    let result = run_analysis(&sql, Dialect::Oracle, None);
+    let codes = issue_codes_set(&result);
+    assert!(
+        codes.contains(issue_codes::APPROXIMATE_LINEAGE),
+        "bare star without schema should emit APPROXIMATE_LINEAGE, issues: {:?}",
+        result.issues
+    );
+}
+
+#[test]
+fn oracle_star_with_schema_expands_insert_bare_star() {
+    let sql = load_sql_fixture("oracle", "insert_bare_star.sql");
+    let schema = oracle_schema();
+    let result = run_analysis(&sql, Dialect::Oracle, Some(schema));
+
+    let approx: Vec<_> = result
+        .issues
+        .iter()
+        .filter(|i| i.code == issue_codes::APPROXIMATE_LINEAGE)
+        .collect();
+    assert!(
+        approx.is_empty(),
+        "with schema, bare star should expand — no APPROXIMATE_LINEAGE: {approx:?}"
+    );
+
+    // Should have column-level edges now
+    let stmt = first_statement(&result);
+    let col_nodes: Vec<_> = stmt
+        .nodes
+        .iter()
+        .filter(|n| n.node_type == NodeType::Column)
+        .collect();
+    assert!(
+        col_nodes.len() >= 2,
+        "expanded star should produce column nodes: found {}",
+        col_nodes.len()
+    );
+}
+
+#[test]
+fn oracle_star_with_schema_expands_insert_table_star() {
+    let sql = load_sql_fixture("oracle", "insert_table_star.sql");
+    let schema = oracle_schema();
+    let result = run_analysis(&sql, Dialect::Oracle, Some(schema));
+
+    let approx: Vec<_> = result
+        .issues
+        .iter()
+        .filter(|i| i.code == issue_codes::APPROXIMATE_LINEAGE)
+        .collect();
+    assert!(
+        approx.is_empty(),
+        "with schema, table star should expand — no APPROXIMATE_LINEAGE: {approx:?}"
+    );
+}
+
+#[test]
+fn oracle_star_with_schema_expands_view_bare_star() {
+    let sql = load_sql_fixture("oracle", "view_bare_star.sql");
+    let schema = oracle_schema();
+    let result = run_analysis(&sql, Dialect::Oracle, Some(schema));
+
+    let approx: Vec<_> = result
+        .issues
+        .iter()
+        .filter(|i| i.code == issue_codes::APPROXIMATE_LINEAGE)
+        .collect();
+    assert!(
+        approx.is_empty(),
+        "view bare star should expand with schema: {approx:?}"
+    );
+}
+
+#[test]
+fn oracle_star_with_schema_expands_view_table_star() {
+    let sql = load_sql_fixture("oracle", "view_table_star.sql");
+    let schema = oracle_schema();
+    let result = run_analysis(&sql, Dialect::Oracle, Some(schema));
+
+    let approx: Vec<_> = result
+        .issues
+        .iter()
+        .filter(|i| i.code == issue_codes::APPROXIMATE_LINEAGE)
+        .collect();
+    assert!(
+        approx.is_empty(),
+        "view table star should expand with schema: {approx:?}"
+    );
+}
+
+#[test]
+fn oracle_star_with_schema_expands_view_star_join() {
+    let sql = load_sql_fixture("oracle", "view_star_join.sql");
+    let schema = oracle_schema();
+    let result = run_analysis(&sql, Dialect::Oracle, Some(schema));
+
+    let approx: Vec<_> = result
+        .issues
+        .iter()
+        .filter(|i| i.code == issue_codes::APPROXIMATE_LINEAGE)
+        .collect();
+    assert!(
+        approx.is_empty(),
+        "view star join should expand with schema: {approx:?}"
+    );
+
+    // Both source tables' columns should appear
+    let stmt = first_statement(&result);
+    let col_nodes: Vec<_> = stmt
+        .nodes
+        .iter()
+        .filter(|n| n.node_type == NodeType::Column)
+        .collect();
+    assert!(
+        col_nodes.len() >= 4,
+        "star over JOIN should expand columns from both tables: found {}",
+        col_nodes.len()
+    );
+}
+
+#[test]
+fn oracle_star_with_schema_expands_merge_using_star() {
+    let sql = load_sql_fixture("oracle", "merge_using_star_subquery.sql");
+    let schema = oracle_schema();
+    let result = run_analysis(&sql, Dialect::Oracle, Some(schema));
+
+    let approx: Vec<_> = result
+        .issues
+        .iter()
+        .filter(|i| i.code == issue_codes::APPROXIMATE_LINEAGE)
+        .collect();
+    assert!(
+        approx.is_empty(),
+        "merge using star should expand with schema: {approx:?}"
+    );
+}
+
+#[test]
+fn oracle_star_with_schema_expands_merge_table_star() {
+    let sql = load_sql_fixture("oracle", "merge_using_table_star.sql");
+    let schema = oracle_schema();
+    let result = run_analysis(&sql, Dialect::Oracle, Some(schema));
+
+    let approx: Vec<_> = result
+        .issues
+        .iter()
+        .filter(|i| i.code == issue_codes::APPROXIMATE_LINEAGE)
+        .collect();
+    assert!(
+        approx.is_empty(),
+        "merge table star should expand with schema: {approx:?}"
+    );
+}
+
+#[test]
+fn oracle_star_with_schema_expands_insert_from_subquery_star() {
+    let sql = load_sql_fixture("oracle", "insert_from_subquery_star.sql");
+    let schema = oracle_schema();
+    let result = run_analysis(&sql, Dialect::Oracle, Some(schema));
+
+    let approx: Vec<_> = result
+        .issues
+        .iter()
+        .filter(|i| i.code == issue_codes::APPROXIMATE_LINEAGE)
+        .collect();
+    assert!(
+        approx.is_empty(),
+        "insert from subquery star should expand with schema: {approx:?}"
+    );
+}
+
+#[test]
+fn oracle_star_with_schema_expands_insert_join_subquery_stars() {
+    let sql = load_sql_fixture("oracle", "insert_join_subquery_stars.sql");
+    let schema = oracle_schema();
+    let result = run_analysis(&sql, Dialect::Oracle, Some(schema));
+
+    let approx: Vec<_> = result
+        .issues
+        .iter()
+        .filter(|i| i.code == issue_codes::APPROXIMATE_LINEAGE)
+        .collect();
+    assert!(
+        approx.is_empty(),
+        "insert join subquery stars should expand with schema: {approx:?}"
+    );
+}
+
+#[test]
+fn oracle_star_with_schema_expands_insert_star_minus() {
+    let sql = load_sql_fixture("oracle", "insert_star_minus_oracle.sql");
+    let schema = oracle_schema();
+    let result = run_analysis(&sql, Dialect::Oracle, Some(schema));
+
+    let approx: Vec<_> = result
+        .issues
+        .iter()
+        .filter(|i| i.code == issue_codes::APPROXIMATE_LINEAGE)
+        .collect();
+    assert!(
+        approx.is_empty(),
+        "insert star minus should expand with schema: {approx:?}"
+    );
+}
+
+#[test]
+fn oracle_star_with_schema_expands_insert_table_star_join_meta() {
+    let sql = load_sql_fixture("oracle", "insert_table_star_join_meta.sql");
+    let schema = oracle_schema();
+    let result = run_analysis(&sql, Dialect::Oracle, Some(schema));
+
+    let approx: Vec<_> = result
+        .issues
+        .iter()
+        .filter(|i| i.code == issue_codes::APPROXIMATE_LINEAGE)
+        .collect();
+    assert!(
+        approx.is_empty(),
+        "insert table star join should expand with schema: {approx:?}"
+    );
+}
+
+#[test]
+fn oracle_star_with_schema_expands_merge_star_join_meta() {
+    let sql = load_sql_fixture("oracle", "merge_using_star_join_meta.sql");
+    let schema = oracle_schema();
+    let result = run_analysis(&sql, Dialect::Oracle, Some(schema));
+
+    let approx: Vec<_> = result
+        .issues
+        .iter()
+        .filter(|i| i.code == issue_codes::APPROXIMATE_LINEAGE)
+        .collect();
+    assert!(
+        approx.is_empty(),
+        "merge star join should expand with schema: {approx:?}"
+    );
+}
+
+#[test]
+fn oracle_star_with_schema_expands_merge_cte_star_meta() {
+    let sql = load_sql_fixture("oracle", "merge_using_cte_star_meta.sql");
+    let schema = oracle_schema();
+    let result = run_analysis(&sql, Dialect::Oracle, Some(schema));
+
+    let approx: Vec<_> = result
+        .issues
+        .iter()
+        .filter(|i| i.code == issue_codes::APPROXIMATE_LINEAGE)
+        .collect();
+    assert!(
+        approx.is_empty(),
+        "merge cte star should expand with schema: {approx:?}"
+    );
+}
+
+#[test]
+fn oracle_star_with_schema_expands_update_star_inner_subquery() {
+    let sql = load_sql_fixture("oracle", "update_star_inner_subquery.sql");
+    let schema = oracle_schema();
+    let result = run_analysis(&sql, Dialect::Oracle, Some(schema));
+
+    let approx: Vec<_> = result
+        .issues
+        .iter()
+        .filter(|i| i.code == issue_codes::APPROXIMATE_LINEAGE)
+        .collect();
+    assert!(
+        approx.is_empty(),
+        "update star inner subquery should expand with schema: {approx:?}"
+    );
+}
+
+#[test]
+fn oracle_star_with_schema_expands_update_star_join_subquery_meta() {
+    let sql = load_sql_fixture("oracle", "update_star_join_subquery_meta.sql");
+    let schema = oracle_schema();
+    let result = run_analysis(&sql, Dialect::Oracle, Some(schema));
+
+    let approx: Vec<_> = result
+        .issues
+        .iter()
+        .filter(|i| i.code == issue_codes::APPROXIMATE_LINEAGE)
+        .collect();
+    assert!(
+        approx.is_empty(),
+        "update star join subquery should expand with schema: {approx:?}"
+    );
+}
+
+#[test]
+fn oracle_star_with_schema_expands_view_join_subquery_stars() {
+    let sql = load_sql_fixture("oracle", "view_join_subquery_stars.sql");
+    let schema = oracle_schema();
+    let result = run_analysis(&sql, Dialect::Oracle, Some(schema));
+
+    let approx: Vec<_> = result
+        .issues
+        .iter()
+        .filter(|i| i.code == issue_codes::APPROXIMATE_LINEAGE)
+        .collect();
+    assert!(
+        approx.is_empty(),
+        "view join subquery stars should expand with schema: {approx:?}"
+    );
+}
+
+#[test]
+fn oracle_star_with_schema_expands_insert_star_source() {
+    let sql = load_sql_fixture("oracle", "insert_star_source.sql");
+    let schema = oracle_schema();
+    let result = run_analysis(&sql, Dialect::Oracle, Some(schema));
+
+    let approx: Vec<_> = result
+        .issues
+        .iter()
+        .filter(|i| i.code == issue_codes::APPROXIMATE_LINEAGE)
+        .collect();
+    assert!(
+        approx.is_empty(),
+        "insert star source should expand with schema: {approx:?}"
+    );
+}
+
+#[test]
+fn oracle_star_with_schema_expands_ctas_cte_star() {
+    let sql = load_sql_fixture("oracle", "ctas_cte_star_using_oracle.sql");
+    let schema = oracle_schema();
+    let result = run_analysis(&sql, Dialect::Oracle, Some(schema));
+
+    let approx: Vec<_> = result
+        .issues
+        .iter()
+        .filter(|i| i.code == issue_codes::APPROXIMATE_LINEAGE)
+        .collect();
+    assert!(
+        approx.is_empty(),
+        "CTAS CTE star should expand with schema: {approx:?}"
+    );
+}
+
+// ── UPDATE SET assignment target column lineage ─────────────────────────────
+// These tests verify that UPDATE SET targets produce column-level lineage nodes.
+
+#[test]
+fn oracle_update_simple_column_lineage() {
+    let sql = load_sql_fixture("oracle", "update_simple.sql");
+    let result = run_analysis(&sql, Dialect::Oracle, None);
+    assert!(
+        !result.summary.has_errors,
+        "should parse: {:?}",
+        result.issues
+    );
+
+    let stmt = first_statement(&result);
+    let col_nodes: Vec<_> = stmt
+        .nodes
+        .iter()
+        .filter(|n| n.node_type == NodeType::Column)
+        .collect();
+    assert!(
+        !col_nodes.is_empty(),
+        "UPDATE SET target should produce column nodes, got 0"
+    );
+    let col_names: Vec<&str> = col_nodes.iter().map(|n| n.label.as_ref()).collect();
+    assert!(
+        col_names.iter().any(|n| n.contains("CODE")),
+        "should have CODE column from SET target, found: {col_names:?}"
+    );
+}
+
+#[test]
+fn oracle_update_case_has_column_lineage() {
+    let sql = load_sql_fixture("oracle", "update_case.sql");
+    let result = run_analysis(&sql, Dialect::Oracle, None);
+    assert!(
+        !result.summary.has_errors,
+        "should parse: {:?}",
+        result.issues
+    );
+
+    let stmt = first_statement(&result);
+    let col_nodes: Vec<_> = stmt
+        .nodes
+        .iter()
+        .filter(|n| n.node_type == NodeType::Column)
+        .collect();
+    assert!(
+        !col_nodes.is_empty(),
+        "UPDATE CASE should produce column nodes, got 0"
+    );
+    let col_names: Vec<&str> = col_nodes.iter().map(|n| n.label.as_ref()).collect();
+    assert!(
+        col_names.iter().any(|n| n.contains("CODE")),
+        "should have CODE column from SET target, found: {col_names:?}"
+    );
+}
+
+#[test]
+fn oracle_update_alias_column_lineage() {
+    let sql = load_sql_fixture("oracle", "update_alias.sql");
+    let result = run_analysis(&sql, Dialect::Oracle, None);
+    assert!(
+        !result.summary.has_errors,
+        "should parse: {:?}",
+        result.issues
+    );
+
+    let stmt = first_statement(&result);
+    let col_nodes: Vec<_> = stmt
+        .nodes
+        .iter()
+        .filter(|n| n.node_type == NodeType::Column)
+        .collect();
+    assert!(
+        !col_nodes.is_empty(),
+        "UPDATE with alias SET target should produce column nodes, got 0"
+    );
+}
+
+#[test]
+fn oracle_update_no_where_column_lineage() {
+    let sql = load_sql_fixture("oracle", "update_no_where.sql");
+    let result = run_analysis(&sql, Dialect::Oracle, None);
+    assert!(
+        !result.summary.has_errors,
+        "should parse: {:?}",
+        result.issues
+    );
+
+    let stmt = first_statement(&result);
+    let col_nodes: Vec<_> = stmt
+        .nodes
+        .iter()
+        .filter(|n| n.node_type == NodeType::Column)
+        .collect();
+    assert!(
+        !col_nodes.is_empty(),
+        "UPDATE without WHERE should produce column nodes, got 0"
+    );
+}
+
+// ── Oracle schema-aware unresolved reference resolution ─────────────────────
+// These tests verify that providing schema metadata resolves unqualified column
+// references that would otherwise produce UNRESOLVED_REFERENCE issues.
+
+/// Assert that an Oracle fixture produces no UNRESOLVED_REFERENCE issues when
+/// run with the shared oracle_sample.json schema metadata.
+fn assert_oracle_no_unresolved_with_schema(fixture: &str) {
+    let sql = load_sql_fixture("oracle", fixture);
+    let schema = oracle_schema();
+    let result = run_analysis(&sql, Dialect::Oracle, Some(schema));
+    assert!(
+        !result.summary.has_errors,
+        "should parse {fixture}: {:?}",
+        result.issues
+    );
+
+    let unresolved: Vec<_> = result
+        .issues
+        .iter()
+        .filter(|i| i.code == issue_codes::UNRESOLVED_REFERENCE)
+        .collect();
+    assert!(
+        unresolved.is_empty(),
+        "{fixture}: with schema, unqualified cols should resolve — no UNRESOLVED_REFERENCE: {unresolved:?}"
+    );
+}
+
+#[test]
+fn oracle_view_unqualified_cols_with_schema() {
+    assert_oracle_no_unresolved_with_schema("view_unqualified_cols_oracle.sql");
+}
+
+#[test]
+fn oracle_insert_scalar_agg_with_schema() {
+    assert_oracle_no_unresolved_with_schema("insert_scalar_agg_multi_tables_oracle.sql");
+}
+
+#[test]
+fn oracle_merge_complex_unqualified_with_schema() {
+    assert_oracle_no_unresolved_with_schema("merge_complex_unqualified_oracle.sql");
+}
+
+// ── Oracle DUAL pseudo-table suppression ────────────────────────────────────
+
+fn assert_oracle_dual_suppressed(fixture: &str) {
+    let sql = load_sql_fixture("oracle", fixture);
+    let schema = oracle_schema();
+    let result = run_analysis(&sql, Dialect::Oracle, Some(schema));
+    assert!(
+        !result.summary.has_errors,
+        "should parse {fixture}: {:?}",
+        result.issues
+    );
+
+    let tables = collect_table_names(&result);
+    let has_dual = tables.iter().any(|t| t.eq_ignore_ascii_case("DUAL"));
+    assert!(
+        !has_dual,
+        "{fixture}: DUAL should not appear in table nodes: {tables:?}"
+    );
+
+    let unresolved: Vec<_> = result
+        .issues
+        .iter()
+        .filter(|i| i.code == issue_codes::UNRESOLVED_REFERENCE)
+        .collect();
+    assert!(
+        unresolved.is_empty(),
+        "{fixture}: should have no UNRESOLVED_REFERENCE with DUAL: {unresolved:?}"
+    );
+}
+
+#[test]
+fn oracle_dual_suppressed_in_insert_select_literals() {
+    assert_oracle_dual_suppressed("insert_select_literals.sql");
+}
+
+#[test]
+fn oracle_dual_suppressed_in_view_literals_only() {
+    assert_oracle_dual_suppressed("view_literals_only.sql");
+}
+
+// ── Oracle schema-expanded fixtures — no UNRESOLVED_REFERENCE ───────────────
+
+#[test]
+fn oracle_merge_union_all_with_schema() {
+    assert_oracle_no_unresolved_with_schema("merge_union_all.sql");
+}
+
+#[test]
+fn oracle_merge_into_subquery_target_with_schema() {
+    assert_oracle_no_unresolved_with_schema("merge_into_subquery_target.sql");
+}
+
+#[test]
+fn oracle_update_from_view_with_schema() {
+    assert_oracle_no_unresolved_with_schema("update_from_view.sql");
+}
+
+#[test]
+fn oracle_insert_from_view_with_schema() {
+    assert_oracle_no_unresolved_with_schema("insert_from_view.sql");
+}
+
+#[test]
+fn oracle_view_from_view_with_schema() {
+    assert_oracle_no_unresolved_with_schema("view_from_view.sql");
+}

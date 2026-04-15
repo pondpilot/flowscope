@@ -107,8 +107,25 @@ impl Dialect {
                 "_PARTITIONTIME",
                 "_TABLE_SUFFIX",
             ],
-            Dialect::Oracle => &["LEVEL", "OBJECT_ID", "OBJECT_VALUE", "ROWID", "ROWNUM"],
+            Dialect::Oracle => &[
+                "LEVEL",
+                "OBJECT_ID",
+                "OBJECT_VALUE",
+                "ROWID",
+                "ROWNUM",
+                "SYSDATE",
+                "SYSTIMESTAMP",
+            ],
             Dialect::Snowflake => &["LEVEL"],
+            _ => &[],
+        }
+    }
+
+    /// Get pseudo-tables for this dialect (e.g., Oracle DUAL).
+    /// These tables are implicit and should not appear in lineage output.
+    pub fn pseudo_tables(&self) -> &'static [&'static str] {
+        match self {
+            Dialect::Oracle => &["DUAL"],
             _ => &[],
         }
     }

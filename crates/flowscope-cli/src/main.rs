@@ -17,8 +17,8 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use flowscope_core::{analyze, AnalysisOptions, AnalyzeRequest, FileSource, LintConfig, Severity};
 use flowscope_export::{
-    export_csv_bundle, export_duckdb, export_html, export_json, export_mermaid, export_sql,
-    export_xlsx, ExportFormat, ExportNaming, MermaidView,
+    dali_compat, export_csv_bundle, export_duckdb, export_html, export_json, export_mermaid,
+    export_sql, export_xlsx, ExportFormat, ExportNaming, MermaidView,
 };
 use is_terminal::IsTerminal;
 use rayon::prelude::*;
@@ -750,6 +750,7 @@ fn validate_lint_output_format(format: OutputFormat) -> Result<()> {
                 OutputFormat::Csv => "csv",
                 OutputFormat::Xlsx => "xlsx",
                 OutputFormat::Duckdb => "duckdb",
+                OutputFormat::Dali => "dali",
                 _ => "unknown",
             };
             anyhow::bail!("--lint only supports 'table' and 'json' output formats, got '{name}'");
@@ -789,6 +790,24 @@ fn run(args: Args) -> Result<bool> {
     let naming = ExportNaming::new(args.project_name.clone());
 
     let output_str = match args.format {
+        OutputFormat::Dali => {
+            let sql = if !request.sql.is_empty() {
+                request.sql.clone()
+            } else if let Some(ref files) = request.files {
+                files
+                    .iter()
+                    .map(|f| f.content.as_str())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            } else {
+                String::new()
+            };
+            if args.compact {
+                dali_compat::export_dali_compat_compact(&result, &sql)
+            } else {
+                dali_compat::export_dali_compat(&result, &sql)
+            }
+        }
         OutputFormat::Json => {
             export_json(&result, args.compact).context("Failed to export JSON")?
         }

@@ -106,6 +106,8 @@ struct DialectSpec {
     #[serde(default)]
     pseudocolumns: Vec<String>,
     #[serde(default)]
+    pseudo_tables: Vec<String>,
+    #[serde(default)]
     quote_chars: Option<QuoteChars>,
     #[serde(default)]
     parser_settings: Option<ParserSettings>,
@@ -526,6 +528,34 @@ impl Dialect {
                 let cols_str = cols.join(", ");
                 code.push_str(&format!(
                     "            Dialect::{variant} => &[{cols_str}],\n"
+                ));
+            }
+        }
+    }
+    code.push_str("            _ => &[],\n");
+    code.push_str("        }\n    }\n");
+
+    // Generate pseudo_tables
+    code.push_str(
+        r#"
+    /// Get pseudo-tables for this dialect (e.g., Oracle DUAL).
+    /// These tables are implicit and should not appear in lineage output.
+    pub fn pseudo_tables(&self) -> &'static [&'static str] {
+        match self {
+"#,
+    );
+
+    for (dialect, spec) in dialects {
+        if !spec.pseudo_tables.is_empty() {
+            if let Some(variant) = dialect_to_variant(dialect) {
+                let tables: Vec<_> = spec
+                    .pseudo_tables
+                    .iter()
+                    .map(|s| format!("\"{s}\""))
+                    .collect();
+                let tables_str = tables.join(", ");
+                code.push_str(&format!(
+                    "            Dialect::{variant} => &[{tables_str}],\n"
                 ));
             }
         }
@@ -1614,7 +1644,7 @@ pub fn normalize_type_name(type_name: &str) -> Option<CanonicalType> {
     // Generate match arms for each canonical type and its aliases
     for (canonical_type, aliases) in &type_system.type_categories {
         let variant = canonical_type_to_variant(canonical_type);
-        let alias_patterns: Vec<_> = aliases.iter().map(|a| format!("\"{}\"", a)).collect();
+        let alias_patterns: Vec<_> = aliases.iter().map(|a| format!("\"{a}\"")).collect();
         let patterns = alias_patterns.join(" | ");
         code.push_str(&format!(
             "        {patterns} => Some(CanonicalType::{variant}),\n"
@@ -1737,7 +1767,11 @@ pub fn dialect_type_name(dialect: Dialect, canonical: CanonicalType) -> &'static
     }
 
     // Handle types not in the dialect_type_mapping (time, binary, json, array)
-    let mapped_types: BTreeSet<_> = type_system.dialect_type_mapping.keys().collect();
+    let mapped_types: BTreeSet<&str> = type_system
+        .dialect_type_mapping
+        .keys()
+        .map(String::as_str)
+        .collect();
     let all_types = [
         "integer",
         "float",
@@ -1752,7 +1786,7 @@ pub fn dialect_type_name(dialect: Dialect, canonical: CanonicalType) -> &'static
     ];
 
     for type_name in all_types {
-        if !mapped_types.contains(&type_name.to_string()) {
+        if !mapped_types.contains(type_name) {
             let variant = canonical_type_to_variant(type_name);
             let default_name = type_name.to_uppercase();
             code.push_str(&format!(
