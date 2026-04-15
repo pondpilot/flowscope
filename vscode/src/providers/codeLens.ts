@@ -20,6 +20,14 @@ export class FlowScopeCodeLensProvider implements vscode.CodeLensProvider {
         this._onDidChangeCodeLenses.fire();
       }
     });
+
+    // Invalidate cache when FlowScope config (e.g. dialect) changes, since
+    // cached analysis results were produced with the old settings.
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration('flowscope')) {
+        this.refresh();
+      }
+    });
   }
 
   public refresh(): void {

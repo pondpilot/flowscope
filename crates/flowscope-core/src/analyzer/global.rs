@@ -421,15 +421,16 @@ fn merge_lineage_edges(state: &mut FlattenState, lineage_edges: Vec<Edge>, state
                 state.edge_ids.insert(unique_id.clone());
                 unique_id
             };
-            let mut remapped = Edge {
+            // The `statement_ids: vec![statement_index]` field in the struct
+            // literal overrides any value carried in `..edge`, so no stale
+            // statement_ids can bleed through.
+            let remapped = Edge {
                 id: edge_id,
                 from: from.clone(),
                 to: to.clone(),
                 statement_ids: vec![statement_index],
                 ..edge
             };
-            // Clear any stale statement_ids carried over from `edge`.
-            remapped.statement_ids = vec![statement_index];
             state.edge_index.insert(key, state.flat_edges.len());
             state.flat_edges.push(remapped);
         }

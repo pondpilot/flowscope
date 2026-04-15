@@ -16,6 +16,16 @@ import {
 export class FlowScopeHoverProvider implements vscode.HoverProvider {
   private cachedResults: Map<string, { result: AnalyzeResult; version: number }> = new Map();
 
+  constructor() {
+    // Invalidate cache when FlowScope config (e.g. dialect) changes, since
+    // cached analysis results were produced with the old settings.
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration('flowscope')) {
+        this.cachedResults.clear();
+      }
+    });
+  }
+
   public provideHover(
     document: vscode.TextDocument,
     position: vscode.Position,
