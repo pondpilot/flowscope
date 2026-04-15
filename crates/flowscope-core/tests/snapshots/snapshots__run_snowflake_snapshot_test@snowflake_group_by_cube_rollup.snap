@@ -100,7 +100,21 @@ expression: clean_result
       },
       "statementIds": [
         0
-      ]
+      ],
+      "metadata": {
+        "occurrenceSourceNames": [
+          null
+        ],
+        "occurrenceSpans": [
+          {
+            "start": 148,
+            "end": 154
+          }
+        ],
+        "occurrenceStatementIds": [
+          0
+        ]
+      }
     }
   ],
   "edges": [

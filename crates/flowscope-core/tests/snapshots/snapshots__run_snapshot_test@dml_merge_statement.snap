@@ -22,7 +22,21 @@ expression: clean_result
       },
       "statementIds": [
         0
-      ]
+      ],
+      "metadata": {
+        "occurrenceSourceNames": [
+          null
+        ],
+        "occurrenceSpans": [
+          {
+            "start": 46,
+            "end": 61
+          }
+        ],
+        "occurrenceStatementIds": [
+          0
+        ]
+      }
     },
     {
       "id": "table_bc8c5d67293581e9",
@@ -34,7 +48,21 @@ expression: clean_result
       },
       "statementIds": [
         0
-      ]
+      ],
+      "metadata": {
+        "occurrenceSourceNames": [
+          null
+        ],
+        "occurrenceSpans": [
+          {
+            "start": 20,
+            "end": 29
+          }
+        ],
+        "occurrenceStatementIds": [
+          0
+        ]
+      }
     }
   ],
   "edges": [

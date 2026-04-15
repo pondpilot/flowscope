@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { analyzeSql, isWasmInitialized } from '../analysis';
-import type { AnalyzeResult, Dialect } from '../types';
+import { nodesInStatement, type AnalyzeResult, type Dialect } from '../types';
 
 /**
  * Provides CodeLens annotations showing complexity, table count, and join count
@@ -88,10 +88,8 @@ export class FlowScopeCodeLensProvider implements vscode.CodeLensProvider {
       const range = new vscode.Range(startPos, startPos);
 
       // Count tables/views/CTEs (excluding columns)
-      const tableCount = result.nodes.filter(
-        (n) =>
-          n.statementIds.includes(stmt.statementIndex) &&
-          (n.type === 'table' || n.type === 'view' || n.type === 'cte')
+      const tableCount = nodesInStatement(result, stmt.statementIndex).filter(
+        (n) => n.type === 'table' || n.type === 'view' || n.type === 'cte'
       ).length;
 
       // Build the annotation text

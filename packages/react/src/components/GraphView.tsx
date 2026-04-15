@@ -33,7 +33,11 @@ import {
   buildScriptGraphInWorker,
   cancelPendingBuilds,
 } from '../utils/graphBuilderWorkerService';
-import { getBodySpanForSourceName, getOccurrenceSourceName } from '../utils/nodeOccurrences';
+import {
+  getBodySpanForSourceName,
+  getOccurrenceSourceName,
+  getOccurrenceSpan,
+} from '../utils/nodeOccurrences';
 import { ScriptNode } from './ScriptNode';
 import { ColumnNode } from './ColumnNode';
 import { SimpleTableNode } from './SimpleTableNode';
@@ -910,7 +914,7 @@ export function GraphView({
         // Prefer the first occurrence from `nameSpans` (per-occurrence list
         // shipped in #20). Fall back to the legacy `span` for column nodes
         // and any future node type that doesn't yet populate `nameSpans`.
-        const targetSpan = lineageNode.nameSpans?.[0] ?? lineageNode.span;
+        const targetSpan = getOccurrenceSpan(lineageNode, 0) ?? lineageNode.span;
         if (targetSpan) {
           actions.highlightSpan(targetSpan);
           span = targetSpan;
@@ -1003,7 +1007,7 @@ export function GraphView({
       return;
     }
 
-    const span = lineageNode.nameSpans?.[focusedOccurrenceIndex] ?? lineageNode.span;
+    const span = getOccurrenceSpan(lineageNode, focusedOccurrenceIndex) ?? lineageNode.span;
     const sourceName =
       getOccurrenceSourceName(lineageNode, focusedOccurrenceIndex) ??
       (typeof lineageNode.metadata?.sourceName === 'string'

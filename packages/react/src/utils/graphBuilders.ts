@@ -24,7 +24,7 @@ import {
   createStatementScope,
   withStatementScope,
 } from './lineageHelpers';
-import { mergeNodesForNavigation, resolveNodeSourceName } from './nodeOccurrences';
+import { mergeNodesForNavigation, scopeNodeToStatement } from './nodeOccurrences';
 
 const SELECT_STATEMENT_TYPES = new Set([
   'SELECT',
@@ -65,7 +65,6 @@ export interface MergedLineage {
 export function mergeAnalyzeResult(result: AnalyzeResult): MergedLineage {
   const mergedNodes = new Map<string, Node>();
   const mergedEdges = new Map<string, Edge>();
-  const statementById = new Map(result.statements.map((stmt) => [stmt.statementIndex, stmt]));
   let anySelect = false;
 
   for (const stmt of result.statements) {
@@ -76,28 +75,24 @@ export function mergeAnalyzeResult(result: AnalyzeResult): MergedLineage {
     const statementScope = createStatementScope(stmt.statementIndex, sourceName);
 
     for (const node of nodesInStatement(result, stmt.statementIndex)) {
-      if (node.statementIds.length > 1 && mergedNodes.has(node.id)) {
-        continue;
-      }
-
-      const resolvedSourceName = resolveNodeSourceName(node, statementById);
-      const nodeWithSource = resolvedSourceName
+      const scopedNode = scopeNodeToStatement(node, stmt.statementIndex, sourceName);
+      const nodeWithSource = sourceName
         ? {
-            ...node,
+            ...scopedNode,
             metadata: {
-              ...(node.metadata || {}),
-              sourceName: resolvedSourceName,
+              ...(scopedNode.metadata || {}),
+              sourceName,
             },
           }
-        : { ...node };
+        : scopedNode;
       const nodeWithScope =
-        node.statementIds.length === 1
+        scopedNode.statementIds.length === 1
           ? withStatementScope(nodeWithSource, statementScope)
           : nodeWithSource;
       const mergedNode = mergeNodesForNavigation(
         mergedNodes.get(node.id) ?? null,
         nodeWithScope,
-        resolvedSourceName
+        sourceName
       );
       mergedNodes.set(node.id, mergedNode);
     }

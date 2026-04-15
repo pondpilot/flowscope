@@ -162,6 +162,9 @@ describe('extractTableDependenciesWithDetails', () => {
     expect(deps).toHaveLength(1);
     expect(deps[0].spans).toHaveLength(1);
     expect(deps[0].spans[0]).toEqual({ start: 10, end: 20 });
+    expect(deps[0].locations).toEqual([
+      { span: { start: 10, end: 20 }, sourceName: undefined, statementIndex: 0 },
+    ]);
   });
 
   it('includes join-only dependencies to output', () => {
@@ -416,8 +419,22 @@ describe('extractScriptDependencies', () => {
 describe('buildTableMatrix', () => {
   it('builds correct matrix cells', () => {
     const deps: TableDependencyWithDetails[] = [
-      { sourceTable: 'A', targetTable: 'B', columnCount: 1, columns: [], spans: [] },
-      { sourceTable: 'B', targetTable: 'C', columnCount: 2, columns: [], spans: [] },
+      {
+        sourceTable: 'A',
+        targetTable: 'B',
+        columnCount: 1,
+        columns: [],
+        spans: [],
+        locations: [],
+      },
+      {
+        sourceTable: 'B',
+        targetTable: 'C',
+        columnCount: 2,
+        columns: [],
+        spans: [],
+        locations: [],
+      },
     ];
 
     const matrix = buildTableMatrix(deps);
@@ -446,7 +463,14 @@ describe('buildTableMatrix', () => {
 
   it('sorts items alphabetically', () => {
     const deps: TableDependencyWithDetails[] = [
-      { sourceTable: 'Z', targetTable: 'A', columnCount: 0, columns: [], spans: [] },
+      {
+        sourceTable: 'Z',
+        targetTable: 'A',
+        columnCount: 0,
+        columns: [],
+        spans: [],
+        locations: [],
+      },
     ];
 
     const matrix = buildTableMatrix(deps);
@@ -464,6 +488,7 @@ describe('buildTableMatrix', () => {
           { source: 'name', target: 'a_name' },
         ],
         spans: [{ start: 0, end: 10 }],
+        locations: [{ span: { start: 0, end: 10 }, statementIndex: 0 }],
       },
     ];
 
@@ -475,6 +500,7 @@ describe('buildTableMatrix', () => {
     expect(details.columnCount).toBe(2);
     expect(details.columns).toHaveLength(2);
     expect(details.spans).toHaveLength(1);
+    expect(details.locations).toHaveLength(1);
   });
 });
 

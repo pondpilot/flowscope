@@ -127,7 +127,45 @@ expression: clean_result
       },
       "statementIds": [
         0
-      ]
+      ],
+      "metadata": {
+        "bodySourceNames": [
+          null
+        ],
+        "bodySpans": [
+          {
+            "start": 40,
+            "end": 341
+          }
+        ],
+        "bodyStatementIds": [
+          0
+        ],
+        "occurrenceSourceNames": [
+          null,
+          null,
+          null
+        ],
+        "occurrenceSpans": [
+          {
+            "start": 24,
+            "end": 36
+          },
+          {
+            "start": 285,
+            "end": 297
+          },
+          {
+            "start": 364,
+            "end": 376
+          }
+        ],
+        "occurrenceStatementIds": [
+          0,
+          0,
+          0
+        ]
+      }
     },
     {
       "id": "output_74d22f755ec62dbc",
@@ -151,6 +189,34 @@ expression: clean_result
       "statementIds": [
         0
       ],
+      "metadata": {
+        "occurrenceSourceNames": [
+          null,
+          null
+        ],
+        "occurrenceSpans": [
+          {
+            "start": 108,
+            "end": 117
+          },
+          {
+            "start": 250,
+            "end": 259
+          }
+        ],
+        "occurrenceStatementIds": [
+          0,
+          0
+        ],
+        "statementFilters": {
+          "0": [
+            {
+              "expression": "manager_id IS NULL",
+              "clauseType": "WHERE"
+            }
+          ]
+        }
+      },
       "filters": [
         {
           "expression": "manager_id IS NULL",

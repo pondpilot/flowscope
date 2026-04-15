@@ -140,7 +140,21 @@ expression: clean_result
       },
       "statementIds": [
         0
-      ]
+      ],
+      "metadata": {
+        "occurrenceSourceNames": [
+          null
+        ],
+        "occurrenceSpans": [
+          {
+            "start": 428,
+            "end": 431
+          }
+        ],
+        "occurrenceStatementIds": [
+          0
+        ]
+      }
     },
     {
       "id": "output_74d22f755ec62dbc",
@@ -163,7 +177,21 @@ expression: clean_result
       },
       "statementIds": [
         0
-      ]
+      ],
+      "metadata": {
+        "occurrenceSourceNames": [
+          null
+        ],
+        "occurrenceSpans": [
+          {
+            "start": 299,
+            "end": 308
+          }
+        ],
+        "occurrenceStatementIds": [
+          0
+        ]
+      }
     },
     {
       "id": "table_e3d59f407f4557b4",
@@ -175,7 +203,21 @@ expression: clean_result
       },
       "statementIds": [
         0
-      ]
+      ],
+      "metadata": {
+        "occurrenceSourceNames": [
+          null
+        ],
+        "occurrenceSpans": [
+          {
+            "start": 192,
+            "end": 203
+          }
+        ],
+        "occurrenceStatementIds": [
+          0
+        ]
+      }
     }
   ],
   "edges": [

@@ -81,7 +81,21 @@ expression: clean_result
       },
       "statementIds": [
         0
-      ]
+      ],
+      "metadata": {
+        "occurrenceSourceNames": [
+          null
+        ],
+        "occurrenceSpans": [
+          {
+            "start": 77,
+            "end": 82
+          }
+        ],
+        "occurrenceStatementIds": [
+          0
+        ]
+      }
     }
   ],
   "edges": [

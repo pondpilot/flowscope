@@ -269,7 +269,11 @@ pub struct Node {
     pub body_span: Option<Span>,
 
     /// Extensible metadata for future use
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "super::serde_utils::serialize_option_json_map_sorted"
+    )]
     pub metadata: Option<HashMap<String, serde_json::Value>>,
 
     /// How this table was resolved (imported, implied, or unknown)
@@ -380,7 +384,37 @@ impl Node {
         self.resolution_source = Some(source);
         self
     }
+
+    /// Return the filter predicates recorded for `statement_index`.
+    ///
+    /// When the flattened graph merges a node across statements, per-statement
+    /// `FilterPredicate`s are preserved in `metadata[STATEMENT_FILTERS_METADATA_KEY]`
+    /// as an object keyed by statement index. This helper looks up that entry
+    /// and falls back to the aggregated `filters` field when no per-statement
+    /// data is recorded (e.g. nodes that only appear in one statement).
+    #[must_use]
+    pub fn filters_for_statement(&self, statement_index: usize) -> Vec<FilterPredicate> {
+        if let Some(metadata) = self.metadata.as_ref() {
+            if let Some(per_stmt) = metadata.get(STATEMENT_FILTERS_METADATA_KEY) {
+                if let Some(entry) = per_stmt.get(statement_index.to_string()) {
+                    if let Ok(filters) =
+                        serde_json::from_value::<Vec<FilterPredicate>>(entry.clone())
+                    {
+                        return filters;
+                    }
+                }
+            }
+        }
+        self.filters.clone()
+    }
 }
+
+/// Metadata key under `Node::metadata` that stores per-statement filter
+/// predicates for nodes merged across statements. The value is a JSON object
+/// keyed by statement index (as a string); each entry is a serialized
+/// `Vec<FilterPredicate>`. Callers should treat this key as reserved and use
+/// [`Node::filters_for_statement`] instead of reading it directly.
+pub const STATEMENT_FILTERS_METADATA_KEY: &str = "statementFilters";
 
 /// An edge connecting two nodes in the lineage graph.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
@@ -431,7 +465,11 @@ pub struct Edge {
     pub join_condition: Option<Arc<str>>,
 
     /// Extensible metadata for future use
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "super::serde_utils::serialize_option_json_map_sorted"
+    )]
     pub metadata: Option<HashMap<String, serde_json::Value>>,
 
     /// True if this edge represents approximate/uncertain lineage

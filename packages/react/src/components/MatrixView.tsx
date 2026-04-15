@@ -1051,7 +1051,19 @@ export function MatrixView({
 
       if (matrixSubMode === 'tables') {
         const details = cellData.details as TableDependencyWithDetails | undefined;
-        if (details?.spans.length) highlightSpan(details.spans[0]);
+        const location = details?.locations[0];
+        if (location?.sourceName) {
+          requestNavigation({
+            sourceName: location.sourceName,
+            span: location.span,
+            targetName: details?.sourceTable,
+            targetType: 'table',
+          });
+        } else if (location?.span) {
+          highlightSpan(location.span);
+        } else if (details?.spans.length) {
+          highlightSpan(details.spans[0]);
+        }
       } else {
         const details = cellData.details as ScriptDependency | undefined;
         if (details) {

@@ -2,15 +2,22 @@ use super::helpers::{generate_node_id, parse_canonical_name};
 use super::Analyzer;
 use crate::types::{
     Edge, EdgeType, IssueCount, Node, NodeType, ResolvedColumnSchema, ResolvedSchemaMetadata,
-    ResolvedSchemaTable, Span, StatementMeta, Summary,
+    ResolvedSchemaTable, Span, StatementMeta, Summary, STATEMENT_FILTERS_METADATA_KEY,
 };
 use serde_json::{Map as JsonMap, Value};
+use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 #[cfg(feature = "tracing")]
 use tracing::debug;
 
-const STATEMENT_FILTERS_METADATA_KEY: &str = "statementFilters";
+const OCCURRENCE_SPANS_METADATA_KEY: &str = "occurrenceSpans";
+const OCCURRENCE_STATEMENT_IDS_METADATA_KEY: &str = "occurrenceStatementIds";
+const OCCURRENCE_SOURCE_NAMES_METADATA_KEY: &str = "occurrenceSourceNames";
+const BODY_SPANS_METADATA_KEY: &str = "bodySpans";
+const BODY_STATEMENT_IDS_METADATA_KEY: &str = "bodyStatementIds";
+const BODY_SOURCE_NAMES_METADATA_KEY: &str = "bodySourceNames";
 
 impl<'a> Analyzer<'a> {
     pub(super) fn build_result(&self) -> crate::AnalyzeResult {
@@ -102,191 +109,144 @@ impl<'a> Analyzer<'a> {
         lineages: Vec<crate::types::StatementLineage>,
     ) -> (Vec<StatementMeta>, Vec<Node>, Vec<Edge>) {
         let mut statement_metas: Vec<StatementMeta> = Vec::with_capacity(lineages.len());
-        let mut flat_nodes: HashMap<Arc<str>, Node> = HashMap::new();
-        let mut node_insertion_order: Vec<Arc<str>> = Vec::new();
-        let mut flat_edges: Vec<Edge> = Vec::new();
-        let mut edge_index: HashMap<(Arc<str>, Arc<str>, &'static str), usize> = HashMap::new();
-        let mut local_to_global_id: HashMap<Arc<str>, Arc<str>> = HashMap::new();
+        let mut state = FlattenState::default();
 
         for lineage in lineages {
-            // Identify nodes whose IDs must stay statement-scoped:
-            // - CTEs and derived tables (their IDs encode the statement index)
-            // - Self-join instance nodes (their IDs hash canonical+alias+scope,
-            //   so they differ from the canonical-only `relation_identity` ID).
-            //   Without preserving these, two self-join instances of the same
-            //   table collapse into one node, losing the distinction between
-            //   `users a` and `users b` in `FROM users a JOIN users b`.
-            let mut statement_scoped_relation_ids: HashSet<Arc<str>> = lineage
-                .nodes
-                .iter()
-                .filter(|node| node.node_type == NodeType::Cte)
-                .map(|node| node.id.clone())
-                .collect();
-            for node in &lineage.nodes {
-                if matches!(node.node_type, NodeType::Table | NodeType::View) {
-                    let canonical = node
-                        .qualified_name
-                        .clone()
-                        .unwrap_or_else(|| node.label.clone());
-                    let canonical_id = self.tracker.relation_identity(&canonical).0;
-                    if node.id != canonical_id {
-                        statement_scoped_relation_ids.insert(node.id.clone());
-                    }
-                }
-            }
-            let statement_scoped_column_ids: HashSet<Arc<str>> = lineage
-                .edges
-                .iter()
-                .filter(|edge| {
-                    edge.edge_type == EdgeType::Ownership
-                        && statement_scoped_relation_ids.contains(&edge.from)
-                })
-                .map(|edge| edge.to.clone())
-                .collect();
-
+            let scoped = self.collect_statement_scoped_ids(&lineage);
             let statement_index = lineage.statement_index;
             let (meta, lineage_nodes, lineage_edges) = lineage.into_meta_and_graph();
+            let statement_source_name = meta.source_name.clone();
 
-            for node in lineage_nodes {
-                let canonical = node
-                    .qualified_name
-                    .clone()
-                    .unwrap_or_else(|| node.label.clone());
-                let canonical_name = parse_canonical_name(&canonical);
-                let preserve_statement_scope = statement_scoped_column_ids.contains(&node.id);
-                let global_id = self.global_node_id(&node, &canonical, preserve_statement_scope);
-                local_to_global_id.insert(node.id.clone(), global_id.clone());
-
-                match flat_nodes.entry(global_id.clone()) {
-                    std::collections::hash_map::Entry::Occupied(mut e) => {
-                        merge_node_into(e.get_mut(), node, statement_index);
-                    }
-                    std::collections::hash_map::Entry::Vacant(slot) => {
-                        let mut initial = Node {
-                            id: global_id.clone(),
-                            statement_ids: vec![statement_index],
-                            canonical_name: Some(canonical_name),
-                            ..node
-                        };
-                        record_statement_filters(&mut initial, statement_index);
-                        // name_spans / filters / resolution_source / aggregation
-                        // all travel from the source node via the spread above.
-                        normalize_name_spans(&mut initial);
-                        slot.insert(initial);
-                        node_insertion_order.push(global_id);
-                    }
-                }
-            }
-
-            for edge in lineage_edges {
-                let from = local_to_global_id
-                    .get(&edge.from)
-                    .cloned()
-                    .unwrap_or_else(|| {
-                        #[cfg(feature = "tracing")]
-                        debug!(
-                            edge_id = %edge.id,
-                            node_id = %edge.from,
-                            "edge source not in local-to-global mapping, using local ID"
-                        );
-                        edge.from.clone()
-                    });
-                let to = local_to_global_id
-                    .get(&edge.to)
-                    .cloned()
-                    .unwrap_or_else(|| {
-                        #[cfg(feature = "tracing")]
-                        debug!(
-                            edge_id = %edge.id,
-                            node_id = %edge.to,
-                            "edge target not in local-to-global mapping, using local ID"
-                        );
-                        edge.to.clone()
-                    });
-
-                let kind = edge_kind(edge.edge_type);
-                let key = (from.clone(), to.clone(), kind);
-                if let Some(&idx) = edge_index.get(&key) {
-                    let existing = &mut flat_edges[idx];
-                    if !existing.statement_ids.contains(&statement_index) {
-                        existing.statement_ids.push(statement_index);
-                    }
-                } else {
-                    let mut remapped = Edge {
-                        from: from.clone(),
-                        to: to.clone(),
-                        statement_ids: vec![statement_index],
-                        ..edge
-                    };
-                    // Preserve the edge's local ID. Nothing persistent depends on
-                    // statement-local IDs post-build, so reuse is safe.
-                    // Clear any stale statement_ids carried over from `edge`.
-                    remapped.statement_ids = vec![statement_index];
-                    edge_index.insert(key, flat_edges.len());
-                    flat_edges.push(remapped);
-                }
-            }
+            self.merge_lineage_nodes(
+                &mut state,
+                lineage_nodes,
+                &scoped,
+                statement_index,
+                statement_source_name.as_deref(),
+            );
+            merge_lineage_edges(&mut state, lineage_edges, statement_index);
 
             statement_metas.push(meta);
             // local_to_global mapping is valid only within the current
             // statement; clear it between statements so local IDs from
             // statement N don't bleed into statement N+1.
-            local_to_global_id.clear();
+            state.local_to_global_id.clear();
         }
 
-        // Append tracker-derived cross-statement edges (producer/consumer).
-        //
-        // Unlike intra-statement edges, cross-statement edges are not deduped
-        // by `(from, to, kind)`: a self-loop on a shared table may appear in
-        // multiple distinct producer/consumer pairs, and collapsing them would
-        // lose the ordered `[producer, consumer]` semantics advertised by
-        // `CrossStatementTracker::build_cross_statement_edges`. Each tracker
-        // edge already has a unique ID derived from `(table, producer, consumer)`;
-        // dedup by that ID only to guard against accidental re-emission.
+        self.append_cross_statement_edges(&mut state.flat_edges);
+
+        let nodes = finalize_nodes(&mut state.flat_nodes, state.node_insertion_order);
+        let edges = finalize_edges(state.flat_edges, &nodes);
+
+        (statement_metas, nodes, edges)
+    }
+
+    /// Collect the set of node IDs that must stay statement-scoped during
+    /// flattening.
+    ///
+    /// Three sources feed this set:
+    /// - CTEs (their IDs already encode the statement index).
+    /// - Tables/views whose ID differs from the canonical identity ID —
+    ///   these are self-join instance nodes whose IDs hash
+    ///   canonical+alias+scope. Without preserving them, two self-join
+    ///   instances of the same table collapse into one node, losing the
+    ///   distinction between `users a` and `users b` in
+    ///   `FROM users a JOIN users b`.
+    /// - Columns owned by any of the above via `EdgeType::Ownership`.
+    fn collect_statement_scoped_ids(&self, lineage: &crate::types::StatementLineage) -> ScopedIds {
+        let mut relation_ids: HashSet<Arc<str>> = lineage
+            .nodes
+            .iter()
+            .filter(|node| node.node_type == NodeType::Cte)
+            .map(|node| node.id.clone())
+            .collect();
+
+        for node in &lineage.nodes {
+            if matches!(node.node_type, NodeType::Table | NodeType::View) {
+                let canonical = node
+                    .qualified_name
+                    .clone()
+                    .unwrap_or_else(|| node.label.clone());
+                let canonical_id = self.tracker.relation_identity(&canonical).0;
+                if node.id != canonical_id {
+                    relation_ids.insert(node.id.clone());
+                }
+            }
+        }
+
+        let column_ids: HashSet<Arc<str>> = lineage
+            .edges
+            .iter()
+            .filter(|edge| {
+                edge.edge_type == EdgeType::Ownership && relation_ids.contains(&edge.from)
+            })
+            .map(|edge| edge.to.clone())
+            .collect();
+
+        ScopedIds { column_ids }
+    }
+
+    /// Merge one statement's worth of nodes into the flat graph.
+    fn merge_lineage_nodes(
+        &self,
+        state: &mut FlattenState,
+        lineage_nodes: Vec<Node>,
+        scoped: &ScopedIds,
+        statement_index: usize,
+        source_name: Option<&str>,
+    ) {
+        for node in lineage_nodes {
+            let canonical = node
+                .qualified_name
+                .clone()
+                .unwrap_or_else(|| node.label.clone());
+            let canonical_name = parse_canonical_name(&canonical);
+            let preserve_statement_scope = scoped.column_ids.contains(&node.id);
+            let global_id = self.global_node_id(&node, &canonical, preserve_statement_scope);
+            state
+                .local_to_global_id
+                .insert(node.id.clone(), global_id.clone());
+
+            match state.flat_nodes.entry(global_id.clone()) {
+                std::collections::hash_map::Entry::Occupied(mut e) => {
+                    merge_node_into(e.get_mut(), node, statement_index, source_name);
+                }
+                std::collections::hash_map::Entry::Vacant(slot) => {
+                    let mut initial = Node {
+                        id: global_id.clone(),
+                        statement_ids: vec![statement_index],
+                        canonical_name: Some(canonical_name),
+                        ..node
+                    };
+                    record_statement_filters(&mut initial, statement_index);
+                    record_occurrences(&mut initial, statement_index, source_name);
+                    record_body_span(&mut initial, statement_index, source_name);
+                    // name_spans / filters / resolution_source / aggregation
+                    // all travel from the source node via the spread above.
+                    normalize_name_spans(&mut initial);
+                    slot.insert(initial);
+                    state.node_insertion_order.push(global_id);
+                }
+            }
+        }
+    }
+
+    /// Append tracker-derived cross-statement edges to `flat_edges`.
+    ///
+    /// Unlike intra-statement edges, cross-statement edges are not deduped
+    /// by `(from, to, kind)`: a self-loop on a shared table may appear in
+    /// multiple distinct producer/consumer pairs, and collapsing them would
+    /// lose the ordered `[producer, consumer]` semantics advertised by
+    /// `CrossStatementTracker::build_cross_statement_edges`. Each tracker
+    /// edge already has a unique ID derived from `(table, producer, consumer)`;
+    /// dedup by that ID only to guard against accidental re-emission.
+    fn append_cross_statement_edges(&self, flat_edges: &mut Vec<Edge>) {
         let mut cross_edge_ids: HashSet<Arc<str>> = HashSet::new();
         for edge in self.tracker.build_cross_statement_edges() {
             if cross_edge_ids.insert(edge.id.clone()) {
                 flat_edges.push(edge);
             }
         }
-
-        // Build the ordered node list and drop edges that reference nodes we
-        // discarded (e.g. ambiguous-column pruning may leave an edge whose
-        // target has no matching node in the flat set).
-        let mut nodes: Vec<Node> = node_insertion_order
-            .into_iter()
-            .filter_map(|id| flat_nodes.remove(&id))
-            .collect();
-
-        // Sort name_spans and statement_ids for stable output.
-        for node in &mut nodes {
-            node.statement_ids.sort_unstable();
-            node.statement_ids.dedup();
-            node.name_spans.sort_by_key(|s: &Span| (s.start, s.end));
-            node.name_spans.dedup();
-        }
-
-        let node_ids: HashSet<&Arc<str>> = nodes.iter().map(|n| &n.id).collect();
-
-        #[cfg(feature = "tracing")]
-        let edges_before = flat_edges.len();
-
-        flat_edges.retain(|edge| node_ids.contains(&edge.from) && node_ids.contains(&edge.to));
-
-        #[cfg(feature = "tracing")]
-        if flat_edges.len() < edges_before {
-            debug!(
-                removed = edges_before - flat_edges.len(),
-                "removed orphaned edges from flattened lineage"
-            );
-        }
-
-        for edge in &mut flat_edges {
-            edge.statement_ids.sort_unstable();
-            edge.statement_ids.dedup();
-        }
-
-        (statement_metas, nodes, flat_edges)
     }
 
     fn global_node_id(
@@ -384,6 +344,144 @@ impl<'a> Analyzer<'a> {
     }
 }
 
+/// Mutable state threaded through the flattening pipeline.
+#[derive(Default)]
+struct FlattenState {
+    flat_nodes: HashMap<Arc<str>, Node>,
+    node_insertion_order: Vec<Arc<str>>,
+    flat_edges: Vec<Edge>,
+    edge_index: HashMap<EdgeIndexKey, usize>,
+    edge_ids: HashSet<Arc<str>>,
+    local_to_global_id: HashMap<Arc<str>, Arc<str>>,
+}
+
+#[derive(Hash, PartialEq, Eq)]
+struct EdgeIndexKey {
+    from: Arc<str>,
+    to: Arc<str>,
+    kind: &'static str,
+    expression: Option<String>,
+    operation: Option<String>,
+    join_type: &'static str,
+    join_condition: Option<String>,
+    approximate: Option<bool>,
+}
+
+/// Per-statement scoped-id classification computed before consuming a lineage.
+struct ScopedIds {
+    /// Column IDs that must remain statement-scoped during flattening.
+    column_ids: HashSet<Arc<str>>,
+}
+
+/// Merge one statement's worth of edges into the flat graph, deduping by the
+/// edge's structural identity plus statement-relevant metadata and
+/// accumulating `statement_ids`.
+fn merge_lineage_edges(state: &mut FlattenState, lineage_edges: Vec<Edge>, statement_index: usize) {
+    for edge in lineage_edges {
+        let from = state
+            .local_to_global_id
+            .get(&edge.from)
+            .cloned()
+            .unwrap_or_else(|| {
+                #[cfg(feature = "tracing")]
+                debug!(
+                    edge_id = %edge.id,
+                    node_id = %edge.from,
+                    "edge source not in local-to-global mapping, using local ID"
+                );
+                edge.from.clone()
+            });
+        let to = state
+            .local_to_global_id
+            .get(&edge.to)
+            .cloned()
+            .unwrap_or_else(|| {
+                #[cfg(feature = "tracing")]
+                debug!(
+                    edge_id = %edge.id,
+                    node_id = %edge.to,
+                    "edge target not in local-to-global mapping, using local ID"
+                );
+                edge.to.clone()
+            });
+
+        let key = edge_index_key(&edge, &from, &to);
+        if let Some(&idx) = state.edge_index.get(&key) {
+            let existing = &mut state.flat_edges[idx];
+            if !existing.statement_ids.contains(&statement_index) {
+                existing.statement_ids.push(statement_index);
+            }
+        } else {
+            let edge_id = if state.edge_ids.insert(edge.id.clone()) {
+                edge.id.clone()
+            } else {
+                let unique_id = flat_edge_id(&key);
+                state.edge_ids.insert(unique_id.clone());
+                unique_id
+            };
+            let mut remapped = Edge {
+                id: edge_id,
+                from: from.clone(),
+                to: to.clone(),
+                statement_ids: vec![statement_index],
+                ..edge
+            };
+            // Clear any stale statement_ids carried over from `edge`.
+            remapped.statement_ids = vec![statement_index];
+            state.edge_index.insert(key, state.flat_edges.len());
+            state.flat_edges.push(remapped);
+        }
+    }
+}
+
+/// Build the final ordered node list, sort/dedup `statement_ids` and
+/// `name_spans`, and drain the insertion map.
+fn finalize_nodes(
+    flat_nodes: &mut HashMap<Arc<str>, Node>,
+    insertion_order: Vec<Arc<str>>,
+) -> Vec<Node> {
+    let mut nodes: Vec<Node> = insertion_order
+        .into_iter()
+        .filter_map(|id| flat_nodes.remove(&id))
+        .collect();
+
+    for node in &mut nodes {
+        node.statement_ids.sort_unstable();
+        node.statement_ids.dedup();
+        node.name_spans.sort_by_key(|s: &Span| (s.start, s.end));
+        node.name_spans.dedup();
+    }
+
+    nodes
+}
+
+/// Drop edges referencing discarded nodes (e.g. ambiguous-column pruning may
+/// leave an edge whose endpoint has no matching node in the flat set) and
+/// sort/dedup each edge's `statement_ids`.
+fn finalize_edges(mut flat_edges: Vec<Edge>, nodes: &[Node]) -> Vec<Edge> {
+    let node_ids: HashSet<&Arc<str>> = nodes.iter().map(|n| &n.id).collect();
+
+    #[cfg(feature = "tracing")]
+    let edges_before = flat_edges.len();
+
+    flat_edges.retain(|edge| node_ids.contains(&edge.from) && node_ids.contains(&edge.to));
+
+    #[cfg(feature = "tracing")]
+    if flat_edges.len() < edges_before {
+        debug!(
+            removed = edges_before - flat_edges.len(),
+            "removed orphaned edges from flattened lineage"
+        );
+    }
+
+    for edge in &mut flat_edges {
+        edge.statement_ids.sort_unstable();
+        edge.statement_ids.dedup();
+    }
+
+    flat_edges
+}
+
 fn edge_kind(edge_type: crate::types::EdgeType) -> &'static str {
     match edge_type {
         crate::types::EdgeType::Ownership => "ownership",
@@ -392,6 +490,43 @@ fn edge_kind(edge_type: crate::types::EdgeType) -> &'static str {
         crate::types::EdgeType::JoinDependency => "join_dependency",
         crate::types::EdgeType::CrossStatement => "cross_statement",
     }
+}
+
+fn join_type_key(join_type: Option<crate::types::JoinType>) -> &'static str {
+    match join_type {
+        None => "",
+        Some(crate::types::JoinType::Inner) => "INNER",
+        Some(crate::types::JoinType::Left) => "LEFT",
+        Some(crate::types::JoinType::Right) => "RIGHT",
+        Some(crate::types::JoinType::Full) => "FULL",
+        Some(crate::types::JoinType::Cross) => "CROSS",
+        Some(crate::types::JoinType::LeftSemi) => "LEFT_SEMI",
+        Some(crate::types::JoinType::RightSemi) => "RIGHT_SEMI",
+        Some(crate::types::JoinType::LeftAnti) => "LEFT_ANTI",
+        Some(crate::types::JoinType::RightAnti) => "RIGHT_ANTI",
+        Some(crate::types::JoinType::CrossApply) => "CROSS_APPLY",
+        Some(crate::types::JoinType::OuterApply) => "OUTER_APPLY",
+        Some(crate::types::JoinType::AsOf) => "AS_OF",
+    }
+}
+
+fn edge_index_key(edge: &Edge, from: &Arc<str>, to: &Arc<str>) -> EdgeIndexKey {
+    EdgeIndexKey {
+        from: from.clone(),
+        to: to.clone(),
+        kind: edge_kind(edge.edge_type),
+        expression: edge.expression.as_ref().map(|value| value.to_string()),
+        operation: edge.operation.as_ref().map(|value| value.to_string()),
+        join_type: join_type_key(edge.join_type),
+        join_condition: edge.join_condition.as_ref().map(|value| value.to_string()),
+        approximate: edge.approximate,
+    }
+}
+
+fn flat_edge_id(key: &EdgeIndexKey) -> Arc<str> {
+    let mut hasher = DefaultHasher::new();
+    key.hash(&mut hasher);
+    format!("edge_{:016x}", hasher.finish()).into()
 }
 
 /// Merge an additional statement's worth of node data into an already-inserted
@@ -409,12 +544,19 @@ fn edge_kind(edge_type: crate::types::EdgeType) -> &'static str {
 ///   non-duplicate entry from the incoming node is appended. Final ordering
 ///   and de-duplication for `statement_ids` / `name_spans` is applied in
 ///   `flatten_lineages`.
-fn merge_node_into(existing: &mut Node, incoming: Node, statement_index: usize) {
+fn merge_node_into(
+    existing: &mut Node,
+    incoming: Node,
+    statement_index: usize,
+    source_name: Option<&str>,
+) {
     if !existing.statement_ids.contains(&statement_index) {
         existing.statement_ids.push(statement_index);
     }
 
     record_statement_filters_from_slice(existing, statement_index, &incoming.filters);
+    record_occurrences_from_node(existing, &incoming, statement_index, source_name);
+    record_body_span_from_node(existing, &incoming, statement_index, source_name);
 
     for span in incoming.name_spans {
         if !existing.name_spans.contains(&span) {
@@ -464,6 +606,117 @@ fn record_statement_filters(node: &mut Node, statement_index: usize) {
     record_statement_filters_from_slice(node, statement_index, &filters);
 }
 
+fn record_occurrences(node: &mut Node, statement_index: usize, source_name: Option<&str>) {
+    let occurrence_source = node.clone();
+    record_occurrences_from_node(node, &occurrence_source, statement_index, source_name);
+}
+
+fn record_occurrences_from_node(
+    node: &mut Node,
+    occurrence_source: &Node,
+    statement_index: usize,
+    source_name: Option<&str>,
+) {
+    append_occurrence_records(
+        node,
+        &occurrence_source.all_name_spans(),
+        statement_index,
+        source_name,
+    );
+}
+
+fn append_occurrence_records(
+    node: &mut Node,
+    spans: &[Span],
+    statement_index: usize,
+    source_name: Option<&str>,
+) {
+    if spans.is_empty() {
+        return;
+    }
+
+    let metadata = node.metadata.get_or_insert_with(HashMap::new);
+    ensure_array(metadata, OCCURRENCE_SPANS_METADATA_KEY);
+    ensure_array(metadata, OCCURRENCE_STATEMENT_IDS_METADATA_KEY);
+    ensure_array(metadata, OCCURRENCE_SOURCE_NAMES_METADATA_KEY);
+
+    for span in spans {
+        append_to_array(
+            metadata,
+            OCCURRENCE_SPANS_METADATA_KEY,
+            serde_json::to_value(span).unwrap_or(Value::Null),
+        );
+        append_to_array(
+            metadata,
+            OCCURRENCE_STATEMENT_IDS_METADATA_KEY,
+            Value::from(statement_index as u64),
+        );
+        append_to_array(
+            metadata,
+            OCCURRENCE_SOURCE_NAMES_METADATA_KEY,
+            match source_name {
+                Some(value) => Value::String(value.to_string()),
+                None => Value::Null,
+            },
+        );
+    }
+}
+
+fn record_body_span(node: &mut Node, statement_index: usize, source_name: Option<&str>) {
+    let body_source = node.clone();
+    record_body_span_from_node(node, &body_source, statement_index, source_name);
+}
+
+fn record_body_span_from_node(
+    node: &mut Node,
+    body_source: &Node,
+    statement_index: usize,
+    source_name: Option<&str>,
+) {
+    let Some(body_span) = body_source.body_span else {
+        return;
+    };
+
+    let metadata = node.metadata.get_or_insert_with(HashMap::new);
+    ensure_array(metadata, BODY_SPANS_METADATA_KEY);
+    ensure_array(metadata, BODY_STATEMENT_IDS_METADATA_KEY);
+    ensure_array(metadata, BODY_SOURCE_NAMES_METADATA_KEY);
+
+    append_to_array(
+        metadata,
+        BODY_SPANS_METADATA_KEY,
+        serde_json::to_value(body_span).unwrap_or(Value::Null),
+    );
+    append_to_array(
+        metadata,
+        BODY_STATEMENT_IDS_METADATA_KEY,
+        Value::from(statement_index as u64),
+    );
+    append_to_array(
+        metadata,
+        BODY_SOURCE_NAMES_METADATA_KEY,
+        match source_name {
+            Some(value) => Value::String(value.to_string()),
+            None => Value::Null,
+        },
+    );
+}
+
+fn ensure_array(metadata: &mut HashMap<String, Value>, key: &str) {
+    let entry = metadata
+        .entry(key.to_string())
+        .or_insert_with(|| Value::Array(Vec::new()));
+    if !entry.is_array() {
+        *entry = Value::Array(Vec::new());
+    }
+}
+
+fn append_to_array(metadata: &mut HashMap<String, Value>, key: &str, value: Value) {
+    if let Some(Value::Array(values)) = metadata.get_mut(key) {
+        values.push(value);
+    }
+}
+
 fn record_statement_filters_from_slice(
     node: &mut Node,
     statement_index: usize,
@@ -483,7 +736,12 @@ fn record_statement_filters_from_slice(
     }
 
     if let Value::Object(statement_filters) = entry {
-        let serialized = serde_json::to_value(filters).unwrap_or(Value::Array(Vec::new()));
+        // `FilterPredicate` derives `Serialize` with no fallible paths, so this
+        // cannot fail at runtime. A panic here would indicate the type was
+        // changed in a way that introduces a custom `Serialize` impl — in that
+        // case, silently dropping filters would be a correctness regression.
+        let serialized =
+            serde_json::to_value(filters).expect("FilterPredicate serialization is infallible");
         statement_filters.insert(statement_index.to_string(), serialized);
     }
 }
@@ -515,4 +773,190 @@ fn calculate_global_complexity(
         + filter_count * FILTER_WEIGHT;
 
     raw_score.clamp(1, 100) as u8
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::StatementLineage;
+    use crate::{AnalyzeRequest, Dialect, EdgeType, JoinType};
+
+    fn make_request() -> AnalyzeRequest {
+        AnalyzeRequest {
+            sql: String::new(),
+            files: None,
+            dialect: Dialect::Generic,
+            source_name: None,
+            options: None,
+            schema: None,
+            #[cfg(feature = "templating")]
+            template_config: None,
+        }
+    }
+
+    fn make_column(local_id: &str, qualified_name: &str, span: Span) -> Node {
+        Node {
+            id: local_id.into(),
+            node_type: NodeType::Column,
+            label: qualified_name
+                .rsplit('.')
+                .next()
+                .unwrap_or(qualified_name)
+                .into(),
+            qualified_name: Some(qualified_name.into()),
+            span: Some(span),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn flatten_keeps_distinct_edge_metadata_per_statement() {
+        let request = make_request();
+        let analyzer = Analyzer::new(&request);
+
+        let stmt_one = StatementLineage {
+            statement_index: 0,
+            statement_type: "INSERT".to_string(),
+            source_name: Some("one.sql".to_string()),
+            nodes: vec![
+                make_column("src_col_stmt_0", "shared.source.id", Span::new(0, 2)),
+                make_column("dst_col_stmt_0", "shared.target.id", Span::new(3, 5)),
+            ],
+            edges: vec![Edge {
+                id: "edge_local_0".into(),
+                from: "src_col_stmt_0".into(),
+                to: "dst_col_stmt_0".into(),
+                edge_type: EdgeType::DataFlow,
+                expression: None,
+                operation: None,
+                join_type: Some(JoinType::Inner),
+                join_condition: Some("a.id = b.id".into()),
+                metadata: None,
+                approximate: None,
+                statement_ids: Vec::new(),
+            }],
+            span: None,
+            join_count: 1,
+            complexity_score: 1,
+            resolved_sql: None,
+        };
+
+        let stmt_two = StatementLineage {
+            statement_index: 1,
+            statement_type: "INSERT".to_string(),
+            source_name: Some("two.sql".to_string()),
+            nodes: vec![
+                make_column("src_col_stmt_1", "shared.source.id", Span::new(10, 12)),
+                make_column("dst_col_stmt_1", "shared.target.id", Span::new(13, 15)),
+            ],
+            edges: vec![Edge {
+                id: "edge_local_1".into(),
+                from: "src_col_stmt_1".into(),
+                to: "dst_col_stmt_1".into(),
+                edge_type: EdgeType::DataFlow,
+                expression: None,
+                operation: None,
+                join_type: Some(JoinType::Left),
+                join_condition: Some("a.id = b.id".into()),
+                metadata: None,
+                approximate: None,
+                statement_ids: Vec::new(),
+            }],
+            span: None,
+            join_count: 1,
+            complexity_score: 1,
+            resolved_sql: None,
+        };
+
+        let (_statements, _nodes, edges) = analyzer.flatten_lineages(vec![stmt_one, stmt_two]);
+
+        assert_eq!(
+            edges.len(),
+            2,
+            "semantic variants must not collapse into one edge"
+        );
+        assert!(edges.iter().any(|edge| {
+            edge.join_type == Some(JoinType::Inner) && edge.statement_ids == vec![0]
+        }));
+        assert!(edges.iter().any(|edge| {
+            edge.join_type == Some(JoinType::Left) && edge.statement_ids == vec![1]
+        }));
+        assert_ne!(
+            edges[0].id, edges[1].id,
+            "distinct variants need distinct edge ids"
+        );
+    }
+
+    #[test]
+    fn flatten_records_occurrence_metadata_for_shared_columns() {
+        let request = make_request();
+        let analyzer = Analyzer::new(&request);
+
+        let stmt_one = StatementLineage {
+            statement_index: 0,
+            statement_type: "SELECT".to_string(),
+            source_name: Some("models/a.sql".to_string()),
+            nodes: vec![make_column(
+                "col_stmt_0",
+                "shared.users.id",
+                Span::new(5, 7),
+            )],
+            edges: Vec::new(),
+            span: None,
+            join_count: 0,
+            complexity_score: 1,
+            resolved_sql: None,
+        };
+        let stmt_two = StatementLineage {
+            statement_index: 1,
+            statement_type: "SELECT".to_string(),
+            source_name: Some("models/b.sql".to_string()),
+            nodes: vec![make_column(
+                "col_stmt_1",
+                "shared.users.id",
+                Span::new(25, 27),
+            )],
+            edges: Vec::new(),
+            span: None,
+            join_count: 0,
+            complexity_score: 1,
+            resolved_sql: None,
+        };
+
+        let (_statements, nodes, _edges) = analyzer.flatten_lineages(vec![stmt_one, stmt_two]);
+        let node = nodes
+            .iter()
+            .find(|node| node.qualified_name.as_deref() == Some("shared.users.id"))
+            .expect("shared column node");
+
+        assert_eq!(node.statement_ids, vec![0, 1]);
+
+        let occurrence_spans = node
+            .metadata
+            .as_ref()
+            .and_then(|metadata| metadata.get(OCCURRENCE_SPANS_METADATA_KEY))
+            .and_then(|value| value.as_array())
+            .expect("occurrence spans");
+        assert_eq!(occurrence_spans.len(), 2);
+
+        let occurrence_statement_ids = node
+            .metadata
+            .as_ref()
+            .and_then(|metadata| metadata.get(OCCURRENCE_STATEMENT_IDS_METADATA_KEY))
+            .and_then(|value| value.as_array())
+            .expect("occurrence statement ids");
+        assert_eq!(occurrence_statement_ids.len(), 2);
+        assert_eq!(occurrence_statement_ids[0].as_u64(), Some(0));
+        assert_eq!(occurrence_statement_ids[1].as_u64(), Some(1));
+
+        let occurrence_source_names = node
+            .metadata
+            .as_ref()
+            .and_then(|metadata| metadata.get(OCCURRENCE_SOURCE_NAMES_METADATA_KEY))
+            .and_then(|value| value.as_array())
+            .expect("occurrence source names");
+        assert_eq!(occurrence_source_names.len(), 2);
+        assert_eq!(occurrence_source_names[0].as_str(), Some("models/a.sql"));
+        assert_eq!(occurrence_source_names[1].as_str(), Some("models/b.sql"));
+    }
 }

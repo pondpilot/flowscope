@@ -81,7 +81,21 @@ expression: cleaned
       },
       "statementIds": [
         0
-      ]
+      ],
+      "metadata": {
+        "occurrenceSourceNames": [
+          null
+        ],
+        "occurrenceSpans": [
+          {
+            "start": 33,
+            "end": 38
+          }
+        ],
+        "occurrenceStatementIds": [
+          0
+        ]
+      }
     },
     {
       "id": "table_eaa6ebb8f158751f",
@@ -93,7 +107,21 @@ expression: cleaned
       },
       "statementIds": [
         0
-      ]
+      ],
+      "metadata": {
+        "occurrenceSourceNames": [
+          null
+        ],
+        "occurrenceSpans": [
+          {
+            "start": 46,
+            "end": 52
+          }
+        ],
+        "occurrenceStatementIds": [
+          0
+        ]
+      }
     }
   ],
   "edges": [

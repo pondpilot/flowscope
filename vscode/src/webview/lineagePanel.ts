@@ -149,7 +149,10 @@ export class LineagePanel {
     const scopedNodes = scopeNodesToStatement(result, targetStatementIndex);
     const relevantNodeIds = new Set(scopedNodes.map((node) => node.id));
     const scopedEdges = result.edges.filter(
-      (edge) => relevantNodeIds.has(edge.from) && relevantNodeIds.has(edge.to)
+      (edge) =>
+        edge.statementIds.includes(targetStatementIndex) &&
+        relevantNodeIds.has(edge.from) &&
+        relevantNodeIds.has(edge.to)
     );
     const filteredIssues = result.issues.filter(
       (issue) => issue.statementIndex === undefined || issue.statementIndex === targetStatementIndex

@@ -156,6 +156,20 @@ expression: cleaned
       "statementIds": [
         2
       ],
+      "metadata": {
+        "occurrenceSourceNames": [
+          null
+        ],
+        "occurrenceSpans": [
+          {
+            "start": 186,
+            "end": 191
+          }
+        ],
+        "occurrenceStatementIds": [
+          2
+        ]
+      },
       "resolutionSource": "imported"
     },
     {
@@ -170,6 +184,34 @@ expression: cleaned
         0,
         1
       ],
+      "metadata": {
+        "occurrenceSourceNames": [
+          null,
+          null
+        ],
+        "occurrenceSpans": [
+          {
+            "start": 26,
+            "end": 32
+          },
+          {
+            "start": 133,
+            "end": 139
+          }
+        ],
+        "occurrenceStatementIds": [
+          0,
+          1
+        ],
+        "statementFilters": {
+          "1": [
+            {
+              "expression": "amount > 100",
+              "clauseType": "WHERE"
+            }
+          ]
+        }
+      },
       "resolutionSource": "implied",
       "filters": [
         {
@@ -188,7 +230,21 @@ expression: cleaned
       },
       "statementIds": [
         1
-      ]
+      ],
+      "metadata": {
+        "occurrenceSourceNames": [
+          null
+        ],
+        "occurrenceSpans": [
+          {
+            "start": 89,
+            "end": 100
+          }
+        ],
+        "occurrenceStatementIds": [
+          1
+        ]
+      }
     }
   ],
   "edges": [

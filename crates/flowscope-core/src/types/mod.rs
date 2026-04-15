@@ -37,7 +37,7 @@ pub use response::{
     AggregationInfo, AnalyzeResult, CanonicalName, ConstraintType, Edge, EdgeType,
     FilterClauseType, FilterPredicate, JoinType, Node, NodeType, ResolutionSource,
     ResolvedColumnSchema, ResolvedSchemaMetadata, ResolvedSchemaTable, SchemaOrigin, StatementMeta,
-    StatementSplitResult, TableConstraintInfo,
+    StatementSplitResult, TableConstraintInfo, STATEMENT_FILTERS_METADATA_KEY,
 };
 // Crate-internal intermediate used during analysis; not exposed to API consumers.
 pub(crate) use response::StatementLineage;

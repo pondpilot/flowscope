@@ -3,8 +3,9 @@ import { ArrowRight, Columns3 } from 'lucide-react';
 import { useLineage } from '../store';
 import type { ColumnPanelProps } from '../types';
 import type { Node, Edge } from '@pondpilot/flowscope-core';
-import { isTableLikeType } from '@pondpilot/flowscope-core';
+import { isTableLikeType, nodesInStatement, edgesInStatement } from '@pondpilot/flowscope-core';
 import { COLORS } from '../constants';
+import { scopeNodeToStatement } from '../utils/nodeOccurrences';
 
 interface ColumnInfo {
   node: Node;
@@ -52,12 +53,14 @@ export function ColumnPanel({ className }: ColumnPanelProps): JSX.Element {
 
   const statementNodes = useMemo(() => {
     if (!result || !statement) return [] as Node[];
-    return result.nodes.filter((n) => n.statementIds.includes(statement.statementIndex));
+    return nodesInStatement(result, statement.statementIndex).map((node) =>
+      scopeNodeToStatement(node, statement.statementIndex, statement.sourceName)
+    );
   }, [result, statement]);
 
   const statementEdges = useMemo(() => {
     if (!result || !statement) return [] as Edge[];
-    return result.edges.filter((e) => e.statementIds.includes(statement.statementIndex));
+    return edgesInStatement(result, statement.statementIndex);
   }, [result, statement]);
 
   const selectedNode = useMemo(() => {

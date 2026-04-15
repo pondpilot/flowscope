@@ -129,7 +129,21 @@ expression: clean_result
       },
       "statementIds": [
         0
-      ]
+      ],
+      "metadata": {
+        "occurrenceSourceNames": [
+          null
+        ],
+        "occurrenceSpans": [
+          {
+            "start": 458,
+            "end": 467
+          }
+        ],
+        "occurrenceStatementIds": [
+          0
+        ]
+      }
     },
     {
       "id": "table_7253befe2c400508",
@@ -141,7 +155,21 @@ expression: clean_result
       },
       "statementIds": [
         0
-      ]
+      ],
+      "metadata": {
+        "occurrenceSourceNames": [
+          null
+        ],
+        "occurrenceSpans": [
+          {
+            "start": 377,
+            "end": 385
+          }
+        ],
+        "occurrenceStatementIds": [
+          0
+        ]
+      }
     },
     {
       "id": "table_e500054d128e991c",
@@ -154,6 +182,28 @@ expression: clean_result
       "statementIds": [
         0
       ],
+      "metadata": {
+        "occurrenceSourceNames": [
+          null
+        ],
+        "occurrenceSpans": [
+          {
+            "start": 285,
+            "end": 294
+          }
+        ],
+        "occurrenceStatementIds": [
+          0
+        ],
+        "statementFilters": {
+          "0": [
+            {
+              "expression": "c.email = 'sample@example.com'",
+              "clauseType": "WHERE"
+            }
+          ]
+        }
+      },
       "filters": [
         {
           "expression": "c.email = 'sample@example.com'",
@@ -171,7 +221,21 @@ expression: clean_result
       },
       "statementIds": [
         0
-      ]
+      ],
+      "metadata": {
+        "occurrenceSourceNames": [
+          null
+        ],
+        "occurrenceSpans": [
+          {
+            "start": 247,
+            "end": 253
+          }
+        ],
+        "occurrenceStatementIds": [
+          0
+        ]
+      }
     }
   ],
   "edges": [

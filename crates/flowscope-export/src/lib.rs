@@ -5,6 +5,20 @@
 //! Two export modes are available:
 //! - **Binary export** (`export_duckdb`): Creates a DuckDB database file (native only)
 //! - **SQL export** (`export_sql`): Generates DDL + INSERT statements (WASM-compatible)
+//!
+//! # Identifier quoting
+//!
+//! The SQL export emits node labels and qualified names as string literals
+//! bound through parameterized inserts (see `sql_backend`/`duckdb_backend`),
+//! so data values cannot cause SQL injection against the export database.
+//!
+//! However, DDL for the **schema of imported tables** (`tables_ddl`) is
+//! string-interpolated and does *not* apply full identifier quoting for
+//! arbitrary user-supplied names. The intended use is inspection/analysis of
+//! the exported `AnalyzeResult`, not replaying the DDL against a production
+//! database. Treat the generated SQL as read-only output; if you intend to
+//! execute it against a shared database, review/adjust identifier quoting
+//! for your target dialect first.
 
 mod csv;
 mod error;

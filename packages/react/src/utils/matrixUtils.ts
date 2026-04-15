@@ -11,6 +11,7 @@ import {
   JOIN_DEPENDENCY_EDGE_TYPE,
   buildColumnOwnershipMap,
 } from './lineageHelpers';
+import { getOccurrenceForStatement } from './nodeOccurrences';
 
 // ============================================================================
 // Types
@@ -22,6 +23,7 @@ export interface TableDependencyWithDetails {
   columnCount: number;
   columns: Array<{ source: string; target: string; expression?: string }>;
   spans: Span[];
+  locations: Array<{ span: Span; sourceName?: string; statementIndex: number }>;
 }
 
 export interface ScriptDependency {
@@ -99,11 +101,23 @@ export function extractTableDependenciesWithDetails(
                 columnCount: 0,
                 columns: [],
                 spans: [],
+                locations: [],
               });
             }
             const dep = depMap.get(depKey)!;
-            if (sourceNode.span) {
+            const occurrences = getOccurrenceForStatement(sourceNode, stmt.statementIndex);
+            if (occurrences.spans.length > 0) {
+              occurrences.spans.forEach((span, index) => {
+                dep.spans.push(span);
+                dep.locations.push({
+                  span,
+                  sourceName: occurrences.sourceNames[index] ?? undefined,
+                  statementIndex: stmt.statementIndex,
+                });
+              });
+            } else if (sourceNode.span) {
               dep.spans.push(sourceNode.span);
+              dep.locations.push({ span: sourceNode.span, statementIndex: stmt.statementIndex });
             }
           }
         }
@@ -126,6 +140,7 @@ export function extractTableDependenciesWithDetails(
                 columnCount: 0,
                 columns: [],
                 spans: [],
+                locations: [],
               });
             }
             const dep = depMap.get(depKey)!;

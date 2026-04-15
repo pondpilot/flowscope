@@ -52,7 +52,21 @@ expression: cleaned
       },
       "statementIds": [
         1
-      ]
+      ],
+      "metadata": {
+        "occurrenceSourceNames": [
+          "beta.sql"
+        ],
+        "occurrenceSpans": [
+          {
+            "start": 14,
+            "end": 24
+          }
+        ],
+        "occurrenceStatementIds": [
+          1
+        ]
+      }
     },
     {
       "id": "table_b1180f6188cee2e2",
@@ -64,7 +78,21 @@ expression: cleaned
       },
       "statementIds": [
         0
-      ]
+      ],
+      "metadata": {
+        "occurrenceSourceNames": [
+          "alpha.sql"
+        ],
+        "occurrenceSpans": [
+          {
+            "start": 14,
+            "end": 25
+          }
+        ],
+        "occurrenceStatementIds": [
+          0
+        ]
+      }
     }
   ],
   "edges": [

@@ -211,7 +211,39 @@ expression: clean_result
       },
       "statementIds": [
         0
-      ]
+      ],
+      "metadata": {
+        "bodySourceNames": [
+          null
+        ],
+        "bodySpans": [
+          {
+            "start": 30,
+            "end": 133
+          }
+        ],
+        "bodyStatementIds": [
+          0
+        ],
+        "occurrenceSourceNames": [
+          null,
+          null
+        ],
+        "occurrenceSpans": [
+          {
+            "start": 14,
+            "end": 26
+          },
+          {
+            "start": 319,
+            "end": 331
+          }
+        ],
+        "occurrenceStatementIds": [
+          0,
+          0
+        ]
+      }
     },
     {
       "id": "cte_79d8a8cdfb0a2a16",
@@ -224,6 +256,46 @@ expression: clean_result
       "statementIds": [
         0
       ],
+      "metadata": {
+        "bodySourceNames": [
+          null
+        ],
+        "bodySpans": [
+          {
+            "start": 158,
+            "end": 420
+          }
+        ],
+        "bodyStatementIds": [
+          0
+        ],
+        "occurrenceSourceNames": [
+          null,
+          null
+        ],
+        "occurrenceSpans": [
+          {
+            "start": 143,
+            "end": 154
+          },
+          {
+            "start": 443,
+            "end": 454
+          }
+        ],
+        "occurrenceStatementIds": [
+          0,
+          0
+        ],
+        "statementFilters": {
+          "0": [
+            {
+              "expression": "total_spend > 1000",
+              "clauseType": "WHERE"
+            }
+          ]
+        }
+      },
       "filters": [
         {
           "expression": "total_spend > 1000",
@@ -253,6 +325,28 @@ expression: clean_result
       "statementIds": [
         0
       ],
+      "metadata": {
+        "occurrenceSourceNames": [
+          null
+        ],
+        "occurrenceSpans": [
+          {
+            "start": 85,
+            "end": 90
+          }
+        ],
+        "occurrenceStatementIds": [
+          0
+        ],
+        "statementFilters": {
+          "0": [
+            {
+              "expression": "active = true",
+              "clauseType": "WHERE"
+            }
+          ]
+        }
+      },
       "filters": [
         {
           "expression": "active = true",
@@ -270,7 +364,21 @@ expression: clean_result
       },
       "statementIds": [
         0
-      ]
+      ],
+      "metadata": {
+        "occurrenceSourceNames": [
+          null
+        ],
+        "occurrenceSpans": [
+          {
+            "start": 356,
+            "end": 362
+          }
+        ],
+        "occurrenceStatementIds": [
+          0
+        ]
+      }
     }
   ],
   "edges": [

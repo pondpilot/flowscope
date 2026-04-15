@@ -55,12 +55,14 @@ export interface Node {
   statementIds: number[];
   expression?: string;
   span?: Span;
+  nameSpans?: Span[];
+  bodySpan?: Span;
   filters?: FilterPredicate[];
   aggregation?: AggregationInfo;
   metadata?: Record<string, unknown>;
 }
 
-export type NodeType = 'table' | 'view' | 'cte' | 'column';
+export type NodeType = 'table' | 'view' | 'cte' | 'output' | 'column';
 
 export interface FilterPredicate {
   expression: string;
@@ -88,7 +90,12 @@ export interface Edge {
   statementIds: number[];
 }
 
-export type EdgeType = 'ownership' | 'data_flow' | 'derivation' | 'cross_statement';
+export type EdgeType =
+  | 'ownership'
+  | 'data_flow'
+  | 'derivation'
+  | 'join_dependency'
+  | 'cross_statement';
 
 export type JoinType =
   | 'INNER'
@@ -140,4 +147,22 @@ export interface IssueCount {
   errors: number;
   warnings: number;
   infos: number;
+}
+
+/**
+ * Return the nodes from an `AnalyzeResult` that participate in the given
+ * statement index. Uses the flat `result.nodes` collection; matching is
+ * by `statementIds.includes(statementIndex)`.
+ */
+export function nodesInStatement(result: AnalyzeResult, statementIndex: number): Node[] {
+  return result.nodes.filter((n) => n.statementIds.includes(statementIndex));
+}
+
+/**
+ * Return the edges from an `AnalyzeResult` that participate in the given
+ * statement index. Uses the flat `result.edges` collection; matching is
+ * by `statementIds.includes(statementIndex)`.
+ */
+export function edgesInStatement(result: AnalyzeResult, statementIndex: number): Edge[] {
+  return result.edges.filter((e) => e.statementIds.includes(statementIndex));
 }

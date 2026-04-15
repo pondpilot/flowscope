@@ -1751,8 +1751,14 @@ fn shared_nodes_preserve_filters_per_statement_in_metadata() {
 
     assert_eq!(first_filters.len(), 1);
     assert_eq!(second_filters.len(), 1);
-    assert!(first_filters[0]["expression"].as_str().unwrap().contains("active"));
-    assert!(second_filters[0]["expression"].as_str().unwrap().contains("deleted"));
+    assert!(first_filters[0]["expression"]
+        .as_str()
+        .unwrap()
+        .contains("active"));
+    assert!(second_filters[0]["expression"]
+        .as_str()
+        .unwrap()
+        .contains("deleted"));
 }
 
 #[test]

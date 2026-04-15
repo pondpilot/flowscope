@@ -91,6 +91,20 @@ expression: cleaned
       "statementIds": [
         0
       ],
+      "metadata": {
+        "occurrenceSourceNames": [
+          null
+        ],
+        "occurrenceSpans": [
+          {
+            "start": 33,
+            "end": 38
+          }
+        ],
+        "occurrenceStatementIds": [
+          0
+        ]
+      },
       "resolutionSource": "imported"
     }
   ],

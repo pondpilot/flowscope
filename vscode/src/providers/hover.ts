@@ -1,7 +1,14 @@
 import * as vscode from 'vscode';
 import { analyzeSql, isWasmInitialized } from '../analysis';
 import { getFiltersForStatement, scopeNodesToStatement } from '../statementScopedLineage';
-import type { AnalyzeResult, Dialect, Edge, Node, StatementMeta } from '../types';
+import {
+  edgesInStatement,
+  type AnalyzeResult,
+  type Dialect,
+  type Edge,
+  type Node,
+  type StatementMeta,
+} from '../types';
 
 /**
  * Provides hover information showing table details, join types, and filters.
@@ -65,7 +72,7 @@ export class FlowScopeHoverProvider implements vscode.HoverProvider {
       }
 
       const stmtNodes = scopeNodesToStatement(result, stmt.statementIndex);
-      const stmtEdges = result.edges.filter((e) => e.statementIds.includes(stmt.statementIndex));
+      const stmtEdges = edgesInStatement(result, stmt.statementIndex);
 
       // Find matching table/view/CTE node
       const matchingNode = stmtNodes.find((node) => {

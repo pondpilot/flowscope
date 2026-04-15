@@ -294,6 +294,7 @@ describe('mergeAnalyzeResult', () => {
       { start: 5, end: 10 },
       { start: 20, end: 25 },
     ]);
+    expect(mergedNode?.metadata?.occurrenceSourceNames).toEqual(['models/a.sql', 'models/b.sql']);
   });
 });
 
