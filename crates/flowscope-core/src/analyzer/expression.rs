@@ -205,10 +205,18 @@ impl<'a, 'b> ExpressionAnalyzer<'a, 'b> {
 
         match expr {
             Expr::Identifier(ident) => {
-                refs.push(ColumnRef {
-                    table: None,
-                    column: ident.value.clone(),
-                });
+                // Skip dialect pseudocolumns (e.g. Oracle SYSDATE, ROWNUM) — they are
+                // not real column references and should not enter resolution.
+                let dominated = {
+                    let pcs = dialect.pseudocolumns();
+                    !pcs.is_empty() && pcs.iter().any(|&p| p.eq_ignore_ascii_case(&ident.value))
+                };
+                if !dominated {
+                    refs.push(ColumnRef {
+                        table: None,
+                        column: ident.value.clone(),
+                    });
+                }
             }
             Expr::CompoundIdentifier(parts) => {
                 if parts.len() >= 2 {

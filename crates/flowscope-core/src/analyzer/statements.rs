@@ -8,8 +8,8 @@ use super::complexity;
 use super::context::StatementContext;
 use super::expression::ExpressionAnalyzer;
 use super::helpers::{
-    classify_query_type, extract_simple_name, generate_edge_id, generate_node_id,
-    split_qualified_identifiers,
+    classify_query_type, extract_simple_name, generate_column_node_id, generate_edge_id,
+    generate_node_id, split_qualified_identifiers,
 };
 use super::visitor::{LineageVisitor, Visitor};
 use super::Analyzer;
@@ -18,9 +18,9 @@ use crate::types::{
     issue_codes, Edge, EdgeType, Issue, JoinType, Node, NodeType, Span, StatementLineage,
 };
 use sqlparser::ast::{
-    self, AlterTableOperation, Assignment, CopyIntoSnowflakeKind, CopySource, CopyTarget, Expr,
-    FromTable, MergeAction, MergeClause, MergeInsertKind, ObjectName, RenameTableNameKind,
-    Statement, TableFactor, TableWithJoins, UpdateTableFromKind,
+    self, AlterTableOperation, Assignment, AssignmentTarget, CopyIntoSnowflakeKind, CopySource,
+    CopyTarget, Expr, FromTable, MergeAction, MergeClause, MergeInsertKind, ObjectName,
+    RenameTableNameKind, Statement, TableFactor, TableWithJoins, UpdateTableFromKind,
 };
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
@@ -100,6 +100,7 @@ impl<'a> Analyzer<'a> {
                     &mut ctx,
                     &create_view.name,
                     &create_view.query,
+                    &create_view.columns,
                     create_view.temporary,
                 );
                 "CREATE_VIEW".to_string()
@@ -436,9 +437,10 @@ impl<'a> Analyzer<'a> {
         self.tracker
             .record_produced(&canonical, ctx.statement_index);
 
-        // Analyze source - check the body of the insert
+        // Analyze source — use analyze_query (not analyze_query_body) so that
+        // INSERT … WITH cte AS (…) SELECT … has its CTEs properly recognised.
         if let Some(ref source_body) = insert.source {
-            self.analyze_query_body(ctx, &source_body.body, Some(&target_id));
+            self.analyze_query(ctx, source_body, Some(&target_id));
         }
     }
 
@@ -483,9 +485,17 @@ impl<'a> Analyzer<'a> {
             }
         }
 
-        // 3. Analyze assignments (SET clause)
+        // 3a. Create column nodes for SET target columns
+        for assignment in assignments {
+            if let Some(col_name) = self.extract_assignment_target_name(assignment) {
+                Self::add_target_column_node(ctx, target_node_id.as_deref(), &col_name);
+            }
+        }
+
+        // 3b. Analyze assignment values and validate column references
         let mut expr_analyzer = ExpressionAnalyzer::new(self, ctx);
         for assignment in assignments {
+            Self::analyze_assignment_targets(&mut expr_analyzer, assignment);
             expr_analyzer.analyze(&assignment.value);
         }
 
@@ -612,43 +622,148 @@ impl<'a> Analyzer<'a> {
         visitor.set_target_node(LineageVisitor::target_from_arc(target_id.as_ref()));
         visitor.visit_table_factor(source);
 
-        // 3. Analyze ON predicate
-        let mut expr_analyzer = ExpressionAnalyzer::new(self, ctx);
-        expr_analyzer.analyze(on);
-
-        // 4. Analyze MERGE clauses
+        // 3a. Create column nodes for SET/INSERT target columns
         for clause in clauses {
             match &clause.action {
                 MergeAction::Update(update_expr) => {
                     for assignment in &update_expr.assignments {
+                        if let Some(col_name) = self.extract_assignment_target_name(assignment) {
+                            Self::add_target_column_node(ctx, target_id.as_deref(), &col_name);
+                        }
+                    }
+                }
+                MergeAction::Insert(insert_expr) => {
+                    for col in &insert_expr.columns {
+                        if let Some(ident) = col.0.iter().filter_map(|p| p.as_ident()).last() {
+                            let col_name = self.normalize_identifier(&ident.value);
+                            Self::add_target_column_node(ctx, target_id.as_deref(), &col_name);
+                        }
+                    }
+                }
+                MergeAction::Delete { .. } => {}
+            }
+        }
+
+        // 3b. Analyze ON predicate
+        let mut expr_analyzer = ExpressionAnalyzer::new(self, ctx);
+        expr_analyzer.analyze(on);
+
+        // 4. Analyze MERGE clauses (expression analysis for column references and values)
+        for clause in clauses {
+            match &clause.action {
+                MergeAction::Update(update_expr) => {
+                    for assignment in &update_expr.assignments {
+                        Self::analyze_assignment_targets(&mut expr_analyzer, assignment);
                         expr_analyzer.analyze(&assignment.value);
                     }
                 }
                 MergeAction::Insert(insert_expr) => {
-                    // Analyze INSERT clause
+                    for col in &insert_expr.columns {
+                        Self::analyze_object_name_as_column(&mut expr_analyzer, col);
+                    }
                     match &insert_expr.kind {
                         MergeInsertKind::Values(values) => {
-                            // VALUES clause with rows
                             for row in &values.rows {
                                 for value in row {
                                     expr_analyzer.analyze(value);
                                 }
                             }
                         }
-                        MergeInsertKind::Row => {
-                            // ROW keyword - no explicit values to analyze here
-                        }
+                        MergeInsertKind::Row => {}
                     }
                 }
-                MergeAction::Delete { .. } => {
-                    // DELETE has no additional expressions
-                }
+                MergeAction::Delete { .. } => {}
             }
 
-            // Analyze the predicate for this clause (WHEN MATCHED ... AND <predicate>)
             if let Some(ref predicate) = clause.predicate {
                 expr_analyzer.analyze(predicate);
             }
+        }
+    }
+
+    /// Analyze the left-hand side of an assignment (SET target = value).
+    /// Registers target column references in the lineage graph.
+    fn analyze_assignment_targets(
+        expr_analyzer: &mut ExpressionAnalyzer<'_, '_>,
+        assignment: &Assignment,
+    ) {
+        let names = match &assignment.target {
+            AssignmentTarget::ColumnName(name) => vec![name],
+            AssignmentTarget::Tuple(names) => names.iter().collect(),
+        };
+        for name in names {
+            Self::analyze_object_name_as_column(expr_analyzer, name);
+        }
+    }
+
+    /// Create a Column node for a target column and an Ownership edge from the
+    /// parent table node.  Used by UPDATE SET and MERGE SET/INSERT to register
+    /// target-side column nodes in the lineage graph.
+    fn add_target_column_node(ctx: &mut StatementContext, target_id: Option<&str>, col_name: &str) {
+        let parent = target_id;
+        let col_node_id = generate_column_node_id(parent, col_name);
+        ctx.add_node(Node {
+            id: col_node_id.clone(),
+            node_type: NodeType::Column,
+            label: col_name.into(),
+            qualified_name: None,
+            expression: None,
+            span: None,
+            name_spans: Vec::new(),
+            body_span: None,
+            metadata: None,
+            resolution_source: None,
+            filters: Vec::new(),
+            aggregation: None,
+        });
+        if let Some(tid) = target_id {
+            let edge_id = generate_edge_id(tid, &col_node_id);
+            if !ctx.edge_ids.contains(&edge_id) {
+                ctx.add_edge(Edge {
+                    id: edge_id,
+                    from: tid.into(),
+                    to: col_node_id,
+                    edge_type: EdgeType::Ownership,
+                    expression: None,
+                    operation: None,
+                    join_type: None,
+                    join_condition: None,
+                    metadata: None,
+                    approximate: None,
+                });
+            }
+        }
+    }
+
+    /// Extract the normalized column name from an assignment target.
+    /// For `SET code = ...` returns "CODE" (Oracle) or "code" (Generic).
+    /// For `SET t.code = ...` returns "CODE"/"code" (the last identifier).
+    fn extract_assignment_target_name(&self, assignment: &Assignment) -> Option<String> {
+        let name = match &assignment.target {
+            AssignmentTarget::ColumnName(name) => name,
+            AssignmentTarget::Tuple(_) => return None,
+        };
+        name.0
+            .last()
+            .and_then(|p| p.as_ident())
+            .map(|ident| self.normalize_identifier(&ident.value))
+    }
+
+    /// Convert an `ObjectName` (e.g., a column reference like `t.col`) into
+    /// an expression and analyze it, registering the column in the lineage graph.
+    fn analyze_object_name_as_column(
+        expr_analyzer: &mut ExpressionAnalyzer<'_, '_>,
+        name: &ObjectName,
+    ) {
+        let idents: Vec<_> = name
+            .0
+            .iter()
+            .filter_map(|p| p.as_ident().cloned())
+            .collect();
+        match idents.len() {
+            0 => {}
+            1 => expr_analyzer.analyze(&Expr::Identifier(idents.into_iter().next().unwrap())),
+            _ => expr_analyzer.analyze(&Expr::CompoundIdentifier(idents)),
         }
     }
 

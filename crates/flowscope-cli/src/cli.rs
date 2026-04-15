@@ -198,6 +198,8 @@ pub enum OutputFormat {
     Xlsx,
     /// DuckDB database file
     Duckdb,
+    /// Dali (sql-parser-service) compatible JSON
+    Dali,
 }
 
 fn parse_positive_usize(value: &str) -> Result<usize, String> {

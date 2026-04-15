@@ -1,5 +1,6 @@
 ---
 source: crates/flowscope-core/tests/snapshots.rs
+assertion_line: 27
 expression: clean_result
 ---
 {
@@ -8,6 +9,16 @@ expression: clean_result
       "statementIndex": 0,
       "statementType": "UPDATE",
       "nodes": [
+        {
+          "id": "column_11fa415539b7dba5",
+          "type": "column",
+          "label": "updated_at"
+        },
+        {
+          "id": "column_74c341704cf4e26f",
+          "type": "column",
+          "label": "status"
+        },
         {
           "id": "table_e500054d128e991c",
           "type": "table",
@@ -39,6 +50,18 @@ expression: clean_result
           "from": "table_e500054d128e991c",
           "to": "table_eaa6ebb8f158751f",
           "type": "data_flow"
+        },
+        {
+          "id": "edge_b508dc70429346a4",
+          "from": "table_eaa6ebb8f158751f",
+          "to": "column_74c341704cf4e26f",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_f14f4de07f83be24",
+          "from": "table_eaa6ebb8f158751f",
+          "to": "column_11fa415539b7dba5",
+          "type": "ownership"
         }
       ],
       "joinCount": 0,
@@ -47,6 +70,34 @@ expression: clean_result
   ],
   "globalLineage": {
     "nodes": [
+      {
+        "id": "column_11fa415539b7dba5",
+        "type": "column",
+        "label": "updated_at",
+        "canonicalName": {
+          "name": "updated_at"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_11fa415539b7dba5"
+          }
+        ]
+      },
+      {
+        "id": "column_74c341704cf4e26f",
+        "type": "column",
+        "label": "status",
+        "canonicalName": {
+          "name": "status"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_74c341704cf4e26f"
+          }
+        ]
+      },
       {
         "id": "table_e500054d128e991c",
         "type": "table",
@@ -85,6 +136,24 @@ expression: clean_result
         "producerStatement": {
           "statementIndex": 0
         }
+      },
+      {
+        "id": "edge_b508dc70429346a4",
+        "from": "table_eaa6ebb8f158751f",
+        "to": "column_74c341704cf4e26f",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_f14f4de07f83be24",
+        "from": "table_eaa6ebb8f158751f",
+        "to": "column_11fa415539b7dba5",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
       }
     ]
   },
@@ -92,7 +161,7 @@ expression: clean_result
   "summary": {
     "statementCount": 1,
     "tableCount": 2,
-    "columnCount": 0,
+    "columnCount": 2,
     "joinCount": 0,
     "complexityScore": 10,
     "issueCount": {

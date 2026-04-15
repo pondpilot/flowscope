@@ -1,0 +1,328 @@
+{
+  "defaultCatalog": null,
+  "defaultSchema": null,
+  "caseSensitivity": "upper",
+  "allowImplied": true,
+  "tables": [
+    {
+      "schema": "IDM",
+      "name": "REG_SUBJECT",
+      "columns": [
+        { "name": "ID_SUBJECT" },
+        { "name": "ID_SUBJECTTYPE" },
+        { "name": "CODE" },
+        { "name": "NAME" }
+      ]
+    },
+    {
+      "schema": "IDM",
+      "name": "REG_SUBJECTTYPE",
+      "columns": [
+        { "name": "ID_SUBJECTTYPE" },
+        { "name": "IS_ACTIVE" },
+        { "name": "NAME" }
+      ]
+    },
+    {
+      "schema": "IDM",
+      "name": "REG_SUBJECT_INFO",
+      "columns": [
+        { "name": "ID_SUBJECT" },
+        { "name": "ID_SUBJECTTYPE" }
+      ]
+    },
+    {
+      "schema": "IDM",
+      "name": "SUBJECT",
+      "columns": [
+        { "name": "ID" },
+        { "name": "ID_SUBJECTTYPE" },
+        { "name": "NAME" }
+      ]
+    },
+    {
+      "schema": "CORE",
+      "name": "REG_SUBJECT",
+      "columns": [
+        { "name": "ID_SUBJECT" },
+        { "name": "ID_SUBJECTTYPE" },
+        { "name": "CODE" },
+        { "name": "IS_ACTIVE" }
+      ]
+    },
+    {
+      "schema": "BMRT_META",
+      "name": "REG_DEAL",
+      "columns": [
+        { "name": "ID" },
+        { "name": "ID_DEAL" },
+        { "name": "DEAL_NUMB" }
+      ]
+    },
+    {
+      "schema": "BMRT",
+      "name": "REG_DEAL",
+      "columns": [
+        { "name": "ID_DEAL" },
+        { "name": "DEAL_NUMB" }
+      ]
+    },
+    {
+      "schema": "BMRT",
+      "name": "DEAL",
+      "columns": [
+        { "name": "ID" },
+        { "name": "DT_FROM" }
+      ]
+    },
+    {
+      "schema": "STG",
+      "name": "BILLING_SYSTEM",
+      "columns": [
+        { "name": "TXN_ID" },
+        { "name": "AMOUNT" },
+        { "name": "TXN_DATE" }
+      ]
+    },
+    {
+      "schema": "STG",
+      "name": "CRM_SYSTEM",
+      "columns": [
+        { "name": "TXN_ID" },
+        { "name": "AMOUNT" },
+        { "name": "TXN_DATE" }
+      ]
+    },
+    {
+      "schema": "DQ",
+      "name": "MISSING_TRANSACTIONS",
+      "columns": [
+        { "name": "TXN_ID" },
+        { "name": "AMOUNT" },
+        { "name": "TXN_DATE" }
+      ]
+    },
+    {
+      "schema": "SALES",
+      "name": "TRANSACTIONS",
+      "columns": [
+        { "name": "DATE_ID" },
+        { "name": "AMOUNT" },
+        { "name": "MONTH_NAME" }
+      ]
+    },
+    {
+      "schema": "DIMS",
+      "name": "CALENDAR",
+      "columns": [
+        { "name": "DATE_ID" },
+        { "name": "MONTH_NAME" }
+      ]
+    },
+    {
+      "schema": "SALES",
+      "name": "CUSTOMERS",
+      "columns": [
+        { "name": "CUSTOMER_ID" },
+        { "name": "CUSTOMER_NAME" }
+      ]
+    },
+    {
+      "schema": "SALES",
+      "name": "ORDERS",
+      "columns": [
+        { "name": "CUSTOMER_ID" },
+        { "name": "AMOUNT" },
+        { "name": "ORDER_ID" }
+      ]
+    },
+    {
+      "schema": "HR",
+      "name": "EMPLOYEES",
+      "columns": [
+        { "name": "EMP_ID" },
+        { "name": "SALARY" },
+        { "name": "DEPARTMENT_ID" },
+        { "name": "DEPT_ID" },
+        { "name": "FIRST_NAME" },
+        { "name": "LAST_NAME" }
+      ]
+    },
+    {
+      "schema": "HR",
+      "name": "DEPARTMENTS",
+      "columns": [
+        { "name": "DEPT_ID" },
+        { "name": "DEPARTMENT_ID" },
+        { "name": "DEPARTMENT_NAME" },
+        { "name": "LOCATION_ID" }
+      ]
+    },
+    {
+      "schema": "HR",
+      "name": "LOCATIONS",
+      "columns": [
+        { "name": "LOCATION_ID" },
+        { "name": "CITY" },
+        { "name": "STATE_PROVINCE" }
+      ]
+    },
+    {
+      "schema": "HR",
+      "name": "JOBS",
+      "columns": [
+        { "name": "JOB_ID" },
+        { "name": "JOB_TITLE" },
+        { "name": "MIN_SALARY" },
+        { "name": "MAX_SALARY" }
+      ]
+    },
+    {
+      "schema": "STG",
+      "name": "EMP_UPDATES",
+      "columns": [
+        { "name": "EMP_ID" },
+        { "name": "NEW_DEPT_ID" },
+        { "name": "NEW_JOB_ID" },
+        { "name": "BASE_SALARY" }
+      ]
+    },
+    {
+      "schema": "PAY",
+      "name": "BONUSES",
+      "columns": [
+        { "name": "EMP_ID" },
+        { "name": "BONUS_AMOUNT" },
+        { "name": "TYPE_ID" }
+      ]
+    },
+    {
+      "schema": "PAY",
+      "name": "BONUS_TYPES",
+      "columns": [
+        { "name": "TYPE_ID" },
+        { "name": "MULTIPLIER" },
+        { "name": "TYPE_NAME" }
+      ]
+    },
+    {
+      "schema": "DM",
+      "name": "EMPLOYEE_DIM",
+      "columns": [
+        { "name": "EMP_KEY" },
+        { "name": "DEPT_NAME" },
+        { "name": "JOB_TITLE" },
+        { "name": "CURRENT_SALARY" }
+      ]
+    },
+    {
+      "schema": "IDM",
+      "name": "REG_DEAL",
+      "columns": [
+        { "name": "ID_DEAL" },
+        { "name": "DEAL_NUMB" }
+      ]
+    },
+    {
+      "schema": "UPL",
+      "name": "DEAL",
+      "columns": [
+        { "name": "ID" },
+        { "name": "DEAL_NUMB" }
+      ]
+    },
+    {
+      "schema": "PUBLIC",
+      "name": "USERS",
+      "columns": [
+        { "name": "LOG_ID" },
+        { "name": "USERNAME" },
+        { "name": "EVENT_TIMESTAMP" },
+        { "name": "IS_DELETED" }
+      ]
+    },
+    {
+      "schema": "ARCHIVE",
+      "name": "USER_LOGS",
+      "columns": [
+        { "name": "LOG_SEQ" },
+        { "name": "USERNAME_UPPER" },
+        { "name": "EVENT_TS" }
+      ]
+    },
+    {
+      "schema": "TARGET_SCHEMA",
+      "name": "TARGET_TABLE",
+      "columns": [
+        { "name": "ID" },
+        { "name": "NAME" },
+        { "name": "DT" }
+      ]
+    },
+    {
+      "schema": "SOURCE_SCHEMA",
+      "name": "SOURCE_TABLE",
+      "columns": [
+        { "name": "ID" },
+        { "name": "NAME" },
+        { "name": "CREATED_DT" },
+        { "name": "STATUS" }
+      ]
+    },
+    {
+      "schema": "TRG",
+      "name": "TBL",
+      "columns": [
+        { "name": "EMPLOYEE_ID" },
+        { "name": "NAME" },
+        { "name": "AGE" },
+        { "name": "DATE" }
+      ]
+    },
+    {
+      "schema": "CORE",
+      "name": "EMPLOYEES",
+      "columns": [
+        { "name": "NAME" },
+        { "name": "AGE" },
+        { "name": "EMPLOYEE_ID" }
+      ]
+    },
+    {
+      "schema": "IDM",
+      "name": "EMPLOYEES_ALL",
+      "columns": [
+        { "name": "NAME1" },
+        { "name": "AGE1" },
+        { "name": "EMPLOYEE_ID1" }
+      ]
+    },
+    {
+      "name": "EMPLOYEES",
+      "columns": [
+        { "name": "EMPLOYEE_ID" },
+        { "name": "FIRST_NAME" },
+        { "name": "SALARY" },
+        { "name": "DEPARTMENT_ID" },
+        { "name": "HIRE_DATE" }
+      ]
+    },
+    {
+      "name": "EMPLOYEES1",
+      "columns": [
+        { "name": "EMPLOYEE_ID" },
+        { "name": "SALARY" },
+        { "name": "DEPARTMENT_ID" },
+        { "name": "HIRE_DATE" }
+      ]
+    },
+    {
+      "name": "TEST_VIEW_EXPLICIT",
+      "columns": [
+        { "name": "ID_SUBJECT" },
+        { "name": "CODE" },
+        { "name": "ID_SUBJECTTYPE" }
+      ]
+    }
+  ]
+}

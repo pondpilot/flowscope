@@ -15,7 +15,7 @@ use crate::types::{
     ResolutionSource, SchemaOrigin,
 };
 use serde_json::json;
-use sqlparser::ast::{self, Query, SetExpr};
+use sqlparser::ast::{self, Query};
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
@@ -57,16 +57,6 @@ impl<'a> Analyzer<'a> {
     ) {
         let mut visitor = LineageVisitor::new(self, ctx, target_node.map(|s| s.to_string()));
         visitor.visit_query(query);
-    }
-
-    pub(super) fn analyze_query_body(
-        &mut self,
-        ctx: &mut StatementContext,
-        body: &SetExpr,
-        target_node: Option<&str>,
-    ) {
-        let mut visitor = LineageVisitor::new(self, ctx, target_node.map(|s| s.to_string()));
-        visitor.visit_set_expr(body);
     }
 
     // --- Shared Methods used by SelectAnalyzer, ExpressionAnalyzer, and Statements ---
@@ -284,6 +274,16 @@ impl<'a> Analyzer<'a> {
     ) -> Option<(String, Arc<str>)> {
         let resolution = self.canonicalize_table_reference(table_name);
         let canonical = resolution.canonical.clone();
+
+        // Skip dialect pseudo-tables (e.g., Oracle DUAL) — they should not
+        // appear in lineage output, similar to how pseudocolumns are skipped.
+        let pseudo_tables = self.request.dialect.pseudo_tables();
+        if pseudo_tables
+            .iter()
+            .any(|pt| pt.eq_ignore_ascii_case(&canonical))
+        {
+            return None;
+        }
 
         // Check if this canonical table already has a node in the current scope.
         // If so, this is a self-join and we need a separate instance node.

@@ -1,5 +1,6 @@
 ---
 source: crates/flowscope-core/tests/snapshots.rs
+assertion_line: 27
 expression: clean_result
 ---
 {
@@ -8,6 +9,16 @@ expression: clean_result
       "statementIndex": 0,
       "statementType": "MERGE",
       "nodes": [
+        {
+          "id": "column_9dc7d0c267c91e02",
+          "type": "column",
+          "label": "product_id"
+        },
+        {
+          "id": "column_f244fdf6189141ab",
+          "type": "column",
+          "label": "quantity"
+        },
         {
           "id": "table_6888b8ab68491bd0",
           "type": "table",
@@ -35,6 +46,18 @@ expression: clean_result
       ],
       "edges": [
         {
+          "id": "edge_311d04bd31a6ad3e",
+          "from": "table_bc8c5d67293581e9",
+          "to": "column_f244fdf6189141ab",
+          "type": "ownership"
+        },
+        {
+          "id": "edge_9bcbe5f5ec13b708",
+          "from": "table_bc8c5d67293581e9",
+          "to": "column_9dc7d0c267c91e02",
+          "type": "ownership"
+        },
+        {
           "id": "edge_ff51b4993f7e0196",
           "from": "table_6888b8ab68491bd0",
           "to": "table_bc8c5d67293581e9",
@@ -47,6 +70,34 @@ expression: clean_result
   ],
   "globalLineage": {
     "nodes": [
+      {
+        "id": "column_9dc7d0c267c91e02",
+        "type": "column",
+        "label": "product_id",
+        "canonicalName": {
+          "name": "product_id"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_9dc7d0c267c91e02"
+          }
+        ]
+      },
+      {
+        "id": "column_f244fdf6189141ab",
+        "type": "column",
+        "label": "quantity",
+        "canonicalName": {
+          "name": "quantity"
+        },
+        "statementRefs": [
+          {
+            "statementIndex": 0,
+            "nodeId": "column_f244fdf6189141ab"
+          }
+        ]
+      },
       {
         "id": "table_6888b8ab68491bd0",
         "type": "table",
@@ -78,6 +129,24 @@ expression: clean_result
     ],
     "edges": [
       {
+        "id": "edge_311d04bd31a6ad3e",
+        "from": "table_bc8c5d67293581e9",
+        "to": "column_f244fdf6189141ab",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
+        "id": "edge_9bcbe5f5ec13b708",
+        "from": "table_bc8c5d67293581e9",
+        "to": "column_9dc7d0c267c91e02",
+        "type": "ownership",
+        "producerStatement": {
+          "statementIndex": 0
+        }
+      },
+      {
         "id": "edge_ff51b4993f7e0196",
         "from": "table_6888b8ab68491bd0",
         "to": "table_bc8c5d67293581e9",
@@ -92,7 +161,7 @@ expression: clean_result
   "summary": {
     "statementCount": 1,
     "tableCount": 2,
-    "columnCount": 0,
+    "columnCount": 2,
     "joinCount": 0,
     "complexityScore": 10,
     "issueCount": {

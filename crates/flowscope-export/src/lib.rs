@@ -7,6 +7,7 @@
 //! - **SQL export** (`export_sql`): Generates DDL + INSERT statements (WASM-compatible)
 
 mod csv;
+pub mod dali_compat;
 mod error;
 mod extract;
 mod html;
