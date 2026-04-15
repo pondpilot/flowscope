@@ -120,6 +120,10 @@ export function useSearchSuggestions({
 
     // Index Nodes (Tables, Views, CTEs, Columns)
     result.nodes.forEach((node) => {
+      if (node.type === 'output') {
+        return;
+      }
+
       // Determine type
       let type: SearchableType;
       if (node.type === 'cte') {

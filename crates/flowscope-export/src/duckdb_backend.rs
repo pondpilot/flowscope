@@ -114,11 +114,12 @@ fn write_nodes(conn: &Connection, result: &AnalyzeResult) -> Result<(), ExportEr
         "INSERT INTO node_name_spans (id, node_id, span_start, span_end) VALUES (?, ?, ?, ?)",
     )?;
 
-    let mut filter_stmt = conn
-        .prepare("INSERT INTO filters (id, node_id, predicate, filter_type) VALUES (?, ?, ?, ?)")?;
+    let mut filter_stmt = conn.prepare(
+        "INSERT INTO filters (id, node_id, statement_id, predicate, filter_type) VALUES (?, ?, ?, ?, ?)",
+    )?;
 
     let mut agg_stmt = conn.prepare(
-        "INSERT INTO aggregations (node_id, is_grouping_key, function, is_distinct) VALUES (?, ?, ?, ?)",
+        "INSERT INTO aggregations (node_id, statement_id, is_grouping_key, function, is_distinct) VALUES (?, ?, ?, ?, ?)",
     )?;
 
     let mut filter_id: i64 = 0;
@@ -175,19 +176,28 @@ fn write_nodes(conn: &Connection, result: &AnalyzeResult) -> Result<(), ExportEr
             name_span_id += 1;
         }
 
-        for filter in &node.filters {
-            let ft = format!("{:?}", filter.clause_type).to_lowercase();
-            filter_stmt.execute(params![filter_id, node.id.as_ref(), &filter.expression, ft,])?;
-            filter_id += 1;
-        }
+        for stmt_id in &node.statement_ids {
+            for filter in node.filters_for_statement(*stmt_id) {
+                let ft = format!("{:?}", filter.clause_type).to_lowercase();
+                filter_stmt.execute(params![
+                    filter_id,
+                    node.id.as_ref(),
+                    *stmt_id as i64,
+                    &filter.expression,
+                    ft,
+                ])?;
+                filter_id += 1;
+            }
 
-        if let Some(agg) = &node.aggregation {
-            agg_stmt.execute(params![
-                node.id.as_ref(),
-                agg.is_grouping_key,
-                &agg.function,
-                agg.distinct,
-            ])?;
+            if let Some(agg) = node.aggregation_for_statement(*stmt_id) {
+                agg_stmt.execute(params![
+                    node.id.as_ref(),
+                    *stmt_id as i64,
+                    agg.is_grouping_key,
+                    &agg.function,
+                    agg.distinct,
+                ])?;
+            }
         }
     }
     Ok(())

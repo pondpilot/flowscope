@@ -88,21 +88,23 @@ CREATE TABLE {prefix}joins (
     join_condition TEXT
 );
 
--- Filter predicates on nodes. Filters are flat properties of the node
--- (deduplicated across statements at analysis time).
+-- Filter predicates on nodes, scoped to the statements where they apply.
 CREATE TABLE {prefix}filters (
     id INTEGER PRIMARY KEY,
     node_id TEXT NOT NULL REFERENCES {prefix}nodes(id),
+    statement_id INTEGER NOT NULL REFERENCES {prefix}statements(id),
     predicate TEXT NOT NULL,
     filter_type TEXT
 );
 
 -- Aggregation info on column nodes.
 CREATE TABLE {prefix}aggregations (
-    node_id TEXT PRIMARY KEY REFERENCES {prefix}nodes(id),
+    node_id TEXT NOT NULL REFERENCES {prefix}nodes(id),
+    statement_id INTEGER NOT NULL REFERENCES {prefix}statements(id),
     is_grouping_key BOOLEAN NOT NULL,
     function TEXT,
-    is_distinct BOOLEAN DEFAULT FALSE
+    is_distinct BOOLEAN DEFAULT FALSE,
+    PRIMARY KEY (node_id, statement_id)
 );
 
 -- Analysis issues
@@ -283,7 +285,7 @@ SELECT
 FROM {prefix}nodes n
 JOIN {prefix}node_statements ns ON ns.node_id = n.id
 LEFT JOIN {prefix}statements s ON ns.statement_id = s.id
-LEFT JOIN {prefix}aggregations a ON n.id = a.node_id;
+LEFT JOIN {prefix}aggregations a ON n.id = a.node_id AND ns.statement_id = a.statement_id;
 
 -- Denormalized edge details (one row per edge × statement participation)
 CREATE VIEW {prefix}edge_details AS
@@ -348,8 +350,7 @@ SELECT
     s.statement_index
 FROM {prefix}filters f
 JOIN {prefix}nodes n ON f.node_id = n.id
-JOIN {prefix}node_statements ns ON ns.node_id = n.id
-LEFT JOIN {prefix}statements s ON ns.statement_id = s.id;
+LEFT JOIN {prefix}statements s ON f.statement_id = s.id;
 
 -- ============================================================================
 -- METRICS VIEWS
@@ -484,7 +485,7 @@ JOIN {prefix}edge_statements es ON es.edge_id = e.id
 JOIN {prefix}statements s ON es.statement_id = s.id
 JOIN {prefix}nodes fn ON e.from_node_id = fn.id
 JOIN {prefix}nodes tn ON e.to_node_id = tn.id
-LEFT JOIN {prefix}aggregations a ON tn.id = a.node_id
+LEFT JOIN {prefix}aggregations a ON tn.id = a.node_id AND es.statement_id = a.statement_id
 WHERE e.expression IS NOT NULL
    OR a.function IS NOT NULL;
 

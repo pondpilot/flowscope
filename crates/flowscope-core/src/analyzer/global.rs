@@ -2,7 +2,8 @@ use super::helpers::{generate_node_id, parse_canonical_name};
 use super::Analyzer;
 use crate::types::{
     Edge, EdgeType, IssueCount, Node, NodeType, ResolvedColumnSchema, ResolvedSchemaMetadata,
-    ResolvedSchemaTable, Span, StatementMeta, Summary, STATEMENT_FILTERS_METADATA_KEY,
+    ResolvedSchemaTable, Span, StatementMeta, Summary, STATEMENT_AGGREGATIONS_METADATA_KEY,
+    STATEMENT_FILTERS_METADATA_KEY,
 };
 use serde_json::{Map as JsonMap, Value};
 use std::collections::hash_map::DefaultHasher;
@@ -219,6 +220,7 @@ impl<'a> Analyzer<'a> {
                         ..node
                     };
                     record_statement_filters(&mut initial, statement_index);
+                    record_statement_aggregation(&mut initial, statement_index);
                     record_occurrences(&mut initial, statement_index, source_name);
                     record_body_span(&mut initial, statement_index, source_name);
                     // name_spans / filters / resolution_source / aggregation
@@ -550,13 +552,15 @@ fn merge_node_into(
     statement_index: usize,
     source_name: Option<&str>,
 ) {
+    let incoming_aggregation = incoming.aggregation.clone();
+    record_statement_filters_from_slice(existing, statement_index, &incoming.filters);
+    record_statement_aggregation_from_option(existing, statement_index, incoming_aggregation);
+    record_occurrences_from_node(existing, &incoming, statement_index, source_name);
+    record_body_span_from_node(existing, &incoming, statement_index, source_name);
+
     if !existing.statement_ids.contains(&statement_index) {
         existing.statement_ids.push(statement_index);
     }
-
-    record_statement_filters_from_slice(existing, statement_index, &incoming.filters);
-    record_occurrences_from_node(existing, &incoming, statement_index, source_name);
-    record_body_span_from_node(existing, &incoming, statement_index, source_name);
 
     for span in incoming.name_spans {
         if !existing.name_spans.contains(&span) {
@@ -603,7 +607,15 @@ fn normalize_name_spans(node: &mut Node) {
 
 fn record_statement_filters(node: &mut Node, statement_index: usize) {
     let filters = node.filters.clone();
-    record_statement_filters_from_slice(node, statement_index, &filters);
+    if !filters.is_empty() {
+        record_statement_filters_from_slice(node, statement_index, &filters);
+    }
+}
+
+fn record_statement_aggregation(node: &mut Node, statement_index: usize) {
+    if node.aggregation.is_some() {
+        record_statement_aggregation_from_option(node, statement_index, node.aggregation.clone());
+    }
 }
 
 fn record_occurrences(node: &mut Node, statement_index: usize, source_name: Option<&str>) {
@@ -717,14 +729,105 @@ fn append_to_array(metadata: &mut HashMap<String, Value>, key: &str, value: Valu
     }
 }
 
+fn record_statement_aggregation_from_option(
+    node: &mut Node,
+    statement_index: usize,
+    aggregation: Option<crate::types::AggregationInfo>,
+) {
+    if aggregation.is_none()
+        && node.aggregation.is_none()
+        && !has_statement_aggregation_tracking(node)
+    {
+        return;
+    }
+
+    ensure_statement_aggregation_tracking(node);
+    insert_statement_aggregation(node, statement_index, aggregation);
+}
+
+fn has_statement_aggregation_tracking(node: &Node) -> bool {
+    node.metadata
+        .as_ref()
+        .and_then(|metadata| metadata.get(STATEMENT_AGGREGATIONS_METADATA_KEY))
+        .is_some_and(Value::is_object)
+}
+
+fn ensure_statement_aggregation_tracking(node: &mut Node) {
+    if has_statement_aggregation_tracking(node) {
+        return;
+    }
+
+    let existing_statements = node.statement_ids.clone();
+    let existing_aggregation = node.aggregation.clone();
+    for statement_id in existing_statements {
+        insert_statement_aggregation(node, statement_id, existing_aggregation.clone());
+    }
+}
+
+fn insert_statement_aggregation(
+    node: &mut Node,
+    statement_index: usize,
+    aggregation: Option<crate::types::AggregationInfo>,
+) {
+    let metadata = node.metadata.get_or_insert_with(HashMap::new);
+    let entry = metadata
+        .entry(STATEMENT_AGGREGATIONS_METADATA_KEY.to_string())
+        .or_insert_with(|| Value::Object(JsonMap::new()));
+
+    if !entry.is_object() {
+        *entry = Value::Object(JsonMap::new());
+    }
+
+    if let Value::Object(statement_aggregations) = entry {
+        let serialized = match aggregation {
+            Some(value) => {
+                serde_json::to_value(value).expect("AggregationInfo serialization is infallible")
+            }
+            None => Value::Null,
+        };
+        statement_aggregations.insert(statement_index.to_string(), serialized);
+    }
+}
+
 fn record_statement_filters_from_slice(
     node: &mut Node,
     statement_index: usize,
     filters: &[crate::types::FilterPredicate],
 ) {
-    if filters.is_empty() {
+    if filters.is_empty() && node.filters.is_empty() && !has_statement_filter_tracking(node) {
         return;
     }
+
+    ensure_statement_filter_tracking(node);
+    insert_statement_filters(node, statement_index, filters);
+}
+
+fn has_statement_filter_tracking(node: &Node) -> bool {
+    node.metadata
+        .as_ref()
+        .and_then(|metadata| metadata.get(STATEMENT_FILTERS_METADATA_KEY))
+        .is_some_and(Value::is_object)
+}
+
+fn ensure_statement_filter_tracking(node: &mut Node) {
+    if has_statement_filter_tracking(node) {
+        return;
+    }
+
+    let existing_statements = node.statement_ids.clone();
+    let existing_filters = node.filters.clone();
+    for statement_id in existing_statements {
+        insert_statement_filters(node, statement_id, &existing_filters);
+    }
+}
+
+fn insert_statement_filters(
+    node: &mut Node,
+    statement_index: usize,
+    filters: &[crate::types::FilterPredicate],
+) {
+    let serialized =
+        serde_json::to_value(filters).expect("FilterPredicate serialization is infallible");
 
     let metadata = node.metadata.get_or_insert_with(HashMap::new);
     let entry = metadata
@@ -736,12 +839,6 @@ fn record_statement_filters_from_slice(
     }
 
     if let Value::Object(statement_filters) = entry {
-        // `FilterPredicate` derives `Serialize` with no fallible paths, so this
-        // cannot fail at runtime. A panic here would indicate the type was
-        // changed in a way that introduces a custom `Serialize` impl — in that
-        // case, silently dropping filters would be a correctness regression.
-        let serialized =
-            serde_json::to_value(filters).expect("FilterPredicate serialization is infallible");
         statement_filters.insert(statement_index.to_string(), serialized);
     }
 }
@@ -779,7 +876,7 @@ fn calculate_global_complexity(
 mod tests {
     use super::*;
     use crate::types::StatementLineage;
-    use crate::{AnalyzeRequest, Dialect, EdgeType, JoinType};
+    use crate::{AggregationInfo, AnalyzeRequest, Dialect, EdgeType, JoinType};
 
     fn make_request() -> AnalyzeRequest {
         AnalyzeRequest {
@@ -958,5 +1055,149 @@ mod tests {
         assert_eq!(occurrence_source_names.len(), 2);
         assert_eq!(occurrence_source_names[0].as_str(), Some("models/a.sql"));
         assert_eq!(occurrence_source_names[1].as_str(), Some("models/b.sql"));
+    }
+
+    #[test]
+    fn flatten_records_statement_scoped_aggregation_metadata() {
+        let request = make_request();
+        let analyzer = Analyzer::new(&request);
+
+        let stmt_one = StatementLineage {
+            statement_index: 0,
+            statement_type: "SELECT".to_string(),
+            source_name: Some("models/counts.sql".to_string()),
+            nodes: vec![Node {
+                id: "col_stmt_0".into(),
+                node_type: NodeType::Column,
+                label: "c".into(),
+                qualified_name: Some("analytics.metrics.c".into()),
+                aggregation: Some(AggregationInfo {
+                    is_grouping_key: false,
+                    function: Some("COUNT".to_string()),
+                    distinct: None,
+                }),
+                span: Some(Span::new(7, 8)),
+                ..Default::default()
+            }],
+            edges: Vec::new(),
+            span: None,
+            join_count: 0,
+            complexity_score: 1,
+            resolved_sql: None,
+        };
+        let stmt_two = StatementLineage {
+            statement_index: 1,
+            statement_type: "SELECT".to_string(),
+            source_name: Some("models/read_counts.sql".to_string()),
+            nodes: vec![Node {
+                id: "col_stmt_1".into(),
+                node_type: NodeType::Column,
+                label: "c".into(),
+                qualified_name: Some("analytics.metrics.c".into()),
+                span: Some(Span::new(30, 31)),
+                ..Default::default()
+            }],
+            edges: Vec::new(),
+            span: None,
+            join_count: 0,
+            complexity_score: 1,
+            resolved_sql: None,
+        };
+
+        let (_statements, nodes, _edges) = analyzer.flatten_lineages(vec![stmt_one, stmt_two]);
+        let node = nodes
+            .iter()
+            .find(|node| node.qualified_name.as_deref() == Some("analytics.metrics.c"))
+            .expect("shared column node");
+
+        assert_eq!(node.statement_ids, vec![0, 1]);
+        assert_eq!(
+            node.aggregation_for_statement(0)
+                .and_then(|aggregation| aggregation.function),
+            Some("COUNT".to_string())
+        );
+        assert!(node.aggregation_for_statement(1).is_none());
+
+        let per_statement = node
+            .metadata
+            .as_ref()
+            .and_then(|metadata| metadata.get(STATEMENT_AGGREGATIONS_METADATA_KEY))
+            .and_then(|value| value.as_object())
+            .expect("statement aggregations metadata");
+        assert!(per_statement
+            .get("0")
+            .and_then(|value| value.as_object())
+            .is_some());
+        assert!(per_statement
+            .get("1")
+            .is_some_and(serde_json::Value::is_null));
+    }
+
+    #[test]
+    fn flatten_records_statement_scoped_empty_filters() {
+        let request = make_request();
+        let analyzer = Analyzer::new(&request);
+
+        let stmt_one = StatementLineage {
+            statement_index: 0,
+            statement_type: "SELECT".to_string(),
+            source_name: Some("models/filtered.sql".to_string()),
+            nodes: vec![Node {
+                id: generate_node_id("table", "public.users"),
+                node_type: NodeType::Table,
+                label: "users".into(),
+                qualified_name: Some("public.users".into()),
+                filters: vec![crate::FilterPredicate {
+                    expression: "active = true".to_string(),
+                    clause_type: crate::FilterClauseType::Where,
+                }],
+                ..Default::default()
+            }],
+            edges: Vec::new(),
+            span: None,
+            join_count: 0,
+            complexity_score: 1,
+            resolved_sql: None,
+        };
+        let stmt_two = StatementLineage {
+            statement_index: 1,
+            statement_type: "SELECT".to_string(),
+            source_name: Some("models/plain.sql".to_string()),
+            nodes: vec![Node {
+                id: generate_node_id("table", "public.users"),
+                node_type: NodeType::Table,
+                label: "users".into(),
+                qualified_name: Some("public.users".into()),
+                ..Default::default()
+            }],
+            edges: Vec::new(),
+            span: None,
+            join_count: 0,
+            complexity_score: 1,
+            resolved_sql: None,
+        };
+
+        let (_statements, nodes, _edges) = analyzer.flatten_lineages(vec![stmt_one, stmt_two]);
+        let node = nodes
+            .iter()
+            .find(|node| node.qualified_name.as_deref() == Some("public.users"))
+            .expect("shared table node");
+
+        assert_eq!(node.filters_for_statement(0).len(), 1);
+        assert!(node.filters_for_statement(1).is_empty());
+
+        let per_statement = node
+            .metadata
+            .as_ref()
+            .and_then(|metadata| metadata.get(STATEMENT_FILTERS_METADATA_KEY))
+            .and_then(|value| value.as_object())
+            .expect("statement filters metadata");
+        assert_eq!(
+            per_statement
+                .get("1")
+                .and_then(|value| value.as_array())
+                .map(std::vec::Vec::len),
+            Some(0)
+        );
     }
 }

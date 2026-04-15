@@ -6,6 +6,7 @@ const OCCURRENCE_SOURCE_NAMES_METADATA_KEY = 'occurrenceSourceNames';
 const BODY_SPANS_METADATA_KEY = 'bodySpans';
 const BODY_STATEMENT_IDS_METADATA_KEY = 'bodyStatementIds';
 const BODY_SOURCE_NAMES_METADATA_KEY = 'bodySourceNames';
+const STATEMENT_AGGREGATIONS_METADATA_KEY = 'statementAggregations';
 
 function isSpan(value: unknown): value is Span {
   return (
@@ -34,6 +35,19 @@ function readNumberArray(value: unknown): number[] {
     return [];
   }
   return value.filter((entry): entry is number => typeof entry === 'number');
+}
+
+function isAggregationInfo(value: unknown): value is NonNullable<Node['aggregation']> {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+
+  const candidate = value as Partial<NonNullable<Node['aggregation']>>;
+  return (
+    typeof candidate.isGroupingKey === 'boolean' &&
+    (candidate.function === undefined || typeof candidate.function === 'string') &&
+    (candidate.distinct === undefined || typeof candidate.distinct === 'boolean')
+  );
 }
 
 function getFallbackSourceName(node: Node, sourceName?: string): string | null {
@@ -182,7 +196,32 @@ export function getOccurrenceForStatement(
   };
 }
 
-export function scopeNodeToStatement(node: Node, statementIndex: number, sourceName?: string): Node {
+export function getAggregationForStatement(
+  node: Node,
+  statementIndex: number
+): Node['aggregation'] {
+  const perStatement = node.metadata?.[STATEMENT_AGGREGATIONS_METADATA_KEY];
+  if (perStatement && typeof perStatement === 'object' && !Array.isArray(perStatement)) {
+    const key = String(statementIndex);
+    if (Object.prototype.hasOwnProperty.call(perStatement, key)) {
+      const value = (perStatement as Record<string, unknown>)[key];
+      if (value === null) {
+        return undefined;
+      }
+      if (isAggregationInfo(value)) {
+        return value;
+      }
+    }
+  }
+
+  return node.aggregation;
+}
+
+export function scopeNodeToStatement(
+  node: Node,
+  statementIndex: number,
+  sourceName?: string
+): Node {
   const scopedFilters =
     typeof statementIndex === 'number'
       ? (() => {
@@ -210,7 +249,9 @@ export function scopeNodeToStatement(node: Node, statementIndex: number, sourceN
   const scopedBodySourceNames =
     bodyIndexes.length > 0
       ? bodyIndexes.map((index) => bodySourceNames[index] ?? null)
-      : bodySpans.length > 0 && node.statementIds.length === 1 && node.statementIds[0] === statementIndex
+      : bodySpans.length > 0 &&
+          node.statementIds.length === 1 &&
+          node.statementIds[0] === statementIndex
         ? bodySourceNames
         : [];
 
@@ -220,6 +261,7 @@ export function scopeNodeToStatement(node: Node, statementIndex: number, sourceN
     span: scopedOccurrences.spans[0] ?? node.span,
     nameSpans: scopedOccurrences.spans.length > 0 ? scopedOccurrences.spans : node.nameSpans,
     bodySpan: scopedBodySpans[0] ?? undefined,
+    aggregation: getAggregationForStatement(node, statementIndex),
     filters: scopedFilters,
     metadata: {
       ...(node.metadata || {}),

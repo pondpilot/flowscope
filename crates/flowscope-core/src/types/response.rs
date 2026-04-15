@@ -407,6 +407,31 @@ impl Node {
         }
         self.filters.clone()
     }
+
+    /// Return the aggregation metadata recorded for `statement_index`.
+    ///
+    /// When the flattened graph merges a node across statements, per-statement
+    /// `AggregationInfo` is preserved in
+    /// `metadata[STATEMENT_AGGREGATIONS_METADATA_KEY]` as an object keyed by
+    /// statement index. Entries may be explicit JSON `null` to indicate that a
+    /// shared node is *not* aggregated in that statement. This helper respects
+    /// that distinction and falls back to the plain `aggregation` field only
+    /// when no per-statement data is recorded.
+    #[must_use]
+    pub fn aggregation_for_statement(&self, statement_index: usize) -> Option<AggregationInfo> {
+        if let Some(metadata) = self.metadata.as_ref() {
+            if let Some(per_stmt) = metadata.get(STATEMENT_AGGREGATIONS_METADATA_KEY) {
+                if let Some(entry) = per_stmt.get(statement_index.to_string()) {
+                    return if entry.is_null() {
+                        None
+                    } else {
+                        serde_json::from_value::<AggregationInfo>(entry.clone()).ok()
+                    };
+                }
+            }
+        }
+        self.aggregation.clone()
+    }
 }
 
 /// Metadata key under `Node::metadata` that stores per-statement filter
@@ -415,6 +440,14 @@ impl Node {
 /// `Vec<FilterPredicate>`. Callers should treat this key as reserved and use
 /// [`Node::filters_for_statement`] instead of reading it directly.
 pub const STATEMENT_FILTERS_METADATA_KEY: &str = "statementFilters";
+
+/// Metadata key under `Node::metadata` that stores per-statement aggregation
+/// metadata for nodes merged across statements. The value is a JSON object
+/// keyed by statement index (as a string); each entry is either a serialized
+/// `AggregationInfo` or explicit `null` when that statement has no
+/// aggregation. Callers should treat this key as reserved and use
+/// [`Node::aggregation_for_statement`] instead of reading it directly.
+pub const STATEMENT_AGGREGATIONS_METADATA_KEY: &str = "statementAggregations";
 
 /// An edge connecting two nodes in the lineage graph.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

@@ -273,26 +273,30 @@ fn write_nodes_sql(sql: &mut String, result: &AnalyzeResult, prefix: &str) {
             name_span_id += 1;
         }
 
-        for filter in &node.filters {
-            let ft = format!("{:?}", filter.clause_type).to_lowercase();
-            sql.push_str(&format!(
-                "INSERT INTO {prefix}filters (id, node_id, predicate, filter_type) VALUES ({}, {}, {}, {});\n",
-                filter_id,
-                sql_str(Some(node.id.as_ref())),
-                sql_str(Some(&filter.expression)),
-                sql_str(Some(&ft)),
-            ));
-            filter_id += 1;
-        }
+        for stmt_id in &node.statement_ids {
+            for filter in node.filters_for_statement(*stmt_id) {
+                let ft = format!("{:?}", filter.clause_type).to_lowercase();
+                sql.push_str(&format!(
+                    "INSERT INTO {prefix}filters (id, node_id, statement_id, predicate, filter_type) VALUES ({}, {}, {}, {}, {});\n",
+                    filter_id,
+                    sql_str(Some(node.id.as_ref())),
+                    stmt_id,
+                    sql_str(Some(&filter.expression)),
+                    sql_str(Some(&ft)),
+                ));
+                filter_id += 1;
+            }
 
-        if let Some(agg) = &node.aggregation {
-            sql.push_str(&format!(
-                "INSERT INTO {prefix}aggregations (node_id, is_grouping_key, function, is_distinct) VALUES ({}, {}, {}, {});\n",
-                sql_str(Some(node.id.as_ref())),
-                sql_bool(agg.is_grouping_key),
-                sql_str(agg.function.as_deref()),
-                sql_opt_bool(agg.distinct),
-            ));
+            if let Some(agg) = node.aggregation_for_statement(*stmt_id) {
+                sql.push_str(&format!(
+                    "INSERT INTO {prefix}aggregations (node_id, statement_id, is_grouping_key, function, is_distinct) VALUES ({}, {}, {}, {}, {});\n",
+                    sql_str(Some(node.id.as_ref())),
+                    stmt_id,
+                    sql_bool(agg.is_grouping_key),
+                    sql_str(agg.function.as_deref()),
+                    sql_opt_bool(agg.distinct),
+                ));
+            }
         }
     }
 }

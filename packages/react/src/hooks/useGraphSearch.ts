@@ -41,6 +41,10 @@ export function useGraphSearch(searchTerm: string) {
 
     // 2. Index Nodes (Tables, CTEs, Columns)
     result.nodes.forEach((node) => {
+      if (node.type === 'output') {
+        return;
+      }
+
       // Determine type and label
       let type: SearchResultItem['type'] = 'table';
       if (node.type === 'cte') type = 'cte';

@@ -5,6 +5,7 @@ const OCCURRENCE_SPANS_METADATA_KEY = 'occurrenceSpans';
 const OCCURRENCE_STATEMENT_IDS_METADATA_KEY = 'occurrenceStatementIds';
 const BODY_SPANS_METADATA_KEY = 'bodySpans';
 const BODY_STATEMENT_IDS_METADATA_KEY = 'bodyStatementIds';
+const STATEMENT_AGGREGATIONS_METADATA_KEY = 'statementAggregations';
 
 function isFilterPredicateArray(value: unknown): value is FilterPredicate[] {
   return (
@@ -38,6 +39,19 @@ function readNumberArray(value: unknown): number[] {
   return Array.isArray(value)
     ? value.filter((entry): entry is number => typeof entry === 'number')
     : [];
+}
+
+function isAggregationInfo(value: unknown): value is NonNullable<Node['aggregation']> {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+
+  const candidate = value as Partial<NonNullable<Node['aggregation']>>;
+  return (
+    typeof candidate.isGroupingKey === 'boolean' &&
+    (candidate.function === undefined || typeof candidate.function === 'string') &&
+    (candidate.distinct === undefined || typeof candidate.distinct === 'boolean')
+  );
 }
 
 function buildOccurrenceSpans(node: Node): NonNullable<Node['span']>[] {
@@ -109,6 +123,27 @@ export function getFiltersForStatement(node: Node, statementIndex: number): Filt
   return node.filters ?? [];
 }
 
+export function getAggregationForStatement(
+  node: Node,
+  statementIndex: number
+): Node['aggregation'] {
+  const perStatement = node.metadata?.[STATEMENT_AGGREGATIONS_METADATA_KEY];
+  if (perStatement && typeof perStatement === 'object' && !Array.isArray(perStatement)) {
+    const key = String(statementIndex);
+    if (Object.prototype.hasOwnProperty.call(perStatement, key)) {
+      const value = (perStatement as Record<string, unknown>)[key];
+      if (value === null) {
+        return undefined;
+      }
+      if (isAggregationInfo(value)) {
+        return value;
+      }
+    }
+  }
+
+  return node.aggregation;
+}
+
 export function scopeNodeToStatement(node: Node, statementIndex: number): Node {
   const occurrenceSpans = buildOccurrenceSpans(node);
   const occurrenceStatementIds = buildOccurrenceStatementIds(node);
@@ -134,6 +169,7 @@ export function scopeNodeToStatement(node: Node, statementIndex: number): Node {
     span: scopedOccurrenceSpans[0] ?? node.span,
     nameSpans: scopedOccurrenceSpans.length > 0 ? scopedOccurrenceSpans : node.nameSpans,
     bodySpan: scopedBodySpans[0],
+    aggregation: getAggregationForStatement(node, statementIndex),
     filters: getFiltersForStatement(node, statementIndex),
   };
 }

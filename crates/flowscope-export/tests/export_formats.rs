@@ -1,8 +1,14 @@
-use flowscope_core::{analyze, AnalyzeRequest, Dialect};
+use duckdb::Connection;
+use flowscope_core::{
+    analyze, AggregationInfo, AnalyzeRequest, AnalyzeResult, Dialect, FilterClauseType,
+    FilterPredicate, Node, NodeType, Span, StatementMeta, Summary,
+};
 use flowscope_export::{
     export_csv_bundle, export_html, export_json, export_mermaid, export_sql, export_xlsx,
     ExportNaming, MermaidView,
 };
+use serde_json::json;
+use std::collections::HashMap;
 use std::io::Read;
 
 fn analyze_sample() -> flowscope_core::AnalyzeResult {
@@ -113,4 +119,109 @@ fn sql_export_dedups_column_level_joins_and_preserves_per_statement_rows() {
             "join row missing expected metadata: {row}"
         );
     }
+}
+
+#[test]
+fn sql_export_preserves_statement_scoped_filters_and_aggregations() {
+    let mut table_metadata = HashMap::new();
+    table_metadata.insert(
+        "statementFilters".to_string(),
+        json!({
+            "0": [{ "expression": "active = true", "clauseType": "where" }],
+            "1": [],
+        }),
+    );
+
+    let mut column_metadata = HashMap::new();
+    column_metadata.insert(
+        "statementAggregations".to_string(),
+        json!({
+            "0": { "isGroupingKey": false, "function": "COUNT" },
+            "1": null,
+        }),
+    );
+
+    let result = AnalyzeResult {
+        statements: vec![
+            StatementMeta {
+                statement_index: 0,
+                statement_type: "SELECT".to_string(),
+                source_name: Some("models/filtered.sql".to_string()),
+                span: Some(Span::new(0, 10)),
+                join_count: 0,
+                complexity_score: 1,
+                resolved_sql: None,
+            },
+            StatementMeta {
+                statement_index: 1,
+                statement_type: "SELECT".to_string(),
+                source_name: Some("models/plain.sql".to_string()),
+                span: Some(Span::new(11, 20)),
+                join_count: 0,
+                complexity_score: 1,
+                resolved_sql: None,
+            },
+        ],
+        nodes: vec![
+            Node {
+                id: "table_users".into(),
+                node_type: NodeType::Table,
+                label: "users".into(),
+                qualified_name: Some("public.users".into()),
+                statement_ids: vec![0, 1],
+                filters: vec![FilterPredicate {
+                    expression: "active = true".to_string(),
+                    clause_type: FilterClauseType::Where,
+                }],
+                metadata: Some(table_metadata),
+                ..Default::default()
+            },
+            Node {
+                id: "column_users_count".into(),
+                node_type: NodeType::Column,
+                label: "user_count".into(),
+                qualified_name: Some("public.users.user_count".into()),
+                statement_ids: vec![0, 1],
+                aggregation: Some(AggregationInfo {
+                    is_grouping_key: false,
+                    function: Some("COUNT".to_string()),
+                    distinct: None,
+                }),
+                metadata: Some(column_metadata),
+                ..Default::default()
+            },
+        ],
+        edges: vec![],
+        issues: vec![],
+        summary: Summary {
+            statement_count: 2,
+            table_count: 1,
+            column_count: 1,
+            ..Default::default()
+        },
+        resolved_schema: None,
+    };
+
+    let exported = export_sql(&result, None).expect("sql export");
+    let conn = Connection::open_in_memory().expect("duckdb connection");
+    conn.execute_batch(&exported)
+        .expect("generated SQL should execute");
+
+    let filter_rows: Vec<(i64, String)> = conn
+        .prepare("SELECT statement_id, predicate FROM filters ORDER BY statement_id, predicate")
+        .expect("prepare filter query")
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+        .expect("query filters")
+        .map(|row| row.expect("filter row"))
+        .collect();
+    assert_eq!(filter_rows, vec![(0, "active = true".to_string())]);
+
+    let aggregation_rows: Vec<(i64, Option<String>)> = conn
+        .prepare("SELECT statement_id, function FROM aggregations ORDER BY statement_id, function")
+        .expect("prepare aggregation query")
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+        .expect("query aggregations")
+        .map(|row| row.expect("aggregation row"))
+        .collect();
+    assert_eq!(aggregation_rows, vec![(0, Some("COUNT".to_string()))]);
 }
