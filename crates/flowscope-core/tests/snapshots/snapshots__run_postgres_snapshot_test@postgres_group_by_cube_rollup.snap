@@ -1,5 +1,6 @@
 ---
 source: crates/flowscope-core/tests/snapshots.rs
+assertion_line: 50
 expression: clean_result
 ---
 {
@@ -72,7 +73,14 @@ expression: clean_result
       ],
       "expression": "COUNT(DISTINCT id)",
       "metadata": {
-        "data_type": "INTEGER"
+        "data_type": "INTEGER",
+        "statementAggregations": {
+          "0": {
+            "isGroupingKey": false,
+            "function": "COUNT",
+            "distinct": true
+          }
+        }
       },
       "aggregation": {
         "isGroupingKey": false,
@@ -104,6 +112,14 @@ expression: clean_result
         0
       ],
       "expression": "GROUPING(region, city)",
+      "metadata": {
+        "statementAggregations": {
+          "0": {
+            "isGroupingKey": false,
+            "function": "GROUPING"
+          }
+        }
+      },
       "aggregation": {
         "isGroupingKey": false,
         "function": "GROUPING"

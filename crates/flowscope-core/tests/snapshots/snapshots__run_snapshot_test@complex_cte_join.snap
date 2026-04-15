@@ -1,5 +1,6 @@
 ---
 source: crates/flowscope-core/tests/snapshots.rs
+assertion_line: 27
 expression: clean_result
 ---
 {
@@ -70,7 +71,13 @@ expression: clean_result
       ],
       "expression": "COUNT(o.id)",
       "metadata": {
-        "data_type": "INTEGER"
+        "data_type": "INTEGER",
+        "statementAggregations": {
+          "0": {
+            "isGroupingKey": false,
+            "function": "COUNT"
+          }
+        }
       },
       "aggregation": {
         "isGroupingKey": false,
@@ -113,7 +120,13 @@ expression: clean_result
       ],
       "expression": "SUM(o.total)",
       "metadata": {
-        "data_type": "FLOAT"
+        "data_type": "FLOAT",
+        "statementAggregations": {
+          "0": {
+            "isGroupingKey": false,
+            "function": "SUM"
+          }
+        }
       },
       "aggregation": {
         "isGroupingKey": false,
@@ -157,6 +170,13 @@ expression: clean_result
       "statementIds": [
         0
       ],
+      "metadata": {
+        "statementAggregations": {
+          "0": {
+            "isGroupingKey": true
+          }
+        }
+      },
       "aggregation": {
         "isGroupingKey": true
       }

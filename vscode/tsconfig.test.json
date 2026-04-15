@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": ".test-dist",
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false
+  },
+  "include": ["src/types.ts", "src/statementScopedLineage.ts", "tests/**/*.ts"],
+  "exclude": ["node_modules", "dist", ".test-dist"]
+}

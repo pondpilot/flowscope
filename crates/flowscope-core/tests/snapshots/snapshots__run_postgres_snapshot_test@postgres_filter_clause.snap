@@ -1,5 +1,6 @@
 ---
 source: crates/flowscope-core/tests/snapshots.rs
+assertion_line: 50
 expression: clean_result
 ---
 {
@@ -24,7 +25,13 @@ expression: clean_result
       ],
       "expression": "SUM(salary)",
       "metadata": {
-        "data_type": "FLOAT"
+        "data_type": "FLOAT",
+        "statementAggregations": {
+          "0": {
+            "isGroupingKey": false,
+            "function": "SUM"
+          }
+        }
       },
       "aggregation": {
         "isGroupingKey": false,
@@ -41,6 +48,13 @@ expression: clean_result
       "statementIds": [
         0
       ],
+      "metadata": {
+        "statementAggregations": {
+          "0": {
+            "isGroupingKey": true
+          }
+        }
+      },
       "aggregation": {
         "isGroupingKey": true
       }
@@ -70,7 +84,13 @@ expression: clean_result
       ],
       "expression": "AVG(salary) FILTER (WHERE performance_rating >= 4)",
       "metadata": {
-        "data_type": "FLOAT"
+        "data_type": "FLOAT",
+        "statementAggregations": {
+          "0": {
+            "isGroupingKey": false,
+            "function": "AVG"
+          }
+        }
       },
       "aggregation": {
         "isGroupingKey": false,
@@ -89,7 +109,13 @@ expression: clean_result
       ],
       "expression": "SUM(salary) FILTER (WHERE years_employed > 5)",
       "metadata": {
-        "data_type": "FLOAT"
+        "data_type": "FLOAT",
+        "statementAggregations": {
+          "0": {
+            "isGroupingKey": false,
+            "function": "SUM"
+          }
+        }
       },
       "aggregation": {
         "isGroupingKey": false,

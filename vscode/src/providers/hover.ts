@@ -81,7 +81,7 @@ export class FlowScopeHoverProvider implements vscode.HoverProvider {
         continue;
       }
 
-      const stmtNodes = scopeNodesToStatement(result, stmt.statementIndex);
+      const stmtNodes = scopeNodesToStatement(result, stmt.statementIndex, stmt.sourceName);
       const stmtEdges = edgesInStatement(result, stmt.statementIndex);
 
       // Find matching table/view/CTE node

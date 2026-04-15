@@ -19,6 +19,7 @@ import { GRAPH_CONFIG } from '../constants';
 import {
   buildJoinedTableIds,
   formatJoinType,
+  getCreatedRelationNodeIds,
   groupOutputColumns,
   resolveOutputMapping,
   edgePairKey,
@@ -332,19 +333,6 @@ function buildColumnOwnershipMap(
   }
 
   return columnToTableMap;
-}
-
-/**
- * Get IDs of nodes that are created by DDL statements (CREATE TABLE AS, etc.)
- */
-function getCreatedRelationNodeIds(nodes: Node[]): Set<string> {
-  const createdIds = new Set<string>();
-  for (const node of nodes) {
-    if (node.metadata?.isCreated) {
-      createdIds.add(node.id);
-    }
-  }
-  return createdIds;
 }
 
 // =============================================================================
@@ -898,7 +886,11 @@ function getScriptIO(slices: StatementSlice[]) {
   const writeQualified = new Set<string>();
 
   slices.forEach((slice) => {
-    const createdRelationIds = getCreatedRelationNodeIds(slice.nodes);
+    const createdRelationIds = getCreatedRelationNodeIds(
+      slice.meta.statementType,
+      slice.nodes,
+      slice.edges
+    );
     slice.nodes.forEach((node) => {
       if (node.type === OUTPUT_NODE_TYPE) {
         writes.add(node.label);
@@ -984,7 +976,11 @@ function buildHybridGraph(
     const { readQualified, writeQualified } = getScriptIO(slices);
 
     slices.forEach((slice) => {
-      const createdRelationIds = getCreatedRelationNodeIds(slice.nodes);
+      const createdRelationIds = getCreatedRelationNodeIds(
+        slice.meta.statementType,
+        slice.nodes,
+        slice.edges
+      );
       slice.nodes.forEach((node) => {
         if (node.type === OUTPUT_NODE_TYPE) {
           const qName = node.qualifiedName || node.label;

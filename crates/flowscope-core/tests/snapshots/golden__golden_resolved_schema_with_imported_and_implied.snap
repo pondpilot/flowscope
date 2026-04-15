@@ -1,5 +1,6 @@
 ---
 source: crates/flowscope-core/tests/golden.rs
+assertion_line: 154
 expression: cleaned
 ---
 {
@@ -204,6 +205,7 @@ expression: cleaned
           1
         ],
         "statementFilters": {
+          "0": [],
           "1": [
             {
               "expression": "amount > 100",

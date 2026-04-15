@@ -111,6 +111,14 @@ export const HierarchyView = forwardRef<HierarchyViewRef, HierarchyViewProps>(
 
     const getNode = useCallback((id: string) => nodesById.get(id), [nodesById]);
 
+    const statementsByIndex = useMemo(() => {
+      const map = new Map<number, (typeof statements)[number]>();
+      for (const statement of statements) {
+        map.set(statement.statementIndex, statement);
+      }
+      return map;
+    }, [statements]);
+
     // Use persisted state hook for all view state
     const {
       expandedNodes,
@@ -203,7 +211,7 @@ export const HierarchyView = forwardRef<HierarchyViewRef, HierarchyViewProps>(
         if (['table', 'view', 'cte'].includes(node.type) && node.statementIds?.length) {
           const scripts: string[] = [];
           node.statementIds.forEach((idx) => {
-            const stmt = statements[idx];
+            const stmt = statementsByIndex.get(idx);
             if (stmt?.sourceName && !scripts.includes(stmt.sourceName)) {
               scripts.push(stmt.sourceName);
             }
@@ -215,7 +223,7 @@ export const HierarchyView = forwardRef<HierarchyViewRef, HierarchyViewProps>(
       });
 
       return { columnsByTable: colMap, scriptsByTable: scriptMap };
-    }, [getNode, nodes, edges, statements]);
+    }, [getNode, nodes, edges, statementsByIndex]);
 
     // Pre-compute all table mappings for efficient lookup
     const mappingsByTable = useMemo(() => {

@@ -1,7 +1,7 @@
 use duckdb::Connection;
 use flowscope_core::{
     analyze, AggregationInfo, AnalyzeRequest, AnalyzeResult, Dialect, FilterClauseType,
-    FilterPredicate, Node, NodeType, Span, StatementMeta, Summary,
+    FilterPredicate, Issue, Node, NodeType, Span, StatementMeta, Summary,
 };
 use flowscope_export::{
     export_csv_bundle, export_html, export_json, export_mermaid, export_sql, export_xlsx,
@@ -224,4 +224,127 @@ fn sql_export_preserves_statement_scoped_filters_and_aggregations() {
         .map(|row| row.expect("aggregation row"))
         .collect();
     assert_eq!(aggregation_rows, vec![(0, Some("COUNT".to_string()))]);
+}
+
+#[test]
+fn sql_export_reindexes_statement_references_and_preserves_occurrence_spans() {
+    let mut column_metadata = HashMap::new();
+    column_metadata.insert(
+        "occurrenceSpans".to_string(),
+        json!([
+            { "start": 1, "end": 2 },
+            { "start": 10, "end": 12 }
+        ]),
+    );
+    column_metadata.insert("occurrenceStatementIds".to_string(), json!([7, 7]));
+
+    let result = AnalyzeResult {
+        statements: vec![StatementMeta {
+            statement_index: 7,
+            statement_type: "SELECT".to_string(),
+            source_name: Some("models/scoped.sql".to_string()),
+            span: Some(Span::new(0, 20)),
+            join_count: 0,
+            complexity_score: 1,
+            resolved_sql: None,
+        }],
+        nodes: vec![
+            Node {
+                id: "table_src".into(),
+                node_type: NodeType::Table,
+                label: "src".into(),
+                qualified_name: Some("public.src".into()),
+                statement_ids: vec![7],
+                ..Default::default()
+            },
+            Node {
+                id: "table_dst".into(),
+                node_type: NodeType::Table,
+                label: "dst".into(),
+                qualified_name: Some("public.dst".into()),
+                statement_ids: vec![7],
+                ..Default::default()
+            },
+            Node {
+                id: "column_shared".into(),
+                node_type: NodeType::Column,
+                label: "id".into(),
+                qualified_name: Some("public.src.id".into()),
+                statement_ids: vec![7],
+                metadata: Some(column_metadata),
+                ..Default::default()
+            },
+        ],
+        edges: vec![flowscope_core::Edge {
+            id: "edge_stmt_7".into(),
+            from: "table_src".into(),
+            to: "table_dst".into(),
+            edge_type: flowscope_core::EdgeType::DataFlow,
+            expression: None,
+            operation: None,
+            join_type: None,
+            join_condition: None,
+            metadata: None,
+            approximate: None,
+            statement_ids: vec![7],
+        }],
+        issues: vec![Issue::warning("TEST_001", "scoped issue").with_statement(7)],
+        summary: Summary {
+            statement_count: 1,
+            table_count: 2,
+            column_count: 1,
+            join_count: 0,
+            complexity_score: 1,
+            issue_count: flowscope_core::IssueCount {
+                errors: 0,
+                warnings: 1,
+                infos: 0,
+            },
+            has_errors: false,
+        },
+        resolved_schema: None,
+    };
+
+    let exported = export_sql(&result, None).expect("sql export");
+    let conn = Connection::open_in_memory().expect("duckdb connection");
+    conn.execute_batch(&exported)
+        .expect("generated SQL should execute for non-zero statement indices");
+
+    let node_statement_ids: Vec<i64> = conn
+        .prepare("SELECT statement_id FROM node_statements ORDER BY node_id")
+        .expect("prepare node statement query")
+        .query_map([], |row| row.get(0))
+        .expect("query node statements")
+        .map(|row| row.expect("node statement row"))
+        .collect();
+    assert_eq!(node_statement_ids, vec![0, 0, 0]);
+
+    let edge_statement_ids: Vec<i64> = conn
+        .prepare("SELECT statement_id FROM edge_statements")
+        .expect("prepare edge statement query")
+        .query_map([], |row| row.get(0))
+        .expect("query edge statements")
+        .map(|row| row.expect("edge statement row"))
+        .collect();
+    assert_eq!(edge_statement_ids, vec![0]);
+
+    let issue_statement_ids: Vec<i64> = conn
+        .prepare("SELECT statement_id FROM issues")
+        .expect("prepare issue query")
+        .query_map([], |row| row.get(0))
+        .expect("query issues")
+        .map(|row| row.expect("issue row"))
+        .collect();
+    assert_eq!(issue_statement_ids, vec![0]);
+
+    let occurrence_spans: Vec<(i64, i64)> = conn
+        .prepare(
+            "SELECT span_start, span_end FROM node_name_spans WHERE node_id = 'column_shared' ORDER BY span_start, span_end",
+        )
+        .expect("prepare name spans query")
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+        .expect("query name spans")
+        .map(|row| row.expect("name span row"))
+        .collect();
+    assert_eq!(occurrence_spans, vec![(1, 2), (10, 12)]);
 }

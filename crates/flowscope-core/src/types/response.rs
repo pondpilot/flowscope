@@ -312,6 +312,20 @@ impl Default for Node {
 }
 
 impl Node {
+    fn metadata_span_array(&self, key: &str) -> Vec<Span> {
+        self.metadata
+            .as_ref()
+            .and_then(|metadata| metadata.get(key))
+            .and_then(serde_json::Value::as_array)
+            .map(|entries| {
+                entries
+                    .iter()
+                    .filter_map(|entry| serde_json::from_value::<Span>(entry.clone()).ok())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     /// Create a new table node with required fields.
     pub fn table(id: impl Into<Arc<str>>, label: impl Into<Arc<str>>) -> Self {
         Self {
@@ -348,7 +362,10 @@ impl Node {
     /// `node_type`.
     #[must_use]
     pub fn all_name_spans(&self) -> Vec<Span> {
-        if !self.name_spans.is_empty() {
+        let occurrence_spans = self.metadata_span_array("occurrenceSpans");
+        if !occurrence_spans.is_empty() {
+            occurrence_spans
+        } else if !self.name_spans.is_empty() {
             self.name_spans.clone()
         } else {
             self.span.into_iter().collect()

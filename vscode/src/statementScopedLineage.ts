@@ -3,8 +3,10 @@ import { nodesInStatement, type AnalyzeResult, type FilterPredicate, type Node }
 const STATEMENT_FILTERS_METADATA_KEY = 'statementFilters';
 const OCCURRENCE_SPANS_METADATA_KEY = 'occurrenceSpans';
 const OCCURRENCE_STATEMENT_IDS_METADATA_KEY = 'occurrenceStatementIds';
+const OCCURRENCE_SOURCE_NAMES_METADATA_KEY = 'occurrenceSourceNames';
 const BODY_SPANS_METADATA_KEY = 'bodySpans';
 const BODY_STATEMENT_IDS_METADATA_KEY = 'bodyStatementIds';
+const BODY_SOURCE_NAMES_METADATA_KEY = 'bodySourceNames';
 const STATEMENT_AGGREGATIONS_METADATA_KEY = 'statementAggregations';
 
 function isFilterPredicateArray(value: unknown): value is FilterPredicate[] {
@@ -41,6 +43,12 @@ function readNumberArray(value: unknown): number[] {
     : [];
 }
 
+function readSourceNameArray(value: unknown): Array<string | null> {
+  return Array.isArray(value)
+    ? value.map((entry) => (typeof entry === 'string' ? entry : null))
+    : [];
+}
+
 function isAggregationInfo(value: unknown): value is NonNullable<Node['aggregation']> {
   if (typeof value !== 'object' || value === null) {
     return false;
@@ -52,6 +60,14 @@ function isAggregationInfo(value: unknown): value is NonNullable<Node['aggregati
     (candidate.function === undefined || typeof candidate.function === 'string') &&
     (candidate.distinct === undefined || typeof candidate.distinct === 'boolean')
   );
+}
+
+function getFallbackSourceName(node: Node, sourceName?: string): string | null {
+  if (typeof node.metadata?.sourceName === 'string') {
+    return node.metadata.sourceName;
+  }
+
+  return sourceName ?? null;
 }
 
 function buildOccurrenceSpans(node: Node): NonNullable<Node['span']>[] {
@@ -92,6 +108,17 @@ function buildBodySpans(node: Node): NonNullable<Node['span']>[] {
   return node.bodySpan ? [node.bodySpan] : [];
 }
 
+function buildOccurrenceSourceNames(node: Node, sourceName?: string): Array<string | null> {
+  const spanCount = buildOccurrenceSpans(node).length;
+  if (spanCount === 0) {
+    return [];
+  }
+
+  const explicit = readSourceNameArray(node.metadata?.[OCCURRENCE_SOURCE_NAMES_METADATA_KEY]);
+  const fallback = getFallbackSourceName(node, sourceName);
+  return Array.from({ length: spanCount }, (_, index) => explicit[index] ?? fallback);
+}
+
 function buildBodyStatementIds(node: Node): number[] {
   const explicit = readNumberArray(node.metadata?.[BODY_STATEMENT_IDS_METADATA_KEY]);
   if (explicit.length > 0) {
@@ -109,6 +136,35 @@ function buildBodyStatementIds(node: Node): number[] {
     return node.statementIds;
   }
   return [];
+}
+
+function buildBodySourceNames(node: Node, sourceName?: string): Array<string | null> {
+  const bodySpanCount = buildBodySpans(node).length;
+  if (bodySpanCount === 0) {
+    return [];
+  }
+
+  const explicit = readSourceNameArray(node.metadata?.[BODY_SOURCE_NAMES_METADATA_KEY]);
+  const fallback = getFallbackSourceName(node, sourceName);
+  return Array.from({ length: bodySpanCount }, (_, index) => explicit[index] ?? fallback);
+}
+
+function getOccurrenceIndexesForStatement(node: Node, statementIndex: number): number[] {
+  const statementIds = buildOccurrenceStatementIds(node);
+  if (statementIds.length === 0) {
+    return [];
+  }
+
+  return statementIds.flatMap((value, index) => (value === statementIndex ? [index] : []));
+}
+
+function getBodyIndexesForStatement(node: Node, statementIndex: number): number[] {
+  const statementIds = buildBodyStatementIds(node);
+  if (statementIds.length === 0) {
+    return [];
+  }
+
+  return statementIds.flatMap((value, index) => (value === statementIndex ? [index] : []));
 }
 
 export function getFiltersForStatement(node: Node, statementIndex: number): FilterPredicate[] {
@@ -144,23 +200,45 @@ export function getAggregationForStatement(
   return node.aggregation;
 }
 
-export function scopeNodeToStatement(node: Node, statementIndex: number): Node {
+export function scopeNodeToStatement(
+  node: Node,
+  statementIndex: number,
+  sourceName?: string
+): Node {
   const occurrenceSpans = buildOccurrenceSpans(node);
-  const occurrenceStatementIds = buildOccurrenceStatementIds(node);
+  const occurrenceSourceNames = buildOccurrenceSourceNames(node, sourceName);
+  const occurrenceIndexes = getOccurrenceIndexesForStatement(node, statementIndex);
   const scopedOccurrenceSpans =
-    occurrenceStatementIds.length > 0
-      ? occurrenceSpans.filter((_, index) => occurrenceStatementIds[index] === statementIndex)
+    occurrenceIndexes.length > 0
+      ? occurrenceIndexes
+          .map((index) => occurrenceSpans[index])
+          .filter((span): span is NonNullable<Node['span']> => !!span)
       : node.statementIds.length === 1 && node.statementIds[0] === statementIndex
         ? occurrenceSpans
         : [];
+  const scopedOccurrenceSourceNames =
+    occurrenceIndexes.length > 0
+      ? occurrenceIndexes.map((index) => occurrenceSourceNames[index] ?? null)
+      : node.statementIds.length === 1 && node.statementIds[0] === statementIndex
+        ? occurrenceSourceNames
+        : [];
 
   const bodySpans = buildBodySpans(node);
-  const bodyStatementIds = buildBodyStatementIds(node);
+  const bodySourceNames = buildBodySourceNames(node, sourceName);
+  const bodyIndexes = getBodyIndexesForStatement(node, statementIndex);
   const scopedBodySpans =
-    bodyStatementIds.length > 0
-      ? bodySpans.filter((_, index) => bodyStatementIds[index] === statementIndex)
+    bodyIndexes.length > 0
+      ? bodyIndexes
+          .map((index) => bodySpans[index])
+          .filter((span): span is NonNullable<Node['span']> => !!span)
       : node.statementIds.length === 1 && node.statementIds[0] === statementIndex
         ? bodySpans
+        : [];
+  const scopedBodySourceNames =
+    bodyIndexes.length > 0
+      ? bodyIndexes.map((index) => bodySourceNames[index] ?? null)
+      : node.statementIds.length === 1 && node.statementIds[0] === statementIndex
+        ? bodySourceNames
         : [];
 
   return {
@@ -171,11 +249,43 @@ export function scopeNodeToStatement(node: Node, statementIndex: number): Node {
     bodySpan: scopedBodySpans[0],
     aggregation: getAggregationForStatement(node, statementIndex),
     filters: getFiltersForStatement(node, statementIndex),
+    metadata: {
+      ...(node.metadata || {}),
+      ...(sourceName ? { sourceName } : {}),
+      ...(scopedOccurrenceSpans.length > 0
+        ? {
+            [OCCURRENCE_SPANS_METADATA_KEY]: scopedOccurrenceSpans,
+            [OCCURRENCE_STATEMENT_IDS_METADATA_KEY]: Array.from(
+              { length: scopedOccurrenceSpans.length },
+              () => statementIndex
+            ),
+            [OCCURRENCE_SOURCE_NAMES_METADATA_KEY]: scopedOccurrenceSourceNames.map(
+              (value) => value ?? sourceName ?? null
+            ),
+          }
+        : {}),
+      ...(scopedBodySpans.length > 0
+        ? {
+            [BODY_SPANS_METADATA_KEY]: scopedBodySpans,
+            [BODY_STATEMENT_IDS_METADATA_KEY]: Array.from(
+              { length: scopedBodySpans.length },
+              () => statementIndex
+            ),
+            [BODY_SOURCE_NAMES_METADATA_KEY]: scopedBodySourceNames.map(
+              (value) => value ?? sourceName ?? null
+            ),
+          }
+        : {}),
+    },
   };
 }
 
-export function scopeNodesToStatement(result: AnalyzeResult, statementIndex: number): Node[] {
+export function scopeNodesToStatement(
+  result: AnalyzeResult,
+  statementIndex: number,
+  sourceName?: string
+): Node[] {
   return nodesInStatement(result, statementIndex).map((node) =>
-    scopeNodeToStatement(node, statementIndex)
+    scopeNodeToStatement(node, statementIndex, sourceName)
   );
 }

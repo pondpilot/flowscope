@@ -5,6 +5,7 @@ use crate::schema::{tables_ddl, views_ddl};
 use crate::ExportError;
 use duckdb::{params, Connection};
 use flowscope_core::AnalyzeResult;
+use std::collections::HashMap;
 use std::fs;
 use tempfile::NamedTempFile;
 
@@ -48,10 +49,10 @@ fn create_schema(conn: &Connection) -> Result<(), ExportError> {
 
 fn write_data(conn: &Connection, result: &AnalyzeResult) -> Result<(), ExportError> {
     write_meta(conn)?;
-    write_statements(conn, result)?;
-    write_nodes(conn, result)?;
-    write_edges(conn, result)?;
-    write_issues(conn, result)?;
+    let statement_row_ids = write_statements(conn, result)?;
+    write_nodes(conn, result, &statement_row_ids)?;
+    write_edges(conn, result, &statement_row_ids)?;
+    write_issues(conn, result, &statement_row_ids)?;
     write_schema_tables(conn, result)?;
     Ok(())
 }
@@ -76,13 +77,18 @@ fn write_meta(conn: &Connection) -> Result<(), ExportError> {
     Ok(())
 }
 
-fn write_statements(conn: &Connection, result: &AnalyzeResult) -> Result<(), ExportError> {
+fn write_statements(
+    conn: &Connection,
+    result: &AnalyzeResult,
+) -> Result<HashMap<usize, i64>, ExportError> {
     let mut stmt = conn.prepare(
         "INSERT INTO statements (id, statement_index, statement_type, source_name, span_start, span_end, join_count, complexity_score)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
     )?;
 
+    let mut statement_row_ids = HashMap::with_capacity(result.statements.len());
     for (idx, s) in result.statements.iter().enumerate() {
+        statement_row_ids.insert(s.statement_index, idx as i64);
         let (span_start, span_end) = s
             .span
             .map(|sp| (Some(sp.start as i64), Some(sp.end as i64)))
@@ -98,10 +104,25 @@ fn write_statements(conn: &Connection, result: &AnalyzeResult) -> Result<(), Exp
             s.complexity_score as i64,
         ])?;
     }
-    Ok(())
+    Ok(statement_row_ids)
 }
 
-fn write_nodes(conn: &Connection, result: &AnalyzeResult) -> Result<(), ExportError> {
+fn statement_row_id(
+    statement_row_ids: &HashMap<usize, i64>,
+    statement_index: usize,
+) -> Result<i64, ExportError> {
+    statement_row_ids.get(&statement_index).copied().ok_or_else(|| {
+        ExportError::Serialization(format!(
+            "statement index {statement_index} is referenced by the graph but missing from result.statements"
+        ))
+    })
+}
+
+fn write_nodes(
+    conn: &Connection,
+    result: &AnalyzeResult,
+    statement_row_ids: &HashMap<usize, i64>,
+) -> Result<(), ExportError> {
     let mut node_stmt = conn.prepare(
         "INSERT INTO nodes (id, node_type, label, qualified_name, canonical_catalog, canonical_schema, canonical_name, canonical_column, expression, span_start, span_end, body_span_start, body_span_end, resolution_source)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
@@ -163,10 +184,11 @@ fn write_nodes(conn: &Connection, result: &AnalyzeResult) -> Result<(), ExportEr
         ])?;
 
         for stmt_id in &node.statement_ids {
-            node_stmt_ref.execute(params![node.id.as_ref(), *stmt_id as i64])?;
+            let statement_row_id = statement_row_id(statement_row_ids, *stmt_id)?;
+            node_stmt_ref.execute(params![node.id.as_ref(), statement_row_id])?;
         }
 
-        for span in &node.name_spans {
+        for span in node.all_name_spans() {
             name_span_stmt.execute(params![
                 name_span_id,
                 node.id.as_ref(),
@@ -177,12 +199,13 @@ fn write_nodes(conn: &Connection, result: &AnalyzeResult) -> Result<(), ExportEr
         }
 
         for stmt_id in &node.statement_ids {
+            let statement_row_id = statement_row_id(statement_row_ids, *stmt_id)?;
             for filter in node.filters_for_statement(*stmt_id) {
                 let ft = format!("{:?}", filter.clause_type).to_lowercase();
                 filter_stmt.execute(params![
                     filter_id,
                     node.id.as_ref(),
-                    *stmt_id as i64,
+                    statement_row_id,
                     &filter.expression,
                     ft,
                 ])?;
@@ -192,7 +215,7 @@ fn write_nodes(conn: &Connection, result: &AnalyzeResult) -> Result<(), ExportEr
             if let Some(agg) = node.aggregation_for_statement(*stmt_id) {
                 agg_stmt.execute(params![
                     node.id.as_ref(),
-                    *stmt_id as i64,
+                    statement_row_id,
                     agg.is_grouping_key,
                     &agg.function,
                     agg.distinct,
@@ -203,7 +226,11 @@ fn write_nodes(conn: &Connection, result: &AnalyzeResult) -> Result<(), ExportEr
     Ok(())
 }
 
-fn write_edges(conn: &Connection, result: &AnalyzeResult) -> Result<(), ExportError> {
+fn write_edges(
+    conn: &Connection,
+    result: &AnalyzeResult,
+    statement_row_ids: &HashMap<usize, i64>,
+) -> Result<(), ExportError> {
     let mut stmt = conn.prepare(
         "INSERT INTO edges (id, edge_type, from_node_id, to_node_id, expression, operation, is_approximate)
          VALUES (?, ?, ?, ?, ?, ?, ?)"
@@ -232,7 +259,8 @@ fn write_edges(conn: &Connection, result: &AnalyzeResult) -> Result<(), ExportEr
         ])?;
 
         for stmt_id in &edge.statement_ids {
-            edge_stmt_ref.execute(params![edge.id.as_ref(), *stmt_id as i64])?;
+            let statement_row_id = statement_row_id(statement_row_ids, *stmt_id)?;
+            edge_stmt_ref.execute(params![edge.id.as_ref(), statement_row_id])?;
         }
 
         if join_edge_ids.contains(edge.id.as_ref()) {
@@ -253,7 +281,11 @@ fn write_edges(conn: &Connection, result: &AnalyzeResult) -> Result<(), ExportEr
     Ok(())
 }
 
-fn write_issues(conn: &Connection, result: &AnalyzeResult) -> Result<(), ExportError> {
+fn write_issues(
+    conn: &Connection,
+    result: &AnalyzeResult,
+    statement_row_ids: &HashMap<usize, i64>,
+) -> Result<(), ExportError> {
     let mut stmt = conn.prepare(
         "INSERT INTO issues (id, statement_id, severity, code, message, span_start, span_end)
          VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -265,9 +297,13 @@ fn write_issues(conn: &Connection, result: &AnalyzeResult) -> Result<(), ExportE
             .span
             .map(|sp| (Some(sp.start as i64), Some(sp.end as i64)))
             .unwrap_or((None, None));
+        let statement_row_id = issue
+            .statement_index
+            .map(|statement_index| statement_row_id(statement_row_ids, statement_index))
+            .transpose()?;
         stmt.execute(params![
             issue_id as i64,
-            issue.statement_index.map(|i| i as i64),
+            statement_row_id,
             severity,
             &issue.code,
             &issue.message,

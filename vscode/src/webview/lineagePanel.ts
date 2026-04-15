@@ -146,7 +146,7 @@ export class LineagePanel {
     }
 
     const targetStatementIndex = statement.statementIndex;
-    const scopedNodes = scopeNodesToStatement(result, targetStatementIndex);
+    const scopedNodes = scopeNodesToStatement(result, targetStatementIndex, statement.sourceName);
     const relevantNodeIds = new Set(scopedNodes.map((node) => node.id));
     const scopedEdges = result.edges.filter(
       (edge) =>
