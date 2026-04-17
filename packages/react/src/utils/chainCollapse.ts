@@ -91,30 +91,60 @@ export function computeChainCollapse(
   collapsedChainNodeIds: ReadonlySet<string>
 ): ChainCollapseResult {
   const nodes = view.nodes.filter((n) => n.type !== 'column');
-  // Only relational edges contribute to the chain graph. `ownership`
-  // (table→column) and `derivation` (column-level) edges are rendering
-  // concerns, not parent/child relations between table-like nodes.
-  const edges = view.edges.filter((e) => e.type === 'data_flow' || e.type === 'cross_statement');
+  const tableNodeIds = new Set(nodes.map((n) => n.id));
+
+  // The analyzer emits most parent/child flow as column-level edges
+  // (data_flow/derivation between column nodes). To derive the
+  // table-level graph the UI shows, we first map columns to their owning
+  // tables via `ownership` edges, then resolve every flow edge to a
+  // table-level pair. This mirrors `buildFlowEdges` so chain eligibility
+  // matches what the user sees on screen.
+  const columnToTable = new Map<string, string>();
+  for (const edge of view.edges) {
+    if (edge.type !== 'ownership') continue;
+    if (tableNodeIds.has(edge.from)) {
+      columnToTable.set(edge.to, edge.from);
+    }
+  }
 
   const inDegree = new Map<string, number>();
   const outDegree = new Map<string, number>();
   const parentsOf = new Map<string, string[]>();
   const childrenOf = new Map<string, string[]>();
-
   for (const node of nodes) {
     inDegree.set(node.id, 0);
     outDegree.set(node.id, 0);
     parentsOf.set(node.id, []);
     childrenOf.set(node.id, []);
   }
-  const knownId = (id: string) => inDegree.has(id);
-  for (const edge of edges) {
-    if (edge.from === edge.to) continue; // ignore self-loops (recursive CTEs)
-    if (!knownId(edge.from) || !knownId(edge.to)) continue;
-    inDegree.set(edge.to, (inDegree.get(edge.to) ?? 0) + 1);
-    outDegree.set(edge.from, (outDegree.get(edge.from) ?? 0) + 1);
-    parentsOf.get(edge.to)!.push(edge.from);
-    childrenOf.get(edge.from)!.push(edge.to);
+
+  const resolveToTable = (endpointId: string): string | undefined => {
+    if (tableNodeIds.has(endpointId)) return endpointId;
+    return columnToTable.get(endpointId);
+  };
+
+  // Dedupe pairs — multiple column-level edges between the same two
+  // tables (a common case when every projected column has its own edge)
+  // should count as one parent/child relation, not N.
+  const seenPair = new Set<string>();
+  const flowEdgeTypes: ReadonlySet<string> = new Set([
+    'data_flow',
+    'derivation',
+    'cross_statement',
+  ]);
+  for (const edge of view.edges) {
+    if (!flowEdgeTypes.has(edge.type)) continue;
+    const fromTable = resolveToTable(edge.from);
+    const toTable = resolveToTable(edge.to);
+    if (!fromTable || !toTable) continue;
+    if (fromTable === toTable) continue; // self-loop (recursive CTE)
+    const key = `${fromTable}\u0000${toTable}`;
+    if (seenPair.has(key)) continue;
+    seenPair.add(key);
+    inDegree.set(toTable, (inDegree.get(toTable) ?? 0) + 1);
+    outDegree.set(fromTable, (outDegree.get(fromTable) ?? 0) + 1);
+    parentsOf.get(toTable)!.push(fromTable);
+    childrenOf.get(fromTable)!.push(toTable);
   }
 
   const collapsibleTargetIds = new Set<string>();

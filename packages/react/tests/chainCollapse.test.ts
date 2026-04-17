@@ -120,16 +120,76 @@ describe('computeChainCollapse', () => {
     expect(expanded.hiddenNodeIds.size).toBe(0);
   });
 
-  it('ignores non-relational edges (column ownership, derivation, join deps)', () => {
+  it('derives table-level parents via column ownership when flow edges are column-level', () => {
+    // Mimics the real analyzer shape: a/b tables own columns, data_flow
+    // runs column→column. The util must still surface a → b as a
+    // relational edge via ownership mapping.
     const nodes: MinimalNode[] = [
-      { id: 'a', type: 'cte' },
+      { id: 'a', type: 'table' },
       { id: 'b', type: 'cte' },
+      { id: 'a.col', type: 'column' },
+      { id: 'b.col', type: 'column' },
     ];
-    // Only derivation: no data_flow relation between a and b, so b has
-    // no chain-collapsible in-degree from the util's perspective.
-    const edges: MinimalEdge[] = [{ from: 'a', to: 'b', type: 'derivation' }];
+    const edges: MinimalEdge[] = [
+      { from: 'a', to: 'a.col', type: 'ownership' },
+      { from: 'b', to: 'b.col', type: 'ownership' },
+      { from: 'a.col', to: 'b.col', type: 'data_flow' },
+    ];
     const result = computeChainCollapse(view(nodes, edges), new Set());
-    expect(result.collapsibleTargetIds.has('b')).toBe(false);
+    expect(result.collapsibleTargetIds.has('b')).toBe(true);
+  });
+
+  it('deduplicates multiple column-level edges between the same two tables', () => {
+    // Three column-level data_flow edges a→b — a's inDegree from b's
+    // perspective should still be 1, not 3, so b remains eligible.
+    const nodes: MinimalNode[] = [
+      { id: 'a', type: 'table' },
+      { id: 'b', type: 'cte' },
+      { id: 'a.x', type: 'column' },
+      { id: 'a.y', type: 'column' },
+      { id: 'b.x', type: 'column' },
+      { id: 'b.y', type: 'column' },
+    ];
+    const edges: MinimalEdge[] = [
+      { from: 'a', to: 'a.x', type: 'ownership' },
+      { from: 'a', to: 'a.y', type: 'ownership' },
+      { from: 'b', to: 'b.x', type: 'ownership' },
+      { from: 'b', to: 'b.y', type: 'ownership' },
+      { from: 'a.x', to: 'b.x', type: 'data_flow' },
+      { from: 'a.y', to: 'b.y', type: 'data_flow' },
+      { from: 'a.x', to: 'b.y', type: 'derivation' },
+    ];
+    const result = computeChainCollapse(view(nodes, edges), new Set());
+    expect(result.collapsibleTargetIds.has('b')).toBe(true);
+  });
+
+  it('correctly counts rollup across a chain resolved through column ownership', () => {
+    // a → b → c → d all connected via column-level data_flow. Folding b
+    // must orphan c and d for a total rollup of 3 under b.
+    const nodes: MinimalNode[] = [
+      { id: 'a', type: 'table' },
+      { id: 'b', type: 'cte' },
+      { id: 'c', type: 'cte' },
+      { id: 'd', type: 'cte' },
+      { id: 'a.c', type: 'column' },
+      { id: 'b.c', type: 'column' },
+      { id: 'c.c', type: 'column' },
+      { id: 'd.c', type: 'column' },
+    ];
+    const edges: MinimalEdge[] = [
+      { from: 'a', to: 'a.c', type: 'ownership' },
+      { from: 'b', to: 'b.c', type: 'ownership' },
+      { from: 'c', to: 'c.c', type: 'ownership' },
+      { from: 'd', to: 'd.c', type: 'ownership' },
+      { from: 'a.c', to: 'b.c', type: 'data_flow' },
+      { from: 'b.c', to: 'c.c', type: 'data_flow' },
+      { from: 'c.c', to: 'd.c', type: 'data_flow' },
+    ];
+    const result = computeChainCollapse(view(nodes, edges), new Set(['b']));
+    expect(result.foldRootIds).toEqual(new Set(['b']));
+    expect(result.hiddenNodeIds).toEqual(new Set(['c', 'd']));
+    // b (self) + c + d = 3.
+    expect(result.rollupCountByFoldRootId.get('b')).toBe(3);
   });
 
   it('ignores self-loops (recursive CTEs) when counting degrees', () => {
