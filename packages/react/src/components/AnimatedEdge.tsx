@@ -1,4 +1,4 @@
-import { useMemo, type CSSProperties, type JSX } from 'react';
+import { useCallback, useMemo, type CSSProperties, type JSX, type MouseEvent } from 'react';
 import { BaseEdge, EdgeLabelRenderer, getBezierPath } from '@xyflow/react';
 import type { EdgeProps } from '@xyflow/react';
 import {
@@ -10,6 +10,7 @@ import {
 } from './ui/graph-tooltip';
 import { GRAPH_CONFIG, EDGE_STYLES, JOIN_TYPE_LABELS } from '../constants';
 import { useColors } from '../hooks/useColors';
+import { useLineageStore } from '../store';
 
 export type EdgeType = 'dataFlow' | 'derivation' | 'joinDependency' | 'aggregation';
 
@@ -112,9 +113,25 @@ export function AnimatedEdge({
   const edgeType = data?.type as EdgeType | string | undefined;
   const joinType = data?.joinType as string | undefined;
   const joinCondition = data?.joinCondition as string | undefined;
+  const chainCollapsible = data?.chainCollapsible as boolean | undefined;
+  const chainFolded = data?.chainFolded as boolean | undefined;
+  const chainFoldCount = data?.chainFoldCount as number | undefined;
+  const chainToggleNodeId = data?.chainToggleNodeId as string | undefined;
   const labelZIndex = isHighlighted
     ? GRAPH_CONFIG.HIGHLIGHTED_EDGE_Z_INDEX
     : GRAPH_CONFIG.EDGE_LABEL_BASE_Z_INDEX;
+
+  const toggleChainCollapse = useLineageStore((store) => store.toggleChainCollapse);
+  const handleChainToggle = useCallback(
+    (event: MouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation();
+      event.preventDefault();
+      if (chainToggleNodeId) {
+        toggleChainCollapse(chainToggleNodeId);
+      }
+    },
+    [chainToggleNodeId, toggleChainCollapse]
+  );
 
   const tooltipContent = useMemo(() => {
     let content = customTooltip || '';
@@ -237,6 +254,52 @@ export function AnimatedEdge({
         <g transform={`translate(${labelX}, ${labelY})`}>
           <title>{tooltipContent}</title>
         </g>
+      )}
+      {(chainFolded || chainCollapsible) && !expression && !joinType && (
+        <EdgeLabelRenderer>
+          <div
+            style={{
+              position: 'absolute',
+              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+              pointerEvents: 'all',
+              zIndex: labelZIndex,
+            }}
+            className="nodrag nopan"
+          >
+            <button
+              type="button"
+              onClick={handleChainToggle}
+              aria-label={
+                chainFolded
+                  ? `Expand ${chainFoldCount ?? 1} collapsed node${(chainFoldCount ?? 1) === 1 ? '' : 's'}`
+                  : 'Collapse this chain into its parent'
+              }
+              title={
+                chainFolded
+                  ? `${chainFoldCount ?? 1} node${(chainFoldCount ?? 1) === 1 ? '' : 's'} folded — click to expand`
+                  : 'Collapse into parent'
+              }
+              style={{
+                cursor: 'pointer',
+                background: chainFolded ? colors.edges.dataFlow : colors.nodes.table.bg,
+                color: chainFolded ? colors.nodes.table.bg : colors.edges.dataFlow,
+                border: `1px solid ${colors.edges.dataFlow}`,
+                borderRadius: 10,
+                padding: '0 6px',
+                minHeight: 16,
+                fontSize: 10,
+                fontWeight: 700,
+                lineHeight: 1,
+                display: 'inline-flex',
+                alignItems: 'center',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                fontVariantNumeric: 'tabular-nums',
+              }}
+            >
+              {chainFolded ? `+${chainFoldCount ?? 1}` : '−'}
+            </button>
+          </div>
+        </EdgeLabelRenderer>
       )}
     </>
   );

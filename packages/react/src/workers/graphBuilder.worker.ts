@@ -30,6 +30,7 @@ import {
   withStatementScope,
 } from '../utils/lineageHelpers';
 import { mergeNodesForNavigation, scopeNodeToStatement } from '../utils/nodeOccurrences';
+import { computeChainCollapse, type ChainCollapseResult } from '../utils/chainCollapse';
 
 // =============================================================================
 // Types for worker communication (all serializable - no Sets, no functions)
@@ -66,6 +67,10 @@ export interface SerializedTableNodeData extends Record<string, unknown> {
   qualifiedName?: string;
   schema?: string;
   database?: string;
+  /** True if this node is a chain-collapse fold root (#28). */
+  isChainFolded?: boolean;
+  /** When `isChainFolded`, the number of nodes rolled up under this fold. */
+  chainFoldCount?: number;
 }
 
 /**
@@ -105,6 +110,25 @@ export interface SerializedEdgeData extends Record<string, unknown> {
   targetColumn?: string;
   isDerived?: boolean;
   isHighlighted?: boolean;
+  /**
+   * True when the edge's target is eligible for chain collapse but is
+   * not currently folded — AnimatedEdge renders a "−" toggle at midpoint
+   * that folds the target into its parent (#28).
+   */
+  chainCollapsible?: boolean;
+  /**
+   * True when the edge's target is a fold root. AnimatedEdge renders a
+   * "+N" badge that expands the fold on click (#28).
+   */
+  chainFolded?: boolean;
+  /**
+   * The node id the chain-collapse toggle/badge acts on. Distinct from
+   * the edge's `target` because the target may be a synthetic/virtual
+   * node in some graphs.
+   */
+  chainToggleNodeId?: string;
+  /** When `chainFolded`, the count of nodes rolled up under the fold. */
+  chainFoldCount?: number;
 }
 
 /**
@@ -135,6 +159,7 @@ export interface GraphBuildRequest {
   searchTerm: string;
   collapsedNodeIds: string[]; // Array instead of Set for serialization
   expandedTableIds: string[]; // Array instead of Set for serialization
+  collapsedChainNodeIds: string[]; // #28: nodes folded into their parent
   resolvedSchema: ResolvedSchemaMetadata | null;
   defaultCollapsed: boolean;
   showColumnEdges: boolean;
@@ -420,11 +445,19 @@ function buildFlowNodes(
   collapsedNodeIds: Set<string>,
   expandedTableIds: Set<string>,
   resolvedSchema: ResolvedSchemaMetadata | null | undefined,
-  defaultCollapsed: boolean
+  defaultCollapsed: boolean,
+  chainCollapse: ChainCollapseResult
 ): SerializedFlowNode[] {
-  const tableNodes = merged.nodes.filter((n) => isTableLikeType(n.type));
+  // Drop nodes that were rolled up by chain-collapse BEFORE we build any
+  // flow data for them. Fold roots themselves stay visible; it is their
+  // orphaned descendants the util flagged — see computeChainCollapse.
+  const tableNodes = merged.nodes
+    .filter((n) => isTableLikeType(n.type))
+    .filter((n) => !chainCollapse.hiddenNodeIds.has(n.id));
   const columnNodes = merged.nodes.filter((n) => n.type === 'column');
-  const outputNodes = merged.nodes.filter((n) => n.type === OUTPUT_NODE_TYPE);
+  const outputNodes = merged.nodes
+    .filter((n) => n.type === OUTPUT_NODE_TYPE)
+    .filter((n) => !chainCollapse.hiddenNodeIds.has(n.id));
   const isSelect = merged.isSelect;
   // Identify tables introduced via JOIN (base tables are those NOT in this set)
   const joinedTableIds = buildJoinedTableIds(merged.edges, merged.nodes);
@@ -487,18 +520,30 @@ function buildFlowNodes(
       resolvedSchema
     );
 
+    const isChainFolded = chainCollapse.foldRootIds.has(node.id);
     flowNodes.push({
       id: node.id,
       type: 'tableNode',
       position: { x: 0, y: 0 },
-      data: buildTableNodeData(node, columns, {
-        selectedNodeId,
-        searchTerm,
-        isCollapsed: computeIsCollapsed(node.id, defaultCollapsed, collapsedNodeIds),
-        hiddenColumnCount,
-        isRecursive: recursiveNodeIds.has(node.id),
-        isBaseTable: baseTableIds.has(node.id),
-      }),
+      data: {
+        ...buildTableNodeData(node, columns, {
+          selectedNodeId,
+          searchTerm,
+          // Folded nodes always render compactly — reuse the existing
+          // isCollapsed path so they shrink to header height.
+          isCollapsed:
+            isChainFolded || computeIsCollapsed(node.id, defaultCollapsed, collapsedNodeIds),
+          hiddenColumnCount,
+          isRecursive: recursiveNodeIds.has(node.id),
+          isBaseTable: baseTableIds.has(node.id),
+        }),
+        ...(isChainFolded
+          ? {
+              isChainFolded: true,
+              chainFoldCount: chainCollapse.rollupCountByFoldRootId.get(node.id) ?? 1,
+            }
+          : {}),
+      },
     });
   }
 
@@ -513,20 +558,31 @@ function buildFlowNodes(
 
   if (isSelect) {
     outputNodes.forEach((outputNode) => {
+      const isChainFolded = chainCollapse.foldRootIds.has(outputNode.id);
       flowNodes.push({
         id: outputNode.id,
         type: 'tableNode',
         position: { x: 0, y: 0 },
-        data: buildOutputNodeData(
-          outputNode.id,
-          outputNode.label,
-          outputColumnsByNodeId.get(outputNode.id) || [],
-          {
-            selectedNodeId,
-            searchTerm,
-            isCollapsed: computeIsCollapsed(outputNode.id, defaultCollapsed, collapsedNodeIds),
-          }
-        ),
+        data: {
+          ...buildOutputNodeData(
+            outputNode.id,
+            outputNode.label,
+            outputColumnsByNodeId.get(outputNode.id) || [],
+            {
+              selectedNodeId,
+              searchTerm,
+              isCollapsed:
+                isChainFolded ||
+                computeIsCollapsed(outputNode.id, defaultCollapsed, collapsedNodeIds),
+            }
+          ),
+          ...(isChainFolded
+            ? {
+                isChainFolded: true,
+                chainFoldCount: chainCollapse.rollupCountByFoldRootId.get(outputNode.id) ?? 1,
+              }
+            : {}),
+        },
       });
     });
 
@@ -565,11 +621,16 @@ function buildFlowEdges(
   merged: MergedLineage,
   showColumnEdges: boolean,
   defaultCollapsed: boolean,
-  collapsedNodeIds: Set<string>
+  collapsedNodeIds: Set<string>,
+  chainCollapse: ChainCollapseResult
 ): SerializedFlowEdge[] {
-  const tableNodes = merged.nodes.filter((n) => isTableLikeType(n.type));
+  const tableNodes = merged.nodes
+    .filter((n) => isTableLikeType(n.type))
+    .filter((n) => !chainCollapse.hiddenNodeIds.has(n.id));
   const columnNodes = merged.nodes.filter((n) => n.type === 'column');
-  const outputNodes = merged.nodes.filter((n) => n.type === OUTPUT_NODE_TYPE);
+  const outputNodes = merged.nodes
+    .filter((n) => n.type === OUTPUT_NODE_TYPE)
+    .filter((n) => !chainCollapse.hiddenNodeIds.has(n.id));
   const isSelect = merged.isSelect;
 
   const tableNodeMap = new Map<string, Node>();
@@ -715,7 +776,7 @@ function buildFlowEdges(
         pushTableEdge(edge.from, edge.to, edge.type, edge);
       });
 
-    return flowEdges;
+    return applyChainCollapseToEdges(flowEdges, chainCollapse);
   }
 
   // Table-level edges
@@ -855,7 +916,64 @@ function buildFlowEdges(
     });
   }
 
-  return flowEdges;
+  return applyChainCollapseToEdges(flowEdges, chainCollapse);
+}
+
+/**
+ * Post-process the flow edges to honor chain-collapse state (#28):
+ *  - Drop any edge whose endpoint is a fully hidden descendant, or whose
+ *    source is a fold root (fold roots are visual leaves — they still
+ *    exist in the graph but nothing downstream of them should render).
+ *  - Annotate edges whose target is a fold root with `chainFolded`/count
+ *    so AnimatedEdge renders a "+N" expand badge at the midpoint.
+ *  - Annotate edges whose target is merely chain-collapsible (eligible
+ *    but not yet folded) with `chainCollapsible` so the edge offers a
+ *    "−" collapse toggle.
+ */
+function applyChainCollapseToEdges(
+  edges: SerializedFlowEdge[],
+  chainCollapse: ChainCollapseResult
+): SerializedFlowEdge[] {
+  const { foldRootIds, hiddenNodeIds, rollupCountByFoldRootId, collapsibleTargetIds } =
+    chainCollapse;
+
+  return edges.flatMap((edge) => {
+    if (hiddenNodeIds.has(edge.source) || hiddenNodeIds.has(edge.target)) {
+      return [];
+    }
+    if (foldRootIds.has(edge.source)) {
+      return [];
+    }
+
+    if (foldRootIds.has(edge.target)) {
+      return [
+        {
+          ...edge,
+          data: {
+            ...(edge.data ?? {}),
+            chainFolded: true,
+            chainToggleNodeId: edge.target,
+            chainFoldCount: rollupCountByFoldRootId.get(edge.target) ?? 1,
+          },
+        },
+      ];
+    }
+
+    if (collapsibleTargetIds.has(edge.target)) {
+      return [
+        {
+          ...edge,
+          data: {
+            ...(edge.data ?? {}),
+            chainCollapsible: true,
+            chainToggleNodeId: edge.target,
+          },
+        },
+      ];
+    }
+
+    return [edge];
+  });
 }
 
 // =============================================================================
@@ -1149,6 +1267,14 @@ self.onmessage = (event: MessageEvent<GraphBuildRequest | ScriptGraphBuildReques
       // Convert arrays back to Sets for internal use
       const collapsedNodeIds = new Set(request.collapsedNodeIds);
       const expandedTableIds = new Set(request.expandedTableIds);
+      const collapsedChainNodeIds = new Set(request.collapsedChainNodeIds ?? []);
+
+      // Compute the chain-collapse fold once; both node and edge builders
+      // consult it to hide descendants and annotate the surviving edges.
+      const chainCollapse = computeChainCollapse(
+        { nodes: merged.nodes, edges: merged.edges },
+        collapsedChainNodeIds
+      );
 
       nodes = buildFlowNodes(
         merged,
@@ -1157,14 +1283,16 @@ self.onmessage = (event: MessageEvent<GraphBuildRequest | ScriptGraphBuildReques
         collapsedNodeIds,
         expandedTableIds,
         request.resolvedSchema,
-        request.defaultCollapsed
+        request.defaultCollapsed,
+        chainCollapse
       );
 
       edges = buildFlowEdges(
         merged,
         request.showColumnEdges,
         request.defaultCollapsed,
-        collapsedNodeIds
+        collapsedNodeIds,
+        chainCollapse
       );
 
       lineageNodes = merged.nodes;

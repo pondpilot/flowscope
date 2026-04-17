@@ -112,6 +112,7 @@ export interface TableGraphBuildOptions {
   searchTerm: string;
   collapsedNodeIds: Set<string>;
   expandedTableIds: Set<string>;
+  collapsedChainNodeIds: ReadonlySet<string>;
   resolvedSchema: ResolvedSchemaMetadata | null | undefined;
   defaultCollapsed: boolean;
   showColumnEdges: boolean;
@@ -146,6 +147,7 @@ export async function buildTableGraphInWorker(
     searchTerm: options.searchTerm,
     collapsedNodeIds: Array.from(options.collapsedNodeIds),
     expandedTableIds: Array.from(options.expandedTableIds),
+    collapsedChainNodeIds: Array.from(options.collapsedChainNodeIds),
     resolvedSchema: options.resolvedSchema ?? null,
     defaultCollapsed: options.defaultCollapsed,
     showColumnEdges: options.showColumnEdges,

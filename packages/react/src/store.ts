@@ -206,6 +206,14 @@ export interface LineageState {
    * `setStalePaths`. Nav affordances gated by membership in this set (#22).
    */
   stalePaths: ReadonlySet<string>;
+  /**
+   * Node ids the user has chosen to fold into their single parent via the
+   * edge-mounted chain-collapse toggle (#28). A selection is only honored
+   * if the node is still chain-collapsible in the current graph (see
+   * `isChainCollapsible`), so stale selections across re-analysis are
+   * ignored rather than throwing errors.
+   */
+  collapsedChainNodeIds: ReadonlySet<string>;
 
   // Actions
   setResult: (result: AnalyzeResult | null) => void;
@@ -272,6 +280,13 @@ export interface LineageState {
    * useOccurrenceShortcuts) can gate on staleness uniformly.
    */
   setStalePaths: (paths: Iterable<string>) => void;
+  /**
+   * Flip a node's chain-collapse selection. Adding a node folds it into
+   * its parent; removing it expands the fold. No-op if the node isn't
+   * currently chain-collapsible — the graph builder re-evaluates on every
+   * rebuild, so stale selections are simply ignored until re-eligible.
+   */
+  toggleChainCollapse: (nodeId: string) => void;
 }
 
 /**
@@ -328,6 +343,7 @@ export function createLineageStore(
     isBuilding: false,
     analyzedContentByPath: null,
     stalePaths: new Set(),
+    collapsedChainNodeIds: new Set(),
     ...initialState,
 
     // Actions
@@ -352,7 +368,13 @@ export function createLineageStore(
           // Clearing the result invalidates any staleness derived from it.
           // A successful re-analysis will immediately refill these via
           // setAnalyzedContent / setStalePaths in the app layer.
-          ...(result === null ? { analyzedContentByPath: null, stalePaths: new Set() } : {}),
+          ...(result === null
+            ? {
+                analyzedContentByPath: null,
+                stalePaths: new Set(),
+                collapsedChainNodeIds: new Set(),
+              }
+            : {}),
         };
       }),
 
@@ -558,6 +580,17 @@ export function createLineageStore(
         }
         return state;
       }),
+
+    toggleChainCollapse: (nodeId) =>
+      set((state) => {
+        const next = new Set(state.collapsedChainNodeIds);
+        if (next.has(nodeId)) {
+          next.delete(nodeId);
+        } else {
+          next.add(nodeId);
+        }
+        return { collapsedChainNodeIds: next };
+      }),
   }));
 }
 
@@ -621,6 +654,7 @@ export function useLineage() {
       isBuilding: store.isBuilding,
       analyzedContentByPath: store.analyzedContentByPath,
       stalePaths: store.stalePaths,
+      collapsedChainNodeIds: store.collapsedChainNodeIds,
     },
     actions: {
       setResult: store.setResult,
@@ -654,6 +688,7 @@ export function useLineage() {
       setIsBuilding: store.setIsBuilding,
       setAnalyzedContent: store.setAnalyzedContent,
       setStalePaths: store.setStalePaths,
+      toggleChainCollapse: store.toggleChainCollapse,
     },
   };
 }
@@ -690,6 +725,7 @@ export function useLineageState() {
   const isBuilding = useLineageStore((state) => state.isBuilding);
   const analyzedContentByPath = useLineageStore((state) => state.analyzedContentByPath);
   const stalePaths = useLineageStore((state) => state.stalePaths);
+  const collapsedChainNodeIds = useLineageStore((state) => state.collapsedChainNodeIds);
 
   return {
     result,
@@ -718,6 +754,7 @@ export function useLineageState() {
     isBuilding,
     analyzedContentByPath,
     stalePaths,
+    collapsedChainNodeIds,
   };
 }
 
@@ -756,6 +793,7 @@ export function useLineageActions() {
   const setIsBuilding = useLineageStore((state) => state.setIsBuilding);
   const setAnalyzedContent = useLineageStore((state) => state.setAnalyzedContent);
   const setStalePaths = useLineageStore((state) => state.setStalePaths);
+  const toggleChainCollapse = useLineageStore((state) => state.toggleChainCollapse);
 
   return {
     setResult,
@@ -789,5 +827,6 @@ export function useLineageActions() {
     setIsBuilding,
     setAnalyzedContent,
     setStalePaths,
+    toggleChainCollapse,
   };
 }

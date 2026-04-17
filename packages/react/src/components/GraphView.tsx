@@ -380,6 +380,7 @@ export function GraphView({
     showColumnEdges,
     showScriptTables,
     expandedTableIds,
+    collapsedChainNodeIds,
     tableFilter,
     focusedOccurrenceIndex,
   } = state;
@@ -492,6 +493,7 @@ export function GraphView({
               searchTerm: effectiveSearchTerm,
               collapsedNodeIds,
               expandedTableIds,
+              collapsedChainNodeIds,
               resolvedSchema: analysisResult.resolvedSchema,
               defaultCollapsed,
               showColumnEdges,
@@ -555,6 +557,7 @@ export function GraphView({
     showColumnEdges,
     showScriptTables,
     expandedTableIds,
+    collapsedChainNodeIds,
     setIsBuilding,
   ]);
 

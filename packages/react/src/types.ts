@@ -152,6 +152,12 @@ export interface LineageState {
    * (OccurrenceCycler, useOccurrenceShortcuts, SqlView reveal button).
    */
   stalePaths: ReadonlySet<string>;
+  /**
+   * Node ids the user has folded into their single parent via the
+   * edge-mounted chain-collapse toggle (#28). Honored only while the node
+   * remains chain-collapsible; stale selections are ignored on rebuild.
+   */
+  collapsedChainNodeIds: ReadonlySet<string>;
 }
 
 /**
@@ -221,6 +227,8 @@ export interface LineageActions {
   setAnalyzedContent: (map: ReadonlyMap<string, string> | null) => void;
   /** Replace the set of paths whose content has diverged from the snapshot. */
   setStalePaths: (paths: Iterable<string>) => void;
+  /** Flip a node's chain-collapse state (fold into parent or expand). */
+  toggleChainCollapse: (nodeId: string) => void;
 }
 
 /**
