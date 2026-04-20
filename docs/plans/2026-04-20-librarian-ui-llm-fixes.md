@@ -49,12 +49,12 @@ Eight small-to-medium UI and prompt changes to the Librarian chat feature and th
 - Modify: `app/src/components/Workspace.tsx` (remove top-right Librarian Button + Tooltip block, keep `toggleLibrarian` wiring)
 - Modify: `app/src/components/AnalysisView.tsx` (add Librarian button right of Schema button in the toolbar)
 
-- [ ] Remove the icon-only Librarian `Button` + `Tooltip` from the top-right header in `Workspace.tsx`
-- [ ] In `AnalysisView.tsx`, import `BookOpen` from `lucide-react`; access `librarianOpen` / `toggleLibrarian` from the same source `Workspace.tsx` uses (lift into a shared store or thread via props — pick the lightest option already present)
-- [ ] Add a new `Button` matching the Schema button style: `variant="outline" size="sm"`, `h-7 text-xs`, icon `BookOpen` + text "Librarian"
-- [ ] Include the existing `⌘L` tooltip; active state: use `variant="secondary"` (or a class) when `librarianOpen`
-- [ ] Update affected tests; add a test asserting the button renders in the analysis toolbar and toggles state
-- [ ] Run `yarn workspace app test` and `just typecheck`
+- [x] Remove the icon-only Librarian `Button` + `Tooltip` from the top-right header in `Workspace.tsx`
+- [x] In `AnalysisView.tsx`, import `BookOpen` from `lucide-react`; access `librarianOpen` / `toggleLibrarian` from the same source `Workspace.tsx` uses (lift into a shared store or thread via props — pick the lightest option already present)
+- [x] Add a new `Button` matching the Schema button style: `variant="outline" size="sm"`, `h-7 text-xs`, icon `BookOpen` + text "Librarian"
+- [x] Include the existing `⌘L` tooltip; active state: use `variant="secondary"` (or a class) when `librarianOpen`
+- [x] Update affected tests; add a test asserting the button renders in the analysis toolbar and toggles state
+- [x] Run `yarn workspace app test` and `just typecheck`
 
 ### Task 3: Style schema identifiers in assistant messages + prompt updates (fixes #3, #5, #6)
 

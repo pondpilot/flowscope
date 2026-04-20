@@ -24,6 +24,7 @@ import { useViewStateStore, getNamespaceFilterStateWithDefaults } from '@/lib/vi
 import { useProject } from '@/lib/project-store';
 import { schemaMetadataToSQL } from '@/lib/schema-parser';
 import { HierarchyView, type HierarchyViewRef } from './HierarchyView';
+import { LibrarianToggleButton } from './LibrarianToggleButton';
 import { StatsPopover } from './StatsPopover';
 import { NamespaceFilterBar } from './NamespaceFilterBar';
 import { SchemaAwareIssuesPanel } from './SchemaAwareIssuesPanel';
@@ -413,6 +414,7 @@ export function AnalysisView({
                 </Tooltip>
               </TooltipProvider>
             )}
+            <LibrarianToggleButton />
           </div>
         </div>
 

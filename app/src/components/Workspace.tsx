@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { Share2, Github, BookOpen } from 'lucide-react';
+import { Share2, Github } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLineageActions, useLineageState } from '@pondpilot/flowscope-react';
 import { Button } from './ui/button';
@@ -395,23 +395,6 @@ export function Workspace({ backendReady, error, onRetry, isRetrying }: Workspac
               </TooltipTrigger>
               <TooltipContent>
                 <p>View on GitHub</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={librarianOpen ? 'secondary' : 'ghost'}
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={toggleLibrarian}
-                >
-                  <BookOpen className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Librarian ({getShortcutDisplay('toggle-librarian') ?? '⌘L'})</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
