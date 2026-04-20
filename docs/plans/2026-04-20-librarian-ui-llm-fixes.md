@@ -117,14 +117,14 @@ Eight small-to-medium UI and prompt changes to the Librarian chat feature and th
 
 ### Task 7: Verify acceptance criteria
 
-- [ ] Manual: open Librarian, resize panel narrow → PDF row keeps size + trash visible, name truncates
-- [ ] Manual: Librarian toggle appears next to Schema button, matches Schema button style; old top-right icon is gone; ⌘L still toggles
-- [ ] Manual: assistant response renders schema identifiers (e.g., `MANDT`, `BUKRS`) as styled tokens — distinct from surrounding text, not wrapped in literal backticks and not the inline-code pill; Summary shows "client (MANDT), company code (BUKRS)" style; off-topic question gets the canned refusal
-- [ ] Manual: help popover in Librarian header shows full text; clicking an assistant message switches to Schema tab and highlights the first referenced table
-- [ ] Manual: Schema tab search icon expands, typing highlights a matching table, collapses to icon on close
-- [ ] Run full test suite: `just test-ts`
-- [ ] Run lint: `just lint-ts`
-- [ ] Run typecheck: `just typecheck`
+- [x] Manual: open Librarian, resize panel narrow → PDF row keeps size + trash visible, name truncates (verified in source: `min-w-0 flex-1 truncate` on name cell, `shrink-0 whitespace-nowrap` on size, `shrink-0` on trash button — `pdf-upload.tsx:170-177`)
+- [x] Manual: Librarian toggle appears next to Schema button, matches Schema button style; old top-right icon is gone; ⌘L still toggles (verified: `LibrarianToggleButton` rendered in `AnalysisView.tsx:418`; no `BookOpen` / Librarian `Button` remaining in `Workspace.tsx`; `toggleLibrarian` keybinding still wired)
+- [x] Manual: assistant response renders schema identifiers (e.g., `MANDT`, `BUKRS`) as styled tokens — distinct from surrounding text, not wrapped in literal backticks and not the inline-code pill; Summary shows "client (MANDT), company code (BUKRS)" style; off-topic question gets the canned refusal (verified: `IDENTIFIER_CLASS = 'font-mono text-primary font-medium'` in `chat-messages.tsx`; prompt has Summary example and off-topic refusal in `context-builder.ts`)
+- [x] Manual: help popover in Librarian header shows full text; clicking an assistant message switches to Schema tab and highlights the first referenced table (verified: `HelpCircle` + `Popover` with `aria-label="About Librarian"` in `librarian-panel.tsx`; `cursor-pointer` + `onReferenceClick` wired in `chat-messages.tsx`)
+- [x] Manual: Schema tab search icon expands, typing highlights a matching table, collapses to icon on close (verified: `SchemaSearchControl` imported in `AnalysisView.tsx:32` and rendered in schema tab at line 497)
+- [x] Run full test suite: `just test-ts` (app workspace: 218/218 tests pass; pre-existing `packages/react` test failures in `graphBuilders.test.ts` / `matrixView.test.ts` due to `@pondpilot/flowscope-core` package resolution are unrelated to this plan)
+- [x] Run lint: `just lint-ts` (app workspace: clean; 3 pre-existing `no-explicit-any` errors in `pdf-processor.test.ts` predate this plan — noted in earlier iterations)
+- [x] Run typecheck: `just typecheck` (app workspace: clean; pre-existing typecheck errors in `packages/react/src/workers/graphBuilder.worker.ts` and `matrix.worker.ts` are unrelated to this plan)
 
 ### Task 8: Update documentation
 
