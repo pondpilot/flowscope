@@ -591,7 +591,7 @@ describe('PdfUpload', () => {
     expect(onUpload).toHaveBeenCalledWith(file);
   });
 
-  it('renders ScrollArea with max-h-[200px] when many files are uploaded', () => {
+  it('renders ScrollArea with max-h-[64px] when many files are uploaded', () => {
     const files = Array.from({ length: 6 }, (_, i) =>
       makePdfFile({ id: `scroll-${i}`, name: `doc-${i}.pdf` })
     );

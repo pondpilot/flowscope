@@ -32,10 +32,16 @@ describe('view-state-store - librarian', () => {
   });
 
   it('librarianOpen is included in persisted state', () => {
-    // The partialize function should include librarianOpen
-    // We test this indirectly by verifying the store has the field
     useViewStateStore.getState().setLibrarianOpen(true);
-    expect(useViewStateStore.getState().librarianOpen).toBe(true);
+
+    const persisted = localStorage.getItem('flowscope-view-states');
+    expect(persisted).not.toBeNull();
+    const parsed = JSON.parse(persisted as string);
+    expect(parsed.state).toHaveProperty('librarianOpen', true);
+
+    useViewStateStore.getState().setLibrarianOpen(false);
+    const persistedAfter = JSON.parse(localStorage.getItem('flowscope-view-states') as string);
+    expect(persistedAfter.state).toHaveProperty('librarianOpen', false);
   });
 
   it('toggleLibrarian does not affect other store state', () => {
