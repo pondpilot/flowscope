@@ -155,4 +155,30 @@ describe('LibrarianPanel', () => {
     render(<LibrarianPanel onClose={vi.fn()} />);
     expect(screen.getByTestId('loading-indicator')).toBeInTheDocument();
   });
+
+  it('renders help button in header', () => {
+    render(<LibrarianPanel onClose={vi.fn()} />);
+    const helpButton = screen.getByTestId('help-button');
+    expect(helpButton).toBeInTheDocument();
+    expect(helpButton).toHaveAttribute('aria-label', 'About Librarian');
+  });
+
+  it('opens help popover with full help text when help button is clicked', () => {
+    render(<LibrarianPanel onClose={vi.fn()} />);
+
+    expect(screen.queryByTestId('help-popover')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('help-button'));
+
+    const popover = screen.getByTestId('help-popover');
+    expect(popover).toBeInTheDocument();
+    expect(popover).toHaveTextContent(/Hi, I'm Librarian!/);
+    expect(popover).toHaveTextContent(
+      /I answer questions about your data structure using your database schema and uploaded technical documentation\./
+    );
+    expect(popover).toHaveTextContent(/How to use:/);
+    expect(popover).toHaveTextContent(/Configure your AI provider in Settings/);
+    expect(popover).toHaveTextContent(/Upload relevant PDF docs \(optional\)/);
+    expect(popover).toHaveTextContent(/Ask questions about your data/);
+  });
 });

@@ -81,10 +81,10 @@ Eight small-to-medium UI and prompt changes to the Librarian chat feature and th
 - Modify: `app/src/features/librarian/components/librarian-panel.tsx`
 - Modify: `app/src/features/librarian/__tests__/librarian-panel.test.tsx`
 
-- [ ] Add a `HelpCircle` icon Button in the right-side header action row, left of Settings (consistent `h-7 w-7` ghost icon button with aria-label "About Librarian")
-- [ ] Use `Popover` (shadcn) so the help text is clickable/readable, not a short tooltip; content body matches the spec verbatim ("Hi, I'm Librarian! ..." with three bullet points)
-- [ ] Add test asserting the popover opens on click and renders the full help text
-- [ ] Run `yarn workspace app test`
+- [x] Add a `HelpCircle` icon Button in the right-side header action row, left of Settings (consistent `h-7 w-7` ghost icon button with aria-label "About Librarian")
+- [x] Use `Popover` (shadcn) so the help text is clickable/readable, not a short tooltip; content body matches the spec verbatim ("Hi, I'm Librarian! ..." with three bullet points)
+- [x] Add test asserting the popover opens on click and renders the full help text
+- [x] Run `yarn workspace app test`
 
 ### Task 5: Highlight referenced tables/columns on chat message click (fix #7)
 

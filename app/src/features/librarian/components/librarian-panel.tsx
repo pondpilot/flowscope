@@ -1,8 +1,9 @@
 import { useCallback, useMemo, useState } from 'react';
-import { BookOpen, ChevronDown, ChevronRight, Settings, X } from 'lucide-react';
+import { BookOpen, ChevronDown, ChevronRight, HelpCircle, Settings, X } from 'lucide-react';
 import { useLineageState } from '@pondpilot/flowscope-react';
 
 import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 import { useLibrarianChat } from '../hooks/use-librarian-chat';
@@ -67,6 +68,31 @@ export function LibrarianPanel({ onClose }: LibrarianPanelProps) {
           <span className="text-sm font-medium">Librarian</span>
         </div>
         <div className="flex items-center gap-1">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                aria-label="About Librarian"
+                data-testid="help-button"
+              >
+                <HelpCircle className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-80 text-sm" data-testid="help-popover">
+              <p>
+                Hi, I&apos;m Librarian! I answer questions about your data structure using your
+                database schema and uploaded technical documentation.
+              </p>
+              <p className="mt-2 font-medium">How to use:</p>
+              <ul className="mt-1 list-disc space-y-1 pl-5 text-muted-foreground">
+                <li>Configure your AI provider in Settings (⚙)</li>
+                <li>Upload relevant PDF docs (optional)</li>
+                <li>Ask questions about your data</li>
+              </ul>
+            </PopoverContent>
+          </Popover>
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
