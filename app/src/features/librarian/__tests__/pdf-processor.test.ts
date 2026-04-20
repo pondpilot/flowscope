@@ -92,7 +92,7 @@ describe('processPdf', () => {
         }),
         destroy: vi.fn(),
       }),
-    } as any);
+    } as unknown as ReturnType<typeof pdfjs.getDocument>);
 
     const file = new File(['fake-pdf-content'], 'test.pdf', { type: 'application/pdf' });
     const embedFn = vi.fn().mockResolvedValue([]);
@@ -116,7 +116,7 @@ describe('processPdf', () => {
         }),
         destroy: vi.fn(),
       }),
-    } as any);
+    } as unknown as ReturnType<typeof pdfjs.getDocument>);
 
     const file = new File(['fake-pdf'], 'doc.pdf', { type: 'application/pdf' });
     const embedFn = vi.fn().mockResolvedValue([[0.1, 0.2, 0.3]]);
@@ -149,7 +149,7 @@ describe('processPdf', () => {
         }),
         destroy: vi.fn(),
       }),
-    } as any);
+    } as unknown as ReturnType<typeof pdfjs.getDocument>);
 
     const file = new File(['fake'], 'test.pdf', { type: 'application/pdf' });
     // Return wrong number of embeddings

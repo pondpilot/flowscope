@@ -338,24 +338,29 @@ export function AnalysisView({
 
   if (!result || !summary) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-muted-foreground bg-muted/5">
-        <div className="p-6 text-center">
-          {isAnalyzing ? (
-            <>
-              <Loader2 className="h-6 w-6 animate-spin mx-auto mb-3 opacity-70" />
-              <h3 className="font-semibold mb-2">Analyzing SQL</h3>
-              <p className="text-sm max-w-xs mx-auto">
-                Building lineage, schema, and issue details for the current analysis run.
-              </p>
-            </>
-          ) : (
-            <>
-              <h3 className="font-semibold mb-2">No Analysis Results</h3>
-              <p className="text-sm max-w-xs mx-auto">
-                Run analysis on your SQL script to see lineage and schema details here.
-              </p>
-            </>
-          )}
+      <div className="flex flex-col h-full bg-background">
+        <div className="px-4 py-2 border-b flex items-center justify-end bg-muted/10 h-[44px] shrink-0">
+          <LibrarianToggleButton />
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground bg-muted/5">
+          <div className="p-6 text-center">
+            {isAnalyzing ? (
+              <>
+                <Loader2 className="h-6 w-6 animate-spin mx-auto mb-3 opacity-70" />
+                <h3 className="font-semibold mb-2">Analyzing SQL</h3>
+                <p className="text-sm max-w-xs mx-auto">
+                  Building lineage, schema, and issue details for the current analysis run.
+                </p>
+              </>
+            ) : (
+              <>
+                <h3 className="font-semibold mb-2">No Analysis Results</h3>
+                <p className="text-sm max-w-xs mx-auto">
+                  Run analysis on your SQL script to see lineage and schema details here.
+                </p>
+              </>
+            )}
+          </div>
         </div>
       </div>
     );

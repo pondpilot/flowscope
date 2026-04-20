@@ -38,8 +38,9 @@ async function getEmbeddingPipeline() {
   if (!pipelinePromise) {
     pipelinePromise = (async () => {
       const { pipeline: createPipeline, env } = await import('@xenova/transformers');
-      // Disable local models and browser cache to prevent Vite dev server
-      // from intercepting model file requests and returning HTML instead of JSON
+      // Models are fetched from a CDN (set below) so Vite never intercepts
+      // them. Browser cache is enabled to avoid re-downloading the ~25 MB
+      // model on every reload.
       env.allowLocalModels = false;
       env.allowRemoteModels = true;
       env.useBrowserCache = true;

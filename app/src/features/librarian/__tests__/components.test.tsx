@@ -370,6 +370,56 @@ describe('ChatMessages', () => {
     expect(onNavigateToTable).toHaveBeenCalledWith('MARA');
   });
 
+  it('does not navigate when text is selected inside the bubble (preserves copy/select)', () => {
+    const schema = makeSchema(['MARA'], []);
+    const onNavigateToTable = vi.fn();
+    const messages = [makeMessage({ role: 'assistant', content: 'Check MARA for this.' })];
+    render(
+      <ChatMessages
+        messages={messages}
+        isLoading={false}
+        schemaIdentifiers={schema}
+        onNavigateToTable={onNavigateToTable}
+      />
+    );
+
+    const bubble = screen.getByTestId('message-assistant').querySelector('[role="button"]')!;
+    const originalGetSelection = window.getSelection;
+    window.getSelection = vi.fn(
+      () => ({ toString: () => 'some selected text' }) as unknown as Selection
+    );
+    try {
+      fireEvent.click(bubble);
+      expect(onNavigateToTable).not.toHaveBeenCalled();
+    } finally {
+      window.getSelection = originalGetSelection;
+    }
+  });
+
+  it('does not navigate when clicking inside a code block (allows code copy)', () => {
+    const schema = makeSchema(['MARA'], []);
+    const onNavigateToTable = vi.fn();
+    const messages = [
+      makeMessage({
+        role: 'assistant',
+        content: 'See MARA below.\n```sql\nSELECT * FROM MARA;\n```',
+      }),
+    ];
+    const { container } = render(
+      <ChatMessages
+        messages={messages}
+        isLoading={false}
+        schemaIdentifiers={schema}
+        onNavigateToTable={onNavigateToTable}
+      />
+    );
+
+    const pre = container.querySelector('pre')!;
+    expect(pre).not.toBeNull();
+    fireEvent.click(pre);
+    expect(onNavigateToTable).not.toHaveBeenCalled();
+  });
+
   it('does not make user messages clickable even when they mention identifiers', () => {
     const schema = makeSchema(['MARA'], []);
     const onNavigateToTable = vi.fn();

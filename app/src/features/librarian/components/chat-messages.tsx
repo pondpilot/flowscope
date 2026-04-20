@@ -81,6 +81,7 @@ function renderInline(
         <code
           key={`${keyPrefix}-c-${m.index}`}
           className="rounded bg-background/50 px-1 py-0.5 text-xs font-mono"
+          onClick={(e) => e.stopPropagation()}
         >
           {m[4]}
         </code>
@@ -118,6 +119,7 @@ function formatContent(content: string, schema: SchemaIdentifiers) {
       <pre
         key={`code-${match.index}`}
         className="my-2 overflow-x-auto rounded-md bg-muted p-3 text-xs font-mono"
+        onClick={(e) => e.stopPropagation()}
       >
         <code>{match[2]}</code>
       </pre>
@@ -176,6 +178,10 @@ export function ChatMessages({
             msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'
           }${isClickable ? ' cursor-pointer hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring' : ''}`;
           const handleActivate = () => {
+            // Skip navigation when the user is selecting text inside the bubble
+            // (text selection ends with a click). Without this, copying text or
+            // SQL out of an answer would also navigate to the schema view.
+            if ((window.getSelection?.()?.toString().length ?? 0) > 0) return;
             if (reference && onNavigateToTable) {
               onNavigateToTable(reference.tableName);
             }
