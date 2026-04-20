@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+#### Web App (app/) — Librarian
+- Help popover in the Librarian panel header describing the assistant and usage tips
+- Clickable assistant messages that jump to the Schema tab and highlight the first referenced table
+- Styled schema identifiers (table and column names) inline in assistant responses, distinct from inline code
+- Search control in the Schema view header that expands to an input and highlights the matching table as you type
+
+### Changed
+
+#### Web App (app/) — Librarian
+- Moved the Librarian toggle from the top-right workspace header into the analysis toolbar, next to the Schema button (⌘L unchanged)
+- Updated the Librarian system prompt: identifiers are emitted as bare tokens (no backticks); Summary sections pair business names with technical names, e.g. `client (MANDT)`; off-topic questions receive a fixed refusal
+
+### Fixed
+
+#### Web App (app/) — Librarian
+- PDF upload list no longer clips the file size and delete button at narrow panel widths — long file names truncate with ellipsis instead
+
 ## [0.7.0] - 2026-04-23
 
 ### Added

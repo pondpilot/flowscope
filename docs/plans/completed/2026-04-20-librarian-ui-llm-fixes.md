@@ -128,6 +128,6 @@ Eight small-to-medium UI and prompt changes to the Librarian chat feature and th
 
 ### Task 8: Update documentation
 
-- [ ] Update `CHANGELOG.md` under Unreleased with a concise entry for the Librarian UI fixes and prompt updates
-- [ ] No README changes expected (feature-level docs live within Librarian module); update only if a user-facing guide references the old toggle location
-- [ ] Move this plan to `docs/plans/completed/` after merge
+- [x] Update `CHANGELOG.md` under Unreleased with a concise entry for the Librarian UI fixes and prompt updates
+- [x] No README changes expected (feature-level docs live within Librarian module); update only if a user-facing guide references the old toggle location (verified: README has no Librarian references)
+- [x] Move this plan to `docs/plans/completed/` after merge
