@@ -19,9 +19,15 @@ import { PdfUpload } from './pdf-upload';
 
 interface LibrarianPanelProps {
   onClose: () => void;
+  /**
+   * Called when the user clicks an assistant message that references a
+   * schema table (directly or via a column). The host wires this to the
+   * schema tab navigation.
+   */
+  onNavigateToTable?: (tableName: string) => void;
 }
 
-export function LibrarianPanel({ onClose }: LibrarianPanelProps) {
+export function LibrarianPanel({ onClose, onNavigateToTable }: LibrarianPanelProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [docsExpanded, setDocsExpanded] = useState(false);
 
@@ -135,6 +141,7 @@ export function LibrarianPanel({ onClose }: LibrarianPanelProps) {
         messages={messages}
         isLoading={isLoading}
         schemaIdentifiers={schemaIdentifiers}
+        onNavigateToTable={onNavigateToTable}
       />
 
       {/* Collapsible docs section */}

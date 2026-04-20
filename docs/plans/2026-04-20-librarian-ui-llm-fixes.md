@@ -95,12 +95,12 @@ Eight small-to-medium UI and prompt changes to the Librarian chat feature and th
 - Reuse: `app/src/features/librarian/utils/schema-identifiers.ts` from Task 3
 - Modify: `app/src/features/librarian/__tests__/components.test.tsx`
 
-- [ ] Reuse `detectIdentifiers` from Task 3 to pull all resolved schema identifiers from an assistant message; resolve each to `{tableName}` or `{tableName, columnName}`
-- [ ] Make assistant message bubbles clickable: visible cursor `cursor-pointer`, keyboard accessible (button role), only when the message has at least one resolvable reference
-- [ ] On click, dispatch the first referenced table via the navigation mechanism already used for navigating to the schema tab; switch to the schema tab and select that table (pre-existing single-select highlight is sufficient)
-- [ ] If the clicked message references a column only, select the owning table in Schema view; leave column-level visual highlight out of scope (not supported by current API)
-- [ ] Add interaction test that clicking an assistant message triggers the navigation target
-- [ ] Run `yarn workspace app test`
+- [x] Reuse `detectIdentifiers` from Task 3 to pull all resolved schema identifiers from an assistant message; resolve each to `{tableName}` or `{tableName, columnName}`
+- [x] Make assistant message bubbles clickable: visible cursor `cursor-pointer`, keyboard accessible (button role), only when the message has at least one resolvable reference
+- [x] On click, dispatch the first referenced table via the navigation mechanism already used for navigating to the schema tab; switch to the schema tab and select that table (pre-existing single-select highlight is sufficient)
+- [x] If the clicked message references a column only, select the owning table in Schema view; leave column-level visual highlight out of scope (not supported by current API)
+- [x] Add interaction test that clicking an assistant message triggers the navigation target
+- [x] Run `yarn workspace app test`
 
 ### Task 6: Add search icon + expandable field to Schema view (fix #8)
 

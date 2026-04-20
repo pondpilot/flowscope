@@ -7,6 +7,7 @@ import type { ChatMessage } from '../types';
 import {
   detectIdentifiers,
   EMPTY_SCHEMA_IDENTIFIERS,
+  resolveFirstTableReference,
   type SchemaIdentifiers,
 } from '../utils/schema-identifiers';
 
@@ -14,6 +15,11 @@ interface ChatMessagesProps {
   messages: ChatMessage[];
   isLoading: boolean;
   schemaIdentifiers?: SchemaIdentifiers;
+  /**
+   * Called when the user clicks an assistant message that contains at least
+   * one resolvable schema identifier. Receives the first referenced table.
+   */
+  onNavigateToTable?: (tableName: string) => void;
 }
 
 const IDENTIFIER_CLASS = 'font-mono text-primary font-medium';
@@ -130,7 +136,12 @@ function formatContent(content: string, schema: SchemaIdentifiers) {
   return parts;
 }
 
-export function ChatMessages({ messages, isLoading, schemaIdentifiers }: ChatMessagesProps) {
+export function ChatMessages({
+  messages,
+  isLoading,
+  schemaIdentifiers,
+  onNavigateToTable,
+}: ChatMessagesProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -155,33 +166,62 @@ export function ChatMessages({ messages, isLoading, schemaIdentifiers }: ChatMes
   return (
     <ScrollArea className="flex-1">
       <div className="flex flex-col gap-4 p-4">
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            data-testid={`message-${msg.role}`}
-          >
-            {msg.role === 'assistant' && (
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/10">
-                <Bot className="h-4 w-4 text-accent-light dark:text-accent-dark" />
-              </div>
-            )}
+        {messages.map((msg) => {
+          const reference =
+            msg.role === 'assistant' && onNavigateToTable
+              ? resolveFirstTableReference(msg.content, schema)
+              : null;
+          const isClickable = reference != null;
+          const bubbleClass = `min-w-0 rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
+            msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'
+          }${isClickable ? ' cursor-pointer hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring' : ''}`;
+          const handleActivate = () => {
+            if (reference && onNavigateToTable) {
+              onNavigateToTable(reference.tableName);
+            }
+          };
+          const clickableProps = isClickable
+            ? {
+                role: 'button',
+                tabIndex: 0,
+                onClick: handleActivate,
+                onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleActivate();
+                  }
+                },
+                'aria-label': `Open ${reference!.tableName} in schema view`,
+                'data-reference-table': reference!.tableName,
+                ...(reference!.columnName
+                  ? { 'data-reference-column': reference!.columnName }
+                  : {}),
+              }
+            : {};
+          return (
             <div
-              className={`min-w-0 rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
-                msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'
-              }`}
+              key={msg.id}
+              className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              data-testid={`message-${msg.role}`}
             >
-              {msg.role === 'assistant'
-                ? formatContent(msg.content, schema)
-                : formatContent(msg.content, EMPTY_SCHEMA_IDENTIFIERS)}
-            </div>
-            {msg.role === 'user' && (
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                <User className="h-4 w-4" />
+              {msg.role === 'assistant' && (
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/10">
+                  <Bot className="h-4 w-4 text-accent-light dark:text-accent-dark" />
+                </div>
+              )}
+              <div className={bubbleClass} {...clickableProps}>
+                {msg.role === 'assistant'
+                  ? formatContent(msg.content, schema)
+                  : formatContent(msg.content, EMPTY_SCHEMA_IDENTIFIERS)}
               </div>
-            )}
-          </div>
-        ))}
+              {msg.role === 'user' && (
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                  <User className="h-4 w-4" />
+                </div>
+              )}
+            </div>
+          );
+        })}
 
         {isLoading && (
           <div className="flex gap-3" data-testid="loading-indicator">

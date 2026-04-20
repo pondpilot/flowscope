@@ -15,6 +15,12 @@ export interface IdentifierSegment {
   kind?: IdentifierKind;
 }
 
+export interface SchemaReference {
+  tableName: string;
+  /** Present when the source identifier was a column; set to that column name. */
+  columnName?: string;
+}
+
 export const EMPTY_SCHEMA_IDENTIFIERS: SchemaIdentifiers = {
   tables: new Set(),
   columns: new Set(),
@@ -85,4 +91,30 @@ export function detectIdentifiers(
   }
 
   return segments;
+}
+
+/**
+ * Resolve the first schema identifier in `text` to a table reference.
+ * Table identifiers resolve to themselves; column identifiers resolve to
+ * their first known owning table. Returns null when no resolvable
+ * identifier is found.
+ */
+export function resolveFirstTableReference(
+  text: string,
+  schema: SchemaIdentifiers
+): SchemaReference | null {
+  const segments = detectIdentifiers(text, schema);
+  for (const seg of segments) {
+    if (seg.type !== 'identifier') continue;
+    if (seg.kind === 'table') {
+      return { tableName: seg.value };
+    }
+    if (seg.kind === 'column') {
+      const owners = schema.columnOwners.get(seg.value);
+      if (owners && owners.length > 0) {
+        return { tableName: owners[0], columnName: seg.value };
+      }
+    }
+  }
+  return null;
 }

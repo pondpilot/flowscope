@@ -17,7 +17,7 @@ import { KeyboardShortcutsDialog } from './KeyboardShortcutsDialog';
 import { CommandPalette } from './CommandPalette';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { useProject } from '@/lib/project-store';
-import { NavigationProvider } from '@/lib/navigation-context';
+import { NavigationProvider, useNavigation } from '@/lib/navigation-context';
 import { FocusRegistryProvider } from '@/lib/focus-registry';
 import { useGlobalShortcuts, useAnalysis } from '@/hooks';
 import type { GlobalShortcut } from '@/hooks';
@@ -495,7 +495,7 @@ export function Workspace({ backendReady, error, onRetry, isRetrying }: Workspac
                     maxSize={40}
                     data-testid="librarian-panel"
                   >
-                    <LibrarianPanel onClose={() => setLibrarianOpen(false)} />
+                    <LibrarianPanelWithNavigation onClose={() => setLibrarianOpen(false)} />
                   </ResizablePanel>
                 </>
               )}
@@ -505,4 +505,15 @@ export function Workspace({ backendReady, error, onRetry, isRetrying }: Workspac
       </NavigationProvider>
     </div>
   );
+}
+
+function LibrarianPanelWithNavigation({ onClose }: { onClose: () => void }) {
+  const { navigateTo } = useNavigation();
+  const handleNavigateToTable = useCallback(
+    (tableName: string) => {
+      navigateTo('schema', { tableName });
+    },
+    [navigateTo]
+  );
+  return <LibrarianPanel onClose={onClose} onNavigateToTable={handleNavigateToTable} />;
 }

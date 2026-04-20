@@ -274,6 +274,118 @@ describe('ChatMessages', () => {
 
     expect(container.querySelector('[data-identifier]')).toBeNull();
   });
+
+  it('makes assistant messages clickable when they reference a table and fires callback', () => {
+    const schema = makeSchema(['MARA'], []);
+    const onNavigateToTable = vi.fn();
+    const messages = [makeMessage({ role: 'assistant', content: 'Check MARA for this.' })];
+    render(
+      <ChatMessages
+        messages={messages}
+        isLoading={false}
+        schemaIdentifiers={schema}
+        onNavigateToTable={onNavigateToTable}
+      />
+    );
+
+    const bubble = screen.getByTestId('message-assistant').querySelector('[role="button"]');
+    expect(bubble).not.toBeNull();
+    expect(bubble).toHaveAttribute('data-reference-table', 'MARA');
+    expect(bubble?.className).toContain('cursor-pointer');
+
+    fireEvent.click(bubble!);
+    expect(onNavigateToTable).toHaveBeenCalledWith('MARA');
+  });
+
+  it('resolves column-only references to the owning table', () => {
+    const schema: SchemaIdentifiers = {
+      tables: new Set(['MARA']),
+      columns: new Set(['MANDT']),
+      columnOwners: new Map([['MANDT', ['MARA']]]),
+    };
+    const onNavigateToTable = vi.fn();
+    const messages = [makeMessage({ role: 'assistant', content: 'The MANDT column exists.' })];
+    render(
+      <ChatMessages
+        messages={messages}
+        isLoading={false}
+        schemaIdentifiers={schema}
+        onNavigateToTable={onNavigateToTable}
+      />
+    );
+
+    const bubble = screen.getByTestId('message-assistant').querySelector('[role="button"]');
+    expect(bubble).toHaveAttribute('data-reference-table', 'MARA');
+    expect(bubble).toHaveAttribute('data-reference-column', 'MANDT');
+
+    fireEvent.click(bubble!);
+    expect(onNavigateToTable).toHaveBeenCalledWith('MARA');
+  });
+
+  it('does not make assistant messages clickable when there is no resolvable reference', () => {
+    const schema = makeSchema(['MARA'], []);
+    const onNavigateToTable = vi.fn();
+    const messages = [
+      makeMessage({ role: 'assistant', content: 'Just a plain answer with no references.' }),
+    ];
+    render(
+      <ChatMessages
+        messages={messages}
+        isLoading={false}
+        schemaIdentifiers={schema}
+        onNavigateToTable={onNavigateToTable}
+      />
+    );
+
+    const bubble = screen.getByTestId('message-assistant').querySelector('[role="button"]');
+    expect(bubble).toBeNull();
+  });
+
+  it('does not make assistant messages clickable when no callback is provided', () => {
+    const schema = makeSchema(['MARA'], []);
+    const messages = [makeMessage({ role: 'assistant', content: 'Check MARA.' })];
+    render(
+      <ChatMessages messages={messages} isLoading={false} schemaIdentifiers={schema} />
+    );
+
+    const bubble = screen.getByTestId('message-assistant').querySelector('[role="button"]');
+    expect(bubble).toBeNull();
+  });
+
+  it('activates the callback via keyboard (Enter)', () => {
+    const schema = makeSchema(['MARA'], []);
+    const onNavigateToTable = vi.fn();
+    const messages = [makeMessage({ role: 'assistant', content: 'MARA row.' })];
+    render(
+      <ChatMessages
+        messages={messages}
+        isLoading={false}
+        schemaIdentifiers={schema}
+        onNavigateToTable={onNavigateToTable}
+      />
+    );
+
+    const bubble = screen.getByTestId('message-assistant').querySelector('[role="button"]');
+    fireEvent.keyDown(bubble!, { key: 'Enter' });
+    expect(onNavigateToTable).toHaveBeenCalledWith('MARA');
+  });
+
+  it('does not make user messages clickable even when they mention identifiers', () => {
+    const schema = makeSchema(['MARA'], []);
+    const onNavigateToTable = vi.fn();
+    const messages = [makeMessage({ role: 'user', content: 'Tell me about MARA.' })];
+    render(
+      <ChatMessages
+        messages={messages}
+        isLoading={false}
+        schemaIdentifiers={schema}
+        onNavigateToTable={onNavigateToTable}
+      />
+    );
+
+    const bubble = screen.getByTestId('message-user').querySelector('[role="button"]');
+    expect(bubble).toBeNull();
+  });
 });
 
 // ============================================================================
