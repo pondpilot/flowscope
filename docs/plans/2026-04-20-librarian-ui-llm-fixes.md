@@ -108,12 +108,12 @@ Eight small-to-medium UI and prompt changes to the Librarian chat feature and th
 - Modify: `app/src/components/AnalysisView.tsx` (schema tab wrapper — overlay a small search control above `SchemaView`)
 - Modify: `app/src/features/librarian/__tests__/components.test.tsx` or create `analysis-view.test.tsx` for the new control
 
-- [ ] Add a small `SchemaSearchControl` React component (colocated in `app/src/components/` or inline in `AnalysisView.tsx`) that renders as an icon-only `Search` (magnifying glass) button; on click expands into a compact `<input>` with a close button; collapses back to icon when dismissed (blur + no text, or explicit close)
-- [ ] Position the control absolutely in the top-right of the schema tab panel (not inside the shared tabs toolbar — spec says "Schema view header")
-- [ ] On keystroke, set `schemaState.setSelectedTableName(matchedName)` using case-insensitive prefix match across schema table names; clear selection when input is empty
-- [ ] Keep it view-local: no persistence across sessions; no change to `usePersistedSchemaState` unless trivial
-- [ ] Add test: typing in the field selects a matching table; clearing the field clears selection; the control collapses on dismiss
-- [ ] Run `yarn workspace app test`
+- [x] Add a small `SchemaSearchControl` React component (colocated in `app/src/components/` or inline in `AnalysisView.tsx`) that renders as an icon-only `Search` (magnifying glass) button; on click expands into a compact `<input>` with a close button; collapses back to icon when dismissed (blur + no text, or explicit close)
+- [x] Position the control absolutely in the top-right of the schema tab panel (not inside the shared tabs toolbar — spec says "Schema view header")
+- [x] On keystroke, set `schemaState.setSelectedTableName(matchedName)` using case-insensitive prefix match across schema table names; clear selection when input is empty
+- [x] Keep it view-local: no persistence across sessions; no change to `usePersistedSchemaState` unless trivial
+- [x] Add test: typing in the field selects a matching table; clearing the field clears selection; the control collapses on dismiss
+- [x] Run `yarn workspace app test`
 
 ### Task 7: Verify acceptance criteria
 

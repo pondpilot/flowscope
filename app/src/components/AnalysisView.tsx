@@ -29,6 +29,7 @@ import { StatsPopover } from './StatsPopover';
 import { NamespaceFilterBar } from './NamespaceFilterBar';
 import { SchemaAwareIssuesPanel } from './SchemaAwareIssuesPanel';
 import { SchemaEditor } from './SchemaEditor';
+import { SchemaSearchControl } from './SchemaSearchControl';
 
 interface AnalysisViewProps {
   graphContainerRef?: React.RefObject<HTMLDivElement | null>;
@@ -486,11 +487,19 @@ export function AnalysisView({
             className="h-full mt-0 p-0 absolute inset-0 data-[state=inactive]:hidden"
           >
             {mountedTabs.has('schema') && (
-              <SchemaView
-                schema={schema}
-                selectedTableName={schemaState.selectedTableName}
-                onClearSelection={schemaState.clearSelection}
-              />
+              <div className="relative h-full w-full">
+                <SchemaView
+                  schema={schema}
+                  selectedTableName={schemaState.selectedTableName}
+                  onClearSelection={schemaState.clearSelection}
+                />
+                <div className="absolute top-2 right-2 z-10">
+                  <SchemaSearchControl
+                    tableNames={schema.map((t) => t.name)}
+                    onSelectTable={schemaState.setSelectedTableName}
+                  />
+                </div>
+              </div>
             )}
           </TabsContent>
 
