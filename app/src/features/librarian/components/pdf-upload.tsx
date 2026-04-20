@@ -167,14 +167,14 @@ export function PdfUpload({ onUpload }: PdfUploadProps) {
                 data-testid="pdf-file-item"
               >
                 <FileStatusIcon status={file.status} />
-                <span className="flex-1 truncate text-xs">{file.name}</span>
-                <span className="shrink-0 text-xs text-muted-foreground">
+                <span className="min-w-0 flex-1 truncate text-xs">{file.name}</span>
+                <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
                   {formatFileSize(file.size)}
                 </span>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-6 w-6"
+                  className="h-6 w-6 shrink-0"
                   onClick={(e) => {
                     e.stopPropagation();
                     removePdf(file.id);

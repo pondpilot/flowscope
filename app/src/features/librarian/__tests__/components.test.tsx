@@ -443,6 +443,31 @@ describe('PdfUpload', () => {
     expect(scrollArea).toBeInTheDocument();
   });
 
+  it('keeps size and delete button visible while truncating long file names', () => {
+    const longName =
+      'a-very-long-pdf-file-name-that-should-be-truncated-with-ellipsis-when-the-panel-is-narrow.pdf';
+    useLibrarianStore.setState({
+      pdfFiles: [makePdfFile({ id: 'long-1', name: longName, size: 2_500_000 })],
+    });
+
+    render(<PdfUpload onUpload={vi.fn()} />);
+
+    const item = screen.getByTestId('pdf-file-item');
+    const nameSpan = item.querySelector('span.truncate');
+    expect(nameSpan).not.toBeNull();
+    expect(nameSpan).toHaveTextContent(longName);
+    expect(nameSpan?.className).toContain('min-w-0');
+    expect(nameSpan?.className).toContain('flex-1');
+    expect(nameSpan?.className).toContain('truncate');
+
+    const sizeSpan = screen.getByText('2.4 MB');
+    expect(sizeSpan.className).toContain('shrink-0');
+    expect(sizeSpan.className).toContain('whitespace-nowrap');
+
+    const removeButton = screen.getByLabelText(`Remove ${longName}`);
+    expect(removeButton.className).toContain('shrink-0');
+  });
+
   it('has data-librarian-dropzone attribute on drop zone', () => {
     render(<PdfUpload onUpload={vi.fn()} />);
     const dropZone = screen.getByTestId('drop-zone');
