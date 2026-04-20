@@ -4,16 +4,57 @@ import { Bot, User } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 import type { ChatMessage } from '../types';
+import {
+  detectIdentifiers,
+  EMPTY_SCHEMA_IDENTIFIERS,
+  type SchemaIdentifiers,
+} from '../utils/schema-identifiers';
 
 interface ChatMessagesProps {
   messages: ChatMessage[];
   isLoading: boolean;
+  schemaIdentifiers?: SchemaIdentifiers;
+}
+
+const IDENTIFIER_CLASS = 'font-mono text-primary font-medium';
+
+/**
+ * Wrap known schema identifiers in a styled span. Used only for plain-text
+ * portions of assistant messages (inline code / code blocks already styled).
+ */
+function renderWithIdentifiers(
+  text: string,
+  schema: SchemaIdentifiers,
+  keyPrefix: string
+): React.ReactNode[] {
+  const segments = detectIdentifiers(text, schema);
+  return segments.map((seg, i) => {
+    if (seg.type === 'identifier') {
+      return (
+        <span
+          key={`${keyPrefix}-id-${i}`}
+          className={IDENTIFIER_CLASS}
+          data-identifier={seg.value}
+          data-identifier-kind={seg.kind}
+        >
+          {seg.value}
+        </span>
+      );
+    }
+    return <span key={`${keyPrefix}-t-${i}`}>{seg.value}</span>;
+  });
 }
 
 /**
- * Render inline markdown: **bold**, `code`, and plain text.
+ * Render inline markdown: **bold**, `code`, and plain text. For assistant
+ * messages, plain-text portions are further tokenized to highlight schema
+ * identifiers.
  */
-function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
+function renderInline(
+  text: string,
+  keyPrefix: string,
+  schema: SchemaIdentifiers
+): React.ReactNode[] {
   const nodes: React.ReactNode[] = [];
   const inlineRegex = /(\*\*(.+?)\*\*)|(`([^`]+)`)/g;
   let last = 0;
@@ -21,7 +62,11 @@ function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
 
   while ((m = inlineRegex.exec(text)) !== null) {
     if (m.index > last) {
-      nodes.push(<span key={`${keyPrefix}-t-${last}`}>{text.slice(last, m.index)}</span>);
+      nodes.push(
+        <span key={`${keyPrefix}-t-${last}`}>
+          {renderWithIdentifiers(text.slice(last, m.index), schema, `${keyPrefix}-t-${last}`)}
+        </span>
+      );
     }
     if (m[2]) {
       nodes.push(<strong key={`${keyPrefix}-b-${m.index}`}>{m[2]}</strong>);
@@ -39,13 +84,17 @@ function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
   }
 
   if (last < text.length) {
-    nodes.push(<span key={`${keyPrefix}-t-${last}`}>{text.slice(last)}</span>);
+    nodes.push(
+      <span key={`${keyPrefix}-t-${last}`}>
+        {renderWithIdentifiers(text.slice(last), schema, `${keyPrefix}-t-${last}`)}
+      </span>
+    );
   }
 
   return nodes;
 }
 
-function formatContent(content: string) {
+function formatContent(content: string, schema: SchemaIdentifiers) {
   const parts: React.ReactNode[] = [];
   const codeBlockRegex = /```(\w*)\n?([\s\S]*?)```/g;
   let lastIndex = 0;
@@ -55,7 +104,7 @@ function formatContent(content: string) {
     if (match.index > lastIndex) {
       parts.push(
         <span key={`text-${lastIndex}`}>
-          {renderInline(content.slice(lastIndex, match.index), `i-${lastIndex}`)}
+          {renderInline(content.slice(lastIndex, match.index), `i-${lastIndex}`, schema)}
         </span>
       );
     }
@@ -73,7 +122,7 @@ function formatContent(content: string) {
   if (lastIndex < content.length) {
     parts.push(
       <span key={`text-${lastIndex}`}>
-        {renderInline(content.slice(lastIndex), `i-${lastIndex}`)}
+        {renderInline(content.slice(lastIndex), `i-${lastIndex}`, schema)}
       </span>
     );
   }
@@ -81,7 +130,7 @@ function formatContent(content: string) {
   return parts;
 }
 
-export function ChatMessages({ messages, isLoading }: ChatMessagesProps) {
+export function ChatMessages({ messages, isLoading, schemaIdentifiers }: ChatMessagesProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -100,6 +149,8 @@ export function ChatMessages({ messages, isLoading }: ChatMessagesProps) {
       </div>
     );
   }
+
+  const schema = schemaIdentifiers ?? EMPTY_SCHEMA_IDENTIFIERS;
 
   return (
     <ScrollArea className="flex-1">
@@ -120,7 +171,9 @@ export function ChatMessages({ messages, isLoading }: ChatMessagesProps) {
                 msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'
               }`}
             >
-              {formatContent(msg.content)}
+              {msg.role === 'assistant'
+                ? formatContent(msg.content, schema)
+                : formatContent(msg.content, EMPTY_SCHEMA_IDENTIFIERS)}
             </div>
             {msg.role === 'user' && (
               <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10">

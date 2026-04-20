@@ -162,4 +162,51 @@ describe('buildPrompt', () => {
       'The "Documentation" section in your response must ONLY contain information from the "DATA SOURCE: Documentation" section'
     );
   });
+
+  it('includes the off-topic refusal rule with the exact canned response', () => {
+    const prompt = buildPrompt({
+      lineage: '',
+      pdfCitations: '',
+      chatHistory: '',
+      sqlSnippet: '',
+    });
+    expect(prompt).toContain('OFF-TOPIC RULE');
+    expect(prompt).toContain('I can only answer questions related to your data.');
+  });
+
+  it('keeps the "no information" data fallback distinct from the off-topic refusal', () => {
+    const prompt = buildPrompt({
+      lineage: '',
+      pdfCitations: '',
+      chatHistory: '',
+      sqlSnippet: '',
+    });
+    expect(prompt).toContain('Based on the current data, there is no information on your question.');
+    expect(prompt).toContain('distinct from the off-topic refusal');
+  });
+
+  it('includes Summary format guidance with technical names in parentheses', () => {
+    const prompt = buildPrompt({
+      lineage: '',
+      pdfCitations: '',
+      chatHistory: '',
+      sqlSnippet: '',
+    });
+    expect(prompt).toContain('client (MANDT)');
+    expect(prompt).toContain('company code (BUKRS)');
+  });
+
+  it('instructs the model to write identifiers as bare tokens', () => {
+    const prompt = buildPrompt({
+      lineage: '',
+      pdfCitations: '',
+      chatHistory: '',
+      sqlSnippet: '',
+    });
+    expect(prompt).toContain('Do NOT wrap them in backticks');
+    expect(prompt).toContain('Do NOT wrap them in quotes');
+    // The prompt must not instruct the model to wrap identifiers in backticks.
+    expect(prompt).not.toMatch(/wrap (?:schema |table |column )?identifiers? in backticks/i);
+    expect(prompt).not.toMatch(/surround identifiers with backticks/i);
+  });
 });

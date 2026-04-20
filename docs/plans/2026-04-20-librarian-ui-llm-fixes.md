@@ -65,15 +65,15 @@ Eight small-to-medium UI and prompt changes to the Librarian chat feature and th
 - Modify: `app/src/features/librarian/__tests__/context-builder.test.ts`
 - Create: `app/src/features/librarian/__tests__/schema-identifiers.test.ts`
 
-- [ ] Implement `detectIdentifiers`: case-sensitive exact match against schema table/column names, with word boundaries so embedded substrings don't match; returns ordered segments of `{type: 'text' | 'identifier', value}`
-- [ ] In `chat-messages.tsx`, replace plain text rendering of assistant segments with a renderer that uses `detectIdentifiers` and wraps identifier tokens in `<span class="font-mono text-primary font-medium">` (distinct styling, not inline-code pill)
-- [ ] Update the system prompt to output identifiers as bare tokens (no backticks, no quotes) so `MANDT` appears as `MANDT` in the text; remove any earlier instruction to wrap identifiers in backticks
-- [ ] Update Summary format guidance: when business-named concepts map to schema columns, include technical names alongside, e.g. `client (MANDT), company code (BUKRS)` — bare tokens, no backticks, parentheses around the technical name
-- [ ] Add off-topic refusal rule: if the user's question is unrelated to the provided data (not about tables, columns, lineage, or the uploaded PDFs), respond exactly with "I can only answer questions related to your data." — no other content
-- [ ] Keep the existing "no information" fallbacks distinct from the off-topic refusal
-- [ ] Tests: `detectIdentifiers` unit tests (exact match, word-boundary non-match, multiple tokens per line); prompt test asserts presence of Summary format example, off-topic refusal instruction, and absence of any "wrap in backticks" instruction
-- [ ] Component test: rendering an assistant message containing `MANDT` yields a span with the identifier class, and surrounding text remains unstyled
-- [ ] Run `yarn workspace app test`
+- [x] Implement `detectIdentifiers`: case-sensitive exact match against schema table/column names, with word boundaries so embedded substrings don't match; returns ordered segments of `{type: 'text' | 'identifier', value}`
+- [x] In `chat-messages.tsx`, replace plain text rendering of assistant segments with a renderer that uses `detectIdentifiers` and wraps identifier tokens in `<span class="font-mono text-primary font-medium">` (distinct styling, not inline-code pill)
+- [x] Update the system prompt to output identifiers as bare tokens (no backticks, no quotes) so `MANDT` appears as `MANDT` in the text; remove any earlier instruction to wrap identifiers in backticks
+- [x] Update Summary format guidance: when business-named concepts map to schema columns, include technical names alongside, e.g. `client (MANDT), company code (BUKRS)` — bare tokens, no backticks, parentheses around the technical name
+- [x] Add off-topic refusal rule: if the user's question is unrelated to the provided data (not about tables, columns, lineage, or the uploaded PDFs), respond exactly with "I can only answer questions related to your data." — no other content
+- [x] Keep the existing "no information" fallbacks distinct from the off-topic refusal
+- [x] Tests: `detectIdentifiers` unit tests (exact match, word-boundary non-match, multiple tokens per line); prompt test asserts presence of Summary format example, off-topic refusal instruction, and absence of any "wrap in backticks" instruction
+- [x] Component test: rendering an assistant message containing `MANDT` yields a span with the identifier class, and surrounding text remains unstyled
+- [x] Run `yarn workspace app test`
 
 ### Task 4: Add help/info icon with popover to Librarian panel header (fix #4)
 

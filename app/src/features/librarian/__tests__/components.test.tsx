@@ -55,6 +55,15 @@ import { AISettingsDialog } from '../components/ai-settings-dialog';
 import { ChatInput } from '../components/chat-input';
 import { ChatMessages } from '../components/chat-messages';
 import { PdfUpload } from '../components/pdf-upload';
+import type { SchemaIdentifiers } from '../utils/schema-identifiers';
+
+function makeSchema(tables: string[], columns: string[]): SchemaIdentifiers {
+  return {
+    tables: new Set(tables),
+    columns: new Set(columns),
+    columnOwners: new Map(),
+  };
+}
 
 // ---------- Shared setup ----------
 
@@ -223,6 +232,47 @@ describe('ChatMessages', () => {
     render(<ChatMessages messages={messages} isLoading={false} />);
     expect(screen.getByText('Question')).toBeInTheDocument();
     expect(screen.getByText('Answer')).toBeInTheDocument();
+  });
+
+  it('wraps schema identifiers in assistant messages with the identifier class', () => {
+    const schema = makeSchema([], ['MANDT']);
+    const messages = [
+      makeMessage({ role: 'assistant', content: 'The client column is MANDT in this table.' }),
+    ];
+    const { container } = render(
+      <ChatMessages messages={messages} isLoading={false} schemaIdentifiers={schema} />
+    );
+
+    const idSpan = container.querySelector('[data-identifier="MANDT"]');
+    expect(idSpan).not.toBeNull();
+    expect(idSpan).toHaveTextContent('MANDT');
+    expect(idSpan?.className).toContain('font-mono');
+    expect(idSpan?.className).toContain('text-primary');
+    expect(idSpan?.className).toContain('font-medium');
+  });
+
+  it('does not style surrounding text as an identifier', () => {
+    const schema = makeSchema([], ['MANDT']);
+    const messages = [
+      makeMessage({ role: 'assistant', content: 'The client column is MANDT.' }),
+    ];
+    const { container } = render(
+      <ChatMessages messages={messages} isLoading={false} schemaIdentifiers={schema} />
+    );
+
+    const all = container.querySelectorAll('[data-identifier]');
+    expect(all).toHaveLength(1);
+    expect(all[0]).toHaveTextContent('MANDT');
+  });
+
+  it('does not style identifiers in user messages', () => {
+    const schema = makeSchema([], ['MANDT']);
+    const messages = [makeMessage({ role: 'user', content: 'What is MANDT used for?' })];
+    const { container } = render(
+      <ChatMessages messages={messages} isLoading={false} schemaIdentifiers={schema} />
+    );
+
+    expect(container.querySelector('[data-identifier]')).toBeNull();
   });
 });
 

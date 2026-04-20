@@ -1,5 +1,6 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { BookOpen, ChevronDown, ChevronRight, Settings, X } from 'lucide-react';
+import { useLineageState } from '@pondpilot/flowscope-react';
 
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -8,6 +9,7 @@ import { useLibrarianChat } from '../hooks/use-librarian-chat';
 import { processPdf } from '../services/pdf-processor';
 import { embedTexts } from '../services/embedding-service';
 import { useLibrarianStore } from '../store';
+import { buildSchemaIdentifiers } from '../utils/schema-identifiers';
 
 import { AISettingsDialog } from './ai-settings-dialog';
 import { ChatInput } from './chat-input';
@@ -29,6 +31,8 @@ export function LibrarianPanel({ onClose }: LibrarianPanelProps) {
   const setPdfStatus = useLibrarianStore((s) => s.setPdfStatus);
 
   const { sendMessage } = useLibrarianChat();
+  const { result } = useLineageState();
+  const schemaIdentifiers = useMemo(() => buildSchemaIdentifiers(result ?? null), [result]);
 
   const handlePdfUpload = useCallback(
     async (file: File) => {
@@ -101,7 +105,11 @@ export function LibrarianPanel({ onClose }: LibrarianPanelProps) {
       </div>
 
       {/* Chat messages */}
-      <ChatMessages messages={messages} isLoading={isLoading} />
+      <ChatMessages
+        messages={messages}
+        isLoading={isLoading}
+        schemaIdentifiers={schemaIdentifiers}
+      />
 
       {/* Collapsible docs section */}
       <div className="border-t">
