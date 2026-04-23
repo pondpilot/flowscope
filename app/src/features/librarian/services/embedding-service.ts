@@ -17,8 +17,12 @@ function getWorker(): Worker {
 
 /**
  * Embed an array of texts using the shared embedding worker.
+ * @param mode - 'query' for user questions, 'passage' for documents (PDF chunks)
  */
-export function embedTexts(texts: string[]): Promise<number[][]> {
+export function embedTexts(
+  texts: string[],
+  mode: 'query' | 'passage' = 'passage'
+): Promise<number[][]> {
   const w = getWorker();
   const id = requestId;
   requestId += 1;
@@ -38,14 +42,12 @@ export function embedTexts(texts: string[]): Promise<number[][]> {
     const errorHandler = (e: ErrorEvent) => {
       w.removeEventListener('message', handler);
       w.removeEventListener('error', errorHandler);
-      // Null out the worker so the next call creates a fresh one
-      // (the worker may be dead after an error event)
       worker = null;
       reject(new Error(e.message || 'Embedding worker error'));
     };
     w.addEventListener('message', handler);
     w.addEventListener('error', errorHandler);
-    w.postMessage({ type: 'embed', id, texts });
+    w.postMessage({ type: 'embed', id, texts, mode });
   });
 }
 

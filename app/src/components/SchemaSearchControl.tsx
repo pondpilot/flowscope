@@ -1,30 +1,65 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Search, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 
+interface TableWithColumns {
+  name: string;
+  columns?: { name: string }[];
+}
+
 interface SchemaSearchControlProps {
   tableNames: string[];
+  tables?: TableWithColumns[];
   onSelectTable: (tableName: string | undefined) => void;
   className?: string;
 }
 
-function findMatch(tableNames: string[], query: string): string | undefined {
-  if (!query) return undefined;
+function findAllMatches(
+  tableNames: string[],
+  query: string,
+  tables?: TableWithColumns[]
+): string[] {
+  if (!query) return [];
   const q = query.toLowerCase();
-  return tableNames.find((name) => name.toLowerCase().startsWith(q));
+  const matches = new Set<string>();
+
+  // Match table names
+  for (const name of tableNames) {
+    if (name.toLowerCase().includes(q)) {
+      matches.add(name);
+    }
+  }
+
+  // Match column names — add owning table
+  if (tables) {
+    for (const table of tables) {
+      if (table.columns?.some((col) => col.name.toLowerCase().includes(q))) {
+        matches.add(table.name);
+      }
+    }
+  }
+
+  return Array.from(matches);
 }
 
 export function SchemaSearchControl({
   tableNames,
+  tables,
   onSelectTable,
   className,
 }: SchemaSearchControlProps) {
   const [expanded, setExpanded] = useState(false);
   const [value, setValue] = useState('');
+  const [matchIndex, setMatchIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const matches = useMemo(
+    () => findAllMatches(tableNames, value.trim(), tables),
+    [tableNames, tables, value]
+  );
 
   useEffect(() => {
     if (expanded) {
@@ -32,23 +67,39 @@ export function SchemaSearchControl({
     }
   }, [expanded]);
 
+  // Update selection when matches or index change
+  useEffect(() => {
+    if (matches.length > 0) {
+      onSelectTable(matches[matchIndex]);
+    } else if (value.trim()) {
+      onSelectTable(undefined);
+    }
+  }, [matches, matchIndex, onSelectTable, value]);
+
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const next = e.target.value;
-      setValue(next);
-      if (!next.trim()) {
-        onSelectTable(undefined);
-        return;
-      }
-      const match = findMatch(tableNames, next.trim());
-      onSelectTable(match);
+      setValue(e.target.value);
+      setMatchIndex(0);
     },
-    [tableNames, onSelectTable]
+    []
   );
+
+  const goNext = useCallback(() => {
+    if (matches.length > 0) {
+      setMatchIndex((i) => (i + 1) % matches.length);
+    }
+  }, [matches.length]);
+
+  const goPrev = useCallback(() => {
+    if (matches.length > 0) {
+      setMatchIndex((i) => (i - 1 + matches.length) % matches.length);
+    }
+  }, [matches.length]);
 
   const collapse = useCallback(() => {
     setExpanded(false);
     setValue('');
+    setMatchIndex(0);
     onSelectTable(undefined);
   }, [onSelectTable]);
 
@@ -63,9 +114,16 @@ export function SchemaSearchControl({
       if (e.key === 'Escape') {
         e.preventDefault();
         collapse();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          goPrev();
+        } else {
+          goNext();
+        }
       }
     },
-    [collapse]
+    [collapse, goNext, goPrev]
   );
 
   if (!expanded) {
@@ -75,7 +133,7 @@ export function SchemaSearchControl({
         variant="outline"
         size="sm"
         className={cn('h-7 w-7 p-0', className)}
-        aria-label="Search schema tables"
+        aria-label="Search schema"
         data-testid="schema-search-toggle"
         onClick={() => setExpanded(true)}
       >
@@ -92,11 +150,42 @@ export function SchemaSearchControl({
         onChange={handleChange}
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
-        placeholder="Search tables…"
-        aria-label="Search tables"
+        placeholder="Search tables or columns…"
+        aria-label="Search tables or columns"
         data-testid="schema-search-input"
-        className="h-7 w-48 text-xs px-3"
+        className="h-7 w-36 text-xs px-3"
       />
+      {matches.length > 0 && (
+        <>
+          <span className="shrink-0 text-xs text-muted-foreground">
+            {matchIndex + 1}/{matches.length}
+          </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0"
+            aria-label="Previous match"
+            data-testid="schema-search-prev"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={goPrev}
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0"
+            aria-label="Next match"
+            data-testid="schema-search-next"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={goNext}
+          >
+            <ChevronRight className="h-3.5 w-3.5" />
+          </Button>
+        </>
+      )}
       <Button
         type="button"
         variant="ghost"
@@ -104,10 +193,7 @@ export function SchemaSearchControl({
         className="h-7 w-7 p-0"
         aria-label="Close schema search"
         data-testid="schema-search-close"
-        onMouseDown={(e) => {
-          // Prevent blur on input before click handler fires
-          e.preventDefault();
-        }}
+        onMouseDown={(e) => e.preventDefault()}
         onClick={collapse}
       >
         <X className="h-3.5 w-3.5" />

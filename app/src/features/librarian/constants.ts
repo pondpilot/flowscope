@@ -12,7 +12,7 @@ export const PDF_CHUNK_OVERLAP = 50;
 export const VECTOR_SEARCH_TOP_K = 5;
 
 /** Embedding model */
-export const EMBEDDING_MODEL = 'Xenova/all-MiniLM-L6-v2';
+export const EMBEDDING_MODEL = 'Xenova/multilingual-e5-small';
 
 /** LocalStorage keys */
 export const STORAGE_KEY_AI_PROVIDER = 'librarian-ai-provider';

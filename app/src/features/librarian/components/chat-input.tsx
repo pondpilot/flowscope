@@ -61,7 +61,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
           onKeyDown={handleKeyDown}
           onInput={handleInput}
           disabled={disabled || !hasConfig}
-          placeholder="Ask about your SQL lineage..."
+          placeholder="Ask about your data..."
           rows={1}
           className="flex-1 resize-none rounded-lg border border-border-primary-light bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:border-accent-light dark:border-border-primary-dark dark:focus-visible:border-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
           data-testid="chat-textarea"

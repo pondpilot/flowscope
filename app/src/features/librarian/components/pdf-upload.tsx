@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { FileText, Loader2, Trash2, Upload, AlertCircle } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
 
 import { MAX_PDF_SIZE_BYTES, MAX_PDF_SIZE_MB } from '../constants';
 import { useLibrarianStore } from '../store';
@@ -117,7 +116,7 @@ export function PdfUpload({ onUpload }: PdfUploadProps) {
   );
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex min-w-0 flex-col gap-2 overflow-hidden">
       <div
         ref={dropRef}
         className={`flex cursor-pointer flex-col items-center gap-2 rounded-lg border border-dashed p-4 transition-colors ${
@@ -158,17 +157,17 @@ export function PdfUpload({ onUpload }: PdfUploadProps) {
       )}
 
       {pdfFiles.length > 0 && (
-        <ScrollArea className="max-h-[64px] overflow-y-auto">
+        <div className="max-h-[64px] overflow-y-auto">
           <div className="flex flex-col gap-1">
             {pdfFiles.map((file) => (
               <div
                 key={file.id}
-                className="flex items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-muted"
+                className="flex min-w-0 items-center gap-1 rounded-md px-2 py-1 text-sm hover:bg-muted"
                 data-testid="pdf-file-item"
               >
                 <FileStatusIcon status={file.status} />
                 <span className="min-w-0 flex-1 truncate text-xs">{file.name}</span>
-                <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
+                <span className="shrink-0 text-xs text-muted-foreground">
                   {formatFileSize(file.size)}
                 </span>
                 <Button
@@ -186,7 +185,7 @@ export function PdfUpload({ onUpload }: PdfUploadProps) {
               </div>
             ))}
           </div>
-        </ScrollArea>
+        </div>
       )}
     </div>
   );

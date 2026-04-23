@@ -10,6 +10,8 @@ export interface EmbeddingRequest {
   type: 'embed';
   id: number;
   texts: string[];
+  /** Prefix mode for e5 models: 'query' for user questions, 'passage' for documents */
+  mode?: 'query' | 'passage';
 }
 
 export interface EmbeddingSuccessResponse {
@@ -60,9 +62,10 @@ async function handleEmbed(request: EmbeddingRequest): Promise<void> {
     const model = await getEmbeddingPipeline();
     const results: number[][] = [];
 
+    const prefix = request.mode === 'query' ? 'query: ' : 'passage: ';
     for (const text of request.texts) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const output = (await model(text, { pooling: 'mean', normalize: true } as any)) as {
+      const output = (await model(prefix + text, { pooling: 'mean', normalize: true } as any)) as {
         data: Float32Array;
       };
       results.push(Array.from(output.data));

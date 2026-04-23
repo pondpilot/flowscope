@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Bot, User } from 'lucide-react';
+import { User } from 'lucide-react';
 
 import { ScrollArea } from '@/components/ui/scroll-area';
 
@@ -80,7 +80,7 @@ function renderInline(
       nodes.push(
         <code
           key={`${keyPrefix}-c-${m.index}`}
-          className="rounded bg-background/50 px-1 py-0.5 text-xs font-mono"
+          className="rounded bg-accent/10 px-1 py-0.5 text-xs font-mono text-accent-light dark:text-accent-dark"
           onClick={(e) => e.stopPropagation()}
         >
           {m[4]}
@@ -154,7 +154,7 @@ export function ChatMessages({
     return (
       <div className="flex flex-1 items-center justify-center p-6" data-testid="empty-state">
         <div className="text-center">
-          <Bot className="mx-auto h-10 w-10 text-muted-foreground/50" />
+          <img src="/polly-icon.svg" alt="Librarian" className="mx-auto h-14 w-14" />
           <p className="mt-2 text-sm text-muted-foreground">
             Ask questions about your data based on data lineage and uploaded documents
           </p>
@@ -212,7 +212,7 @@ export function ChatMessages({
             >
               {msg.role === 'assistant' && (
                 <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/10">
-                  <Bot className="h-4 w-4 text-accent-light dark:text-accent-dark" />
+                  <img src="/polly-icon.svg" alt="" className="h-6 w-6" />
                 </div>
               )}
               <div className={bubbleClass} {...clickableProps}>
@@ -232,7 +232,7 @@ export function ChatMessages({
         {isLoading && (
           <div className="flex gap-3" data-testid="loading-indicator">
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/10">
-              <Bot className="h-4 w-4 text-accent-light dark:text-accent-dark" />
+              <img src="/polly-icon.svg" alt="" className="h-6 w-6" />
             </div>
             <div className="flex items-center gap-1 rounded-lg bg-muted px-3 py-2">
               <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:0ms]" />

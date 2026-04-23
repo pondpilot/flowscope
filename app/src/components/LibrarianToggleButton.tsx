@@ -1,5 +1,3 @@
-import { BookOpen } from 'lucide-react';
-
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useViewStateStore } from '@/lib/view-state-store';
@@ -22,11 +20,11 @@ export function LibrarianToggleButton() {
             variant={librarianOpen ? 'secondary' : 'outline'}
             size="sm"
             onClick={toggleLibrarian}
-            className="h-7 text-xs"
+            className="h-7 rounded-full text-xs"
             data-testid="librarian-toggle-button"
             aria-pressed={librarianOpen}
           >
-            <BookOpen className="h-3 w-3 mr-1" />
+            <img src="/polly-icon.svg" alt="" className="h-5 w-5 mr-1" />
             Librarian
           </Button>
         </TooltipTrigger>

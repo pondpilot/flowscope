@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { BookOpen, ChevronDown, ChevronRight, HelpCircle, Settings, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, HelpCircle, Settings, X } from 'lucide-react';
 import { useLineageState } from '@pondpilot/flowscope-react';
 
 import { Button } from '@/components/ui/button';
@@ -66,11 +66,10 @@ export function LibrarianPanel({ onClose, onNavigateToTable }: LibrarianPanelPro
   );
 
   return (
-    <div className="flex h-full flex-col" data-testid="librarian-panel">
+    <div className="flex h-full min-w-0 flex-col overflow-hidden" data-testid="librarian-panel">
       {/* Header */}
-      <div className="flex items-center justify-between border-b px-3 h-12 shrink-0">
+      <div className="flex items-center justify-between border-b px-3 h-[44px] shrink-0">
         <div className="flex items-center gap-2">
-          <BookOpen className="h-4 w-4 text-muted-foreground" />
           <span className="text-sm font-medium">Librarian</span>
         </div>
         <div className="flex items-center gap-1">
@@ -159,7 +158,7 @@ export function LibrarianPanel({ onClose, onNavigateToTable }: LibrarianPanelPro
           Documentation
         </button>
         {docsExpanded && (
-          <div className="px-3 pb-2" data-testid="docs-section">
+          <div className="min-w-0 overflow-hidden px-3 pb-2" data-testid="docs-section">
             <PdfUpload onUpload={handlePdfUpload} />
           </div>
         )}

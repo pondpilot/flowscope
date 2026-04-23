@@ -501,6 +501,7 @@ export function AnalysisView({
                 <div className="absolute top-2 right-2 z-10">
                   <SchemaSearchControl
                     tableNames={schema.map((t) => t.name)}
+                    tables={schema}
                     onSelectTable={schemaState.setSelectedTableName}
                   />
                 </div>

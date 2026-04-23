@@ -53,7 +53,7 @@ export function useLibrarianChat() {
         let pdfCitations = '';
         if (pdfChunks.length > 0) {
           try {
-            const [queryEmbedding] = await embedTexts([userMessage]);
+            const [queryEmbedding] = await embedTexts([userMessage], 'query');
             const relevantChunks = searchChunks(queryEmbedding, pdfChunks, VECTOR_SEARCH_TOP_K);
             if (relevantChunks.length > 0) {
               pdfCitations = relevantChunks
