@@ -35,6 +35,11 @@ FlowScope code is released under Apache-2.0 unless stated otherwise. The `app/` 
 - `error-codes.md`
   Issue code reference for `AnalyzeResult.issues`.
 
+### Features
+
+- `librarian.md`
+  AI-powered chat panel for SQL lineage Q&A using data lineage and uploaded PDF docs.
+
 ### Guides
 
 - `guides/quickstart.md`

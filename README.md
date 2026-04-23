@@ -32,6 +32,7 @@ Features:
 - Multi-file project support with schema DDL
 - dbt/Jinja template preprocessing for dbt models
 - Export to Mermaid, JSON, CSV, Excel, or HTML reports
+- Librarian — AI chat panel that answers questions about your data based on lineage analysis and uploaded PDF docs
 - All processing happens in your browser — your SQL never leaves your machine
 
 ### Command-Line Interface
@@ -114,6 +115,7 @@ See [CLI documentation](crates/flowscope-cli/README.md) for all options.
 - Structured diagnostics with spans for precise highlighting
 - Completion API for SQL authoring workflows
 - TypeScript API and optional React visualization components
+- Librarian AI chat panel for natural-language Q&A over SQL lineage and uploaded PDF documentation (OpenAI, Anthropic, or custom endpoints)
 
 ## Components
 
@@ -184,6 +186,7 @@ npm install @pondpilot/flowscope-react
 ## Documentation
 
 - [docs/README.md](docs/README.md) — documentation map and reference index
+- [docs/librarian.md](docs/librarian.md) — Librarian AI chat panel user guide
 - [docs/guides/quickstart.md](docs/guides/quickstart.md) — TypeScript quickstart guide
 - [docs/guides/schema-metadata.md](docs/guides/schema-metadata.md) — schema metadata setup
 - [docs/dialect-coverage.md](docs/dialect-coverage.md) — dialect and statement coverage

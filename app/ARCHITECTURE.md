@@ -19,6 +19,8 @@ app/src/
 │   ├── SchemaEditor.tsx    # DDL schema editor
 │   ├── ShareDialog.tsx     # Project export/sharing
 │   └── Workspace.tsx       # Main two-panel layout
+├── features/           # Feature modules (self-contained)
+│   └── librarian/         # AI chat panel (Q&A over lineage + PDFs)
 ├── hooks/              # Custom React hooks
 │   ├── useAnalysis.ts      # SQL analysis workflow
 │   ├── useFileNavigation.ts # Graph-to-editor navigation
@@ -74,6 +76,22 @@ The app now supports "Schema-Aware" analysis.
     *   Column validation
     *   Precise column lineage
 
+### 5. Feature Modules
+
+Self-contained feature folders under `app/src/features/` own all their code (components, hooks, services, workers, tests) and expose a public API via `index.ts`.
+
+#### Librarian (`features/librarian/`)
+
+AI-powered chat panel for SQL lineage Q&A.
+
+- `components/` — panel, chat messages, input, PDF upload, AI settings dialog
+- `services/` — AI client (OpenAI / Anthropic / custom), context builder, lineage formatter, PDF processor, vector search, embedding service
+- `workers/` — embedding Web Worker (local Xenova/transformers model)
+- `hooks/use-librarian-chat.ts` — chat orchestrator
+- `store.ts` — Zustand store (messages, PDF files, chunks, loading state)
+
+State is Zustand (not React Context), UI is Radix + Tailwind. All AI calls hit the user's configured provider directly from the browser. See `docs/librarian.md` for the user guide.
+
 ## Data Flow
 
 ### Analysis Loop
@@ -87,12 +105,23 @@ The app now supports "Schema-Aware" analysis.
 5.  **Result**: The JSON result is dispatched to the Lineage Store.
 6.  **Rendering**: `AnalysisView` updates the Graph and Issues panel.
 
+### Librarian Chat Flow
+
+1.  User types a question in the Librarian panel.
+2.  `use-librarian-chat.ts` gathers: current lineage (from `useLineageState`), active SQL file content, last 10 chat messages, and vector-search results over uploaded PDF chunks.
+3.  `context-builder.ts` assembles a structured prompt with labeled data sources (Data Lineage / SQL Code / Documentation / Conversation History).
+4.  `ai-service.ts` sends the prompt via `fetch()` to the configured provider (OpenAI / Anthropic / custom endpoint).
+5.  Response is stored in the chat and rendered with markdown + identifier highlighting.
+
+PDF processing runs asynchronously: text extraction (pdfjs-dist) → 500-char chunking → embeddings (local `multilingual-e5-small` model in a Web Worker) → stored in the librarian store.
+
 ## UI Architecture
 
 *   **Layout**: `react-resizable-panels` provides the split-view.
 *   **Styling**: Tailwind CSS with `shadcn/ui` (Radix Primitives) pattern.
 *   **Icons**: Lucide React.
 *   **Editor**: `CodeMirror` (via `@pondpilot/flowscope-react`).
+*   **Librarian icon**: Custom SVG (`/public/polly-icon.svg`) for the toolbar, chat avatar, and empty state.
 
 ## Configuration
 
@@ -102,6 +131,7 @@ The app now supports "Schema-Aware" analysis.
     *   `Cmd/Ctrl + P`: Switch Project
     *   `Cmd/Ctrl + O`: Switch File
     *   `Cmd/Ctrl + D`: Switch Dialect
+    *   `Cmd/Ctrl + L`: Toggle Librarian panel
 
 ## Future Improvements
 
