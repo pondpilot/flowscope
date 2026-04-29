@@ -409,6 +409,36 @@ describe('ChatMessages', () => {
     expect(onNavigateToReferences).toHaveBeenCalledWith([{ tableName: 'MARA' }]);
   });
 
+  it('keyboard activation ignores stale page-wide text selection', () => {
+    // Regression: the selection guard previously fired for both mouse clicks
+    // and keyboard activation. If the user had any text selected anywhere on
+    // the page (e.g., in another message) and pressed Enter on a focused
+    // bubble, navigation was silently aborted.
+    const schema = makeSchema(['MARA'], []);
+    const onNavigateToReferences = vi.fn();
+    const messages = [makeMessage({ role: 'assistant', content: 'Check MARA for this.' })];
+    render(
+      <ChatMessages
+        messages={messages}
+        isLoading={false}
+        schemaIdentifiers={schema}
+        onNavigateToReferences={onNavigateToReferences}
+      />
+    );
+
+    const bubble = screen.getByTestId('message-assistant').querySelector('[role="button"]')!;
+    const originalGetSelection = window.getSelection;
+    window.getSelection = vi.fn(
+      () => ({ toString: () => 'stale page-wide selection' }) as unknown as Selection
+    );
+    try {
+      fireEvent.keyDown(bubble, { key: 'Enter' });
+      expect(onNavigateToReferences).toHaveBeenCalledWith([{ tableName: 'MARA' }]);
+    } finally {
+      window.getSelection = originalGetSelection;
+    }
+  });
+
   it('does not navigate when text is selected inside the bubble (preserves copy/select)', () => {
     const schema = makeSchema(['MARA'], []);
     const onNavigateToReferences = vi.fn();

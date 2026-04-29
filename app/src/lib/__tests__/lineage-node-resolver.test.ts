@@ -251,6 +251,40 @@ describe('resolveLineageNodeIds', () => {
     expect(out.primaryFocusId).toBe('t:bkpf');
   });
 
+  it('routes columns to their actual parent table when multiple schemas share a table name', () => {
+    // Regression: previously the parent-table index was keyed only on the
+    // bare lowercased name, so a column from `staging.BKPF.MANDT` would have
+    // its parent looked up as 'bkpf' and resolved to whichever BKPF was
+    // registered first (here, the sap version) — leaving the staging.BKPF
+    // table collapsed and its column highlight invisible.
+    const nodes: TestNode[] = [
+      { id: 't:sap-bkpf', type: 'table', label: 'BKPF', canonicalName: { schema: 'sap', name: 'BKPF' } },
+      { id: 't:staging-bkpf', type: 'table', label: 'BKPF', canonicalName: { schema: 'staging', name: 'BKPF' } },
+      {
+        id: 'c:sap-bkpf-mandt',
+        type: 'column',
+        label: 'MANDT',
+        canonicalName: { schema: 'sap', name: 'BKPF', column: 'MANDT' },
+      },
+      {
+        id: 'c:staging-bkpf-mandt',
+        type: 'column',
+        label: 'MANDT',
+        canonicalName: { schema: 'staging', name: 'BKPF', column: 'MANDT' },
+      },
+    ];
+    const out = resolveLineageNodeIds(makeResult(nodes), [
+      { columnName: 'MANDT', bareColumn: true },
+    ]);
+    expect(new Set(out.nodeIds)).toEqual(
+      new Set(['c:sap-bkpf-mandt', 'c:staging-bkpf-mandt'])
+    );
+    // Both parent tables must be expanded so each column highlight is visible.
+    expect(new Set(out.tablesToExpand)).toEqual(
+      new Set(['t:sap-bkpf', 't:staging-bkpf'])
+    );
+  });
+
   it('treats views and CTEs as table-like for table refs', () => {
     const nodes: TestNode[] = [
       { id: 'v:report', type: 'view', label: 'REPORT' },

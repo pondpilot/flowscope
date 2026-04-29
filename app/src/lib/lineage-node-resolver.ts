@@ -47,6 +47,15 @@ function buildQualifiedName(node: GlobalNodeLike): string {
   return parts.length > 0 ? parts.join('.') : node.label;
 }
 
+function buildTableQualifiedKey(canonicalName: GlobalNodeLike['canonicalName']): string | null {
+  if (!canonicalName?.name) return null;
+  const { catalog, schema, name } = canonicalName;
+  const parts = [catalog, schema, name].filter(
+    (p): p is string => typeof p === 'string' && p.length > 0
+  );
+  return parts.join('.').toLowerCase();
+}
+
 function matchesTable(node: GlobalNodeLike, tableName: string): boolean {
   if (!isTableLike(node.type)) return false;
   const target = normalize(tableName);
@@ -90,11 +99,20 @@ function matchesBareColumn(node: GlobalNodeLike, columnName: string): boolean {
 
 function findParentTableId(
   columnNode: GlobalNodeLike,
+  tableIdsByQualifiedName: Map<string, string>,
   tableIdsByName: Map<string, string>
 ): string | null {
-  const canonicalName = normalize(columnNode.canonicalName?.name);
-  if (canonicalName) {
-    const id = tableIdsByName.get(canonicalName);
+  // Prefer fully-qualified lookup (catalog.schema.name) so columns map to
+  // their actual owning table when multiple table-like nodes share the same
+  // bare name across schemas.
+  const qualifiedKey = buildTableQualifiedKey(columnNode.canonicalName);
+  if (qualifiedKey) {
+    const id = tableIdsByQualifiedName.get(qualifiedKey);
+    if (id) return id;
+  }
+  const bareKey = normalize(columnNode.canonicalName?.name);
+  if (bareKey) {
+    const id = tableIdsByName.get(bareKey);
     if (id) return id;
   }
   return null;
@@ -130,11 +148,18 @@ export function resolveLineageNodeIds(
 
   const allNodes = (result.globalLineage?.nodes ?? []) as unknown as GlobalNodeLike[];
 
-  // Index table-like nodes by lowercased label and canonical name so column
-  // nodes can resolve their owning table id.
+  // Index table-like nodes so column nodes can resolve their owning table id.
+  // The qualified map (catalog.schema.name) keeps schemas with duplicate
+  // table names distinct; the bare-name map is the fallback when a column
+  // has no schema/catalog on its canonicalName.
+  const tableIdsByQualifiedName = new Map<string, string>();
   const tableIdsByName = new Map<string, string>();
   for (const node of allNodes) {
     if (!isTableLike(node.type)) continue;
+    const qualifiedKey = buildTableQualifiedKey(node.canonicalName);
+    if (qualifiedKey && !tableIdsByQualifiedName.has(qualifiedKey)) {
+      tableIdsByQualifiedName.set(qualifiedKey, node.id);
+    }
     const labelKey = normalize(node.label);
     if (labelKey && !tableIdsByName.has(labelKey)) tableIdsByName.set(labelKey, node.id);
     const canonicalKey = normalize(node.canonicalName?.name);
@@ -162,7 +187,7 @@ export function resolveLineageNodeIds(
       if (matches.length === 0) continue;
       for (const match of matches) {
         addNode(match.id);
-        const parentId = findParentTableId(match, tableIdsByName);
+        const parentId = findParentTableId(match, tableIdsByQualifiedName, tableIdsByName);
         if (parentId) addExpand(parentId);
         if (primaryFocusId === null) primaryFocusId = parentId ?? match.id;
       }
@@ -184,7 +209,7 @@ export function resolveLineageNodeIds(
       if (matches.length === 0) continue;
       for (const match of matches) {
         addNode(match.id);
-        const parentId = findParentTableId(match, tableIdsByName);
+        const parentId = findParentTableId(match, tableIdsByQualifiedName, tableIdsByName);
         if (parentId) addExpand(parentId);
         if (primaryFocusId === null) primaryFocusId = parentId ?? match.id;
       }

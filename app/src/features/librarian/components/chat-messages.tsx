@@ -182,11 +182,19 @@ export function ChatMessages({
           const bubbleClass = `min-w-0 max-w-[calc(100%-2.5rem)] break-words rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
             msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'
           }${isClickable ? ' cursor-pointer hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring' : ''}`;
-          const handleActivate = () => {
+          const handleActivate = (source: 'click' | 'keyboard') => {
             // Skip navigation when the user is selecting text inside the bubble
             // (text selection ends with a click). Without this, copying text or
             // SQL out of an answer would also navigate to the lineage view.
-            if ((window.getSelection?.()?.toString().length ?? 0) > 0) return;
+            // Only applies to mouse clicks — pressing Enter/Space on a focused
+            // bubble must always activate, regardless of any stale page-wide
+            // selection that may exist elsewhere.
+            if (
+              source === 'click' &&
+              (window.getSelection?.()?.toString().length ?? 0) > 0
+            ) {
+              return;
+            }
             if (refs.length > 0 && onNavigateToReferences) {
               onNavigateToReferences(refs);
             }
@@ -195,11 +203,11 @@ export function ChatMessages({
             ? {
                 role: 'button',
                 tabIndex: 0,
-                onClick: handleActivate,
+                onClick: () => handleActivate('click'),
                 onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    handleActivate();
+                    handleActivate('keyboard');
                   }
                 },
                 'aria-label': ariaLabel,
