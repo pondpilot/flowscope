@@ -27,13 +27,14 @@ function makeDeps(
 }
 
 describe('applyLineageNavigation', () => {
-  it('expands missing parent tables and selects the first highlighted node', () => {
+  it('expands missing parent tables, selects the first column, and focuses on its parent table', () => {
     const deps = makeDeps({
       expandedTableIds: new Set<string>(['t:already-open']),
     });
     const target: NavigationTarget = {
       highlightNodeIds: ['c:bkpf.mandt', 'c:bseg.mandt'],
       tablesToExpand: ['t:bkpf', 't:bseg', 't:already-open'],
+      primaryFocusId: 't:bkpf',
     };
 
     applyLineageNavigation(target, deps);
@@ -44,10 +45,24 @@ describe('applyLineageNavigation', () => {
     expect(deps.toggleTableExpansion).not.toHaveBeenCalledWith('t:already-open');
     expect(deps.toggleTableExpansion).toHaveBeenCalledTimes(2);
 
-    // First highlighted node becomes the selection + focus.
+    // The column id is selected so the column highlights inside its table,
+    // but the viewport recenters on the parent table because columns are not
+    // top-level ReactFlow nodes.
     expect(deps.selectNode).toHaveBeenCalledWith('c:bkpf.mandt');
-    expect(deps.setFocusNodeId).toHaveBeenCalledWith('c:bkpf.mandt');
+    expect(deps.setFocusNodeId).toHaveBeenCalledWith('t:bkpf');
     expect(deps.triggerFitView).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the first highlight id for focus when primaryFocusId is missing', () => {
+    const deps = makeDeps();
+    const target: NavigationTarget = {
+      highlightNodeIds: ['t:mara'],
+    };
+
+    applyLineageNavigation(target, deps);
+
+    expect(deps.selectNode).toHaveBeenCalledWith('t:mara');
+    expect(deps.setFocusNodeId).toHaveBeenCalledWith('t:mara');
   });
 
   it('deduplicates entries in tablesToExpand', () => {

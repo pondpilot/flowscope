@@ -7,6 +7,15 @@ export interface LineageNodeResolution {
   nodeIds: string[];
   /** Table-like node IDs whose owning columns are in `nodeIds` and which therefore need to be expanded so the columns are visible. */
   tablesToExpand: string[];
+  /**
+   * Top-level node ID best suited to recenter the viewport on. Columns are not
+   * top-level ReactFlow nodes (they render inside table nodes), so passing a
+   * column id to `useNodeFocus` results in a no-op. For column refs we expose
+   * the parent table id here; callers should prefer this over `nodeIds[0]` for
+   * fitView/focus calls. Falls back to the first node id when no parent table
+   * could be resolved.
+   */
+  primaryFocusId: string | null;
 }
 
 interface GlobalNodeLike {
@@ -113,9 +122,10 @@ export function resolveLineageNodeIds(
   const tablesToExpand: string[] = [];
   const seenIds = new Set<string>();
   const seenExpand = new Set<string>();
+  let primaryFocusId: string | null = null;
 
   if (!result || refs.length === 0) {
-    return { nodeIds, tablesToExpand };
+    return { nodeIds, tablesToExpand, primaryFocusId };
   }
 
   const allNodes = (result.globalLineage?.nodes ?? []) as unknown as GlobalNodeLike[];
@@ -154,6 +164,7 @@ export function resolveLineageNodeIds(
         addNode(match.id);
         const parentId = findParentTableId(match, tableIdsByName);
         if (parentId) addExpand(parentId);
+        if (primaryFocusId === null) primaryFocusId = parentId ?? match.id;
       }
       continue;
     }
@@ -161,7 +172,10 @@ export function resolveLineageNodeIds(
     if (ref.tableName) {
       const matches = allNodes.filter((n) => matchesTable(n, ref.tableName!));
       if (matches.length === 0) continue;
-      for (const match of matches) addNode(match.id);
+      for (const match of matches) {
+        addNode(match.id);
+        if (primaryFocusId === null) primaryFocusId = match.id;
+      }
       continue;
     }
 
@@ -172,9 +186,10 @@ export function resolveLineageNodeIds(
         addNode(match.id);
         const parentId = findParentTableId(match, tableIdsByName);
         if (parentId) addExpand(parentId);
+        if (primaryFocusId === null) primaryFocusId = parentId ?? match.id;
       }
     }
   }
 
-  return { nodeIds, tablesToExpand };
+  return { nodeIds, tablesToExpand, primaryFocusId };
 }

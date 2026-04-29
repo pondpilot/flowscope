@@ -516,9 +516,16 @@ function LibrarianPanelWithNavigation({ onClose }: { onClose: () => void }) {
   const handleNavigateToReferences = useCallback(
     (refs: ChatReference[]) => {
       if (refs.length === 0) return;
-      const { nodeIds, tablesToExpand } = resolveLineageNodeIds(result ?? null, refs);
+      const { nodeIds, tablesToExpand, primaryFocusId } = resolveLineageNodeIds(
+        result ?? null,
+        refs
+      );
       if (nodeIds.length === 0) return;
-      navigateTo('lineage', { highlightNodeIds: nodeIds, tablesToExpand });
+      navigateTo('lineage', {
+        highlightNodeIds: nodeIds,
+        tablesToExpand,
+        ...(primaryFocusId ? { primaryFocusId } : {}),
+      });
     },
     [navigateTo, result]
   );

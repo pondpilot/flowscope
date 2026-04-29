@@ -91,18 +91,19 @@ const FULL_GRAPH: TestNode[] = [
 describe('resolveLineageNodeIds', () => {
   it('returns empty result for null AnalyzeResult', () => {
     const result = resolveLineageNodeIds(null, [{ tableName: 'BKPF' }]);
-    expect(result).toEqual({ nodeIds: [], tablesToExpand: [] });
+    expect(result).toEqual({ nodeIds: [], tablesToExpand: [], primaryFocusId: null });
   });
 
   it('returns empty result for an empty refs array', () => {
     const out = resolveLineageNodeIds(makeResult(FULL_GRAPH), []);
-    expect(out).toEqual({ nodeIds: [], tablesToExpand: [] });
+    expect(out).toEqual({ nodeIds: [], tablesToExpand: [], primaryFocusId: null });
   });
 
   it('matches a table reference by label (case-insensitive)', () => {
     const out = resolveLineageNodeIds(makeResult(FULL_GRAPH), [{ tableName: 'bkpf' }]);
     expect(out.nodeIds).toEqual(['t:bkpf']);
     expect(out.tablesToExpand).toEqual([]);
+    expect(out.primaryFocusId).toBe('t:bkpf');
   });
 
   it('matches a qualified column to exactly one node and expands its parent', () => {
@@ -111,6 +112,9 @@ describe('resolveLineageNodeIds', () => {
     ]);
     expect(out.nodeIds).toEqual(['c:bkpf.mandt']);
     expect(out.tablesToExpand).toEqual(['t:bkpf']);
+    // Column nodes are not top-level ReactFlow nodes, so primaryFocusId points
+    // at the parent table for viewport recentering.
+    expect(out.primaryFocusId).toBe('t:bkpf');
   });
 
   it('matches qualified column case-insensitively', () => {
@@ -119,6 +123,7 @@ describe('resolveLineageNodeIds', () => {
     ]);
     expect(out.nodeIds).toEqual(['c:bkpf.mandt']);
     expect(out.tablesToExpand).toEqual(['t:bkpf']);
+    expect(out.primaryFocusId).toBe('t:bkpf');
   });
 
   it('expands every parent table for a bare column with multiple matches', () => {
@@ -129,11 +134,13 @@ describe('resolveLineageNodeIds', () => {
       new Set(['c:bkpf.mandt', 'c:bseg.mandt', 'c:t001.mandt'])
     );
     expect(new Set(out.tablesToExpand)).toEqual(new Set(['t:bkpf', 't:bseg', 't:t001']));
+    // Focus on the parent of the first matched column.
+    expect(out.primaryFocusId).toBe('t:bkpf');
   });
 
   it('returns empty arrays when the reference has no match', () => {
     const out = resolveLineageNodeIds(makeResult(FULL_GRAPH), [{ tableName: 'NOPE' }]);
-    expect(out).toEqual({ nodeIds: [], tablesToExpand: [] });
+    expect(out).toEqual({ nodeIds: [], tablesToExpand: [], primaryFocusId: null });
   });
 
   it('skips refs with zero matches but returns matches for others', () => {
@@ -144,6 +151,7 @@ describe('resolveLineageNodeIds', () => {
     ]);
     expect(out.nodeIds).toEqual(['t:bkpf']);
     expect(out.tablesToExpand).toEqual([]);
+    expect(out.primaryFocusId).toBe('t:bkpf');
   });
 
   it('deduplicates node IDs and tablesToExpand across overlapping refs', () => {
@@ -171,14 +179,14 @@ describe('resolveLineageNodeIds', () => {
 
   it('does not match table-like refs against column nodes', () => {
     const out = resolveLineageNodeIds(makeResult(FULL_GRAPH), [{ tableName: 'MANDT' }]);
-    expect(out).toEqual({ nodeIds: [], tablesToExpand: [] });
+    expect(out).toEqual({ nodeIds: [], tablesToExpand: [], primaryFocusId: null });
   });
 
   it('does not match bare-column refs against table nodes', () => {
     const out = resolveLineageNodeIds(makeResult(FULL_GRAPH), [
       { columnName: 'BKPF', bareColumn: true },
     ]);
-    expect(out).toEqual({ nodeIds: [], tablesToExpand: [] });
+    expect(out).toEqual({ nodeIds: [], tablesToExpand: [], primaryFocusId: null });
   });
 
   it('matches a qualified column where the canonical name contains a schema prefix', () => {
@@ -215,6 +223,32 @@ describe('resolveLineageNodeIds', () => {
     expect(out.nodeIds).toEqual(['t:bkpf', 'c:mandt']);
     // Without canonicalName.name we cannot map the column to a parent.
     expect(out.tablesToExpand).toEqual([]);
+    // First ref matches a table directly, so primaryFocusId is that table.
+    expect(out.primaryFocusId).toBe('t:bkpf');
+  });
+
+  it('falls back to the column id for primaryFocusId when no parent table can be resolved', () => {
+    const nodes: TestNode[] = [{ id: 'c:mandt', type: 'column', label: 'MANDT' }];
+    const out = resolveLineageNodeIds(makeResult(nodes), [
+      { columnName: 'MANDT', bareColumn: true },
+    ]);
+    expect(out.nodeIds).toEqual(['c:mandt']);
+    expect(out.tablesToExpand).toEqual([]);
+    // No parent table available — caller will see the column id and accept the
+    // useNodeFocus no-op rather than focusing on something incorrect.
+    expect(out.primaryFocusId).toBe('c:mandt');
+  });
+
+  it('exposes the parent table as primaryFocusId even when a column ref appears first', () => {
+    // Regression: previously the navigation layer focused on highlightNodeIds[0]
+    // directly, which silently no-ops when that id is a column. The resolver
+    // now hands callers the parent table id for viewport focus.
+    const out = resolveLineageNodeIds(makeResult(FULL_GRAPH), [
+      { columnName: 'MANDT', bareColumn: true },
+      { tableName: 'BKPF' },
+    ]);
+    expect(out.nodeIds[0]).toMatch(/^c:/);
+    expect(out.primaryFocusId).toBe('t:bkpf');
   });
 
   it('treats views and CTEs as table-like for table refs', () => {
