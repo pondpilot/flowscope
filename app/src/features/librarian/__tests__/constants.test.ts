@@ -36,7 +36,7 @@ describe('constants', () => {
   });
 
   it('EMBEDDING_MODEL is a valid model identifier', () => {
-    expect(EMBEDDING_MODEL).toBe('Xenova/all-MiniLM-L6-v2');
+    expect(EMBEDDING_MODEL).toBe('Xenova/multilingual-e5-small');
   });
 
   it('storage keys are unique strings', () => {

@@ -14,13 +14,14 @@ afterEach(() => {
 });
 
 describe('LibrarianToggleButton', () => {
-  it('renders the Librarian label and book icon', () => {
+  it('renders the Librarian label and Polly icon', () => {
     render(<LibrarianToggleButton />);
     const button = screen.getByTestId('librarian-toggle-button');
     expect(button).toBeInTheDocument();
     expect(button).toHaveTextContent('Librarian');
-    // Lucide renders the icon as an SVG inside the button
-    expect(button.querySelector('svg')).not.toBeNull();
+    const icon = button.querySelector('img');
+    expect(icon).not.toBeNull();
+    expect(icon?.getAttribute('src')).toBe('/polly-icon.svg');
   });
 
   it('reflects the closed state with aria-pressed=false', () => {

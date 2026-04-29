@@ -167,7 +167,7 @@ export function PdfUpload({ onUpload }: PdfUploadProps) {
               >
                 <FileStatusIcon status={file.status} />
                 <span className="min-w-0 flex-1 truncate text-xs">{file.name}</span>
-                <span className="shrink-0 text-xs text-muted-foreground">
+                <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
                   {formatFileSize(file.size)}
                 </span>
                 <Button

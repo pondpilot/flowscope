@@ -75,7 +75,7 @@ describe('buildPrompt', () => {
       chatHistory: '',
       sqlSnippet: '',
     });
-    expect(prompt).toContain('SQL lineage assistant');
+    expect(prompt).toContain('expert on SQL lineage and data flow');
   });
 
   it('includes lineage section when present', () => {
@@ -155,12 +155,9 @@ describe('buildPrompt', () => {
       chatHistory: '',
       sqlSnippet: '',
     });
-    expect(prompt).toContain(
-      'The "Data Lineage" section in your response must ONLY contain information from the "DATA SOURCE: Data Lineage" and "DATA SOURCE: SQL Code" sections'
-    );
-    expect(prompt).toContain(
-      'The "Documentation" section in your response must ONLY contain information from the "DATA SOURCE: Documentation" section'
-    );
+    expect(prompt).toContain('answer from Data Lineage and SQL Code sources ONLY');
+    expect(prompt).toContain('answer from Documentation ONLY');
+    expect(prompt).toContain('Never mix sources between sections');
   });
 
   it('includes the off-topic refusal rule with the exact canned response', () => {
@@ -170,7 +167,7 @@ describe('buildPrompt', () => {
       chatHistory: '',
       sqlSnippet: '',
     });
-    expect(prompt).toContain('OFF-TOPIC RULE');
+    expect(prompt).toContain('Politely decline off-topic questions');
     expect(prompt).toContain('I can only answer questions related to your data.');
   });
 
@@ -181,8 +178,7 @@ describe('buildPrompt', () => {
       chatHistory: '',
       sqlSnippet: '',
     });
-    expect(prompt).toContain('Based on the current data, there is no information on your question.');
-    expect(prompt).toContain('distinct from the off-topic refusal');
+    expect(prompt).toContain('If a source has no relevant information, write "No information"');
   });
 
   it('includes Summary format guidance with technical names in parentheses', () => {
@@ -192,21 +188,16 @@ describe('buildPrompt', () => {
       chatHistory: '',
       sqlSnippet: '',
     });
-    expect(prompt).toContain('client (MANDT)');
-    expect(prompt).toContain('company code (BUKRS)');
+    expect(prompt).toContain('document number (BELNR)');
   });
 
-  it('instructs the model to write identifiers as bare tokens', () => {
+  it('instructs the model to render identifiers as inline code', () => {
     const prompt = buildPrompt({
       lineage: '',
       pdfCitations: '',
       chatHistory: '',
       sqlSnippet: '',
     });
-    expect(prompt).toContain('Do NOT wrap them in backticks');
-    expect(prompt).toContain('Do NOT wrap them in quotes');
-    // The prompt must not instruct the model to wrap identifiers in backticks.
-    expect(prompt).not.toMatch(/wrap (?:schema |table |column )?identifiers? in backticks/i);
-    expect(prompt).not.toMatch(/surround identifiers with backticks/i);
+    expect(prompt).toContain('Write table and column names as inline code');
   });
 });

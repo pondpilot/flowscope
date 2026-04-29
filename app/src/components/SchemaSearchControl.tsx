@@ -71,10 +71,10 @@ export function SchemaSearchControl({
   useEffect(() => {
     if (matches.length > 0) {
       onSelectTable(matches[matchIndex]);
-    } else if (value.trim()) {
+    } else {
       onSelectTable(undefined);
     }
-  }, [matches, matchIndex, onSelectTable, value]);
+  }, [matches, matchIndex, onSelectTable]);
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
