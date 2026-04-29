@@ -4,7 +4,6 @@ import {
   buildSchemaIdentifiers,
   detectIdentifiers,
   resolveAllReferences,
-  resolveFirstTableReference,
   type SchemaIdentifiers,
 } from '../utils/schema-identifiers';
 
@@ -134,47 +133,6 @@ describe('buildSchemaIdentifiers', () => {
   });
 });
 
-describe('resolveFirstTableReference', () => {
-  it('returns null when text has no identifiers', () => {
-    const schema = makeSchema(['MARA'], []);
-    expect(resolveFirstTableReference('no match here', schema)).toBeNull();
-  });
-
-  it('returns null when schema is empty', () => {
-    const schema = makeSchema([], []);
-    expect(resolveFirstTableReference('MARA is a table', schema)).toBeNull();
-  });
-
-  it('resolves a direct table reference', () => {
-    const schema = makeSchema(['MARA', 'EKKO'], []);
-    expect(resolveFirstTableReference('Look at MARA.', schema)).toEqual({
-      tableName: 'MARA',
-    });
-  });
-
-  it('resolves a column reference to its first owning table', () => {
-    const schema = makeSchema([], ['MANDT'], { MANDT: ['MARA', 'EKKO'] });
-    expect(resolveFirstTableReference('The MANDT column exists.', schema)).toEqual({
-      tableName: 'MARA',
-      columnName: 'MANDT',
-    });
-  });
-
-  it('picks the first resolvable identifier in order', () => {
-    const schema = makeSchema(['EKKO'], ['MANDT'], { MANDT: ['MARA'] });
-    expect(resolveFirstTableReference('First EKKO, then MANDT.', schema)).toEqual({
-      tableName: 'EKKO',
-    });
-  });
-
-  it('skips unresolvable column identifiers with no known owner', () => {
-    const schema = makeSchema(['EKKO'], ['MANDT']);
-    expect(resolveFirstTableReference('MANDT only here, then EKKO.', schema)).toEqual({
-      tableName: 'EKKO',
-    });
-  });
-});
-
 describe('resolveAllReferences', () => {
   it('returns an empty list when text has no identifiers', () => {
     const schema = makeSchema(['MARA'], ['MANDT']);
@@ -245,5 +203,28 @@ describe('resolveAllReferences', () => {
   it('treats names that are both tables and columns as table references', () => {
     const schema = makeSchema(['shared'], ['shared']);
     expect(resolveAllReferences('the shared name', schema)).toEqual([{ tableName: 'shared' }]);
+  });
+
+  it('does not qualify across a newline gap', () => {
+    const schema = makeSchema(['BKPF'], ['MANDT']);
+    expect(resolveAllReferences('Tables: BKPF.\n\nKey columns: MANDT.', schema)).toEqual([
+      { tableName: 'BKPF' },
+      { columnName: 'MANDT', bareColumn: true },
+    ]);
+  });
+
+  it('does not qualify when the gap contains more than one dot', () => {
+    const schema = makeSchema(['BKPF'], ['MANDT']);
+    expect(resolveAllReferences('BKPF..MANDT', schema)).toEqual([
+      { tableName: 'BKPF' },
+      { columnName: 'MANDT', bareColumn: true },
+    ]);
+  });
+
+  it('qualifies through a single dot surrounded by horizontal whitespace', () => {
+    const schema = makeSchema(['BKPF'], ['MANDT']);
+    expect(resolveAllReferences('BKPF . MANDT is the key', schema)).toEqual([
+      { tableName: 'BKPF', columnName: 'MANDT' },
+    ]);
   });
 });

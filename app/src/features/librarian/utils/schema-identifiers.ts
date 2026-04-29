@@ -15,12 +15,6 @@ export interface IdentifierSegment {
   kind?: IdentifierKind;
 }
 
-export interface SchemaReference {
-  tableName: string;
-  /** Present when the source identifier was a column; set to that column name. */
-  columnName?: string;
-}
-
 export interface ChatReference {
   tableName?: string;
   columnName?: string;
@@ -101,32 +95,6 @@ export function detectIdentifiers(
 }
 
 /**
- * Resolve the first schema identifier in `text` to a table reference.
- * Table identifiers resolve to themselves; column identifiers resolve to
- * their first known owning table. Returns null when no resolvable
- * identifier is found.
- */
-export function resolveFirstTableReference(
-  text: string,
-  schema: SchemaIdentifiers
-): SchemaReference | null {
-  const segments = detectIdentifiers(text, schema);
-  for (const seg of segments) {
-    if (seg.type !== 'identifier') continue;
-    if (seg.kind === 'table') {
-      return { tableName: seg.value };
-    }
-    if (seg.kind === 'column') {
-      const owners = schema.columnOwners.get(seg.value);
-      if (owners && owners.length > 0) {
-        return { tableName: owners[0], columnName: seg.value };
-      }
-    }
-  }
-  return null;
-}
-
-/**
  * Resolve every schema identifier in `text` to a chat reference.
  *
  * - Table identifiers become `{ tableName }` references.
@@ -148,6 +116,11 @@ export function resolveAllReferences(
   const refs: ChatReference[] = [];
   const seen = new Set<string>();
 
+  // Gap between a table identifier and a column identifier: at most one dot,
+  // surrounded only by horizontal whitespace. Newlines or anything else break
+  // the qualification — `BKPF.\n\nMANDT` and `BKPF..MANDT` are NOT qualified.
+  const QUALIFIER_GAP = /^[ \t]*\.?[ \t]*$/;
+
   for (let i = 0; i < segments.length; i++) {
     const seg = segments[i];
     if (seg.type !== 'identifier') continue;
@@ -156,13 +129,13 @@ export function resolveAllReferences(
 
     if (seg.kind === 'table') {
       // Skip emitting a standalone table reference when the next identifier is
-      // a column separated only by whitespace and/or a dot — that column will
-      // produce a qualified `{ tableName, columnName }` reference instead.
+      // a column separated only by whitespace and at most one dot — that column
+      // will produce a qualified `{ tableName, columnName }` reference instead.
       let consumedByColumn = false;
       for (let j = i + 1; j < segments.length; j++) {
         const next = segments[j];
         if (next.type === 'text') {
-          if (!/^[.\s]*$/.test(next.value)) break;
+          if (!QUALIFIER_GAP.test(next.value)) break;
           continue;
         }
         if (next.kind === 'column') consumedByColumn = true;
@@ -174,7 +147,7 @@ export function resolveAllReferences(
       for (let j = i - 1; j >= 0; j--) {
         const prev = segments[j];
         if (prev.type === 'text') {
-          if (!/^[.\s]*$/.test(prev.value)) break;
+          if (!QUALIFIER_GAP.test(prev.value)) break;
           continue;
         }
         if (prev.kind === 'table') qualifier = prev.value;
