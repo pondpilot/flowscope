@@ -7,8 +7,16 @@ vi.mock('../services/ai-service', () => ({
 import { loadAIConfig } from '../services/ai-service';
 
 import { CHAT_HISTORY_LIMIT } from '../constants';
-import { useLibrarianStore } from '../store';
+import {
+  useLibrarianStore,
+  useLibrarianMessages,
+  useLibrarianPdfFiles,
+  useLibrarianPdfChunks,
+} from '../store';
 import type { PdfChunk, PdfFile } from '../types';
+
+const PROJECT_A = 'proj-a';
+const PROJECT_B = 'proj-b';
 
 function makePdfFile(overrides: Partial<PdfFile> = {}): PdfFile {
   return {
@@ -33,16 +41,22 @@ function makePdfChunk(overrides: Partial<PdfChunk> = {}): PdfChunk {
   };
 }
 
+function resetStore(activeProjectId: string | null = PROJECT_A) {
+  useLibrarianStore.setState({
+    byProject: {},
+    activeProjectId,
+    isLoading: false,
+    hasConfig: false,
+    messages: [],
+    pdfFiles: [],
+    pdfChunks: [],
+  });
+}
+
 describe('useLibrarianStore', () => {
   beforeEach(() => {
     vi.mocked(loadAIConfig).mockReturnValue(null);
-    useLibrarianStore.setState({
-      messages: [],
-      isLoading: false,
-      pdfFiles: [],
-      pdfChunks: [],
-      hasConfig: false,
-    });
+    resetStore(PROJECT_A);
   });
 
   // ---------- messages ----------
@@ -76,15 +90,53 @@ describe('useLibrarianStore', () => {
       expect(messages[0].content).toBe('msg-0');
       expect(messages[messages.length - 1].content).toBe(`msg-${total - 1}`);
     });
+
+    it('no-ops when activeProjectId is null', () => {
+      resetStore(null);
+      useLibrarianStore.getState().addMessage('user', 'orphan');
+      const state = useLibrarianStore.getState();
+      expect(state.messages).toHaveLength(0);
+      expect(state.byProject).toEqual({});
+    });
+
+    it('lazily initializes the bucket on first write', () => {
+      // No bucket exists yet; addMessage should create one for the active project.
+      expect(useLibrarianStore.getState().byProject[PROJECT_A]).toBeUndefined();
+      useLibrarianStore.getState().addMessage('user', 'hi');
+      const bucket = useLibrarianStore.getState().byProject[PROJECT_A];
+      expect(bucket).toBeDefined();
+      expect(bucket.messages).toHaveLength(1);
+      expect(bucket.pdfFiles).toEqual([]);
+      expect(bucket.pdfChunks).toEqual([]);
+    });
   });
 
   describe('clearMessages', () => {
-    it('removes all messages', () => {
+    it('removes all messages for the active project', () => {
       const store = useLibrarianStore.getState();
       store.addMessage('user', 'a');
       store.addMessage('assistant', 'b');
       store.clearMessages();
       expect(useLibrarianStore.getState().messages).toHaveLength(0);
+      expect(useLibrarianStore.getState().byProject[PROJECT_A].messages).toHaveLength(0);
+    });
+
+    it('does not touch other projects', () => {
+      useLibrarianStore.getState().addMessage('user', 'a-msg');
+      useLibrarianStore.getState().setActiveProjectId(PROJECT_B);
+      useLibrarianStore.getState().addMessage('user', 'b-msg');
+      useLibrarianStore.getState().clearMessages();
+      const { byProject } = useLibrarianStore.getState();
+      expect(byProject[PROJECT_A].messages).toHaveLength(1);
+      expect(byProject[PROJECT_B].messages).toHaveLength(0);
+    });
+
+    it('no-ops when activeProjectId is null', () => {
+      useLibrarianStore.getState().addMessage('user', 'a-msg');
+      resetStore(null);
+      useLibrarianStore.setState({ byProject: { [PROJECT_A]: { messages: [], pdfFiles: [], pdfChunks: [] } } });
+      // No active id; clearMessages should not throw and not modify state.
+      expect(() => useLibrarianStore.getState().clearMessages()).not.toThrow();
     });
   });
 
@@ -100,6 +152,12 @@ describe('useLibrarianStore', () => {
       useLibrarianStore.getState().setLoading(true);
       useLibrarianStore.getState().setLoading(false);
       expect(useLibrarianStore.getState().isLoading).toBe(false);
+    });
+
+    it('isLoading is global (not per project)', () => {
+      useLibrarianStore.getState().setLoading(true);
+      useLibrarianStore.getState().setActiveProjectId(PROJECT_B);
+      expect(useLibrarianStore.getState().isLoading).toBe(true);
     });
   });
 
@@ -117,6 +175,12 @@ describe('useLibrarianStore', () => {
       store.addPdfFile(makePdfFile({ id: 'f1', name: 'a.pdf' }));
       store.addPdfFile(makePdfFile({ id: 'f2', name: 'b.pdf' }));
       expect(useLibrarianStore.getState().pdfFiles).toHaveLength(2);
+    });
+
+    it('no-ops when activeProjectId is null', () => {
+      resetStore(null);
+      useLibrarianStore.getState().addPdfFile(makePdfFile());
+      expect(useLibrarianStore.getState().pdfFiles).toHaveLength(0);
     });
   });
 
@@ -191,7 +255,7 @@ describe('useLibrarianStore', () => {
   });
 
   describe('hasPdfFile', () => {
-    it('returns true when file exists', () => {
+    it('returns true when file exists in the active project', () => {
       useLibrarianStore.getState().addPdfFile(makePdfFile({ name: 'test.pdf' }));
       expect(useLibrarianStore.getState().hasPdfFile('test.pdf')).toBe(true);
     });
@@ -204,6 +268,100 @@ describe('useLibrarianStore', () => {
       useLibrarianStore.getState().addPdfFile(makePdfFile({ id: 'f1', name: 'report.pdf' }));
       expect(useLibrarianStore.getState().hasPdfFile('report.pdf')).toBe(true);
       expect(useLibrarianStore.getState().hasPdfFile('f1')).toBe(false);
+    });
+
+    it('is scoped to the active project', () => {
+      // Upload report.pdf to project A
+      useLibrarianStore.getState().addPdfFile(makePdfFile({ id: 'f1', name: 'report.pdf' }));
+      expect(useLibrarianStore.getState().hasPdfFile('report.pdf')).toBe(true);
+
+      // Switch to project B — A's file must not be visible
+      useLibrarianStore.getState().setActiveProjectId(PROJECT_B);
+      expect(useLibrarianStore.getState().hasPdfFile('report.pdf')).toBe(false);
+    });
+
+    it('returns false when activeProjectId is null', () => {
+      resetStore(null);
+      expect(useLibrarianStore.getState().hasPdfFile('anything.pdf')).toBe(false);
+    });
+  });
+
+  // ---------- per-project isolation ----------
+
+  describe('per-project isolation', () => {
+    it('isolates messages and PDFs across two project ids', () => {
+      const store = useLibrarianStore.getState();
+      // Project A
+      store.addMessage('user', 'hello from A');
+      store.addPdfFile(makePdfFile({ id: 'a1', name: 'a.pdf' }));
+      store.addPdfChunks([makePdfChunk({ id: 'ac1', fileId: 'a1', fileName: 'a.pdf' })]);
+
+      // Switch to Project B and add different content
+      useLibrarianStore.getState().setActiveProjectId(PROJECT_B);
+      const stateAfterSwitch = useLibrarianStore.getState();
+      expect(stateAfterSwitch.messages).toEqual([]);
+      expect(stateAfterSwitch.pdfFiles).toEqual([]);
+      expect(stateAfterSwitch.pdfChunks).toEqual([]);
+
+      useLibrarianStore.getState().addMessage('user', 'hello from B');
+      useLibrarianStore.getState().addPdfFile(makePdfFile({ id: 'b1', name: 'b.pdf' }));
+      useLibrarianStore.getState().addPdfChunks([
+        makePdfChunk({ id: 'bc1', fileId: 'b1', fileName: 'b.pdf' }),
+      ]);
+
+      const { byProject } = useLibrarianStore.getState();
+      expect(byProject[PROJECT_A].messages.map((m) => m.content)).toEqual(['hello from A']);
+      expect(byProject[PROJECT_A].pdfFiles[0].name).toBe('a.pdf');
+      expect(byProject[PROJECT_A].pdfChunks).toHaveLength(1);
+      expect(byProject[PROJECT_B].messages.map((m) => m.content)).toEqual(['hello from B']);
+      expect(byProject[PROJECT_B].pdfFiles[0].name).toBe('b.pdf');
+      expect(byProject[PROJECT_B].pdfChunks).toHaveLength(1);
+    });
+
+    it('switching back to a previous project restores its data', () => {
+      const store = useLibrarianStore.getState();
+      store.addMessage('user', 'A says hi');
+      store.addPdfFile(makePdfFile({ id: 'a1', name: 'a.pdf' }));
+
+      useLibrarianStore.getState().setActiveProjectId(PROJECT_B);
+      useLibrarianStore.getState().addMessage('user', 'B says hi');
+
+      useLibrarianStore.getState().setActiveProjectId(PROJECT_A);
+      const state = useLibrarianStore.getState();
+      expect(state.messages.map((m) => m.content)).toEqual(['A says hi']);
+      expect(state.pdfFiles[0].name).toBe('a.pdf');
+    });
+
+    it('setActiveProjectId(null) blanks the flat mirror without dropping buckets', () => {
+      const store = useLibrarianStore.getState();
+      store.addMessage('user', 'A says hi');
+      useLibrarianStore.getState().setActiveProjectId(null);
+      const state = useLibrarianStore.getState();
+      expect(state.messages).toEqual([]);
+      expect(state.pdfFiles).toEqual([]);
+      expect(state.pdfChunks).toEqual([]);
+      expect(state.byProject[PROJECT_A].messages).toHaveLength(1);
+    });
+  });
+
+  // ---------- selector hooks ----------
+
+  describe('selector hooks', () => {
+    it('useLibrarianMessages returns the active project bucket', () => {
+      useLibrarianStore.getState().addMessage('user', 'a');
+      // Hooks return state by reading the store synchronously when not inside a component.
+      // Here we just verify the selector logic against getState().
+      const id = useLibrarianStore.getState().activeProjectId!;
+      expect(useLibrarianStore.getState().byProject[id].messages).toHaveLength(1);
+      // Indirect: stable empty array when project absent
+      useLibrarianStore.getState().setActiveProjectId('unknown-id');
+      const state = useLibrarianStore.getState();
+      expect(state.byProject['unknown-id']).toBeUndefined();
+      // The selector hooks themselves are exercised via component tests; here we
+      // confirm they're exported and typed correctly.
+      expect(useLibrarianMessages).toBeTypeOf('function');
+      expect(useLibrarianPdfFiles).toBeTypeOf('function');
+      expect(useLibrarianPdfChunks).toBeTypeOf('function');
     });
   });
 
