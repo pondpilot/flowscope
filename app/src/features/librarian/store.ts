@@ -32,9 +32,17 @@ interface LibrarianState {
   clearMessages: () => void;
   setLoading: (loading: boolean) => void;
   addPdfFile: (file: PdfFile) => void;
+  addPdfFileToProject: (projectId: string, file: PdfFile) => void;
   addPdfChunks: (chunks: PdfChunk[]) => void;
+  addPdfChunksToProject: (projectId: string, chunks: PdfChunk[]) => void;
   removePdf: (fileId: string) => void;
   setPdfStatus: (fileId: string, status: PdfFileStatus, error?: string) => void;
+  setPdfStatusForProject: (
+    projectId: string,
+    fileId: string,
+    status: PdfFileStatus,
+    error?: string
+  ) => void;
   hasPdfFile: (fileName: string) => boolean;
   pruneProjectBuckets: (validIds: ReadonlySet<string>) => void;
   refreshConfig: () => void;
@@ -102,6 +110,12 @@ export const useLibrarianStore = create<LibrarianState>()((set, get) => ({
       timestamp: Date.now(),
     };
     set((state) => {
+      // If the bucket is missing and the project is no longer active, it
+      // was pruned by a project deletion — drop the write rather than
+      // resurrect a zombie bucket for a deleted project.
+      if (!state.byProject[projectId] && state.activeProjectId !== projectId) {
+        return state;
+      }
       const prev = getBucket(state.byProject, projectId);
       const next: ProjectLibrarianState = { ...prev, messages: [...prev.messages, message] };
       const isActive = state.activeProjectId === projectId;
@@ -130,12 +144,23 @@ export const useLibrarianStore = create<LibrarianState>()((set, get) => ({
   addPdfFile: (file) => {
     const { activeProjectId } = get();
     if (!activeProjectId) return;
+    get().addPdfFileToProject(activeProjectId, file);
+  },
+
+  // Like `addMessageToProject`: writes to an explicit project bucket so a
+  // mid-flight project switch during PDF processing still routes the file
+  // (and its chunks/status updates) back to the originating project.
+  addPdfFileToProject: (projectId, file) => {
     set((state) => {
-      const prev = getBucket(state.byProject, activeProjectId);
+      if (!state.byProject[projectId] && state.activeProjectId !== projectId) {
+        return state;
+      }
+      const prev = getBucket(state.byProject, projectId);
       const next: ProjectLibrarianState = { ...prev, pdfFiles: [...prev.pdfFiles, file] };
+      const isActive = state.activeProjectId === projectId;
       return {
-        byProject: { ...state.byProject, [activeProjectId]: next },
-        pdfFiles: next.pdfFiles,
+        byProject: { ...state.byProject, [projectId]: next },
+        ...(isActive ? { pdfFiles: next.pdfFiles } : {}),
       };
     });
   },
@@ -143,15 +168,23 @@ export const useLibrarianStore = create<LibrarianState>()((set, get) => ({
   addPdfChunks: (chunks) => {
     const { activeProjectId } = get();
     if (!activeProjectId) return;
+    get().addPdfChunksToProject(activeProjectId, chunks);
+  },
+
+  addPdfChunksToProject: (projectId, chunks) => {
     set((state) => {
-      const prev = getBucket(state.byProject, activeProjectId);
+      if (!state.byProject[projectId] && state.activeProjectId !== projectId) {
+        return state;
+      }
+      const prev = getBucket(state.byProject, projectId);
       const next: ProjectLibrarianState = {
         ...prev,
         pdfChunks: [...prev.pdfChunks, ...chunks],
       };
+      const isActive = state.activeProjectId === projectId;
       return {
-        byProject: { ...state.byProject, [activeProjectId]: next },
-        pdfChunks: next.pdfChunks,
+        byProject: { ...state.byProject, [projectId]: next },
+        ...(isActive ? { pdfChunks: next.pdfChunks } : {}),
       };
     });
   },
@@ -177,15 +210,23 @@ export const useLibrarianStore = create<LibrarianState>()((set, get) => ({
   setPdfStatus: (fileId, status, error) => {
     const { activeProjectId } = get();
     if (!activeProjectId) return;
+    get().setPdfStatusForProject(activeProjectId, fileId, status, error);
+  },
+
+  setPdfStatusForProject: (projectId, fileId, status, error) => {
     set((state) => {
-      const prev = getBucket(state.byProject, activeProjectId);
+      if (!state.byProject[projectId] && state.activeProjectId !== projectId) {
+        return state;
+      }
+      const prev = getBucket(state.byProject, projectId);
       const next: ProjectLibrarianState = {
         ...prev,
         pdfFiles: prev.pdfFiles.map((f) => (f.id === fileId ? { ...f, status, error } : f)),
       };
+      const isActive = state.activeProjectId === projectId;
       return {
-        byProject: { ...state.byProject, [activeProjectId]: next },
-        pdfFiles: next.pdfFiles,
+        byProject: { ...state.byProject, [projectId]: next },
+        ...(isActive ? { pdfFiles: next.pdfFiles } : {}),
       };
     });
   },

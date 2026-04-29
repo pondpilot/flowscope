@@ -353,14 +353,21 @@ describe('useLibrarianStore', () => {
   // ---------- explicit-bucket writes ----------
 
   describe('addMessageToProject', () => {
-    it('writes to the named bucket regardless of which project is active', () => {
-      // Active project is A; write to B.
-      useLibrarianStore.getState().addMessageToProject(PROJECT_B, 'user', 'for B');
+    it('writes to a non-active bucket that already exists', () => {
+      // Seed B's bucket while it's active, then switch back to A.
+      useLibrarianStore.getState().setActiveProjectId(PROJECT_B);
+      useLibrarianStore.getState().addMessage('user', 'B existing');
+      useLibrarianStore.getState().setActiveProjectId(PROJECT_A);
+
+      // Now write to B from A's context — bucket exists, write succeeds.
+      useLibrarianStore.getState().addMessageToProject(PROJECT_B, 'assistant', 'for B');
       const state = useLibrarianStore.getState();
-      expect(state.byProject[PROJECT_B].messages.map((m) => m.content)).toEqual(['for B']);
-      // A is untouched.
+      expect(state.byProject[PROJECT_B].messages.map((m) => m.content)).toEqual([
+        'B existing',
+        'for B',
+      ]);
+      // A is untouched; flat mirror reflects the active project (A), which is empty.
       expect(state.byProject[PROJECT_A]).toBeUndefined();
-      // The flat mirror still reflects the active project (A), which is empty.
       expect(state.messages).toEqual([]);
     });
 
@@ -385,6 +392,58 @@ describe('useLibrarianStore', () => {
       ]);
       // B's bucket is untouched (no leakage).
       expect(state.byProject[PROJECT_B]?.messages ?? []).toEqual([]);
+    });
+
+    it('drops the write when the bucket was pruned (project deleted mid-flight)', () => {
+      // Seed A's bucket as active, then simulate deletion: switch away and
+      // prune. A late-arriving response must not resurrect a zombie bucket.
+      useLibrarianStore.getState().addMessage('user', 'A asked');
+      useLibrarianStore.getState().setActiveProjectId(PROJECT_B);
+      useLibrarianStore.getState().pruneProjectBuckets(new Set([PROJECT_B]));
+      expect(useLibrarianStore.getState().byProject[PROJECT_A]).toBeUndefined();
+
+      useLibrarianStore.getState().addMessageToProject(PROJECT_A, 'assistant', 'late reply');
+      const state = useLibrarianStore.getState();
+      expect(state.byProject[PROJECT_A]).toBeUndefined();
+    });
+  });
+
+  describe('addPdfFileToProject / addPdfChunksToProject / setPdfStatusForProject', () => {
+    it('routes the full PDF lifecycle to the originating project after a mid-flight switch', () => {
+      // Simulates handlePdfUpload capturing projectId at upload time:
+      // user uploads in A, switches to B mid-process, chunks/status arrive late.
+      useLibrarianStore
+        .getState()
+        .addPdfFileToProject(PROJECT_A, makePdfFile({ id: 'f1', status: 'processing' }));
+      useLibrarianStore.getState().setActiveProjectId(PROJECT_B);
+
+      useLibrarianStore.getState().addPdfChunksToProject(PROJECT_A, [
+        makePdfChunk({ id: 'c1', fileId: 'f1' }),
+      ]);
+      useLibrarianStore.getState().setPdfStatusForProject(PROJECT_A, 'f1', 'ready');
+
+      const state = useLibrarianStore.getState();
+      expect(state.byProject[PROJECT_A].pdfFiles[0].status).toBe('ready');
+      expect(state.byProject[PROJECT_A].pdfChunks).toHaveLength(1);
+      // B's bucket is untouched.
+      expect(state.byProject[PROJECT_B]?.pdfFiles ?? []).toEqual([]);
+      expect(state.byProject[PROJECT_B]?.pdfChunks ?? []).toEqual([]);
+      // Flat mirror tracks active project B.
+      expect(state.pdfFiles).toEqual([]);
+      expect(state.pdfChunks).toEqual([]);
+    });
+
+    it('drops PDF writes when the bucket was pruned', () => {
+      useLibrarianStore.getState().addPdfFile(makePdfFile({ id: 'f1' }));
+      useLibrarianStore.getState().setActiveProjectId(PROJECT_B);
+      useLibrarianStore.getState().pruneProjectBuckets(new Set([PROJECT_B]));
+
+      useLibrarianStore.getState().addPdfChunksToProject(PROJECT_A, [
+        makePdfChunk({ id: 'c1', fileId: 'f1' }),
+      ]);
+      useLibrarianStore.getState().setPdfStatusForProject(PROJECT_A, 'f1', 'ready');
+
+      expect(useLibrarianStore.getState().byProject[PROJECT_A]).toBeUndefined();
     });
   });
 

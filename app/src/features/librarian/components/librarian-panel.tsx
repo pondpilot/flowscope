@@ -34,37 +34,38 @@ export function LibrarianPanel({ onClose, onNavigateToTable }: LibrarianPanelPro
   const messages = useLibrarianMessages();
   const isLoading = useLibrarianStore((s) => s.isLoading);
   const activeProjectId = useLibrarianStore((s) => s.activeProjectId);
-  const addPdfFile = useLibrarianStore((s) => s.addPdfFile);
-  const addPdfChunks = useLibrarianStore((s) => s.addPdfChunks);
-  const setPdfStatus = useLibrarianStore((s) => s.setPdfStatus);
 
   const { sendMessage } = useLibrarianChat();
   const { result } = useLineageState();
   const schemaIdentifiers = useMemo(() => buildSchemaIdentifiers(result ?? null), [result]);
 
-  const handlePdfUpload = useCallback(
-    async (file: File) => {
-      const fileId = crypto.randomUUID();
-      addPdfFile({
-        id: fileId,
-        name: file.name,
-        size: file.size,
-        status: 'processing',
-        uploadedAt: Date.now(),
-      });
+  const handlePdfUpload = useCallback(async (file: File) => {
+    // Capture the active project id at upload time so all three writes
+    // (file, chunks, status) route to the originating project even if
+    // the user switches projects while the PDF is being processed.
+    const { activeProjectId: projectId, addPdfFileToProject, addPdfChunksToProject, setPdfStatusForProject } =
+      useLibrarianStore.getState();
+    if (!projectId) return;
 
-      try {
-        const chunks = await processPdf(file, fileId, embedTexts);
-        addPdfChunks(chunks);
-        setPdfStatus(fileId, 'ready');
-      } catch (err) {
-        console.error('[Librarian] PDF processing failed:', err);
-        const message = err instanceof Error ? err.message : 'Failed to process PDF';
-        setPdfStatus(fileId, 'error', message);
-      }
-    },
-    [addPdfFile, addPdfChunks, setPdfStatus]
-  );
+    const fileId = crypto.randomUUID();
+    addPdfFileToProject(projectId, {
+      id: fileId,
+      name: file.name,
+      size: file.size,
+      status: 'processing',
+      uploadedAt: Date.now(),
+    });
+
+    try {
+      const chunks = await processPdf(file, fileId, embedTexts);
+      addPdfChunksToProject(projectId, chunks);
+      setPdfStatusForProject(projectId, fileId, 'ready');
+    } catch (err) {
+      console.error('[Librarian] PDF processing failed:', err);
+      const message = err instanceof Error ? err.message : 'Failed to process PDF';
+      setPdfStatusForProject(projectId, fileId, 'error', message);
+    }
+  }, []);
 
   return (
     <div className="flex h-full min-w-0 flex-col overflow-hidden" data-testid="librarian-panel">
