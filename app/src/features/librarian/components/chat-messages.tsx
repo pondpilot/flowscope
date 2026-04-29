@@ -1,13 +1,12 @@
 import { useEffect, useRef } from 'react';
 import { User } from 'lucide-react';
 
-import { ScrollArea } from '@/components/ui/scroll-area';
-
 import type { ChatMessage } from '../types';
 import {
   detectIdentifiers,
   EMPTY_SCHEMA_IDENTIFIERS,
-  resolveFirstTableReference,
+  resolveAllReferences,
+  type ChatReference,
   type SchemaIdentifiers,
 } from '../utils/schema-identifiers';
 
@@ -17,9 +16,10 @@ interface ChatMessagesProps {
   schemaIdentifiers?: SchemaIdentifiers;
   /**
    * Called when the user clicks an assistant message that contains at least
-   * one resolvable schema identifier. Receives the first referenced table.
+   * one resolvable schema identifier. Receives every parsed reference so the
+   * host can highlight all of them in the lineage view.
    */
-  onNavigateToTable?: (tableName: string) => void;
+  onNavigateToReferences?: (refs: ChatReference[]) => void;
 }
 
 const IDENTIFIER_CLASS = 'font-mono text-primary font-medium';
@@ -142,7 +142,7 @@ export function ChatMessages({
   messages,
   isLoading,
   schemaIdentifiers,
-  onNavigateToTable,
+  onNavigateToReferences,
 }: ChatMessagesProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -166,24 +166,29 @@ export function ChatMessages({
   const schema = schemaIdentifiers ?? EMPTY_SCHEMA_IDENTIFIERS;
 
   return (
-    <ScrollArea className="flex-1">
-      <div className="flex flex-col gap-4 p-4">
+    <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden">
+      <div className="flex min-w-0 flex-col gap-4 p-4">
         {messages.map((msg) => {
-          const reference =
-            msg.role === 'assistant' && onNavigateToTable
-              ? resolveFirstTableReference(msg.content, schema)
-              : null;
-          const isClickable = reference != null;
-          const bubbleClass = `min-w-0 rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
+          const refs =
+            msg.role === 'assistant' && onNavigateToReferences
+              ? resolveAllReferences(msg.content, schema)
+              : [];
+          const isClickable = refs.length > 0;
+          const firstTable = refs.find((r) => r.tableName)?.tableName;
+          const firstColumn = refs.find((r) => r.columnName)?.columnName;
+          const ariaLabel = firstTable
+            ? `Open ${firstTable} in lineage view`
+            : 'Open highlighted nodes in lineage view';
+          const bubbleClass = `min-w-0 max-w-[calc(100%-2.5rem)] break-words rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
             msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'
           }${isClickable ? ' cursor-pointer hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring' : ''}`;
           const handleActivate = () => {
             // Skip navigation when the user is selecting text inside the bubble
             // (text selection ends with a click). Without this, copying text or
-            // SQL out of an answer would also navigate to the schema view.
+            // SQL out of an answer would also navigate to the lineage view.
             if ((window.getSelection?.()?.toString().length ?? 0) > 0) return;
-            if (reference && onNavigateToTable) {
-              onNavigateToTable(reference.tableName);
+            if (refs.length > 0 && onNavigateToReferences) {
+              onNavigateToReferences(refs);
             }
           };
           const clickableProps = isClickable
@@ -197,17 +202,16 @@ export function ChatMessages({
                     handleActivate();
                   }
                 },
-                'aria-label': `Open ${reference!.tableName} in schema view`,
-                'data-reference-table': reference!.tableName,
-                ...(reference!.columnName
-                  ? { 'data-reference-column': reference!.columnName }
-                  : {}),
+                'aria-label': ariaLabel,
+                'data-reference-count': String(refs.length),
+                ...(firstTable ? { 'data-reference-table': firstTable } : {}),
+                ...(firstColumn ? { 'data-reference-column': firstColumn } : {}),
               }
             : {};
           return (
             <div
               key={msg.id}
-              className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              className={`flex min-w-0 gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
               data-testid={`message-${msg.role}`}
             >
               {msg.role === 'assistant' && (
@@ -244,6 +248,6 @@ export function ChatMessages({
 
         <div ref={bottomRef} />
       </div>
-    </ScrollArea>
+    </div>
   );
 }

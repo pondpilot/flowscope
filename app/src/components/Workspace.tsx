@@ -26,6 +26,8 @@ import { useViewStateStore } from '@/lib/view-state-store';
 import { getShortcutDisplay } from '@/lib/shortcuts';
 import { useBackend } from '@/lib/backend-context';
 import { LibrarianPanel, useSyncActiveProject } from '@/features/librarian';
+import type { ChatReference } from '@/features/librarian/utils/schema-identifiers';
+import { resolveLineageNodeIds } from '@/lib/lineage-node-resolver';
 
 interface WorkspaceProps {
   backendReady: boolean;
@@ -510,11 +512,17 @@ export function Workspace({ backendReady, error, onRetry, isRetrying }: Workspac
 
 function LibrarianPanelWithNavigation({ onClose }: { onClose: () => void }) {
   const { navigateTo } = useNavigation();
-  const handleNavigateToTable = useCallback(
-    (tableName: string) => {
-      navigateTo('schema', { tableName });
+  const { result } = useLineageState();
+  const handleNavigateToReferences = useCallback(
+    (refs: ChatReference[]) => {
+      if (refs.length === 0) return;
+      const { nodeIds, tablesToExpand } = resolveLineageNodeIds(result ?? null, refs);
+      if (nodeIds.length === 0) return;
+      navigateTo('lineage', { highlightNodeIds: nodeIds, tablesToExpand });
     },
-    [navigateTo]
+    [navigateTo, result]
   );
-  return <LibrarianPanel onClose={onClose} onNavigateToTable={handleNavigateToTable} />;
+  return (
+    <LibrarianPanel onClose={onClose} onNavigateToReferences={handleNavigateToReferences} />
+  );
 }

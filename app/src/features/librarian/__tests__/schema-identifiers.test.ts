@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildSchemaIdentifiers,
   detectIdentifiers,
+  resolveAllReferences,
   resolveFirstTableReference,
   type SchemaIdentifiers,
 } from '../utils/schema-identifiers';
@@ -171,5 +172,78 @@ describe('resolveFirstTableReference', () => {
     expect(resolveFirstTableReference('MANDT only here, then EKKO.', schema)).toEqual({
       tableName: 'EKKO',
     });
+  });
+});
+
+describe('resolveAllReferences', () => {
+  it('returns an empty list when text has no identifiers', () => {
+    const schema = makeSchema(['MARA'], ['MANDT']);
+    expect(resolveAllReferences('Nothing to resolve here.', schema)).toEqual([]);
+  });
+
+  it('returns an empty list for unknown identifiers (skipped silently)', () => {
+    const schema = makeSchema(['MARA'], ['MANDT']);
+    expect(resolveAllReferences('UNKNOWN_TABLE and OTHER_COL', schema)).toEqual([]);
+  });
+
+  it('resolves a dotted column as a qualified reference', () => {
+    const schema = makeSchema(['BKPF'], ['MANDT']);
+    expect(resolveAllReferences('Look at BKPF.MANDT now.', schema)).toEqual([
+      { tableName: 'BKPF', columnName: 'MANDT' },
+    ]);
+  });
+
+  it('resolves a space-separated table+column as a qualified reference', () => {
+    const schema = makeSchema(['BKPF'], ['MANDT']);
+    expect(resolveAllReferences('Look at BKPF MANDT now.', schema)).toEqual([
+      { tableName: 'BKPF', columnName: 'MANDT' },
+    ]);
+  });
+
+  it('resolves a standalone table as a table reference', () => {
+    const schema = makeSchema(['BKPF'], ['MANDT']);
+    expect(resolveAllReferences('Look at BKPF now.', schema)).toEqual([{ tableName: 'BKPF' }]);
+  });
+
+  it('resolves a standalone column as a bare-column reference', () => {
+    const schema = makeSchema(['BKPF'], ['MANDT']);
+    expect(resolveAllReferences('The MANDT column appears everywhere.', schema)).toEqual([
+      { columnName: 'MANDT', bareColumn: true },
+    ]);
+  });
+
+  it('does not qualify a column when the preceding text is more than a separator', () => {
+    const schema = makeSchema(['BKPF'], ['MANDT']);
+    expect(resolveAllReferences('BKPF and then MANDT.', schema)).toEqual([
+      { tableName: 'BKPF' },
+      { columnName: 'MANDT', bareColumn: true },
+    ]);
+  });
+
+  it('does not qualify a column when the preceding identifier is another column', () => {
+    const schema = makeSchema([], ['MANDT', 'BUKRS']);
+    expect(resolveAllReferences('MANDT BUKRS pair', schema)).toEqual([
+      { columnName: 'MANDT', bareColumn: true },
+      { columnName: 'BUKRS', bareColumn: true },
+    ]);
+  });
+
+  it('returns mixed references in order, deduplicated', () => {
+    const schema = makeSchema(['BKPF', 'BSEG'], ['MANDT', 'BUKRS']);
+    const refs = resolveAllReferences(
+      'BKPF.MANDT joins BSEG.MANDT; mention MANDT alone, then BKPF.MANDT again, and BSEG too.',
+      schema
+    );
+    expect(refs).toEqual([
+      { tableName: 'BKPF', columnName: 'MANDT' },
+      { tableName: 'BSEG', columnName: 'MANDT' },
+      { columnName: 'MANDT', bareColumn: true },
+      { tableName: 'BSEG' },
+    ]);
+  });
+
+  it('treats names that are both tables and columns as table references', () => {
+    const schema = makeSchema(['shared'], ['shared']);
+    expect(resolveAllReferences('the shared name', schema)).toEqual([{ tableName: 'shared' }]);
   });
 });

@@ -76,12 +76,12 @@ When the user clicks an assistant message in the Librarian chat, switch to the D
 - Modify: `app/src/features/librarian/components/chat-messages.tsx`
 - Modify: `app/src/features/librarian/__tests__/components.test.tsx`
 
-- [ ] Rename `onNavigateToTable` to `onNavigateToReferences(refs: ChatReference[])` through `chat-messages` → `librarian-panel` → `Workspace`
-- [ ] In `chat-messages.tsx`, replace `resolveFirstTableReference` with `resolveAllReferences`; bubble is clickable when `refs.length > 0`; on click, pass full refs array (preserve existing text-selection-skip logic and aria-label/data attributes — adapt label to first table or "highlighted nodes")
-- [ ] In `Workspace.tsx` `LibrarianPanelWithNavigation`: receive refs, call `resolveLineageNodeIds` against current `AnalyzeResult` (read via `useLineage` state), then `navigateTo('lineage', { highlightNodeIds, tablesToExpand })`
-- [ ] If `resolveLineageNodeIds` returns zero matches, do nothing (no toast, no error) — matches spec
-- [ ] Update `components.test.tsx`: clicking an assistant message must trigger `onNavigateToReferences` with the parsed refs (replace the old `expect(onNavigateToTable).toHaveBeenCalledWith('MARA')` assertions)
-- [ ] Run `npx vitest run src/features/librarian/` — must pass
+- [x] Rename `onNavigateToTable` to `onNavigateToReferences(refs: ChatReference[])` through `chat-messages` → `librarian-panel` → `Workspace`
+- [x] In `chat-messages.tsx`, replace `resolveFirstTableReference` with `resolveAllReferences`; bubble is clickable when `refs.length > 0`; on click, pass full refs array (preserve existing text-selection-skip logic and aria-label/data attributes — adapt label to first table or "highlighted nodes")
+- [x] In `Workspace.tsx` `LibrarianPanelWithNavigation`: receive refs, call `resolveLineageNodeIds` against current `AnalyzeResult` (read via `useLineage` state), then `navigateTo('lineage', { highlightNodeIds, tablesToExpand })`
+- [x] If `resolveLineageNodeIds` returns zero matches, do nothing (no toast, no error) — matches spec
+- [x] Update `components.test.tsx`: clicking an assistant message must trigger `onNavigateToReferences` with the parsed refs (replace the old `expect(onNavigateToTable).toHaveBeenCalledWith('MARA')` assertions)
+- [x] Run `npx vitest run src/features/librarian/` — must pass
 
 ### Task 5: Consume highlightNodeIds in AnalysisView
 

@@ -21,6 +21,13 @@ export interface SchemaReference {
   columnName?: string;
 }
 
+export interface ChatReference {
+  tableName?: string;
+  columnName?: string;
+  /** True when the reference came from a column identifier with no preceding table qualifier. */
+  bareColumn?: boolean;
+}
+
 export const EMPTY_SCHEMA_IDENTIFIERS: SchemaIdentifiers = {
   tables: new Set(),
   columns: new Set(),
@@ -117,4 +124,73 @@ export function resolveFirstTableReference(
     }
   }
   return null;
+}
+
+/**
+ * Resolve every schema identifier in `text` to a chat reference.
+ *
+ * - Table identifiers become `{ tableName }` references.
+ * - Column identifiers immediately preceded by a table identifier (separated
+ *   only by whitespace and/or a single dot, e.g. `BKPF.MANDT` or `BKPF MANDT`)
+ *   become qualified `{ tableName, columnName }` references.
+ * - Column identifiers without such a qualifier become bare-column references
+ *   `{ columnName, bareColumn: true }` so the caller can decide how to expand
+ *   them (e.g. highlight every owning table).
+ *
+ * Results are deduplicated by `(tableName, columnName)` while preserving the
+ * order of first occurrence.
+ */
+export function resolveAllReferences(
+  text: string,
+  schema: SchemaIdentifiers
+): ChatReference[] {
+  const segments = detectIdentifiers(text, schema);
+  const refs: ChatReference[] = [];
+  const seen = new Set<string>();
+
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
+    if (seg.type !== 'identifier') continue;
+
+    let ref: ChatReference | null = null;
+
+    if (seg.kind === 'table') {
+      // Skip emitting a standalone table reference when the next identifier is
+      // a column separated only by whitespace and/or a dot — that column will
+      // produce a qualified `{ tableName, columnName }` reference instead.
+      let consumedByColumn = false;
+      for (let j = i + 1; j < segments.length; j++) {
+        const next = segments[j];
+        if (next.type === 'text') {
+          if (!/^[.\s]*$/.test(next.value)) break;
+          continue;
+        }
+        if (next.kind === 'column') consumedByColumn = true;
+        break;
+      }
+      if (!consumedByColumn) ref = { tableName: seg.value };
+    } else if (seg.kind === 'column') {
+      let qualifier: string | null = null;
+      for (let j = i - 1; j >= 0; j--) {
+        const prev = segments[j];
+        if (prev.type === 'text') {
+          if (!/^[.\s]*$/.test(prev.value)) break;
+          continue;
+        }
+        if (prev.kind === 'table') qualifier = prev.value;
+        break;
+      }
+      ref = qualifier
+        ? { tableName: qualifier, columnName: seg.value }
+        : { columnName: seg.value, bareColumn: true };
+    }
+
+    if (!ref) continue;
+    const key = `${ref.tableName ?? ''}${ref.columnName ?? ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    refs.push(ref);
+  }
+
+  return refs;
 }

@@ -276,54 +276,94 @@ describe('ChatMessages', () => {
 
   it('makes assistant messages clickable when they reference a table and fires callback', () => {
     const schema = makeSchema(['MARA'], []);
-    const onNavigateToTable = vi.fn();
+    const onNavigateToReferences = vi.fn();
     const messages = [makeMessage({ role: 'assistant', content: 'Check MARA for this.' })];
     render(
       <ChatMessages
         messages={messages}
         isLoading={false}
         schemaIdentifiers={schema}
-        onNavigateToTable={onNavigateToTable}
+        onNavigateToReferences={onNavigateToReferences}
       />
     );
 
     const bubble = screen.getByTestId('message-assistant').querySelector('[role="button"]');
     expect(bubble).not.toBeNull();
     expect(bubble).toHaveAttribute('data-reference-table', 'MARA');
+    expect(bubble).toHaveAttribute('data-reference-count', '1');
     expect(bubble?.className).toContain('cursor-pointer');
 
     fireEvent.click(bubble!);
-    expect(onNavigateToTable).toHaveBeenCalledWith('MARA');
+    expect(onNavigateToReferences).toHaveBeenCalledWith([{ tableName: 'MARA' }]);
   });
 
-  it('resolves column-only references to the owning table', () => {
+  it('passes bare column references through unchanged for the host to resolve', () => {
     const schema: SchemaIdentifiers = {
       tables: new Set(['MARA']),
       columns: new Set(['MANDT']),
       columnOwners: new Map([['MANDT', ['MARA']]]),
     };
-    const onNavigateToTable = vi.fn();
+    const onNavigateToReferences = vi.fn();
     const messages = [makeMessage({ role: 'assistant', content: 'The MANDT column exists.' })];
     render(
       <ChatMessages
         messages={messages}
         isLoading={false}
         schemaIdentifiers={schema}
-        onNavigateToTable={onNavigateToTable}
+        onNavigateToReferences={onNavigateToReferences}
       />
     );
 
     const bubble = screen.getByTestId('message-assistant').querySelector('[role="button"]');
-    expect(bubble).toHaveAttribute('data-reference-table', 'MARA');
     expect(bubble).toHaveAttribute('data-reference-column', 'MANDT');
+    expect(bubble).not.toHaveAttribute('data-reference-table');
+    expect(bubble).toHaveAttribute('aria-label', 'Open highlighted nodes in lineage view');
 
     fireEvent.click(bubble!);
-    expect(onNavigateToTable).toHaveBeenCalledWith('MARA');
+    expect(onNavigateToReferences).toHaveBeenCalledWith([
+      { columnName: 'MANDT', bareColumn: true },
+    ]);
+  });
+
+  it('passes every parsed reference for a multi-identifier message', () => {
+    const schema: SchemaIdentifiers = {
+      tables: new Set(['BKPF', 'BSEG']),
+      columns: new Set(['MANDT', 'BUKRS']),
+      columnOwners: new Map([
+        ['MANDT', ['BKPF', 'BSEG']],
+        ['BUKRS', ['BKPF']],
+      ]),
+    };
+    const onNavigateToReferences = vi.fn();
+    const messages = [
+      makeMessage({
+        role: 'assistant',
+        content: 'BKPF.MANDT links to BSEG via BUKRS.',
+      }),
+    ];
+    render(
+      <ChatMessages
+        messages={messages}
+        isLoading={false}
+        schemaIdentifiers={schema}
+        onNavigateToReferences={onNavigateToReferences}
+      />
+    );
+
+    const bubble = screen.getByTestId('message-assistant').querySelector('[role="button"]')!;
+    expect(bubble).toHaveAttribute('data-reference-count', '3');
+
+    fireEvent.click(bubble);
+    expect(onNavigateToReferences).toHaveBeenCalledWith([
+      { tableName: 'BKPF', columnName: 'MANDT' },
+      { tableName: 'BSEG' },
+      { columnName: 'BUKRS', bareColumn: true },
+    ]);
   });
 
   it('does not make assistant messages clickable when there is no resolvable reference', () => {
     const schema = makeSchema(['MARA'], []);
-    const onNavigateToTable = vi.fn();
+    const onNavigateToReferences = vi.fn();
     const messages = [
       makeMessage({ role: 'assistant', content: 'Just a plain answer with no references.' }),
     ];
@@ -332,7 +372,7 @@ describe('ChatMessages', () => {
         messages={messages}
         isLoading={false}
         schemaIdentifiers={schema}
-        onNavigateToTable={onNavigateToTable}
+        onNavigateToReferences={onNavigateToReferences}
       />
     );
 
@@ -353,32 +393,32 @@ describe('ChatMessages', () => {
 
   it('activates the callback via keyboard (Enter)', () => {
     const schema = makeSchema(['MARA'], []);
-    const onNavigateToTable = vi.fn();
+    const onNavigateToReferences = vi.fn();
     const messages = [makeMessage({ role: 'assistant', content: 'MARA row.' })];
     render(
       <ChatMessages
         messages={messages}
         isLoading={false}
         schemaIdentifiers={schema}
-        onNavigateToTable={onNavigateToTable}
+        onNavigateToReferences={onNavigateToReferences}
       />
     );
 
     const bubble = screen.getByTestId('message-assistant').querySelector('[role="button"]');
     fireEvent.keyDown(bubble!, { key: 'Enter' });
-    expect(onNavigateToTable).toHaveBeenCalledWith('MARA');
+    expect(onNavigateToReferences).toHaveBeenCalledWith([{ tableName: 'MARA' }]);
   });
 
   it('does not navigate when text is selected inside the bubble (preserves copy/select)', () => {
     const schema = makeSchema(['MARA'], []);
-    const onNavigateToTable = vi.fn();
+    const onNavigateToReferences = vi.fn();
     const messages = [makeMessage({ role: 'assistant', content: 'Check MARA for this.' })];
     render(
       <ChatMessages
         messages={messages}
         isLoading={false}
         schemaIdentifiers={schema}
-        onNavigateToTable={onNavigateToTable}
+        onNavigateToReferences={onNavigateToReferences}
       />
     );
 
@@ -389,7 +429,7 @@ describe('ChatMessages', () => {
     );
     try {
       fireEvent.click(bubble);
-      expect(onNavigateToTable).not.toHaveBeenCalled();
+      expect(onNavigateToReferences).not.toHaveBeenCalled();
     } finally {
       window.getSelection = originalGetSelection;
     }
@@ -397,7 +437,7 @@ describe('ChatMessages', () => {
 
   it('does not navigate when clicking inside a code block (allows code copy)', () => {
     const schema = makeSchema(['MARA'], []);
-    const onNavigateToTable = vi.fn();
+    const onNavigateToReferences = vi.fn();
     const messages = [
       makeMessage({
         role: 'assistant',
@@ -409,26 +449,26 @@ describe('ChatMessages', () => {
         messages={messages}
         isLoading={false}
         schemaIdentifiers={schema}
-        onNavigateToTable={onNavigateToTable}
+        onNavigateToReferences={onNavigateToReferences}
       />
     );
 
     const pre = container.querySelector('pre')!;
     expect(pre).not.toBeNull();
     fireEvent.click(pre);
-    expect(onNavigateToTable).not.toHaveBeenCalled();
+    expect(onNavigateToReferences).not.toHaveBeenCalled();
   });
 
   it('does not make user messages clickable even when they mention identifiers', () => {
     const schema = makeSchema(['MARA'], []);
-    const onNavigateToTable = vi.fn();
+    const onNavigateToReferences = vi.fn();
     const messages = [makeMessage({ role: 'user', content: 'Tell me about MARA.' })];
     render(
       <ChatMessages
         messages={messages}
         isLoading={false}
         schemaIdentifiers={schema}
-        onNavigateToTable={onNavigateToTable}
+        onNavigateToReferences={onNavigateToReferences}
       />
     );
 

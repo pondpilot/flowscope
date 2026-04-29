@@ -10,7 +10,7 @@ import { useLibrarianChat } from '../hooks/use-librarian-chat';
 import { processPdf } from '../services/pdf-processor';
 import { embedTexts } from '../services/embedding-service';
 import { useLibrarianMessages, useLibrarianStore } from '../store';
-import { buildSchemaIdentifiers } from '../utils/schema-identifiers';
+import { buildSchemaIdentifiers, type ChatReference } from '../utils/schema-identifiers';
 
 import { AISettingsDialog } from './ai-settings-dialog';
 import { ChatInput } from './chat-input';
@@ -20,14 +20,14 @@ import { PdfUpload } from './pdf-upload';
 interface LibrarianPanelProps {
   onClose: () => void;
   /**
-   * Called when the user clicks an assistant message that references a
-   * schema table (directly or via a column). The host wires this to the
-   * schema tab navigation.
+   * Called when the user clicks an assistant message that contains at least
+   * one resolvable schema identifier. Receives every parsed reference so the
+   * host can highlight all of them in the lineage view.
    */
-  onNavigateToTable?: (tableName: string) => void;
+  onNavigateToReferences?: (refs: ChatReference[]) => void;
 }
 
-export function LibrarianPanel({ onClose, onNavigateToTable }: LibrarianPanelProps) {
+export function LibrarianPanel({ onClose, onNavigateToReferences }: LibrarianPanelProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [docsExpanded, setDocsExpanded] = useState(false);
 
@@ -142,7 +142,7 @@ export function LibrarianPanel({ onClose, onNavigateToTable }: LibrarianPanelPro
         messages={messages}
         isLoading={isLoading}
         schemaIdentifiers={schemaIdentifiers}
-        onNavigateToTable={onNavigateToTable}
+        onNavigateToReferences={onNavigateToReferences}
       />
 
       {/* Collapsible docs section */}
