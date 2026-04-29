@@ -78,10 +78,10 @@ Refactor the Librarian Zustand store from a single flat shape to per-project buc
 - Modify: `app/src/features/librarian/hooks/use-librarian-chat.ts`
 - Modify: `app/src/features/librarian/__tests__/use-librarian-chat.test.ts`
 
-- [ ] Replace `useLibrarianStore.getState().pdfChunks` and `.messages` reads with bucket-scoped reads (`state.byProject[state.activeProjectId]?.pdfChunks ?? []`, same for messages)
-- [ ] Bail out early with a friendly assistant message ("Open or create a project to use Librarian") if `activeProjectId` is null — keeps prompt builder from running on a phantom bucket
-- [ ] Update the existing chat hook test mock for `useProject` to include `activeProjectId: 'proj-1'`; update the `beforeEach` `setState` to seed `byProject['proj-1']` and `activeProjectId`; add a new test: PDF chunks uploaded to project A are not searched while project B is active
-- [ ] `yarn typecheck && npx vitest run src/features/librarian/__tests__/use-librarian-chat.test.ts` — must pass
+- [x] Replace `useLibrarianStore.getState().pdfChunks` and `.messages` reads with bucket-scoped reads (`state.byProject[state.activeProjectId]?.pdfChunks ?? []`, same for messages)
+- [x] Bail out early with a friendly assistant message ("Open or create a project to use Librarian") if `activeProjectId` is null — keeps prompt builder from running on a phantom bucket
+- [x] Update the existing chat hook test mock for `useProject` to include `activeProjectId: 'proj-1'`; update the `beforeEach` `setState` to seed `byProject['proj-1']` and `activeProjectId`; add a new test: PDF chunks uploaded to project A are not searched while project B is active
+- [x] `yarn typecheck && npx vitest run src/features/librarian/__tests__/use-librarian-chat.test.ts` — must pass
 
 ### Task 5: Verify acceptance criteria
 

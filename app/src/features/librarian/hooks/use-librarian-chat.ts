@@ -27,6 +27,12 @@ export function useLibrarianChat() {
         return;
       }
 
+      const { activeProjectId } = useLibrarianStore.getState();
+      if (!activeProjectId) {
+        addMessage('assistant', 'Open or create a project to use Librarian.');
+        return;
+      }
+
       // Add user message to store
       addMessage('user', userMessage);
       setLoading(true);
@@ -48,8 +54,9 @@ export function useLibrarianChat() {
           }
         }
 
-        // Vector search PDFs if chunks exist — read from store to avoid stale closure
-        const pdfChunks = useLibrarianStore.getState().pdfChunks;
+        // Vector search PDFs if chunks exist — read from active project bucket
+        const pdfChunks =
+          useLibrarianStore.getState().byProject[activeProjectId]?.pdfChunks ?? [];
         let pdfCitations = '';
         if (pdfChunks.length > 0) {
           try {
@@ -65,13 +72,12 @@ export function useLibrarianChat() {
           }
         }
 
-        // Build context and prompt — read messages from store to get latest state
-        // (the closure `messages` would be stale after addMessage above).
+        // Build context and prompt — read messages from the active project bucket.
         // Exclude the last message (the user message just added) since it will
-        // also be sent as the userMessage parameter to the LLM.
-        // Send only the last CHAT_HISTORY_LIMIT messages as context to the AI,
-        // excluding the current user message (sent separately as userMessage).
-        const allMessages = useLibrarianStore.getState().messages;
+        // also be sent as the userMessage parameter to the LLM. Send only the
+        // last CHAT_HISTORY_LIMIT messages as context to the AI.
+        const allMessages =
+          useLibrarianStore.getState().byProject[activeProjectId]?.messages ?? [];
         const recentHistory = allMessages.slice(0, -1).slice(-CHAT_HISTORY_LIMIT);
         const context = buildContext({
           lineage,

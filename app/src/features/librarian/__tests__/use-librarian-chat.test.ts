@@ -50,7 +50,7 @@ const mockCurrentProject = {
   templateMode: 'raw',
 };
 vi.mock('@/lib/project-store', () => ({
-  useProject: () => ({ currentProject: mockCurrentProject }),
+  useProject: () => ({ currentProject: mockCurrentProject, activeProjectId: 'proj-1' }),
 }));
 
 // Import mocked modules after vi.mock
@@ -74,6 +74,8 @@ const mockedSearchChunks = vi.mocked(searchChunks);
 
 beforeEach(() => {
   useLibrarianStore.setState({
+    byProject: { 'proj-1': { messages: [], pdfFiles: [], pdfChunks: [] } },
+    activeProjectId: 'proj-1',
     messages: [],
     isLoading: false,
     pdfFiles: [],
@@ -280,7 +282,9 @@ describe('useLibrarianChat', () => {
     ];
 
     it('searches PDF chunks when available', async () => {
-      useLibrarianStore.setState({ pdfChunks });
+      useLibrarianStore.setState({
+        byProject: { 'proj-1': { messages: [], pdfFiles: [], pdfChunks } },
+      });
       mockedSearchChunks.mockReturnValue(pdfChunks);
 
       const { result } = renderHook(() => useLibrarianChat());
@@ -289,7 +293,7 @@ describe('useLibrarianChat', () => {
         await result.current.sendMessage('question');
       });
 
-      expect(mockedEmbedTexts).toHaveBeenCalledWith(['question']);
+      expect(mockedEmbedTexts).toHaveBeenCalledWith(['question'], 'query');
       expect(mockedSearchChunks).toHaveBeenCalled();
       expect(mockedBuildContext).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -310,7 +314,9 @@ describe('useLibrarianChat', () => {
     });
 
     it('continues without PDF context if embedding fails', async () => {
-      useLibrarianStore.setState({ pdfChunks });
+      useLibrarianStore.setState({
+        byProject: { 'proj-1': { messages: [], pdfFiles: [], pdfChunks } },
+      });
       mockedEmbedTexts.mockRejectedValue(new Error('embedding error'));
 
       const { result } = renderHook(() => useLibrarianChat());
@@ -323,6 +329,50 @@ describe('useLibrarianChat', () => {
       expect(mockedBuildContext).toHaveBeenCalledWith(
         expect.objectContaining({ pdfCitations: '' })
       );
+    });
+
+    it('does not search project A PDF chunks while project B is active', async () => {
+      // Seed project A with chunks; project B has none. Active project is A.
+      useLibrarianStore.setState({
+        activeProjectId: 'proj-a',
+        byProject: {
+          'proj-a': { messages: [], pdfFiles: [], pdfChunks },
+          'proj-b': { messages: [], pdfFiles: [], pdfChunks: [] },
+        },
+      });
+
+      // Switch active project to B before sending.
+      useLibrarianStore.setState({ activeProjectId: 'proj-b' });
+
+      const { result } = renderHook(() => useLibrarianChat());
+
+      await act(async () => {
+        await result.current.sendMessage('question');
+      });
+
+      expect(mockedEmbedTexts).not.toHaveBeenCalled();
+      expect(mockedSearchChunks).not.toHaveBeenCalled();
+      expect(mockedBuildContext).toHaveBeenCalledWith(
+        expect.objectContaining({ pdfCitations: '' })
+      );
+    });
+  });
+
+  describe('no active project', () => {
+    it('shows a friendly message and bails when activeProjectId is null', async () => {
+      useLibrarianStore.setState({ activeProjectId: null, byProject: {} });
+
+      const { result } = renderHook(() => useLibrarianChat());
+
+      await act(async () => {
+        await result.current.sendMessage('question');
+      });
+
+      // addMessage is a no-op when activeProjectId is null, so no messages
+      // land in any bucket, but the prompt builder/AI service must not run.
+      expect(mockedSendChatMessage).not.toHaveBeenCalled();
+      expect(mockedBuildContext).not.toHaveBeenCalled();
+      expect(useLibrarianStore.getState().byProject).toEqual({});
     });
   });
 });
