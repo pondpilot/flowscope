@@ -27,14 +27,21 @@ export function useLibrarianChat() {
         return;
       }
 
-      const { activeProjectId } = useLibrarianStore.getState();
+      const { activeProjectId, addMessageToProject } = useLibrarianStore.getState();
       if (!activeProjectId) {
-        addMessage('assistant', 'Open or create a project to use Librarian.');
+        // The chat input UI shows the "Open or create a project" hint
+        // (via the `noActiveProject` prop), so we just bail. We can't
+        // write a chat message here because the bucket doesn't exist.
         return;
       }
 
-      // Add user message to store
-      addMessage('user', userMessage);
+      // Capture the project id for the duration of this request so a
+      // mid-flight project switch routes the assistant response back to
+      // the originating project's bucket, not whichever project is
+      // active when the network call returns.
+      const projectId = activeProjectId;
+
+      addMessageToProject(projectId, 'user', userMessage);
       setLoading(true);
 
       // Create abort controller for this request
@@ -54,9 +61,10 @@ export function useLibrarianChat() {
           }
         }
 
-        // Vector search PDFs if chunks exist — read from active project bucket
+        // Vector search PDFs if chunks exist — read from the originating
+        // project's bucket (captured projectId, not the live active id).
         const pdfChunks =
-          useLibrarianStore.getState().byProject[activeProjectId]?.pdfChunks ?? [];
+          useLibrarianStore.getState().byProject[projectId]?.pdfChunks ?? [];
         let pdfCitations = '';
         if (pdfChunks.length > 0) {
           try {
@@ -72,12 +80,12 @@ export function useLibrarianChat() {
           }
         }
 
-        // Build context and prompt — read messages from the active project bucket.
-        // Exclude the last message (the user message just added) since it will
-        // also be sent as the userMessage parameter to the LLM. Send only the
-        // last CHAT_HISTORY_LIMIT messages as context to the AI.
+        // Build context and prompt — read messages from the originating
+        // project's bucket. Exclude the last message (the user message just
+        // added) since it will also be sent as the userMessage parameter to
+        // the LLM. Send only the last CHAT_HISTORY_LIMIT messages as context.
         const allMessages =
-          useLibrarianStore.getState().byProject[activeProjectId]?.messages ?? [];
+          useLibrarianStore.getState().byProject[projectId]?.messages ?? [];
         const recentHistory = allMessages.slice(0, -1).slice(-CHAT_HISTORY_LIMIT);
         const context = buildContext({
           lineage,
@@ -90,13 +98,13 @@ export function useLibrarianChat() {
         // Send to AI
         const response = await sendChatMessage(config, prompt, userMessage, controller.signal);
 
-        addMessage('assistant', response);
+        addMessageToProject(projectId, 'assistant', response);
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') {
-          addMessage('assistant', 'Request was cancelled.');
+          addMessageToProject(projectId, 'assistant', 'Request was cancelled.');
         } else {
           const message = err instanceof Error ? err.message : 'An unexpected error occurred.';
-          addMessage('assistant', `Error: ${message}`);
+          addMessageToProject(projectId, 'assistant', `Error: ${message}`);
         }
       } finally {
         setLoading(false);

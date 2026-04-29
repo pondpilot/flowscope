@@ -358,8 +358,100 @@ describe('useLibrarianChat', () => {
     });
   });
 
+  describe('mid-flight project switch', () => {
+    it('routes the assistant response to the originating project, not the live active one', async () => {
+      // Hold the network call open until we explicitly resolve it.
+      let resolveSend: (value: string) => void = () => {};
+      mockedSendChatMessage.mockImplementation(
+        () =>
+          new Promise<string>((resolve) => {
+            resolveSend = resolve;
+          })
+      );
+
+      useLibrarianStore.setState({
+        activeProjectId: 'proj-1',
+        byProject: { 'proj-1': { messages: [], pdfFiles: [], pdfChunks: [] } },
+      });
+
+      const { result } = renderHook(() => useLibrarianChat());
+
+      let sendPromise!: Promise<void>;
+      act(() => {
+        sendPromise = result.current.sendMessage('question for proj-1');
+      });
+
+      // User switches to a different project before the response arrives.
+      // Seed the destination bucket so it's a realistic switch.
+      act(() => {
+        useLibrarianStore.setState({
+          activeProjectId: 'proj-2',
+          byProject: {
+            ...useLibrarianStore.getState().byProject,
+            'proj-2': { messages: [], pdfFiles: [], pdfChunks: [] },
+          },
+        });
+      });
+
+      await act(async () => {
+        resolveSend('answer for proj-1');
+        await sendPromise;
+      });
+
+      const state = useLibrarianStore.getState();
+      const proj1Messages = state.byProject['proj-1'].messages.map((m) => m.content);
+      const proj2Messages = state.byProject['proj-2']?.messages.map((m) => m.content) ?? [];
+      expect(proj1Messages).toEqual(['question for proj-1', 'answer for proj-1']);
+      expect(proj2Messages).toEqual([]);
+    });
+
+    it('routes errors to the originating project too', async () => {
+      let rejectSend: (reason: Error) => void = () => {};
+      mockedSendChatMessage.mockImplementation(
+        () =>
+          new Promise<string>((_resolve, reject) => {
+            rejectSend = reject;
+          })
+      );
+
+      useLibrarianStore.setState({
+        activeProjectId: 'proj-1',
+        byProject: { 'proj-1': { messages: [], pdfFiles: [], pdfChunks: [] } },
+      });
+
+      const { result } = renderHook(() => useLibrarianChat());
+
+      let sendPromise!: Promise<void>;
+      act(() => {
+        sendPromise = result.current.sendMessage('question');
+      });
+
+      act(() => {
+        useLibrarianStore.setState({
+          activeProjectId: 'proj-2',
+          byProject: {
+            ...useLibrarianStore.getState().byProject,
+            'proj-2': { messages: [], pdfFiles: [], pdfChunks: [] },
+          },
+        });
+      });
+
+      await act(async () => {
+        rejectSend(new Error('network down'));
+        await sendPromise;
+      });
+
+      const state = useLibrarianStore.getState();
+      const proj1Messages = state.byProject['proj-1'].messages.map((m) => m.content);
+      const proj2Messages = state.byProject['proj-2']?.messages.map((m) => m.content) ?? [];
+      expect(proj1Messages[0]).toBe('question');
+      expect(proj1Messages[1]).toContain('network down');
+      expect(proj2Messages).toEqual([]);
+    });
+  });
+
   describe('no active project', () => {
-    it('shows a friendly message and bails when activeProjectId is null', async () => {
+    it('bails silently when activeProjectId is null', async () => {
       useLibrarianStore.setState({ activeProjectId: null, byProject: {} });
 
       const { result } = renderHook(() => useLibrarianChat());
@@ -368,8 +460,9 @@ describe('useLibrarianChat', () => {
         await result.current.sendMessage('question');
       });
 
-      // addMessage is a no-op when activeProjectId is null, so no messages
-      // land in any bucket, but the prompt builder/AI service must not run.
+      // No bucket exists to write to — the chat input UI shows the
+      // "Open or create a project" hint via its `noActiveProject` prop,
+      // so the hook just bails without producing a message.
       expect(mockedSendChatMessage).not.toHaveBeenCalled();
       expect(mockedBuildContext).not.toHaveBeenCalled();
       expect(useLibrarianStore.getState().byProject).toEqual({});

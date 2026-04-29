@@ -6,8 +6,9 @@ vi.mock('../services/ai-service', () => ({
 }));
 
 let mockActiveProjectId: string | null = null;
+let mockProjects: { id: string }[] = [];
 vi.mock('@/lib/project-store', () => ({
-  useProject: () => ({ activeProjectId: mockActiveProjectId }),
+  useProject: () => ({ activeProjectId: mockActiveProjectId, projects: mockProjects }),
 }));
 
 import { useLibrarianStore } from '../store';
@@ -18,6 +19,7 @@ const PROJECT_B = 'proj-b';
 
 beforeEach(() => {
   mockActiveProjectId = null;
+  mockProjects = [];
   useLibrarianStore.setState({
     byProject: {},
     activeProjectId: null,
@@ -75,5 +77,26 @@ describe('useSyncActiveProject', () => {
     rerender();
     expect(useLibrarianStore.getState().activeProjectId).toBe(PROJECT_A);
     expect(useLibrarianStore.getState().messages.map((m) => m.content)).toEqual(['A says hi']);
+  });
+
+  it('drops Librarian buckets for projects removed from the project list', () => {
+    // Both projects exist; seed both buckets.
+    mockActiveProjectId = PROJECT_A;
+    mockProjects = [{ id: PROJECT_A }, { id: PROJECT_B }];
+    const { rerender } = renderHook(() => useSyncActiveProject());
+    useLibrarianStore.getState().addMessage('user', 'A msg');
+    useLibrarianStore.getState().setActiveProjectId(PROJECT_B);
+    useLibrarianStore.getState().addMessage('user', 'B msg');
+    useLibrarianStore.getState().setActiveProjectId(PROJECT_A);
+
+    expect(Object.keys(useLibrarianStore.getState().byProject).sort()).toEqual([
+      PROJECT_A,
+      PROJECT_B,
+    ]);
+
+    // Project B is deleted from the project list — its bucket must be dropped.
+    mockProjects = [{ id: PROJECT_A }];
+    rerender();
+    expect(Object.keys(useLibrarianStore.getState().byProject)).toEqual([PROJECT_A]);
   });
 });

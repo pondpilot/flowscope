@@ -28,6 +28,7 @@ interface LibrarianState {
 
   setActiveProjectId: (id: string | null) => void;
   addMessage: (role: ChatRole, content: string) => void;
+  addMessageToProject: (projectId: string, role: ChatRole, content: string) => void;
   clearMessages: () => void;
   setLoading: (loading: boolean) => void;
   addPdfFile: (file: PdfFile) => void;
@@ -35,6 +36,7 @@ interface LibrarianState {
   removePdf: (fileId: string) => void;
   setPdfStatus: (fileId: string, status: PdfFileStatus, error?: string) => void;
   hasPdfFile: (fileName: string) => boolean;
+  pruneProjectBuckets: (validIds: ReadonlySet<string>) => void;
   refreshConfig: () => void;
 }
 
@@ -85,6 +87,14 @@ export const useLibrarianStore = create<LibrarianState>()((set, get) => ({
   addMessage: (role, content) => {
     const { activeProjectId } = get();
     if (!activeProjectId) return;
+    get().addMessageToProject(activeProjectId, role, content);
+  },
+
+  // Writes a message to an explicit project bucket regardless of which
+  // project is currently active. Used by `useLibrarianChat` so that an
+  // assistant response always lands in the project that originated the
+  // request, even if the user switched projects mid-flight.
+  addMessageToProject: (projectId, role, content) => {
     const message: ChatMessage = {
       id: crypto.randomUUID(),
       role,
@@ -92,11 +102,12 @@ export const useLibrarianStore = create<LibrarianState>()((set, get) => ({
       timestamp: Date.now(),
     };
     set((state) => {
-      const prev = getBucket(state.byProject, activeProjectId);
+      const prev = getBucket(state.byProject, projectId);
       const next: ProjectLibrarianState = { ...prev, messages: [...prev.messages, message] };
+      const isActive = state.activeProjectId === projectId;
       return {
-        byProject: { ...state.byProject, [activeProjectId]: next },
-        messages: next.messages,
+        byProject: { ...state.byProject, [projectId]: next },
+        ...(isActive ? { messages: next.messages } : {}),
       };
     });
   },
@@ -183,7 +194,26 @@ export const useLibrarianStore = create<LibrarianState>()((set, get) => ({
     const { activeProjectId, byProject } = get();
     if (!activeProjectId) return false;
     const bucket = byProject[activeProjectId];
-    return bucket ? bucket.pdfFiles.some((f) => f.name === fileName) : false;
+    if (!bucket) return false;
+    const target = fileName.toLowerCase();
+    return bucket.pdfFiles.some((f) => f.name.toLowerCase() === target);
+  },
+
+  // Drop buckets whose project id is no longer present. Called by
+  // `useSyncActiveProject` when the project list changes — without this,
+  // chat history and embedded PDF chunks for deleted projects accumulate
+  // in RAM for the lifetime of the tab.
+  pruneProjectBuckets: (validIds) => {
+    set((state) => {
+      const ids = Object.keys(state.byProject);
+      const stale = ids.filter((id) => !validIds.has(id));
+      if (stale.length === 0) return state;
+      const next: Record<string, ProjectLibrarianState> = {};
+      for (const id of ids) {
+        if (validIds.has(id)) next[id] = state.byProject[id];
+      }
+      return { byProject: next };
+    });
   },
 
   refreshConfig: () => {

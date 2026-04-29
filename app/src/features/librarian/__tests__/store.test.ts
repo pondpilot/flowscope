@@ -270,6 +270,12 @@ describe('useLibrarianStore', () => {
       expect(useLibrarianStore.getState().hasPdfFile('f1')).toBe(false);
     });
 
+    it('matches names case-insensitively', () => {
+      useLibrarianStore.getState().addPdfFile(makePdfFile({ id: 'f1', name: 'Report.pdf' }));
+      expect(useLibrarianStore.getState().hasPdfFile('report.pdf')).toBe(true);
+      expect(useLibrarianStore.getState().hasPdfFile('REPORT.PDF')).toBe(true);
+    });
+
     it('is scoped to the active project', () => {
       // Upload report.pdf to project A
       useLibrarianStore.getState().addPdfFile(makePdfFile({ id: 'f1', name: 'report.pdf' }));
@@ -341,6 +347,74 @@ describe('useLibrarianStore', () => {
       expect(state.pdfFiles).toEqual([]);
       expect(state.pdfChunks).toEqual([]);
       expect(state.byProject[PROJECT_A].messages).toHaveLength(1);
+    });
+  });
+
+  // ---------- explicit-bucket writes ----------
+
+  describe('addMessageToProject', () => {
+    it('writes to the named bucket regardless of which project is active', () => {
+      // Active project is A; write to B.
+      useLibrarianStore.getState().addMessageToProject(PROJECT_B, 'user', 'for B');
+      const state = useLibrarianStore.getState();
+      expect(state.byProject[PROJECT_B].messages.map((m) => m.content)).toEqual(['for B']);
+      // A is untouched.
+      expect(state.byProject[PROJECT_A]).toBeUndefined();
+      // The flat mirror still reflects the active project (A), which is empty.
+      expect(state.messages).toEqual([]);
+    });
+
+    it('updates the flat mirror when writing to the active project', () => {
+      useLibrarianStore.getState().addMessageToProject(PROJECT_A, 'assistant', 'reply');
+      const state = useLibrarianStore.getState();
+      expect(state.byProject[PROJECT_A].messages).toHaveLength(1);
+      expect(state.messages.map((m) => m.content)).toEqual(['reply']);
+    });
+
+    it('preserves cross-project routing after a mid-flight switch', () => {
+      // Simulates use-librarian-chat: capture the project id, switch active,
+      // then write the assistant response back to the captured id.
+      useLibrarianStore.getState().addMessageToProject(PROJECT_A, 'user', 'A asked');
+      useLibrarianStore.getState().setActiveProjectId(PROJECT_B);
+      useLibrarianStore.getState().addMessageToProject(PROJECT_A, 'assistant', 'A answer');
+
+      const state = useLibrarianStore.getState();
+      expect(state.byProject[PROJECT_A].messages.map((m) => m.content)).toEqual([
+        'A asked',
+        'A answer',
+      ]);
+      // B's bucket is untouched (no leakage).
+      expect(state.byProject[PROJECT_B]?.messages ?? []).toEqual([]);
+    });
+  });
+
+  describe('pruneProjectBuckets', () => {
+    it('drops buckets whose id is not in the valid set', () => {
+      useLibrarianStore.getState().addMessage('user', 'A msg');
+      useLibrarianStore.getState().setActiveProjectId(PROJECT_B);
+      useLibrarianStore.getState().addMessage('user', 'B msg');
+
+      // Only PROJECT_A is valid — B's bucket should be dropped.
+      useLibrarianStore.getState().pruneProjectBuckets(new Set([PROJECT_A]));
+      const state = useLibrarianStore.getState();
+      expect(state.byProject[PROJECT_A]).toBeDefined();
+      expect(state.byProject[PROJECT_B]).toBeUndefined();
+    });
+
+    it('is a no-op when all buckets are valid', () => {
+      useLibrarianStore.getState().addMessage('user', 'A msg');
+      const before = useLibrarianStore.getState().byProject;
+      useLibrarianStore.getState().pruneProjectBuckets(new Set([PROJECT_A, PROJECT_B]));
+      // Reference equality: state was returned unchanged.
+      expect(useLibrarianStore.getState().byProject).toBe(before);
+    });
+
+    it('does not modify the flat mirror when the active project survives', () => {
+      useLibrarianStore.getState().addMessage('user', 'A msg');
+      useLibrarianStore.getState().pruneProjectBuckets(new Set([PROJECT_A]));
+      const state = useLibrarianStore.getState();
+      expect(state.activeProjectId).toBe(PROJECT_A);
+      expect(state.messages.map((m) => m.content)).toEqual(['A msg']);
     });
   });
 

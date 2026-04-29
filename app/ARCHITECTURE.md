@@ -88,7 +88,8 @@ AI-powered chat panel for SQL lineage Q&A.
 - `services/` — AI client (OpenAI / Anthropic / custom), context builder, lineage formatter, PDF processor, vector search, embedding service
 - `workers/` — embedding Web Worker (local Xenova/transformers model)
 - `hooks/use-librarian-chat.ts` — chat orchestrator
-- `store.ts` — Zustand store (messages, PDF files, chunks, loading state)
+- `hooks/use-sync-active-project.ts` — mirrors `activeProjectId` from `useProject()` into the Librarian store and prunes buckets for deleted projects
+- `store.ts` — Zustand store. Per-project buckets (`byProject` keyed by `activeProjectId`) hold messages, PDF files, and embedded chunks; `isLoading` and `hasConfig` are global. Selector hooks `useLibrarianMessages` / `useLibrarianPdfFiles` / `useLibrarianPdfChunks` return the active project's slice. `addMessageToProject(projectId, ...)` writes to an explicit bucket so an in-flight LLM response is routed back to the originating project even if the user switches mid-flight.
 
 State is Zustand (not React Context), UI is Radix + Tailwind. All AI calls hit the user's configured provider directly from the browser. See `docs/librarian.md` for the user guide.
 
