@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Clickable assistant messages that jump to the Schema tab and highlight the first referenced table
 - Styled schema identifiers (table and column names) inline in assistant responses, distinct from inline code
 - Search control in the Schema view header that expands to an input and highlights the matching table as you type
+- Per-project Librarian state isolation (RAM-only) — chat messages, PDF files, and embedded chunks are scoped to the active project; switching projects shows that project's own state without leaking another project's chat or documentation into the LLM prompt. State is in-memory, so a page reload still starts fresh.
 
 ### Changed
 

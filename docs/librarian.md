@@ -74,6 +74,7 @@ To remove a document, click the trash icon next to its name. Both the file entry
 - The full chat history is shown in the panel
 - Only the **last 10 messages** are sent to the AI as context (to keep prompts small)
 - History is **not** persisted across reloads — a page refresh starts a fresh conversation
+- Chat and uploaded PDFs are **scoped to the active project** — switching projects shows that project's own conversation and documents, and questions only see the active project's PDFs and chat history. State stays in memory only, so a reload clears every project's Librarian state.
 
 ## Keyboard Shortcuts
 

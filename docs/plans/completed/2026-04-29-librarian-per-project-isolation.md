@@ -102,7 +102,7 @@ Refactor the Librarian Zustand store from a single flat shape to per-project buc
 
 ### Task 6: Update documentation and finalize
 
-- [ ] Update `flowscope_fork/CHANGELOG.md` with a "Per-project Librarian state isolation (RAM-only)" entry
-- [ ] Update `flowscope_fork/docs/librarian.md` if it describes chat/PDF persistence (add a note that state is per project, RAM-only)
-- [ ] Update `PondPilot Librarian/CLAUDE.md` "Current Status" working list to mention per-project isolation
-- [ ] Move this plan to `flowscope_fork/docs/plans/completed/`
+- [x] Update `flowscope_fork/CHANGELOG.md` with a "Per-project Librarian state isolation (RAM-only)" entry
+- [x] Update `flowscope_fork/docs/librarian.md` if it describes chat/PDF persistence (add a note that state is per project, RAM-only)
+- [x] Update `PondPilot Librarian/CLAUDE.md` "Current Status" working list to mention per-project isolation
+- [x] Move this plan to `flowscope_fork/docs/plans/completed/`
