@@ -70,10 +70,9 @@ function makeSchema(tables: string[], columns: string[]): SchemaIdentifiers {
 beforeEach(() => {
   localStorage.clear();
   useLibrarianStore.setState({
-    messages: [],
+    byProject: { 'proj-1': { messages: [], pdfFiles: [], pdfChunks: [] } },
+    activeProjectId: 'proj-1',
     isLoading: false,
-    pdfFiles: [],
-    pdfChunks: [],
     hasConfig: true,
   });
   vi.clearAllMocks();
@@ -526,6 +525,24 @@ describe('ChatInput', () => {
     expect(screen.getByTestId('chat-textarea')).not.toBeDisabled();
   });
 
+  it('shows no-project hint and disables input when noActiveProject is true', () => {
+    render(<ChatInput onSend={vi.fn()} disabled={false} noActiveProject={true} />);
+    expect(screen.getByTestId('no-project-hint')).toHaveTextContent(
+      /Open or create a project to use Librarian/
+    );
+    expect(screen.getByTestId('chat-textarea')).toBeDisabled();
+    expect(screen.queryByTestId('config-hint')).not.toBeInTheDocument();
+  });
+
+  it('does not call onSend when noActiveProject is true', () => {
+    const onSend = vi.fn();
+    render(<ChatInput onSend={onSend} disabled={false} noActiveProject={true} />);
+    const textarea = screen.getByTestId('chat-textarea');
+    fireEvent.change(textarea, { target: { value: 'test' } });
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
   it('truncates input to MAX_MESSAGE_LENGTH', () => {
     render(<ChatInput onSend={vi.fn()} disabled={false} />);
     const textarea = screen.getByTestId('chat-textarea') as HTMLTextAreaElement;
@@ -580,7 +597,10 @@ describe('PdfUpload', () => {
     const files = Array.from({ length: 20 }, (_, i) =>
       makePdfFile({ id: `f-${i}`, name: `file-${i}.pdf` })
     );
-    useLibrarianStore.setState({ pdfFiles: files });
+    useLibrarianStore.setState({
+      byProject: { 'proj-1': { messages: [], pdfFiles: files, pdfChunks: [] } },
+      activeProjectId: 'proj-1',
+    });
 
     const onUpload = vi.fn();
     render(<PdfUpload onUpload={onUpload} />);
@@ -591,7 +611,16 @@ describe('PdfUpload', () => {
   });
 
   it('rejects duplicate file names', () => {
-    useLibrarianStore.setState({ pdfFiles: [makePdfFile({ name: 'dup.pdf' })] });
+    useLibrarianStore.setState({
+      byProject: {
+        'proj-1': {
+          messages: [],
+          pdfFiles: [makePdfFile({ name: 'dup.pdf' })],
+          pdfChunks: [],
+        },
+      },
+      activeProjectId: 'proj-1',
+    });
 
     const onUpload = vi.fn();
     render(<PdfUpload onUpload={onUpload} />);
@@ -604,10 +633,17 @@ describe('PdfUpload', () => {
 
   it('renders file list with status', () => {
     useLibrarianStore.setState({
-      pdfFiles: [
-        makePdfFile({ id: 'f1', name: 'ready.pdf', status: 'ready' }),
-        makePdfFile({ id: 'f2', name: 'processing.pdf', status: 'processing' }),
-      ],
+      byProject: {
+        'proj-1': {
+          messages: [],
+          pdfFiles: [
+            makePdfFile({ id: 'f1', name: 'ready.pdf', status: 'ready' }),
+            makePdfFile({ id: 'f2', name: 'processing.pdf', status: 'processing' }),
+          ],
+          pdfChunks: [],
+        },
+      },
+      activeProjectId: 'proj-1',
     });
 
     render(<PdfUpload onUpload={vi.fn()} />);
@@ -619,12 +655,41 @@ describe('PdfUpload', () => {
 
   it('removes file when clicking remove button', () => {
     useLibrarianStore.setState({
-      pdfFiles: [makePdfFile({ id: 'f1', name: 'remove-me.pdf' })],
+      byProject: {
+        'proj-1': {
+          messages: [],
+          pdfFiles: [makePdfFile({ id: 'f1', name: 'remove-me.pdf' })],
+          pdfChunks: [],
+        },
+      },
+      activeProjectId: 'proj-1',
     });
 
     render(<PdfUpload onUpload={vi.fn()} />);
     fireEvent.click(screen.getByLabelText('Remove remove-me.pdf'));
-    expect(useLibrarianStore.getState().pdfFiles).toHaveLength(0);
+    expect(useLibrarianStore.getState().byProject['proj-1'].pdfFiles).toHaveLength(0);
+  });
+
+  it('only lists PDFs from the active project', () => {
+    useLibrarianStore.setState({
+      byProject: {
+        'proj-1': {
+          messages: [],
+          pdfFiles: [makePdfFile({ id: 'a1', name: 'project-a.pdf' })],
+          pdfChunks: [],
+        },
+        'proj-2': {
+          messages: [],
+          pdfFiles: [makePdfFile({ id: 'b1', name: 'project-b.pdf' })],
+          pdfChunks: [],
+        },
+      },
+      activeProjectId: 'proj-1',
+    });
+
+    render(<PdfUpload onUpload={vi.fn()} />);
+    expect(screen.getByText('project-a.pdf')).toBeInTheDocument();
+    expect(screen.queryByText('project-b.pdf')).not.toBeInTheDocument();
   });
 
   it('handles drag and drop', () => {
@@ -645,7 +710,10 @@ describe('PdfUpload', () => {
     const files = Array.from({ length: 6 }, (_, i) =>
       makePdfFile({ id: `scroll-${i}`, name: `doc-${i}.pdf` })
     );
-    useLibrarianStore.setState({ pdfFiles: files });
+    useLibrarianStore.setState({
+      byProject: { 'proj-1': { messages: [], pdfFiles: files, pdfChunks: [] } },
+      activeProjectId: 'proj-1',
+    });
 
     const { container } = render(<PdfUpload onUpload={vi.fn()} />);
     const items = screen.getAllByTestId('pdf-file-item');
@@ -659,7 +727,14 @@ describe('PdfUpload', () => {
     const longName =
       'a-very-long-pdf-file-name-that-should-be-truncated-with-ellipsis-when-the-panel-is-narrow.pdf';
     useLibrarianStore.setState({
-      pdfFiles: [makePdfFile({ id: 'long-1', name: longName, size: 2_500_000 })],
+      byProject: {
+        'proj-1': {
+          messages: [],
+          pdfFiles: [makePdfFile({ id: 'long-1', name: longName, size: 2_500_000 })],
+          pdfChunks: [],
+        },
+      },
+      activeProjectId: 'proj-1',
     });
 
     render(<PdfUpload onUpload={vi.fn()} />);

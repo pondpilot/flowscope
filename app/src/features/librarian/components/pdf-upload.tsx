@@ -4,7 +4,7 @@ import { FileText, Loader2, Trash2, Upload, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 import { MAX_PDF_SIZE_BYTES, MAX_PDF_SIZE_MB } from '../constants';
-import { useLibrarianStore } from '../store';
+import { useLibrarianPdfFiles, useLibrarianStore } from '../store';
 import type { PdfFile } from '../types';
 
 interface PdfUploadProps {
@@ -33,7 +33,7 @@ export function PdfUpload({ onUpload }: PdfUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
 
-  const pdfFiles = useLibrarianStore((s) => s.pdfFiles);
+  const pdfFiles = useLibrarianPdfFiles();
   const removePdf = useLibrarianStore((s) => s.removePdf);
   const hasPdfFile = useLibrarianStore((s) => s.hasPdfFile);
 

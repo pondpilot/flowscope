@@ -9,7 +9,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useLibrarianChat } from '../hooks/use-librarian-chat';
 import { processPdf } from '../services/pdf-processor';
 import { embedTexts } from '../services/embedding-service';
-import { useLibrarianStore } from '../store';
+import { useLibrarianMessages, useLibrarianStore } from '../store';
 import { buildSchemaIdentifiers } from '../utils/schema-identifiers';
 
 import { AISettingsDialog } from './ai-settings-dialog';
@@ -31,8 +31,9 @@ export function LibrarianPanel({ onClose, onNavigateToTable }: LibrarianPanelPro
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [docsExpanded, setDocsExpanded] = useState(false);
 
-  const messages = useLibrarianStore((s) => s.messages);
+  const messages = useLibrarianMessages();
   const isLoading = useLibrarianStore((s) => s.isLoading);
+  const activeProjectId = useLibrarianStore((s) => s.activeProjectId);
   const addPdfFile = useLibrarianStore((s) => s.addPdfFile);
   const addPdfChunks = useLibrarianStore((s) => s.addPdfChunks);
   const setPdfStatus = useLibrarianStore((s) => s.setPdfStatus);
@@ -165,7 +166,11 @@ export function LibrarianPanel({ onClose, onNavigateToTable }: LibrarianPanelPro
       </div>
 
       {/* Chat input */}
-      <ChatInput onSend={sendMessage} disabled={isLoading} />
+      <ChatInput
+        onSend={sendMessage}
+        disabled={isLoading}
+        noActiveProject={!activeProjectId}
+      />
 
       {/* Settings dialog */}
       <AISettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />

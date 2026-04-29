@@ -66,11 +66,11 @@ Refactor the Librarian Zustand store from a single flat shape to per-project buc
 - Modify: `app/src/features/librarian/components/pdf-upload.tsx`
 - Modify: `app/src/features/librarian/components/chat-input.tsx`
 
-- [ ] In `librarian-panel.tsx`, replace `useLibrarianStore((s) => s.messages)` with `useLibrarianMessages()`; keep setter calls (`addPdfFile`, `addPdfChunks`, `setPdfStatus`) unchanged — they now route through active project automatically
-- [ ] In `pdf-upload.tsx`, replace `useLibrarianStore((s) => s.pdfFiles)` with `useLibrarianPdfFiles()`; keep `removePdf` / `hasPdfFile` calls
-- [ ] Add a "no active project" guard to `LibrarianPanel`: read `activeProjectId` from the store; when null, disable the chat input (pass an additional disabled signal) and surface an empty-state hint "Open or create a project to use Librarian" — wire via `ChatInput`'s existing `disabled` prop or a thin sibling flag (no new component)
-- [ ] Update `app/src/features/librarian/__tests__/librarian-panel.test.tsx` (and `components.test.tsx` if it covers `pdf-upload`) to seed `byProject` + `activeProjectId` in `beforeEach`; add a case for the "no active project" disabled UI
-- [ ] `yarn typecheck && npx vitest run src/features/librarian/` — must pass
+- [x] In `librarian-panel.tsx`, replace `useLibrarianStore((s) => s.messages)` with `useLibrarianMessages()`; keep setter calls (`addPdfFile`, `addPdfChunks`, `setPdfStatus`) unchanged — they now route through active project automatically
+- [x] In `pdf-upload.tsx`, replace `useLibrarianStore((s) => s.pdfFiles)` with `useLibrarianPdfFiles()`; keep `removePdf` / `hasPdfFile` calls
+- [x] Add a "no active project" guard to `LibrarianPanel`: read `activeProjectId` from the store; when null, disable the chat input (pass an additional disabled signal) and surface an empty-state hint "Open or create a project to use Librarian" — wire via `ChatInput`'s existing `disabled` prop or a thin sibling flag (no new component)
+- [x] Update `app/src/features/librarian/__tests__/librarian-panel.test.tsx` (and `components.test.tsx` if it covers `pdf-upload`) to seed `byProject` + `activeProjectId` in `beforeEach`; add a case for the "no active project" disabled UI
+- [x] `yarn typecheck && npx vitest run src/features/librarian/` — must pass
 
 ### Task 4: Update `use-librarian-chat` to read from the active project bucket
 

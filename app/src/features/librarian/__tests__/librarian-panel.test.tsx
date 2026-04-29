@@ -48,10 +48,9 @@ import { LibrarianPanel } from '../components/librarian-panel';
 
 beforeEach(() => {
   useLibrarianStore.setState({
-    messages: [],
+    byProject: { 'proj-1': { messages: [], pdfFiles: [], pdfChunks: [] } },
+    activeProjectId: 'proj-1',
     isLoading: false,
-    pdfFiles: [],
-    pdfChunks: [],
   });
   vi.clearAllMocks();
 });
@@ -127,27 +126,72 @@ describe('LibrarianPanel', () => {
     expect(screen.queryByTestId('docs-section')).not.toBeInTheDocument();
   });
 
-  it('renders messages from store', () => {
+  it('renders messages from active project bucket', () => {
     useLibrarianStore.setState({
-      messages: [
-        {
-          id: '1',
-          role: 'user',
-          content: 'What tables exist?',
-          timestamp: Date.now(),
+      byProject: {
+        'proj-1': {
+          messages: [
+            {
+              id: '1',
+              role: 'user',
+              content: 'What tables exist?',
+              timestamp: Date.now(),
+            },
+            {
+              id: '2',
+              role: 'assistant',
+              content: 'There are 3 tables.',
+              timestamp: Date.now(),
+            },
+          ],
+          pdfFiles: [],
+          pdfChunks: [],
         },
-        {
-          id: '2',
-          role: 'assistant',
-          content: 'There are 3 tables.',
-          timestamp: Date.now(),
-        },
-      ],
+      },
+      activeProjectId: 'proj-1',
     });
 
     render(<LibrarianPanel onClose={vi.fn()} />);
     expect(screen.getByText('What tables exist?')).toBeInTheDocument();
     expect(screen.getByText('There are 3 tables.')).toBeInTheDocument();
+  });
+
+  it('does not render messages from a non-active project bucket', () => {
+    useLibrarianStore.setState({
+      byProject: {
+        'proj-1': { messages: [], pdfFiles: [], pdfChunks: [] },
+        'proj-2': {
+          messages: [
+            {
+              id: '1',
+              role: 'user',
+              content: 'Hidden in project 2',
+              timestamp: Date.now(),
+            },
+          ],
+          pdfFiles: [],
+          pdfChunks: [],
+        },
+      },
+      activeProjectId: 'proj-1',
+    });
+
+    render(<LibrarianPanel onClose={vi.fn()} />);
+    expect(screen.queryByText('Hidden in project 2')).not.toBeInTheDocument();
+    expect(screen.getByTestId('empty-state')).toBeInTheDocument();
+  });
+
+  it('disables chat input and shows hint when no active project', () => {
+    useLibrarianStore.setState({
+      byProject: {},
+      activeProjectId: null,
+    });
+
+    render(<LibrarianPanel onClose={vi.fn()} />);
+    expect(screen.getByTestId('no-project-hint')).toHaveTextContent(
+      /Open or create a project to use Librarian/
+    );
+    expect(screen.getByTestId('chat-textarea')).toBeDisabled();
   });
 
   it('renders loading indicator when loading', () => {
