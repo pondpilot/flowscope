@@ -19,6 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePersistedLineageState } from '@/hooks/usePersistedLineageState';
 import { usePersistedMatrixState } from '@/hooks/usePersistedMatrixState';
 import { usePersistedSchemaState } from '@/hooks/usePersistedSchemaState';
+import { applyLineageNavigation } from '@/lib/lineage-navigation';
 import { isValidTab, useNavigation } from '@/lib/navigation-context';
 import { useViewStateStore, getNamespaceFilterStateWithDefaults } from '@/lib/view-state-store';
 import { useProject } from '@/lib/project-store';
@@ -108,14 +109,13 @@ export function AnalysisView({
   // Handle navigation target for GraphView - select and focus node/statement when navigating to lineage tab
   useEffect(() => {
     if (activeTab === 'lineage' && navigationTarget) {
-      if (navigationTarget.tableId) {
-        // Navigate to specific table node
-        actionsRef.current.selectNode(navigationTarget.tableId);
-        setLineageFocusNodeId(navigationTarget.tableId);
-      } else if (navigationTarget.fitView) {
-        // Trigger fitView to show all nodes (e.g., from Issues panel)
-        setFitViewTrigger((prev) => prev + 1);
-      }
+      applyLineageNavigation(navigationTarget, {
+        expandedTableIds: stateRef.current.expandedTableIds,
+        selectNode: actionsRef.current.selectNode,
+        toggleTableExpansion: actionsRef.current.toggleTableExpansion,
+        setFocusNodeId: setLineageFocusNodeId,
+        triggerFitView: () => setFitViewTrigger((prev) => prev + 1),
+      });
       clearNavigationTarget();
     }
   }, [activeTab, navigationTarget, clearNavigationTarget]);

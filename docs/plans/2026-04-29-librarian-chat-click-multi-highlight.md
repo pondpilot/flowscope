@@ -89,12 +89,12 @@ When the user clicks an assistant message in the Librarian chat, switch to the D
 - Modify: `app/src/components/AnalysisView.tsx`
 - Modify: `app/src/components/__tests__/AnalysisView.test.tsx` (or create if absent)
 
-- [ ] In the lineage useEffect that consumes `navigationTarget`: if `highlightNodeIds` is present and non-empty, (a) for each id in `tablesToExpand`, expand only if not already expanded (read `state.expandedTableIds`, then call `actions.toggleTableExpansion(id)` if missing); (b) trigger highlight + fit-to-view via the chosen mechanism (see below); (c) `clearNavigationTarget()`
-- [ ] Highlight + fit mechanism: investigate at implementation time. Preferred: any direct public action in `@pondpilot/flowscope-react` that accepts a node-id set. If none, fall back per spec: `actions.selectNode(highlightNodeIds[0])` and `setLineageFocusNodeId(highlightNodeIds[0])`; document the limitation as a TODO comment and in the PR description. Do not modify `packages/react`.
-- [ ] Remove the schema-tab branch in the second navigation useEffect that reacted to `navigationTarget.tableName` originating from Librarian. Keep `schemaState.setSelectedTableName` usage elsewhere (SchemaSearchControl) intact — it does not flow through `navigationTarget`. Verify `HierarchyView` still routes to schema tab via `tableName` (it does, per Grep — leave that working).
-- [ ] When the user clicks empty graph background, the existing GraphView pane-click already calls `selectNode(null)`; verify highlight clears in this flow (no code change expected, but add a manual check).
-- [ ] Tests: assert that consuming a `navigationTarget` with `highlightNodeIds` expands missing parent tables (mock `toggleTableExpansion`) and selects the first node (mock `selectNode`); assert that schema-tab branch no longer fires for librarian-originated navigation
-- [ ] Run `npx vitest run src/components/` — must pass
+- [x] In the lineage useEffect that consumes `navigationTarget`: if `highlightNodeIds` is present and non-empty, (a) for each id in `tablesToExpand`, expand only if not already expanded (read `state.expandedTableIds`, then call `actions.toggleTableExpansion(id)` if missing); (b) trigger highlight + fit-to-view via the chosen mechanism (see below); (c) `clearNavigationTarget()`
+- [x] Highlight + fit mechanism: investigate at implementation time. Preferred: any direct public action in `@pondpilot/flowscope-react` that accepts a node-id set. If none, fall back per spec: `actions.selectNode(highlightNodeIds[0])` and `setLineageFocusNodeId(highlightNodeIds[0])`; document the limitation as a TODO comment and in the PR description. Do not modify `packages/react`.
+- [x] Remove the schema-tab branch in the second navigation useEffect that reacted to `navigationTarget.tableName` originating from Librarian. Keep `schemaState.setSelectedTableName` usage elsewhere (SchemaSearchControl) intact — it does not flow through `navigationTarget`. Verify `HierarchyView` still routes to schema tab via `tableName` (it does, per Grep — leave that working).
+- [x] When the user clicks empty graph background, the existing GraphView pane-click already calls `selectNode(null)`; verify highlight clears in this flow (no code change expected, but add a manual check).
+- [x] Tests: assert that consuming a `navigationTarget` with `highlightNodeIds` expands missing parent tables (mock `toggleTableExpansion`) and selects the first node (mock `selectNode`); assert that schema-tab branch no longer fires for librarian-originated navigation
+- [x] Run `npx vitest run src/components/` — must pass
 
 ### Task 6: Verify acceptance criteria
 
