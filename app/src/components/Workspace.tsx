@@ -25,7 +25,7 @@ import { useThemeStore, type Theme } from '@/lib/theme-store';
 import { useViewStateStore } from '@/lib/view-state-store';
 import { getShortcutDisplay } from '@/lib/shortcuts';
 import { useBackend } from '@/lib/backend-context';
-import { LibrarianPanel } from '@/features/librarian';
+import { LibrarianPanel, useSyncActiveProject } from '@/features/librarian';
 
 interface WorkspaceProps {
   backendReady: boolean;
@@ -43,6 +43,7 @@ const EDITOR_PANEL_DEFAULT_SIZE = 33;
 
 export function Workspace({ backendReady, error, onRetry, isRetrying }: WorkspaceProps) {
   const { currentProject, selectFile, activeProjectId, isBackendMode } = useProject();
+  useSyncActiveProject();
   const { adapter } = useBackend();
   const analysis = useAnalysis(backendReady, { adapter });
   const lineageActions = useLineageActions();

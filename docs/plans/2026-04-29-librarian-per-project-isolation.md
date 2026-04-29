@@ -54,10 +54,10 @@ Refactor the Librarian Zustand store from a single flat shape to per-project buc
 - Create: `app/src/features/librarian/hooks/use-sync-active-project.ts`
 - Modify: `app/src/components/Workspace.tsx` (call the hook where `useProject()` is already in scope)
 
-- [ ] Implement `useSyncActiveProject()` that reads `activeProjectId` from `useProject()` and pushes it into the store via `setActiveProjectId` inside a `useEffect`
-- [ ] Invoke the hook once in `Workspace.tsx` (it already calls `useProject()`)
-- [ ] Add a test `app/src/features/librarian/__tests__/use-sync-active-project.test.tsx` that mounts the hook with a mocked `useProject`, asserts the store's `activeProjectId` updates when the project changes, and that switching back re-points to the original bucket
-- [ ] `yarn typecheck && npx vitest run src/features/librarian/` — must pass
+- [x] Implement `useSyncActiveProject()` that reads `activeProjectId` from `useProject()` and pushes it into the store via `setActiveProjectId` inside a `useEffect`
+- [x] Invoke the hook once in `Workspace.tsx` (it already calls `useProject()`)
+- [x] Add a test `app/src/features/librarian/__tests__/use-sync-active-project.test.tsx` that mounts the hook with a mocked `useProject`, asserts the store's `activeProjectId` updates when the project changes, and that switching back re-points to the original bucket
+- [x] `yarn typecheck && npx vitest run src/features/librarian/` — must pass
 
 ### Task 3: Migrate consumer components to selector hooks
 
