@@ -110,7 +110,7 @@ When the user clicks an assistant message in the Librarian chat, switch to the D
 
 ### Task 7: Update documentation
 
-- [ ] Update `docs/librarian.md` to reflect: clicking a chat answer opens Lineage (not Schema) and highlights all referenced identifiers
-- [ ] Update `CHANGELOG.md` with a one-line entry under unreleased
-- [ ] If multi-highlight fell back to single-select + cycling, note the limitation in `pr-description.md` (parent dir) and in the librarian section of `CLAUDE.md` "Known Limitations"
-- [ ] Move `docs/plans/2026-04-29-librarian-chat-click-multi-highlight.md` to `docs/plans/completed/`
+- [x] Update `docs/librarian.md` to reflect: clicking a chat answer opens Lineage (not Schema) and highlights all referenced identifiers
+- [x] Update `CHANGELOG.md` with a one-line entry under unreleased
+- [x] If multi-highlight fell back to single-select + cycling, note the limitation in `pr-description.md` (parent dir) and in the librarian section of `CLAUDE.md` "Known Limitations"
+- [x] Move `docs/plans/2026-04-29-librarian-chat-click-multi-highlight.md` to `docs/plans/completed/`

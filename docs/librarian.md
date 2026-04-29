@@ -47,6 +47,14 @@ If the question is unrelated to your data, Librarian replies:
 
 Identifiers like `BKPF`, `MANDT` are visually highlighted in the response so they're easy to scan.
 
+### Jump to Lineage from a chat answer
+
+Click an assistant message to switch to the **Lineage** tab and reveal every table and column that the answer referenced. Parent tables of any referenced columns are auto-expanded, and the viewport recenters on the first reference so the highlighted area is in view.
+
+If the answer references identifiers that aren't present in the current lineage (e.g. a column from a PDF only), those references are skipped silently. A click with zero matches is a no-op — the active tab does not change.
+
+> **Limitation:** the lineage view's public API does not currently support highlighting an arbitrary set of nodes at once. The first referenced node is selected and recentered; the others are made visible by expanding their parent tables, but only one node carries the active selection ring at a time. Use the lineage search box to cycle through the rest if you need to focus each one individually.
+
 ## Uploading PDF Documentation
 
 Librarian can answer questions using technical documentation you upload (e.g. table specs, business logic reference, ERD docs).
