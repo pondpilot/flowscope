@@ -64,9 +64,9 @@ When the user clicks an assistant message in the Librarian chat, switch to the D
 **Files:**
 - Modify: `app/src/lib/navigation-context.tsx`
 
-- [ ] Add `highlightNodeIds?: string[]` and `tablesToExpand?: string[]` to `NavigationTarget` interface
-- [ ] Leave existing `tableId` / `tableName` fields intact (back-compat for `HierarchyView` and other callers)
-- [ ] No new tests required (pure type/state plumbing); existing context tests must still pass — run them
+- [x] Add `highlightNodeIds?: string[]` and `tablesToExpand?: string[]` to `NavigationTarget` interface
+- [x] Leave existing `tableId` / `tableName` fields intact (back-compat for `HierarchyView` and other callers)
+- [x] No new tests required (pure type/state plumbing); existing context tests must still pass — run them
 
 ### Task 4: Wire chat click → lineage tab with highlight set
 
