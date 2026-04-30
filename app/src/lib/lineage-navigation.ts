@@ -15,6 +15,13 @@ export interface LineageNavigationDeps {
   toggleTableExpansion: (id: string) => void;
   setFocusNodeId: (id: string | undefined) => void;
   triggerFitView: () => void;
+  /**
+   * Reveal a node in the graph with a gentle pan/zoom and a transient pulse
+   * animation (added in flowscope-react v0.7.0). Used for chat-click
+   * navigation instead of `setFocusNodeId`, which triggers the much more
+   * aggressive `useNodeFocus` zoom.
+   */
+  revealNodeInGraph: (nodeId: string) => void;
 }
 
 export function applyLineageNavigation(
@@ -33,11 +40,11 @@ export function applyLineageNavigation(
     }
     const firstId = target.highlightNodeIds[0];
     deps.selectNode(firstId);
-    // Intentionally skip setFocusNodeId for chat-click navigation: the
-    // useNodeFocus hook in @pondpilot/flowscope-react auto-zooms to the
-    // focused node, which is too aggressive for a multi-reference chat
-    // answer. The search-term highlight + selection styling is enough to
-    // signal which tables matter; the user can pan/zoom themselves.
+    // Reveal the primary node (parent table for column refs, or the first
+    // referenced top-level node otherwise). Columns are not top-level
+    // ReactFlow nodes, so reveal would be a no-op for column ids — the
+    // resolver hands us a parent-table id via primaryFocusId for that case.
+    deps.revealNodeInGraph(target.primaryFocusId ?? firstId);
     return;
   }
 

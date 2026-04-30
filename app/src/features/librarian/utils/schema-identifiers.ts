@@ -174,3 +174,24 @@ export function resolveAllReferences(
 
   return refs;
 }
+
+/**
+ * Extract the Summary block from a structured assistant answer.
+ *
+ * The Librarian system prompt formats answers in three labelled sections —
+ * `Summary`, `Data Lineage`, `Documentation`. Lineage navigation should
+ * react only to identifiers in the Summary so a click reflects the
+ * answer's main claim and ignores incidental tables named only in the
+ * supporting sections. Falls back to the full text when no Summary marker
+ * is present.
+ */
+export function extractSummary(text: string): string {
+  if (!text) return '';
+  // The Summary marker may appear bold-wrapped in markdown — the closing `**`
+  // can sit either before or after the colon (e.g. `**Summary:**` or
+  // `**Summary**:`), so allow an optional `**` on each side of `:`.
+  const re =
+    /(?:\*\*)?\s*Summary\s*(?:\*\*)?\s*:?\s*(?:\*\*)?\s*([\s\S]*?)(?=(?:\*\*)?\s*(?:Data\s*Lineage|Documentation)\s*(?:\*\*)?\s*:|$)/i;
+  const m = text.match(re);
+  return m ? m[1].trim() : text;
+}

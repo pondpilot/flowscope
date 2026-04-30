@@ -519,18 +519,15 @@ function LibrarianPanelWithNavigation({ onClose }: { onClose: () => void }) {
   const handleNavigateToReferences = useCallback(
     (refs: ChatReference[]) => {
       if (refs.length === 0) return;
-      const { nodeIds, tablesToExpand, primaryFocusId } = resolveLineageNodeIds(
-        result ?? null,
-        refs
-      );
-      if (nodeIds.length === 0) return;
-      // Drive the existing lineage search pipeline. If the answer references
-      // any column, prefer searching by the first column name (and force
-      // "show column edges" on so columns are actually matchable). Otherwise
+      // Drive the lineage search pipeline first, regardless of whether the
+      // resolver can produce concrete node ids. If the answer references any
+      // column, prefer searching by the first column name (and force
+      // "show column edges" on so columns are actually matchable); otherwise
       // fall back to the first table name. Writing the term to the persisted
       // per-project view state propagates to GraphView's controlled
-      // searchTerm prop, which drives the same highlighting a manual search
-      // would.
+      // searchTerm prop, so table cards highlight via `isNodeHighlighted`
+      // even when navigation is a no-op (e.g. column nodes absent from the
+      // current statement's lineage).
       const firstColumn = refs.find((r) => r.columnName)?.columnName;
       const firstTable = refs.find((r) => r.tableName)?.tableName;
       const searchTerm = firstColumn ?? firstTable;
@@ -540,6 +537,11 @@ function LibrarianPanelWithNavigation({ onClose }: { onClose: () => void }) {
       if (searchTerm && activeProjectId) {
         updateViewState(activeProjectId, 'lineage', { searchTerm });
       }
+      const { nodeIds, tablesToExpand, primaryFocusId } = resolveLineageNodeIds(
+        result ?? null,
+        refs
+      );
+      if (nodeIds.length === 0) return;
       navigateTo('lineage', {
         highlightNodeIds: nodeIds,
         tablesToExpand,

@@ -115,6 +115,7 @@ export function AnalysisView({
         toggleTableExpansion: actionsRef.current.toggleTableExpansion,
         setFocusNodeId: setLineageFocusNodeId,
         triggerFitView: () => setFitViewTrigger((prev) => prev + 1),
+        revealNodeInGraph: actionsRef.current.revealNodeInGraph,
       });
       clearNavigationTarget();
     }

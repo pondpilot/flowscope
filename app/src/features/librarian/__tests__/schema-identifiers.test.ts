@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildSchemaIdentifiers,
   detectIdentifiers,
+  extractSummary,
   resolveAllReferences,
   type SchemaIdentifiers,
 } from '../utils/schema-identifiers';
@@ -262,5 +263,44 @@ describe('resolveAllReferences', () => {
     expect(resolveAllReferences('the mandt column appears everywhere.', schema)).toEqual([
       { columnName: 'MANDT', bareColumn: true },
     ]);
+  });
+});
+
+describe('extractSummary', () => {
+  it('returns empty string for empty input', () => {
+    expect(extractSummary('')).toBe('');
+  });
+
+  it('returns the original text when no Summary marker is present', () => {
+    const text = 'Just a plain answer with no sections.';
+    expect(extractSummary(text)).toBe(text);
+  });
+
+  it('extracts content between Summary: and Data Lineage:', () => {
+    const text =
+      'Summary: MANDT is a technical key in BKPF and BSEG.\n' +
+      'Data Lineage: bkpf.MANDT = bseg.MANDT.\n' +
+      'Documentation: No information.';
+    expect(extractSummary(text)).toBe('MANDT is a technical key in BKPF and BSEG.');
+  });
+
+  it('extracts content between Summary: and Documentation: when Data Lineage is absent', () => {
+    const text = 'Summary: Vendor country lives in LFA1.LAND1.\nDocumentation: see PDF foo.pdf.';
+    expect(extractSummary(text)).toBe('Vendor country lives in LFA1.LAND1.');
+  });
+
+  it('handles markdown-bold Summary header', () => {
+    const text = '**Summary:** Payment block is in RBKP.ZLSPR.\n**Data Lineage:** rbkp.ZLSPR.';
+    expect(extractSummary(text)).toBe('Payment block is in RBKP.ZLSPR.');
+  });
+
+  it('extracts everything after Summary when no terminating section follows', () => {
+    const text = 'Summary: Just one section here, no other markers.';
+    expect(extractSummary(text)).toBe('Just one section here, no other markers.');
+  });
+
+  it('is case-insensitive on the Summary marker', () => {
+    const text = 'summary: lowercase header.\nData Lineage: details.';
+    expect(extractSummary(text)).toBe('lowercase header.');
   });
 });

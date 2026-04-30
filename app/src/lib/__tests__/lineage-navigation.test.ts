@@ -10,6 +10,7 @@ function makeDeps(
   toggleTableExpansion: ReturnType<typeof vi.fn>;
   setFocusNodeId: ReturnType<typeof vi.fn>;
   triggerFitView: ReturnType<typeof vi.fn>;
+  revealNodeInGraph: ReturnType<typeof vi.fn>;
 } {
   return {
     expandedTableIds: new Set<string>(),
@@ -17,17 +18,19 @@ function makeDeps(
     toggleTableExpansion: vi.fn(),
     setFocusNodeId: vi.fn(),
     triggerFitView: vi.fn(),
+    revealNodeInGraph: vi.fn(),
     ...overrides,
   } as LineageNavigationDeps & {
     selectNode: ReturnType<typeof vi.fn>;
     toggleTableExpansion: ReturnType<typeof vi.fn>;
     setFocusNodeId: ReturnType<typeof vi.fn>;
     triggerFitView: ReturnType<typeof vi.fn>;
+    revealNodeInGraph: ReturnType<typeof vi.fn>;
   };
 }
 
 describe('applyLineageNavigation', () => {
-  it('expands missing parent tables and selects the first column without zooming', () => {
+  it('expands missing parent tables, selects the first node, and reveals the primary focus', () => {
     const deps = makeDeps({
       expandedTableIds: new Set<string>(['t:already-open']),
     });
@@ -45,14 +48,16 @@ describe('applyLineageNavigation', () => {
     expect(deps.toggleTableExpansion).not.toHaveBeenCalledWith('t:already-open');
     expect(deps.toggleTableExpansion).toHaveBeenCalledTimes(2);
 
-    // First node is selected for highlight styling, but focus/zoom is skipped
-    // so the viewport stays put when a chat answer references multiple tables.
+    // First node is selected for highlight styling. revealNodeInGraph drives
+    // the gentle pan/zoom + pulse on the parent table; setFocusNodeId stays
+    // unused because its useNodeFocus zoom is too aggressive.
     expect(deps.selectNode).toHaveBeenCalledWith('c:bkpf.mandt');
+    expect(deps.revealNodeInGraph).toHaveBeenCalledWith('t:bkpf');
     expect(deps.setFocusNodeId).not.toHaveBeenCalled();
     expect(deps.triggerFitView).not.toHaveBeenCalled();
   });
 
-  it('selects the first highlight id without focusing/zooming', () => {
+  it('reveals the first highlight id when no primaryFocusId is provided', () => {
     const deps = makeDeps();
     const target: NavigationTarget = {
       highlightNodeIds: ['t:mara'],
@@ -61,6 +66,7 @@ describe('applyLineageNavigation', () => {
     applyLineageNavigation(target, deps);
 
     expect(deps.selectNode).toHaveBeenCalledWith('t:mara');
+    expect(deps.revealNodeInGraph).toHaveBeenCalledWith('t:mara');
     expect(deps.setFocusNodeId).not.toHaveBeenCalled();
   });
 
@@ -87,6 +93,7 @@ describe('applyLineageNavigation', () => {
 
     expect(deps.toggleTableExpansion).not.toHaveBeenCalled();
     expect(deps.selectNode).toHaveBeenCalledWith('t:mara');
+    expect(deps.revealNodeInGraph).toHaveBeenCalledWith('t:mara');
     expect(deps.setFocusNodeId).not.toHaveBeenCalled();
   });
 
@@ -151,6 +158,7 @@ describe('applyLineageNavigation', () => {
 
     expect(deps.selectNode).toHaveBeenCalledWith('n:highlight');
     expect(deps.selectNode).not.toHaveBeenCalledWith('t:other');
+    expect(deps.revealNodeInGraph).toHaveBeenCalledWith('n:highlight');
     expect(deps.setFocusNodeId).not.toHaveBeenCalled();
   });
 

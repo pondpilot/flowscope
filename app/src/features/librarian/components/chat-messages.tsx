@@ -5,6 +5,7 @@ import type { ChatMessage } from '../types';
 import {
   detectIdentifiers,
   EMPTY_SCHEMA_IDENTIFIERS,
+  extractSummary,
   resolveAllReferences,
   type ChatReference,
   type SchemaIdentifiers,
@@ -171,7 +172,7 @@ export function ChatMessages({
         {messages.map((msg) => {
           const refs =
             msg.role === 'assistant' && onNavigateToReferences
-              ? resolveAllReferences(msg.content, schema)
+              ? resolveAllReferences(extractSummary(msg.content), schema)
               : [];
           const isClickable = refs.length > 0;
           const firstTable = refs.find((r) => r.tableName)?.tableName;

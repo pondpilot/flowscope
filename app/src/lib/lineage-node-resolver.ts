@@ -154,8 +154,14 @@ export function resolveLineageNodeIds(
   // has no schema/catalog on its canonicalName.
   const tableIdsByQualifiedName = new Map<string, string>();
   const tableIdsByName = new Map<string, string>();
+  // Type per table-like node id. Used to prefer real source tables over
+  // views / CTEs when a bare column name matches column nodes in both: the
+  // analyzer can attach transitive column-lineage nodes to view nodes even
+  // when the column is not selected into the view's output.
+  const tableTypeById = new Map<string, string>();
   for (const node of allNodes) {
     if (!isTableLike(node.type)) continue;
+    tableTypeById.set(node.id, node.type);
     const qualifiedKey = buildTableQualifiedKey(node.canonicalName);
     if (qualifiedKey && !tableIdsByQualifiedName.has(qualifiedKey)) {
       tableIdsByQualifiedName.set(qualifiedKey, node.id);
@@ -179,15 +185,53 @@ export function resolveLineageNodeIds(
     tablesToExpand.push(id);
   };
 
+  // Resolve a column match to its parent table id, falling back to the ref's
+  // explicit tableName lookup when the column's own canonicalName lacks a
+  // useful pointer to its owning table. Returning null means the parent
+  // could not be identified — callers should not promote the column id to
+  // primaryFocusId in that case, since column ids are not top-level
+  // ReactFlow nodes and would make `revealNodeInGraph` a no-op.
+  const resolveColumnParentId = (
+    columnNode: GlobalNodeLike,
+    refTableName: string | undefined
+  ): string | null => {
+    const direct = findParentTableId(columnNode, tableIdsByQualifiedName, tableIdsByName);
+    if (direct) return direct;
+    if (refTableName) {
+      const fallback = tableIdsByName.get(normalize(refTableName));
+      if (fallback) return fallback;
+    }
+    return null;
+  };
+
+  // Rank a column match by the type of its resolved parent. Real source
+  // tables come first so primaryFocusId lands on a base table when one
+  // exists, instead of a view that just references the column transitively.
+  const parentTypeRank = (
+    columnNode: GlobalNodeLike,
+    refTableName: string | undefined
+  ): number => {
+    const parentId = resolveColumnParentId(columnNode, refTableName);
+    if (!parentId) return 4;
+    const type = tableTypeById.get(parentId);
+    if (type === 'table') return 0;
+    if (type === 'view') return 1;
+    if (type === 'cte') return 2;
+    return 3;
+  };
+
   for (const ref of refs) {
     if (ref.tableName && ref.columnName) {
       const matches = allNodes.filter((n) =>
         matchesQualifiedColumn(n, ref.tableName!, ref.columnName!)
       );
       if (matches.length === 0) continue;
-      for (const match of matches) {
+      const sorted = [...matches].sort(
+        (a, b) => parentTypeRank(a, ref.tableName) - parentTypeRank(b, ref.tableName)
+      );
+      for (const match of sorted) {
         addNode(match.id);
-        const parentId = findParentTableId(match, tableIdsByQualifiedName, tableIdsByName);
+        const parentId = resolveColumnParentId(match, ref.tableName);
         if (parentId) addExpand(parentId);
         if (primaryFocusId === null) primaryFocusId = parentId ?? match.id;
       }
@@ -207,9 +251,12 @@ export function resolveLineageNodeIds(
     if (ref.columnName) {
       const matches = allNodes.filter((n) => matchesBareColumn(n, ref.columnName!));
       if (matches.length === 0) continue;
-      for (const match of matches) {
+      const sorted = [...matches].sort(
+        (a, b) => parentTypeRank(a, undefined) - parentTypeRank(b, undefined)
+      );
+      for (const match of sorted) {
         addNode(match.id);
-        const parentId = findParentTableId(match, tableIdsByQualifiedName, tableIdsByName);
+        const parentId = resolveColumnParentId(match, undefined);
         if (parentId) addExpand(parentId);
         if (primaryFocusId === null) primaryFocusId = parentId ?? match.id;
       }
