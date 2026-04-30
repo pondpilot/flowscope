@@ -27,7 +27,7 @@ function makeDeps(
 }
 
 describe('applyLineageNavigation', () => {
-  it('expands missing parent tables, selects the first column, and focuses on its parent table', () => {
+  it('expands missing parent tables and selects the first column without zooming', () => {
     const deps = makeDeps({
       expandedTableIds: new Set<string>(['t:already-open']),
     });
@@ -45,15 +45,14 @@ describe('applyLineageNavigation', () => {
     expect(deps.toggleTableExpansion).not.toHaveBeenCalledWith('t:already-open');
     expect(deps.toggleTableExpansion).toHaveBeenCalledTimes(2);
 
-    // The column id is selected so the column highlights inside its table,
-    // but the viewport recenters on the parent table because columns are not
-    // top-level ReactFlow nodes.
+    // First node is selected for highlight styling, but focus/zoom is skipped
+    // so the viewport stays put when a chat answer references multiple tables.
     expect(deps.selectNode).toHaveBeenCalledWith('c:bkpf.mandt');
-    expect(deps.setFocusNodeId).toHaveBeenCalledWith('t:bkpf');
+    expect(deps.setFocusNodeId).not.toHaveBeenCalled();
     expect(deps.triggerFitView).not.toHaveBeenCalled();
   });
 
-  it('falls back to the first highlight id for focus when primaryFocusId is missing', () => {
+  it('selects the first highlight id without focusing/zooming', () => {
     const deps = makeDeps();
     const target: NavigationTarget = {
       highlightNodeIds: ['t:mara'],
@@ -62,7 +61,7 @@ describe('applyLineageNavigation', () => {
     applyLineageNavigation(target, deps);
 
     expect(deps.selectNode).toHaveBeenCalledWith('t:mara');
-    expect(deps.setFocusNodeId).toHaveBeenCalledWith('t:mara');
+    expect(deps.setFocusNodeId).not.toHaveBeenCalled();
   });
 
   it('deduplicates entries in tablesToExpand', () => {
@@ -88,7 +87,7 @@ describe('applyLineageNavigation', () => {
 
     expect(deps.toggleTableExpansion).not.toHaveBeenCalled();
     expect(deps.selectNode).toHaveBeenCalledWith('t:mara');
-    expect(deps.setFocusNodeId).toHaveBeenCalledWith('t:mara');
+    expect(deps.setFocusNodeId).not.toHaveBeenCalled();
   });
 
   it('falls back to tableId selection when highlightNodeIds is empty', () => {
@@ -152,7 +151,7 @@ describe('applyLineageNavigation', () => {
 
     expect(deps.selectNode).toHaveBeenCalledWith('n:highlight');
     expect(deps.selectNode).not.toHaveBeenCalledWith('t:other');
-    expect(deps.setFocusNodeId).toHaveBeenCalledWith('n:highlight');
+    expect(deps.setFocusNodeId).not.toHaveBeenCalled();
   });
 
   it('does not touch schema-related state for librarian-originated navigation', () => {

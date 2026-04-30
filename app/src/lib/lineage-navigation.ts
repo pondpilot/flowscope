@@ -33,12 +33,11 @@ export function applyLineageNavigation(
     }
     const firstId = target.highlightNodeIds[0];
     deps.selectNode(firstId);
-    // Columns are not top-level ReactFlow nodes, so passing a column id to
-    // useNodeFocus produces a no-op. The resolver hands us a parent-table id
-    // via primaryFocusId for that case; fall back to firstId when the target
-    // is already a top-level node (table/view/cte) or when no parent could be
-    // resolved.
-    deps.setFocusNodeId(target.primaryFocusId ?? firstId);
+    // Intentionally skip setFocusNodeId for chat-click navigation: the
+    // useNodeFocus hook in @pondpilot/flowscope-react auto-zooms to the
+    // focused node, which is too aggressive for a multi-reference chat
+    // answer. The search-term highlight + selection styling is enough to
+    // signal which tables matter; the user can pan/zoom themselves.
     return;
   }
 
