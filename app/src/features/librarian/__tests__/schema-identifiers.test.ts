@@ -31,7 +31,7 @@ describe('detectIdentifiers', () => {
     expect(detectIdentifiers('', schema)).toEqual([]);
   });
 
-  it('matches a column name exactly (case-sensitive, word-bounded)', () => {
+  it('matches a column name (case-insensitive, word-bounded)', () => {
     const schema = makeSchema([], ['MANDT']);
     const segments = detectIdentifiers('Client is MANDT.', schema);
     expect(segments).toEqual([
@@ -47,10 +47,30 @@ describe('detectIdentifiers', () => {
     expect(segments[1]).toEqual({ type: 'identifier', value: 'ekko', kind: 'table' });
   });
 
-  it('does not match lower-case variants of an upper-case identifier', () => {
+  it('matches lower-case variants and normalizes to canonical casing', () => {
     const schema = makeSchema([], ['MANDT']);
     const segments = detectIdentifiers('This mandt is lowercase.', schema);
-    expect(segments).toEqual([{ type: 'text', value: 'This mandt is lowercase.' }]);
+    expect(segments).toEqual([
+      { type: 'text', value: 'This ' },
+      { type: 'identifier', value: 'MANDT', kind: 'column' },
+      { type: 'text', value: ' is lowercase.' },
+    ]);
+  });
+
+  it('matches mixed-case variants and normalizes to canonical casing', () => {
+    const schema = makeSchema(['BKPF'], ['MANDT']);
+    const segments = detectIdentifiers('See Bkpf.MaNdT now.', schema);
+    const ids = segments.filter((s) => s.type === 'identifier');
+    expect(ids).toEqual([
+      { type: 'identifier', value: 'BKPF', kind: 'table' },
+      { type: 'identifier', value: 'MANDT', kind: 'column' },
+    ]);
+  });
+
+  it('does not match a non-identifier word that contains an identifier as a prefix', () => {
+    const schema = makeSchema([], ['MANDT']);
+    const segments = detectIdentifiers('The mandate is renewed.', schema);
+    expect(segments.every((s) => s.type === 'text')).toBe(true);
   });
 
   it('does not match embedded substrings (word boundary)', () => {
@@ -225,6 +245,22 @@ describe('resolveAllReferences', () => {
     const schema = makeSchema(['BKPF'], ['MANDT']);
     expect(resolveAllReferences('BKPF . MANDT is the key', schema)).toEqual([
       { tableName: 'BKPF', columnName: 'MANDT' },
+    ]);
+  });
+
+  it('resolves all four case variants of a qualified reference to the same canonical ref', () => {
+    const schema = makeSchema(['BKPF'], ['MANDT']);
+    const expected = [{ tableName: 'BKPF', columnName: 'MANDT' }];
+    expect(resolveAllReferences('BKPF.MANDT', schema)).toEqual(expected);
+    expect(resolveAllReferences('bkpf.MANDT', schema)).toEqual(expected);
+    expect(resolveAllReferences('BKPF.mandt', schema)).toEqual(expected);
+    expect(resolveAllReferences('bkpf.mandt', schema)).toEqual(expected);
+  });
+
+  it('resolves a bare lowercase column to a bare-column reference with canonical casing', () => {
+    const schema = makeSchema(['BKPF'], ['MANDT']);
+    expect(resolveAllReferences('the mandt column appears everywhere.', schema)).toEqual([
+      { columnName: 'MANDT', bareColumn: true },
     ]);
   });
 });

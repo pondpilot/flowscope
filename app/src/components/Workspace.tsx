@@ -512,7 +512,10 @@ export function Workspace({ backendReady, error, onRetry, isRetrying }: Workspac
 
 function LibrarianPanelWithNavigation({ onClose }: { onClose: () => void }) {
   const { navigateTo } = useNavigation();
-  const { result } = useLineageState();
+  const { result, showColumnEdges } = useLineageState();
+  const { toggleColumnEdges } = useLineageActions();
+  const { activeProjectId } = useProject();
+  const updateViewState = useViewStateStore((s) => s.updateViewState);
   const handleNavigateToReferences = useCallback(
     (refs: ChatReference[]) => {
       if (refs.length === 0) return;
@@ -521,13 +524,29 @@ function LibrarianPanelWithNavigation({ onClose }: { onClose: () => void }) {
         refs
       );
       if (nodeIds.length === 0) return;
+      // Drive the existing lineage search pipeline. If the answer references
+      // any column, prefer searching by the first column name (and force
+      // "show column edges" on so columns are actually matchable). Otherwise
+      // fall back to the first table name. Writing the term to the persisted
+      // per-project view state propagates to GraphView's controlled
+      // searchTerm prop, which drives the same highlighting a manual search
+      // would.
+      const firstColumn = refs.find((r) => r.columnName)?.columnName;
+      const firstTable = refs.find((r) => r.tableName)?.tableName;
+      const searchTerm = firstColumn ?? firstTable;
+      if (firstColumn && !showColumnEdges) {
+        toggleColumnEdges();
+      }
+      if (searchTerm && activeProjectId) {
+        updateViewState(activeProjectId, 'lineage', { searchTerm });
+      }
       navigateTo('lineage', {
         highlightNodeIds: nodeIds,
         tablesToExpand,
         ...(primaryFocusId ? { primaryFocusId } : {}),
       });
     },
-    [navigateTo, result]
+    [navigateTo, result, showColumnEdges, toggleColumnEdges, activeProjectId, updateViewState]
   );
   return (
     <LibrarianPanel onClose={onClose} onNavigateToReferences={handleNavigateToReferences} />

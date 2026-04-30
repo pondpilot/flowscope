@@ -56,8 +56,9 @@ function escapeRegex(s: string): string {
 
 /**
  * Tokenize `text` into text/identifier segments.
- * Matches are case-sensitive and bounded by word boundaries so embedded
- * substrings (e.g. "MANDT" inside "MANDT_X") are not matched.
+ * Matches are case-insensitive and bounded by word boundaries so embedded
+ * substrings (e.g. "MANDT" inside "MANDT_X") are not matched. Matched values
+ * are normalized to their canonical schema casing.
  */
 export function detectIdentifiers(
   text: string,
@@ -69,9 +70,15 @@ export function detectIdentifiers(
     return [{ type: 'text', value: text }];
   }
 
-  const names = new Set<string>([...schema.tables, ...schema.columns]);
-  const sorted = [...names].sort((a, b) => b.length - a.length);
-  const pattern = new RegExp(`\\b(?:${sorted.map(escapeRegex).join('|')})\\b`, 'g');
+  // Build lower-cased lookup so we can normalize matches back to canonical
+  // names. Tables win over columns when a name appears in both, matching the
+  // downstream kind-resolution rule.
+  const lookup = new Map<string, string>();
+  for (const c of schema.columns) lookup.set(c.toLowerCase(), c);
+  for (const t of schema.tables) lookup.set(t.toLowerCase(), t);
+
+  const names = [...lookup.keys()].sort((a, b) => b.length - a.length);
+  const pattern = new RegExp(`\\b(?:${names.map(escapeRegex).join('|')})\\b`, 'gi');
 
   const segments: IdentifierSegment[] = [];
   let last = 0;
@@ -81,10 +88,10 @@ export function detectIdentifiers(
     if (m.index > last) {
       segments.push({ type: 'text', value: text.slice(last, m.index) });
     }
-    const value = m[0];
-    const kind: IdentifierKind = schema.tables.has(value) ? 'table' : 'column';
-    segments.push({ type: 'identifier', value, kind });
-    last = m.index + value.length;
+    const canonical = lookup.get(m[0].toLowerCase()) ?? m[0];
+    const kind: IdentifierKind = schema.tables.has(canonical) ? 'table' : 'column';
+    segments.push({ type: 'identifier', value: canonical, kind });
+    last = m.index + m[0].length;
   }
 
   if (last < text.length) {
