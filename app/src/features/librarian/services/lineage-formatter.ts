@@ -6,7 +6,7 @@ import type { AnalyzeResult } from '@pondpilot/flowscope-core';
 export function formatLineage(result: AnalyzeResult | null): string {
   if (!result) return '';
 
-  const { globalLineage, resolvedSchema } = result;
+  const { nodes, edges, resolvedSchema } = result;
   const sections: string[] = [];
 
   // Tables and columns from resolved schema
@@ -28,12 +28,9 @@ export function formatLineage(result: AnalyzeResult | null): string {
     sections.push(`Tables:\n${tableLines.join('\n\n')}`);
   }
 
-  // Table-level nodes from global lineage (only if no resolved schema)
-  if (
-    (!resolvedSchema?.tables || resolvedSchema.tables.length === 0) &&
-    globalLineage.nodes.length > 0
-  ) {
-    const tableNodes = globalLineage.nodes.filter(
+  // Table-level nodes from the flat lineage graph (only if no resolved schema)
+  if ((!resolvedSchema?.tables || resolvedSchema.tables.length === 0) && nodes.length > 0) {
+    const tableNodes = nodes.filter(
       (n) => n.type === 'table' || n.type === 'view' || n.type === 'cte'
     );
     if (tableNodes.length > 0) {
@@ -43,10 +40,10 @@ export function formatLineage(result: AnalyzeResult | null): string {
   }
 
   // Relationships from edges
-  if (globalLineage.edges.length > 0) {
-    const nodeMap = new Map(globalLineage.nodes.map((n) => [n.id, n.label]));
+  if (edges.length > 0) {
+    const nodeMap = new Map(nodes.map((n) => [n.id, n.label]));
     const relationships: string[] = [];
-    for (const edge of globalLineage.edges) {
+    for (const edge of edges) {
       const from = nodeMap.get(edge.from) ?? edge.from;
       const to = nodeMap.get(edge.to) ?? edge.to;
       relationships.push(`- ${from} --[${edge.type}]--> ${to}`);

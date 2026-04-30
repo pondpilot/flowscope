@@ -6,7 +6,8 @@ import { formatLineage } from '../services/lineage-formatter';
 function makeResult(overrides: Partial<AnalyzeResult> = {}): AnalyzeResult {
   return {
     statements: [],
-    globalLineage: { nodes: [], edges: [] },
+    nodes: [],
+    edges: [],
     issues: [],
     summary: {
       tableCount: 0,
@@ -62,25 +63,23 @@ describe('formatLineage', () => {
 
   it('falls back to global lineage nodes when no resolved schema', () => {
     const result = makeResult({
-      globalLineage: {
-        nodes: [
-          {
-            id: 'n1',
-            type: 'table',
-            label: 'orders',
-            canonicalName: { name: 'orders' },
-            statementRefs: [],
-          },
-          {
-            id: 'n2',
-            type: 'view',
-            label: 'order_summary',
-            canonicalName: { name: 'order_summary' },
-            statementRefs: [],
-          },
-        ],
-        edges: [],
-      },
+      nodes: [
+        {
+          id: 'n1',
+          type: 'table',
+          label: 'orders',
+          canonicalName: { name: 'orders' },
+          statementIds: [0],
+        },
+        {
+          id: 'n2',
+          type: 'view',
+          label: 'order_summary',
+          canonicalName: { name: 'order_summary' },
+          statementIds: [0],
+        },
+      ],
+      edges: [],
     });
 
     const output = formatLineage(result);
@@ -90,32 +89,31 @@ describe('formatLineage', () => {
 
   it('formats relationships from edges', () => {
     const result = makeResult({
-      globalLineage: {
-        nodes: [
-          {
-            id: 'n1',
-            type: 'table',
-            label: 'users',
-            canonicalName: { name: 'users' },
-            statementRefs: [],
-          },
-          {
-            id: 'n2',
-            type: 'column',
-            label: 'users.id',
-            canonicalName: { name: 'id', column: 'id' },
-            statementRefs: [],
-          },
-        ],
-        edges: [
-          {
-            id: 'e1',
-            from: 'n1',
-            to: 'n2',
-            type: 'ownership',
-          },
-        ],
-      },
+      nodes: [
+        {
+          id: 'n1',
+          type: 'table',
+          label: 'users',
+          canonicalName: { name: 'users' },
+          statementIds: [0],
+        },
+        {
+          id: 'n2',
+          type: 'column',
+          label: 'users.id',
+          canonicalName: { name: 'id', column: 'id' },
+          statementIds: [0],
+        },
+      ],
+      edges: [
+        {
+          id: 'e1',
+          from: 'n1',
+          to: 'n2',
+          type: 'ownership',
+          statementIds: [0],
+        },
+      ],
     });
 
     const output = formatLineage(result);
@@ -124,17 +122,16 @@ describe('formatLineage', () => {
 
   it('uses edge IDs as fallback when node labels not found', () => {
     const result = makeResult({
-      globalLineage: {
-        nodes: [],
-        edges: [
-          {
-            id: 'e1',
-            from: 'unknown1',
-            to: 'unknown2',
-            type: 'data_flow',
-          },
-        ],
-      },
+      nodes: [],
+      edges: [
+        {
+          id: 'e1',
+          from: 'unknown1',
+          to: 'unknown2',
+          type: 'data_flow',
+          statementIds: [0],
+        },
+      ],
     });
 
     const output = formatLineage(result);
@@ -153,25 +150,23 @@ describe('formatLineage', () => {
           },
         ],
       },
-      globalLineage: {
-        nodes: [
-          {
-            id: 'n1',
-            type: 'table',
-            label: 'a',
-            canonicalName: { name: 'a' },
-            statementRefs: [],
-          },
-          {
-            id: 'n2',
-            type: 'table',
-            label: 'b',
-            canonicalName: { name: 'b' },
-            statementRefs: [],
-          },
-        ],
-        edges: [{ id: 'e1', from: 'n1', to: 'n2', type: 'cross_statement' }],
-      },
+      nodes: [
+        {
+          id: 'n1',
+          type: 'table',
+          label: 'a',
+          canonicalName: { name: 'a' },
+          statementIds: [0],
+        },
+        {
+          id: 'n2',
+          type: 'table',
+          label: 'b',
+          canonicalName: { name: 'b' },
+          statementIds: [1],
+        },
+      ],
+      edges: [{ id: 'e1', from: 'n1', to: 'n2', type: 'cross_statement', statementIds: [0, 1] }],
     });
 
     const output = formatLineage(result);

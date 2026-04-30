@@ -146,7 +146,7 @@ export function resolveLineageNodeIds(
     return { nodeIds, tablesToExpand, primaryFocusId };
   }
 
-  const allNodes = (result.globalLineage?.nodes ?? []) as unknown as GlobalNodeLike[];
+  const allNodes = (result.nodes ?? []) as unknown as GlobalNodeLike[];
 
   // Index table-like nodes so column nodes can resolve their owning table id.
   // The qualified map (catalog.schema.name) keeps schemas with duplicate

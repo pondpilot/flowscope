@@ -17,10 +17,11 @@ interface TestNode {
 
 function makeResult(nodes: TestNode[]): AnalyzeResult {
   // Cast through `unknown` because the test only populates the fields the
-  // resolver actually reads (`globalLineage.nodes`); the rest of `AnalyzeResult`
-  // is irrelevant here.
+  // resolver actually reads (`nodes`); the rest of `AnalyzeResult` is
+  // irrelevant here.
   return {
-    globalLineage: { nodes, edges: [] },
+    nodes,
+    edges: [],
     statements: [],
     issues: [],
     summary: {
