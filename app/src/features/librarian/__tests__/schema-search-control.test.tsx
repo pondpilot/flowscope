@@ -25,10 +25,7 @@ describe('SchemaSearchControl', () => {
   it('selects a matching table on keystroke (case-insensitive prefix)', () => {
     const onSelectTable = vi.fn();
     render(
-      <SchemaSearchControl
-        tableNames={['MARA', 'BKPF', 'BSEG']}
-        onSelectTable={onSelectTable}
-      />
+      <SchemaSearchControl tableNames={['MARA', 'BKPF', 'BSEG']} onSelectTable={onSelectTable} />
     );
     fireEvent.click(screen.getByTestId('schema-search-toggle'));
     const input = screen.getByTestId('schema-search-input');

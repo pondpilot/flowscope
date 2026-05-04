@@ -131,9 +131,7 @@ describe('resolveLineageNodeIds', () => {
     const out = resolveLineageNodeIds(makeResult(FULL_GRAPH), [
       { columnName: 'MANDT', bareColumn: true },
     ]);
-    expect(new Set(out.nodeIds)).toEqual(
-      new Set(['c:bkpf.mandt', 'c:bseg.mandt', 'c:t001.mandt'])
-    );
+    expect(new Set(out.nodeIds)).toEqual(new Set(['c:bkpf.mandt', 'c:bseg.mandt', 'c:t001.mandt']));
     expect(new Set(out.tablesToExpand)).toEqual(new Set(['t:bkpf', 't:bseg', 't:t001']));
     // Focus on the parent of the first matched column.
     expect(out.primaryFocusId).toBe('t:bkpf');
@@ -163,9 +161,7 @@ describe('resolveLineageNodeIds', () => {
     ]);
     expect(out.nodeIds.filter((id) => id === 'c:bkpf.mandt')).toHaveLength(1);
     expect(out.tablesToExpand.filter((id) => id === 't:bkpf')).toHaveLength(1);
-    expect(new Set(out.nodeIds)).toEqual(
-      new Set(['c:bkpf.mandt', 'c:bseg.mandt', 'c:t001.mandt'])
-    );
+    expect(new Set(out.nodeIds)).toEqual(new Set(['c:bkpf.mandt', 'c:bseg.mandt', 'c:t001.mandt']));
     expect(new Set(out.tablesToExpand)).toEqual(new Set(['t:bkpf', 't:bseg', 't:t001']));
   });
 
@@ -259,8 +255,18 @@ describe('resolveLineageNodeIds', () => {
     // registered first (here, the sap version) — leaving the staging.BKPF
     // table collapsed and its column highlight invisible.
     const nodes: TestNode[] = [
-      { id: 't:sap-bkpf', type: 'table', label: 'BKPF', canonicalName: { schema: 'sap', name: 'BKPF' } },
-      { id: 't:staging-bkpf', type: 'table', label: 'BKPF', canonicalName: { schema: 'staging', name: 'BKPF' } },
+      {
+        id: 't:sap-bkpf',
+        type: 'table',
+        label: 'BKPF',
+        canonicalName: { schema: 'sap', name: 'BKPF' },
+      },
+      {
+        id: 't:staging-bkpf',
+        type: 'table',
+        label: 'BKPF',
+        canonicalName: { schema: 'staging', name: 'BKPF' },
+      },
       {
         id: 'c:sap-bkpf-mandt',
         type: 'column',
@@ -277,13 +283,9 @@ describe('resolveLineageNodeIds', () => {
     const out = resolveLineageNodeIds(makeResult(nodes), [
       { columnName: 'MANDT', bareColumn: true },
     ]);
-    expect(new Set(out.nodeIds)).toEqual(
-      new Set(['c:sap-bkpf-mandt', 'c:staging-bkpf-mandt'])
-    );
+    expect(new Set(out.nodeIds)).toEqual(new Set(['c:sap-bkpf-mandt', 'c:staging-bkpf-mandt']));
     // Both parent tables must be expanded so each column highlight is visible.
-    expect(new Set(out.tablesToExpand)).toEqual(
-      new Set(['t:sap-bkpf', 't:staging-bkpf'])
-    );
+    expect(new Set(out.tablesToExpand)).toEqual(new Set(['t:sap-bkpf', 't:staging-bkpf']));
   });
 
   it('treats views and CTEs as table-like for table refs', () => {

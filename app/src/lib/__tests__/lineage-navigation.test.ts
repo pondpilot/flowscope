@@ -3,9 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { applyLineageNavigation, type LineageNavigationDeps } from '../lineage-navigation';
 import type { NavigationTarget } from '../navigation-context';
 
-function makeDeps(
-  overrides: Partial<LineageNavigationDeps> = {}
-): LineageNavigationDeps & {
+function makeDeps(overrides: Partial<LineageNavigationDeps> = {}): LineageNavigationDeps & {
   selectNode: ReturnType<typeof vi.fn>;
   toggleTableExpansion: ReturnType<typeof vi.fn>;
   setFocusNodeId: ReturnType<typeof vi.fn>;

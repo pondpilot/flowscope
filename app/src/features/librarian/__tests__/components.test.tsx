@@ -252,9 +252,7 @@ describe('ChatMessages', () => {
 
   it('does not style surrounding text as an identifier', () => {
     const schema = makeSchema([], ['MANDT']);
-    const messages = [
-      makeMessage({ role: 'assistant', content: 'The client column is MANDT.' }),
-    ];
+    const messages = [makeMessage({ role: 'assistant', content: 'The client column is MANDT.' })];
     const { container } = render(
       <ChatMessages messages={messages} isLoading={false} schemaIdentifiers={schema} />
     );
@@ -383,9 +381,7 @@ describe('ChatMessages', () => {
   it('does not make assistant messages clickable when no callback is provided', () => {
     const schema = makeSchema(['MARA'], []);
     const messages = [makeMessage({ role: 'assistant', content: 'Check MARA.' })];
-    render(
-      <ChatMessages messages={messages} isLoading={false} schemaIdentifiers={schema} />
-    );
+    render(<ChatMessages messages={messages} isLoading={false} schemaIdentifiers={schema} />);
 
     const bubble = screen.getByTestId('message-assistant').querySelector('[role="button"]');
     expect(bubble).toBeNull();

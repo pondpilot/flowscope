@@ -43,8 +43,12 @@ export function LibrarianPanel({ onClose, onNavigateToReferences }: LibrarianPan
     // Capture the active project id at upload time so all three writes
     // (file, chunks, status) route to the originating project even if
     // the user switches projects while the PDF is being processed.
-    const { activeProjectId: projectId, addPdfFileToProject, addPdfChunksToProject, setPdfStatusForProject } =
-      useLibrarianStore.getState();
+    const {
+      activeProjectId: projectId,
+      addPdfFileToProject,
+      addPdfChunksToProject,
+      setPdfStatusForProject,
+    } = useLibrarianStore.getState();
     if (!projectId) return;
 
     const fileId = crypto.randomUUID();
@@ -167,11 +171,7 @@ export function LibrarianPanel({ onClose, onNavigateToReferences }: LibrarianPan
       </div>
 
       {/* Chat input */}
-      <ChatInput
-        onSend={sendMessage}
-        disabled={isLoading}
-        noActiveProject={!activeProjectId}
-      />
+      <ChatInput onSend={sendMessage} disabled={isLoading} noActiveProject={!activeProjectId} />
 
       {/* Settings dialog */}
       <AISettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />

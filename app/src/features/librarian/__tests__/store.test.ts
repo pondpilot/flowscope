@@ -134,7 +134,9 @@ describe('useLibrarianStore', () => {
     it('no-ops when activeProjectId is null', () => {
       useLibrarianStore.getState().addMessage('user', 'a-msg');
       resetStore(null);
-      useLibrarianStore.setState({ byProject: { [PROJECT_A]: { messages: [], pdfFiles: [], pdfChunks: [] } } });
+      useLibrarianStore.setState({
+        byProject: { [PROJECT_A]: { messages: [], pdfFiles: [], pdfChunks: [] } },
+      });
       // No active id; clearMessages should not throw and not modify state.
       expect(() => useLibrarianStore.getState().clearMessages()).not.toThrow();
     });
@@ -311,9 +313,9 @@ describe('useLibrarianStore', () => {
 
       useLibrarianStore.getState().addMessage('user', 'hello from B');
       useLibrarianStore.getState().addPdfFile(makePdfFile({ id: 'b1', name: 'b.pdf' }));
-      useLibrarianStore.getState().addPdfChunks([
-        makePdfChunk({ id: 'bc1', fileId: 'b1', fileName: 'b.pdf' }),
-      ]);
+      useLibrarianStore
+        .getState()
+        .addPdfChunks([makePdfChunk({ id: 'bc1', fileId: 'b1', fileName: 'b.pdf' })]);
 
       const { byProject } = useLibrarianStore.getState();
       expect(byProject[PROJECT_A].messages.map((m) => m.content)).toEqual(['hello from A']);
@@ -417,9 +419,9 @@ describe('useLibrarianStore', () => {
         .addPdfFileToProject(PROJECT_A, makePdfFile({ id: 'f1', status: 'processing' }));
       useLibrarianStore.getState().setActiveProjectId(PROJECT_B);
 
-      useLibrarianStore.getState().addPdfChunksToProject(PROJECT_A, [
-        makePdfChunk({ id: 'c1', fileId: 'f1' }),
-      ]);
+      useLibrarianStore
+        .getState()
+        .addPdfChunksToProject(PROJECT_A, [makePdfChunk({ id: 'c1', fileId: 'f1' })]);
       useLibrarianStore.getState().setPdfStatusForProject(PROJECT_A, 'f1', 'ready');
 
       const state = useLibrarianStore.getState();
@@ -438,9 +440,9 @@ describe('useLibrarianStore', () => {
       useLibrarianStore.getState().setActiveProjectId(PROJECT_B);
       useLibrarianStore.getState().pruneProjectBuckets(new Set([PROJECT_B]));
 
-      useLibrarianStore.getState().addPdfChunksToProject(PROJECT_A, [
-        makePdfChunk({ id: 'c1', fileId: 'f1' }),
-      ]);
+      useLibrarianStore
+        .getState()
+        .addPdfChunksToProject(PROJECT_A, [makePdfChunk({ id: 'c1', fileId: 'f1' })]);
       useLibrarianStore.getState().setPdfStatusForProject(PROJECT_A, 'f1', 'ready');
 
       expect(useLibrarianStore.getState().byProject[PROJECT_A]).toBeUndefined();

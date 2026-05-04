@@ -207,10 +207,7 @@ export function resolveLineageNodeIds(
   // Rank a column match by the type of its resolved parent. Real source
   // tables come first so primaryFocusId lands on a base table when one
   // exists, instead of a view that just references the column transitively.
-  const parentTypeRank = (
-    columnNode: GlobalNodeLike,
-    refTableName: string | undefined
-  ): number => {
+  const parentTypeRank = (columnNode: GlobalNodeLike, refTableName: string | undefined): number => {
     const parentId = resolveColumnParentId(columnNode, refTableName);
     if (!parentId) return 4;
     const type = tableTypeById.get(parentId);

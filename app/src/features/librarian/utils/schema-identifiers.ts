@@ -60,10 +60,7 @@ function escapeRegex(s: string): string {
  * substrings (e.g. "MANDT" inside "MANDT_X") are not matched. Matched values
  * are normalized to their canonical schema casing.
  */
-export function detectIdentifiers(
-  text: string,
-  schema: SchemaIdentifiers
-): IdentifierSegment[] {
+export function detectIdentifiers(text: string, schema: SchemaIdentifiers): IdentifierSegment[] {
   if (!text) return [];
 
   if (schema.tables.size === 0 && schema.columns.size === 0) {
@@ -115,10 +112,7 @@ export function detectIdentifiers(
  * Results are deduplicated by `(tableName, columnName)` while preserving the
  * order of first occurrence.
  */
-export function resolveAllReferences(
-  text: string,
-  schema: SchemaIdentifiers
-): ChatReference[] {
+export function resolveAllReferences(text: string, schema: SchemaIdentifiers): ChatReference[] {
   const segments = detectIdentifiers(text, schema);
   const refs: ChatReference[] = [];
   const seen = new Set<string>();

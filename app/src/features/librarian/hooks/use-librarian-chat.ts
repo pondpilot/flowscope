@@ -63,8 +63,7 @@ export function useLibrarianChat() {
 
         // Vector search PDFs if chunks exist — read from the originating
         // project's bucket (captured projectId, not the live active id).
-        const pdfChunks =
-          useLibrarianStore.getState().byProject[projectId]?.pdfChunks ?? [];
+        const pdfChunks = useLibrarianStore.getState().byProject[projectId]?.pdfChunks ?? [];
         let pdfCitations = '';
         if (pdfChunks.length > 0) {
           try {
@@ -84,8 +83,7 @@ export function useLibrarianChat() {
         // project's bucket. Exclude the last message (the user message just
         // added) since it will also be sent as the userMessage parameter to
         // the LLM. Send only the last CHAT_HISTORY_LIMIT messages as context.
-        const allMessages =
-          useLibrarianStore.getState().byProject[projectId]?.messages ?? [];
+        const allMessages = useLibrarianStore.getState().byProject[projectId]?.messages ?? [];
         const recentHistory = allMessages.slice(0, -1).slice(-CHAT_HISTORY_LIMIT);
         const context = buildContext({
           lineage,

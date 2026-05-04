@@ -550,7 +550,5 @@ function LibrarianPanelWithNavigation({ onClose }: { onClose: () => void }) {
     },
     [navigateTo, result, showColumnEdges, toggleColumnEdges, activeProjectId, updateViewState]
   );
-  return (
-    <LibrarianPanel onClose={onClose} onNavigateToReferences={handleNavigateToReferences} />
-  );
+  return <LibrarianPanel onClose={onClose} onNavigateToReferences={handleNavigateToReferences} />;
 }

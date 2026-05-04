@@ -190,10 +190,7 @@ export function ChatMessages({
             // Only applies to mouse clicks — pressing Enter/Space on a focused
             // bubble must always activate, regardless of any stale page-wide
             // selection that may exist elsewhere.
-            if (
-              source === 'click' &&
-              (window.getSelection?.()?.toString().length ?? 0) > 0
-            ) {
+            if (source === 'click' && (window.getSelection?.()?.toString().length ?? 0) > 0) {
               return;
             }
             if (refs.length > 0 && onNavigateToReferences) {
