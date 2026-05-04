@@ -49,11 +49,18 @@ Identifiers like `BKPF`, `MANDT` are visually highlighted in the response so the
 
 ### Jump to Lineage from a chat answer
 
-Click an assistant message to switch to the **Lineage** tab and reveal every table and column that the answer referenced. Parent tables of any referenced columns are auto-expanded, and the viewport recenters on the first reference so the highlighted area is in view.
+Click an assistant message to switch to the **Lineage** tab and highlight what the answer is about. Navigation reads only the **Summary** section of the answer (not Data Lineage or Documentation), so the click reflects the main claim and ignores tables mentioned only as supporting context.
 
-If the answer references identifiers that aren't present in the current lineage (e.g. a column from a PDF only), those references are skipped silently. A click with zero matches is a no-op — the active tab does not change.
+What happens on click:
 
-> **Limitation:** the lineage view's public API does not currently support highlighting an arbitrary set of nodes at once. The first referenced node is selected and recentered; the others are made visible by expanding their parent tables, but only one node carries the active selection ring at a time. Use the lineage search box to cycle through the rest if you need to focus each one individually.
+- The first referenced **column** (or, if the Summary mentions only a table, the first table) is written to the lineage search box. Every matching table card lights up its border, and matching columns inside the cards get the highlight color.
+- "Show column edges" auto-enables when a column is referenced, so individual column rows are visually distinct inside the table cards.
+- The viewport gently pans and pulses on the source table that contains the column. Real source tables (`type === 'table'`) are preferred over views and CTEs that only reference the column transitively.
+- Identifier matching is case-insensitive — `bkpf.MANDT`, `BKPF.mandt`, and `BKPF.MANDT` all resolve the same way.
+
+If the answer references identifiers that aren't present in the current lineage (e.g. a column from a PDF only), those references are skipped. A click on a Summary with no resolvable identifier is a no-op — the active tab does not change.
+
+> **Tip:** the lineage search box accepts a single substring, not a regex. Heterogeneous references in one Summary (e.g. both `MANDT` and `BUKRS`) cannot share a single search term — the first column wins. Clear the search box manually to dismiss the highlight.
 
 ## Uploading PDF Documentation
 

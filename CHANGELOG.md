@@ -9,23 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-#### Web App (app/) — Librarian
-- Help popover in the Librarian panel header describing the assistant and usage tips
-- Clickable assistant messages that jump to the Lineage tab, expand the parent tables of every referenced column, and recenter on the referenced nodes (first reference is selected; multi-highlight falls back to single-select due to a `@pondpilot/flowscope-react` API limitation)
-- Styled schema identifiers (table and column names) inline in assistant responses, distinct from inline code
-- Search control in the Schema view header that expands to an input and highlights the matching table as you type
-- Per-project Librarian state isolation (RAM-only) — chat messages, PDF files, and embedded chunks are scoped to the active project; switching projects shows that project's own state without leaking another project's chat or documentation into the LLM prompt. State is in-memory, so a page reload still starts fresh.
+#### Web App (app/) — Librarian (2026-05-04)
 
-### Changed
+AI chat panel for asking questions about your data using SQL lineage and uploaded PDF documentation. Supports OpenAI, Anthropic, and custom OpenAI-compatible endpoints; multilingual embeddings (`Xenova/multilingual-e5-small`, 100+ languages); per-project state isolation (RAM-only) so chat, PDFs, and embedded chunks don't leak between projects.
 
-#### Web App (app/) — Librarian
-- Moved the Librarian toggle from the top-right workspace header into the analysis toolbar, next to the Schema button (⌘L unchanged)
-- Updated the Librarian system prompt: identifiers are emitted as bare tokens (no backticks); Summary sections pair business names with technical names, e.g. `client (MANDT)`; off-topic questions receive a fixed refusal
+Answers follow a structured **Summary / Data Lineage / Documentation** format. Schema identifiers are highlighted inline in assistant responses (case-insensitive, normalized to canonical schema casing). Clicking an assistant message reads the answer's Summary, highlights every referenced table and column in the Lineage view via the existing search pipeline (auto-enabling "show column edges" when a column is referenced), and gently pans + pulses on the source table containing the column.
 
-### Fixed
-
-#### Web App (app/) — Librarian
-- PDF upload list no longer clips the file size and delete button at narrow panel widths — long file names truncate with ellipsis instead
+Schema view gains a search control (table-name or column-name substring, Prev/Next cycling). Librarian toggle lives in the analysis toolbar next to Schema (⌘L / Ctrl+L); a help popover in the panel header describes the assistant and usage.
 
 ## [0.7.0] - 2026-04-23
 
