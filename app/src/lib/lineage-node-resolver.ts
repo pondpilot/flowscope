@@ -56,6 +56,41 @@ function buildTableQualifiedKey(canonicalName: GlobalNodeLike['canonicalName']):
   return parts.join('.').toLowerCase();
 }
 
+interface ColumnIdentity {
+  /** The column's own name, or undefined if it cannot be derived. */
+  columnName: string | undefined;
+  /** The owning table's name (bare), or undefined if it cannot be derived. */
+  parentName: string | undefined;
+  /** Lowercased qualified key for the parent table (catalog.schema.name). */
+  parentQualifiedKey: string | null;
+}
+
+const EMPTY_COLUMN_IDENTITY: ColumnIdentity = {
+  columnName: undefined,
+  parentName: undefined,
+  parentQualifiedKey: null,
+};
+
+// Resolve a column node's identity in one place. Different emitters pack the
+// column into either `canonicalName.column` (with the table in `.name`) or
+// the trailing `canonicalName.name` (with the table in `.schema`). Picking
+// the right split — and the matching parent-table parts — was previously
+// duplicated across three helpers; co-locating them here keeps the rule a
+// single fact instead of three independent opinions.
+function splitColumnIdentity(node: GlobalNodeLike): ColumnIdentity {
+  if (node.type !== 'column' || !node.canonicalName) {
+    return EMPTY_COLUMN_IDENTITY;
+  }
+  const { catalog, schema, name, column } = node.canonicalName;
+  const columnName = column ?? name;
+  const parentName = column ? name : schema;
+  const parentParts = (column ? [catalog, schema, name] : [catalog, schema]).filter(
+    (p): p is string => typeof p === 'string' && p.length > 0
+  );
+  const parentQualifiedKey = parentParts.length > 0 ? parentParts.join('.').toLowerCase() : null;
+  return { columnName, parentName, parentQualifiedKey };
+}
+
 function matchesTable(node: GlobalNodeLike, tableName: string): boolean {
   if (!isTableLike(node.type)) return false;
   const target = normalize(tableName);
@@ -78,10 +113,11 @@ function matchesQualifiedColumn(
   // Suffix match handles full canonical names like catalog.schema.tableName.columnName.
   if (qualified.endsWith(`.${target}`)) return true;
   // Fallback: parent table canonical name + column label.
+  const identity = splitColumnIdentity(node);
   if (
-    normalize(node.canonicalName?.name) === normalize(tableName) &&
+    normalize(identity.parentName) === normalize(tableName) &&
     (normalize(node.label) === normalize(columnName) ||
-      normalize(node.canonicalName?.column) === normalize(columnName))
+      normalize(identity.columnName) === normalize(columnName))
   ) {
     return true;
   }
@@ -93,7 +129,7 @@ function matchesBareColumn(node: GlobalNodeLike, columnName: string): boolean {
   const target = normalize(columnName);
   if (!target) return false;
   if (normalize(node.label) === target) return true;
-  if (normalize(node.canonicalName?.column) === target) return true;
+  if (normalize(splitColumnIdentity(node).columnName) === target) return true;
   return false;
 }
 
@@ -105,12 +141,12 @@ function findParentTableId(
   // Prefer fully-qualified lookup (catalog.schema.name) so columns map to
   // their actual owning table when multiple table-like nodes share the same
   // bare name across schemas.
-  const qualifiedKey = buildTableQualifiedKey(columnNode.canonicalName);
-  if (qualifiedKey) {
-    const id = tableIdsByQualifiedName.get(qualifiedKey);
+  const identity = splitColumnIdentity(columnNode);
+  if (identity.parentQualifiedKey) {
+    const id = tableIdsByQualifiedName.get(identity.parentQualifiedKey);
     if (id) return id;
   }
-  const bareKey = normalize(columnNode.canonicalName?.name);
+  const bareKey = normalize(identity.parentName);
   if (bareKey) {
     const id = tableIdsByName.get(bareKey);
     if (id) return id;

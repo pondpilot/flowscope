@@ -105,7 +105,11 @@ async function sendOpenAI(
   }
 
   const data = await response.json();
-  return data.choices[0]?.message?.content ?? '';
+  const content = data.choices?.[0]?.message?.content;
+  if (typeof content !== 'string' || content.length === 0) {
+    throw new Error('OpenAI API returned no text content.');
+  }
+  return content;
 }
 
 async function sendAnthropic(
@@ -137,6 +141,11 @@ async function sendAnthropic(
   }
 
   const data = await response.json();
-  const textBlock = data.content?.find((block: { type: string }) => block.type === 'text');
-  return textBlock?.text ?? '';
+  const textBlock = data.content?.find(
+    (block: { type: string; text?: unknown }) => block.type === 'text'
+  );
+  if (typeof textBlock?.text !== 'string' || textBlock.text.length === 0) {
+    throw new Error('Anthropic API returned no text content.');
+  }
+  return textBlock.text;
 }

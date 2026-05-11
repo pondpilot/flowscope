@@ -208,6 +208,37 @@ describe('resolveLineageNodeIds', () => {
     expect(out.tablesToExpand).toEqual(['t:bkpf']);
   });
 
+  it('expands the parent table for column canonical names without a column field', () => {
+    const nodes: TestNode[] = [
+      {
+        id: 't:users',
+        type: 'table',
+        label: 'users',
+        canonicalName: { name: 'users' },
+      },
+      {
+        id: 'c:users.id',
+        type: 'column',
+        label: 'id',
+        canonicalName: { schema: 'users', name: 'id' },
+      },
+    ];
+
+    const bareOut = resolveLineageNodeIds(makeResult(nodes), [
+      { columnName: 'id', bareColumn: true },
+    ]);
+    expect(bareOut.nodeIds).toEqual(['c:users.id']);
+    expect(bareOut.tablesToExpand).toEqual(['t:users']);
+    expect(bareOut.primaryFocusId).toBe('t:users');
+
+    const qualifiedOut = resolveLineageNodeIds(makeResult(nodes), [
+      { tableName: 'users', columnName: 'id' },
+    ]);
+    expect(qualifiedOut.nodeIds).toEqual(['c:users.id']);
+    expect(qualifiedOut.tablesToExpand).toEqual(['t:users']);
+    expect(qualifiedOut.primaryFocusId).toBe('t:users');
+  });
+
   it('handles nodes with no canonicalName by falling back to label', () => {
     const nodes: TestNode[] = [
       { id: 't:bkpf', type: 'table', label: 'BKPF' },

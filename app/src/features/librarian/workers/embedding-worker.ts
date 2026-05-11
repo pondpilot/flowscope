@@ -39,18 +39,23 @@ async function getEmbeddingPipeline() {
 
   if (!pipelinePromise) {
     pipelinePromise = (async () => {
-      const { pipeline: createPipeline, env } = await import('@xenova/transformers');
-      // Models are fetched from a CDN (set below) so Vite never intercepts
-      // them. Browser cache is enabled to avoid re-downloading the ~25 MB
-      // model on every reload.
-      env.allowLocalModels = false;
-      env.allowRemoteModels = true;
-      env.useBrowserCache = true;
-      env.backends.onnx.wasm.wasmPaths =
-        'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/';
-      const p = await createPipeline('feature-extraction', EMBEDDING_MODEL);
-      cachedPipeline = p;
-      return p;
+      try {
+        const { pipeline: createPipeline, env } = await import('@xenova/transformers');
+        // Models are fetched from a CDN (set below) so Vite never intercepts
+        // them. Browser cache is enabled to avoid re-downloading the ~25 MB
+        // model on every reload.
+        env.allowLocalModels = false;
+        env.allowRemoteModels = true;
+        env.useBrowserCache = true;
+        env.backends.onnx.wasm.wasmPaths =
+          'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/';
+        const p = await createPipeline('feature-extraction', EMBEDDING_MODEL);
+        cachedPipeline = p;
+        return p;
+      } catch (error) {
+        pipelinePromise = null;
+        throw error;
+      }
     })();
   }
 

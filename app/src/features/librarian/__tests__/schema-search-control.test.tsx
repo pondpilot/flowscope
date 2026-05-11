@@ -108,4 +108,63 @@ describe('SchemaSearchControl', () => {
     expect(screen.getByTestId('schema-search-toggle')).toBeInTheDocument();
     expect(onSelectTable).toHaveBeenLastCalledWith(undefined);
   });
+
+  it('does not re-clear selection on parent re-render after collapse', () => {
+    // Regression: hasInteractedRef leaked across search sessions. After the
+    // user typed once and then closed the control, a subsequent parent
+    // re-render would fire the selection effect with empty matches and an
+    // already-true ref, calling onSelectTable(undefined) again — which would
+    // clobber any selection set externally between collapse and re-render.
+    const onSelectTable = vi.fn();
+    const { rerender } = render(
+      <SchemaSearchControl tableNames={['MARA', 'BKPF']} onSelectTable={onSelectTable} />
+    );
+    fireEvent.click(screen.getByTestId('schema-search-toggle'));
+    fireEvent.change(screen.getByTestId('schema-search-input'), { target: { value: 'MA' } });
+    fireEvent.click(screen.getByTestId('schema-search-close'));
+
+    expect(onSelectTable).toHaveBeenLastCalledWith(undefined);
+    const callsAfterCollapse = onSelectTable.mock.calls.length;
+
+    rerender(
+      <SchemaSearchControl tableNames={['MARA', 'BKPF', 'NEW']} onSelectTable={onSelectTable} />
+    );
+
+    expect(onSelectTable.mock.calls.length).toBe(callsAfterCollapse);
+  });
+
+  it('clamps the active match when the match list shrinks', () => {
+    const onSelectTable = vi.fn();
+    const { rerender } = render(
+      <SchemaSearchControl tableNames={['MARA', 'MANDT', 'MATDOC']} onSelectTable={onSelectTable} />
+    );
+    fireEvent.click(screen.getByTestId('schema-search-toggle'));
+    const input = screen.getByTestId('schema-search-input');
+
+    fireEvent.change(input, { target: { value: 'ma' } });
+    fireEvent.click(screen.getByTestId('schema-search-next'));
+    fireEvent.click(screen.getByTestId('schema-search-next'));
+    expect(screen.getByText('3/3')).toBeInTheDocument();
+
+    rerender(<SchemaSearchControl tableNames={['MARA']} onSelectTable={onSelectTable} />);
+
+    expect(screen.getByText('1/1')).toBeInTheDocument();
+    expect(onSelectTable).toHaveBeenLastCalledWith('MARA');
+  });
+
+  it('does not reselect the same match when parent props get new array identities', () => {
+    const onSelectTable = vi.fn();
+    const { rerender } = render(
+      <SchemaSearchControl tableNames={['MARA', 'BKPF']} onSelectTable={onSelectTable} />
+    );
+    fireEvent.click(screen.getByTestId('schema-search-toggle'));
+    fireEvent.change(screen.getByTestId('schema-search-input'), { target: { value: 'MA' } });
+
+    expect(onSelectTable).toHaveBeenCalledTimes(1);
+    expect(onSelectTable).toHaveBeenLastCalledWith('MARA');
+
+    rerender(<SchemaSearchControl tableNames={['MARA', 'BKPF']} onSelectTable={onSelectTable} />);
+
+    expect(onSelectTable).toHaveBeenCalledTimes(1);
+  });
 });

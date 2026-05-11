@@ -55,11 +55,14 @@ export function SchemaSearchControl({
   const [value, setValue] = useState('');
   const [matchIndex, setMatchIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const hasInteractedRef = useRef(false);
 
   const matches = useMemo(
     () => findAllMatches(tableNames, value.trim(), tables),
     [tableNames, tables, value]
   );
+  const activeMatch =
+    matches.length > 0 ? matches[Math.min(matchIndex, matches.length - 1)] : undefined;
 
   useEffect(() => {
     if (expanded) {
@@ -67,22 +70,32 @@ export function SchemaSearchControl({
     }
   }, [expanded]);
 
-  // Update selection when matches or index change
   useEffect(() => {
-    if (matches.length > 0) {
-      onSelectTable(matches[matchIndex]);
-    } else {
+    if (matches.length > 0 && matchIndex >= matches.length) {
+      setMatchIndex(0);
+    }
+  }, [matches.length, matchIndex]);
+
+  // Update selection when an active search has matches. Do not clear an
+  // existing schema selection just because the control mounted with an empty
+  // query; only clear after the user has interacted with the search field.
+  // `hasInteractedRef` is scoped to a single search session — it is reset
+  // when the control collapses, so a fresh open behaves like a fresh mount
+  // and a parent re-render of the collapsed control does not clobber an
+  // externally-set selection.
+  useEffect(() => {
+    if (activeMatch !== undefined) {
+      onSelectTable(activeMatch);
+    } else if (hasInteractedRef.current) {
       onSelectTable(undefined);
     }
-  }, [matches, matchIndex, onSelectTable]);
+  }, [activeMatch, matches.length, onSelectTable, value]);
 
-  const handleChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      setValue(e.target.value);
-      setMatchIndex(0);
-    },
-    []
-  );
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    hasInteractedRef.current = true;
+    setValue(e.target.value);
+    setMatchIndex(0);
+  }, []);
 
   const goNext = useCallback(() => {
     if (matches.length > 0) {
@@ -97,6 +110,7 @@ export function SchemaSearchControl({
   }, [matches.length]);
 
   const collapse = useCallback(() => {
+    hasInteractedRef.current = false;
     setExpanded(false);
     setValue('');
     setMatchIndex(0);
@@ -105,6 +119,7 @@ export function SchemaSearchControl({
 
   const handleBlur = useCallback(() => {
     if (!value) {
+      hasInteractedRef.current = false;
       setExpanded(false);
     }
   }, [value]);

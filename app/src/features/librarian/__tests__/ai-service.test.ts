@@ -257,7 +257,7 @@ describe('ai-service', () => {
       expect(mockFetch.mock.calls[0][1].signal).toBe(controller.signal);
     });
 
-    it('returns empty string when OpenAI response has no content', async () => {
+    it('throws when OpenAI response has no content', async () => {
       vi.stubGlobal(
         'fetch',
         vi.fn().mockResolvedValue({
@@ -266,11 +266,12 @@ describe('ai-service', () => {
         })
       );
 
-      const result = await sendChatMessage(openaiConfig, 'sys', 'msg');
-      expect(result).toBe('');
+      await expect(sendChatMessage(openaiConfig, 'sys', 'msg')).rejects.toThrow(
+        'OpenAI API returned no text content.'
+      );
     });
 
-    it('returns empty string when Anthropic response has no text block', async () => {
+    it('throws when Anthropic response has no text block', async () => {
       vi.stubGlobal(
         'fetch',
         vi.fn().mockResolvedValue({
@@ -279,8 +280,9 @@ describe('ai-service', () => {
         })
       );
 
-      const result = await sendChatMessage(anthropicConfig, 'sys', 'msg');
-      expect(result).toBe('');
+      await expect(sendChatMessage(anthropicConfig, 'sys', 'msg')).rejects.toThrow(
+        'Anthropic API returned no text content.'
+      );
     });
 
     it('routes custom provider to OpenAI format with custom endpoint URL', async () => {
