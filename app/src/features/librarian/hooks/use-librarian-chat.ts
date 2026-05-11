@@ -5,7 +5,7 @@ import { useProject } from '@/lib/project-store';
 
 import { CHAT_HISTORY_LIMIT, VECTOR_SEARCH_TOP_K } from '../constants';
 import { loadAIConfig, sendChatMessage } from '../services/ai-service';
-import { buildContext, buildPrompt } from '../services/context-builder';
+import { buildContext, buildPrompt, getPromptStats } from '../services/context-builder';
 import { embedTexts } from '../services/embedding-service';
 import { formatLineage } from '../services/lineage-formatter';
 import { searchChunks } from '../services/vector-search';
@@ -27,7 +27,8 @@ export function useLibrarianChat() {
         return;
       }
 
-      const { activeProjectId, addMessageToProject } = useLibrarianStore.getState();
+      const { activeProjectId, addMessageToProject, setPromptStatsForProject } =
+        useLibrarianStore.getState();
       if (!activeProjectId) {
         // The chat input UI shows the "Open or create a project" hint
         // (via the `noActiveProject` prop), so we just bail. We can't
@@ -92,7 +93,8 @@ export function useLibrarianChat() {
           chatHistory: recentHistory,
           sqlSnippet,
         });
-        const prompt = buildPrompt(context);
+        const prompt = buildPrompt(context, { systemPrompt: config.systemPrompt });
+        setPromptStatsForProject(projectId, getPromptStats(prompt));
 
         // Send to AI
         const response = await sendChatMessage(config, prompt, userMessage, controller.signal);

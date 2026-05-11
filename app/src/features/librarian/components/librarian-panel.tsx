@@ -9,13 +9,18 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useLibrarianChat } from '../hooks/use-librarian-chat';
 import { processPdf } from '../services/pdf-processor';
 import { embedTexts } from '../services/embedding-service';
-import { useLibrarianMessages, useLibrarianStore } from '../store';
+import { useLibrarianMessages, useLibrarianPromptStats, useLibrarianStore } from '../store';
 import { buildSchemaIdentifiers, type ChatReference } from '../utils/schema-identifiers';
 
 import { AISettingsDialog } from './ai-settings-dialog';
 import { ChatInput } from './chat-input';
 import { ChatMessages } from './chat-messages';
 import { PdfUpload } from './pdf-upload';
+
+function formatPromptBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes.toLocaleString()} B`;
+  return `${(bytes / 1024).toFixed(1)} KB`;
+}
 
 interface LibrarianPanelProps {
   onClose: () => void;
@@ -32,6 +37,7 @@ export function LibrarianPanel({ onClose, onNavigateToReferences }: LibrarianPan
   const [docsExpanded, setDocsExpanded] = useState(false);
 
   const messages = useLibrarianMessages();
+  const promptStats = useLibrarianPromptStats();
   const isLoading = useLibrarianStore((s) => s.isLoading);
   const activeProjectId = useLibrarianStore((s) => s.activeProjectId);
 
@@ -169,6 +175,16 @@ export function LibrarianPanel({ onClose, onNavigateToReferences }: LibrarianPan
           </div>
         )}
       </div>
+
+      {promptStats && (
+        <div
+          className="border-t px-3 py-1.5 text-xs text-muted-foreground"
+          data-testid="last-prompt-size"
+        >
+          Last prompt: {promptStats.characters.toLocaleString()} chars /{' '}
+          {formatPromptBytes(promptStats.bytes)}
+        </div>
+      )}
 
       {/* Chat input */}
       <ChatInput onSend={sendMessage} disabled={isLoading} noActiveProject={!activeProjectId} />

@@ -19,6 +19,7 @@ vi.mock('../services/lineage-formatter', () => ({
 vi.mock('../services/context-builder', () => ({
   buildContext: vi.fn(),
   buildPrompt: vi.fn(),
+  getPromptStats: vi.fn(),
 }));
 
 vi.mock('../services/embedding-service', () => ({
@@ -56,7 +57,7 @@ vi.mock('@/lib/project-store', () => ({
 // Import mocked modules after vi.mock
 import { loadAIConfig, sendChatMessage } from '../services/ai-service';
 import { formatLineage } from '../services/lineage-formatter';
-import { buildContext, buildPrompt } from '../services/context-builder';
+import { buildContext, buildPrompt, getPromptStats } from '../services/context-builder';
 import { embedTexts } from '../services/embedding-service';
 import { searchChunks } from '../services/vector-search';
 import { useLibrarianChat } from '../hooks/use-librarian-chat';
@@ -67,6 +68,7 @@ const mockedSendChatMessage = vi.mocked(sendChatMessage);
 const mockedFormatLineage = vi.mocked(formatLineage);
 const mockedBuildContext = vi.mocked(buildContext);
 const mockedBuildPrompt = vi.mocked(buildPrompt);
+const mockedGetPromptStats = vi.mocked(getPromptStats);
 const mockedEmbedTexts = vi.mocked(embedTexts);
 const mockedSearchChunks = vi.mocked(searchChunks);
 
@@ -98,6 +100,7 @@ beforeEach(() => {
     sqlSnippet: '',
   });
   mockedBuildPrompt.mockReturnValue('system prompt');
+  mockedGetPromptStats.mockReturnValue({ characters: 13, bytes: 13 });
   mockedEmbedTexts.mockResolvedValue([[0.1, 0.2, 0.3]]);
   mockedSearchChunks.mockReturnValue([]);
 });
@@ -173,6 +176,38 @@ describe('useLibrarianChat', () => {
       'my question',
       expect.any(AbortSignal)
     );
+  });
+
+  it('passes configured prompt override to the prompt builder', async () => {
+    mockedLoadAIConfig.mockReturnValue({
+      provider: 'openai',
+      apiKey: 'sk-test',
+      model: 'gpt-4o',
+      systemPrompt: 'Custom prompt',
+    });
+    const { result } = renderHook(() => useLibrarianChat());
+
+    await act(async () => {
+      await result.current.sendMessage('my question');
+    });
+
+    expect(mockedBuildPrompt).toHaveBeenCalledWith(expect.any(Object), {
+      systemPrompt: 'Custom prompt',
+    });
+  });
+
+  it('stores the final prompt size for the originating project', async () => {
+    const { result } = renderHook(() => useLibrarianChat());
+
+    await act(async () => {
+      await result.current.sendMessage('my question');
+    });
+
+    expect(mockedGetPromptStats).toHaveBeenCalledWith('system prompt');
+    expect(useLibrarianStore.getState().byProject['proj-1'].lastPromptStats).toEqual({
+      characters: 13,
+      bytes: 13,
+    });
   });
 
   it('sets loading state during request', async () => {

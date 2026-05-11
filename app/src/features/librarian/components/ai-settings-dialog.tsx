@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -27,6 +27,7 @@ import {
   saveAIConfig,
   sendChatMessage,
 } from '../services/ai-service';
+import { DEFAULT_LIBRARIAN_SYSTEM_PROMPT, getPromptStats } from '../services/context-builder';
 import { useLibrarianStore } from '../store';
 
 interface AISettingsDialogProps {
@@ -39,6 +40,7 @@ export function AISettingsDialog({ open, onOpenChange }: AISettingsDialogProps) 
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState('');
   const [apiEndpoint, setApiEndpoint] = useState('');
+  const [systemPrompt, setSystemPrompt] = useState(DEFAULT_LIBRARIAN_SYSTEM_PROMPT);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
 
@@ -50,11 +52,13 @@ export function AISettingsDialog({ open, onOpenChange }: AISettingsDialogProps) 
         setApiKey(config.apiKey);
         setModel(config.model);
         setApiEndpoint(config.apiEndpoint ?? '');
+        setSystemPrompt(config.systemPrompt ?? DEFAULT_LIBRARIAN_SYSTEM_PROMPT);
       } else {
         setProvider('openai');
         setApiKey('');
         setModel(getDefaultModel('openai'));
         setApiEndpoint('');
+        setSystemPrompt(DEFAULT_LIBRARIAN_SYSTEM_PROMPT);
       }
       setTestResult(null);
     }
@@ -79,11 +83,12 @@ export function AISettingsDialog({ open, onOpenChange }: AISettingsDialogProps) 
       apiKey,
       model: provider === 'custom' ? model : model || getDefaultModel(provider),
       ...(provider === 'custom' && apiEndpoint ? { apiEndpoint } : {}),
+      systemPrompt,
     };
     saveAIConfig(config);
     refreshConfig();
     onOpenChange(false);
-  }, [provider, apiKey, model, apiEndpoint, onOpenChange, refreshConfig]);
+  }, [provider, apiKey, model, apiEndpoint, systemPrompt, onOpenChange, refreshConfig]);
 
   const handleTestConnection = useCallback(async () => {
     setTesting(true);
@@ -107,13 +112,15 @@ export function AISettingsDialog({ open, onOpenChange }: AISettingsDialogProps) 
     }
   }, [provider, apiKey, model, apiEndpoint]);
 
+  const promptStats = useMemo(() => getPromptStats(systemPrompt), [systemPrompt]);
+
   const canSave =
     apiKey.trim().length > 0 &&
     (provider !== 'custom' || (apiEndpoint.trim().length > 0 && model.trim().length > 0));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>AI Settings</DialogTitle>
           <DialogDescription>Configure your AI provider for the Librarian.</DialogDescription>
@@ -171,6 +178,33 @@ export function AISettingsDialog({ open, onOpenChange }: AISettingsDialogProps) 
               onChange={(e) => setModel(e.target.value)}
               placeholder={provider === 'custom' ? 'model-name' : getDefaultModel(provider)}
             />
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <Label htmlFor="ai-system-prompt">System Prompt</Label>
+              <span className="shrink-0 text-xs text-muted-foreground" data-testid="prompt-size">
+                {promptStats.characters.toLocaleString()} chars /{' '}
+                {promptStats.bytes.toLocaleString()} bytes
+              </span>
+            </div>
+            <textarea
+              id="ai-system-prompt"
+              className="min-h-[220px] w-full resize-y rounded-md border border-input bg-background px-3 py-2 font-mono text-xs leading-relaxed ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              value={systemPrompt}
+              onChange={(e) => setSystemPrompt(e.target.value)}
+              data-testid="system-prompt-textarea"
+            />
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setSystemPrompt(DEFAULT_LIBRARIAN_SYSTEM_PROMPT)}
+              >
+                Reset to default
+              </Button>
+            </div>
           </div>
 
           {testResult && (

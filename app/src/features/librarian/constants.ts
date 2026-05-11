@@ -19,3 +19,4 @@ export const STORAGE_KEY_AI_PROVIDER = 'librarian-ai-provider';
 export const STORAGE_KEY_AI_API_KEY = 'librarian-ai-api-key';
 export const STORAGE_KEY_AI_MODEL = 'librarian-ai-model';
 export const STORAGE_KEY_AI_ENDPOINT = 'librarian-ai-endpoint';
+export const STORAGE_KEY_AI_SYSTEM_PROMPT = 'librarian-ai-system-prompt';

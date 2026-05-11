@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 import { loadAIConfig } from './services/ai-service';
-import type { ChatMessage, ChatRole, PdfChunk, PdfFile, PdfFileStatus } from './types';
+import type { ChatMessage, ChatRole, PdfChunk, PdfFile, PdfFileStatus, PromptStats } from './types';
 
 // ============================================================================
 // Types
@@ -11,6 +11,7 @@ export interface ProjectLibrarianState {
   messages: ChatMessage[];
   pdfFiles: PdfFile[];
   pdfChunks: PdfChunk[];
+  lastPromptStats?: PromptStats;
 }
 
 interface LibrarianState {
@@ -25,6 +26,7 @@ interface LibrarianState {
   messages: ChatMessage[];
   pdfFiles: PdfFile[];
   pdfChunks: PdfChunk[];
+  lastPromptStats: PromptStats | null;
 
   setActiveProjectId: (id: string | null) => void;
   addMessage: (role: ChatRole, content: string) => void;
@@ -44,6 +46,8 @@ interface LibrarianState {
     error?: string
   ) => void;
   hasPdfFile: (fileName: string) => boolean;
+  setPromptStats: (stats: PromptStats) => void;
+  setPromptStatsForProject: (projectId: string, stats: PromptStats) => void;
   pruneProjectBuckets: (validIds: ReadonlySet<string>) => void;
   refreshConfig: () => void;
 }
@@ -80,6 +84,7 @@ export const useLibrarianStore = create<LibrarianState>()((set, get) => ({
   messages: EMPTY_MESSAGES,
   pdfFiles: EMPTY_PDF_FILES,
   pdfChunks: EMPTY_PDF_CHUNKS,
+  lastPromptStats: null,
 
   setActiveProjectId: (id) => {
     const state = get();
@@ -89,6 +94,7 @@ export const useLibrarianStore = create<LibrarianState>()((set, get) => ({
       messages: bucket?.messages ?? EMPTY_MESSAGES,
       pdfFiles: bucket?.pdfFiles ?? EMPTY_PDF_FILES,
       pdfChunks: bucket?.pdfChunks ?? EMPTY_PDF_CHUNKS,
+      lastPromptStats: bucket?.lastPromptStats ?? null,
     });
   },
 
@@ -254,6 +260,27 @@ export const useLibrarianStore = create<LibrarianState>()((set, get) => ({
     return bucket.pdfFiles.some((f) => f.name.toLowerCase() === target);
   },
 
+  setPromptStats: (stats) => {
+    const { activeProjectId } = get();
+    if (!activeProjectId) return;
+    get().setPromptStatsForProject(activeProjectId, stats);
+  },
+
+  setPromptStatsForProject: (projectId, stats) => {
+    set((state) => {
+      if (!state.byProject[projectId] && state.activeProjectId !== projectId) {
+        return state;
+      }
+      const prev = getBucket(state.byProject, projectId);
+      const next: ProjectLibrarianState = { ...prev, lastPromptStats: stats };
+      const isActive = state.activeProjectId === projectId;
+      return {
+        byProject: { ...state.byProject, [projectId]: next },
+        ...(isActive ? { lastPromptStats: stats } : {}),
+      };
+    });
+  },
+
   // Drop buckets whose project id is no longer present. Called by
   // `useSyncActiveProject` when the project list changes — without this,
   // chat history and embedded PDF chunks for deleted projects accumulate
@@ -299,4 +326,11 @@ export const useLibrarianPdfChunks = (): PdfChunk[] =>
     const id = s.activeProjectId;
     if (!id) return EMPTY_PDF_CHUNKS;
     return s.byProject[id]?.pdfChunks ?? EMPTY_PDF_CHUNKS;
+  });
+
+export const useLibrarianPromptStats = (): PromptStats | null =>
+  useLibrarianStore((s) => {
+    const id = s.activeProjectId;
+    if (!id) return null;
+    return s.byProject[id]?.lastPromptStats ?? null;
   });

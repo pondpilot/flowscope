@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ChatMessage } from '../types';
-import { buildContext, buildPrompt } from '../services/context-builder';
+import {
+  DEFAULT_LIBRARIAN_SYSTEM_PROMPT,
+  buildContext,
+  buildPrompt,
+  getPromptStats,
+} from '../services/context-builder';
 
 function makeMessage(role: 'user' | 'assistant', content: string): ChatMessage {
   return { id: `msg-${Date.now()}`, role, content, timestamp: Date.now() };
@@ -75,6 +80,34 @@ describe('buildPrompt', () => {
       chatHistory: '',
       sqlSnippet: '',
     });
+    expect(prompt).toContain('expert on SQL lineage and data flow');
+  });
+
+  it('uses a custom system prompt when provided', () => {
+    const prompt = buildPrompt(
+      {
+        lineage: 'lineage data',
+        pdfCitations: '',
+        chatHistory: '',
+        sqlSnippet: '',
+      },
+      { systemPrompt: 'Custom instructions' }
+    );
+    expect(prompt).toContain('Custom instructions');
+    expect(prompt).not.toContain(DEFAULT_LIBRARIAN_SYSTEM_PROMPT);
+    expect(prompt).toContain('lineage data');
+  });
+
+  it('falls back to the default prompt when the custom prompt is blank', () => {
+    const prompt = buildPrompt(
+      {
+        lineage: '',
+        pdfCitations: '',
+        chatHistory: '',
+        sqlSnippet: '',
+      },
+      { systemPrompt: '   ' }
+    );
     expect(prompt).toContain('expert on SQL lineage and data flow');
   });
 
@@ -199,5 +232,12 @@ describe('buildPrompt', () => {
       sqlSnippet: '',
     });
     expect(prompt).toContain('Write table and column names as inline code');
+  });
+});
+
+describe('getPromptStats', () => {
+  it('returns character and byte counts', () => {
+    expect(getPromptStats('abc')).toEqual({ characters: 3, bytes: 3 });
+    expect(getPromptStats('é')).toEqual({ characters: 1, bytes: 2 });
   });
 });

@@ -101,6 +101,25 @@ describe('LibrarianPanel', () => {
     expect(screen.getByTestId('chat-textarea')).toBeInTheDocument();
   });
 
+  it('renders the last prompt size when available', () => {
+    useLibrarianStore.setState({
+      byProject: {
+        'proj-1': {
+          messages: [],
+          pdfFiles: [],
+          pdfChunks: [],
+          lastPromptStats: { characters: 12430, bytes: 13100 },
+        },
+      },
+      activeProjectId: 'proj-1',
+    });
+
+    render(<LibrarianPanel onClose={vi.fn()} />);
+    expect(screen.getByTestId('last-prompt-size')).toHaveTextContent(
+      'Last prompt: 12,430 chars / 12.8 KB'
+    );
+  });
+
   it('renders documentation toggle', () => {
     render(<LibrarianPanel onClose={vi.fn()} />);
     expect(screen.getByTestId('docs-toggle')).toBeInTheDocument();

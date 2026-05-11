@@ -5,7 +5,9 @@ import {
   STORAGE_KEY_AI_ENDPOINT,
   STORAGE_KEY_AI_MODEL,
   STORAGE_KEY_AI_PROVIDER,
+  STORAGE_KEY_AI_SYSTEM_PROMPT,
 } from '../constants';
+import { DEFAULT_LIBRARIAN_SYSTEM_PROMPT } from '../services/context-builder';
 import {
   type AIConfig,
   getDefaultModel,
@@ -73,6 +75,19 @@ describe('ai-service', () => {
       });
     });
 
+    it('loads config with stored system prompt override', () => {
+      localStorage.setItem(STORAGE_KEY_AI_PROVIDER, 'openai');
+      localStorage.setItem(STORAGE_KEY_AI_API_KEY, 'sk-test');
+      localStorage.setItem(STORAGE_KEY_AI_SYSTEM_PROMPT, 'Custom prompt');
+
+      expect(loadAIConfig()).toEqual({
+        provider: 'openai',
+        apiKey: 'sk-test',
+        model: 'gpt-4o',
+        systemPrompt: 'Custom prompt',
+      });
+    });
+
     it('returns null if localStorage throws', () => {
       vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
         throw new Error('localStorage disabled');
@@ -134,6 +149,71 @@ describe('ai-service', () => {
       });
 
       expect(localStorage.getItem(STORAGE_KEY_AI_ENDPOINT)).toBeNull();
+    });
+
+    it('saves a custom system prompt override', () => {
+      saveAIConfig({
+        provider: 'openai',
+        apiKey: 'sk-123',
+        model: 'gpt-4o',
+        systemPrompt: 'Custom prompt',
+      });
+
+      expect(localStorage.getItem(STORAGE_KEY_AI_SYSTEM_PROMPT)).toBe('Custom prompt');
+      expect(loadAIConfig()?.systemPrompt).toBe('Custom prompt');
+    });
+
+    it('removes system prompt override when saving the default prompt', () => {
+      localStorage.setItem(STORAGE_KEY_AI_SYSTEM_PROMPT, 'Old prompt');
+
+      saveAIConfig({
+        provider: 'openai',
+        apiKey: 'sk-123',
+        model: 'gpt-4o',
+        systemPrompt: DEFAULT_LIBRARIAN_SYSTEM_PROMPT,
+      });
+
+      expect(localStorage.getItem(STORAGE_KEY_AI_SYSTEM_PROMPT)).toBeNull();
+    });
+
+    it('preserves trailing whitespace in the persisted system prompt', () => {
+      const promptWithWhitespace = 'Custom prompt\n\n';
+
+      saveAIConfig({
+        provider: 'openai',
+        apiKey: 'sk-123',
+        model: 'gpt-4o',
+        systemPrompt: promptWithWhitespace,
+      });
+
+      expect(localStorage.getItem(STORAGE_KEY_AI_SYSTEM_PROMPT)).toBe(promptWithWhitespace);
+      expect(loadAIConfig()?.systemPrompt).toBe(promptWithWhitespace);
+    });
+
+    it('treats a whitespace-only system prompt as no override', () => {
+      localStorage.setItem(STORAGE_KEY_AI_SYSTEM_PROMPT, 'Old prompt');
+
+      saveAIConfig({
+        provider: 'openai',
+        apiKey: 'sk-123',
+        model: 'gpt-4o',
+        systemPrompt: '   \n\t',
+      });
+
+      expect(localStorage.getItem(STORAGE_KEY_AI_SYSTEM_PROMPT)).toBeNull();
+    });
+
+    it('does not persist the default prompt as an override when padded with whitespace', () => {
+      localStorage.setItem(STORAGE_KEY_AI_SYSTEM_PROMPT, 'Old prompt');
+
+      saveAIConfig({
+        provider: 'openai',
+        apiKey: 'sk-123',
+        model: 'gpt-4o',
+        systemPrompt: `  ${DEFAULT_LIBRARIAN_SYSTEM_PROMPT}\n`,
+      });
+
+      expect(localStorage.getItem(STORAGE_KEY_AI_SYSTEM_PROMPT)).toBeNull();
     });
   });
 

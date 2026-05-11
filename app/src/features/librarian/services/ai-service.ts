@@ -3,7 +3,9 @@ import {
   STORAGE_KEY_AI_ENDPOINT,
   STORAGE_KEY_AI_MODEL,
   STORAGE_KEY_AI_PROVIDER,
+  STORAGE_KEY_AI_SYSTEM_PROMPT,
 } from '../constants';
+import { DEFAULT_LIBRARIAN_SYSTEM_PROMPT } from './context-builder';
 
 export type AIProvider = 'openai' | 'anthropic' | 'custom';
 
@@ -12,6 +14,7 @@ export interface AIConfig {
   apiKey: string;
   model: string;
   apiEndpoint?: string;
+  systemPrompt?: string;
 }
 
 const DEFAULT_MODELS: Record<AIProvider, string> = {
@@ -36,8 +39,15 @@ export function loadAIConfig(): AIConfig | null {
 
     const model = localStorage.getItem(STORAGE_KEY_AI_MODEL) || getDefaultModel(provider);
     const apiEndpoint = localStorage.getItem(STORAGE_KEY_AI_ENDPOINT) || undefined;
+    const systemPrompt = localStorage.getItem(STORAGE_KEY_AI_SYSTEM_PROMPT) || undefined;
 
-    return { provider, apiKey, model, ...(apiEndpoint ? { apiEndpoint } : {}) };
+    return {
+      provider,
+      apiKey,
+      model,
+      ...(apiEndpoint ? { apiEndpoint } : {}),
+      ...(systemPrompt ? { systemPrompt } : {}),
+    };
   } catch {
     return null;
   }
@@ -51,6 +61,13 @@ export function saveAIConfig(config: AIConfig): void {
     localStorage.setItem(STORAGE_KEY_AI_ENDPOINT, config.apiEndpoint);
   } else {
     localStorage.removeItem(STORAGE_KEY_AI_ENDPOINT);
+  }
+  const raw = config.systemPrompt ?? '';
+  const normalized = raw.trim();
+  if (normalized && normalized !== DEFAULT_LIBRARIAN_SYSTEM_PROMPT.trim()) {
+    localStorage.setItem(STORAGE_KEY_AI_SYSTEM_PROMPT, raw);
+  } else {
+    localStorage.removeItem(STORAGE_KEY_AI_SYSTEM_PROMPT);
   }
 }
 

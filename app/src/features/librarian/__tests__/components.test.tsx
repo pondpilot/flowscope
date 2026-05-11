@@ -25,6 +25,7 @@ import {
   saveAIConfig,
   sendChatMessage,
 } from '../services/ai-service';
+import { DEFAULT_LIBRARIAN_SYSTEM_PROMPT } from '../services/context-builder';
 
 // ---------- Helpers ----------
 
@@ -122,6 +123,13 @@ describe('AISettingsDialog', () => {
     expect(screen.getByLabelText('Model')).toBeInTheDocument();
   });
 
+  it('shows editable system prompt with size', () => {
+    render(<AISettingsDialog open={true} onOpenChange={vi.fn()} />);
+    const promptInput = screen.getByTestId('system-prompt-textarea') as HTMLTextAreaElement;
+    expect(promptInput.value).toContain('expert on SQL lineage and data flow');
+    expect(screen.getByTestId('prompt-size')).toHaveTextContent(/chars/);
+  });
+
   it('loads existing config on open', () => {
     render(<AISettingsDialog open={true} onOpenChange={vi.fn()} />);
     const apiKeyInput = screen.getByLabelText('API Key') as HTMLInputElement;
@@ -132,6 +140,25 @@ describe('AISettingsDialog', () => {
     render(<AISettingsDialog open={true} onOpenChange={vi.fn()} />);
     fireEvent.click(screen.getByText('Save'));
     expect(saveAIConfig).toHaveBeenCalled();
+  });
+
+  it('saves a custom system prompt override', () => {
+    render(<AISettingsDialog open={true} onOpenChange={vi.fn()} />);
+    fireEvent.change(screen.getByTestId('system-prompt-textarea'), {
+      target: { value: 'Custom Librarian instructions' },
+    });
+    fireEvent.click(screen.getByText('Save'));
+    expect(saveAIConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ systemPrompt: 'Custom Librarian instructions' })
+    );
+  });
+
+  it('resets the system prompt to the default', () => {
+    render(<AISettingsDialog open={true} onOpenChange={vi.fn()} />);
+    const promptInput = screen.getByTestId('system-prompt-textarea') as HTMLTextAreaElement;
+    fireEvent.change(promptInput, { target: { value: 'Custom Librarian instructions' } });
+    fireEvent.click(screen.getByText('Reset to default'));
+    expect(promptInput.value).toBe(DEFAULT_LIBRARIAN_SYSTEM_PROMPT);
   });
 
   it('calls refreshConfig after save to update store', () => {

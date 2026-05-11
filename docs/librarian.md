@@ -21,7 +21,8 @@ Before sending your first question, configure an AI provider:
 3. Paste your **API key**
 4. Enter the **model** name (e.g. `gpt-4o`, `claude-sonnet-4-6`, or your custom model ID)
 5. For **Custom**, also enter the **endpoint URL**
-6. Click **Save**
+6. Optionally edit the **System Prompt**. The default prompt is prefilled and can be restored with **Reset to default**.
+7. Click **Save**
 
 Your API key is stored in the browser's `localStorage` and is only ever sent to the provider you configured. It never reaches FlowScope's servers.
 
@@ -43,7 +44,7 @@ The answer has three sections:
 
 If the question is unrelated to your data, Librarian replies:
 
-> *"I can only answer questions related to your data."*
+> _"I can only answer questions related to your data."_
 
 Identifiers like `BKPF`, `MANDT` are visually highlighted in the response so they're easy to scan.
 
@@ -88,16 +89,17 @@ To remove a document, click the trash icon next to its name. Both the file entry
 
 - The full chat history is shown in the panel
 - Only the **last 10 messages** are sent to the AI as context (to keep prompts small)
+- After each request, the panel shows the last prompt's raw character and byte size above the chat input
 - History is **not** persisted across reloads — a page refresh starts a fresh conversation
 - Chat and uploaded PDFs are **scoped to the active project** — switching projects shows that project's own conversation and documents, and questions only see the active project's PDFs and chat history. State stays in memory only, so a reload clears every project's Librarian state.
 
 ## Keyboard Shortcuts
 
-| Shortcut | Action |
-|----------|--------|
+| Shortcut        | Action                 |
+| --------------- | ---------------------- |
 | `⌘L` / `Ctrl+L` | Toggle Librarian panel |
-| `Enter` | Send message |
-| `Shift+Enter` | Newline in input |
+| `Enter`         | Send message           |
+| `Shift+Enter`   | Newline in input       |
 
 ## Help Icon
 

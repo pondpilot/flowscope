@@ -33,3 +33,8 @@ export interface LibrarianContext {
   chatHistory: string;
   sqlSnippet: string;
 }
+
+export interface PromptStats {
+  characters: number;
+  bytes: number;
+}
