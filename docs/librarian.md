@@ -30,9 +30,9 @@ Your API key is stored in the browser's `localStorage` and is only ever sent to 
 Paste SQL into the editor, wait for lineage analysis to render, then type your question in the Librarian chat:
 
 > "Where is payment block stored?"
-> 
+>
 > "How are BKPF and BSEG linked?"
-> 
+>
 > "What field stores the invoice amount?"
 
 The answer has three sections:

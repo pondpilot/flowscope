@@ -177,9 +177,23 @@ export const useLibrarianStore = create<LibrarianState>()((set, get) => ({
         return state;
       }
       const prev = getBucket(state.byProject, projectId);
+      const fileIds = new Set(prev.pdfFiles.map((file) => file.id));
+      const chunksForExistingFiles = chunks.filter((chunk) => fileIds.has(chunk.fileId));
+      const dropped = chunks.length - chunksForExistingFiles.length;
+      if (dropped > 0) {
+        // Chunk owner was removed mid-embed (e.g. user deleted the PDF before
+        // embeddings finished). Surface a debug trace so this doesn't look
+        // like "embeddings sometimes vanish" if it's ever investigated.
+        console.debug(
+          `[librarian] dropped ${dropped} chunk(s) for project ${projectId}: source file(s) no longer present`
+        );
+      }
+      if (chunksForExistingFiles.length === 0) {
+        return state;
+      }
       const next: ProjectLibrarianState = {
         ...prev,
-        pdfChunks: [...prev.pdfChunks, ...chunks],
+        pdfChunks: [...prev.pdfChunks, ...chunksForExistingFiles],
       };
       const isActive = state.activeProjectId === projectId;
       return {

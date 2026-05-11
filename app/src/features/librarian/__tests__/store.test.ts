@@ -188,6 +188,7 @@ describe('useLibrarianStore', () => {
 
   describe('addPdfChunks', () => {
     it('adds chunks to the store', () => {
+      useLibrarianStore.getState().addPdfFile(makePdfFile({ id: 'file-1' }));
       useLibrarianStore
         .getState()
         .addPdfChunks([makePdfChunk({ id: 'c1' }), makePdfChunk({ id: 'c2' })]);
@@ -196,9 +197,30 @@ describe('useLibrarianStore', () => {
 
     it('appends to existing chunks', () => {
       const store = useLibrarianStore.getState();
+      store.addPdfFile(makePdfFile({ id: 'file-1' }));
       store.addPdfChunks([makePdfChunk({ id: 'c1' })]);
       store.addPdfChunks([makePdfChunk({ id: 'c2' })]);
       expect(useLibrarianStore.getState().pdfChunks).toHaveLength(2);
+    });
+
+    it('drops chunks for files that no longer exist', () => {
+      const store = useLibrarianStore.getState();
+      store.addPdfFile(makePdfFile({ id: 'f1' }));
+      store.removePdf('f1');
+      store.addPdfChunks([makePdfChunk({ id: 'c1', fileId: 'f1' })]);
+      expect(useLibrarianStore.getState().pdfChunks).toEqual([]);
+    });
+
+    it('logs a debug trace when chunks are dropped for missing files', () => {
+      const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
+      const store = useLibrarianStore.getState();
+      store.addPdfFile(makePdfFile({ id: 'f1' }));
+      store.addPdfChunks([
+        makePdfChunk({ id: 'c1', fileId: 'f1' }),
+        makePdfChunk({ id: 'c2', fileId: 'ghost' }),
+      ]);
+      expect(debugSpy).toHaveBeenCalledWith(expect.stringContaining('dropped 1 chunk(s)'));
+      debugSpy.mockRestore();
     });
   });
 

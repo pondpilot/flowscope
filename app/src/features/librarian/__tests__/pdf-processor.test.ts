@@ -9,6 +9,14 @@ vi.mock('pdfjs-dist', () => ({
   getDocument: vi.fn(),
 }));
 
+function makePdfFile(name: string): File {
+  const file = new File(['fake-pdf-content'], name, { type: 'application/pdf' });
+  Object.defineProperty(file, 'arrayBuffer', {
+    value: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+  });
+  return file;
+}
+
 describe('splitIntoChunks', () => {
   it('returns empty array for empty pages', () => {
     expect(splitIntoChunks([])).toEqual([]);
@@ -94,7 +102,7 @@ describe('processPdf', () => {
       }),
     } as unknown as ReturnType<typeof pdfjs.getDocument>);
 
-    const file = new File(['fake-pdf-content'], 'test.pdf', { type: 'application/pdf' });
+    const file = makePdfFile('test.pdf');
     const embedFn = vi.fn().mockResolvedValue([]);
 
     const result = await processPdf(file, 'file-1', embedFn);
@@ -118,7 +126,7 @@ describe('processPdf', () => {
       }),
     } as unknown as ReturnType<typeof pdfjs.getDocument>);
 
-    const file = new File(['fake-pdf'], 'doc.pdf', { type: 'application/pdf' });
+    const file = makePdfFile('doc.pdf');
     const embedFn = vi.fn().mockResolvedValue([[0.1, 0.2, 0.3]]);
 
     const result = await processPdf(file, 'f1', embedFn);
@@ -151,7 +159,7 @@ describe('processPdf', () => {
       }),
     } as unknown as ReturnType<typeof pdfjs.getDocument>);
 
-    const file = new File(['fake'], 'test.pdf', { type: 'application/pdf' });
+    const file = makePdfFile('test.pdf');
     // Return wrong number of embeddings
     const embedFn = vi.fn().mockResolvedValue([[0.1], [0.2]]);
 

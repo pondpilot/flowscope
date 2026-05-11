@@ -28,6 +28,20 @@ export const EMPTY_SCHEMA_IDENTIFIERS: SchemaIdentifiers = {
   columnOwners: new Map(),
 };
 
+function isTableLikeNode(type: string | undefined): boolean {
+  return type === 'table' || type === 'view' || type === 'cte';
+}
+
+function addColumnOwner(
+  columnOwners: Map<string, string[]>,
+  columnName: string,
+  tableName: string
+): void {
+  const owners = columnOwners.get(columnName) ?? [];
+  if (!owners.includes(tableName)) owners.push(tableName);
+  columnOwners.set(columnName, owners);
+}
+
 export function buildSchemaIdentifiers(
   result: AnalyzeResult | null | undefined
 ): SchemaIdentifiers {
@@ -41,9 +55,41 @@ export function buildSchemaIdentifiers(
     for (const col of table.columns) {
       if (!col.name) continue;
       columns.add(col.name);
-      const owners = columnOwners.get(col.name) ?? [];
-      if (!owners.includes(table.name)) owners.push(table.name);
-      columnOwners.set(col.name, owners);
+      addColumnOwner(columnOwners, col.name, table.name);
+    }
+  }
+
+  // `resolvedSchema` is the source of truth when present, even if it only
+  // contributed tables or only columns — falling through to the lineage-node
+  // fallback could then mix in stale or duplicated entries. Only fall back
+  // when the resolved schema produced nothing at all.
+  if (tables.size > 0 || columns.size > 0) {
+    return { tables, columns, columnOwners };
+  }
+
+  for (const node of result?.nodes ?? []) {
+    if (isTableLikeNode(node.type)) {
+      const tableName = node.canonicalName?.name ?? node.label;
+      if (tableName) tables.add(tableName);
+      continue;
+    }
+
+    if (node.type === 'column') {
+      // Column-node canonical names can arrive in two shapes:
+      //   1. Structured: `{ name: <table>, column: <col> }` (when a builder
+      //      emits an explicit column canonical name).
+      //   2. Parsed qualified name: `{ schema: <table>, name: <col> }` (what
+      //      the analyzer's `parse_canonical_name` produces by splitting
+      //      `table.col` on the dot — it can't distinguish tables from
+      //      columns, so the last part lands in `name`).
+      // Prefer the structured shape when `column` is set; otherwise treat
+      // `name` as the column and `schema` as the owning table.
+      const cn = node.canonicalName;
+      const columnName = cn?.column ?? cn?.name ?? node.label;
+      if (!columnName) continue;
+      columns.add(columnName);
+      const tableName = cn?.column ? cn?.name : cn?.schema;
+      if (tableName) addColumnOwner(columnOwners, columnName, tableName);
     }
   }
 

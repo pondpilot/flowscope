@@ -74,8 +74,9 @@ export function useLibrarianChat() {
                 .map((c) => `[${c.fileName} p.${c.pageNumber}]: ${c.text}`)
                 .join('\n\n');
             }
-          } catch {
-            // Embedding failed - continue without PDF context
+          } catch (err) {
+            const message = err instanceof Error ? err.message : 'Unknown embedding error';
+            throw new Error(`Failed to search uploaded PDFs: ${message}`);
           }
         }
 

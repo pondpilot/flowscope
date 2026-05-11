@@ -37,7 +37,7 @@
     "html-to-image": "^1.11.13",
     "lucide-react": "^0.562.0",
     "next-themes": "^0.4.6",
-    "pdfjs-dist": "^5.5.207",
+    "pdfjs-dist": "4.8.69",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-resizable-panels": "^3.0.6",

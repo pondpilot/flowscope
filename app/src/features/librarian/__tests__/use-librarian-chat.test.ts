@@ -313,7 +313,7 @@ describe('useLibrarianChat', () => {
       expect(mockedSearchChunks).not.toHaveBeenCalled();
     });
 
-    it('continues without PDF context if embedding fails', async () => {
+    it('reports an error if PDF embedding fails', async () => {
       useLibrarianStore.setState({
         byProject: { 'proj-1': { messages: [], pdfFiles: [], pdfChunks } },
       });
@@ -325,9 +325,10 @@ describe('useLibrarianChat', () => {
         await result.current.sendMessage('question');
       });
 
-      expect(mockedSendChatMessage).toHaveBeenCalled();
-      expect(mockedBuildContext).toHaveBeenCalledWith(
-        expect.objectContaining({ pdfCitations: '' })
+      expect(mockedSendChatMessage).not.toHaveBeenCalled();
+      expect(mockedBuildContext).not.toHaveBeenCalled();
+      expect(useLibrarianStore.getState().messages[1].content).toContain(
+        'Failed to search uploaded PDFs: embedding error'
       );
     });
 

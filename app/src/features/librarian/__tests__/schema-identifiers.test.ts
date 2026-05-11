@@ -146,11 +146,71 @@ describe('buildSchemaIdentifiers', () => {
     expect(ids.columnOwners.get('MANDT')).toEqual(['ekko']);
   });
 
-  it('handles missing resolvedSchema gracefully', () => {
+  it('handles missing resolvedSchema and nodes gracefully', () => {
     const result = {} as unknown as Parameters<typeof buildSchemaIdentifiers>[0];
     const ids = buildSchemaIdentifiers(result);
     expect(ids.tables.size).toBe(0);
     expect(ids.columns.size).toBe(0);
+  });
+
+  it('falls back to lineage nodes when resolvedSchema is absent', () => {
+    const result = {
+      nodes: [
+        {
+          id: 'table-1',
+          type: 'table',
+          label: 'orders_alias',
+          canonicalName: { schema: 'public', name: 'orders' },
+        },
+        {
+          id: 'view-1',
+          type: 'view',
+          label: 'invoice_view',
+          canonicalName: { name: 'invoice_view' },
+        },
+        {
+          id: 'column-1',
+          type: 'column',
+          label: 'order_id',
+          canonicalName: { schema: 'public', name: 'orders', column: 'ORDER_ID' },
+        },
+      ],
+    } as unknown as Parameters<typeof buildSchemaIdentifiers>[0];
+
+    const ids = buildSchemaIdentifiers(result);
+
+    expect([...ids.tables].sort()).toEqual(['invoice_view', 'orders']);
+    expect([...ids.columns]).toEqual(['ORDER_ID']);
+    expect(ids.columnOwners.get('ORDER_ID')).toEqual(['orders']);
+  });
+
+  it('maps column owners correctly for analyzer-shaped canonical names', () => {
+    // Matches what `parse_canonical_name` in flowscope-core actually emits:
+    // 2-part `orders.total_amount` becomes `{ schema: 'orders', name: 'total_amount' }`,
+    // with no `column` field. Without the schema-as-owner fallback this
+    // assertion would record `total_amount -> ['total_amount']`.
+    const result = {
+      nodes: [
+        {
+          id: 'col-1',
+          type: 'column',
+          label: 'total_amount',
+          canonicalName: { schema: 'orders', name: 'total_amount' },
+        },
+        {
+          id: 'col-2',
+          type: 'column',
+          label: 'customer_id',
+          canonicalName: { catalog: 'main', schema: 'orders', name: 'customer_id' },
+        },
+      ],
+    } as unknown as Parameters<typeof buildSchemaIdentifiers>[0];
+
+    const ids = buildSchemaIdentifiers(result);
+
+    expect([...ids.columns].sort()).toEqual(['customer_id', 'total_amount']);
+    expect(ids.columnOwners.get('total_amount')).toEqual(['orders']);
+    expect(ids.columnOwners.get('customer_id')).toEqual(['orders']);
   });
 });
 
