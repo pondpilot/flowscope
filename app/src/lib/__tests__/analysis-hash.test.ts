@@ -10,8 +10,12 @@ describe('buildFileSyncKey', () => {
     const after = buildFileSyncKey({
       files: [{ name: 'query.sql', content: 'SELECT 2' }],
     });
+    const restored = buildFileSyncKey({
+      files: [{ name: 'query.sql', content: 'SELECT 1' }],
+    });
 
     expect(after).not.toBe(before);
+    expect(restored).toBe(before);
   });
 
   it('is stable for unchanged files', () => {
