@@ -73,4 +73,4 @@ const result = await analyzeSql({
 ## Supported Dialects
 
 - `generic`, `ansi`, `bigquery`, `clickhouse`, `databricks`, `duckdb`, `hive`
-- `mssql`, `mysql`, `postgres`, `redshift`, `snowflake`, `sqlite`
+- `mssql`, `mysql`, `oracle`, `postgres`, `redshift`, `snowflake`, `sqlite`

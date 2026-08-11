@@ -1,4 +1,5 @@
 import { initWasm, isWasmInitialized } from './wasm-loader';
+import { VALID_DIALECTS } from './types';
 import type {
   AnalyzeRequest,
   AnalyzeResult,
@@ -39,23 +40,6 @@ const MAX_SCHEMA_NAME_LENGTH = 63;
  * this roughly corresponds to 10MB. The WASM layer enforces the actual 10MB byte limit.
  */
 const MAX_SQL_LENGTH = 10 * 1024 * 1024;
-
-/** Valid SQL dialects. */
-const VALID_DIALECTS: readonly Dialect[] = [
-  'generic',
-  'ansi',
-  'bigquery',
-  'clickhouse',
-  'databricks',
-  'duckdb',
-  'hive',
-  'mssql',
-  'mysql',
-  'postgres',
-  'redshift',
-  'snowflake',
-  'sqlite',
-] as const;
 
 /**
  * Validate that a dialect value is valid.

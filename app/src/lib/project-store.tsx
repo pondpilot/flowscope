@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
-import type { FileSource, SchemaMetadata } from '@pondpilot/flowscope-core';
+import { VALID_DIALECTS as CORE_VALID_DIALECTS } from '@pondpilot/flowscope-core';
+import type { Dialect as CoreDialect, FileSource, SchemaMetadata } from '@pondpilot/flowscope-core';
 import { STORAGE_KEYS, FILE_EXTENSIONS, SHARE_LIMITS, DEFAULT_FILE_LANGUAGE } from './constants';
 import type { SharePayload } from './share';
 import { parseTemplateMode } from '@/types';
@@ -32,21 +33,7 @@ function validateProjectName(name: string, existingNames: string[]): string | nu
   return trimmed;
 }
 
-export type Dialect =
-  | 'generic'
-  | 'ansi'
-  | 'bigquery'
-  | 'clickhouse'
-  | 'databricks'
-  | 'duckdb'
-  | 'hive'
-  | 'mssql'
-  | 'mysql'
-  | 'oracle'
-  | 'postgres'
-  | 'redshift'
-  | 'snowflake'
-  | 'sqlite';
+export type Dialect = CoreDialect;
 
 /** Human-readable labels for each dialect. */
 const DIALECT_LABELS: Record<Dialect, string> = {
@@ -67,22 +54,7 @@ const DIALECT_LABELS: Record<Dialect, string> = {
 };
 
 /** All valid dialect values for runtime validation. */
-export const VALID_DIALECTS: readonly Dialect[] = [
-  'generic',
-  'ansi',
-  'bigquery',
-  'clickhouse',
-  'databricks',
-  'duckdb',
-  'hive',
-  'mssql',
-  'mysql',
-  'oracle',
-  'postgres',
-  'redshift',
-  'snowflake',
-  'sqlite',
-] as const;
+export const VALID_DIALECTS: readonly Dialect[] = CORE_VALID_DIALECTS;
 
 /**
  * Dialect options for UI dropdowns, derived from VALID_DIALECTS.

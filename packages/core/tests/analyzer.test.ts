@@ -74,11 +74,23 @@ describe('analyzer', () => {
     );
   });
 
-  it('validates dialect values', async () => {
+  it('rejects invalid dialect values', async () => {
     const { analyzeSql } = await loadAnalyzer();
     await expect(analyzeSql({ sql: 'SELECT 1', dialect: 'unsupported' as never })).rejects.toThrow(
-      /Invalid dialect/
+      /Invalid dialect: unsupported/
     );
+    expect(wasmModuleMock.analyze_sql_json).not.toHaveBeenCalled();
+  });
+
+  it('accepts Oracle dialect requests', async () => {
+    const { analyzeSql } = await loadAnalyzer();
+
+    await analyzeSql({ sql: 'SELECT 1 FROM dual', dialect: 'oracle' });
+
+    const payloadJson = wasmModuleMock.analyze_sql_json.mock.calls[0]?.[0];
+    expect(payloadJson).toBeDefined();
+    const payload = JSON.parse(payloadJson as string);
+    expect(payload.dialect).toBe('oracle');
   });
 
   it('throws when wasm returns malformed JSON', async () => {

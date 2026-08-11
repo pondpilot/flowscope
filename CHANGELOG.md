@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+#### TypeScript API, Web App, and VS Code Extension
+
+- **Oracle dialect validation** — accepted `oracle` requests in the TypeScript runtime and synchronized Oracle across the app, VS Code settings, and supported-dialect documentation
+
 ## [0.8.0] - 2026-08-11
 
 ### Added

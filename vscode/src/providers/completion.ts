@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { completionItems, isWasmInitialized } from '../analysis';
+import { VALID_DIALECTS } from '../types';
 import type { CompletionItem as FlowscopeCompletionItem, Dialect } from '../types';
 
 /**
@@ -98,22 +99,6 @@ function resolveReplaceRange(
   const to = Math.max(from, clamp(token.span.end));
   return new vscode.Range(document.positionAt(from), document.positionAt(to));
 }
-
-const VALID_DIALECTS: readonly Dialect[] = [
-  'generic',
-  'ansi',
-  'bigquery',
-  'clickhouse',
-  'databricks',
-  'duckdb',
-  'hive',
-  'mssql',
-  'mysql',
-  'postgres',
-  'redshift',
-  'snowflake',
-  'sqlite',
-];
 
 function resolveDialect(config: vscode.WorkspaceConfiguration): Dialect {
   const raw = config.get<string>('dialect', 'generic');

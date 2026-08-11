@@ -15,6 +15,7 @@ FlowScope currently exposes these dialects through its public API:
 - `hive`
 - `mssql`
 - `mysql`
+- `oracle`
 - `postgres`
 - `redshift`
 - `snowflake`

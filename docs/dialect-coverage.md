@@ -15,6 +15,7 @@ These are the dialects exposed by the TypeScript API (`packages/core/src/types.t
 - `hive`
 - `mssql`
 - `mysql`
+- `oracle`
 - `postgres`
 - `redshift`
 - `snowflake`

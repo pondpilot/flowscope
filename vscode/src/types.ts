@@ -3,20 +3,24 @@
  * Copied from @pondpilot/flowscope-core for standalone VSCode extension use.
  */
 
-export type Dialect =
-  | 'generic'
-  | 'ansi'
-  | 'bigquery'
-  | 'clickhouse'
-  | 'databricks'
-  | 'duckdb'
-  | 'hive'
-  | 'mssql'
-  | 'mysql'
-  | 'postgres'
-  | 'redshift'
-  | 'snowflake'
-  | 'sqlite';
+export const VALID_DIALECTS = [
+  'generic',
+  'ansi',
+  'bigquery',
+  'clickhouse',
+  'databricks',
+  'duckdb',
+  'hive',
+  'mssql',
+  'mysql',
+  'oracle',
+  'postgres',
+  'redshift',
+  'snowflake',
+  'sqlite',
+] as const;
+
+export type Dialect = (typeof VALID_DIALECTS)[number];
 
 export interface AnalyzeRequest {
   sql: string;

@@ -83,6 +83,7 @@ export type {
 
 // Constants and utilities
 export {
+  VALID_DIALECTS,
   IssueCodes,
   isTableLikeType,
   charOffsetToByteOffset,

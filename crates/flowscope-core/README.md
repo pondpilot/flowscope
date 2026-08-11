@@ -8,7 +8,7 @@ Core SQL lineage analysis engine for FlowScope.
 
 ## Features
 
-- **Multi-Dialect Parsing:** Built on `sqlparser-rs`, supporting PostgreSQL, Snowflake, BigQuery, DuckDB, Redshift, MySQL, SQLite, Databricks, ClickHouse, and Generic ANSI SQL.
+- **Multi-Dialect Parsing:** Built on `sqlparser-rs`, supporting PostgreSQL, Snowflake, BigQuery, DuckDB, Redshift, MySQL, SQLite, Oracle, Databricks, ClickHouse, and Generic ANSI SQL.
 - **Deep Lineage Extraction:**
   - Table-level dependencies (SELECT, INSERT, UPDATE, MERGE, COPY, UNLOAD, etc.)
   - Column-level data flow (including transformations)

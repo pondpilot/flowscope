@@ -54,7 +54,7 @@ Arguments:
 
 Options:
   -d, --dialect <DIALECT>  SQL dialect [default: generic]
-                           [possible values: generic, ansi, bigquery, clickhouse, databricks, duckdb, hive, mssql, mysql, postgres, redshift, snowflake, sqlite]
+                           [possible values: generic, ansi, bigquery, clickhouse, databricks, duckdb, hive, mssql, mysql, oracle, postgres, redshift, snowflake, sqlite]
   -f, --format <FORMAT>    Output format [default: table]
                            [possible values: table, json, mermaid, html, sql, csv, xlsx, duckdb]
   -s, --schema <FILE>      Schema DDL file for table/column resolution

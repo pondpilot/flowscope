@@ -44,6 +44,7 @@
             "hive",
             "mssql",
             "mysql",
+            "oracle",
             "postgres",
             "redshift",
             "snowflake",
@@ -84,7 +85,7 @@
     "build:webview": "cd webview-ui && npm run build",
     "watch": "node esbuild.js --watch",
     "typecheck": "tsc --noEmit",
-    "test": "tsc -p tsconfig.test.json && node --test .test-dist/tests/statementScopedLineage.test.js",
+    "test": "tsc -p tsconfig.test.json && node --test .test-dist/tests/statementScopedLineage.test.js .test-dist/tests/dialects.test.js",
     "package": "vsce package"
   },
   "devDependencies": {

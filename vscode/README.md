@@ -19,7 +19,7 @@ Hover over any table or column in your SQL file to see:
 
 ### ⚙️ Multi-Dialect Support
 Supports parsing for a wide range of SQL dialects including:
-- PostgreSQL, MySQL, SQLite
+- PostgreSQL, MySQL, SQLite, Oracle
 - Snowflake, BigQuery, Redshift
 - Databricks, DuckDB, ClickHouse
 - T-SQL (MSSQL), Hive, ANSI SQL

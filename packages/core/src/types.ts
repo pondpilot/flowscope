@@ -5,22 +5,26 @@
 
 // Request Types
 
+/** SQL dialects supported for parsing and analysis. */
+export const VALID_DIALECTS = [
+  'generic',
+  'ansi',
+  'bigquery',
+  'clickhouse',
+  'databricks',
+  'duckdb',
+  'hive',
+  'mssql',
+  'mysql',
+  'oracle',
+  'postgres',
+  'redshift',
+  'snowflake',
+  'sqlite',
+] as const;
+
 /** SQL dialect for parsing and analysis. */
-export type Dialect =
-  | 'generic'
-  | 'ansi'
-  | 'bigquery'
-  | 'clickhouse'
-  | 'databricks'
-  | 'duckdb'
-  | 'hive'
-  | 'mssql'
-  | 'mysql'
-  | 'oracle'
-  | 'postgres'
-  | 'redshift'
-  | 'snowflake'
-  | 'sqlite';
+export type Dialect = (typeof VALID_DIALECTS)[number];
 
 /** Case sensitivity mode for identifier normalization. */
 export type CaseSensitivity = 'dialect' | 'lower' | 'upper' | 'exact';

@@ -15,6 +15,7 @@ Some dialects supported by SQLLineage (via SQLFluff) are not yet available.
 | Hive | Yes | Yes | |
 | MS SQL (T-SQL) | Yes | Yes | |
 | MySQL | Yes | Yes | |
+| Oracle | Yes | Yes | |
 | PostgreSQL | Yes | Yes | |
 | Redshift | Yes | Yes | |
 | Snowflake | Yes | Yes | |
@@ -26,7 +27,6 @@ These dialects are supported by SQLLineage (via SQLFluff) but not available in F
 
 | Dialect | Blocking Issue | Workaround |
 |---------|----------------|------------|
-| Oracle | Not in sqlparser-rs | Use Generic dialect |
 | Spark SQL | Not in sqlparser-rs | Use Hive or Databricks dialect |
 | Athena | Not in sqlparser-rs | Use Generic dialect |
 | Vertica | Not in sqlparser-rs | Use Generic dialect |
@@ -47,7 +47,7 @@ These dialects are supported by SQLLineage (via SQLFluff) but not available in F
 
 When using an unsupported dialect, select the closest compatible dialect:
 
-1. **Oracle, DB2, Teradata, Vertica, Exasol** - Use `Generic` dialect
+1. **DB2, Teradata, Vertica, Exasol** - Use `Generic` dialect
 2. **Spark SQL** - Use `Hive` or `Databricks` dialect (Databricks is Spark-based)
 3. **Athena** - Use `Generic` dialect (Athena is Presto/Trino-based)
 4. **Trino** - Use `Generic` dialect
@@ -78,5 +78,4 @@ To request a new dialect in sqlparser-rs:
 
 ### Open Upstream Issues
 
-- Oracle: No active issue (complex PL/SQL support needed)
 - Spark SQL: No dedicated dialect (use Hive or Databricks as workaround)
