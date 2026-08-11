@@ -41,8 +41,8 @@ Confirm the tarball includes:
 Publishing is triggered by tag pushes in CI:
 
 ```bash
-git tag v0.8.0
-git push origin v0.8.0
+git tag vX.Y.Z
+git push origin vX.Y.Z
 ```
 
 The workflow builds WASM + TypeScript and runs `npm publish --workspaces=false` from `packages/core`.
