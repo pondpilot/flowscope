@@ -5,8 +5,9 @@
  * Results are NOT persisted to localStorage due to size constraints.
  * When the user switches projects, we restore their cached result if available.
  *
- * Each cached result tracks the hideCTEs setting used during analysis,
- * allowing cache validation when options change.
+ * Each project keeps only its latest result, tagged with the canonical analysis
+ * cache key. A lookup with any other key is a cache miss, so callers cannot
+ * restore a result produced from different semantic inputs.
  */
 
 import { create } from 'zustand';
@@ -14,9 +15,14 @@ import type { AnalyzeResult } from '@pondpilot/flowscope-core';
 
 interface CachedResult {
   result: AnalyzeResult;
-  /** The hideCTEs value used when this result was computed */
-  hideCTEs: boolean;
+  cacheKey: string;
+  storedAt: number;
 }
+
+/** Large analysis graphs stay bounded even when many projects are opened. */
+export const ANALYSIS_MEMORY_CACHE_MAX_ENTRIES = 10;
+
+let cacheSequence = 0;
 
 export interface AnalysisWorkerTimings {
   totalMs: number;
@@ -34,18 +40,18 @@ export interface AnalysisMetrics {
 }
 
 interface AnalysisStore {
-  /** Analysis results keyed by project ID, with metadata for cache validation */
+  /** Latest analysis result per project, bounded by ANALYSIS_MEMORY_CACHE_MAX_ENTRIES */
   results: Record<string, CachedResult>;
   /** Performance metrics keyed by project ID */
   metrics: Record<string, AnalysisMetrics>;
 
-  /** Get analysis result for a project if cache is valid for given hideCTEs */
-  getResult: (projectId: string, hideCTEs: boolean) => AnalyzeResult | null;
+  /** Get a result only when its canonical analysis cache key matches exactly */
+  getResult: (projectId: string, cacheKey: string) => AnalyzeResult | null;
   /** Get performance metrics for a project */
   getMetrics: (projectId: string) => AnalysisMetrics | null;
 
-  /** Set analysis result for a project with its hideCTEs context */
-  setResult: (projectId: string, result: AnalyzeResult, hideCTEs: boolean) => void;
+  /** Replace a project's cached result and evict the oldest project if needed */
+  setResult: (projectId: string, cacheKey: string, result: AnalyzeResult) => void;
   /** Set performance metrics for a project */
   setMetrics: (projectId: string, metrics: AnalysisMetrics) => void;
 
@@ -60,10 +66,9 @@ export const useAnalysisStore = create<AnalysisStore>((set, get) => ({
   results: {},
   metrics: {},
 
-  getResult: (projectId, hideCTEs) => {
+  getResult: (projectId, cacheKey) => {
     const cached = get().results[projectId];
-    // Return cached result only if it was computed with the same hideCTEs setting
-    if (cached && cached.hideCTEs === hideCTEs) {
+    if (cached?.cacheKey === cacheKey) {
       return cached.result;
     }
     return null;
@@ -71,13 +76,28 @@ export const useAnalysisStore = create<AnalysisStore>((set, get) => ({
 
   getMetrics: (projectId) => get().metrics[projectId] ?? null,
 
-  setResult: (projectId, result, hideCTEs) =>
-    set((state) => ({
-      results: {
+  setResult: (projectId, cacheKey, result) =>
+    set((state) => {
+      const results = {
         ...state.results,
-        [projectId]: { result, hideCTEs },
-      },
-    })),
+        [projectId]: { result, cacheKey, storedAt: (cacheSequence += 1) },
+      };
+      const projectIds = Object.keys(results);
+
+      if (projectIds.length <= ANALYSIS_MEMORY_CACHE_MAX_ENTRIES) {
+        return { results };
+      }
+
+      const oldestProjectId = projectIds.reduce((oldest, candidate) =>
+        results[candidate].storedAt < results[oldest].storedAt ? candidate : oldest
+      );
+      const { [oldestProjectId]: _evictedResult, ...boundedResults } = results;
+      const { [oldestProjectId]: _evictedMetrics, ...boundedMetrics } = state.metrics;
+      void _evictedResult;
+      void _evictedMetrics;
+
+      return { results: boundedResults, metrics: boundedMetrics };
+    }),
 
   setMetrics: (projectId, metrics) =>
     set((state) => ({
