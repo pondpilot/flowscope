@@ -1339,7 +1339,6 @@ fn nested_subquery_correlated() {
 // =============================================================================
 
 #[test]
-#[ignore = "tracked in #41: nested-scope alias shadowing not yet filtered by cursor"]
 fn alias_shadowing_inner_subquery_wins() {
     // Inner `FROM orders u` shadows outer `FROM users u`; cursor after `u.`
     // inside the inner scope must resolve to orders (has `total`), not users.
@@ -1360,7 +1359,6 @@ fn alias_shadowing_inner_subquery_wins() {
 }
 
 #[test]
-#[ignore = "tracked in #41: nested-scope alias shadowing not yet filtered by cursor"]
 fn alias_shadowing_outer_scope_unaffected() {
     // Outer `u.` after a subquery that shadows `u` should still resolve to users.
     let request = request_at_cursor(
@@ -1376,6 +1374,26 @@ fn alias_shadowing_outer_scope_unaffected() {
     assert!(
         !result.items.iter().any(|item| item.label == "total"),
         "outer `u.` must not pick up the inner-scope shadow (`total`)"
+    );
+}
+
+#[test]
+fn alias_shadowing_preserves_correlated_outer_alias() {
+    // Without an inner `u` binding, the outer alias remains visible to the
+    // correlated subquery.
+    let request = request_at_cursor(
+        "SELECT * FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE u.|)",
+        Some(sample_schema()),
+    );
+    let result = completion_items(&request);
+    assert!(result.should_show);
+    assert!(
+        result.items.iter().any(|item| item.label == "email"),
+        "inner `u.` should resolve to the correlated outer users alias"
+    );
+    assert!(
+        !result.items.iter().any(|item| item.label == "total"),
+        "inner `u.` must not resolve to the differently named orders alias"
     );
 }
 

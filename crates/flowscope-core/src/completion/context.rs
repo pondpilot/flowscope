@@ -712,13 +712,97 @@ fn find_token_at_cursor(
     None
 }
 
-fn parse_tables(tokens: &[TokenInfo]) -> Vec<(String, Option<String>)> {
+#[derive(Debug)]
+struct SelectScope {
+    parent: Option<usize>,
+    depth: usize,
+    start: usize,
+    end: usize,
+}
+
+/// Assign each token to its nearest SELECT scope.
+///
+/// Completion SQL is often incomplete and cannot be parsed into an AST. Tracking
+/// parentheses and set operators here keeps scope resolution available for inputs
+/// such as `u.` while still separating nested queries and set-operation branches.
+fn select_scopes(
+    tokens: &[TokenInfo],
+    statement_end: usize,
+) -> (Vec<SelectScope>, Vec<Option<usize>>) {
+    let mut scopes: Vec<SelectScope> = Vec::new();
+    let mut token_scopes = vec![None; tokens.len()];
+    let mut active_scopes: Vec<usize> = Vec::new();
+    let mut paren_depth = 0usize;
+
+    for (index, token) in tokens.iter().enumerate() {
+        if matches!(token.token, Token::RParen) {
+            while active_scopes
+                .last()
+                .is_some_and(|scope_id| scopes[*scope_id].depth == paren_depth)
+            {
+                let scope_id = active_scopes.pop().expect("active scope exists");
+                scopes[scope_id].end = token.span.start;
+            }
+        }
+
+        let keyword = keyword_from_token(&token.token);
+        if matches!(keyword.as_deref(), Some("UNION" | "EXCEPT" | "INTERSECT")) {
+            while active_scopes
+                .last()
+                .is_some_and(|scope_id| scopes[*scope_id].depth == paren_depth)
+            {
+                let scope_id = active_scopes.pop().expect("active scope exists");
+                scopes[scope_id].end = token.span.start;
+            }
+        }
+
+        if keyword.as_deref() == Some("SELECT") {
+            while active_scopes
+                .last()
+                .is_some_and(|scope_id| scopes[*scope_id].depth >= paren_depth)
+            {
+                let scope_id = active_scopes.pop().expect("active scope exists");
+                scopes[scope_id].end = token.span.start;
+            }
+
+            let scope_id = scopes.len();
+            scopes.push(SelectScope {
+                parent: active_scopes.last().copied(),
+                depth: paren_depth,
+                start: token.span.start,
+                end: statement_end,
+            });
+            active_scopes.push(scope_id);
+        }
+
+        token_scopes[index] = active_scopes.last().copied();
+
+        match token.token {
+            Token::LParen => paren_depth += 1,
+            Token::RParen => paren_depth = paren_depth.saturating_sub(1),
+            _ => {}
+        }
+    }
+
+    (scopes, token_scopes)
+}
+
+fn parse_tables_for_scope(
+    tokens: &[TokenInfo],
+    token_scopes: &[Option<usize>],
+    scope_id: usize,
+) -> Vec<(String, Option<String>)> {
     let mut tables = Vec::new();
     let mut in_from_clause = false;
     let mut expecting_table = false;
     let mut index = 0;
 
     while index < tokens.len() {
+        if token_scopes[index] != Some(scope_id) {
+            index += 1;
+            continue;
+        }
+
         let token = &tokens[index].token;
         let keyword = keyword_from_token(token);
 
@@ -771,7 +855,11 @@ fn parse_tables(tokens: &[TokenInfo]) -> Vec<(String, Option<String>)> {
                 index += 1;
             }
 
-            let (alias, consumed) = parse_alias(tokens, index);
+            let (alias, consumed) = if token_scopes.get(index) == Some(&Some(scope_id)) {
+                parse_alias(tokens, index)
+            } else {
+                (None, index)
+            };
             tables.push((String::new(), alias));
             index = consumed;
 
@@ -794,6 +882,61 @@ fn parse_tables(tokens: &[TokenInfo]) -> Vec<(String, Option<String>)> {
     }
 
     tables
+}
+
+fn table_binding_label<'a>(name: &'a str, alias: &'a Option<String>) -> Option<&'a str> {
+    alias
+        .as_deref()
+        .or_else(|| name.rsplit('.').next().filter(|label| !label.is_empty()))
+}
+
+fn parse_tables_in_scope(
+    tokens: &[TokenInfo],
+    cursor_offset: usize,
+    statement_end: usize,
+    registry: &SchemaRegistry,
+) -> Vec<(String, Option<String>)> {
+    let (scopes, token_scopes) = select_scopes(tokens, statement_end);
+    let Some(active_scope) = scopes
+        .iter()
+        .enumerate()
+        .filter(|(_, scope)| scope.start <= cursor_offset && cursor_offset <= scope.end)
+        .max_by_key(|(_, scope)| scope.depth)
+        .map(|(scope_id, _)| scope_id)
+    else {
+        return parse_tables_for_scope(tokens, &vec![Some(0); tokens.len()], 0);
+    };
+
+    let mut visible_scopes = Vec::new();
+    let mut current_scope = Some(active_scope);
+    while let Some(scope_id) = current_scope {
+        visible_scopes.push(scope_id);
+        current_scope = scopes[scope_id].parent;
+    }
+
+    let mut tables = Vec::new();
+    let mut shadowed_labels = std::collections::HashSet::new();
+    for scope_id in visible_scopes {
+        let scope_tables = parse_tables_for_scope(tokens, &token_scopes, scope_id);
+        for (name, alias) in &scope_tables {
+            let label = table_binding_label(name, alias);
+            if label.is_some_and(|label| {
+                shadowed_labels.contains(&registry.normalize_identifier(label))
+            }) {
+                continue;
+            }
+            tables.push((name.clone(), alias.clone()));
+        }
+        shadowed_labels.extend(scope_tables.iter().filter_map(|(name, alias)| {
+            table_binding_label(name, alias).map(|label| registry.normalize_identifier(label))
+        }));
+    }
+
+    tables
+}
+
+fn parse_tables(tokens: &[TokenInfo]) -> Vec<(String, Option<String>)> {
+    parse_tables_for_scope(tokens, &vec![Some(0); tokens.len()], 0)
 }
 
 fn parse_table_name(tokens: &[TokenInfo], start: usize) -> Option<(String, usize)> {
@@ -885,6 +1028,33 @@ fn build_columns(tables: &[CompletionTable], registry: &SchemaRegistry) -> Vec<C
     columns
 }
 
+fn resolve_tables(
+    tables_raw: Vec<(String, Option<String>)>,
+    registry: &SchemaRegistry,
+) -> Vec<CompletionTable> {
+    tables_raw
+        .into_iter()
+        .map(|(name, alias)| {
+            if name.is_empty() {
+                return CompletionTable {
+                    name,
+                    canonical: String::new(),
+                    alias,
+                    matched_schema: false,
+                };
+            }
+
+            let resolution = registry.canonicalize_table_reference(&name);
+            CompletionTable {
+                name,
+                canonical: resolution.canonical,
+                alias,
+                matched_schema: resolution.matched_schema,
+            }
+        })
+        .collect()
+}
+
 fn token_list_for_statement(tokens: &[TokenInfo], span: &Span) -> Vec<TokenInfo> {
     tokens
         .iter()
@@ -944,27 +1114,7 @@ pub fn completion_context(request: &CompletionRequest) -> CompletionContext {
     let token = find_token_at_cursor(&statement_tokens, request.cursor_offset, sql);
 
     let tables_raw = parse_tables(&statement_tokens);
-    let mut tables = Vec::new();
-
-    for (name, alias) in tables_raw {
-        if name.is_empty() {
-            tables.push(CompletionTable {
-                name: name.clone(),
-                canonical: String::new(),
-                alias,
-                matched_schema: false,
-            });
-            continue;
-        }
-
-        let resolution = registry.canonicalize_table_reference(&name);
-        tables.push(CompletionTable {
-            name,
-            canonical: resolution.canonical,
-            alias,
-            matched_schema: resolution.matched_schema,
-        });
-    }
+    let tables = resolve_tables(tables_raw, &registry);
 
     let columns = build_columns(&tables, &registry);
 
@@ -1789,14 +1939,31 @@ pub fn completion_items(request: &CompletionRequest) -> CompletionItemsResult {
     // SchemaRegistry::new returns (registry, issues). Issues are intentionally discarded
     // because completion should work even with schema validation warnings.
     let (registry, _schema_issues) = SchemaRegistry::new(request.schema.as_ref(), request.dialect);
+
+    // Tokenize once for scoped qualifier resolution, GROUP BY detection, and type inference.
+    let tokens_opt = tokenize_sql(&request.sql, request.dialect).ok();
+    let statement_tokens_opt = tokens_opt
+        .as_ref()
+        .map(|tokens| token_list_for_statement(tokens, &context.statement_span));
+
+    let scoped_tables = statement_tokens_opt
+        .as_ref()
+        .map(|tokens| {
+            resolve_tables(
+                parse_tables_in_scope(
+                    tokens,
+                    request.cursor_offset,
+                    context.statement_span.end,
+                    &registry,
+                ),
+                &registry,
+            )
+        })
+        .unwrap_or_else(|| context.tables_in_scope.clone());
+
     let qualifier = extract_qualifier(&request.sql, request.cursor_offset);
     let qualifier_resolution = qualifier.as_ref().and_then(|value| {
-        resolve_qualifier(
-            value,
-            &context.tables_in_scope,
-            request.schema.as_ref(),
-            &registry,
-        )
+        resolve_qualifier(value, &scoped_tables, request.schema.as_ref(), &registry)
     });
     let restrict_to_columns = qualifier_resolution.is_some();
 
@@ -1809,12 +1976,6 @@ pub fn completion_items(request: &CompletionRequest) -> CompletionItemsResult {
             items.push(item);
         }
     };
-
-    // Tokenize once for GROUP BY detection and type context inference
-    let tokens_opt = tokenize_sql(&request.sql, request.dialect).ok();
-    let statement_tokens_opt = tokens_opt
-        .as_ref()
-        .map(|tokens| token_list_for_statement(tokens, &context.statement_span));
 
     if !restrict_to_columns {
         // Add smart function completions with context-aware scoring before keyword hints so they
@@ -1884,7 +2045,14 @@ pub fn completion_items(request: &CompletionRequest) -> CompletionItemsResult {
         None
     };
 
-    let mut columns = context.columns_in_scope.clone();
+    let use_scoped_columns = qualifier_resolution
+        .as_ref()
+        .is_some_and(|resolution| resolution.target == QualifierTarget::ColumnLabel);
+    let mut columns = if use_scoped_columns {
+        build_columns(&scoped_tables, &registry)
+    } else {
+        context.columns_in_scope.clone()
+    };
     if columns.is_empty() && context.clause == CompletionClause::Select {
         if let Some(schema) = request.schema.as_ref() {
             columns = build_columns_from_schema(schema, &registry);
@@ -1892,7 +2060,11 @@ pub fn completion_items(request: &CompletionRequest) -> CompletionItemsResult {
     }
 
     // Try AST-based enrichment for CTE and subquery columns
-    let mut tables_enriched = context.tables_in_scope.clone();
+    let mut tables_enriched = if use_scoped_columns {
+        scoped_tables.clone()
+    } else {
+        context.tables_in_scope.clone()
+    };
     let parse_result =
         try_parse_for_completion(&request.sql, request.cursor_offset, request.dialect);
     if let Some(ref result) = parse_result {
