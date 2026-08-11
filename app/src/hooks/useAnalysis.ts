@@ -10,9 +10,11 @@ import { useViewStateStore, getIssuesStateWithDefaults } from '@/lib/view-state-
 import { FILE_LIMITS, ANALYSIS_SQL_PREVIEW_LIMITS } from '@/lib/constants';
 import { AnalysisErrorCode, isAnalysisError } from '@/types';
 import type { AnalysisState, AnalysisContext, FileValidationResult } from '@/types';
+import { useDebounce } from './useDebounce';
 
 // Maximum retry attempts for file sync errors to prevent infinite loops
 const MAX_FILE_SYNC_RETRIES = 1;
+const ANALYSIS_CACHE_KEY_DEBOUNCE_MS = 300;
 
 // Debug flag for analysis-related logging - only enabled in development
 const ANALYSIS_DEBUG = !!(import.meta as { env?: { DEV?: boolean } }).env?.DEV;
@@ -141,7 +143,7 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
     []
   );
 
-  const buildAnalysisInput = useCallback(
+  const buildAnalysisPayload = useCallback(
     (project: Project | null, activeFileContent?: string, activeFilePath?: string) => {
       const context = buildAnalysisContext(project, activeFileContent, activeFilePath);
       if (!project || !context) {
@@ -161,20 +163,64 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
       return {
         context,
         payload,
-        cacheKey: buildAnalysisCacheKey(payload),
       };
     },
     [buildAnalysisContext, enableLinting, hideCTEs]
   );
 
-  const currentAnalysisInput = useMemo(() => {
+  const buildAnalysisInput = useCallback(
+    (project: Project | null, activeFileContent?: string, activeFilePath?: string) => {
+      const analysisPayload = buildAnalysisPayload(project, activeFileContent, activeFilePath);
+      if (!analysisPayload) {
+        return null;
+      }
+
+      return {
+        ...analysisPayload,
+        cacheKey: buildAnalysisCacheKey(analysisPayload.payload),
+      };
+    },
+    [buildAnalysisPayload]
+  );
+
+  const canUseMemoryCache = !adapter || adapter.type === 'wasm';
+  // The canonical hash scans every file character. Skip it for REST (which cannot
+  // reuse memory results) and debounce it for interactive WASM project changes.
+  const currentAnalysisPayload = useMemo(() => {
+    if (!canUseMemoryCache || !activeProjectId) {
+      return null;
+    }
+
     const activeFile = currentProject?.files.find(
       (file) => file.id === currentProject.activeFileId
     );
-    return buildAnalysisInput(currentProject, activeFile?.content, activeFile?.path);
-  }, [buildAnalysisInput, currentProject]);
+    const analysisPayload = buildAnalysisPayload(
+      currentProject,
+      activeFile?.content,
+      activeFile?.path
+    );
+    return analysisPayload ? { ...analysisPayload, projectId: activeProjectId } : null;
+  }, [activeProjectId, buildAnalysisPayload, canUseMemoryCache, currentProject]);
+  const debouncedAnalysisPayload = useDebounce(
+    currentAnalysisPayload,
+    ANALYSIS_CACHE_KEY_DEBOUNCE_MS
+  );
+  const currentAnalysisInput = useMemo(() => {
+    if (
+      !canUseMemoryCache ||
+      !debouncedAnalysisPayload ||
+      debouncedAnalysisPayload.projectId !== activeProjectId
+    ) {
+      return null;
+    }
+
+    return {
+      context: debouncedAnalysisPayload.context,
+      payload: debouncedAnalysisPayload.payload,
+      cacheKey: buildAnalysisCacheKey(debouncedAnalysisPayload.payload),
+    };
+  }, [activeProjectId, canUseMemoryCache, debouncedAnalysisPayload]);
   const currentAnalysisCacheKey = currentAnalysisInput?.cacheKey ?? null;
-  const canUseMemoryCache = !adapter || adapter.type === 'wasm';
 
   // The REST server owns additional schema/template configuration that is not
   // fully represented by AnalysisPayload. Never reuse its results in memory;
@@ -231,17 +277,22 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
         `[useAnalysis] Memory cache effect triggered (projectId: ${activeProjectId?.slice(0, 8) ?? 'null'})`
       );
     const memoryCacheStart = nowMs();
-    const projectChanged = restoredProjectRef.current !== activeProjectId;
-    restoredProjectRef.current = activeProjectId;
 
-    if (!activeProjectId || !currentAnalysisCacheKey || !canUseMemoryCache) {
+    if (!activeProjectId || !canUseMemoryCache) {
+      restoredProjectRef.current = activeProjectId;
       actionsRef.current.setResult(null);
       return;
     }
 
-    if (!projectChanged) {
+    if (!currentAnalysisCacheKey) {
+      actionsRef.current.setResult(null);
       return;
     }
+
+    if (restoredProjectRef.current === activeProjectId) {
+      return;
+    }
+    restoredProjectRef.current = activeProjectId;
 
     const cachedResult = getResult(activeProjectId, currentAnalysisCacheKey);
     if (ANALYSIS_DEBUG)
