@@ -15,6 +15,8 @@ build/
 
 # WASM build artifacts
 packages/core/src/wasm/
+vscode/wasm-node/
+vscode/.test-dist/
 *.wasm
 pkg/
 !packages/core/wasm/

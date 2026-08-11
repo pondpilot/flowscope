@@ -243,6 +243,9 @@ _build-core-ts:
 _build-react-ts: _build-core-ts
     yarn workspace @pondpilot/flowscope-react build
 
+_build-vscode-wasm:
+    wasm-pack build crates/flowscope-wasm --target nodejs --no-opt --out-dir ../../vscode/wasm-node
+
 # Run all tests
 test: test-rust test-ts
 
@@ -269,6 +272,7 @@ test-core:
 # Run TypeScript tests
 test-ts: _build-core-ts
     yarn test:ts
+    npm --prefix vscode run test
 
 # Generate app TypeScript coverage
 coverage-ts:
@@ -314,8 +318,9 @@ lint-fix:
     yarn workspaces run lint:fix
 
 # Run TypeScript type checking
-typecheck: _build-react-ts
+typecheck: _build-react-ts _build-vscode-wasm
     yarn workspaces run typecheck
+    npm --prefix vscode run typecheck
 
 # Format code
 fmt: fmt-rust fmt-ts
@@ -348,6 +353,7 @@ clean:
 # Install dependencies
 install:
     yarn install
+    npm ci --prefix vscode
 
 # Install Rust tools (wasm-pack, cargo-watch, cargo-llvm-cov)
 install-rust-tools:

@@ -135,14 +135,23 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-wasm-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Build WASM
+      - name: Build browser WASM
         run: wasm-pack build crates/flowscope-wasm --target web --out-dir ../../packages/core/wasm
+
+      - name: Build Node.js WASM
+        run: wasm-pack build crates/flowscope-wasm --target nodejs --no-opt --out-dir ../../vscode/wasm-node
 
       - name: Upload WASM artifact
         uses: actions/upload-artifact@v4
         with:
           name: wasm-module
           path: packages/core/wasm/
+
+      - name: Upload Node.js WASM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-node-module
+          path: vscode/wasm-node/
 
   typescript:
     name: TypeScript
@@ -157,14 +166,26 @@ jobs:
           node-version: '20'
           cache: 'yarn'
 
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Install VS Code extension dependencies
+        run: npm ci --prefix vscode
+
+      - name: Check formatting
+        run: yarn prettier
+
       - name: Download WASM artifact
         uses: actions/download-artifact@v4
         with:
           name: wasm-module
           path: packages/core/wasm/
 
-      - name: Install dependencies
-        run: yarn install --frozen-lockfile
+      - name: Download Node.js WASM artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-node-module
+          path: vscode/wasm-node/
 
       - name: Build core package (skip WASM rebuild)
         run: yarn workspace @pondpilot/flowscope-core build:no-wasm
@@ -172,17 +193,18 @@ jobs:
       - name: Build React package
         run: yarn workspace @pondpilot/flowscope-react build
 
-      - name: Check formatting
-        run: yarn prettier
-
       - name: Run ESLint
         run: yarn workspaces run lint
 
       - name: Run typechecks
-        run: yarn workspaces run typecheck
+        run: |
+          yarn workspaces run typecheck
+          npm --prefix vscode run typecheck
 
       - name: Run tests
-        run: yarn test:ts
+        run: |
+          yarn test:ts
+          npm --prefix vscode run test
 
       - name: Build demo app
         run: yarn workspace @pondpilot/flowscope-app build
