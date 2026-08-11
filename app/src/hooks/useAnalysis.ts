@@ -308,6 +308,12 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
     // allowing UI interactions and worker callbacks to proceed without blocking
     startTransition(() => {
       actionsRef.current.setResult(restoreDecision.result);
+      if (restoreDecision.result && currentAnalysisInput) {
+        actionsRef.current.setAnalyzedContent(
+          new Map(currentAnalysisInput.context.files.map((file) => [file.name, file.content]))
+        );
+        actionsRef.current.setStalePaths([]);
+      }
     });
   }, [
     activeProjectId,
@@ -315,6 +321,7 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
     backendSchemaIdentity,
     canUseMemoryCache,
     currentAnalysisCacheKey,
+    currentAnalysisInput,
     getResult,
   ]);
 

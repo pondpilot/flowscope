@@ -175,11 +175,17 @@ describe('useAnalysis memory cache', () => {
     });
     expect(lineageActions.setResult).toHaveBeenLastCalledWith(null);
     lineageActions.setResult.mockClear();
+    lineageActions.setAnalyzedContent.mockClear();
+    lineageActions.setStalePaths.mockClear();
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(300);
     });
     expect(lineageActions.setResult).toHaveBeenCalledWith(cachedResult);
+    expect(lineageActions.setAnalyzedContent).toHaveBeenCalledWith(
+      new Map([['model.sql', projectA.files[0].content]])
+    );
+    expect(lineageActions.setStalePaths).toHaveBeenCalledWith([]);
   });
 
   it('ignores an old persistent lookup that resolves during the debounce window', async () => {
