@@ -4,8 +4,12 @@ import { analyzeWithWorker, getCachedAnalysis, syncAnalysisFiles } from '@/lib/a
 import type { BackendAdapter, AnalysisPayload } from '@/lib/backend-adapter';
 import { useProject } from '@/lib/project-store';
 import type { Project } from '@/lib/project-store';
-import { useAnalysisStore } from '@/lib/analysis-store';
-import { buildAnalysisCacheKey } from '@/lib/analysis-hash';
+import {
+  getAnalysisCacheRestoreDecision,
+  useAnalysisStore,
+  type AnalysisCacheIdentity,
+} from '@/lib/analysis-store';
+import { buildAnalysisCacheKey, canBuildProactiveAnalysisCacheKey } from '@/lib/analysis-hash';
 import { useViewStateStore, getIssuesStateWithDefaults } from '@/lib/view-state-store';
 import { FILE_LIMITS, ANALYSIS_SQL_PREVIEW_LIMITS } from '@/lib/constants';
 import { AnalysisErrorCode, isAnalysisError } from '@/types';
@@ -57,7 +61,7 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
     lastAnalyzedAt: null,
   });
   const analysisRequestRef = useRef(0);
-  const restoredProjectRef = useRef<string | null>(null);
+  const attemptedCacheIdentityRef = useRef<AnalysisCacheIdentity | null>(null);
 
   // Use ref for actions to avoid dependency issues (actions object changes every render)
   const actionsRef = useRef(actions);
@@ -185,7 +189,8 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
 
   const canUseMemoryCache = !adapter || adapter.type === 'wasm';
   // The canonical hash scans every file character. Skip it for REST (which cannot
-  // reuse memory results) and debounce it for interactive WASM project changes.
+  // reuse memory results), debounce it for interactive WASM project changes, and
+  // keep proactive hashing bounded. Explicit analysis runs still build exact keys.
   const currentAnalysisPayload = useMemo(() => {
     if (!canUseMemoryCache || !activeProjectId) {
       return null;
@@ -199,7 +204,11 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
       activeFile?.content,
       activeFile?.path
     );
-    return analysisPayload ? { ...analysisPayload, projectId: activeProjectId } : null;
+    if (!analysisPayload || !canBuildProactiveAnalysisCacheKey(analysisPayload.payload)) {
+      return null;
+    }
+
+    return { ...analysisPayload, projectId: activeProjectId };
   }, [activeProjectId, buildAnalysisPayload, canUseMemoryCache, currentProject]);
   const debouncedAnalysisPayload = useDebounce(
     currentAnalysisPayload,
@@ -279,30 +288,37 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
     const memoryCacheStart = nowMs();
 
     if (!activeProjectId || !canUseMemoryCache) {
-      restoredProjectRef.current = activeProjectId;
+      attemptedCacheIdentityRef.current = null;
       actionsRef.current.setResult(null);
       return;
     }
 
     if (!currentAnalysisCacheKey) {
-      actionsRef.current.setResult(null);
+      if (attemptedCacheIdentityRef.current?.projectId !== activeProjectId) {
+        actionsRef.current.setResult(null);
+      }
       return;
     }
-
-    if (restoredProjectRef.current === activeProjectId) {
-      return;
-    }
-    restoredProjectRef.current = activeProjectId;
 
     const cachedResult = getResult(activeProjectId, currentAnalysisCacheKey);
+    const nextIdentity = { projectId: activeProjectId, cacheKey: currentAnalysisCacheKey };
+    const restoreDecision = getAnalysisCacheRestoreDecision(
+      attemptedCacheIdentityRef.current,
+      nextIdentity,
+      cachedResult
+    );
+    attemptedCacheIdentityRef.current = nextIdentity;
     if (ANALYSIS_DEBUG)
       console.log(
         `[useAnalysis] Memory cache ${cachedResult ? 'HIT' : 'MISS'} (${(nowMs() - memoryCacheStart).toFixed(1)}ms)`
       );
+    if (!restoreDecision.shouldSetResult) {
+      return;
+    }
     // Use startTransition to make the result update low-priority,
     // allowing UI interactions and worker callbacks to proceed without blocking
     startTransition(() => {
-      actionsRef.current.setResult(cachedResult);
+      actionsRef.current.setResult(restoreDecision.result);
     });
   }, [
     activeProjectId,

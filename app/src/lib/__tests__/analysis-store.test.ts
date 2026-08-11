@@ -1,7 +1,16 @@
 import type { AnalyzeResult } from '@pondpilot/flowscope-core';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { ANALYSIS_MEMORY_CACHE_MAX_ENTRIES, useAnalysisStore } from '@/lib/analysis-store';
-import { buildAnalysisCacheKey, type AnalysisHashInput } from '@/lib/analysis-hash';
+import {
+  ANALYSIS_MEMORY_CACHE_MAX_ENTRIES,
+  getAnalysisCacheRestoreDecision,
+  useAnalysisStore,
+} from '@/lib/analysis-store';
+import {
+  PROACTIVE_ANALYSIS_CACHE_KEY_MAX_CHARS,
+  buildAnalysisCacheKey,
+  canBuildProactiveAnalysisCacheKey,
+  type AnalysisHashInput,
+} from '@/lib/analysis-hash';
 
 const result = { nodes: [], edges: [], statements: [], issues: [] } as unknown as AnalyzeResult;
 
@@ -81,5 +90,40 @@ describe('analysis memory cache', () => {
           `cache-${ANALYSIS_MEMORY_CACHE_MAX_ENTRIES}`
         )
     ).toBe(result);
+  });
+
+  it('restores an exact hit after a project-level miss without clearing same-project misses', () => {
+    const keyA = { projectId: 'project-1', cacheKey: 'key-a' };
+    const keyB = { projectId: 'project-1', cacheKey: 'key-b' };
+    const otherProject = { projectId: 'project-2', cacheKey: 'key-x' };
+
+    expect(getAnalysisCacheRestoreDecision(otherProject, keyB, null)).toEqual({
+      shouldSetResult: true,
+      result: null,
+    });
+    expect(getAnalysisCacheRestoreDecision(keyB, keyA, result)).toEqual({
+      shouldSetResult: true,
+      result,
+    });
+    expect(getAnalysisCacheRestoreDecision(keyA, keyB, null)).toEqual({
+      shouldSetResult: false,
+      result: null,
+    });
+  });
+
+  it('bounds proactive key hashing without changing canonical run-time keys', () => {
+    const overLimit = {
+      ...baseInput,
+      files: [
+        {
+          name: '',
+          content: 'x'.repeat(PROACTIVE_ANALYSIS_CACHE_KEY_MAX_CHARS + 1),
+        },
+      ],
+    };
+
+    expect(canBuildProactiveAnalysisCacheKey(baseInput)).toBe(true);
+    expect(canBuildProactiveAnalysisCacheKey(overLimit)).toBe(false);
+    expect(buildAnalysisCacheKey(overLimit)).not.toBe(buildAnalysisCacheKey(baseInput));
   });
 });

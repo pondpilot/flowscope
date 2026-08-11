@@ -24,6 +24,35 @@ export const ANALYSIS_MEMORY_CACHE_MAX_ENTRIES = 10;
 
 let cacheSequence = 0;
 
+export interface AnalysisCacheIdentity {
+  projectId: string;
+  cacheKey: string;
+}
+
+export interface AnalysisCacheRestoreDecision {
+  shouldSetResult: boolean;
+  result: AnalyzeResult | null;
+}
+
+/**
+ * Project switches replace the visible graph even on a miss. Within one
+ * project, exact hits replace it while misses preserve the stale graph.
+ */
+export function getAnalysisCacheRestoreDecision(
+  previous: AnalysisCacheIdentity | null,
+  next: AnalysisCacheIdentity,
+  cachedResult: AnalyzeResult | null
+): AnalysisCacheRestoreDecision {
+  if (previous?.projectId === next.projectId && previous.cacheKey === next.cacheKey) {
+    return { shouldSetResult: false, result: cachedResult };
+  }
+
+  return {
+    shouldSetResult: previous?.projectId !== next.projectId || cachedResult !== null,
+    result: cachedResult,
+  };
+}
+
 export interface AnalysisWorkerTimings {
   totalMs: number;
   cacheReadMs: number;
