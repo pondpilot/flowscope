@@ -1,32 +1,18 @@
 import { useMemo, useCallback, useEffect, useRef, useState, type JSX } from 'react';
-import {
-  ReactFlow,
-  Background,
-  Controls,
-  MiniMap,
-  useNodesState,
-  useEdgesState,
-  useReactFlow,
-  Panel,
-} from '@xyflow/react';
-import type { Node as FlowNode, Edge as FlowEdge, Viewport } from '@xyflow/react';
+import { ReactFlow, useNodesState, useEdgesState } from '@xyflow/react';
+import type { Node as FlowNode, Edge as FlowEdge } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { LayoutList, Maximize2, Minimize2, Route, GitBranch } from 'lucide-react';
 import type { AnalyzeResult, Node as LineageNode } from '@pondpilot/flowscope-core';
 
 import { useLineage, useLineageStore } from '../store';
-import { useNodeFocus } from '../hooks/useNodeFocus';
 import { useGraphFiltering } from '../hooks/useGraphFiltering';
 import { useOccurrenceShortcuts } from '../hooks/useOccurrenceShortcuts';
 import type { GraphViewProps, TableNodeData, LayoutAlgorithm } from '../types';
 import {
   getLayoutedElements,
   getLayoutedElementsInWorker,
-  getFastLayoutedNodes,
   cancelLayoutRequests,
 } from '../utils/layout';
-import { LayoutSelector } from './LayoutSelector';
-import { isTableNodeData } from '../utils/graphTraversal';
 import { GRAPH_DEBUG, nowMs } from '../utils/debug';
 import {
   buildTableGraphInWorker,
@@ -43,200 +29,27 @@ import { ColumnNode } from './ColumnNode';
 import { SimpleTableNode } from './SimpleTableNode';
 import { TableNode } from './TableNode';
 import { AnimatedEdge } from './AnimatedEdge';
-import { ViewModeSelector } from './ViewModeSelector';
-import { GraphSearchControl } from './GraphSearchControl';
-import { TableFilterDropdown } from './TableFilterDropdown';
-import { Legend } from './Legend';
-import { LayoutProgressIndicator } from './LayoutProgressIndicator';
-import type { SearchableType } from '../hooks/useSearchSuggestions';
 import {
-  GraphTooltip,
-  GraphTooltipContent,
-  GraphTooltipProvider,
-  GraphTooltipTrigger,
-  GraphTooltipArrow,
-  GraphTooltipPortal,
-} from './ui/graph-tooltip';
+  FitViewHandler,
+  NodeFocusHandler,
+  RevealHandler,
+  ViewportHandler,
+} from './GraphViewHandlers';
+import { GraphViewControls } from './GraphViewControls';
+import { REVEAL_PULSE_DURATION_MS } from '../constants';
 import {
-  GRAPH_CONFIG,
-  NODE_FOCUS_DELAY_MS,
-  PANEL_STYLES,
-  REVEAL_PULSE_DURATION_MS,
-  getMinimapNodeColor,
-} from '../constants';
+  applyRenderDataToEdges,
+  applyRenderDataToNodes,
+  createRenderGraphIndex,
+  enhanceGraphWithHighlights,
+  getGraphSearchableTypes,
+  getNodeCollapseStates,
+  hasNodeCollapseChanged,
+  prepareProgressiveLayoutNodes,
+  shouldShowMiniMap,
+} from '../utils/graphViewModel';
 
-const MINIMAP_NODE_LIMIT = 2000;
 const ELK_NODE_LIMIT = 2000;
-
-/**
- * Threshold for determining when to treat a graph as "new" vs "evolved".
- * If fewer than this fraction of nodes have existing positions, we use
- * fast layout for all nodes instead of preserving positions.
- * 0.5 means: if less than half the nodes match, treat as new graph.
- */
-const NODE_OVERLAP_THRESHOLD = 0.5;
-
-/**
- * Helper component to handle node focusing.
- * Must be rendered inside ReactFlow to access useReactFlow hook.
- */
-function NodeFocusHandler({
-  focusNodeId,
-  onFocusApplied,
-}: {
-  focusNodeId?: string;
-  onFocusApplied?: () => void;
-}): null {
-  useNodeFocus({ focusNodeId, onFocusApplied });
-  return null;
-}
-
-/**
- * Watches the store's `revealRequest` and drives both the graph's fitView
- * animation and the transient pulse class on the target node. A nonce is used
- * instead of a plain node id so re-revealing the same node restarts the
- * animation.
- */
-function RevealHandler({ applyPulse }: { applyPulse: (nodeId: string) => void }): null {
-  const revealRequest = useLineageStore((store) => store.revealRequest);
-  const clearRevealRequest = useLineageStore((store) => store.clearRevealRequest);
-  const { fitView, getNode } = useReactFlow();
-  const lastNonceRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (!revealRequest) {
-      lastNonceRef.current = null;
-      return;
-    }
-    if (revealRequest.nonce === lastNonceRef.current) return;
-    lastNonceRef.current = revealRequest.nonce;
-
-    // ReactFlow needs a tick to render newly-selected nodes before we can
-    // query their positions (same reason `useNodeFocus` uses NODE_FOCUS_DELAY_MS).
-    const timer = setTimeout(() => {
-      const node = getNode(revealRequest.nodeId);
-      if (node) {
-        fitView({ nodes: [{ id: revealRequest.nodeId }], duration: 500, padding: 0.5 });
-        applyPulse(revealRequest.nodeId);
-      }
-      clearRevealRequest();
-    }, NODE_FOCUS_DELAY_MS);
-
-    return () => clearTimeout(timer);
-  }, [revealRequest, fitView, getNode, applyPulse, clearRevealRequest]);
-
-  return null;
-}
-
-/**
- * Helper component to trigger fitView when fitViewTrigger changes.
- * Must be rendered inside ReactFlow to access useReactFlow hook.
- */
-function FitViewHandler({ trigger }: { trigger?: number }): null {
-  const { fitView } = useReactFlow();
-  const lastTriggerRef = useRef(trigger);
-
-  useEffect(() => {
-    if (trigger !== undefined && trigger !== lastTriggerRef.current) {
-      lastTriggerRef.current = trigger;
-      // Small delay to ensure nodes are rendered
-      setTimeout(() => {
-        fitView({ padding: 0.2, duration: 200 });
-      }, 50);
-    }
-  }, [trigger, fitView]);
-
-  return null;
-}
-
-/**
- * Helper component to handle viewport changes and restoration.
- * Must be rendered inside ReactFlow to access useReactFlow hook.
- */
-function ViewportHandler({
-  initialViewport,
-  onViewportChange,
-}: {
-  initialViewport?: Viewport;
-  onViewportChange?: (viewport: Viewport) => void;
-}): null {
-  const { setViewport, getViewport } = useReactFlow();
-  const hasRestoredRef = useRef(false);
-  const previousInitialViewportRef = useRef<Viewport | undefined>(initialViewport);
-  const viewportChangeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Cleanup timer on unmount
-  useEffect(() => {
-    return () => {
-      if (viewportChangeTimerRef.current) {
-        clearTimeout(viewportChangeTimerRef.current);
-      }
-    };
-  }, []);
-
-  // Reset restoration flag when initial viewport changes (e.g., project switch)
-  useEffect(() => {
-    if (previousInitialViewportRef.current !== initialViewport) {
-      hasRestoredRef.current = false;
-      previousInitialViewportRef.current = initialViewport;
-    }
-  }, [initialViewport]);
-
-  // Restore initial viewport as needed
-  useEffect(() => {
-    if (initialViewport && !hasRestoredRef.current) {
-      // Delay to ensure ReactFlow is ready
-      const timer = setTimeout(() => {
-        setViewport(initialViewport, { duration: 0 });
-        hasRestoredRef.current = true;
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [initialViewport, setViewport]);
-
-  // Debounced viewport change callback
-  useEffect(() => {
-    if (!onViewportChange) return;
-
-    const handleViewportChange = () => {
-      if (viewportChangeTimerRef.current) {
-        clearTimeout(viewportChangeTimerRef.current);
-      }
-      viewportChangeTimerRef.current = setTimeout(() => {
-        const viewport = getViewport();
-        onViewportChange(viewport);
-      }, 300);
-    };
-
-    // Use MutationObserver on the viewport's style attribute rather than ReactFlow's
-    // onMove/onViewportChange events. Those events fire at very high frequency during
-    // pan/zoom operations which would cause excessive state updates and re-renders.
-    // The MutationObserver approach with debouncing provides more reliable, batched updates.
-    const container = document.querySelector('.react-flow__viewport');
-    if (container) {
-      const observer = new MutationObserver(handleViewportChange);
-      observer.observe(container, { attributes: true, attributeFilter: ['style'] });
-      return () => {
-        observer.disconnect();
-        if (viewportChangeTimerRef.current) {
-          clearTimeout(viewportChangeTimerRef.current);
-        }
-      };
-    }
-  }, [onViewportChange, getViewport]);
-
-  return null;
-}
-
-// Type guard for data with isSelected property
-interface SelectableNodeData {
-  isSelected?: boolean;
-  [key: string]: unknown;
-}
-
-function isSelectableNodeData(data: unknown): data is SelectableNodeData {
-  return typeof data === 'object' && data !== null;
-}
 
 const nodeTypes = {
   tableNode: TableNode,
@@ -248,104 +61,6 @@ const nodeTypes = {
 const edgeTypes = {
   animated: AnimatedEdge,
 };
-
-interface ToolbarToggleButtonProps {
-  isActive: boolean;
-  onClick: () => void;
-  ariaLabel: string;
-  tooltip: string;
-  icon: React.ReactNode;
-}
-
-/**
- * Reusable toggle button for graph toolbar actions.
- * Provides consistent styling and tooltip behavior.
- */
-function ToolbarToggleButton({
-  isActive,
-  onClick,
-  ariaLabel,
-  tooltip,
-  icon,
-}: ToolbarToggleButtonProps): JSX.Element {
-  return (
-    <div className={PANEL_STYLES.container} data-graph-panel>
-      <GraphTooltipProvider>
-        <GraphTooltip delayDuration={300}>
-          <GraphTooltipTrigger asChild>
-            <button
-              onClick={onClick}
-              className={`
-                inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-all duration-200
-                ${isActive ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}
-                focus-visible:outline-hidden
-              `}
-              aria-label={ariaLabel}
-              aria-pressed={isActive}
-            >
-              {icon}
-            </button>
-          </GraphTooltipTrigger>
-          <GraphTooltipPortal>
-            <GraphTooltipContent side="bottom">
-              <p>{tooltip}</p>
-              <GraphTooltipArrow />
-            </GraphTooltipContent>
-          </GraphTooltipPortal>
-        </GraphTooltip>
-      </GraphTooltipProvider>
-    </div>
-  );
-}
-
-function enhanceGraphWithHighlights(
-  graph: { nodes: FlowNode[]; edges: FlowEdge[] },
-  highlightIds: Set<string>
-): { nodes: FlowNode[]; edges: FlowEdge[] } {
-  const enhancedNodes = graph.nodes.map((node) => {
-    const isHighlighted = highlightIds.has(node.id);
-
-    // Handle Table Nodes with columns
-    if (isTableNodeData(node.data)) {
-      const nodeData = node.data;
-      const enhancedColumns = nodeData.columns.map((col) => ({
-        ...col,
-        isHighlighted: highlightIds.has(col.id),
-      }));
-
-      return {
-        ...node,
-        data: {
-          ...nodeData,
-          columns: enhancedColumns,
-          isSelected: nodeData.isSelected || isHighlighted,
-        },
-      };
-    }
-
-    // Handle Script Nodes and generic nodes
-    const currentIsSelected = isSelectableNodeData(node.data) ? node.data.isSelected : false;
-    return {
-      ...node,
-      data: {
-        ...node.data,
-        isSelected: currentIsSelected || isHighlighted,
-      },
-    };
-  });
-
-  const enhancedEdges = graph.edges.map((edge) => ({
-    ...edge,
-    animated: highlightIds.has(edge.id),
-    zIndex: highlightIds.has(edge.id) ? GRAPH_CONFIG.HIGHLIGHTED_EDGE_Z_INDEX : 0,
-    data: {
-      ...edge.data,
-      isHighlighted: highlightIds.has(edge.id),
-    },
-  }));
-
-  return { nodes: enhancedNodes, edges: enhancedEdges };
-}
 
 export function GraphView({
   className,
@@ -424,15 +139,10 @@ export function GraphView({
   }, []);
 
   // Determine searchable types based on view mode and column edges setting
-  const searchableTypes = useMemo((): SearchableType[] => {
-    if (viewMode === 'script') {
-      return ['script', 'table', 'view', 'cte'];
-    }
-    // Table view: include columns when showing column edges
-    return showColumnEdges
-      ? ['table', 'view', 'cte', 'column', 'script']
-      : ['table', 'view', 'cte', 'script'];
-  }, [viewMode, showColumnEdges]);
+  const searchableTypes = useMemo(
+    () => getGraphSearchableTypes(viewMode, showColumnEdges),
+    [viewMode, showColumnEdges]
+  );
 
   // State for async graph building results
   const [builtGraph, setBuiltGraph] = useState<{ nodes: FlowNode[]; edges: FlowEdge[] }>({
@@ -595,24 +305,8 @@ export function GraphView({
   const layoutNodes = filteredGraph.nodes;
   const layoutEdges = filteredGraph.edges;
 
-  const renderNodeDataById = useMemo(() => {
-    const map = new Map<string, FlowNode['data']>();
-    for (const node of renderGraph.nodes) {
-      map.set(node.id, node.data);
-    }
-    return map;
-  }, [renderGraph.nodes]);
-
-  const renderEdgeById = useMemo(() => {
-    const map = new Map<string, FlowEdge>();
-    for (const edge of renderGraph.edges) {
-      map.set(edge.id, edge);
-    }
-    return map;
-  }, [renderGraph.edges]);
-
-  const showMiniMap =
-    renderGraph.nodes.length > 0 && renderGraph.nodes.length <= MINIMAP_NODE_LIMIT;
+  const renderGraphIndex = useMemo(() => createRenderGraphIndex(renderGraph), [renderGraph]);
+  const showMiniMap = shouldShowMiniMap(renderGraph.nodes.length);
 
   useEffect(() => {
     if (!analysisResult) {
@@ -688,54 +382,9 @@ export function GraphView({
     if (GRAPH_DEBUG) console.time('[Layout] Stage 1: preserve positions');
     // Stage 1: Preserve existing node positions for smoother transitions.
     // This prevents nodes from jumping to origin (0,0) while layout computes.
-    setNodes((currentNodes) => {
-      if (currentNodes.length === 0) {
-        if (GRAPH_DEBUG) console.time('[Layout] getFastLayoutedNodes');
-        const fastResult = getFastLayoutedNodes(renderGraphSnapshot.nodes, direction);
-        if (GRAPH_DEBUG) console.timeEnd('[Layout] getFastLayoutedNodes');
-        return fastResult;
-      }
-
-      const positionMap = new Map(currentNodes.map((node) => [node.id, node.position]));
-
-      // Count how many new nodes don't have existing positions
-      const nodesWithoutPosition = renderGraphSnapshot.nodes.filter(
-        (node) => !positionMap.has(node.id)
-      );
-      const matchCount = renderGraphSnapshot.nodes.length - nodesWithoutPosition.length;
-
-      // If less than threshold of nodes have existing positions, treat as new graph.
-      // This handles project switch where node IDs completely change.
-      if (matchCount < renderGraphSnapshot.nodes.length * NODE_OVERLAP_THRESHOLD) {
-        if (GRAPH_DEBUG) console.log('[Layout] Low node overlap, using fast layout');
-        return getFastLayoutedNodes(renderGraphSnapshot.nodes, direction);
-      }
-
-      // If all nodes have existing positions, just preserve them (no fast layout needed)
-      if (nodesWithoutPosition.length === 0) {
-        if (GRAPH_DEBUG) console.log('[Layout] All nodes have positions, preserving');
-        return renderGraphSnapshot.nodes.map((node) => ({
-          ...node,
-          position: positionMap.get(node.id)!,
-        }));
-      }
-
-      // Only compute fast layout when there are actually new nodes that need positions
-      if (GRAPH_DEBUG)
-        console.log(`[Layout] ${nodesWithoutPosition.length} new nodes need positions`);
-      const fastLayoutNodes = getFastLayoutedNodes(renderGraphSnapshot.nodes, direction);
-      const fastPositionMap = new Map(fastLayoutNodes.map((node) => [node.id, node.position]));
-
-      return renderGraphSnapshot.nodes.map((node) => {
-        const existingPosition = positionMap.get(node.id);
-        if (existingPosition) {
-          return { ...node, position: existingPosition };
-        }
-        // Use fast layout position for new nodes instead of (0,0)
-        const fastPosition = fastPositionMap.get(node.id);
-        return { ...node, position: fastPosition ?? { x: 0, y: 0 } };
-      });
-    });
+    setNodes((currentNodes) =>
+      prepareProgressiveLayoutNodes(currentNodes, renderGraphSnapshot.nodes, direction)
+    );
     setEdges(renderGraphSnapshot.edges);
     if (GRAPH_DEBUG) console.timeEnd('[Layout] Stage 1: preserve positions');
 
@@ -857,31 +506,11 @@ export function GraphView({
       return;
     }
 
-    const hasRenderData = layoutedNodes.every((node) => renderNodeDataById.has(node.id));
+    const hasRenderData = layoutedNodes.every((node) => renderGraphIndex.nodeDataById.has(node.id));
     if (!hasRenderData) {
       if (GRAPH_DEBUG) console.timeEnd('[Layout] Stage 2: apply layout positions');
       return;
     }
-
-    const applyRenderDataToNode = (node: FlowNode): FlowNode => {
-      const renderData = renderNodeDataById.get(node.id);
-      if (!renderData || node.data === renderData) return node;
-      return { ...node, data: renderData };
-    };
-
-    const applyRenderDataToEdge = (edge: FlowEdge): FlowEdge => {
-      const renderEdge = renderEdgeById.get(edge.id);
-      if (!renderEdge || edge === renderEdge) return edge;
-      return {
-        ...edge,
-        type: renderEdge.type,
-        label: renderEdge.label,
-        animated: renderEdge.animated,
-        zIndex: renderEdge.zIndex,
-        data: renderEdge.data,
-        style: renderEdge.style,
-      };
-    };
 
     // Note: The layoutIsStale check was removed because it's incompatible with
     // async Web Worker layout. With async layout, layoutedNodes always reflects
@@ -895,12 +524,10 @@ export function GraphView({
       layoutSnapshot.defaultCollapsed !== lastAppliedDefaultCollapsed.current;
 
     // Check if any individual node's collapse state changed (affects node height/layout)
-    const nodeCollapseChanged = layoutedNodes.some((node) => {
-      if (!isTableNodeData(node.data)) return false;
-      const currentCollapsed = node.data.isCollapsed ?? false;
-      const lastCollapsed = lastAppliedCollapseStates.current.get(node.id);
-      return lastCollapsed !== undefined && lastCollapsed !== currentCollapsed;
-    });
+    const nodeCollapseChanged = hasNodeCollapseChanged(
+      layoutedNodes,
+      lastAppliedCollapseStates.current
+    );
 
     // Trigger full layout reapplication when view-affecting settings change
     const needsFullUpdate =
@@ -913,8 +540,8 @@ export function GraphView({
       nodeCollapseChanged;
 
     if (needsFullUpdate) {
-      setNodes(layoutedNodes.map(applyRenderDataToNode));
-      setEdges(layoutedEdges.map(applyRenderDataToEdge));
+      setNodes(applyRenderDataToNodes(layoutedNodes, renderGraphIndex.nodeDataById));
+      setEdges(applyRenderDataToEdges(layoutedEdges, renderGraphIndex.edgeById));
       isInitialized.current = true;
       lastResultId.current = currentResultId;
       lastViewMode.current = layoutSnapshot.viewMode;
@@ -923,28 +550,16 @@ export function GraphView({
       lastAppliedDefaultCollapsed.current = layoutSnapshot.defaultCollapsed;
     } else {
       // Preserve user-adjusted positions while updating node data
-      setNodes((currentNodes) => {
-        return layoutedNodes.map((layoutNode) => {
-          const currentNode = currentNodes.find((n) => n.id === layoutNode.id);
-          if (currentNode) {
-            return applyRenderDataToNode({ ...layoutNode, position: currentNode.position });
-          }
-          return applyRenderDataToNode(layoutNode);
-        });
-      });
-      setEdges(layoutedEdges.map(applyRenderDataToEdge));
+      setNodes((currentNodes) =>
+        applyRenderDataToNodes(layoutedNodes, renderGraphIndex.nodeDataById, currentNodes)
+      );
+      setEdges(applyRenderDataToEdges(layoutedEdges, renderGraphIndex.edgeById));
     }
 
     // Update tracked collapse states
-    const newCollapseStates = new Map<string, boolean>();
-    for (const node of layoutedNodes) {
-      if (isTableNodeData(node.data)) {
-        newCollapseStates.set(node.id, node.data.isCollapsed ?? false);
-      }
-    }
-    lastAppliedCollapseStates.current = newCollapseStates;
+    lastAppliedCollapseStates.current = getNodeCollapseStates(layoutedNodes);
     if (GRAPH_DEBUG) console.timeEnd('[Layout] Stage 2: apply layout positions');
-  }, [layoutedNodes, layoutedEdges, renderNodeDataById, renderEdgeById, setNodes, setEdges]);
+  }, [layoutedNodes, layoutedEdges, renderGraphIndex, setNodes, setEdges]);
 
   const internalGraphRef = useRef<HTMLDivElement>(null);
   const finalRef = graphContainerRef || internalGraphRef;
@@ -1210,79 +825,21 @@ export function GraphView({
         <RevealHandler applyPulse={applyRevealPulse} />
         <ViewportHandler initialViewport={initialViewport} onViewportChange={onViewportChange} />
         <FitViewHandler trigger={fitViewTrigger} />
-        <Background />
-        <Controls />
-        <Panel position="top-left" className="flex gap-3 items-start">
-          <ViewModeSelector />
-          {viewMode === 'script' && (
-            <ToolbarToggleButton
-              isActive={showScriptTables}
-              onClick={actions.toggleShowScriptTables}
-              ariaLabel="Toggle table details"
-              tooltip={showScriptTables ? 'Hide tables' : 'Show tables'}
-              icon={<LayoutList className="size-4" strokeWidth={showScriptTables ? 2.5 : 1.5} />}
-            />
-          )}
-          <GraphSearchControl
-            searchTerm={effectiveSearchTerm ?? ''}
-            onSearchTermChange={handleSearchTermChange}
-            searchableTypes={searchableTypes}
-            focusMode={focusMode}
-            onFocusModeChange={handleFocusModeChange}
-          />
-          {viewMode !== 'script' && (
-            <ToolbarToggleButton
-              isActive={!defaultCollapsed}
-              onClick={() => actions.setAllNodesCollapsed(!defaultCollapsed)}
-              ariaLabel={defaultCollapsed ? 'Expand all tables' : 'Collapse all tables'}
-              tooltip={defaultCollapsed ? 'Expand all tables' : 'Collapse all tables'}
-              icon={
-                defaultCollapsed ? (
-                  <Maximize2 className="size-4" strokeWidth={1.5} />
-                ) : (
-                  <Minimize2 className="size-4" strokeWidth={1.5} />
-                )
-              }
-            />
-          )}
-          {viewMode !== 'script' && (
-            <ToolbarToggleButton
-              isActive={showColumnEdges}
-              onClick={actions.toggleColumnEdges}
-              ariaLabel={showColumnEdges ? 'Show table connections' : 'Show column lineage'}
-              tooltip={showColumnEdges ? 'Show table connections' : 'Show column lineage'}
-              icon={
-                showColumnEdges ? (
-                  <GitBranch className="size-4" strokeWidth={1.5} />
-                ) : (
-                  <Route className="size-4" strokeWidth={1.5} />
-                )
-              }
-            />
-          )}
-          {viewMode !== 'script' && <TableFilterDropdown />}
-        </Panel>
-        <Panel position="top-right" className="flex gap-3 items-start">
-          <Legend viewMode={viewMode} />
-          <LayoutSelector />
-        </Panel>
-        <Panel position="bottom-left" className="!m-3">
-          <LayoutProgressIndicator />
-        </Panel>
-        {showMiniMap && (
-          <MiniMap
-            nodeColor={(node) => {
-              if (isTableNodeData(node.data)) {
-                return getMinimapNodeColor(node.data.nodeType || 'table');
-              }
-              // For script nodes, check node type from id prefix
-              if (node.id.startsWith('script:')) {
-                return getMinimapNodeColor('script');
-              }
-              return getMinimapNodeColor('table');
-            }}
-          />
-        )}
+        <GraphViewControls
+          viewMode={viewMode}
+          showScriptTables={showScriptTables}
+          defaultCollapsed={defaultCollapsed}
+          showColumnEdges={showColumnEdges}
+          searchTerm={effectiveSearchTerm ?? ''}
+          searchableTypes={searchableTypes}
+          focusMode={focusMode}
+          showMiniMap={showMiniMap}
+          onSearchTermChange={handleSearchTermChange}
+          onFocusModeChange={handleFocusModeChange}
+          onToggleShowScriptTables={actions.toggleShowScriptTables}
+          onSetAllNodesCollapsed={actions.setAllNodesCollapsed}
+          onToggleColumnEdges={actions.toggleColumnEdges}
+        />
       </ReactFlow>
     </div>
   );
