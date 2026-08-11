@@ -4,7 +4,9 @@
 //! FROM clauses, JOINs, WHERE/HAVING filters, and wildcard expansion. It builds the
 //! column-level lineage graph by tracking data flow from source columns to output columns.
 
-use super::context::{ColumnRef, OutputColumn, PendingWildcard, StatementContext};
+use super::context::{
+    ColumnRef, OutputColumn, PendingWildcard, StatementContext, DBT_MODEL_SINK_METADATA_KEY,
+};
 use super::helpers::{
     generate_column_node_id, generate_edge_id, generate_node_id, normalize_schema_type,
 };
@@ -948,13 +950,27 @@ impl<'a> Analyzer<'a> {
             .target_node
             .as_deref()
             .map(|target| generate_edge_id(target, &node_id));
+        let qualified_name = params.target_node.as_deref().and_then(|target| {
+            ctx.nodes
+                .iter()
+                .find(|node| node.id.as_ref() == target)
+                .filter(|node| {
+                    node.metadata
+                        .as_ref()
+                        .and_then(|metadata| metadata.get(DBT_MODEL_SINK_METADATA_KEY))
+                        .and_then(serde_json::Value::as_bool)
+                        == Some(true)
+                })
+                .and_then(|node| node.qualified_name.as_deref())
+                .map(|target_name| format!("{target_name}.{normalized_name}").into())
+        });
 
         // Create column node
         let col_node = Node {
             id: node_id.clone(),
             node_type: NodeType::Column,
             label: normalized_name.clone().into(),
-            qualified_name: None, // Will be set if we have target table
+            qualified_name,
             expression: params.expression.as_deref().map(Into::into),
             metadata: params.data_type.as_ref().map(|dt| {
                 let mut m = HashMap::new();
@@ -996,6 +1012,7 @@ impl<'a> Analyzer<'a> {
             if let Some(ref table_canonical) = resolved_table {
                 resolved_sources += 1;
                 let mut source_col_id = None;
+                let normalized_source_col = self.normalize_identifier(&source.column);
 
                 // Try alias-specific subquery columns first, then canonical CTE/derived columns.
                 if let Some(cte_cols) = source
@@ -1004,7 +1021,6 @@ impl<'a> Analyzer<'a> {
                     .and_then(|qualifier| ctx.resolve_subquery_columns(qualifier))
                     .or_else(|| ctx.resolve_subquery_columns(table_canonical))
                 {
-                    let normalized_source_col = self.normalize_identifier(&source.column);
                     if let Some(col) = cte_cols.iter().find(|c| c.name == normalized_source_col) {
                         source_col_id = Some(col.node_id.clone());
                     }
@@ -1037,11 +1053,13 @@ impl<'a> Analyzer<'a> {
 
                 // Fallback to generating a new ID
                 let source_col_id = source_col_id.unwrap_or_else(|| {
-                    generate_column_node_id(
-                        Some(&table_node_id),
-                        &self.normalize_identifier(&source.column),
-                    )
+                    generate_column_node_id(Some(&table_node_id), &normalized_source_col)
                 });
+                let identity_source_col = if self.tracker.is_declared(table_canonical) {
+                    normalized_source_col.as_str()
+                } else {
+                    source.column.as_str()
+                };
 
                 // Check if source column exists in schema
                 self.validate_column(ctx, table_canonical, &source.column);
@@ -1051,7 +1069,7 @@ impl<'a> Analyzer<'a> {
                     id: source_col_id.clone(),
                     node_type: NodeType::Column,
                     label: source.column.clone().into(),
-                    qualified_name: Some(format!("{}.{}", table_canonical, source.column).into()),
+                    qualified_name: Some(format!("{table_canonical}.{identity_source_col}").into()),
                     ..Default::default()
                 };
                 ctx.add_node(source_col_node);
@@ -1603,7 +1621,12 @@ impl<'a> Analyzer<'a> {
         column_name: &str,
         data_type: Option<String>,
     ) -> Option<Arc<str>> {
-        let col_node_id = generate_column_node_id(Some(source_node_id), column_name);
+        let identity_column_name = if self.tracker.is_declared(source_canonical) {
+            self.normalize_identifier(column_name)
+        } else {
+            column_name.to_string()
+        };
+        let col_node_id = generate_column_node_id(Some(source_node_id), &identity_column_name);
 
         if ctx.node_ids.contains(&col_node_id) {
             // Already exists, return the ID for edge creation
@@ -1615,7 +1638,7 @@ impl<'a> Analyzer<'a> {
             id: col_node_id.clone(),
             node_type: NodeType::Column,
             label: column_name.to_string().into(),
-            qualified_name: Some(format!("{}.{}", source_canonical, column_name).into()),
+            qualified_name: Some(format!("{source_canonical}.{identity_column_name}").into()),
             resolution_source: Some(ResolutionSource::Implied),
             ..Default::default()
         });
@@ -1639,7 +1662,7 @@ impl<'a> Analyzer<'a> {
         }
 
         // Record in source_table_columns for implied schema
-        ctx.record_source_column(source_canonical, column_name, data_type);
+        ctx.record_source_column(source_canonical, &identity_column_name, data_type);
 
         Some(col_node_id)
     }

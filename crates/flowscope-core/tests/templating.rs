@@ -929,10 +929,18 @@ use flowscope_core::{
 /// Helper to run multi-file dbt analysis.
 #[cfg(feature = "templating")]
 fn analyze_dbt_files(files: Vec<FileSource>) -> flowscope_core::AnalyzeResult {
+    analyze_dbt_files_with_dialect(files, Dialect::Postgres)
+}
+
+#[cfg(feature = "templating")]
+fn analyze_dbt_files_with_dialect(
+    files: Vec<FileSource>,
+    dialect: Dialect,
+) -> flowscope_core::AnalyzeResult {
     let request = AnalyzeRequest {
         sql: String::new(),
         files: Some(files),
-        dialect: Dialect::Postgres,
+        dialect,
         source_name: None,
         options: None,
         schema: None,
@@ -2312,5 +2320,162 @@ fn dbt_chained_models_unify_producer_and_consumer_nodes() {
     assert!(
         has_stg_to_int,
         "should have a DataFlow edge stg_supplies -> int_supplies at the table level"
+    );
+}
+
+#[test]
+#[cfg(feature = "templating")]
+fn snowflake_dbt_ref_columns_merge_with_model_definition_columns() {
+    // Regression test for https://github.com/pondpilot/flowscope/issues/45.
+    let stg_customers = r#"
+{{ config(materialized='view') }}
+WITH final AS (
+    SELECT
+        customer_id,
+        first_name,
+        last_name,
+        first_name || ' ' || last_name AS full_name,
+        created_at
+    FROM {{ source('raw', 'customers') }}
+)
+SELECT customer_id, first_name, last_name, full_name, created_at
+FROM final
+"#;
+    let customers = r#"
+SELECT customer_id, first_name, last_name, full_name, created_at
+FROM {{ ref('stg_customers') }}
+"#;
+
+    let result = analyze_dbt_files_with_dialect(
+        vec![
+            FileSource {
+                name: "models/stg_customers.sql".to_string(),
+                content: stg_customers.to_string(),
+            },
+            FileSource {
+                name: "models/customers.sql".to_string(),
+                content: customers.to_string(),
+            },
+        ],
+        Dialect::Snowflake,
+    );
+
+    assert!(
+        !result.summary.has_errors,
+        "Snowflake dbt analysis should succeed: {:?}",
+        result.issues
+    );
+
+    let stg_customers_node = result
+        .nodes
+        .iter()
+        .find(|node| {
+            node.node_type == NodeType::View
+                && node
+                    .canonical_name
+                    .as_ref()
+                    .is_some_and(|name| name.name == "STG_CUSTOMERS")
+        })
+        .expect("stg_customers model view should exist");
+    let owned_column_ids: std::collections::HashSet<_> = result
+        .edges
+        .iter()
+        .filter(|edge| edge.edge_type == EdgeType::Ownership && edge.from == stg_customers_node.id)
+        .map(|edge| edge.to.as_ref())
+        .collect();
+    let mut owned_column_labels: Vec<_> = result
+        .nodes
+        .iter()
+        .filter(|node| owned_column_ids.contains(node.id.as_ref()))
+        .map(|node| node.label.as_ref())
+        .collect();
+    owned_column_labels.sort_unstable();
+
+    assert_eq!(
+        owned_column_labels,
+        [
+            "CREATED_AT",
+            "CUSTOMER_ID",
+            "FIRST_NAME",
+            "FULL_NAME",
+            "LAST_NAME",
+        ],
+        "the model definition and downstream ref must share Snowflake-normalized column identities"
+    );
+}
+
+#[test]
+#[cfg(feature = "templating")]
+fn dbt_ref_column_merge_preserves_case_sensitive_dialect_identity() {
+    let result = analyze_dbt_files_with_dialect(
+        vec![
+            FileSource {
+                name: "models/stg_customers.sql".to_string(),
+                content: "{{ config(materialized='view') }} SELECT Customer_ID FROM raw.customers"
+                    .to_string(),
+            },
+            FileSource {
+                name: "models/customers.sql".to_string(),
+                content: "SELECT customer_id FROM {{ ref('stg_customers') }}".to_string(),
+            },
+        ],
+        Dialect::Mysql,
+    );
+
+    assert!(
+        !result.summary.has_errors,
+        "case-sensitive dbt analysis should succeed: {:?}",
+        result.issues
+    );
+
+    let stg_customers_node = result
+        .nodes
+        .iter()
+        .find(|node| node.node_type == NodeType::View && node.label.as_ref() == "stg_customers")
+        .expect("stg_customers model view should exist");
+    let owned_column_ids: std::collections::HashSet<_> = result
+        .edges
+        .iter()
+        .filter(|edge| edge.edge_type == EdgeType::Ownership && edge.from == stg_customers_node.id)
+        .map(|edge| edge.to.as_ref())
+        .collect();
+    let mut owned_column_labels: Vec<_> = result
+        .nodes
+        .iter()
+        .filter(|node| owned_column_ids.contains(node.id.as_ref()))
+        .map(|node| node.label.as_ref())
+        .collect();
+    owned_column_labels.sort_unstable();
+
+    assert_eq!(owned_column_labels, ["Customer_ID", "customer_id"]);
+}
+
+#[test]
+#[cfg(feature = "templating")]
+fn snowflake_dbt_consumer_first_column_keeps_producer_expression() {
+    let result = analyze_dbt_files_with_dialect(
+        vec![
+            FileSource {
+                name: "models/customers.sql".to_string(),
+                content: "SELECT full_name FROM {{ ref('stg_customers') }}".to_string(),
+            },
+            FileSource {
+                name: "models/stg_customers.sql".to_string(),
+                content: "{{ config(materialized='view') }} SELECT first_name || last_name AS full_name FROM raw.customers"
+                    .to_string(),
+            },
+        ],
+        Dialect::Snowflake,
+    );
+
+    let full_name = result
+        .nodes
+        .iter()
+        .find(|node| node.qualified_name.as_deref() == Some("STG_CUSTOMERS.FULL_NAME"))
+        .expect("consumer and producer full_name columns should merge");
+
+    assert_eq!(
+        full_name.expression.as_deref(),
+        Some("first_name || last_name")
     );
 }

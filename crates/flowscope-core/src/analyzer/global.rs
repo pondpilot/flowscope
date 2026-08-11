@@ -551,10 +551,9 @@ fn flat_edge_id(key: &EdgeIndexKey) -> Arc<str> {
 /// flat node.
 ///
 /// Precedence rules:
-/// - **First-wins** for `node_type`, `label`, and `expression`: the earliest
-///   statement to emit the node defines these and incoming values are
-///   discarded.
-/// - **None-fill** for `qualified_name`, `span`, `body_span`,
+/// - **First-wins** for `node_type` and `label`: the earliest statement to emit
+///   the node defines these and incoming values are discarded.
+/// - **None-fill** for `qualified_name`, `expression`, `span`, `body_span`,
 ///   `resolution_source`, `aggregation`, and `metadata`: existing non-`None`
 ///   values are preserved, but incoming values fill in gaps when the
 ///   existing slot is still `None`.
@@ -599,6 +598,9 @@ fn merge_node_into(
     }
     if existing.qualified_name.is_none() {
         existing.qualified_name = incoming.qualified_name;
+    }
+    if existing.expression.is_none() {
+        existing.expression = incoming.expression;
     }
     if existing.resolution_source.is_none() {
         existing.resolution_source = incoming.resolution_source;
