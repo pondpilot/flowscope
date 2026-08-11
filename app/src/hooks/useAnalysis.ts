@@ -173,21 +173,6 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
     [buildAnalysisContext, enableLinting, hideCTEs]
   );
 
-  const buildAnalysisInput = useCallback(
-    (project: Project | null, activeFileContent?: string, activeFilePath?: string) => {
-      const analysisPayload = buildAnalysisPayload(project, activeFileContent, activeFilePath);
-      if (!analysisPayload) {
-        return null;
-      }
-
-      return {
-        ...analysisPayload,
-        cacheKey: buildAnalysisCacheKey(analysisPayload.payload),
-      };
-    },
-    [buildAnalysisPayload]
-  );
-
   const canUseMemoryCache = !adapter || adapter.type === 'wasm';
   // The canonical hash scans every file character. Skip it for REST (which cannot
   // reuse memory results), debounce it for interactive WASM project changes, and
@@ -215,6 +200,7 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
     currentAnalysisPayload,
     ANALYSIS_CACHE_KEY_DEBOUNCE_MS
   );
+  const proactiveCacheInputIsSettled = currentAnalysisPayload === debouncedAnalysisPayload;
   const currentAnalysisInput = useMemo(() => {
     if (
       !canUseMemoryCache ||
@@ -340,7 +326,12 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
         `[useAnalysis] IndexedDB cache effect triggered (projectId: ${activeProjectId?.slice(0, 8) ?? 'null'})`
       );
 
-    if (!backendReady || !activeProjectId || !currentAnalysisInput) {
+    if (
+      !backendReady ||
+      !activeProjectId ||
+      !currentAnalysisInput ||
+      !proactiveCacheInputIsSettled
+    ) {
       return;
     }
 
@@ -434,6 +425,7 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
     activeProjectId,
     canUseMemoryCache,
     currentAnalysisInput,
+    proactiveCacheInputIsSettled,
     getResult,
     storeResult,
     setMetrics,
@@ -455,14 +447,18 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
       try {
-        const analysisInput = buildAnalysisInput(currentProject, activeFileContent, activeFilePath);
+        const analysisInput = buildAnalysisPayload(
+          currentProject,
+          activeFileContent,
+          activeFilePath
+        );
 
         if (!analysisInput) {
           setError('No project context available');
           return;
         }
 
-        const { context, payload: adapterPayload, cacheKey } = analysisInput;
+        const { context, payload: adapterPayload } = analysisInput;
 
         if (context.files.length === 0) {
           if (currentProject.runMode === 'custom') {
@@ -481,6 +477,7 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
           setError(validation.error || 'Validation failed');
           return;
         }
+        const cacheKey = canUseMemoryCache ? buildAnalysisCacheKey(adapterPayload) : null;
 
         console.log(context.description);
 
@@ -502,7 +499,7 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
         }
 
         const cachedResult =
-          activeProjectId && canUseMemoryCache ? getResult(activeProjectId, cacheKey) : null;
+          activeProjectId && cacheKey ? getResult(activeProjectId, cacheKey) : null;
         const knownCacheKey = cachedResult ? cacheKey : null;
         const displayResult = (result: AnalyzeResult) => {
           startTransition(() => {
@@ -581,14 +578,14 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
         const durationMs = performance.now() - analysisStart;
 
         if (!analysisResponse.skipped && analysisResponse.result) {
-          if (canUseMemoryCache && analysisResponse.cacheKey !== cacheKey) {
+          if (cacheKey && analysisResponse.cacheKey !== cacheKey) {
             throw new Error('Analysis response cache key did not match the requested inputs');
           }
 
           // Snapshot the exact content that was just analyzed so the staleness
           // gate (#22) has a baseline keyed like analyzer statements.
           displayResult(analysisResponse.result);
-          if (activeProjectId && canUseMemoryCache) {
+          if (activeProjectId && cacheKey) {
             storeResult(activeProjectId, cacheKey, analysisResponse.result);
           }
         }
@@ -622,7 +619,7 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
       storeResult,
       setMetrics,
       getResult,
-      buildAnalysisInput,
+      buildAnalysisPayload,
       validateFiles,
       setAnalyzing,
       setError,

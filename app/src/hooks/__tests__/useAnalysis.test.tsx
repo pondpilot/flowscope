@@ -77,9 +77,9 @@ function buildProjectCacheKey(project: Project): string {
   });
 }
 
-function createAdapter(analyze = vi.fn()): BackendAdapter {
+function createAdapter(analyze = vi.fn(), type: BackendAdapter['type'] = 'wasm'): BackendAdapter {
   return {
-    type: 'wasm',
+    type,
     initialize: vi.fn(),
     analyze,
     getCached: vi.fn().mockResolvedValue(null),
@@ -178,6 +178,83 @@ describe('useAnalysis memory cache', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(300);
     });
+    expect(lineageActions.setResult).toHaveBeenCalledWith(cachedResult);
+  });
+
+  it('ignores an old persistent lookup that resolves during the debounce window', async () => {
+    const projectA = createProject('project-1', 'SELECT 1');
+    const projectB = createProject('project-1', 'SELECT 2');
+    const keyA = buildProjectCacheKey(projectA);
+    activeProjectId = projectA.id;
+    currentProject = projectA;
+
+    let resolveLookup!: (value: {
+      result: AnalyzeResult;
+      cacheKey: string;
+      cacheHit: boolean;
+      skipped: boolean;
+      timings: null;
+    }) => void;
+    const lookup = new Promise<Parameters<typeof resolveLookup>[0]>((resolve) => {
+      resolveLookup = resolve;
+    });
+    const adapter = createAdapter();
+    adapter.getCached = vi.fn(() => lookup);
+    const { rerender } = renderHook(() => useAnalysis(true, { adapter }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(adapter.getCached).toHaveBeenCalledTimes(1);
+    lineageActions.setResult.mockClear();
+
+    act(() => {
+      currentProject = projectB;
+      rerender();
+    });
+
+    await act(async () => {
+      resolveLookup({
+        result: cachedResult,
+        cacheKey: keyA,
+        cacheHit: true,
+        skipped: false,
+        timings: null,
+      });
+      await lookup;
+    });
+
+    expect(lineageActions.setResult).not.toHaveBeenCalledWith(cachedResult);
+    expect(useAnalysisStore.getState().getResult(projectA.id, keyA)).toBeNull();
+  });
+
+  it('does not build a canonical cache key for explicit REST analysis', async () => {
+    const charCodeAt = vi.fn(() => {
+      throw new Error('REST content was hashed');
+    });
+    const hashSentinel = {
+      length: PROACTIVE_ANALYSIS_CACHE_KEY_MAX_CHARS + 1,
+      charCodeAt,
+    } as unknown as string;
+    currentProject = createProject('project-1', hashSentinel);
+    activeProjectId = currentProject.id;
+
+    const analyze = vi.fn().mockResolvedValue({
+      result: cachedResult,
+      cacheKey: '',
+      cacheHit: false,
+      skipped: false,
+      timings: null,
+    });
+    const adapter = createAdapter(analyze, 'rest');
+    const { result } = renderHook(() => useAnalysis(true, { adapter }));
+
+    await act(async () => {
+      await result.current.runAnalysis();
+    });
+
+    expect(charCodeAt).not.toHaveBeenCalled();
+    expect(analyze).toHaveBeenCalledTimes(1);
     expect(lineageActions.setResult).toHaveBeenCalledWith(cachedResult);
   });
 });
