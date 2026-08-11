@@ -26,7 +26,7 @@ let cacheSequence = 0;
 
 export interface AnalysisCacheIdentity {
   projectId: string;
-  cacheKey: string;
+  cacheKey: string | null;
 }
 
 export interface AnalysisCacheRestoreDecision {

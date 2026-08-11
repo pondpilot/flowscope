@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef, startTransition } from 'react';
+import type { AnalyzeResult } from '@pondpilot/flowscope-core';
 import { useLineage } from '@pondpilot/flowscope-react';
 import { analyzeWithWorker, getCachedAnalysis, syncAnalysisFiles } from '@/lib/analysis-worker';
 import type { BackendAdapter, AnalysisPayload } from '@/lib/backend-adapter';
@@ -296,6 +297,7 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
     if (!currentAnalysisCacheKey) {
       if (attemptedCacheIdentityRef.current?.projectId !== activeProjectId) {
         actionsRef.current.setResult(null);
+        attemptedCacheIdentityRef.current = { projectId: activeProjectId, cacheKey: null };
       }
       return;
     }
@@ -502,6 +504,21 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
         const cachedResult =
           activeProjectId && canUseMemoryCache ? getResult(activeProjectId, cacheKey) : null;
         const knownCacheKey = cachedResult ? cacheKey : null;
+        const displayResult = (result: AnalyzeResult) => {
+          startTransition(() => {
+            actionsRef.current.setResult(result);
+            actionsRef.current.setAnalyzedContent(
+              new Map(context.files.map((file) => [file.name, file.content]))
+            );
+            actionsRef.current.setStalePaths([]);
+          });
+        };
+
+        // A known key asks the worker to omit its result payload, so install the
+        // exact memory hit before allowing that response optimization.
+        if (cachedResult) {
+          displayResult(cachedResult);
+        }
 
         let analysisResponse: Awaited<ReturnType<typeof analyzeWithWorker>>;
         let fileSyncRetries = 0;
@@ -568,18 +585,9 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
             throw new Error('Analysis response cache key did not match the requested inputs');
           }
 
-          // Use startTransition to make the result update low-priority,
-          // allowing UI interactions and worker callbacks to proceed without blocking
-          startTransition(() => {
-            actionsRef.current.setResult(analysisResponse.result);
-            // Snapshot the exact content that was just analyzed so the
-            // staleness gate (#22) has a baseline to diff future edits
-            // against. Keyed by the same path the analyzer keys statements by.
-            actionsRef.current.setAnalyzedContent(
-              new Map(context.files.map((f) => [f.name, f.content]))
-            );
-            actionsRef.current.setStalePaths([]);
-          });
+          // Snapshot the exact content that was just analyzed so the staleness
+          // gate (#22) has a baseline keyed like analyzer statements.
+          displayResult(analysisResponse.result);
           if (activeProjectId && canUseMemoryCache) {
             storeResult(activeProjectId, cacheKey, analysisResponse.result);
           }

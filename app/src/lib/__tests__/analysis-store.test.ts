@@ -96,6 +96,7 @@ describe('analysis memory cache', () => {
     const keyA = { projectId: 'project-1', cacheKey: 'key-a' };
     const keyB = { projectId: 'project-1', cacheKey: 'key-b' };
     const otherProject = { projectId: 'project-2', cacheKey: 'key-x' };
+    const clearedProject = { projectId: 'project-1', cacheKey: null };
 
     expect(getAnalysisCacheRestoreDecision(otherProject, keyB, null)).toEqual({
       shouldSetResult: true,
@@ -108,6 +109,14 @@ describe('analysis memory cache', () => {
     expect(getAnalysisCacheRestoreDecision(keyA, keyB, null)).toEqual({
       shouldSetResult: false,
       result: null,
+    });
+    expect(getAnalysisCacheRestoreDecision(clearedProject, keyB, null)).toEqual({
+      shouldSetResult: false,
+      result: null,
+    });
+    expect(getAnalysisCacheRestoreDecision(clearedProject, keyA, result)).toEqual({
+      shouldSetResult: true,
+      result,
     });
   });
 
