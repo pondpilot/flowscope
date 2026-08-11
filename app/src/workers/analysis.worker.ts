@@ -264,11 +264,7 @@ async function runAnalysis(
     resolvedPayload.templateMode && resolvedPayload.templateMode !== 'raw'
       ? { mode: resolvedPayload.templateMode, context: {} }
       : undefined;
-  // Note: templateConfig is supported by the WASM API but not yet typed in @pondpilot/flowscope-core.
-  // The request is serialized to JSON, and the Rust side deserializes it with templateConfig support.
-  const analysisRequest: Parameters<typeof analyzeSql>[0] & {
-    templateConfig?: { mode: TemplateMode; context: Record<string, unknown> };
-  } = {
+  const analysisRequest: Parameters<typeof analyzeSql>[0] = {
     sql: '',
     files: resolvedPayload.files,
     dialect: resolvedPayload.dialect,

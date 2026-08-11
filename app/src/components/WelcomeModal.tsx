@@ -38,7 +38,7 @@ export function WelcomeModal({ onClose }: WelcomeModalProps) {
         <DialogHeader>
           <DialogTitle className="text-xl">Welcome to FlowScope</DialogTitle>
           <DialogDescription>
-            A privacy-first SQL lineage engine that runs entirely in your browser.
+            A client-side SQL lineage engine that runs entirely in your browser.
           </DialogDescription>
         </DialogHeader>
 
@@ -66,9 +66,10 @@ export function WelcomeModal({ onClose }: WelcomeModalProps) {
           <div className="flex items-start gap-3">
             <Shield className="h-5 w-5 text-muted-foreground mt-0.5 shrink-0" />
             <div>
-              <p className="font-medium text-sm">Privacy First</p>
+              <p className="font-medium text-sm">Local by Default</p>
               <p className="text-sm text-muted-foreground">
-                All analysis runs locally in your browser. Your SQL never leaves your machine.
+                SQL lineage analysis runs in your browser. Librarian sends prompt context only after
+                you configure a provider and ask a question.
               </p>
             </div>
           </div>

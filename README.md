@@ -1,6 +1,6 @@
 # FlowScope
 
-[![CI](https://github.com/pondpilot/flowscope/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/pondpilot/flowscope/actions/workflows/ci.yml)
+[![CI](https://github.com/pondpilot/flowscope/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/pondpilot/flowscope/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/badge/docs-available-brightgreen.svg)](docs/README.md)
 [![codecov](https://codecov.io/gh/pondpilot/flowscope/graph/badge.svg)](https://codecov.io/gh/pondpilot/flowscope)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
@@ -14,7 +14,7 @@
 
 FlowScope includes a full web application at [flowscope.pondpilot.io](https://flowscope.pondpilot.io) for interactive, multi-file SQL lineage analysis.
 
-Under the hood, it is a privacy-first SQL lineage engine that runs entirely in the browser. Built with Rust and WebAssembly, it analyzes SQL queries to produce lineage graphs that describe how tables, CTEs, and columns flow through transformations.
+Under the hood, it is a client-side SQL lineage engine that runs entirely in the browser. Built with Rust and WebAssembly, it analyzes SQL queries to produce lineage graphs that describe how tables, CTEs, and columns flow through transformations.
 
 The engine is designed for embedding into web apps, browser extensions, and developer tools that need instant lineage analysis without sending SQL to a server.
 
@@ -33,7 +33,9 @@ Features:
 - dbt/Jinja template preprocessing for dbt models
 - Export to Mermaid, JSON, CSV, Excel, or HTML reports
 - Librarian — AI chat panel that answers questions about your data based on lineage analysis and uploaded PDF docs
-- All processing happens in your browser — your SQL never leaves your machine
+- SQL lineage analysis runs in your browser by default. Librarian sends prompt context to an AI provider only after you configure the provider and submit a question.
+
+When Librarian is used, its request includes the active SQL snippet, formatted lineage, relevant text excerpts and citations from uploaded PDFs, recent Librarian chat history, and the question. The browser sends this data directly to the configured AI provider. PDF extraction, embeddings, and vector search remain local. See the [Librarian privacy details](docs/librarian.md#privacy).
 
 ### Command-Line Interface
 
@@ -106,7 +108,7 @@ See [CLI documentation](crates/flowscope-cli/README.md) for all options.
 
 ## Key Features
 
-- Client-side analysis with zero data egress
+- Local SQL lineage analysis by default, with explicit provider requests only when Librarian is configured and used
 - Multi-dialect coverage (PostgreSQL, Snowflake, BigQuery, DuckDB, Redshift, and more)
 - dbt and Jinja templating support with built-in macro stubs (`ref()`, `source()`, `var()`)
 - Table and column lineage with schema-aware wildcard expansion

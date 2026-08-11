@@ -186,5 +186,5 @@ Use a single repo tag for each release (`vX.Y.Z`) and align Rust workspace + npm
 
 ## Notes
 
-- The demo app (`app/`) and VS Code webview (`vscode/webview-ui/`) currently define no tests.
+- The demo app (`app/`) has a Vitest suite. The VS Code webview (`vscode/webview-ui/`) currently defines no tests.
 - For full CI parity, `just check` runs formatting checks, lint, typecheck, and schema checks.

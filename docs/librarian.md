@@ -1,6 +1,6 @@
 # Librarian — User Guide
 
-Librarian is an AI-powered chat panel inside FlowScope that answers questions about your SQL based on data lineage analysis and uploaded PDF documentation. It runs entirely in the browser — no backend.
+Librarian is an AI-powered chat panel inside FlowScope that answers questions about your SQL based on data lineage analysis and uploaded PDF documentation. The panel prepares its context in the browser and sends each question directly to the AI provider you configure; FlowScope does not proxy the request through its own backend.
 
 ## Opening the Panel
 
@@ -124,8 +124,11 @@ Check that the API key is valid and has quota. For Anthropic, ensure the model n
 
 ## Privacy
 
-- All processing (PDF extraction, embeddings, vector search) runs locally in your browser
-- Your SQL, PDFs, and questions are sent **only** to the AI provider you configured
+- SQL lineage analysis, PDF extraction, embeddings, and vector search run locally in your browser
+- No Librarian prompt data is sent until you configure an AI provider and submit a question
+- Each Librarian request sends the active SQL snippet (up to 3,000 characters), formatted lineage, up to five relevant PDF text excerpts with file and page citations, up to 10 recent chat messages, the configured system prompt, and your question to that provider
+- Uploaded PDF files are not sent to the provider; only the relevant text excerpts selected locally are included
+- The provider's data handling and retention policies apply to the request
 - No telemetry, no analytics, no third-party tracking
 
 ## What Librarian Does NOT Do

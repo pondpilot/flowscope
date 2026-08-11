@@ -64,5 +64,5 @@ app/ and vscode/webview-ui
 
 ## Notes
 
-- The demo app and VS Code webview currently define no tests.
+- The demo app has a Vitest suite. The VS Code webview currently defines no tests.
 - API schema snapshots live in `docs/api_schema.json` and are validated by `just check-schema`.
