@@ -10,7 +10,8 @@ import {
   useAnalysisStore,
   type AnalysisCacheIdentity,
 } from '@/lib/analysis-store';
-import { buildAnalysisCacheKey, canBuildProactiveAnalysisCacheKey } from '@/lib/analysis-hash';
+import { buildAnalysisCacheKey } from '@/lib/analysis-hash';
+import { canBuildProactiveAnalysisCacheKey } from '@/lib/analysis-cache-policy';
 import { useViewStateStore, getIssuesStateWithDefaults } from '@/lib/view-state-store';
 import { FILE_LIMITS, ANALYSIS_SQL_PREVIEW_LIMITS } from '@/lib/constants';
 import { AnalysisErrorCode, isAnalysisError } from '@/types';

@@ -13,13 +13,6 @@ const FNV_OFFSET_BASIS = 0xcbf29ce484222325n;
 const FNV_PRIME = 0x100000001b3n;
 const FNV_MASK = 0xffffffffffffffffn;
 
-/**
- * Proactive cache restoration runs on the UI thread after edits settle. Keep
- * that opportunistic work below a small payload size; explicit analysis runs
- * always build the exact canonical key regardless of size.
- */
-export const PROACTIVE_ANALYSIS_CACHE_KEY_MAX_CHARS = 250_000;
-
 export interface AnalysisHashInput {
   files: Array<{ name: string; content: string }>;
   dialect: Dialect;
@@ -32,28 +25,6 @@ export interface AnalysisHashInput {
 
 export interface FileSyncInput {
   files: Array<{ name: string; content: string }>;
-}
-
-export function canBuildProactiveAnalysisCacheKey(input: AnalysisHashInput): boolean {
-  let totalChars =
-    HASH_VERSION.length +
-    input.dialect.length +
-    input.schemaSQL.length +
-    (input.templateMode ?? 'raw').length +
-    3;
-
-  if (totalChars > PROACTIVE_ANALYSIS_CACHE_KEY_MAX_CHARS) {
-    return false;
-  }
-
-  for (const file of input.files) {
-    totalChars += file.name.length + file.content.length;
-    if (totalChars > PROACTIVE_ANALYSIS_CACHE_KEY_MAX_CHARS) {
-      return false;
-    }
-  }
-
-  return true;
 }
 
 /**

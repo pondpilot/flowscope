@@ -2,7 +2,8 @@ import type { AnalyzeResult } from '@pondpilot/flowscope-core';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BackendAdapter } from '@/lib/backend-adapter';
-import { buildAnalysisCacheKey, PROACTIVE_ANALYSIS_CACHE_KEY_MAX_CHARS } from '@/lib/analysis-hash';
+import { buildAnalysisCacheKey } from '@/lib/analysis-hash';
+import { PROACTIVE_ANALYSIS_CACHE_KEY_MAX_CHARS } from '@/lib/analysis-cache-policy';
 import { useAnalysisStore } from '@/lib/analysis-store';
 import type { Project } from '@/lib/project-store';
 

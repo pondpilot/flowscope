@@ -7,10 +7,9 @@ import {
 } from '@/lib/analysis-store';
 import {
   PROACTIVE_ANALYSIS_CACHE_KEY_MAX_CHARS,
-  buildAnalysisCacheKey,
   canBuildProactiveAnalysisCacheKey,
-  type AnalysisHashInput,
-} from '@/lib/analysis-hash';
+} from '@/lib/analysis-cache-policy';
+import { buildAnalysisCacheKey, type AnalysisHashInput } from '@/lib/analysis-hash';
 
 const result = { nodes: [], edges: [], statements: [], issues: [] } as unknown as AnalyzeResult;
 
