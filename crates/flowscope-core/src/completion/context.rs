@@ -746,7 +746,16 @@ fn select_scopes(
         }
 
         let keyword = keyword_from_token(&token.token);
-        if matches!(keyword.as_deref(), Some("UNION" | "EXCEPT" | "INTERSECT")) {
+        let select_star_except = keyword.as_deref() == Some("EXCEPT")
+            && index > 0
+            && matches!(tokens[index - 1].token, Token::Mul)
+            && matches!(
+                tokens.get(index + 1).map(|token| &token.token),
+                Some(Token::LParen)
+            );
+        if matches!(keyword.as_deref(), Some("UNION" | "EXCEPT" | "INTERSECT"))
+            && !select_star_except
+        {
             while active_scopes
                 .last()
                 .is_some_and(|scope_id| scopes[*scope_id].depth == paren_depth)
@@ -1953,7 +1962,7 @@ pub fn completion_items(request: &CompletionRequest) -> CompletionItemsResult {
                 parse_tables_in_scope(
                     tokens,
                     request.cursor_offset,
-                    context.statement_span.end,
+                    context.statement_span.end.max(request.cursor_offset),
                     &registry,
                 ),
                 &registry,

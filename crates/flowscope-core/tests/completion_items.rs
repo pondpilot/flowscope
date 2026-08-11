@@ -1359,6 +1359,32 @@ fn alias_shadowing_inner_subquery_wins() {
 }
 
 #[test]
+fn alias_shadowing_inner_subquery_wins_after_qualifier_whitespace() {
+    let request = request_at_cursor(
+        "SELECT * FROM users u WHERE EXISTS (SELECT 1 FROM orders u WHERE u. |",
+        Some(sample_schema()),
+    );
+    let result = completion_items(&request);
+    assert!(result.items.iter().any(|item| item.label == "total"));
+    assert!(!result.items.iter().any(|item| item.label == "email"));
+}
+
+#[test]
+fn alias_shadowing_ignores_bigquery_select_star_except() {
+    let request = request_at_cursor(
+        "SELECT * FROM users u WHERE EXISTS (SELECT * EXCEPT(id) FROM orders u WHERE u.|)",
+        Some(sample_schema()),
+    );
+    let request = CompletionRequest {
+        dialect: Dialect::Bigquery,
+        ..request
+    };
+    let result = completion_items(&request);
+    assert!(result.items.iter().any(|item| item.label == "total"));
+    assert!(!result.items.iter().any(|item| item.label == "email"));
+}
+
+#[test]
 fn alias_shadowing_outer_scope_unaffected() {
     // Outer `u.` after a subquery that shadows `u` should still resolve to users.
     let request = request_at_cursor(
