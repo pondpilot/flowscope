@@ -13,4 +13,3 @@ ignore:
   - "packages/core/src/wasm/**"
   - "**/generated/**"
   - "**/tests/**"
-  - "app/**"

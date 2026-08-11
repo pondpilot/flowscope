@@ -199,7 +199,15 @@
   },
   "oracle": {
     "normalization": "uppercase",
-    "pseudocolumns": ["LEVEL", "OBJECT_ID", "OBJECT_VALUE", "ROWID", "ROWNUM", "SYSDATE", "SYSTIMESTAMP"],
+    "pseudocolumns": [
+      "LEVEL",
+      "OBJECT_ID",
+      "OBJECT_VALUE",
+      "ROWID",
+      "ROWNUM",
+      "SYSDATE",
+      "SYSTIMESTAMP"
+    ],
     "pseudo_tables": ["DUAL"],
     "quote_chars": {
       "identifier_quotes": ["\""],

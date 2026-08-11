@@ -155,4 +155,13 @@ jobs:
 
       - name: Publish npm package (react)
         if: ${{ env.DRY_RUN != 'true' }}
-        run: echo "Skipping @pondpilot/flowscope-react publish."
+        working-directory: packages/react
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "@pondpilot/flowscope-react@${VERSION}" version >/dev/null 2>&1; then
+            echo "@pondpilot/flowscope-react@${VERSION} already published; skipping."
+          else
+            npm publish --workspaces=false
+          fi
+        env:
+          NODE_AUTH_TOKEN: ''

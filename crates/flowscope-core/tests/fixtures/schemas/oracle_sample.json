@@ -17,28 +17,17 @@
     {
       "schema": "IDM",
       "name": "REG_SUBJECTTYPE",
-      "columns": [
-        { "name": "ID_SUBJECTTYPE" },
-        { "name": "IS_ACTIVE" },
-        { "name": "NAME" }
-      ]
+      "columns": [{ "name": "ID_SUBJECTTYPE" }, { "name": "IS_ACTIVE" }, { "name": "NAME" }]
     },
     {
       "schema": "IDM",
       "name": "REG_SUBJECT_INFO",
-      "columns": [
-        { "name": "ID_SUBJECT" },
-        { "name": "ID_SUBJECTTYPE" }
-      ]
+      "columns": [{ "name": "ID_SUBJECT" }, { "name": "ID_SUBJECTTYPE" }]
     },
     {
       "schema": "IDM",
       "name": "SUBJECT",
-      "columns": [
-        { "name": "ID" },
-        { "name": "ID_SUBJECTTYPE" },
-        { "name": "NAME" }
-      ]
+      "columns": [{ "name": "ID" }, { "name": "ID_SUBJECTTYPE" }, { "name": "NAME" }]
     },
     {
       "schema": "CORE",
@@ -53,88 +42,52 @@
     {
       "schema": "BMRT_META",
       "name": "REG_DEAL",
-      "columns": [
-        { "name": "ID" },
-        { "name": "ID_DEAL" },
-        { "name": "DEAL_NUMB" }
-      ]
+      "columns": [{ "name": "ID" }, { "name": "ID_DEAL" }, { "name": "DEAL_NUMB" }]
     },
     {
       "schema": "BMRT",
       "name": "REG_DEAL",
-      "columns": [
-        { "name": "ID_DEAL" },
-        { "name": "DEAL_NUMB" }
-      ]
+      "columns": [{ "name": "ID_DEAL" }, { "name": "DEAL_NUMB" }]
     },
     {
       "schema": "BMRT",
       "name": "DEAL",
-      "columns": [
-        { "name": "ID" },
-        { "name": "DT_FROM" }
-      ]
+      "columns": [{ "name": "ID" }, { "name": "DT_FROM" }]
     },
     {
       "schema": "STG",
       "name": "BILLING_SYSTEM",
-      "columns": [
-        { "name": "TXN_ID" },
-        { "name": "AMOUNT" },
-        { "name": "TXN_DATE" }
-      ]
+      "columns": [{ "name": "TXN_ID" }, { "name": "AMOUNT" }, { "name": "TXN_DATE" }]
     },
     {
       "schema": "STG",
       "name": "CRM_SYSTEM",
-      "columns": [
-        { "name": "TXN_ID" },
-        { "name": "AMOUNT" },
-        { "name": "TXN_DATE" }
-      ]
+      "columns": [{ "name": "TXN_ID" }, { "name": "AMOUNT" }, { "name": "TXN_DATE" }]
     },
     {
       "schema": "DQ",
       "name": "MISSING_TRANSACTIONS",
-      "columns": [
-        { "name": "TXN_ID" },
-        { "name": "AMOUNT" },
-        { "name": "TXN_DATE" }
-      ]
+      "columns": [{ "name": "TXN_ID" }, { "name": "AMOUNT" }, { "name": "TXN_DATE" }]
     },
     {
       "schema": "SALES",
       "name": "TRANSACTIONS",
-      "columns": [
-        { "name": "DATE_ID" },
-        { "name": "AMOUNT" },
-        { "name": "MONTH_NAME" }
-      ]
+      "columns": [{ "name": "DATE_ID" }, { "name": "AMOUNT" }, { "name": "MONTH_NAME" }]
     },
     {
       "schema": "DIMS",
       "name": "CALENDAR",
-      "columns": [
-        { "name": "DATE_ID" },
-        { "name": "MONTH_NAME" }
-      ]
+      "columns": [{ "name": "DATE_ID" }, { "name": "MONTH_NAME" }]
     },
     {
       "schema": "SALES",
       "name": "CUSTOMERS",
-      "columns": [
-        { "name": "CUSTOMER_ID" },
-        { "name": "CUSTOMER_NAME" }
-      ]
+      "columns": [{ "name": "CUSTOMER_ID" }, { "name": "CUSTOMER_NAME" }]
     },
     {
       "schema": "SALES",
       "name": "ORDERS",
-      "columns": [
-        { "name": "CUSTOMER_ID" },
-        { "name": "AMOUNT" },
-        { "name": "ORDER_ID" }
-      ]
+      "columns": [{ "name": "CUSTOMER_ID" }, { "name": "AMOUNT" }, { "name": "ORDER_ID" }]
     },
     {
       "schema": "HR",
@@ -161,11 +114,7 @@
     {
       "schema": "HR",
       "name": "LOCATIONS",
-      "columns": [
-        { "name": "LOCATION_ID" },
-        { "name": "CITY" },
-        { "name": "STATE_PROVINCE" }
-      ]
+      "columns": [{ "name": "LOCATION_ID" }, { "name": "CITY" }, { "name": "STATE_PROVINCE" }]
     },
     {
       "schema": "HR",
@@ -190,20 +139,12 @@
     {
       "schema": "PAY",
       "name": "BONUSES",
-      "columns": [
-        { "name": "EMP_ID" },
-        { "name": "BONUS_AMOUNT" },
-        { "name": "TYPE_ID" }
-      ]
+      "columns": [{ "name": "EMP_ID" }, { "name": "BONUS_AMOUNT" }, { "name": "TYPE_ID" }]
     },
     {
       "schema": "PAY",
       "name": "BONUS_TYPES",
-      "columns": [
-        { "name": "TYPE_ID" },
-        { "name": "MULTIPLIER" },
-        { "name": "TYPE_NAME" }
-      ]
+      "columns": [{ "name": "TYPE_ID" }, { "name": "MULTIPLIER" }, { "name": "TYPE_NAME" }]
     },
     {
       "schema": "DM",
@@ -218,18 +159,12 @@
     {
       "schema": "IDM",
       "name": "REG_DEAL",
-      "columns": [
-        { "name": "ID_DEAL" },
-        { "name": "DEAL_NUMB" }
-      ]
+      "columns": [{ "name": "ID_DEAL" }, { "name": "DEAL_NUMB" }]
     },
     {
       "schema": "UPL",
       "name": "DEAL",
-      "columns": [
-        { "name": "ID" },
-        { "name": "DEAL_NUMB" }
-      ]
+      "columns": [{ "name": "ID" }, { "name": "DEAL_NUMB" }]
     },
     {
       "schema": "PUBLIC",
@@ -244,20 +179,12 @@
     {
       "schema": "ARCHIVE",
       "name": "USER_LOGS",
-      "columns": [
-        { "name": "LOG_SEQ" },
-        { "name": "USERNAME_UPPER" },
-        { "name": "EVENT_TS" }
-      ]
+      "columns": [{ "name": "LOG_SEQ" }, { "name": "USERNAME_UPPER" }, { "name": "EVENT_TS" }]
     },
     {
       "schema": "TARGET_SCHEMA",
       "name": "TARGET_TABLE",
-      "columns": [
-        { "name": "ID" },
-        { "name": "NAME" },
-        { "name": "DT" }
-      ]
+      "columns": [{ "name": "ID" }, { "name": "NAME" }, { "name": "DT" }]
     },
     {
       "schema": "SOURCE_SCHEMA",
@@ -282,20 +209,12 @@
     {
       "schema": "CORE",
       "name": "EMPLOYEES",
-      "columns": [
-        { "name": "NAME" },
-        { "name": "AGE" },
-        { "name": "EMPLOYEE_ID" }
-      ]
+      "columns": [{ "name": "NAME" }, { "name": "AGE" }, { "name": "EMPLOYEE_ID" }]
     },
     {
       "schema": "IDM",
       "name": "EMPLOYEES_ALL",
-      "columns": [
-        { "name": "NAME1" },
-        { "name": "AGE1" },
-        { "name": "EMPLOYEE_ID1" }
-      ]
+      "columns": [{ "name": "NAME1" }, { "name": "AGE1" }, { "name": "EMPLOYEE_ID1" }]
     },
     {
       "name": "EMPLOYEES",
@@ -318,11 +237,7 @@
     },
     {
       "name": "TEST_VIEW_EXPLICIT",
-      "columns": [
-        { "name": "ID_SUBJECT" },
-        { "name": "CODE" },
-        { "name": "ID_SUBJECTTYPE" }
-      ]
+      "columns": [{ "name": "ID_SUBJECT" }, { "name": "CODE" }, { "name": "ID_SUBJECTTYPE" }]
     }
   ]
 }

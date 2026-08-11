@@ -13,6 +13,12 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/features/librarian/__tests__/setup.ts'],
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.{ts,tsx}'],
+      reporter: ['text', ['lcov', { projectRoot: path.resolve(__dirname, '..') }]],
+      reportsDirectory: './coverage',
+    },
     alias: {
       '@pondpilot/flowscope-core': path.resolve(
         __dirname,

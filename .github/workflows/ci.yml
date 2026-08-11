@@ -144,8 +144,8 @@ jobs:
           name: wasm-module
           path: packages/core/wasm/
 
-  typescript-build:
-    name: TypeScript Build
+  typescript:
+    name: TypeScript
     runs-on: ubuntu-latest
     needs: wasm-build
     steps:
@@ -164,10 +164,25 @@ jobs:
           path: packages/core/wasm/
 
       - name: Install dependencies
-        run: yarn install
+        run: yarn install --frozen-lockfile
 
       - name: Build core package (skip WASM rebuild)
         run: yarn workspace @pondpilot/flowscope-core build:no-wasm
+
+      - name: Build React package
+        run: yarn workspace @pondpilot/flowscope-react build
+
+      - name: Check formatting
+        run: yarn prettier
+
+      - name: Run ESLint
+        run: yarn workspaces run lint
+
+      - name: Run typechecks
+        run: yarn workspaces run typecheck
+
+      - name: Run tests
+        run: yarn test:ts
 
       - name: Build demo app
         run: yarn workspace @pondpilot/flowscope-app build
@@ -194,27 +209,6 @@ jobs:
         run: |
           cargo test -p flowscope-core --test schema_guard --locked
           cd packages/core && yarn test schema-compat.test.ts --silent
-
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'yarn'
-
-      - name: Install dependencies
-        run: yarn install
-
-      - name: Run ESLint
-        run: yarn lint || true
-
-      - name: Run Prettier check
-        run: yarn prettier --check . || true
 
   cli-serve:
     name: CLI Serve Mode
@@ -274,6 +268,12 @@ jobs:
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'yarn'
+
       - name: Cache Cargo
         uses: actions/cache@v4
         with:
@@ -288,10 +288,16 @@ jobs:
       - name: Generate coverage
         run: cargo llvm-cov --workspace --lcov --output-path lcov.info
 
+      - name: Install JS dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Generate app coverage
+        run: yarn workspace @pondpilot/flowscope-app test:coverage
+
       - name: Upload to Codecov
         uses: codecov/codecov-action@v4
         with:
-          files: lcov.info
+          files: lcov.info,app/coverage/lcov.info
           fail_ci_if_error: false
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
