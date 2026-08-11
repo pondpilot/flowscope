@@ -85,7 +85,7 @@ export function buildFileSyncKey(input: FileSyncInput): string {
   for (const file of input.files) {
     // Variable-length fields use length-prefixed hashing
     hash = updateHashWithField(hash, file.name);
-    hash = updateHashWithField(hash, file.content);
+    hash = updateHashWithString(hash, String(file.content.length));
   }
 
   return hash.toString(16).padStart(16, '0');

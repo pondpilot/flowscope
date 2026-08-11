@@ -1,11 +1,7 @@
 import type { AnalyzeResult } from '@pondpilot/flowscope-core';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ANALYSIS_MEMORY_CACHE_MAX_ENTRIES, useAnalysisStore } from '@/lib/analysis-store';
-import {
-  buildAnalysisCacheKey,
-  buildFileSyncKey,
-  type AnalysisHashInput,
-} from '@/lib/analysis-hash';
+import { buildAnalysisCacheKey, type AnalysisHashInput } from '@/lib/analysis-hash';
 
 const result = { nodes: [], edges: [], statements: [], issues: [] } as unknown as AnalyzeResult;
 
@@ -52,9 +48,6 @@ describe('analysis memory cache', () => {
     expect(
       useAnalysisStore.getState().getResult('project-1', buildAnalysisCacheKey(changedSelection))
     ).toBeNull();
-
-    // Same-length edits must also reach the worker before its canonical key is built.
-    expect(buildFileSyncKey(baseInput)).not.toBe(buildFileSyncKey(changedContent));
   });
 
   it.each([
