@@ -7,7 +7,6 @@ import type {
   SyncFilesPayload,
   WorkerErrorCode,
 } from '../workers/analysis.worker';
-import { buildFileSyncKey } from './analysis-hash';
 import { AnalysisError, AnalysisErrorCode } from '../types';
 
 // Debug flag for analysis worker logging - only enabled in development
@@ -34,6 +33,7 @@ function mapWorkerErrorCode(code: WorkerErrorCode | undefined): AnalysisErrorCod
 interface PendingRequest {
   resolve: (value: AnalysisWorkerResponse) => void;
   reject: (error: Error) => void;
+  worker: Worker;
 }
 
 export interface AnalysisWorkerResult {
@@ -47,7 +47,25 @@ export interface AnalysisWorkerResult {
 let workerInstance: Worker | null = null;
 let requestCounter = 0;
 const pendingRequests = new Map<string, PendingRequest>();
-let lastSyncedFileKey: string | null = null;
+let syncedFiles: Map<string, string> | null = null;
+let fileSyncQueue = Promise.resolve();
+let fileSyncGeneration = 0;
+
+function resetFileSyncState(): void {
+  syncedFiles = null;
+  fileSyncGeneration += 1;
+  fileSyncQueue = Promise.resolve();
+}
+
+function rejectWorkerRequests(worker: Worker, error: Error): void {
+  for (const [requestId, pending] of pendingRequests) {
+    if (pending.worker !== worker) {
+      continue;
+    }
+    pending.reject(error);
+    pendingRequests.delete(requestId);
+  }
+}
 
 function isWorkerSupported(): boolean {
   return typeof Worker !== 'undefined';
@@ -55,14 +73,15 @@ function isWorkerSupported(): boolean {
 
 function getWorker(): Worker {
   if (!workerInstance) {
-    workerInstance = new Worker(new URL('../workers/analysis.worker.ts', import.meta.url), {
+    const worker = new Worker(new URL('../workers/analysis.worker.ts', import.meta.url), {
       type: 'module',
     });
+    workerInstance = worker;
 
-    workerInstance.onmessage = (event: MessageEvent<AnalysisWorkerResponse>) => {
+    worker.onmessage = (event: MessageEvent<AnalysisWorkerResponse>) => {
       const response = event.data;
       const pending = pendingRequests.get(response.requestId);
-      if (!pending) {
+      if (!pending || pending.worker !== worker) {
         return;
       }
       pendingRequests.delete(response.requestId);
@@ -81,11 +100,13 @@ function getWorker(): Worker {
       pending.resolve(response);
     };
 
-    workerInstance.onerror = (error) => {
-      for (const [requestId, pending] of pendingRequests) {
-        pending.reject(new Error(`Worker error: ${error.message}`));
-        pendingRequests.delete(requestId);
+    worker.onerror = (error) => {
+      if (workerInstance === worker) {
+        worker.terminate();
+        workerInstance = null;
+        resetFileSyncState();
       }
+      rejectWorkerRequests(worker, new Error(`Worker error: ${error.message}`));
     };
   }
 
@@ -103,8 +124,13 @@ function sendRequest(
   const worker = getWorker();
 
   return new Promise((resolve, reject) => {
-    pendingRequests.set(requestId, { resolve, reject });
-    worker.postMessage({ ...message, requestId });
+    pendingRequests.set(requestId, { resolve, reject, worker });
+    try {
+      worker.postMessage({ ...message, requestId });
+    } catch (error) {
+      pendingRequests.delete(requestId);
+      reject(error instanceof Error ? error : new Error(String(error)));
+    }
   });
 }
 
@@ -118,42 +144,132 @@ async function yieldToMainThread(): Promise<void> {
   });
 }
 
-export async function syncAnalysisFiles(files: SyncFilesPayload['files']): Promise<void> {
-  const syncStart = nowMs();
-  const nextKey = buildFileSyncKey({ files });
-  if (nextKey === lastSyncedFileKey) {
-    if (ANALYSIS_WORKER_DEBUG)
-      console.log(`[syncAnalysisFiles] Skipped (cache hit), ${files.length} files`);
-    return;
-  }
-
-  if (ANALYSIS_WORKER_DEBUG)
-    console.log(`[syncAnalysisFiles] Starting sync of ${files.length} files`);
+async function sendFileChanges(
+  files: SyncFilesPayload['files'],
+  deletedFileNames: string[],
+  replace: boolean,
+  generation: number
+): Promise<void> {
+  const assertCurrentGeneration = () => {
+    if (generation !== fileSyncGeneration) {
+      throw new Error('Worker terminated');
+    }
+  };
 
   if (files.length === 0) {
-    await sendRequest({ type: 'clear-files' });
-    lastSyncedFileKey = nextKey;
-    if (ANALYSIS_WORKER_DEBUG)
-      console.log(`[syncAnalysisFiles] Cleared files in ${(nowMs() - syncStart).toFixed(1)}ms`);
+    assertCurrentGeneration();
+    await sendRequest({
+      type: 'sync-files',
+      syncPayload: { files: [], deletedFileNames, replace },
+    });
+    assertCurrentGeneration();
     return;
   }
 
   const chunkSize = 5;
   for (let index = 0; index < files.length; index += chunkSize) {
-    const chunk = files.slice(index, index + chunkSize);
+    assertCurrentGeneration();
+    const isFirstChunk = index === 0;
     await sendRequest({
       type: 'sync-files',
       syncPayload: {
-        files: chunk,
-        replace: index === 0,
+        files: files.slice(index, index + chunkSize),
+        deletedFileNames: isFirstChunk ? deletedFileNames : [],
+        replace: isFirstChunk && replace,
       },
     });
-    await yieldToMainThread();
+    assertCurrentGeneration();
+    if (index + chunkSize < files.length) {
+      await yieldToMainThread();
+    }
+  }
+}
+
+async function applyFileSnapshot(
+  files: SyncFilesPayload['files'],
+  generation: number
+): Promise<void> {
+  const syncStart = nowMs();
+  const targetFilesByName = new Map(files.map((file) => [file.name, file]));
+  const targetFiles = [...targetFilesByName.values()];
+  const targetContents = new Map(targetFiles.map((file) => [file.name, file.content]));
+
+  if (ANALYSIS_WORKER_DEBUG)
+    console.log(`[syncAnalysisFiles] Comparing ${targetFiles.length} files`);
+
+  if (syncedFiles === null) {
+    await sendFileChanges(targetFiles, [], true, generation);
+    syncedFiles = targetContents;
+    if (ANALYSIS_WORKER_DEBUG)
+      console.log(
+        `[syncAnalysisFiles] Replaced worker snapshot in ${(nowMs() - syncStart).toFixed(1)}ms`
+      );
+    return;
   }
 
-  lastSyncedFileKey = nextKey;
+  const changedFiles = targetFiles.filter((file) => syncedFiles?.get(file.name) !== file.content);
+  const deletedFileNames = [...syncedFiles.keys()].filter(
+    (fileName) => !targetContents.has(fileName)
+  );
+
+  if (changedFiles.length === 0 && deletedFileNames.length === 0) {
+    if (ANALYSIS_WORKER_DEBUG) console.log(`[syncAnalysisFiles] Skipped unchanged snapshot`);
+    return;
+  }
+
+  await sendFileChanges(changedFiles, deletedFileNames, false, generation);
+  syncedFiles = targetContents;
   if (ANALYSIS_WORKER_DEBUG)
-    console.log(`[syncAnalysisFiles] Completed in ${(nowMs() - syncStart).toFixed(1)}ms`);
+    console.log(
+      `[syncAnalysisFiles] Applied ${changedFiles.length} updates and ${deletedFileNames.length} deletions in ${(nowMs() - syncStart).toFixed(1)}ms`
+    );
+}
+
+export interface SyncAnalysisFilesOptions {
+  /** Replace the worker snapshot even when the client snapshot appears current. */
+  forceReplace?: boolean;
+}
+
+function withFileSnapshot<T>(
+  files: SyncFilesPayload['files'],
+  options: SyncAnalysisFilesOptions | undefined,
+  task: () => Promise<T>
+): Promise<T> {
+  const snapshot = files.map((file) => ({ ...file }));
+  const generation = fileSyncGeneration;
+  const operation = fileSyncQueue
+    .catch(() => undefined)
+    .then(async () => {
+      if (generation !== fileSyncGeneration) {
+        throw new Error('Worker terminated');
+      }
+      if (options?.forceReplace) {
+        syncedFiles = null;
+      }
+      await applyFileSnapshot(snapshot, generation);
+      if (generation !== fileSyncGeneration) {
+        throw new Error('Worker terminated');
+      }
+      return task();
+    });
+  fileSyncQueue = operation.then(
+    () => undefined,
+    () => undefined
+  );
+  return operation;
+}
+
+/**
+ * Synchronize an exact file snapshot to the worker in call order. The first
+ * snapshot after worker creation/restart replaces all files; later snapshots
+ * send only added, changed, renamed, or deleted paths. The returned promise is
+ * a barrier: analysis started after it resolves observes this snapshot.
+ */
+export function syncAnalysisFiles(
+  files: SyncFilesPayload['files'],
+  options?: SyncAnalysisFilesOptions
+): Promise<void> {
+  return withFileSnapshot(files, options, async () => undefined);
 }
 
 export async function initializeAnalysisWorker(): Promise<void> {
@@ -167,53 +283,72 @@ export async function clearAnalysisWorkerCache(): Promise<void> {
 export interface AnalyzeWorkerOptions {
   cacheMaxBytes?: number;
   knownCacheKey?: string | null;
+  /** Exact worker file snapshot that must remain bound to this analysis. */
+  fileSnapshot?: SyncFilesPayload['files'];
 }
 
 export async function analyzeWithWorker(
   payload: AnalysisWorkerPayload,
   options?: AnalyzeWorkerOptions
 ): Promise<AnalysisWorkerResult> {
-  const response = await sendRequest({
-    type: 'analyze',
-    payload,
-    cacheMaxBytes: options?.cacheMaxBytes,
-    knownCacheKey: options?.knownCacheKey,
-  });
+  const analyze = async () => {
+    const response = await sendRequest({
+      type: 'analyze',
+      payload,
+      cacheMaxBytes: options?.cacheMaxBytes,
+      knownCacheKey: options?.knownCacheKey,
+    });
 
-  if (!response.cacheKey) {
-    throw new Error('Worker returned an empty cache key');
-  }
+    if (!response.cacheKey) {
+      throw new Error('Worker returned an empty cache key');
+    }
 
-  const skipped = Boolean(response.skipResult);
-  if (!response.result && !skipped) {
-    throw new Error('Worker returned an empty analysis result');
-  }
+    const skipped = Boolean(response.skipResult);
+    if (!response.result && !skipped) {
+      throw new Error('Worker returned an empty analysis result');
+    }
 
-  return {
-    result: response.result ?? null,
-    cacheKey: response.cacheKey,
-    cacheHit: Boolean(response.cacheHit),
-    skipped,
-    timings: response.timings ?? null,
+    return {
+      result: response.result ?? null,
+      cacheKey: response.cacheKey,
+      cacheHit: Boolean(response.cacheHit),
+      skipped,
+      timings: response.timings ?? null,
+    };
   };
+
+  if (options?.fileSnapshot) {
+    return withFileSnapshot(options.fileSnapshot, undefined, analyze);
+  }
+  await fileSyncQueue;
+  return analyze();
 }
 
 export async function getCachedAnalysis(
-  payload: AnalysisWorkerPayload
+  payload: AnalysisWorkerPayload,
+  fileSnapshot?: SyncFilesPayload['files']
 ): Promise<AnalysisWorkerResult | null> {
-  const response = await sendRequest({ type: 'get-cache', payload });
+  const getCached = async () => {
+    const response = await sendRequest({ type: 'get-cache', payload });
 
-  if (!response.result || !response.cacheKey) {
-    return null;
-  }
+    if (!response.result || !response.cacheKey) {
+      return null;
+    }
 
-  return {
-    result: response.result,
-    cacheKey: response.cacheKey,
-    cacheHit: Boolean(response.cacheHit),
-    skipped: false,
-    timings: response.timings ?? null,
+    return {
+      result: response.result,
+      cacheKey: response.cacheKey,
+      cacheHit: Boolean(response.cacheHit),
+      skipped: false,
+      timings: response.timings ?? null,
+    };
   };
+
+  if (fileSnapshot) {
+    return withFileSnapshot(fileSnapshot, undefined, getCached);
+  }
+  await fileSyncQueue;
+  return getCached();
 }
 
 export async function getAnalysisWorkerVersion(): Promise<string | null> {
@@ -222,11 +357,12 @@ export async function getAnalysisWorkerVersion(): Promise<string | null> {
 }
 
 export function terminateAnalysisWorker(): void {
-  if (workerInstance) {
-    workerInstance.terminate();
+  const worker = workerInstance;
+  if (worker) {
+    worker.terminate();
     workerInstance = null;
   }
-  lastSyncedFileKey = null;
+  resetFileSyncState();
   for (const [requestId, pending] of pendingRequests) {
     pending.reject(new Error('Worker terminated'));
     pendingRequests.delete(requestId);

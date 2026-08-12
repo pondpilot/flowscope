@@ -28,6 +28,7 @@ export interface AnalysisWorkerPayload {
 
 export interface SyncFilesPayload {
   files: Array<{ name: string; content: string }>;
+  deletedFileNames?: string[];
   replace?: boolean;
 }
 
@@ -369,6 +370,10 @@ self.onmessage = async (event: MessageEvent<AnalysisWorkerRequest>) => {
 
       if (syncPayload.replace) {
         fileCache.clear();
+      }
+
+      for (const fileName of syncPayload.deletedFileNames ?? []) {
+        fileCache.delete(fileName);
       }
 
       for (const file of syncPayload.files) {

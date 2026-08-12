@@ -1,4 +1,12 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+} from 'react';
 import { VALID_DIALECTS as CORE_VALID_DIALECTS } from '@pondpilot/flowscope-core';
 import type { Dialect as CoreDialect, FileSource, SchemaMetadata } from '@pondpilot/flowscope-core';
 import { STORAGE_KEYS, FILE_EXTENSIONS, SHARE_LIMITS, DEFAULT_FILE_LANGUAGE } from './constants';
@@ -8,6 +16,10 @@ import type { TemplateMode } from '@/types';
 import { DEFAULT_PROJECT, DEFAULT_DBT_PROJECT } from './default-projects';
 import { useBackend } from './backend-context';
 import { useBackendFiles } from '@/hooks/useBackendFiles';
+import {
+  createDebouncedProjectPersistence,
+  PROJECT_PERSISTENCE_DEBOUNCE_MS,
+} from './project-persistence';
 
 const uuidv4 = () => crypto.randomUUID();
 
@@ -219,6 +231,10 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const [activeProjectId, setActiveProjectId] = useState<string | null>(() =>
     loadActiveProjectIdFromStorage(projects)
   );
+  const projectPersistence = useMemo(
+    () => createDebouncedProjectPersistence(saveProjectsToStorage, PROJECT_PERSISTENCE_DEBOUNCE_MS),
+    []
+  );
 
   // Get backend state
   const { backendType } = useBackend();
@@ -278,14 +294,19 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isBackendMode]);
 
+  const backendProjectFiles = useMemo(
+    () => backendFiles?.map(fileSourceToProjectFile) ?? null,
+    [backendFiles]
+  );
+
   // Create a virtual project from backend files
   const backendProject: Project | null = useMemo(() => {
-    if (!isBackendMode || !backendFiles) return null;
+    if (!isBackendMode || !backendProjectFiles) return null;
 
     return {
       id: BACKEND_PROJECT_ID,
       name: 'Server Files',
-      files: backendFiles.map(fileSourceToProjectFile),
+      files: backendProjectFiles,
       activeFileId: backendActiveFileId,
       dialect: backendDialect,
       runMode: backendRunMode,
@@ -295,7 +316,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     };
   }, [
     isBackendMode,
-    backendFiles,
+    backendProjectFiles,
     backendDialect,
     backendTemplateMode,
     backendActiveFileId,
@@ -303,11 +324,29 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     backendSelectedFileIds,
   ]);
 
-  useEffect(() => {
-    saveProjectsToStorage(projects);
-  }, [projects]);
+  useLayoutEffect(() => {
+    projectPersistence.schedule(projects);
+  }, [projectPersistence, projects]);
 
   useEffect(() => {
+    const flushProjects = () => projectPersistence.flush();
+    const flushProjectsWhenHidden = () => {
+      if (document.visibilityState === 'hidden') {
+        flushProjects();
+      }
+    };
+
+    window.addEventListener('pagehide', flushProjects);
+    document.addEventListener('visibilitychange', flushProjectsWhenHidden);
+
+    return () => {
+      window.removeEventListener('pagehide', flushProjects);
+      document.removeEventListener('visibilitychange', flushProjectsWhenHidden);
+      flushProjects();
+    };
+  }, [projectPersistence]);
+
+  useLayoutEffect(() => {
     saveActiveProjectIdToStorage(activeProjectId);
   }, [activeProjectId]);
 

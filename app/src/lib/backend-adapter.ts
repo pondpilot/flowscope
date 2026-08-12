@@ -19,6 +19,7 @@ import {
   clearAnalysisWorkerCache,
 } from './analysis-worker';
 import type { AnalysisWorkerResult, AnalyzeWorkerOptions } from './analysis-worker';
+import type { SyncAnalysisFilesOptions } from './analysis-worker';
 
 /**
  * Payload for running analysis.
@@ -69,7 +70,10 @@ export interface BackendAdapter {
   getVersion(): Promise<string | null>;
 
   /** Sync files to the backend (for WASM worker file cache) */
-  syncFiles(files: Array<{ name: string; content: string }>): Promise<void>;
+  syncFiles(
+    files: Array<{ name: string; content: string }>,
+    options?: SyncAnalysisFilesOptions
+  ): Promise<void>;
 
   /** Clear the analysis cache */
   clearCache(): Promise<void>;
@@ -167,9 +171,6 @@ export class WasmBackendAdapter implements BackendAdapter {
   }
 
   async analyze(payload: AnalysisPayload, options?: AnalyzeWorkerOptions): Promise<AnalysisResult> {
-    // Ensure files are synced before analysis
-    await this.syncFiles(payload.files);
-
     const workerResult: AnalysisWorkerResult = await analyzeWithWorker(
       {
         fileNames: payload.files.map((f) => f.name),
@@ -180,7 +181,7 @@ export class WasmBackendAdapter implements BackendAdapter {
         enableLinting: payload.enableLinting,
         templateMode: payload.templateMode,
       },
-      options
+      { ...options, fileSnapshot: payload.files }
     );
 
     return {
@@ -193,18 +194,18 @@ export class WasmBackendAdapter implements BackendAdapter {
   }
 
   async getCached(payload: AnalysisPayload): Promise<AnalysisResult | null> {
-    // Ensure files are synced before checking cache
-    await this.syncFiles(payload.files);
-
-    const cached = await getCachedAnalysis({
-      fileNames: payload.files.map((f) => f.name),
-      dialect: payload.dialect,
-      schemaSQL: payload.schemaSQL,
-      hideCTEs: payload.hideCTEs,
-      enableColumnLineage: payload.enableColumnLineage,
-      enableLinting: payload.enableLinting,
-      templateMode: payload.templateMode,
-    });
+    const cached = await getCachedAnalysis(
+      {
+        fileNames: payload.files.map((f) => f.name),
+        dialect: payload.dialect,
+        schemaSQL: payload.schemaSQL,
+        hideCTEs: payload.hideCTEs,
+        enableColumnLineage: payload.enableColumnLineage,
+        enableLinting: payload.enableLinting,
+        templateMode: payload.templateMode,
+      },
+      payload.files
+    );
 
     if (!cached) {
       return null;
@@ -223,8 +224,11 @@ export class WasmBackendAdapter implements BackendAdapter {
     return getAnalysisWorkerVersion();
   }
 
-  async syncFiles(files: Array<{ name: string; content: string }>): Promise<void> {
-    await syncAnalysisFiles(files);
+  async syncFiles(
+    files: Array<{ name: string; content: string }>,
+    options?: SyncAnalysisFilesOptions
+  ): Promise<void> {
+    await syncAnalysisFiles(files, options);
   }
 
   async clearCache(): Promise<void> {

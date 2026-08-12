@@ -1,10 +1,18 @@
-import { useState, useCallback, useEffect, useMemo, useRef, startTransition } from 'react';
+import {
+  useState,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  startTransition,
+} from 'react';
 import type { AnalyzeResult } from '@pondpilot/flowscope-core';
 import { useLineageActions, useLineageState } from '@flowscope-react/store';
 import { analyzeWithWorker, getCachedAnalysis, syncAnalysisFiles } from '@/lib/analysis-worker';
 import type { BackendAdapter, AnalysisPayload } from '@/lib/backend-adapter';
 import { useProject } from '@/lib/project-store';
-import type { Project } from '@/lib/project-store';
+import type { Project, RunMode } from '@/lib/project-store';
 import {
   getAnalysisCacheRestoreDecision,
   useAnalysisStore,
@@ -20,7 +28,44 @@ import { useDebounce } from './useDebounce';
 
 // Maximum retry attempts for file sync errors to prevent infinite loops
 const MAX_FILE_SYNC_RETRIES = 1;
+/** Idle window before proactive cache hashing and worker synchronization. */
 const ANALYSIS_CACHE_KEY_DEBOUNCE_MS = 300;
+
+interface ActiveAnalysisRequest {
+  requestId: number;
+  projectId: string | null;
+  runMode: RunMode;
+  currentFilePath?: string;
+  payload: AnalysisPayload;
+  adapter: BackendAdapter | null | undefined;
+  backendReady: boolean;
+  backendSchemaIdentity: string | null;
+}
+
+interface ExplicitResultAuthority {
+  requestId: number;
+  projectId: string;
+  configuredPayload: AnalysisPayload;
+  adapter: BackendAdapter | null | undefined;
+  backendReady: boolean;
+  backendSchemaIdentity: string | null;
+}
+
+function analysisPayloadsEqual(left: AnalysisPayload, right: AnalysisPayload): boolean {
+  return (
+    left.dialect === right.dialect &&
+    left.schemaSQL === right.schemaSQL &&
+    left.hideCTEs === right.hideCTEs &&
+    left.enableColumnLineage === right.enableColumnLineage &&
+    left.enableLinting === right.enableLinting &&
+    left.templateMode === right.templateMode &&
+    left.files.length === right.files.length &&
+    left.files.every(
+      (file, index) =>
+        file.name === right.files[index].name && file.content === right.files[index].content
+    )
+  );
+}
 
 // Debug flag for analysis-related logging - only enabled in development
 const ANALYSIS_DEBUG = !!(import.meta as { env?: { DEV?: boolean } }).env?.DEV;
@@ -53,16 +98,19 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
   const actions = useLineageActions();
   const hideCTEs = useLineageState((state) => state.hideCTEs);
   const { getResult, setResult: storeResult, setMetrics } = useAnalysisStore();
-  const getViewState = useViewStateStore((s) => s.getViewState);
-  const enableLinting = activeProjectId
-    ? getIssuesStateWithDefaults(getViewState(activeProjectId, 'issues')).showLintIssues
-    : false;
+  const issuesState = useViewStateStore((store) =>
+    activeProjectId ? store.viewStates[activeProjectId]?.issues : undefined
+  );
+  const enableLinting = getIssuesStateWithDefaults(issuesState).showLintIssues;
   const [state, setState] = useState<AnalysisState>({
     isAnalyzing: false,
     error: null,
     lastAnalyzedAt: null,
   });
   const analysisRequestRef = useRef(0);
+  const activeAnalysisRequestRef = useRef<ActiveAnalysisRequest | null>(null);
+  const proactiveRestoreRequestRef = useRef(0);
+  const explicitResultAuthorityRef = useRef<ExplicitResultAuthority | null>(null);
   const attemptedCacheIdentityRef = useRef<AnalysisCacheIdentity | null>(null);
 
   const setAnalyzing = useCallback((isAnalyzing: boolean) => {
@@ -106,15 +154,20 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
       activeFileContent?: string,
       // Use path (not just basename) for consistency with custom/all modes.
       // This ensures sourceName matches across all run modes.
-      activeFilePath?: string
+      activeFilePath?: string,
+      runModeOverride?: RunMode
     ): AnalysisContext | null => {
       if (!project) return null;
 
       let contextDescription = '';
       let filesToAnalyze: Array<{ name: string; content: string }> = [];
-      const runMode = project.runMode;
+      const runMode = runModeOverride ?? project.runMode;
 
-      if (runMode === 'current' && activeFileContent && activeFilePath) {
+      if (
+        runMode === 'current' &&
+        activeFileContent !== undefined &&
+        activeFilePath !== undefined
+      ) {
         filesToAnalyze = [{ name: activeFilePath, content: activeFileContent }];
         contextDescription = `Analyzing file: ${activeFilePath}`;
       } else if (runMode === 'custom') {
@@ -144,8 +197,18 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
   );
 
   const buildAnalysisPayload = useCallback(
-    (project: Project | null, activeFileContent?: string, activeFilePath?: string) => {
-      const context = buildAnalysisContext(project, activeFileContent, activeFilePath);
+    (
+      project: Project | null,
+      activeFileContent?: string,
+      activeFilePath?: string,
+      runModeOverride?: RunMode
+    ) => {
+      const context = buildAnalysisContext(
+        project,
+        activeFileContent,
+        activeFilePath,
+        runModeOverride
+      );
       if (!project || !context) {
         return null;
       }
@@ -221,42 +284,80 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
     [adapter?.type, backendSchema]
   );
 
-  useEffect(() => {
-    if (!backendReady || !currentProject) {
-      return;
+  // An explicit result remains authoritative while the configured analysis
+  // inputs are semantically unchanged. This prevents a metadata-only project
+  // replacement from scheduling the same proactive cache restore and replacing
+  // an active-file result with the saved all/custom-mode result.
+  useLayoutEffect(() => {
+    const authority = explicitResultAuthorityRef.current;
+    if (!authority) return;
+
+    if (
+      authority.projectId !== activeProjectId ||
+      authority.adapter !== adapter ||
+      authority.backendReady !== backendReady ||
+      authority.backendSchemaIdentity !== backendSchemaIdentity ||
+      !currentAnalysisPayload ||
+      !analysisPayloadsEqual(authority.configuredPayload, currentAnalysisPayload.payload)
+    ) {
+      explicitResultAuthorityRef.current = null;
+    }
+  }, [activeProjectId, adapter, backendReady, backendSchemaIdentity, currentAnalysisPayload]);
+
+  // A late result belongs to the exact inputs captured by runAnalysis, which
+  // may use a one-off run mode. Rebuild that same mode from the live project so
+  // unrelated edits and metadata updates do not cancel it, while an edit to an
+  // explicitly analyzed file always does.
+  useLayoutEffect(() => {
+    const activeRequest = activeAnalysisRequestRef.current;
+    if (!activeRequest) return;
+
+    let liveAnalysisInput: ReturnType<typeof buildAnalysisPayload> = null;
+    if (activeRequest.runMode === 'current') {
+      const currentFile = currentProject?.files.find(
+        (file) => file.path === activeRequest.currentFilePath
+      );
+      if (currentFile) {
+        liveAnalysisInput = buildAnalysisPayload(
+          currentProject,
+          currentFile.content,
+          currentFile.path,
+          'current'
+        );
+      }
+    } else {
+      liveAnalysisInput = buildAnalysisPayload(
+        currentProject,
+        undefined,
+        undefined,
+        activeRequest.runMode
+      );
     }
 
-    let cancelled = false;
-    // Use file.path as name to match how buildAnalysisContext keys files.
-    // This ensures the worker cache uses consistent keys (paths) across sync and analysis.
-    const sqlFiles = currentProject.files
-      .filter((file) => file.name.endsWith('.sql'))
-      .map((f) => ({ name: f.path, content: f.content }));
+    const shouldInvalidate =
+      activeRequest.projectId !== activeProjectId ||
+      activeRequest.adapter !== adapter ||
+      activeRequest.backendReady !== backendReady ||
+      activeRequest.backendSchemaIdentity !== backendSchemaIdentity ||
+      !liveAnalysisInput ||
+      !analysisPayloadsEqual(activeRequest.payload, liveAnalysisInput.payload);
 
-    if (ANALYSIS_DEBUG)
-      console.log(`[useAnalysis] File sync effect triggered (${sqlFiles.length} SQL files)`);
-    const syncEffectStart = nowMs();
+    if (!shouldInvalidate) return;
 
-    const syncFiles = adapter ? adapter.syncFiles(sqlFiles) : syncAnalysisFiles(sqlFiles);
-
-    syncFiles
-      .then(() => {
-        if (!cancelled && ANALYSIS_DEBUG) {
-          console.log(
-            `[useAnalysis] File sync effect completed in ${(nowMs() - syncEffectStart).toFixed(1)}ms`
-          );
-        }
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) {
-          console.warn('Failed to sync analysis files:', error);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentProject, backendReady, adapter]);
+    analysisRequestRef.current += 1;
+    activeAnalysisRequestRef.current = null;
+    if (explicitResultAuthorityRef.current?.requestId === activeRequest.requestId) {
+      explicitResultAuthorityRef.current = null;
+    }
+    setState((previous) => (previous.isAnalyzing ? { ...previous, isAnalyzing: false } : previous));
+  }, [
+    activeProjectId,
+    adapter,
+    backendReady,
+    backendSchemaIdentity,
+    buildAnalysisPayload,
+    currentProject,
+  ]);
 
   // Restore a result only when switching to a project whose canonical analysis
   // key matches. Input changes within the active project may keep the current
@@ -283,8 +384,18 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
       return;
     }
 
-    const cachedResult = getResult(activeProjectId, currentAnalysisCacheKey);
     const nextIdentity = { projectId: activeProjectId, cacheKey: currentAnalysisCacheKey };
+    const explicitAuthority = explicitResultAuthorityRef.current;
+    if (
+      explicitAuthority?.projectId === activeProjectId &&
+      currentAnalysisInput &&
+      analysisPayloadsEqual(explicitAuthority.configuredPayload, currentAnalysisInput.payload)
+    ) {
+      attemptedCacheIdentityRef.current = nextIdentity;
+      return;
+    }
+
+    const cachedResult = getResult(activeProjectId, currentAnalysisCacheKey);
     const restoreDecision = getAnalysisCacheRestoreDecision(
       attemptedCacheIdentityRef.current,
       nextIdentity,
@@ -338,6 +449,14 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
       return;
     }
 
+    const explicitAuthority = explicitResultAuthorityRef.current;
+    if (
+      explicitAuthority?.projectId === activeProjectId &&
+      analysisPayloadsEqual(explicitAuthority.configuredPayload, currentAnalysisInput.payload)
+    ) {
+      return;
+    }
+
     const cachedResult = canUseMemoryCache
       ? getResult(activeProjectId, currentAnalysisInput.cacheKey)
       : null;
@@ -352,35 +471,52 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
     }
 
     let cancelled = false;
+    const restoreRequestId = proactiveRestoreRequestRef.current + 1;
+    proactiveRestoreRequestRef.current = restoreRequestId;
     const cacheStart = nowMs();
     if (ANALYSIS_DEBUG)
       console.log(`[useAnalysis] Checking IndexedDB cache for ${context.files.length} files`);
 
     const syncAndGetCache = adapter
       ? adapter.syncFiles(context.files).then(() => {
+          if (cancelled || proactiveRestoreRequestRef.current !== restoreRequestId) return null;
           if (ANALYSIS_DEBUG) console.log(`[useAnalysis] Files synced, checking cache...`);
           return adapter.getCached(cachePayload);
         })
       : syncAnalysisFiles(context.files).then(() => {
+          if (cancelled || proactiveRestoreRequestRef.current !== restoreRequestId) return null;
           if (ANALYSIS_DEBUG)
             console.log(`[useAnalysis] Files synced, checking IndexedDB cache...`);
-          return getCachedAnalysis({
-            fileNames: context.files.map((file) => file.name),
-            dialect: cachePayload.dialect,
-            schemaSQL: cachePayload.schemaSQL,
-            hideCTEs: cachePayload.hideCTEs,
-            enableColumnLineage: cachePayload.enableColumnLineage,
-            enableLinting: cachePayload.enableLinting,
-            templateMode: cachePayload.templateMode,
-          });
+          return getCachedAnalysis(
+            {
+              fileNames: context.files.map((file) => file.name),
+              dialect: cachePayload.dialect,
+              schemaSQL: cachePayload.schemaSQL,
+              hideCTEs: cachePayload.hideCTEs,
+              enableColumnLineage: cachePayload.enableColumnLineage,
+              enableLinting: cachePayload.enableLinting,
+              templateMode: cachePayload.templateMode,
+            },
+            context.files
+          );
         });
 
     syncAndGetCache
       .then((cached) => {
         const durationMs = nowMs() - cacheStart;
-        if (cancelled) {
+        if (cancelled || proactiveRestoreRequestRef.current !== restoreRequestId) {
           if (ANALYSIS_DEBUG)
             console.log(`[useAnalysis] IndexedDB cache cancelled after ${durationMs.toFixed(1)}ms`);
+          return;
+        }
+        const latestExplicitAuthority = explicitResultAuthorityRef.current;
+        if (
+          latestExplicitAuthority?.projectId === activeProjectId &&
+          analysisPayloadsEqual(
+            latestExplicitAuthority.configuredPayload,
+            currentAnalysisInput.payload
+          )
+        ) {
           return;
         }
         if (!cached?.result || cached.cacheKey !== cacheKey) {
@@ -436,25 +572,58 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
   ]);
 
   const runAnalysis = useCallback(
-    async (activeFileContent?: string, activeFilePath?: string) => {
+    async (activeFileContent?: string, activeFilePath?: string, runModeOverride?: RunMode) => {
       if (!backendReady || !currentProject) return;
 
+      const analysisInput = buildAnalysisPayload(
+        currentProject,
+        activeFileContent,
+        activeFilePath,
+        runModeOverride
+      );
+      const runMode = runModeOverride ?? currentProject.runMode;
       const requestId = analysisRequestRef.current + 1;
       analysisRequestRef.current = requestId;
+      activeAnalysisRequestRef.current = analysisInput
+        ? {
+            requestId,
+            projectId: activeProjectId,
+            runMode,
+            currentFilePath: runMode === 'current' ? activeFilePath : undefined,
+            payload: analysisInput.payload,
+            adapter,
+            backendReady,
+            backendSchemaIdentity,
+          }
+        : null;
+      // An explicit user run owns the visible result. Prevent an older
+      // proactive IndexedDB restore from replacing it after the worker queue
+      // drains, including active-file runs that do not change project mode.
+      proactiveRestoreRequestRef.current += 1;
+      explicitResultAuthorityRef.current =
+        canUseMemoryCache && activeProjectId && currentAnalysisPayload
+          ? {
+              requestId,
+              projectId: activeProjectId,
+              configuredPayload: currentAnalysisPayload.payload,
+              adapter,
+              backendReady,
+              backendSchemaIdentity,
+            }
+          : null;
 
       setAnalyzing(true);
       setError(null);
 
       const analysisStart = performance.now();
+      let explicitResultAccepted = false;
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
-      try {
-        const analysisInput = buildAnalysisPayload(
-          currentProject,
-          activeFileContent,
-          activeFilePath
-        );
+      if (analysisRequestRef.current !== requestId) {
+        return;
+      }
 
+      try {
         if (!analysisInput) {
           setError('No project context available');
           return;
@@ -463,7 +632,7 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
         const { context, payload: adapterPayload } = analysisInput;
 
         if (context.files.length === 0) {
-          if (currentProject.runMode === 'custom') {
+          if ((runModeOverride ?? currentProject.runMode) === 'custom') {
             setError('No files selected for analysis.');
             return;
           }
@@ -504,6 +673,7 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
           activeProjectId && cacheKey ? getResult(activeProjectId, cacheKey) : null;
         const knownCacheKey = cachedResult ? cacheKey : null;
         const displayResult = (result: AnalyzeResult) => {
+          explicitResultAccepted = true;
           startTransition(() => {
             actions.setResult(result);
             actions.setAnalyzedContent(
@@ -534,7 +704,7 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
                 fileSyncRetries < MAX_FILE_SYNC_RETRIES
               ) {
                 fileSyncRetries++;
-                await adapter.syncFiles(context.files);
+                await adapter.syncFiles(context.files, { forceReplace: true });
                 continue;
               }
               throw error;
@@ -554,7 +724,10 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
 
           while (true) {
             try {
-              analysisResponse = await analyzeWithWorker(workerPayload, { knownCacheKey });
+              analysisResponse = await analyzeWithWorker(workerPayload, {
+                knownCacheKey,
+                fileSnapshot: context.files,
+              });
               break;
             } catch (error) {
               // Handle missing file content by syncing files and retrying.
@@ -565,7 +738,7 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
                 fileSyncRetries < MAX_FILE_SYNC_RETRIES
               ) {
                 fileSyncRetries++;
-                await syncAnalysisFiles(context.files);
+                await syncAnalysisFiles(context.files, { forceReplace: true });
                 continue;
               }
               throw error;
@@ -610,6 +783,13 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
         console.error(error);
       } finally {
         if (analysisRequestRef.current === requestId) {
+          activeAnalysisRequestRef.current = null;
+          if (
+            !explicitResultAccepted &&
+            explicitResultAuthorityRef.current?.requestId === requestId
+          ) {
+            explicitResultAuthorityRef.current = null;
+          }
           setAnalyzing(false);
         }
       }
@@ -626,7 +806,9 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
       setAnalyzing,
       setError,
       canUseMemoryCache,
+      currentAnalysisPayload,
       adapter,
+      backendSchemaIdentity,
       actions,
     ]
   );

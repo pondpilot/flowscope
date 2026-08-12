@@ -105,6 +105,19 @@ function sanitizeErrorMessage(message: string): string {
   return withoutPaths;
 }
 
+function reuseUnchangedFiles(previous: FileSource[] | null, next: FileSource[]): FileSource[] {
+  if (
+    previous &&
+    previous.length === next.length &&
+    previous.every(
+      (file, index) => file.name === next[index].name && file.content === next[index].content
+    )
+  ) {
+    return previous;
+  }
+  return next;
+}
+
 /**
  * Fetches files and schema from the backend REST API.
  *
@@ -165,7 +178,10 @@ export function useBackendFiles(enabled: boolean, baseUrl = ''): BackendFilesSta
         }
 
         const filesData = (await filesResponse.json()) as FileSource[];
-        setFiles(filesData);
+        // Polling returns freshly allocated arrays even when the watched files
+        // are unchanged. Preserve the committed snapshot in that case so
+        // consumers do not cancel in-flight analysis on referential churn.
+        setFiles((previous) => reuseUnchangedFiles(previous, filesData));
 
         // Schema is optional (may not be configured on backend)
         if (schemaResponse.ok) {

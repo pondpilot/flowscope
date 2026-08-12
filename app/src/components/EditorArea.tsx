@@ -18,7 +18,11 @@ import type { RunMode } from '@/lib/project-store';
 interface EditorAnalysisState {
   isAnalyzing: boolean;
   error: string | null;
-  runAnalysis: (activeFileContent?: string, activeFilePath?: string) => Promise<void>;
+  runAnalysis: (
+    activeFileContent?: string,
+    activeFilePath?: string,
+    runModeOverride?: RunMode
+  ) => Promise<void>;
   setError: (error: string | null) => void;
 }
 
@@ -207,15 +211,9 @@ export function EditorArea({
 
   const handleAnalyzeActiveOnly = useCallback(() => {
     if (activeFile && currentProject) {
-      // Temporarily switch to 'current' mode for this run
-      const originalMode = currentProject.runMode;
-      setRunMode(currentProject.id, 'current');
-      runAnalysis(activeFile.content, activeFile.path).finally(() => {
-        // Restore original mode after analysis
-        setRunMode(currentProject.id, originalMode);
-      });
+      runAnalysis(activeFile.content, activeFile.path, 'current');
     }
-  }, [activeFile, currentProject, runAnalysis, setRunMode]);
+  }, [activeFile, currentProject, runAnalysis]);
 
   // Keyboard shortcuts for running analysis
   const analysisShortcuts = useMemo<GlobalShortcut[]>(

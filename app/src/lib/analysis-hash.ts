@@ -12,10 +12,6 @@ const HASH_VERSION = 'v5';
 const FNV_OFFSET_BASIS = 0xcbf29ce484222325n;
 const FNV_PRIME = 0x100000001b3n;
 const FNV_MASK = 0xffffffffffffffffn;
-const FNV_OFFSET_HIGH = 0xcbf29ce4;
-const FNV_OFFSET_LOW = 0x84222325;
-const FNV_PRIME_LOW = 0x1b3;
-const UINT32_SIZE = 0x100000000;
 
 export interface AnalysisHashInput {
   files: Array<{ name: string; content: string }>;
@@ -26,23 +22,6 @@ export interface AnalysisHashInput {
   enableLinting?: boolean;
   templateMode?: TemplateMode;
 }
-
-export interface FileSyncInput {
-  files: Array<{ name: string; content: string }>;
-}
-
-interface FastHashState {
-  high: number;
-  low: number;
-}
-
-interface CachedFileSyncDigest {
-  name: string;
-  content: string;
-  digest: string;
-}
-
-let previousFileSyncDigests: CachedFileSyncDigest[] = [];
 
 /**
  * Update hash with a string value using FNV-1a algorithm.
@@ -73,46 +52,6 @@ function updateHashWithField(currentHash: bigint, value: string): bigint {
   return hash;
 }
 
-/**
- * Update a 64-bit FNV-1a hash using two 32-bit words.
- *
- * This produces the same hash as the BigInt implementation without performing
- * BigInt arithmetic for every character on the browser's main thread.
- */
-function updateFastHashWithString(currentHash: FastHashState, value: string): FastHashState {
-  let { high, low } = currentHash;
-
-  for (let index = 0; index < value.length; index += 1) {
-    low = (low ^ value.charCodeAt(index)) >>> 0;
-
-    // The 64-bit FNV prime is 2^40 + 0x1b3. Multiplication by 0x1b3
-    // stays within JavaScript's exact integer range, so carry can be
-    // applied to the high word without BigInt.
-    const lowProduct = low * FNV_PRIME_LOW;
-    const carry = Math.floor(lowProduct / UINT32_SIZE);
-    high = (Math.imul(high, FNV_PRIME_LOW) + carry + (low << 8)) >>> 0;
-    low = lowProduct >>> 0;
-  }
-
-  return { high, low };
-}
-
-function updateFastHashWithField(currentHash: FastHashState, value: string): FastHashState {
-  const hash = updateFastHashWithString(currentHash, `${value.length}:`);
-  return updateFastHashWithString(hash, value);
-}
-
-function formatFastHash(hash: FastHashState): string {
-  return `${hash.high.toString(16).padStart(8, '0')}${hash.low.toString(16).padStart(8, '0')}`;
-}
-
-function buildFileDigest(file: FileSyncInput['files'][number]): string {
-  let hash = { high: FNV_OFFSET_HIGH, low: FNV_OFFSET_LOW };
-  hash = updateFastHashWithField(hash, file.name);
-  hash = updateFastHashWithField(hash, file.content);
-  return formatFastHash(hash);
-}
-
 export function buildAnalysisCacheKey(input: AnalysisHashInput): string {
   let hash = FNV_OFFSET_BASIS;
   // Fixed-format fields use updateHashWithString (no collision risk)
@@ -131,25 +70,4 @@ export function buildAnalysisCacheKey(input: AnalysisHashInput): string {
   }
 
   return hash.toString(16).padStart(16, '0');
-}
-
-export function buildFileSyncKey(input: FileSyncInput): string {
-  let hash = { high: FNV_OFFSET_HIGH, low: FNV_OFFSET_LOW };
-  hash = updateFastHashWithString(hash, `${HASH_VERSION}-files`);
-  hash = updateFastHashWithString(hash, String(input.files.length));
-
-  const nextFileSyncDigests: CachedFileSyncDigest[] = [];
-  for (const [index, file] of input.files.entries()) {
-    const cached = previousFileSyncDigests[index];
-    const digest =
-      cached && cached.name === file.name && cached.content === file.content
-        ? cached.digest
-        : buildFileDigest(file);
-
-    nextFileSyncDigests.push({ ...file, digest });
-    hash = updateFastHashWithField(hash, digest);
-  }
-  previousFileSyncDigests = nextFileSyncDigests;
-
-  return formatFastHash(hash);
 }
