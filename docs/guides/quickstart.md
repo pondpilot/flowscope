@@ -13,7 +13,12 @@ yarn add @pondpilot/flowscope-core
 ## Basic Usage
 
 ```typescript
-import { initWasm, analyzeSql } from '@pondpilot/flowscope-core';
+import {
+  analyzeSql,
+  edgesInStatement,
+  initWasm,
+  nodesInStatement,
+} from '@pondpilot/flowscope-core';
 
 await initWasm();
 
@@ -52,12 +57,17 @@ if (result.summary.hasErrors) {
   console.error('Analysis failed:', result.issues);
 }
 
-for (const stmt of result.statements) {
-  console.log(`Statement ${stmt.statementIndex}: ${stmt.statementType}`);
-  console.log('Edges:', stmt.edges.length);
+for (const statement of result.statements) {
+  const nodes = nodesInStatement(result, statement.statementIndex);
+  const edges = edgesInStatement(result, statement.statementIndex);
+
+  console.log(`Statement ${statement.statementIndex}: ${statement.statementType}`);
+  console.log('Nodes:', nodes.length);
+  console.log('Edges:', edges.length);
 }
 
-console.log('Global nodes:', result.globalLineage.nodes.length);
+console.log('All graph nodes:', result.nodes.length);
+console.log('All graph edges:', result.edges.length);
 ```
 
 ## Disabling Column Lineage

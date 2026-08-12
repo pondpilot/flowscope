@@ -29,7 +29,7 @@
     "test:wasm-browser": "node ../../scripts/test_wasm_browser.mjs",
     "test:watch": "vitest",
     "clean": "rm -rf dist",
-    "typecheck": "yarn check:generated-types && tsc --noEmit",
+    "typecheck": "yarn check:generated-types && tsc --noEmit && tsc --project tsconfig.type-tests.json",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix"
   },

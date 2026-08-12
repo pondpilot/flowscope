@@ -30,6 +30,8 @@ When `options.lint.enabled` is `true`, lint diagnostics are included in the `iss
 ```json
 {
   "statements": [ ... ],
+  "nodes": [ ... ],
+  "edges": [ ... ],
   "issues": [ ... ],
   "summary": {
     "hasErrors": false,
@@ -37,6 +39,10 @@ When `options.lint.enabled` is `true`, lint diagnostics are included in the `iss
   }
 }
 ```
+
+`statements` contains per-statement metadata. The flat lineage graph lives in
+the top-level `nodes` and `edges` arrays; each graph item lists its participating
+statements in `statementIds`.
 
 ### `analyze_sql(sql: string) -> string`
 

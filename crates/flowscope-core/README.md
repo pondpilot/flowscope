@@ -22,7 +22,7 @@ Core SQL lineage analysis engine for FlowScope.
 
 ## Structure
 
-```
+```text
 src/
 ├── analyzer.rs              # Main analysis orchestration
 ├── analyzer/
@@ -58,17 +58,31 @@ use flowscope_core::{analyze, AnalyzeRequest, Dialect};
 fn main() {
     let request = AnalyzeRequest {
         sql: "SELECT u.name, o.id FROM users u JOIN orders o ON u.id = o.user_id".to_string(),
+        files: None,
         dialect: Dialect::Postgres,
-        schema: None, // Optional schema metadata
-        file_path: None,
+        source_name: Some("example.sql".to_string()),
+        options: None,
+        schema: None,
+        #[cfg(feature = "templating")]
+        template_config: None,
     };
 
     let result = analyze(&request);
 
-    // Access table lineage
-    for statement in result.statements {
-        println!("Tables: {:?}", statement.nodes);
-        println!("Edges: {:?}", statement.edges);
+    // The complete graph spans every statement.
+    println!("Nodes: {:?}", result.nodes);
+    println!("Edges: {:?}", result.edges);
+
+    // Use the helpers to inspect one statement's portion of the flat graph.
+    for statement in &result.statements {
+        let nodes: Vec<_> = result
+            .nodes_in_statement(statement.statement_index)
+            .collect();
+        let edges: Vec<_> = result
+            .edges_in_statement(statement.statement_index)
+            .collect();
+        println!("Statement {} nodes: {nodes:?}", statement.statement_index);
+        println!("Statement {} edges: {edges:?}", statement.statement_index);
     }
 }
 ```
@@ -76,12 +90,29 @@ fn main() {
 ### Linting
 
 ```rust
-use flowscope_core::linter::{Linter, LintConfig, LintDocument};
+use flowscope_core::{analyze, AnalysisOptions, AnalyzeRequest, Dialect, LintConfig};
 
-let config = LintConfig::default();
-let linter = Linter::new(config);
-let document = LintDocument::new(sql, dialect);
-let issues = linter.check_document(&document);
+let request = AnalyzeRequest {
+    sql: "select * from users".to_string(),
+    files: None,
+    dialect: Dialect::Postgres,
+    source_name: None,
+    options: Some(AnalysisOptions {
+        lint: Some(LintConfig::default()),
+        ..Default::default()
+    }),
+    schema: None,
+    #[cfg(feature = "templating")]
+    template_config: None,
+};
+
+let result = analyze(&request);
+let lint_issues: Vec<_> = result
+    .issues
+    .iter()
+    .filter(|issue| issue.code.starts_with("LINT_"))
+    .collect();
+println!("Lint issues: {lint_issues:?}");
 ```
 
 ## Testing

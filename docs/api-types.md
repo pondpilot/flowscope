@@ -128,6 +128,20 @@ export interface StatementMeta {
 }
 ```
 
+`StatementMeta` contains metadata only. Use the public helpers to project the
+top-level graph down to a statement without reimplementing the `statementIds`
+filter:
+
+```typescript
+import { edgesInStatement, nodesInStatement } from '@pondpilot/flowscope-core';
+
+for (const statement of result.statements) {
+  const nodes = nodesInStatement(result, statement.statementIndex);
+  const edges = edgesInStatement(result, statement.statementIndex);
+  console.log({ statement, nodes, edges });
+}
+```
+
 ### Node & Edge
 
 ```typescript

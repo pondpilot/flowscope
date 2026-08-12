@@ -15,7 +15,12 @@ npm install @pondpilot/flowscope-core
 ## Usage
 
 ```typescript
-import { initWasm, analyzeSql } from '@pondpilot/flowscope-core';
+import {
+  analyzeSql,
+  edgesInStatement,
+  initWasm,
+  nodesInStatement,
+} from '@pondpilot/flowscope-core';
 
 await initWasm();
 
@@ -23,6 +28,17 @@ const result = await analyzeSql({
   sql: 'SELECT * FROM users',
   dialect: 'duckdb',
 });
+
+console.log('All graph nodes:', result.nodes);
+console.log('All graph edges:', result.edges);
+
+for (const statement of result.statements) {
+  console.log({
+    metadata: statement,
+    nodes: nodesInStatement(result, statement.statementIndex),
+    edges: edgesInStatement(result, statement.statementIndex),
+  });
+}
 ```
 
 Bundlers such as Vite resolve the package-owned WASM URL automatically. Pass

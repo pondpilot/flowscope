@@ -213,12 +213,16 @@ async function ensureWasmReady(): Promise<void> {
  *
  * @example
  * ```typescript
+ * import { analyzeSql, nodesInStatement } from '@pondpilot/flowscope-core';
+ *
  * const result = await analyzeSql({
  *   sql: 'SELECT * FROM users JOIN orders ON users.id = orders.user_id',
  *   dialect: 'postgres'
  * });
  *
- * console.log(result.statements[0].nodes); // Tables: users, orders
+ * console.log(result.nodes.map((node) => node.label)); // Complete flat graph
+ * const statement = result.statements[0];
+ * console.log(nodesInStatement(result, statement.statementIndex));
  * console.log(result.summary.hasErrors); // false
  * ```
  */

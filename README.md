@@ -136,7 +136,7 @@ npm install @pondpilot/flowscope-core
 Analyze a query:
 
 ```typescript
-import { initWasm, analyzeSql } from '@pondpilot/flowscope-core';
+import { analyzeSql, initWasm, nodesInStatement } from '@pondpilot/flowscope-core';
 
 await initWasm();
 
@@ -145,7 +145,13 @@ const result = await analyzeSql({
   dialect: 'postgres',
 });
 
-console.log(result.statements[0]);
+console.log('All graph nodes:', result.nodes);
+
+const statement = result.statements[0];
+console.log(
+  'First statement nodes:',
+  nodesInStatement(result, statement.statementIndex)
+);
 ```
 
 ## Completion API
