@@ -1,4 +1,4 @@
-import { initWasm, isWasmInitialized } from './wasm-loader';
+import { initWasm } from './wasm-loader';
 import { VALID_DIALECTS } from './types';
 import type {
   AnalyzeRequest,
@@ -14,22 +14,6 @@ import type {
 
 // Shared reserved keywords (single source of truth for Rust and TypeScript)
 import reservedKeywordsJson from './reserved-keywords.json';
-
-// Import WASM functions (will be available after init)
-let analyzeSqlJson: ((request: string) => string) | null = null;
-let exportToDuckDbSqlFn: ((resultJson: string) => string) | null = null;
-let exportJsonFn: ((requestJson: string) => string) | null = null;
-let exportMermaidFn: ((requestJson: string) => string) | null = null;
-let exportHtmlFn: ((requestJson: string) => string) | null = null;
-let exportCsvBundleFn: ((requestJson: string) => Uint8Array) | null = null;
-let exportXlsxFn: ((requestJson: string) => Uint8Array) | null = null;
-let exportFilenameFn: ((requestJson: string) => string) | null = null;
-let completionItemsJson: ((requestJson: string) => string) | null = null;
-let splitStatementsJson: ((requestJson: string) => string) | null = null;
-let panicHookInstalled = false;
-
-// Initialization guard to prevent race conditions
-let wasmInitPromise: Promise<void> | null = null;
 
 /** Maximum length for schema identifiers (PostgreSQL/DuckDB limit). */
 const MAX_SCHEMA_NAME_LENGTH = 63;
@@ -142,67 +126,8 @@ function validateSchemaNameOrThrow(schema: string): void {
   }
 }
 
-async function ensureWasmReady(): Promise<void> {
-  // Use initialization guard to prevent race conditions when called concurrently
-  if (wasmInitPromise) {
-    return wasmInitPromise;
-  }
-
-  wasmInitPromise = (async () => {
-    const wasmModule = await initWasm();
-
-    if (!isWasmInitialized()) {
-      throw new Error('WASM module failed to initialize');
-    }
-
-    if (!analyzeSqlJson) {
-      analyzeSqlJson = wasmModule.analyze_sql_json;
-    }
-
-    if (!exportToDuckDbSqlFn) {
-      exportToDuckDbSqlFn = wasmModule.export_to_duckdb_sql;
-    }
-
-    if (!exportJsonFn && typeof wasmModule.export_json === 'function') {
-      exportJsonFn = wasmModule.export_json;
-    }
-
-    if (!exportMermaidFn && typeof wasmModule.export_mermaid === 'function') {
-      exportMermaidFn = wasmModule.export_mermaid;
-    }
-
-    if (!exportHtmlFn && typeof wasmModule.export_html === 'function') {
-      exportHtmlFn = wasmModule.export_html;
-    }
-
-    if (!exportCsvBundleFn && typeof wasmModule.export_csv_bundle === 'function') {
-      exportCsvBundleFn = wasmModule.export_csv_bundle;
-    }
-
-    if (!exportXlsxFn && typeof wasmModule.export_xlsx === 'function') {
-      exportXlsxFn = wasmModule.export_xlsx;
-    }
-
-    if (!exportFilenameFn && typeof wasmModule.export_filename === 'function') {
-      exportFilenameFn = wasmModule.export_filename;
-    }
-
-    if (!completionItemsJson && typeof wasmModule.completion_items_json === 'function') {
-      completionItemsJson = wasmModule.completion_items_json;
-    }
-
-    if (!splitStatementsJson && typeof wasmModule.split_statements_json === 'function') {
-      splitStatementsJson = wasmModule.split_statements_json;
-    }
-
-    // Install panic hook for better error messages
-    if (!panicHookInstalled && wasmModule.set_panic_hook) {
-      wasmModule.set_panic_hook();
-      panicHookInstalled = true;
-    }
-  })();
-
-  return wasmInitPromise;
+function ensureWasmReady(): ReturnType<typeof initWasm> {
+  return initWasm();
 }
 
 /**
@@ -223,9 +148,10 @@ async function ensureWasmReady(): Promise<void> {
  * ```
  */
 export async function analyzeSql(request: AnalyzeRequest): Promise<AnalyzeResult> {
-  await ensureWasmReady();
+  const wasmModule = await ensureWasmReady();
+  const analyzeSqlJson = wasmModule.analyze_sql_json;
 
-  if (!analyzeSqlJson) {
+  if (typeof analyzeSqlJson !== 'function') {
     throw new Error('WASM module not properly initialized');
   }
 
@@ -260,9 +186,10 @@ export async function analyzeSql(request: AnalyzeRequest): Promise<AnalyzeResult
 }
 
 export async function completionItems(request: CompletionRequest): Promise<CompletionItemsResult> {
-  await ensureWasmReady();
+  const wasmModule = await ensureWasmReady();
+  const completionItemsJson = wasmModule.completion_items_json;
 
-  if (!completionItemsJson) {
+  if (typeof completionItemsJson !== 'function') {
     throw new Error('WASM module not properly initialized');
   }
 
@@ -294,9 +221,10 @@ export async function completionItems(request: CompletionRequest): Promise<Compl
 export async function splitStatements(
   request: StatementSplitRequest
 ): Promise<StatementSplitResult> {
-  await ensureWasmReady();
+  const wasmModule = await ensureWasmReady();
+  const splitStatementsJson = wasmModule.split_statements_json;
 
-  if (!splitStatementsJson) {
+  if (typeof splitStatementsJson !== 'function') {
     throw new Error('WASM module not properly initialized');
   }
 
@@ -362,9 +290,10 @@ export async function exportToDuckDbSql(result: AnalyzeResult, schema?: string):
     validateSchemaNameOrThrow(schema);
   }
 
-  await ensureWasmReady();
+  const wasmModule = await ensureWasmReady();
+  const exportToDuckDbSqlFn = wasmModule.export_to_duckdb_sql;
 
-  if (!exportToDuckDbSqlFn) {
+  if (typeof exportToDuckDbSqlFn !== 'function') {
     throw new Error('WASM module not properly initialized');
   }
 
@@ -387,9 +316,10 @@ export async function exportJson(
   result: AnalyzeResult,
   options: { compact?: boolean } = {}
 ): Promise<string> {
-  await ensureWasmReady();
+  const wasmModule = await ensureWasmReady();
+  const exportJsonFn = wasmModule.export_json;
 
-  if (!exportJsonFn) {
+  if (typeof exportJsonFn !== 'function') {
     throw new Error('WASM module not properly initialized');
   }
 
@@ -401,9 +331,10 @@ export async function exportMermaid(
   result: AnalyzeResult,
   view: MermaidView = 'table'
 ): Promise<string> {
-  await ensureWasmReady();
+  const wasmModule = await ensureWasmReady();
+  const exportMermaidFn = wasmModule.export_mermaid;
 
-  if (!exportMermaidFn) {
+  if (typeof exportMermaidFn !== 'function') {
     throw new Error('WASM module not properly initialized');
   }
 
@@ -415,9 +346,10 @@ export async function exportHtml(
   result: AnalyzeResult,
   options: { projectName?: string; exportedAt?: Date } = {}
 ): Promise<string> {
-  await ensureWasmReady();
+  const wasmModule = await ensureWasmReady();
+  const exportHtmlFn = wasmModule.export_html;
 
-  if (!exportHtmlFn) {
+  if (typeof exportHtmlFn !== 'function') {
     throw new Error('WASM module not properly initialized');
   }
 
@@ -430,9 +362,10 @@ export async function exportHtml(
 }
 
 export async function exportCsvArchive(result: AnalyzeResult): Promise<Uint8Array> {
-  await ensureWasmReady();
+  const wasmModule = await ensureWasmReady();
+  const exportCsvBundleFn = wasmModule.export_csv_bundle;
 
-  if (!exportCsvBundleFn) {
+  if (typeof exportCsvBundleFn !== 'function') {
     throw new Error('WASM module not properly initialized');
   }
 
@@ -441,9 +374,10 @@ export async function exportCsvArchive(result: AnalyzeResult): Promise<Uint8Arra
 }
 
 export async function exportXlsx(result: AnalyzeResult): Promise<Uint8Array> {
-  await ensureWasmReady();
+  const wasmModule = await ensureWasmReady();
+  const exportXlsxFn = wasmModule.export_xlsx;
 
-  if (!exportXlsxFn) {
+  if (typeof exportXlsxFn !== 'function') {
     throw new Error('WASM module not properly initialized');
   }
 
@@ -458,9 +392,10 @@ export async function exportFilename(options: {
   view?: MermaidView;
   compact?: boolean;
 }): Promise<string> {
-  await ensureWasmReady();
+  const wasmModule = await ensureWasmReady();
+  const exportFilenameFn = wasmModule.export_filename;
 
-  if (!exportFilenameFn) {
+  if (typeof exportFilenameFn !== 'function') {
     throw new Error('WASM module not properly initialized');
   }
 

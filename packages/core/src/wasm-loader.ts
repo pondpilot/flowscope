@@ -1,5 +1,7 @@
-let wasmModule: typeof import('./wasm/flowscope_wasm') | null = null;
-let initPromise: Promise<typeof import('./wasm/flowscope_wasm')> | null = null;
+type WasmModule = typeof import('./wasm/flowscope_wasm');
+
+let wasmModule: WasmModule | null = null;
+let initPromise: Promise<WasmModule> | null = null;
 
 export interface InitWasmOptions {
   wasmUrl?: string;
@@ -10,12 +12,10 @@ export interface InitWasmOptions {
  * Initialize the WASM module. Safe to call multiple times (idempotent).
  * Returns the initialized WASM module.
  */
-export async function initWasm(
-  options: InitWasmOptions = {}
-): Promise<typeof import('./wasm/flowscope_wasm')> {
+export function initWasm(options: InitWasmOptions = {}): Promise<WasmModule> {
   // Return cached module if already initialized
   if (wasmModule) {
-    return wasmModule;
+    return Promise.resolve(wasmModule);
   }
 
   // Return existing promise if initialization is in progress
@@ -23,39 +23,61 @@ export async function initWasm(
     return initPromise;
   }
 
-  initPromise = (async () => {
-    try {
-      // Dynamic import of the wasm module
-      // With vite-plugin-wasm, the module auto-initializes on import
-      const wasm = await import('./wasm/flowscope_wasm');
-
-      // Explicitly initialize the WASM module
-      if (typeof wasm.default === 'function') {
-        // Pass through custom URL when provided so host apps can control asset location
-        await wasm.default(options.wasmUrl ?? undefined);
-        // Allow host apps to enable tracing via init option if supported by the build
-        const wasmWithTracing = wasm as typeof wasm & { enable_tracing?: () => void };
-        if (options.enableTracing && typeof wasmWithTracing.enable_tracing === 'function') {
-          wasmWithTracing.enable_tracing();
+  const attempt: Promise<WasmModule> = initializeWasm(options).then(
+    (wasm) => {
+      // A reset may have invalidated this attempt while it was in flight. Join a
+      // replacement attempt when one exists, but do not undo an explicit reset.
+      if (initPromise !== attempt) {
+        if (initPromise) {
+          return initPromise;
         }
-      }
-
-      // Verify that the module is actually initialized by checking for required functions
-      if (!wasm.analyze_sql_json || typeof wasm.analyze_sql_json !== 'function') {
-        throw new Error('WASM module loaded but analyze_sql_json function is not available');
+        throw new Error('WASM initialization was superseded by reset or cleanup');
       }
 
       wasmModule = wasm;
-      return wasmModule;
-    } catch (error) {
-      initPromise = null; // Allow retry on failure
+      return wasm;
+    },
+    (error: unknown) => {
+      // Only the active attempt may clear the shared guard. An older rejected
+      // attempt must not clobber a retry started after reset.
+      if (initPromise === attempt) {
+        initPromise = null;
+      }
       throw new Error(
         `Failed to initialize WASM module: ${error instanceof Error ? error.message : String(error)}`
       );
     }
-  })();
+  );
+  initPromise = attempt;
+  return attempt;
+}
 
-  return initPromise;
+async function initializeWasm(options: InitWasmOptions): Promise<WasmModule> {
+  // Dynamic import of the wasm module
+  // With vite-plugin-wasm, the module auto-initializes on import
+  const wasm = await import('./wasm/flowscope_wasm');
+
+  // Explicitly initialize the WASM module
+  if (typeof wasm.default === 'function') {
+    // Pass through custom URL when provided so host apps can control asset location
+    await wasm.default(options.wasmUrl ?? undefined);
+    // Allow host apps to enable tracing via init option if supported by the build
+    const wasmWithTracing = wasm as typeof wasm & { enable_tracing?: () => void };
+    if (options.enableTracing && typeof wasmWithTracing.enable_tracing === 'function') {
+      wasmWithTracing.enable_tracing();
+    }
+  }
+
+  // Verify that the module is actually initialized by checking for required functions
+  if (!wasm.analyze_sql_json || typeof wasm.analyze_sql_json !== 'function') {
+    throw new Error('WASM module loaded but analyze_sql_json function is not available');
+  }
+
+  if (typeof wasm.set_panic_hook === 'function') {
+    wasm.set_panic_hook();
+  }
+
+  return wasm;
 }
 
 /**

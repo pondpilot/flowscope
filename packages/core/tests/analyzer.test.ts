@@ -67,6 +67,57 @@ describe('analyzer', () => {
     expect(payload.dialect).toBe('generic');
   });
 
+  it('retries initialization for analysis, completion, and export after a transient failure', async () => {
+    wasmModuleMock.default.mockRejectedValueOnce(new Error('transient load failure'));
+    const { analyzeSql, completionItems, exportJson } = await loadAnalyzer();
+
+    await expect(analyzeSql({ sql: 'SELECT 1', dialect: 'generic' })).rejects.toThrow(
+      /transient load failure/
+    );
+
+    const [analysis, completions, exported] = await Promise.all([
+      analyzeSql({ sql: 'SELECT 1', dialect: 'generic' }),
+      completionItems({ sql: 'SELECT ', dialect: 'generic', cursorOffset: 7 }),
+      exportJson(baseResult),
+    ]);
+
+    expect(analysis.summary.hasErrors).toBe(false);
+    expect(completions.items).toEqual([]);
+    expect(JSON.parse(exported)).toEqual(baseResult);
+    expect(wasmModuleMock.default).toHaveBeenCalledTimes(2);
+  });
+
+  it('uses current wasm exports after reset instead of cached function references', async () => {
+    const originalAnalyze = wasmModuleMock.analyze_sql_json;
+    const originalExportJson = wasmModuleMock.export_json;
+    const replacementAnalyze = vi.fn(() =>
+      JSON.stringify({ ...baseResult, summary: { ...baseResult.summary, tableCount: 2 } })
+    );
+    const replacementExportJson = vi.fn(() => '{"lifecycle":"replacement"}');
+    const { analyzeSql, exportJson } = await loadAnalyzer();
+    const { resetWasm } = await import('../src/wasm-loader');
+
+    try {
+      await analyzeSql({ sql: 'SELECT 1', dialect: 'generic' });
+      await exportJson(baseResult);
+      resetWasm();
+      wasmModuleMock.analyze_sql_json = replacementAnalyze;
+      wasmModuleMock.export_json = replacementExportJson;
+
+      const analysis = await analyzeSql({ sql: 'SELECT 2', dialect: 'generic' });
+      const exported = await exportJson(baseResult);
+
+      expect(analysis.summary.tableCount).toBe(2);
+      expect(exported).toBe('{"lifecycle":"replacement"}');
+      expect(replacementAnalyze).toHaveBeenCalledTimes(1);
+      expect(replacementExportJson).toHaveBeenCalledTimes(1);
+      expect(wasmModuleMock.default).toHaveBeenCalledTimes(2);
+    } finally {
+      wasmModuleMock.analyze_sql_json = originalAnalyze;
+      wasmModuleMock.export_json = originalExportJson;
+    }
+  });
+
   it('validates input SQL and throws for empty strings', async () => {
     const { analyzeSql } = await loadAnalyzer();
     await expect(analyzeSql({ sql: '', dialect: 'generic' })).rejects.toThrow(
