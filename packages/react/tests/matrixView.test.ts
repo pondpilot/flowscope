@@ -7,6 +7,7 @@ import {
   buildScriptMatrix,
   type TableDependencyWithDetails,
 } from '../src/utils/matrixUtils';
+import { clusterItems, filterItems, getTransitiveFlow } from '../src/components/matrix/algorithms';
 
 /**
  * Test fixture shape mirroring the legacy per-statement lineage — statement
@@ -658,5 +659,81 @@ describe('buildScriptMatrix', () => {
 
     expect(matrix.items).toContain('lone.sql');
     expect(matrix.cells.get('lone.sql')?.get('lone.sql')?.type).toBe('self');
+  });
+});
+
+describe('matrix view algorithms', () => {
+  const cells = new Map([
+    [
+      'A',
+      new Map([
+        ['A', { type: 'self' as const }],
+        ['B', { type: 'write' as const }],
+        ['C', { type: 'none' as const }],
+      ]),
+    ],
+    [
+      'B',
+      new Map([
+        ['A', { type: 'read' as const }],
+        ['B', { type: 'self' as const }],
+        ['C', { type: 'write' as const }],
+      ]),
+    ],
+    [
+      'C',
+      new Map([
+        ['A', { type: 'none' as const }],
+        ['B', { type: 'read' as const }],
+        ['C', { type: 'self' as const }],
+      ]),
+    ],
+  ]);
+
+  it('finds transitive ancestors and descendants independently', () => {
+    const flow = getTransitiveFlow('B', cells, ['A', 'B', 'C']);
+
+    expect(flow.ancestors).toEqual(new Set(['A']));
+    expect(flow.descendants).toEqual(new Set(['C']));
+  });
+
+  it('applies field and X-Ray filters before row or column text filters', () => {
+    const items = ['alpha', 'beta', 'gamma'];
+
+    expect(
+      filterItems({
+        items,
+        filterMode: 'fields',
+        filterText: 'alpha',
+        matchingFieldNodes: new Set(['beta']),
+        xRayMode: true,
+        xRayFilterMode: 'hide',
+        activeXRaySet: new Set(['gamma']),
+        targetMode: 'rows',
+      })
+    ).toEqual(['beta']);
+
+    expect(
+      filterItems({
+        items,
+        filterMode: 'rows',
+        filterText: 'alpha',
+        matchingFieldNodes: null,
+        xRayMode: true,
+        xRayFilterMode: 'hide',
+        activeXRaySet: new Set(['gamma']),
+        targetMode: 'rows',
+      })
+    ).toEqual(['gamma']);
+  });
+
+  it('clusters without mutating the worker-provided item order', () => {
+    const items = ['C', 'B', 'A'];
+
+    const clustered = clusterItems(items, cells);
+
+    expect(items).toEqual(['C', 'B', 'A']);
+    expect(clustered).toHaveLength(items.length);
+    expect(new Set(clustered)).toEqual(new Set(items));
   });
 });
