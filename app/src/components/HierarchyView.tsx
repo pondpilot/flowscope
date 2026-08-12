@@ -24,12 +24,10 @@ import {
   Grid3X3,
   ExternalLink,
 } from 'lucide-react';
-import {
-  useLineage,
-  SearchAutocomplete,
-  type SearchSuggestion,
-  type SearchAutocompleteRef,
-} from '@pondpilot/flowscope-react';
+import { SearchAutocomplete } from '@flowscope-react/components/SearchAutocomplete';
+import type { SearchAutocompleteRef } from '@flowscope-react/components/SearchAutocomplete';
+import type { SearchSuggestion } from '@flowscope-react/hooks/useSearchSuggestions';
+import { useLineage } from '@flowscope-react/store';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useNavigation } from '@/lib/navigation-context';

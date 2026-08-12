@@ -34,7 +34,7 @@ vi.mock('../services/embedding-service', () => ({
   embedTexts: vi.fn(() => Promise.resolve([[0.1, 0.2]])),
 }));
 
-vi.mock('@pondpilot/flowscope-react', () => ({
+vi.mock('@flowscope-react/store', () => ({
   useLineageState: () => ({ result: null }),
 }));
 

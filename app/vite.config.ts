@@ -13,6 +13,7 @@ export default defineConfig({
     alias: {
       '@pondpilot/flowscope-core': path.resolve(__dirname, '../packages/core/src'),
       '@pondpilot/flowscope-react': path.resolve(__dirname, '../packages/react/src'),
+      '@flowscope-react': path.resolve(__dirname, '../packages/react/src'),
       '@': path.resolve(__dirname, './src'),
     },
   },
@@ -21,6 +22,10 @@ export default defineConfig({
   },
   build: {
     target: 'esnext',
+    manifest: true,
+    // The manifest-based checker enforces tighter startup/async budgets; this
+    // warning ceiling matches the documented 3 MiB entry cap.
+    chunkSizeWarningLimit: 3072,
   },
   worker: {
     format: 'es',

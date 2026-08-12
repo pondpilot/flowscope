@@ -7,12 +7,15 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      '@flowscope-react': path.resolve(__dirname, '../packages/react/src'),
     },
   },
   test: {
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/features/librarian/__tests__/setup.ts'],
+    include: ['src/**/*.test.{ts,tsx}'],
+    exclude: ['scripts/**/*.test.mjs'],
     coverage: {
       provider: 'v8',
       include: ['src/**/*.{ts,tsx}'],

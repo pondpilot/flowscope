@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react';
-import { useLineageState } from '@pondpilot/flowscope-react';
+import { useLineageState } from '@flowscope-react/store';
 
 import { useProject } from '@/lib/project-store';
 

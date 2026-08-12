@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, HelpCircle, Settings, X } from 'lucide-react';
-import { useLineageState } from '@pondpilot/flowscope-react';
+import { useLineageState } from '@flowscope-react/store';
 
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';

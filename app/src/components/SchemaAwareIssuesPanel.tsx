@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useLineage } from '@pondpilot/flowscope-react';
+import { useLineage } from '@flowscope-react/store';
 import { AlertCircle, Database } from 'lucide-react';
 import { useNavigation } from '@/lib/navigation-context';
 import { useProject } from '@/lib/project-store';

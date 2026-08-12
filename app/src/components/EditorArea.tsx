@@ -1,12 +1,9 @@
 import { useEffect, useCallback, useRef, useMemo, useState } from 'react';
 import { Loader2, AlertCircle, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
-import {
-  SqlView,
-  computeStalePaths,
-  useLineageActions,
-  useLineageState,
-} from '@pondpilot/flowscope-react';
+import { SqlView } from '@flowscope-react/components/SqlView';
+import { useLineageActions, useLineageState } from '@flowscope-react/store';
+import { computeStalePaths } from '@flowscope-react/utils/staleContent';
 import { cn } from '@/lib/utils';
 import { useProject } from '@/lib/project-store';
 import { useThemeStore, resolveTheme } from '@/lib/theme-store';

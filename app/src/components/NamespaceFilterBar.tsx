@@ -15,7 +15,7 @@ import {
   getNamespaceFilterStateWithDefaults,
   type NamespaceFilterState,
 } from '@/lib/view-state-store';
-import { getNamespaceColor } from '@pondpilot/flowscope-react';
+import { getNamespaceColor } from '@flowscope-react/constants';
 import { useThemeStore, resolveTheme } from '@/lib/theme-store';
 
 interface NamespaceFilterBarProps {

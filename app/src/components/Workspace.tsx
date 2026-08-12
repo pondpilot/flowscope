@@ -1,7 +1,7 @@
-import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import { lazy, Suspense, useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { Share2, Github } from 'lucide-react';
 import { toast } from 'sonner';
-import { useLineageActions, useLineageState } from '@pondpilot/flowscope-react';
+import { useLineageActions, useLineageState } from '@flowscope-react/store';
 import { Button } from './ui/button';
 import { FlowScopeLogo } from './FlowScopeLogo';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from './ui/resizable';
@@ -10,7 +10,6 @@ import type { ImperativePanelHandle } from 'react-resizable-panels';
 import { EditorArea } from './EditorArea';
 import { AnalysisView } from './AnalysisView';
 import { ProjectSelector } from './ProjectSelector';
-import { ShareDialog } from './ShareDialog';
 import { ExportDialog } from './ExportDialog';
 import { ThemeToggle } from './ThemeToggle';
 import { KeyboardShortcutsDialog } from './KeyboardShortcutsDialog';
@@ -25,9 +24,18 @@ import { useThemeStore, type Theme } from '@/lib/theme-store';
 import { useViewStateStore } from '@/lib/view-state-store';
 import { getShortcutDisplay } from '@/lib/shortcuts';
 import { useBackend } from '@/lib/backend-context';
-import { LibrarianPanel, useSyncActiveProject } from '@/features/librarian';
+import { useSyncActiveProject } from '@/features/librarian/hooks/use-sync-active-project';
 import type { ChatReference } from '@/features/librarian/utils/schema-identifiers';
 import { resolveLineageNodeIds } from '@/lib/lineage-node-resolver';
+
+const LazyShareDialog = lazy(() =>
+  import('./ShareDialog').then(({ ShareDialog }) => ({ default: ShareDialog }))
+);
+const LazyLibrarianPanel = lazy(() =>
+  import('@/features/librarian/components/librarian-panel').then(({ LibrarianPanel }) => ({
+    default: LibrarianPanel,
+  }))
+);
 
 interface WorkspaceProps {
   backendReady: boolean;
@@ -406,12 +414,14 @@ export function Workspace({ backendReady, error, onRetry, isRetrying }: Workspac
       </header>
 
       {/* Share Dialog */}
-      {currentProject && (
-        <ShareDialog
-          open={shareDialogOpen}
-          onOpenChange={setShareDialogOpen}
-          project={currentProject}
-        />
+      {currentProject && shareDialogOpen && (
+        <Suspense fallback={null}>
+          <LazyShareDialog
+            open={shareDialogOpen}
+            onOpenChange={setShareDialogOpen}
+            project={currentProject}
+          />
+        </Suspense>
       )}
 
       {/* Keyboard Shortcuts Help Dialog */}
@@ -498,7 +508,15 @@ export function Workspace({ backendReady, error, onRetry, isRetrying }: Workspac
                     maxSize={40}
                     data-testid="librarian-panel"
                   >
-                    <LibrarianPanelWithNavigation onClose={() => setLibrarianOpen(false)} />
+                    <Suspense
+                      fallback={
+                        <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                          Loading Librarian…
+                        </div>
+                      }
+                    >
+                      <LibrarianPanelWithNavigation onClose={() => setLibrarianOpen(false)} />
+                    </Suspense>
                   </ResizablePanel>
                 </>
               )}
@@ -550,5 +568,7 @@ function LibrarianPanelWithNavigation({ onClose }: { onClose: () => void }) {
     },
     [navigateTo, result, showColumnEdges, toggleColumnEdges, activeProjectId, updateViewState]
   );
-  return <LibrarianPanel onClose={onClose} onNavigateToReferences={handleNavigateToReferences} />;
+  return (
+    <LazyLibrarianPanel onClose={onClose} onNavigateToReferences={handleNavigateToReferences} />
+  );
 }

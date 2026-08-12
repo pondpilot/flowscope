@@ -1,5 +1,5 @@
 import dagre from 'dagre';
-import ELK from 'elkjs/lib/elk.bundled.js';
+import type { ELK as ElkInstance } from 'elkjs/lib/elk-api';
 import type { Node, Edge } from '@xyflow/react';
 import {
   computeLayoutInWorker,
@@ -27,8 +27,18 @@ export type LayoutAlgorithm = 'dagre' | 'elk';
 
 const LAYOUT_CACHE_LIMIT = 6;
 
-// ELK instance
-const elk = new ELK();
+let elkPromise: Promise<ElkInstance> | null = null;
+
+/**
+ * Load ELK only after a user selects it. Dagre is the default, so keeping the
+ * 1.6 MB ELK runtime out of the startup graph materially reduces initial JS.
+ */
+function loadElk(): Promise<ElkInstance> {
+  if (!elkPromise) {
+    elkPromise = import('elkjs/lib/elk.bundled.js').then(({ default: ELK }) => new ELK());
+  }
+  return elkPromise;
+}
 
 interface LayoutCacheEntry {
   positions: Record<string, { x: number; y: number }>;
@@ -237,6 +247,7 @@ async function layoutWithElk<N extends NodeData, E extends Record<string, unknow
   edges: Edge<E>[],
   direction: 'LR' | 'TB'
 ): Promise<{ nodes: Node<N>[]; edges: Edge<E>[] }> {
+  const elk = await loadElk();
   const elkDirection = direction === 'LR' ? 'RIGHT' : 'DOWN';
 
   const graph = {

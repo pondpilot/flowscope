@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useLineage } from '@pondpilot/flowscope-react';
+import { useLineage } from '@flowscope-react/store';
 import { useProject } from '../lib/project-store';
 import { getLastParseResult } from '../lib/schema-parser';
 import { useAnalysisStore } from '../lib/analysis-store';

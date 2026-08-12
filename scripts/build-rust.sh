@@ -1,13 +1,12 @@
 #!/bin/bash
 # Build script for FlowScope Rust/WASM components
 #
-# This script builds the native Rust workspace and the WASM module,
-# then sets up the necessary symlinks and copies for development.
+# This script builds the native Rust workspace and the browser WASM module,
+# then sets up the TypeScript source symlink used by package and app builds.
 #
 # Directory structure:
-#   packages/core/wasm/     - WASM build output (committed for npm publishing)
-#   packages/core/src/wasm  - Symlink to ../wasm (for TypeScript imports)
-#   app/public/wasm/        - WASM files served by the dev server
+#   packages/core/wasm/     - Canonical browser WASM output (also published to npm)
+#   packages/core/src/wasm  - Symlink to ../wasm (for package/Vite imports)
 #
 # Usage: Run from repository root: ./scripts/build-rust.sh
 
@@ -37,6 +36,10 @@ wasm-pack build crates/flowscope-wasm --release --target web --out-dir ../../pac
 # (wasm-pack generates a .gitignore that ignores everything)
 echo "# Keep wasm artifacts available for publishing" > packages/core/wasm/.gitignore
 
+# Remove the legacy app/public mirror, including ignored binaries left behind
+# by older versions of this script. Vite now emits the package-owned WASM.
+node app/scripts/remove-legacy-wasm.mjs
+
 # Create symlink for TypeScript development imports
 # The symlink allows TypeScript to import from './wasm' while the actual files
 # live one directory up in packages/core/wasm (for cleaner npm package structure)
@@ -45,24 +48,6 @@ if [ ! -L "packages/core/src/wasm" ]; then
     # Remove any existing directory and replace with symlink
     rm -rf packages/core/src/wasm
     ln -s ../wasm packages/core/src/wasm
-fi
-
-echo "Copying WASM to app locations..."
-# Copy to app/public/wasm for the Vite dev server to serve
-mkdir -p app/public/wasm
-cp packages/core/wasm/flowscope_wasm_bg.wasm app/public/wasm/
-cp packages/core/wasm/flowscope_wasm.js app/public/wasm/
-cp packages/core/wasm/flowscope_wasm.d.ts app/public/wasm/
-cp packages/core/wasm/flowscope_wasm_bg.wasm.d.ts app/public/wasm/
-
-# Copy to app's node_modules when using yarn workspace linking
-# This ensures the app can resolve the WASM files from the linked package
-if [ -d "app/node_modules/@pondpilot/flowscope-core/wasm" ]; then
-    echo "Copying WASM to app node_modules (workspace linking)..."
-    cp packages/core/wasm/flowscope_wasm_bg.wasm app/node_modules/@pondpilot/flowscope-core/wasm/
-    cp packages/core/wasm/flowscope_wasm.js app/node_modules/@pondpilot/flowscope-core/wasm/
-else
-    echo "Skipping app node_modules copy (directory not found - expected for fresh installs)"
 fi
 
 echo "WASM build complete!"

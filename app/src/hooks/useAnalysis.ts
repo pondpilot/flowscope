@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useMemo, useRef, startTransition } from 'react';
 import type { AnalyzeResult } from '@pondpilot/flowscope-core';
-import { useLineage } from '@pondpilot/flowscope-react';
+import { useLineage } from '@flowscope-react/store';
 import { analyzeWithWorker, getCachedAnalysis, syncAnalysisFiles } from '@/lib/analysis-worker';
 import type { BackendAdapter, AnalysisPayload } from '@/lib/backend-adapter';
 import { useProject } from '@/lib/project-store';

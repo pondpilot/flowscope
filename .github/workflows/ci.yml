@@ -206,7 +206,7 @@ jobs:
           yarn test:ts
           npm --prefix vscode run test
 
-      - name: Build demo app
+      - name: Build demo app and enforce bundle budgets
         run: yarn workspace @pondpilot/flowscope-app build
 
   schema-compat:

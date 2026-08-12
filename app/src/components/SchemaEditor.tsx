@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { SqlView } from '@pondpilot/flowscope-react';
+import { SqlView } from '@flowscope-react/components/SqlView';
 import {
   Dialog,
   DialogContent,

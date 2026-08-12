@@ -1,7 +1,5 @@
 import { useCallback, useState, type JSX } from 'react';
-import { toPng } from 'html-to-image';
 import { toast } from 'sonner';
-import { gzipSync, strToU8 } from 'fflate';
 import {
   Download,
   Image,
@@ -47,14 +45,9 @@ import {
   formatSchemaError,
   validateSchemaName,
 } from '@pondpilot/flowscope-core';
-import { useIsDarkMode } from '@pondpilot/flowscope-react';
+import { useIsDarkMode } from '@flowscope-react/hooks/useColors';
 import { getShortcutDisplay } from '@/lib/shortcuts';
-import {
-  base64UrlEncode,
-  formatBytes,
-  SHARE_URL_SOFT_LIMIT,
-  SHARE_URL_HARD_LIMIT,
-} from '@/lib/share';
+import { SHARE_LIMITS } from '@/lib/constants';
 
 // ============================================================================
 // Types
@@ -117,16 +110,21 @@ const PONDPILOT_URL = 'https://app.pondpilot.io';
  * Create a PondPilot shareable URL for the given SQL content.
  * Uses gzip compression for efficient URL encoding.
  */
-function createPondPilotUrl(
+async function createPondPilotUrl(
   name: string,
   sqlContent: string
-): { url: string; compressedSize: number } {
+): Promise<{ url: string; compressedSize: number; formattedSize: string }> {
+  const [{ gzipSync, strToU8 }, { base64UrlEncode, formatBytes }] = await Promise.all([
+    import('fflate'),
+    import('@/lib/share'),
+  ]);
   const payload = JSON.stringify({ name, content: sqlContent });
   const compressed = gzipSync(strToU8(payload), { level: 9 });
   const encoded = base64UrlEncode(compressed);
   return {
     url: `${PONDPILOT_URL}/shared-script/${encoded}`,
     compressedSize: encoded.length,
+    formattedSize: formatBytes(encoded.length),
   };
 }
 
@@ -202,6 +200,7 @@ export function ExportDialog({
     }
 
     try {
+      const { toPng } = await import('html-to-image');
       const backgroundColor = isDarkMode ? '#1e293b' : '#ffffff';
       const dataUrl = await toPng(graphRef.current, { backgroundColor });
       const { filename } = await buildExportFilename(projectName, 'png');
@@ -287,18 +286,18 @@ export function ExportDialog({
       const schema = schemaInput.trim() || undefined;
       const sql = await exportToDuckDbSql(result, schema);
       const fileName = `${sanitizeProjectName(projectName)}-lineage`;
-      const { url, compressedSize } = createPondPilotUrl(fileName, sql);
+      const { url, compressedSize, formattedSize } = await createPondPilotUrl(fileName, sql);
 
-      if (compressedSize > SHARE_URL_HARD_LIMIT) {
+      if (compressedSize > SHARE_LIMITS.URL_HARD_LIMIT) {
         setExportError(
           'File is too large for URL sharing. Please download the SQL file and open it in PondPilot manually.'
         );
         return;
       }
 
-      if (compressedSize > SHARE_URL_SOFT_LIMIT) {
+      if (compressedSize > SHARE_LIMITS.URL_SOFT_LIMIT) {
         toast.warning('Large export may not work in all browsers', {
-          description: `Compressed size: ${formatBytes(compressedSize)}`,
+          description: `Compressed size: ${formattedSize}`,
         });
       }
 

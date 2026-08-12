@@ -17,13 +17,18 @@ npm install @pondpilot/flowscope-core
 ```typescript
 import { initWasm, analyzeSql } from '@pondpilot/flowscope-core';
 
-await initWasm({ wasmUrl: '/wasm/flowscope_wasm_bg.wasm' });
+await initWasm();
 
 const result = await analyzeSql({
   sql: 'SELECT * FROM users',
-  dialect: 'duckdb'
+  dialect: 'duckdb',
 });
 ```
+
+Bundlers such as Vite resolve the package-owned WASM URL automatically. Pass
+`wasmUrl` only when a host deliberately serves the binary from a custom
+location; application builds should not copy the package WASM into a public
+asset directory as well.
 
 ### Lint Diagnostics
 
@@ -36,7 +41,7 @@ const result = await analyzeSql({
   options: { lint: { enabled: true } },
 });
 
-const lintIssues = result.issues.filter(i => i.code.startsWith('LINT_'));
+const lintIssues = result.issues.filter((i) => i.code.startsWith('LINT_'));
 ```
 
 See the root [README](../../README.md) for more details.

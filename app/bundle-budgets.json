@@ -1,0 +1,12 @@
+{
+  "wasmFileCount": 1,
+  "maxWasmBytes": 9437184,
+  "maxEntryJsBytes": 3145728,
+  "maxStartupJsBytes": 3145728,
+  "maxStartupJsGzipBytes": 614400,
+  "maxStartupCssBytes": 131072,
+  "maxStartupCssGzipBytes": 24576,
+  "maxAsyncJsChunkBytes": 2359296,
+  "maxTotalJsBytes": 8388608,
+  "maxTotalDistBytes": 18874368
+}

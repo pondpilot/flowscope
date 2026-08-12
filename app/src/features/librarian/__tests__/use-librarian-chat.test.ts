@@ -32,7 +32,7 @@ vi.mock('../services/vector-search', () => ({
 
 // Mock lineage state
 const mockResult = { globalLineage: { nodes: [], edges: [] } };
-vi.mock('@pondpilot/flowscope-react', () => ({
+vi.mock('@flowscope-react/store', () => ({
   useLineageState: () => ({ result: mockResult }),
 }));
 

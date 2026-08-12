@@ -1,12 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { LineageActions } from '@pondpilot/flowscope-react';
-import {
-  GraphErrorBoundary,
-  GraphView,
-  MatrixView,
-  SchemaView,
-  useLineage,
-} from '@pondpilot/flowscope-react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { LineageActions } from '@flowscope-react/types';
+import { GraphErrorBoundary } from '@flowscope-react/components/ErrorBoundary';
+import { GraphView } from '@flowscope-react/components/GraphView';
+import { useLineage } from '@flowscope-react/store';
 import type { AnalyzeResult, SchemaTable } from '@pondpilot/flowscope-core';
 import { Loader2, Settings } from 'lucide-react';
 
@@ -24,13 +20,35 @@ import { isValidTab, useNavigation } from '@/lib/navigation-context';
 import { useViewStateStore, getNamespaceFilterStateWithDefaults } from '@/lib/view-state-store';
 import { useProject } from '@/lib/project-store';
 import { schemaMetadataToSQL } from '@/lib/schema-parser';
-import { HierarchyView, type HierarchyViewRef } from './HierarchyView';
+import type { HierarchyViewRef } from './HierarchyView';
 import { LibrarianToggleButton } from './LibrarianToggleButton';
 import { StatsPopover } from './StatsPopover';
 import { NamespaceFilterBar } from './NamespaceFilterBar';
 import { SchemaAwareIssuesPanel } from './SchemaAwareIssuesPanel';
 import { SchemaEditor } from './SchemaEditor';
 import { SchemaSearchControl } from './SchemaSearchControl';
+
+const LazyHierarchyView = lazy(() =>
+  import('./HierarchyView').then(({ HierarchyView }) => ({ default: HierarchyView }))
+);
+const LazyMatrixView = lazy(() =>
+  import('@flowscope-react/components/MatrixView').then(({ MatrixView }) => ({
+    default: MatrixView,
+  }))
+);
+const LazySchemaView = lazy(() =>
+  import('@flowscope-react/components/SchemaView').then(({ SchemaView }) => ({
+    default: SchemaView,
+  }))
+);
+
+function LazyViewFallback() {
+  return (
+    <div className="flex h-full items-center justify-center text-muted-foreground">
+      <Loader2 className="h-5 w-5 animate-spin" aria-label="Loading view" />
+    </div>
+  );
+}
 
 interface AnalysisViewProps {
   graphContainerRef?: React.RefObject<HTMLDivElement | null>;
@@ -464,11 +482,13 @@ export function AnalysisView({
           >
             {mountedTabs.has('hierarchy') && (
               <GraphErrorBoundary>
-                <HierarchyView
-                  ref={hierarchyViewRef}
-                  className="h-full"
-                  projectId={activeProjectId}
-                />
+                <Suspense fallback={<LazyViewFallback />}>
+                  <LazyHierarchyView
+                    ref={hierarchyViewRef}
+                    className="h-full"
+                    projectId={activeProjectId}
+                  />
+                </Suspense>
               </GraphErrorBoundary>
             )}
           </TabsContent>
@@ -479,11 +499,13 @@ export function AnalysisView({
             className="h-full mt-0 p-0 absolute inset-0 data-[state=inactive]:hidden"
           >
             {mountedTabs.has('matrix') && (
-              <MatrixView
-                className="h-full"
-                controlledState={matrixState.controlledState}
-                onStateChange={matrixState.onStateChange}
-              />
+              <Suspense fallback={<LazyViewFallback />}>
+                <LazyMatrixView
+                  className="h-full"
+                  controlledState={matrixState.controlledState}
+                  onStateChange={matrixState.onStateChange}
+                />
+              </Suspense>
             )}
           </TabsContent>
 
@@ -494,11 +516,13 @@ export function AnalysisView({
           >
             {mountedTabs.has('schema') && (
               <div className="relative h-full w-full">
-                <SchemaView
-                  schema={schema}
-                  selectedTableName={schemaState.selectedTableName}
-                  onClearSelection={schemaState.clearSelection}
-                />
+                <Suspense fallback={<LazyViewFallback />}>
+                  <LazySchemaView
+                    schema={schema}
+                    selectedTableName={schemaState.selectedTableName}
+                    onClearSelection={schemaState.clearSelection}
+                  />
+                </Suspense>
                 <div className="absolute top-2 right-2 z-10">
                   <SchemaSearchControl
                     tableNames={schema.map((t) => t.name)}

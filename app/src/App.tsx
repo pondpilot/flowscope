@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { LineageProvider } from '@pondpilot/flowscope-react';
+import { LineageProvider } from '@flowscope-react/context';
 import '@pondpilot/flowscope-react/styles.css';
 
 import { ProjectProvider } from './lib/project-store';
