@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useMemo, useRef, startTransition } from 'react';
 import type { AnalyzeResult } from '@pondpilot/flowscope-core';
-import { useLineage } from '@pondpilot/flowscope-react';
+import { useLineageActions, useLineageState } from '@pondpilot/flowscope-react';
 import { analyzeWithWorker, getCachedAnalysis, syncAnalysisFiles } from '@/lib/analysis-worker';
 import type { BackendAdapter, AnalysisPayload } from '@/lib/backend-adapter';
 import { useProject } from '@/lib/project-store';
@@ -50,8 +50,8 @@ export interface UseAnalysisOptions {
 export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions) {
   const adapter = options?.adapter;
   const { currentProject, activeProjectId, backendSchema } = useProject();
-  const { actions, state: lineageState } = useLineage();
-  const { hideCTEs } = lineageState;
+  const actions = useLineageActions();
+  const hideCTEs = useLineageState((state) => state.hideCTEs);
   const { getResult, setResult: storeResult, setMetrics } = useAnalysisStore();
   const getViewState = useViewStateStore((s) => s.getViewState);
   const enableLinting = activeProjectId
@@ -64,12 +64,6 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
   });
   const analysisRequestRef = useRef(0);
   const attemptedCacheIdentityRef = useRef<AnalysisCacheIdentity | null>(null);
-
-  // Use ref for actions to avoid dependency issues (actions object changes every render)
-  const actionsRef = useRef(actions);
-  useEffect(() => {
-    actionsRef.current = actions;
-  }, [actions]);
 
   const setAnalyzing = useCallback((isAnalyzing: boolean) => {
     setState((prev) => ({ ...prev, isAnalyzing }));
@@ -277,13 +271,13 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
 
     if (!activeProjectId || !canUseMemoryCache) {
       attemptedCacheIdentityRef.current = null;
-      actionsRef.current.setResult(null);
+      actions.setResult(null);
       return;
     }
 
     if (!currentAnalysisCacheKey) {
       if (attemptedCacheIdentityRef.current?.projectId !== activeProjectId) {
-        actionsRef.current.setResult(null);
+        actions.setResult(null);
         attemptedCacheIdentityRef.current = { projectId: activeProjectId, cacheKey: null };
       }
       return;
@@ -307,12 +301,12 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
     // Use startTransition to make the result update low-priority,
     // allowing UI interactions and worker callbacks to proceed without blocking
     startTransition(() => {
-      actionsRef.current.setResult(restoreDecision.result);
+      actions.setResult(restoreDecision.result);
       if (restoreDecision.result && currentAnalysisInput) {
-        actionsRef.current.setAnalyzedContent(
+        actions.setAnalyzedContent(
           new Map(currentAnalysisInput.context.files.map((file) => [file.name, file.content]))
         );
-        actionsRef.current.setStalePaths([]);
+        actions.setStalePaths([]);
       }
     });
   }, [
@@ -323,6 +317,7 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
     currentAnalysisCacheKey,
     currentAnalysisInput,
     getResult,
+    actions,
   ]);
 
   // Check worker's IndexedDB cache for persisted analysis results.
@@ -400,14 +395,12 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
         // Use startTransition to make the result update low-priority,
         // allowing UI interactions and worker callbacks to proceed without blocking
         startTransition(() => {
-          actionsRef.current.setResult(cached.result);
+          actions.setResult(cached.result);
           // Cache hits imply the current file content already matches what
           // was analyzed (cache key is content-derived), so seed the
           // staleness snapshot from the live files used to build `context`.
-          actionsRef.current.setAnalyzedContent(
-            new Map(context.files.map((f) => [f.name, f.content]))
-          );
-          actionsRef.current.setStalePaths([]);
+          actions.setAnalyzedContent(new Map(context.files.map((f) => [f.name, f.content])));
+          actions.setStalePaths([]);
         });
         if (canUseMemoryCache) {
           storeResult(activeProjectId, cacheKey, cached.result);
@@ -439,6 +432,7 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
     setMetrics,
     backendReady,
     adapter,
+    actions,
   ]);
 
   const runAnalysis = useCallback(
@@ -501,9 +495,9 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
           const representativeSql = context.files
             .map((f) => `-- File: ${f.name}\n${f.content}`)
             .join('\n\n');
-          actionsRef.current.setSql(representativeSql);
+          actions.setSql(representativeSql);
         } else if (activeFileContent) {
-          actionsRef.current.setSql(activeFileContent);
+          actions.setSql(activeFileContent);
         }
 
         const cachedResult =
@@ -511,11 +505,11 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
         const knownCacheKey = cachedResult ? cacheKey : null;
         const displayResult = (result: AnalyzeResult) => {
           startTransition(() => {
-            actionsRef.current.setResult(result);
-            actionsRef.current.setAnalyzedContent(
+            actions.setResult(result);
+            actions.setAnalyzedContent(
               new Map(context.files.map((file) => [file.name, file.content]))
             );
-            actionsRef.current.setStalePaths([]);
+            actions.setStalePaths([]);
           });
         };
 
@@ -633,6 +627,7 @@ export function useAnalysis(backendReady: boolean, options?: UseAnalysisOptions)
       setError,
       canUseMemoryCache,
       adapter,
+      actions,
     ]
   );
 

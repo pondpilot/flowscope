@@ -18,10 +18,9 @@ let currentProject: Project | null = null;
 let activeProjectId: string | null = null;
 
 vi.mock('@pondpilot/flowscope-react', () => ({
-  useLineage: () => ({
-    state: { hideCTEs: false },
-    actions: lineageActions,
-  }),
+  useLineageState: (selector: (state: { hideCTEs: boolean }) => unknown) =>
+    selector({ hideCTEs: false }),
+  useLineageActions: () => lineageActions,
 }));
 
 vi.mock('@/lib/project-store', () => ({

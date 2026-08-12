@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### TypeScript API, Web App, and VS Code Extension
 
+- **Stable React store subscriptions** — added selector overloads for lineage state and actions, stabilized the legacy `useLineage()` object references, and prevented prop synchronization effects from rerunning on unrelated store updates
 - **Oracle dialect validation** — accepted `oracle` requests in the TypeScript runtime and synchronized Oracle across the app, VS Code settings, and supported-dialect documentation
 
 ## [0.8.0] - 2026-08-11
