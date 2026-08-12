@@ -1,15 +1,27 @@
+codecov:
+  require_ci_to_pass: true
+
 coverage:
   status:
     project:
       default:
-        informational: true
+        # Baseline: 77.82% combined Rust and app line coverage on 2026-08-12.
+        target: 77%
+        threshold: 0.5%
+        if_ci_failed: error
+        if_not_found: failure
+        informational: false
     patch:
       default:
-        informational: true
+        target: 70%
+        threshold: 1%
+        if_ci_failed: error
+        if_not_found: failure
+        informational: false
 
 ignore:
-  - "crates/flowscope-wasm/**"
-  - "packages/core/wasm/**"
-  - "packages/core/src/wasm/**"
-  - "**/generated/**"
-  - "**/tests/**"
+  - 'crates/flowscope-wasm/**'
+  - 'packages/core/wasm/**'
+  - 'packages/core/src/wasm/**'
+  - '**/generated/**'
+  - '**/tests/**'

@@ -147,6 +147,17 @@ pub fn assert_star_expansion(output: &Output, expected_columns: &[&str]) {
 
 /// Find a node by label and type in the JSON output.
 fn find_node_by_label(json: &serde_json::Value, label: &str, node_type: &str) -> bool {
+    // Check top-level nodes in the current response shape.
+    if let Some(nodes) = json.get("nodes").and_then(|n| n.as_array()) {
+        for node in nodes {
+            let node_label = node.get("label").and_then(|l| l.as_str()).unwrap_or("");
+            let ntype = node.get("type").and_then(|t| t.as_str()).unwrap_or("");
+            if node_label == label && ntype == node_type {
+                return true;
+            }
+        }
+    }
+
     // Check in statements array
     if let Some(statements) = json.get("statements").and_then(|s| s.as_array()) {
         for stmt in statements {

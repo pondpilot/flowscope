@@ -116,7 +116,9 @@ test-integration-postgres: _postgres-start
     "
 
     # Run tests
-    cargo test -p flowscope-cli --features integration-tests --test integration postgres -- --test-threads=1
+    postgres_port="${TEST_POSTGRES_PORT:-5433}"
+    TEST_POSTGRES_URL="postgres://flowscope:flowscope@127.0.0.1:${postgres_port}/flowscope" \
+        cargo test -p flowscope-cli --features integration-tests --test integration postgres -- --test-threads=1
 
     # Stop PostgreSQL
     just _postgres-stop
@@ -129,16 +131,17 @@ _postgres-start:
     # Stop existing container if running
     docker rm -f flowscope-test-postgres 2>/dev/null || true
 
-    # Start PostgreSQL on port 5433 to avoid conflicts
+    # Start PostgreSQL on the configurable test port
+    postgres_port="${TEST_POSTGRES_PORT:-5433}"
     docker run -d \
         --name flowscope-test-postgres \
         -e POSTGRES_USER=flowscope \
         -e POSTGRES_PASSWORD=flowscope \
         -e POSTGRES_DB=flowscope \
-        -p 5433:5432 \
+        -p "127.0.0.1:${postgres_port}:5432" \
         postgres:16-alpine
 
-    echo "PostgreSQL container started on port 5433"
+    echo "PostgreSQL container started on port ${postgres_port}"
 
 # Stop PostgreSQL container
 _postgres-stop:
@@ -195,7 +198,9 @@ test-integration-mysql: _mysql-start
     "
 
     # Run tests
-    cargo test -p flowscope-cli --features integration-tests --test integration mysql -- --test-threads=1
+    mysql_port="${TEST_MYSQL_PORT:-3307}"
+    TEST_MYSQL_URL="mysql://flowscope:flowscope@127.0.0.1:${mysql_port}/flowscope" \
+        cargo test -p flowscope-cli --features integration-tests --test integration mysql -- --test-threads=1
 
     # Stop MySQL
     just _mysql-stop
@@ -208,17 +213,18 @@ _mysql-start:
     # Stop existing container if running
     docker rm -f flowscope-test-mysql 2>/dev/null || true
 
-    # Start MySQL on port 3307 to avoid conflicts
+    # Start MySQL on the configurable test port
+    mysql_port="${TEST_MYSQL_PORT:-3307}"
     docker run -d \
         --name flowscope-test-mysql \
         -e MYSQL_ROOT_PASSWORD=root \
         -e MYSQL_USER=flowscope \
         -e MYSQL_PASSWORD=flowscope \
         -e MYSQL_DATABASE=flowscope \
-        -p 3307:3306 \
+        -p "127.0.0.1:${mysql_port}:3306" \
         mysql:8.0
 
-    echo "MySQL container started on port 3307"
+    echo "MySQL container started on port ${mysql_port}"
 
 # Stop MySQL container
 _mysql-stop:
@@ -277,6 +283,10 @@ test-ts: _build-core-ts
 # Generate app TypeScript coverage
 coverage-ts:
     yarn workspace @pondpilot/flowscope-app test:coverage
+
+# Validate the repository Codecov configuration against Codecov's schema
+validate-codecov:
+    curl --fail --show-error --silent --retry 3 --retry-all-errors --max-time 30 --data-binary @codecov.yml https://codecov.io/validate
 
 # Generate HTML coverage report (requires cargo-llvm-cov)
 coverage:
