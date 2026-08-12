@@ -3,6 +3,7 @@
 //! This module handles the parsing and collection of SQL statements from analysis requests,
 //! supporting both file-based and inline SQL inputs.
 
+use crate::limits::{MAX_ANALYSIS_SOURCE_BYTES, MAX_ANALYSIS_TOTAL_BYTES};
 use crate::parser::{parse_sql_with_dialect, parse_sql_with_dialect_output};
 use crate::types::{issue_codes, AnalyzeRequest, Dialect, Issue, Span};
 use sqlparser::ast::Statement;
@@ -19,6 +20,115 @@ use crate::templater::{template_sql, TemplateMode};
 /// Maximum iterations allowed when merging statement ranges to prevent infinite loops
 /// on malformed SQL input.
 const MAX_MERGE_ITERATIONS: usize = 10_000;
+
+#[derive(Clone, Copy)]
+enum AnalysisSource<'a> {
+    Inline(Option<&'a str>),
+    File(&'a str),
+}
+
+impl<'a> AnalysisSource<'a> {
+    fn name(self) -> Option<&'a str> {
+        match self {
+            Self::Inline(name) => name,
+            Self::File(name) => Some(name),
+        }
+    }
+
+    fn description(self) -> String {
+        match self {
+            Self::Inline(Some(name)) | Self::File(name) => format!("SQL source \"{name}\""),
+            Self::Inline(None) => "Inline SQL".to_string(),
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct AnalysisSourceSize<'a> {
+    source: AnalysisSource<'a>,
+    bytes: usize,
+}
+
+/// Validates raw SQL byte sizes before schema initialization, templating, or parsing.
+pub(super) fn validate_analysis_input_sizes(request: &AnalyzeRequest) -> Result<(), Box<Issue>> {
+    validate_analysis_input_sizes_with_limits(
+        request,
+        MAX_ANALYSIS_SOURCE_BYTES,
+        MAX_ANALYSIS_TOTAL_BYTES,
+    )
+}
+
+fn validate_analysis_input_sizes_with_limits(
+    request: &AnalyzeRequest,
+    max_source_bytes: usize,
+    max_total_bytes: usize,
+) -> Result<(), Box<Issue>> {
+    let inline = std::iter::once(AnalysisSourceSize {
+        source: AnalysisSource::Inline(request.source_name.as_deref()),
+        bytes: request.sql.len(),
+    });
+    let files = request
+        .files
+        .iter()
+        .flatten()
+        .map(|file| AnalysisSourceSize {
+            source: AnalysisSource::File(&file.name),
+            bytes: file.content.len(),
+        });
+
+    validate_analysis_source_sizes(inline.chain(files), max_source_bytes, max_total_bytes)
+}
+
+fn validate_analysis_source_sizes<'a>(
+    sources: impl IntoIterator<Item = AnalysisSourceSize<'a>>,
+    max_source_bytes: usize,
+    max_total_bytes: usize,
+) -> Result<(), Box<Issue>> {
+    let mut total_bytes = 0usize;
+
+    for source in sources {
+        if source.bytes > max_source_bytes {
+            let mut issue = Issue::error(
+                issue_codes::INVALID_REQUEST,
+                format!(
+                    "{} exceeds the maximum analysis source size of {} bytes ({} bytes provided)",
+                    source.source.description(),
+                    max_source_bytes,
+                    source.bytes
+                ),
+            );
+            if let Some(name) = source.source.name() {
+                issue = issue.with_source_name(name);
+            }
+            return Err(Box::new(issue));
+        }
+
+        total_bytes = match total_bytes.checked_add(source.bytes) {
+            Some(total) => total,
+            None => {
+                return Err(Box::new(Issue::error(
+                    issue_codes::INVALID_REQUEST,
+                    format!(
+                        "Aggregate SQL input exceeds the maximum analysis size of {} bytes",
+                        max_total_bytes
+                    ),
+                )));
+            }
+        };
+
+        if total_bytes > max_total_bytes {
+            return Err(Box::new(Issue::error(
+                issue_codes::INVALID_REQUEST,
+                format!(
+                    "Aggregate SQL input exceeds the maximum analysis size of {} bytes ({} bytes provided)",
+                    max_total_bytes, total_bytes
+                ),
+            )));
+        }
+    }
+
+    Ok(())
+}
 
 /// Creates an issue for a template rendering error.
 #[cfg(feature = "templating")]
@@ -979,6 +1089,48 @@ mod tests {
             #[cfg(feature = "templating")]
             template_config: None,
         }
+    }
+
+    #[test]
+    fn analysis_source_size_limit_uses_utf8_bytes_and_is_inclusive() {
+        let mut request = base_request();
+        request.sql = "é".repeat(5);
+        assert_eq!(request.sql.chars().count(), 5);
+        assert_eq!(request.sql.len(), 10);
+        assert!(validate_analysis_input_sizes_with_limits(&request, 10, 100).is_ok());
+
+        request.sql.push('x');
+        let issue =
+            validate_analysis_input_sizes_with_limits(&request, 10, 100).expect_err("oversized");
+        assert_eq!(issue.code, issue_codes::INVALID_REQUEST);
+        assert!(issue.message.contains("11 bytes provided"));
+    }
+
+    #[test]
+    fn aggregate_limit_includes_inline_and_multibyte_multi_file_sources() {
+        let mut request = base_request();
+        request.sql = "é".repeat(2);
+        request.files = Some(vec![
+            crate::types::FileSource {
+                name: "first.sql".to_string(),
+                content: "日".repeat(2),
+            },
+            crate::types::FileSource {
+                name: "second.sql".to_string(),
+                content: "SELECT 1".to_string(),
+            },
+        ]);
+        assert_eq!(request.sql.len(), 4);
+        assert_eq!(request.files.as_ref().unwrap()[0].content.len(), 6);
+        assert_eq!(request.files.as_ref().unwrap()[1].content.len(), 8);
+        assert!(validate_analysis_input_sizes_with_limits(&request, 10, 18).is_ok());
+
+        request.files.as_mut().unwrap()[1].content.push('é');
+        let issue =
+            validate_analysis_input_sizes_with_limits(&request, 10, 18).expect_err("oversized");
+        assert_eq!(issue.code, issue_codes::INVALID_REQUEST);
+        assert!(issue.message.contains("Aggregate SQL input"));
+        assert!(issue.message.contains("20 bytes provided"));
     }
 
     #[test]

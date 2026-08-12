@@ -14,14 +14,22 @@
  *
  * This is the main entry point for the analysis API. It accepts SQL code along with
  * optional dialect and schema information to produce accurate lineage graphs.
+ *
+ * Raw SQL is limited by UTF-8 byte length before templating or parsing: inline SQL and
+ * each file may contain at most 10 MiB (10,485,760 bytes), and all sources combined
+ * may contain at most 100 MiB (104,857,600 bytes). Inputs exactly at either limit are
+ * accepted.
  */
 export interface AnalyzeRequest {
   /**
-   * The SQL code to analyze (UTF-8 string, multi-statement supported)
+   * Inline SQL to analyze (UTF-8 string, multi-statement supported).
+   *
+   * This may be empty when `files` contains at least one source. When both are
+   * provided, file statements are analyzed first and inline statements last.
    */
   sql: string;
   /**
-   * Optional list of source files to analyze (alternative to single `sql` field)
+   * Optional source files to analyze, either alone or together with inline `sql`.
    */
   files?: FileSource[];
   /**
@@ -47,7 +55,13 @@ export interface AnalyzeRequest {
 }
 
 export interface FileSource {
+  /**
+   * Source identifier used for grouping and issue attribution.
+   */
   name: string;
+  /**
+   * UTF-8 SQL content, subject to the per-source and aggregate analysis limits.
+   */
   content: string;
 }
 

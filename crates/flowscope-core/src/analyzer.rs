@@ -37,7 +37,7 @@ use descriptions::DescriptionKey;
 use helpers::{
     build_column_schemas_with_constraints, find_identifier_span, find_relation_occurrence_spans,
 };
-use input::{collect_statements, StatementInput};
+use input::{collect_statements, validate_analysis_input_sizes, StatementInput};
 use schema_registry::SchemaRegistry;
 use statements::{
     detect_dbt_model_materialization, extract_model_name, DbtMaterializationDetection,
@@ -51,6 +51,10 @@ pub(crate) use schema_registry::TableResolution;
 /// Main entry point for SQL analysis
 #[must_use]
 pub fn analyze(request: &AnalyzeRequest) -> AnalyzeResult {
+    if let Err(issue) = validate_analysis_input_sizes(request) {
+        return AnalyzeResult::from_issue(*issue);
+    }
+
     #[cfg(feature = "tracing")]
     let _span =
         info_span!("analyze_request", statement_count = %request.sql.matches(';').count() + 1)

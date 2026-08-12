@@ -1,10 +1,14 @@
 use super::*;
 use crate::test_utils::{load_schema_fixture, load_sql_fixture};
 use crate::{
+    limits::MAX_ANALYSIS_SOURCE_BYTES,
     types::{AnalysisOptions, LintConfidence, LintFallbackSource},
     LintConfig,
 };
 use std::collections::{BTreeSet, HashMap, HashSet};
+
+#[cfg(feature = "templating")]
+use crate::templater::{TemplateConfig, TemplateMode};
 
 fn make_request(sql: &str) -> AnalyzeRequest {
     AnalyzeRequest {
@@ -31,6 +35,61 @@ fn make_request_with_options(
         ..Default::default()
     });
     request
+}
+
+#[test]
+fn analyze_rejects_oversized_inline_sql_before_templating_or_parsing() {
+    let mut sql = "{{ unclosed ".to_string();
+    sql.push_str(&"x".repeat(MAX_ANALYSIS_SOURCE_BYTES + 1 - sql.len()));
+    let mut request = make_request(&sql);
+    #[cfg(feature = "templating")]
+    {
+        request.template_config = Some(TemplateConfig {
+            mode: TemplateMode::Jinja,
+            context: HashMap::new(),
+        });
+    }
+    let result = analyze(&request);
+
+    assert!(result.statements.is_empty());
+    assert!(result.nodes.is_empty());
+    assert_eq!(result.issues.len(), 1);
+    assert_eq!(result.issues[0].code, issue_codes::INVALID_REQUEST);
+    assert!(result.issues[0].message.contains("Inline SQL"));
+    assert!(result.summary.has_errors);
+}
+
+#[test]
+fn analyze_uses_utf8_bytes_for_inline_size_limit() {
+    let sql = "é".repeat(MAX_ANALYSIS_SOURCE_BYTES / "é".len() + 1);
+    assert!(sql.chars().count() < MAX_ANALYSIS_SOURCE_BYTES);
+    assert!(sql.len() > MAX_ANALYSIS_SOURCE_BYTES);
+
+    let result = analyze(&make_request(&sql));
+
+    assert_eq!(result.issues.len(), 1);
+    assert_eq!(result.issues[0].code, issue_codes::INVALID_REQUEST);
+    assert!(result.issues[0].message.contains(&sql.len().to_string()));
+}
+
+#[test]
+fn analyze_rejects_oversized_file_with_source_attribution() {
+    let mut request = make_request("");
+    request.files = Some(vec![FileSource {
+        name: "oversized.sql".to_string(),
+        content: "x".repeat(MAX_ANALYSIS_SOURCE_BYTES + 1),
+    }]);
+
+    let result = analyze(&request);
+
+    assert!(result.statements.is_empty());
+    assert_eq!(result.issues.len(), 1);
+    assert_eq!(result.issues[0].code, issue_codes::INVALID_REQUEST);
+    assert_eq!(
+        result.issues[0].source_name.as_deref(),
+        Some("oversized.sql")
+    );
+    assert!(result.issues[0].message.contains("oversized.sql"));
 }
 
 fn schema_with_known_table() -> SchemaMetadata {

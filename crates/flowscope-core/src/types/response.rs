@@ -81,11 +81,16 @@ impl AnalyzeResult {
     /// Create an error result with a single issue.
     /// Useful for returning errors from WASM boundary or other entry points.
     pub fn from_error(code: impl Into<String>, message: impl Into<String>) -> Self {
+        Self::from_issue(Issue::error(code, message))
+    }
+
+    /// Create an error result from an existing structured error issue.
+    pub(crate) fn from_issue(issue: Issue) -> Self {
         Self {
             statements: Vec::new(),
             nodes: Vec::new(),
             edges: Vec::new(),
-            issues: vec![Issue::error(code, message)],
+            issues: vec![issue],
             summary: Summary {
                 statement_count: 0,
                 table_count: 0,

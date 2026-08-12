@@ -2,15 +2,15 @@
   "AnalyzeRequest": {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "AnalyzeRequest",
-    "description": "A request to analyze SQL for data lineage.\n\nThis is the main entry point for the analysis API. It accepts SQL code along with\noptional dialect and schema information to produce accurate lineage graphs.",
+    "description": "A request to analyze SQL for data lineage.\n\nThis is the main entry point for the analysis API. It accepts SQL code along with\noptional dialect and schema information to produce accurate lineage graphs.\n\nRaw SQL is limited by UTF-8 byte length before templating or parsing: inline SQL and\neach file may contain at most 10 MiB (10,485,760 bytes), and all sources combined\nmay contain at most 100 MiB (104,857,600 bytes). Inputs exactly at either limit are\naccepted.",
     "type": "object",
     "properties": {
       "sql": {
-        "description": "The SQL code to analyze (UTF-8 string, multi-statement supported)",
+        "description": "Inline SQL to analyze (UTF-8 string, multi-statement supported).\n\nThis may be empty when `files` contains at least one source. When both are\nprovided, file statements are analyzed first and inline statements last.",
         "type": "string"
       },
       "files": {
-        "description": "Optional list of source files to analyze (alternative to single `sql` field)",
+        "description": "Optional source files to analyze, either alone or together with inline `sql`.",
         "type": ["array", "null"],
         "items": {
           "$ref": "#/definitions/FileSource"
@@ -68,9 +68,11 @@
         "type": "object",
         "properties": {
           "name": {
+            "description": "Source identifier used for grouping and issue attribution.",
             "type": "string"
           },
           "content": {
+            "description": "UTF-8 SQL content, subject to the per-source and aggregate analysis limits.",
             "type": "string"
           }
         },

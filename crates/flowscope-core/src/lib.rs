@@ -3,6 +3,7 @@ pub mod completion;
 pub mod error;
 pub mod extractors;
 pub mod generated;
+mod limits;
 pub mod linter;
 pub mod parser;
 #[cfg(feature = "templating")]

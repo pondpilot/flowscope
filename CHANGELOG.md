@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+#### Core Engine (flowscope-core)
+
+- **Bounded analysis inputs** — enforced UTF-8 byte limits before templating and parsing for inline and multi-file requests, with a 10 MiB per-source limit, a 100 MiB aggregate limit, and structured source-attributed errors
+
 #### TypeScript API, Web App, and VS Code Extension
 
 - **Stable React store subscriptions** — added selector overloads for lineage state and actions, stabilized the legacy `useLineage()` object references, and prevented prop synchronization effects from rerunning on unrelated store updates

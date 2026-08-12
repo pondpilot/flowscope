@@ -65,6 +65,14 @@ Analysis produces a single flat graph in `AnalyzeResult.nodes` /
 - Issues include severity, code, message, span, and statement index.
 - `Summary` includes counts (statements, tables, columns, joins), a complexity score, and per-severity issue counts.
 
+## Analysis Input Limits
+
+- Limits use UTF-8 byte lengths, not Unicode character counts.
+- Inline SQL and each file are separate sources, each limited to 10 MiB (10,485,760 bytes).
+- Inline SQL and all file contents together are limited to 100 MiB (104,857,600 bytes).
+- Values exactly at either limit are accepted. The aggregate includes every source even when both inline SQL and files are supplied.
+- Size validation runs before schema initialization, templating, statement splitting, tokenization, and parsing. An oversized request returns an error issue with code `INVALID_REQUEST`; named sources also populate the issue's `sourceName`.
+
 ## Performance Expectations
 
 - The engine favors deterministic behavior and stable output for identical inputs.
