@@ -104,6 +104,8 @@ export interface LineageState {
   selectedStatementIndex: number;
   /** The currently highlighted span in the SQL editor, or null if none */
   highlightedSpan: Span | null;
+  /** Index of the selected node occurrence currently highlighted in the editor */
+  focusedOccurrenceIndex: number;
   /** Search term for filtering/highlighting nodes in the graph */
   searchTerm: string;
   /** Current view mode for the lineage graph */
@@ -141,6 +143,10 @@ export interface LineageState {
   revealRequest: { nodeId: string; nonce: number; suppressNavigation: boolean } | null;
   /** Table filter configuration */
   tableFilter: TableFilter;
+  /** Whether the graph layout is currently running */
+  isLayouting: boolean;
+  /** Whether the graph view model is currently being built */
+  isBuilding: boolean;
   /**
    * Snapshot of the SQL text each path held when the most recent analysis
    * ran, keyed by the analyzer's `sourceName`. `null` before any analysis
@@ -167,6 +173,10 @@ export interface LineageActions {
   setSql: (sql: string) => void;
   /** Select a node by ID, or null to deselect */
   selectNode: (nodeId: string | null) => void;
+  /** Cycle the highlighted occurrence of the selected node */
+  cycleOccurrence: (direction: 'next' | 'prev') => void;
+  /** Focus a specific occurrence of the selected node */
+  focusOccurrence: (index: number) => void;
   /** Toggle the collapsed state of a node */
   toggleNodeCollapse: (nodeId: string) => void;
   /** Explicitly set whether a node is collapsed */
@@ -223,6 +233,10 @@ export interface LineageActions {
   setTableFilterDirection: (direction: TableFilterDirection) => void;
   /** Clear the table filter */
   clearTableFilter: () => void;
+  /** Set whether the graph layout is currently running */
+  setIsLayouting: (isLayouting: boolean) => void;
+  /** Set whether the graph view model is currently being built */
+  setIsBuilding: (isBuilding: boolean) => void;
   /** Replace the analyzed-content snapshot (or clear with null). */
   setAnalyzedContent: (map: ReadonlyMap<string, string> | null) => void;
   /** Replace the set of paths whose content has diverged from the snapshot. */

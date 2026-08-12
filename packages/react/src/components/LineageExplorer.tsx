@@ -1,5 +1,5 @@
 import { useEffect, type JSX } from 'react';
-import { useLineage } from '../store';
+import { useLineageActions } from '../store';
 import { LineageProvider } from '../context';
 import { GraphView } from './GraphView';
 import { SqlView } from './SqlView';
@@ -16,7 +16,7 @@ interface LineageExplorerInnerProps {
   onCompletionError?: LineageExplorerProps['onCompletionError'];
 }
 
-function LineageExplorerInner({
+export function LineageExplorerInner({
   result,
   sql,
   onSqlChange,
@@ -25,15 +25,16 @@ function LineageExplorerInner({
   disableCompletion,
   onCompletionError,
 }: LineageExplorerInnerProps): JSX.Element {
-  const { actions } = useLineage();
+  const setResult = useLineageActions((actions) => actions.setResult);
+  const setSql = useLineageActions((actions) => actions.setSql);
 
   useEffect(() => {
-    actions.setResult(result);
-  }, [result, actions]);
+    setResult(result);
+  }, [result, setResult]);
 
   useEffect(() => {
-    actions.setSql(sql);
-  }, [sql, actions]);
+    setSql(sql);
+  }, [sql, setSql]);
 
   return (
     <div className="flowscope-explorer-inner">

@@ -1,5 +1,6 @@
-import { createContext, createElement, useContext, type ReactNode } from 'react';
+import { createContext, createElement, useContext, useMemo, type ReactNode } from 'react';
 import { useStore } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { AnalyzeResult, Span } from '@pondpilot/flowscope-core';
 import type {
@@ -11,6 +12,9 @@ import type {
   MatrixSubMode,
   TableFilterDirection,
   TableFilter,
+  LineageState as LineageContextState,
+  LineageActions as LineageContextActions,
+  LineageContextValue,
 } from './types';
 import { findMergedNodeById } from './utils/nodeOccurrences';
 
@@ -632,214 +636,117 @@ export function useLineageStore<T>(selector?: (state: LineageState) => T) {
   return useStore(store);
 }
 
-/**
- * Hook to access the full lineage store.
- * Compatible with the previous useLineage API for easier migration.
- */
-export function useLineage() {
-  const store = useLineageStore();
-
+function selectLineageState(store: LineageState): LineageContextState {
   return {
-    state: {
-      result: store.result,
-      sql: store.sql,
-      selectedNodeId: store.selectedNodeId,
-      selectedStatementIndex: store.selectedStatementIndex,
-      highlightedSpan: store.highlightedSpan,
-      focusedOccurrenceIndex: store.focusedOccurrenceIndex,
-      searchTerm: store.searchTerm,
-      viewMode: store.viewMode,
-      matrixSubMode: store.matrixSubMode,
-      layoutAlgorithm: store.layoutAlgorithm,
-      layoutMetrics: store.layoutMetrics,
-      graphMetrics: store.graphMetrics,
-      collapsedNodeIds: store.collapsedNodeIds,
-      expandedTableIds: store.expandedTableIds,
-      defaultCollapsed: store.defaultCollapsed,
-      showColumnEdges: store.showColumnEdges,
-      hideCTEs: store.hideCTEs,
-      showScriptTables: store.showScriptTables,
-      navigationRequest: store.navigationRequest,
-      visibleGraphNodeIds: store.visibleGraphNodeIds,
-      revealRequest: store.revealRequest,
-      tableFilter: store.tableFilter,
-      isLayouting: store.isLayouting,
-      isBuilding: store.isBuilding,
-      analyzedContentByPath: store.analyzedContentByPath,
-      stalePaths: store.stalePaths,
-    },
-    actions: {
-      setResult: store.setResult,
-      setSql: store.setSql,
-      selectNode: store.selectNode,
-      cycleOccurrence: store.cycleOccurrence,
-      focusOccurrence: store.focusOccurrence,
-      toggleNodeCollapse: store.toggleNodeCollapse,
-      setNodeCollapsed: store.setNodeCollapsed,
-      toggleTableExpansion: store.toggleTableExpansion,
-      setTableExpanded: store.setTableExpanded,
-      setAllNodesCollapsed: store.setAllNodesCollapsed,
-      selectStatement: store.selectStatement,
-      highlightSpan: store.highlightSpan,
-      setSearchTerm: store.setSearchTerm,
-      setViewMode: store.setViewMode,
-      setMatrixSubMode: store.setMatrixSubMode,
-      setLayoutAlgorithm: store.setLayoutAlgorithm,
-      setLayoutMetrics: store.setLayoutMetrics,
-      setGraphMetrics: store.setGraphMetrics,
-      toggleColumnEdges: store.toggleColumnEdges,
-      toggleHideCTEs: store.toggleHideCTEs,
-      toggleShowScriptTables: store.toggleShowScriptTables,
-      requestNavigation: store.requestNavigation,
-      setVisibleGraphNodeIds: store.setVisibleGraphNodeIds,
-      revealNodeInGraph: store.revealNodeInGraph,
-      clearRevealRequest: store.clearRevealRequest,
-      setTableFilter: store.setTableFilter,
-      toggleTableFilterSelection: store.toggleTableFilterSelection,
-      setTableFilterDirection: store.setTableFilterDirection,
-      clearTableFilter: store.clearTableFilter,
-      setIsLayouting: store.setIsLayouting,
-      setIsBuilding: store.setIsBuilding,
-      setAnalyzedContent: store.setAnalyzedContent,
-      setStalePaths: store.setStalePaths,
-    },
+    result: store.result,
+    sql: store.sql,
+    selectedNodeId: store.selectedNodeId,
+    selectedStatementIndex: store.selectedStatementIndex,
+    highlightedSpan: store.highlightedSpan,
+    focusedOccurrenceIndex: store.focusedOccurrenceIndex,
+    searchTerm: store.searchTerm,
+    viewMode: store.viewMode,
+    matrixSubMode: store.matrixSubMode,
+    layoutAlgorithm: store.layoutAlgorithm,
+    layoutMetrics: store.layoutMetrics,
+    graphMetrics: store.graphMetrics,
+    collapsedNodeIds: store.collapsedNodeIds,
+    expandedTableIds: store.expandedTableIds,
+    defaultCollapsed: store.defaultCollapsed,
+    showColumnEdges: store.showColumnEdges,
+    hideCTEs: store.hideCTEs,
+    showScriptTables: store.showScriptTables,
+    navigationRequest: store.navigationRequest,
+    visibleGraphNodeIds: store.visibleGraphNodeIds,
+    revealRequest: store.revealRequest,
+    tableFilter: store.tableFilter,
+    isLayouting: store.isLayouting,
+    isBuilding: store.isBuilding,
+    analyzedContentByPath: store.analyzedContentByPath,
+    stalePaths: store.stalePaths,
+  };
+}
+
+function selectLineageActions(store: LineageState): LineageContextActions {
+  return {
+    setResult: store.setResult,
+    setSql: store.setSql,
+    selectNode: store.selectNode,
+    cycleOccurrence: store.cycleOccurrence,
+    focusOccurrence: store.focusOccurrence,
+    toggleNodeCollapse: store.toggleNodeCollapse,
+    setNodeCollapsed: store.setNodeCollapsed,
+    toggleTableExpansion: store.toggleTableExpansion,
+    setTableExpanded: store.setTableExpanded,
+    setAllNodesCollapsed: store.setAllNodesCollapsed,
+    selectStatement: store.selectStatement,
+    highlightSpan: store.highlightSpan,
+    setSearchTerm: store.setSearchTerm,
+    setViewMode: store.setViewMode,
+    setMatrixSubMode: store.setMatrixSubMode,
+    setLayoutAlgorithm: store.setLayoutAlgorithm,
+    setLayoutMetrics: store.setLayoutMetrics,
+    setGraphMetrics: store.setGraphMetrics,
+    toggleColumnEdges: store.toggleColumnEdges,
+    toggleHideCTEs: store.toggleHideCTEs,
+    toggleShowScriptTables: store.toggleShowScriptTables,
+    requestNavigation: store.requestNavigation,
+    setVisibleGraphNodeIds: store.setVisibleGraphNodeIds,
+    revealNodeInGraph: store.revealNodeInGraph,
+    clearRevealRequest: store.clearRevealRequest,
+    setTableFilter: store.setTableFilter,
+    toggleTableFilterSelection: store.toggleTableFilterSelection,
+    setTableFilterDirection: store.setTableFilterDirection,
+    clearTableFilter: store.clearTableFilter,
+    setIsLayouting: store.setIsLayouting,
+    setIsBuilding: store.setIsBuilding,
+    setAnalyzedContent: store.setAnalyzedContent,
+    setStalePaths: store.setStalePaths,
   };
 }
 
 /**
- * Hook to access only the lineage state.
- * Note: This returns the store directly to avoid re-render issues.
- * Access individual properties as needed.
+ * Hook to access lineage state. Pass a selector to subscribe only to the
+ * fields a component consumes. The no-argument form preserves the legacy
+ * state object API and keeps its reference stable until a state field changes.
  */
-export function useLineageState() {
-  const result = useLineageStore((state) => state.result);
-  const sql = useLineageStore((state) => state.sql);
-  const selectedNodeId = useLineageStore((state) => state.selectedNodeId);
-  const selectedStatementIndex = useLineageStore((state) => state.selectedStatementIndex);
-  const highlightedSpan = useLineageStore((state) => state.highlightedSpan);
-  const focusedOccurrenceIndex = useLineageStore((state) => state.focusedOccurrenceIndex);
-  const searchTerm = useLineageStore((state) => state.searchTerm);
-  const viewMode = useLineageStore((state) => state.viewMode);
-  const matrixSubMode = useLineageStore((state) => state.matrixSubMode);
-  const layoutAlgorithm = useLineageStore((state) => state.layoutAlgorithm);
-  const layoutMetrics = useLineageStore((state) => state.layoutMetrics);
-  const graphMetrics = useLineageStore((state) => state.graphMetrics);
-  const collapsedNodeIds = useLineageStore((state) => state.collapsedNodeIds);
-  const expandedTableIds = useLineageStore((state) => state.expandedTableIds);
-  const defaultCollapsed = useLineageStore((state) => state.defaultCollapsed);
-  const showColumnEdges = useLineageStore((state) => state.showColumnEdges);
-  const hideCTEs = useLineageStore((state) => state.hideCTEs);
-  const showScriptTables = useLineageStore((state) => state.showScriptTables);
-  const navigationRequest = useLineageStore((state) => state.navigationRequest);
-  const visibleGraphNodeIds = useLineageStore((state) => state.visibleGraphNodeIds);
-  const revealRequest = useLineageStore((state) => state.revealRequest);
-  const tableFilter = useLineageStore((state) => state.tableFilter);
-  const isLayouting = useLineageStore((state) => state.isLayouting);
-  const isBuilding = useLineageStore((state) => state.isBuilding);
-  const analyzedContentByPath = useLineageStore((state) => state.analyzedContentByPath);
-  const stalePaths = useLineageStore((state) => state.stalePaths);
+export function useLineageState(): LineageContextState;
+export function useLineageState<T>(selector: (state: LineageContextState) => T): T;
+export function useLineageState<T>(
+  selector?: (state: LineageContextState) => T
+): LineageContextState | T {
+  const activeSelector = useShallow((store: LineageState): LineageContextState | T =>
+    selector ? selector(store) : selectLineageState(store)
+  );
 
-  return {
-    result,
-    sql,
-    selectedNodeId,
-    selectedStatementIndex,
-    highlightedSpan,
-    focusedOccurrenceIndex,
-    searchTerm,
-    viewMode,
-    matrixSubMode,
-    layoutAlgorithm,
-    layoutMetrics,
-    graphMetrics,
-    collapsedNodeIds,
-    expandedTableIds,
-    defaultCollapsed,
-    showColumnEdges,
-    hideCTEs,
-    showScriptTables,
-    navigationRequest,
-    visibleGraphNodeIds,
-    revealRequest,
-    tableFilter,
-    isLayouting,
-    isBuilding,
-    analyzedContentByPath,
-    stalePaths,
-  };
+  return useLineageStore<LineageContextState | T>(activeSelector);
 }
 
 /**
- * Hook to access only the lineage actions.
+ * Hook to access lineage actions. Action references and the no-argument action
+ * object remain stable for the lifetime of the store. A selector can narrow
+ * the returned API for components that use only a subset of actions.
  */
-export function useLineageActions() {
-  const setResult = useLineageStore((state) => state.setResult);
-  const setSql = useLineageStore((state) => state.setSql);
-  const selectNode = useLineageStore((state) => state.selectNode);
-  const cycleOccurrence = useLineageStore((state) => state.cycleOccurrence);
-  const focusOccurrence = useLineageStore((state) => state.focusOccurrence);
-  const toggleNodeCollapse = useLineageStore((state) => state.toggleNodeCollapse);
-  const setNodeCollapsed = useLineageStore((state) => state.setNodeCollapsed);
-  const toggleTableExpansion = useLineageStore((state) => state.toggleTableExpansion);
-  const setTableExpanded = useLineageStore((state) => state.setTableExpanded);
-  const setAllNodesCollapsed = useLineageStore((state) => state.setAllNodesCollapsed);
-  const selectStatement = useLineageStore((state) => state.selectStatement);
-  const highlightSpan = useLineageStore((state) => state.highlightSpan);
-  const setSearchTerm = useLineageStore((state) => state.setSearchTerm);
-  const setViewMode = useLineageStore((state) => state.setViewMode);
-  const setMatrixSubMode = useLineageStore((state) => state.setMatrixSubMode);
-  const setLayoutAlgorithm = useLineageStore((state) => state.setLayoutAlgorithm);
-  const setLayoutMetrics = useLineageStore((state) => state.setLayoutMetrics);
-  const setGraphMetrics = useLineageStore((state) => state.setGraphMetrics);
-  const toggleColumnEdges = useLineageStore((state) => state.toggleColumnEdges);
-  const toggleHideCTEs = useLineageStore((state) => state.toggleHideCTEs);
-  const toggleShowScriptTables = useLineageStore((state) => state.toggleShowScriptTables);
-  const requestNavigation = useLineageStore((state) => state.requestNavigation);
-  const setVisibleGraphNodeIds = useLineageStore((state) => state.setVisibleGraphNodeIds);
-  const revealNodeInGraph = useLineageStore((state) => state.revealNodeInGraph);
-  const clearRevealRequest = useLineageStore((state) => state.clearRevealRequest);
-  const setTableFilter = useLineageStore((state) => state.setTableFilter);
-  const toggleTableFilterSelection = useLineageStore((state) => state.toggleTableFilterSelection);
-  const setTableFilterDirection = useLineageStore((state) => state.setTableFilterDirection);
-  const clearTableFilter = useLineageStore((state) => state.clearTableFilter);
-  const setIsLayouting = useLineageStore((state) => state.setIsLayouting);
-  const setIsBuilding = useLineageStore((state) => state.setIsBuilding);
-  const setAnalyzedContent = useLineageStore((state) => state.setAnalyzedContent);
-  const setStalePaths = useLineageStore((state) => state.setStalePaths);
+export function useLineageActions(): LineageContextActions;
+export function useLineageActions<T>(selector: (actions: LineageContextActions) => T): T;
+export function useLineageActions<T>(
+  selector?: (actions: LineageContextActions) => T
+): LineageContextActions | T {
+  const activeSelector = useShallow((store: LineageState): LineageContextActions | T => {
+    const actions = selectLineageActions(store);
+    return selector ? selector(actions) : actions;
+  });
 
-  return {
-    setResult,
-    setSql,
-    selectNode,
-    cycleOccurrence,
-    focusOccurrence,
-    toggleNodeCollapse,
-    setNodeCollapsed,
-    toggleTableExpansion,
-    setTableExpanded,
-    setAllNodesCollapsed,
-    selectStatement,
-    highlightSpan,
-    setSearchTerm,
-    setViewMode,
-    setMatrixSubMode,
-    setLayoutAlgorithm,
-    setLayoutMetrics,
-    setGraphMetrics,
-    toggleColumnEdges,
-    toggleHideCTEs,
-    toggleShowScriptTables,
-    requestNavigation,
-    setVisibleGraphNodeIds,
-    revealNodeInGraph,
-    clearRevealRequest,
-    setTableFilter,
-    toggleTableFilterSelection,
-    setTableFilterDirection,
-    clearTableFilter,
-    setIsLayouting,
-    setIsBuilding,
-    setAnalyzedContent,
-    setStalePaths,
-  };
+  return useLineageStore<LineageContextActions | T>(activeSelector);
+}
+
+/**
+ * Hook to access the legacy structured state/actions value. Both nested
+ * objects are referentially stable until their selected store fields change.
+ */
+export function useLineage(): LineageContextValue {
+  const state = useLineageState();
+  const actions = useLineageActions();
+
+  return useMemo(() => ({ state, actions }), [state, actions]);
 }
