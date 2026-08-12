@@ -3,7 +3,7 @@
 //! SQLFluff parity: configurable column aliasing style (`explicit`/`implicit`).
 
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit, Span};
 use sqlparser::ast::{Ident, SelectItem, Spanned, Statement};
 use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
@@ -64,7 +64,7 @@ impl Default for AliasingColumnStyle {
     }
 }
 
-impl LintRule for AliasingColumnStyle {
+impl BuiltinLintRule for AliasingColumnStyle {
     fn code(&self) -> &'static str {
         issue_codes::LINT_AL_002
     }
@@ -77,7 +77,7 @@ impl LintRule for AliasingColumnStyle {
         "Implicit/explicit aliasing of columns."
     }
 
-    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let mut issues = Vec::new();
         let tokens =
             tokenized_for_context(ctx).or_else(|| tokenized(ctx.statement_sql(), ctx.dialect()));
@@ -152,7 +152,7 @@ fn autofix_edits_for_occurrence(
 fn alias_occurrence_in_statement(
     alias: &Ident,
     item: &SelectItem,
-    ctx: &LintContext,
+    ctx: &RuleContext,
     tokens: Option<&[LocatedToken]>,
 ) -> Option<AliasOccurrence> {
     let tokens = tokens?;
@@ -261,7 +261,7 @@ fn tokenized(sql: &str, dialect: Dialect) -> Option<Vec<LocatedToken>> {
     Some(out)
 }
 
-fn tokenized_for_context(ctx: &LintContext) -> Option<Vec<LocatedToken>> {
+fn tokenized_for_context(ctx: &RuleContext) -> Option<Vec<LocatedToken>> {
     let statement_start = ctx.statement_range.start;
     ctx.with_document_tokens(|tokens| {
         if tokens.is_empty() {
@@ -353,14 +353,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, stmt)| {
-                rule.check(
-                    stmt,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(stmt, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }
@@ -453,14 +446,8 @@ mod tests {
     fn allows_tsql_assignment_style_alias() {
         let sql = "select alias1 = col1";
         let statements = parse_sql_with_dialect(sql, Dialect::Mssql).expect("parse");
-        let issues = AliasingColumnStyle::default().check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues = AliasingColumnStyle::default()
+            .check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert!(issues.is_empty());
     }
 }

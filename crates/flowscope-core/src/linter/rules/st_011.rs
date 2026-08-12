@@ -4,7 +4,7 @@
 
 use std::collections::HashSet;
 
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Issue};
 use sqlparser::ast::{
     ConnectByKind, CreateView, Expr, FunctionArg, FunctionArgExpr, JoinOperator, NamedWindowExpr,
@@ -19,7 +19,7 @@ use super::semantic_helpers::{
 
 pub struct StructureUnusedJoin;
 
-impl LintRule for StructureUnusedJoin {
+impl BuiltinLintRule for StructureUnusedJoin {
     fn code(&self) -> &'static str {
         issue_codes::LINT_ST_011
     }
@@ -32,7 +32,7 @@ impl LintRule for StructureUnusedJoin {
         "Joined table not referenced in query."
     }
 
-    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let violations = unused_join_count_for_statement(statement);
 
         (0..violations)
@@ -677,14 +677,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }

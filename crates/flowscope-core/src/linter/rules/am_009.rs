@@ -3,7 +3,7 @@
 //! SQLFluff AM09 parity: use of LIMIT/OFFSET without ORDER BY may lead to
 //! non-deterministic results.
 
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Issue};
 use sqlparser::ast::{
     CreateView, Expr, FunctionArg, FunctionArgExpr, FunctionArguments, LimitClause, OrderByKind,
@@ -14,7 +14,7 @@ use super::semantic_helpers::join_on_expr;
 
 pub struct LimitOffsetWithoutOrderBy;
 
-impl LintRule for LimitOffsetWithoutOrderBy {
+impl BuiltinLintRule for LimitOffsetWithoutOrderBy {
     fn code(&self) -> &'static str {
         issue_codes::LINT_AM_009
     }
@@ -27,7 +27,7 @@ impl LintRule for LimitOffsetWithoutOrderBy {
         "Use of LIMIT and OFFSET without ORDER BY may lead to non-deterministic results."
     }
 
-    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let mut violation_count = 0usize;
         check_statement(statement, &mut violation_count);
 
@@ -279,14 +279,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }

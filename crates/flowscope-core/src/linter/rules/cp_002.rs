@@ -5,7 +5,7 @@
 use std::collections::HashSet;
 
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit, Span};
 use regex::Regex;
 use sqlparser::ast::{ObjectName, Statement};
@@ -58,7 +58,7 @@ impl Default for CapitalisationIdentifiers {
     }
 }
 
-impl LintRule for CapitalisationIdentifiers {
+impl BuiltinLintRule for CapitalisationIdentifiers {
     fn code(&self) -> &'static str {
         issue_codes::LINT_CP_002
     }
@@ -71,7 +71,7 @@ impl LintRule for CapitalisationIdentifiers {
         "Inconsistent capitalisation of unquoted identifiers."
     }
 
-    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         if databricks_case_sensitive_set_property(statement, ctx.dialect()) {
             return Vec::new();
         }
@@ -986,7 +986,6 @@ fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
 mod tests {
     use super::*;
     use crate::linter::config::LintConfig;
-    use crate::linter::rule::with_active_dialect;
     use crate::parser::{parse_sql, parse_sql_with_dialect};
     use crate::types::Dialect;
     use crate::types::IssueAutofixApplicability;
@@ -1002,22 +1001,16 @@ mod tests {
     fn run_with_config_in_dialect(sql: &str, dialect: Dialect, config: LintConfig) -> Vec<Issue> {
         let statements = parse_sql_with_dialect(sql, dialect).expect("parse");
         let rule = CapitalisationIdentifiers::from_config(&config);
-        with_active_dialect(dialect, || {
-            statements
-                .iter()
-                .enumerate()
-                .flat_map(|(index, statement)| {
-                    rule.check(
-                        statement,
-                        &LintContext {
-                            sql,
-                            statement_range: 0..sql.len(),
-                            statement_index: index,
-                        },
-                    )
-                })
-                .collect()
-        })
+        statements
+            .iter()
+            .enumerate()
+            .flat_map(|(index, statement)| {
+                rule.check_with_context(
+                    statement,
+                    &RuleContext::new(sql, 0..sql.len(), index).with_dialect(dialect),
+                )
+            })
+            .collect()
     }
 
     fn run_statementless_with_config_in_dialect(
@@ -1027,16 +1020,10 @@ mod tests {
     ) -> Vec<Issue> {
         let placeholder = parse_sql("SELECT 1").expect("parse placeholder");
         let rule = CapitalisationIdentifiers::from_config(&config);
-        with_active_dialect(dialect, || {
-            rule.check(
-                &placeholder[0],
-                &LintContext {
-                    sql,
-                    statement_range: 0..sql.len(),
-                    statement_index: 0,
-                },
-            )
-        })
+        rule.check_with_context(
+            &placeholder[0],
+            &RuleContext::new(sql, 0..sql.len(), 0).with_dialect(dialect),
+        )
     }
 
     fn apply_issue_autofix(sql: &str, issue: &Issue) -> Option<String> {

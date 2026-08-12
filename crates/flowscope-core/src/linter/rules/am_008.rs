@@ -3,7 +3,7 @@
 //! SQLFluff AM08 parity: detect implicit cross joins where JOIN-like operators
 //! omit ON/USING/NATURAL conditions.
 
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit, Span};
 use sqlparser::ast::{JoinConstraint, JoinOperator, Select, Statement, TableFactor};
 use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
@@ -12,7 +12,7 @@ use super::semantic_helpers::visit_selects_in_statement;
 
 pub struct AmbiguousJoinCondition;
 
-impl LintRule for AmbiguousJoinCondition {
+impl BuiltinLintRule for AmbiguousJoinCondition {
     fn code(&self) -> &'static str {
         issue_codes::LINT_AM_008
     }
@@ -25,7 +25,7 @@ impl LintRule for AmbiguousJoinCondition {
         "Implicit cross join detected."
     }
 
-    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let mut violations = 0usize;
 
         visit_selects_in_statement(statement, &mut |select| {
@@ -164,7 +164,7 @@ struct JoinOperatorTokenSpan {
 /// `POSITIONAL` as a table alias and `JOIN` as a bare join. This function
 /// detects the pattern at the token level so the AST violation count can be
 /// corrected.
-fn count_positional_joins_in_context(ctx: &LintContext) -> usize {
+fn count_positional_joins_in_context(ctx: &RuleContext) -> usize {
     let sql = ctx.statement_sql();
     // Quick textual check to avoid tokenization when not needed.
     if !sql.to_ascii_uppercase().contains("POSITIONAL") {
@@ -194,7 +194,7 @@ fn count_positional_joins_in_context(ctx: &LintContext) -> usize {
     count
 }
 
-fn am008_autofix_candidates_for_context(ctx: &LintContext) -> Vec<Am008AutofixCandidate> {
+fn am008_autofix_candidates_for_context(ctx: &RuleContext) -> Vec<Am008AutofixCandidate> {
     let from_document_tokens = ctx.with_document_tokens(|tokens| {
         if tokens.is_empty() {
             return None;
@@ -588,14 +588,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }

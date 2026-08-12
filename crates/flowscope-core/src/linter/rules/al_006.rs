@@ -4,7 +4,7 @@
 //! characters are discouraged.
 
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Issue};
 use sqlparser::ast::{Select, Statement, TableFactor, TableWithJoins};
 
@@ -40,7 +40,7 @@ impl Default for AliasingLength {
     }
 }
 
-impl LintRule for AliasingLength {
+impl BuiltinLintRule for AliasingLength {
     fn code(&self) -> &'static str {
         issue_codes::LINT_AL_006
     }
@@ -53,7 +53,7 @@ impl LintRule for AliasingLength {
         "Enforce table alias lengths in from clauses and join conditions."
     }
 
-    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let mut violations = 0usize;
 
         visit_selects_in_statement(statement, &mut |select| {
@@ -181,14 +181,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }
@@ -238,15 +231,13 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
+                rule.check_with_context(
                     statement,
-                    &LintContext {
-                        sql: "SELECT * FROM users this_alias_name_is_longer_than_thirty_chars",
-                        statement_range: 0
-                            .."SELECT * FROM users this_alias_name_is_longer_than_thirty_chars"
-                                .len(),
-                        statement_index: index,
-                    },
+                    &RuleContext::new(
+                        "SELECT * FROM users this_alias_name_is_longer_than_thirty_chars",
+                        0.."SELECT * FROM users this_alias_name_is_longer_than_thirty_chars".len(),
+                        index,
+                    ),
                 )
             })
             .collect::<Vec<_>>();
@@ -272,13 +263,13 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
+                rule.check_with_context(
                     statement,
-                    &LintContext {
-                        sql: "SELECT * FROM users eleven_chars",
-                        statement_range: 0.."SELECT * FROM users eleven_chars".len(),
-                        statement_index: index,
-                    },
+                    &RuleContext::new(
+                        "SELECT * FROM users eleven_chars",
+                        0.."SELECT * FROM users eleven_chars".len(),
+                        index,
+                    ),
                 )
             })
             .collect::<Vec<_>>();
@@ -303,13 +294,13 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
+                rule.check_with_context(
                     statement,
-                    &LintContext {
-                        sql: "SELECT * FROM users a",
-                        statement_range: 0.."SELECT * FROM users a".len(),
-                        statement_index: index,
-                    },
+                    &RuleContext::new(
+                        "SELECT * FROM users a",
+                        0.."SELECT * FROM users a".len(),
+                        index,
+                    ),
                 )
             })
             .collect::<Vec<_>>();

@@ -13,7 +13,7 @@
 //!   6. `CASE WHEN x IS NOT NULL THEN x ELSE NULL END` → `x`
 //!   7. `CASE WHEN x IS NOT NULL THEN x END`          → `x`
 
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::linter::visit;
 use crate::types::{issue_codes, Issue, IssueAutofixApplicability, IssuePatchEdit, Span};
 use regex::Regex;
@@ -23,7 +23,7 @@ use std::sync::OnceLock;
 
 pub struct StructureSimpleCase;
 
-impl LintRule for StructureSimpleCase {
+impl BuiltinLintRule for StructureSimpleCase {
     fn code(&self) -> &'static str {
         issue_codes::LINT_ST_002
     }
@@ -36,7 +36,7 @@ impl LintRule for StructureSimpleCase {
         "Unnecessary 'CASE' statement."
     }
 
-    fn check(&self, stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, stmt: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let mut issues = Vec::new();
 
         visit::visit_expressions(stmt, &mut |expr| {
@@ -237,7 +237,7 @@ fn contains_template_tags(sql: &str) -> bool {
 // ---------------------------------------------------------------------------
 
 fn build_autofix(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     expr: &Expr,
     rewrite: &UnnecessaryCaseKind,
 ) -> Option<(Span, IssueAutofixApplicability, Vec<IssuePatchEdit>)> {
@@ -295,7 +295,7 @@ fn build_autofix(
 /// Falls back to AST Display with keyword-case normalization when the span
 /// does not capture the full expression text (e.g. sqlparser omits unary
 /// operator keywords like `NOT` from span calculations).
-fn source_text_for_expr(ctx: &LintContext, expr: &Expr) -> Option<String> {
+fn source_text_for_expr(ctx: &RuleContext, expr: &Expr) -> Option<String> {
     let display_text = format!("{expr}");
 
     let Some((start, end)) = expr_statement_offsets(ctx, expr) else {
@@ -394,7 +394,7 @@ fn column_identity_expr<'a>(
 // Span and offset utilities
 // ---------------------------------------------------------------------------
 
-fn expr_statement_offsets(ctx: &LintContext, expr: &Expr) -> Option<(usize, usize)> {
+fn expr_statement_offsets(ctx: &RuleContext, expr: &Expr) -> Option<(usize, usize)> {
     if ctx.statement_range.start > 0 {
         if let Some((start, end)) = expr_span_offsets(ctx.sql, expr) {
             if start >= ctx.statement_range.start && end <= ctx.statement_range.end {
@@ -433,7 +433,7 @@ fn expr_span_offsets(sql: &str, expr: &Expr) -> Option<(usize, usize)> {
     (end >= start).then_some((start, end))
 }
 
-fn span_contains_comment(ctx: &LintContext, span: Span) -> bool {
+fn span_contains_comment(ctx: &RuleContext, span: Span) -> bool {
     let from_document_tokens = ctx.with_document_tokens(|tokens| {
         if tokens.is_empty() {
             return None;
@@ -547,14 +547,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }
@@ -882,14 +875,8 @@ mod tests {
         let sql = "select\n    foo,\n    case\n        when\n            bar is null then {{ result }}\n        else bar\n    end as test\nfrom baz;\n";
         let synthetic = parse_sql("SELECT 1").expect("parse");
         let rule = StructureSimpleCase;
-        let issues = rule.check(
-            &synthetic[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&synthetic[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_ST_002);
         assert!(

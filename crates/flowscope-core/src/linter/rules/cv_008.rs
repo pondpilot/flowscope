@@ -3,13 +3,13 @@
 //! RIGHT JOIN is functionally valid but harder to read and reason about in many
 //! codebases. Prefer LEFT JOIN for consistent join direction.
 
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Issue};
 use sqlparser::ast::*;
 
 pub struct LeftJoinOverRightJoin;
 
-impl LintRule for LeftJoinOverRightJoin {
+impl BuiltinLintRule for LeftJoinOverRightJoin {
     fn code(&self) -> &'static str {
         issue_codes::LINT_CV_008
     }
@@ -22,14 +22,14 @@ impl LintRule for LeftJoinOverRightJoin {
         "Use 'LEFT JOIN' instead of 'RIGHT JOIN'."
     }
 
-    fn check(&self, stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, stmt: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let mut issues = Vec::new();
         check_statement(stmt, ctx, &mut issues);
         issues
     }
 }
 
-fn check_statement(stmt: &Statement, ctx: &LintContext, issues: &mut Vec<Issue>) {
+fn check_statement(stmt: &Statement, ctx: &RuleContext, issues: &mut Vec<Issue>) {
     match stmt {
         Statement::Query(q) => check_query(q, ctx, issues),
         Statement::Insert(ins) => {
@@ -47,7 +47,7 @@ fn check_statement(stmt: &Statement, ctx: &LintContext, issues: &mut Vec<Issue>)
     }
 }
 
-fn check_query(query: &Query, ctx: &LintContext, issues: &mut Vec<Issue>) {
+fn check_query(query: &Query, ctx: &RuleContext, issues: &mut Vec<Issue>) {
     if let Some(ref with) = query.with {
         for cte in &with.cte_tables {
             check_query(&cte.query, ctx, issues);
@@ -56,7 +56,7 @@ fn check_query(query: &Query, ctx: &LintContext, issues: &mut Vec<Issue>) {
     check_set_expr(&query.body, ctx, issues);
 }
 
-fn check_set_expr(body: &SetExpr, ctx: &LintContext, issues: &mut Vec<Issue>) {
+fn check_set_expr(body: &SetExpr, ctx: &RuleContext, issues: &mut Vec<Issue>) {
     match body {
         SetExpr::Select(select) => {
             for from_item in &select.from {
@@ -84,7 +84,7 @@ fn check_set_expr(body: &SetExpr, ctx: &LintContext, issues: &mut Vec<Issue>) {
     }
 }
 
-fn check_table_factor(relation: &TableFactor, ctx: &LintContext, issues: &mut Vec<Issue>) {
+fn check_table_factor(relation: &TableFactor, ctx: &RuleContext, issues: &mut Vec<Issue>) {
     match relation {
         TableFactor::Derived { subquery, .. } => check_query(subquery, ctx, issues),
         TableFactor::NestedJoin {
@@ -126,14 +126,10 @@ mod tests {
     fn check_sql(sql: &str) -> Vec<Issue> {
         let stmts = parse_sql(sql).unwrap();
         let rule = LeftJoinOverRightJoin;
-        let ctx = LintContext {
-            sql,
-            statement_range: 0..sql.len(),
-            statement_index: 0,
-        };
+        let ctx = RuleContext::new(sql, 0..sql.len(), 0);
         let mut issues = Vec::new();
         for stmt in &stmts {
-            issues.extend(rule.check(stmt, &ctx));
+            issues.extend(rule.check_with_context(stmt, &ctx));
         }
         issues
     }

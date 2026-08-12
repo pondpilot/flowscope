@@ -3,7 +3,7 @@
 //! SQLFluff LT07 parity (current scope): in multiline CTE bodies, the closing
 //! bracket should appear on its own line.
 
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit};
 use sqlparser::ast::{CreateView, Query, Statement};
 use sqlparser::keywords::Keyword;
@@ -12,7 +12,7 @@ use std::ops::Range;
 
 pub struct LayoutCteBracket;
 
-impl LintRule for LayoutCteBracket {
+impl BuiltinLintRule for LayoutCteBracket {
     fn code(&self) -> &'static str {
         issue_codes::LINT_LT_007
     }
@@ -25,7 +25,7 @@ impl LintRule for LayoutCteBracket {
         "'WITH' clause closing bracket should be on a new line."
     }
 
-    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let tokens = tokenize_with_offsets_for_context(ctx);
         let violation = misplaced_cte_closing_bracket_for_statement(
             statement,
@@ -74,7 +74,7 @@ type Lt07Violation = (Lt07Span, Option<Lt07AutofixSpan>);
 
 fn misplaced_cte_closing_bracket_for_statement(
     statement: &Statement,
-    ctx: &LintContext,
+    ctx: &RuleContext,
     tokens: Option<&[LocatedToken]>,
 ) -> Option<Lt07Violation> {
     let query = match statement {
@@ -88,7 +88,7 @@ fn misplaced_cte_closing_bracket_for_statement(
 
 fn misplaced_cte_closing_bracket_in_query(
     query: &Query,
-    ctx: &LintContext,
+    ctx: &RuleContext,
     tokens: Option<&[LocatedToken]>,
 ) -> Option<Lt07Violation> {
     let with = query.with.as_ref()?;
@@ -192,7 +192,7 @@ fn tokenize_with_offsets(sql: &str, dialect: Dialect) -> Option<Vec<LocatedToken
     Some(out)
 }
 
-fn tokenize_with_offsets_for_context(ctx: &LintContext) -> Option<Vec<LocatedToken>> {
+fn tokenize_with_offsets_for_context(ctx: &RuleContext) -> Option<Vec<LocatedToken>> {
     let statement_start = ctx.statement_range.start;
     let from_document_tokens = ctx.with_document_tokens(|tokens| {
         if tokens.is_empty() {
@@ -561,14 +561,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }

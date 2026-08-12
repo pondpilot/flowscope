@@ -3,7 +3,7 @@
 //! SQLFluff ST08 parity: `SELECT DISTINCT(<expr>)` should be rewritten to
 //! `SELECT DISTINCT <expr>`.
 
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit, Span};
 use sqlparser::ast::Statement;
 use sqlparser::keywords::Keyword;
@@ -11,7 +11,7 @@ use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
 
 pub struct StructureDistinct;
 
-impl LintRule for StructureDistinct {
+impl BuiltinLintRule for StructureDistinct {
     fn code(&self) -> &'static str {
         issue_codes::LINT_ST_008
     }
@@ -24,7 +24,7 @@ impl LintRule for StructureDistinct {
         "'DISTINCT' used with parentheses."
     }
 
-    fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, _statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let candidates = st008_autofix_candidates(ctx.statement_sql(), ctx.dialect());
 
         candidates
@@ -300,14 +300,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }

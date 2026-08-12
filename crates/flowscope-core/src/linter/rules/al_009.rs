@@ -4,7 +4,7 @@
 
 use crate::generated::NormalizationStrategy;
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Issue, IssueAutofixApplicability, IssuePatchEdit, Span};
 use regex::Regex;
 use sqlparser::ast::{Expr, Ident, SelectItem, Statement};
@@ -64,7 +64,7 @@ impl Default for AliasingSelfAliasColumn {
     }
 }
 
-impl LintRule for AliasingSelfAliasColumn {
+impl BuiltinLintRule for AliasingSelfAliasColumn {
     fn code(&self) -> &'static str {
         issue_codes::LINT_AL_009
     }
@@ -77,7 +77,7 @@ impl LintRule for AliasingSelfAliasColumn {
         "Column aliases should not alias to itself, i.e. self-alias."
     }
 
-    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let mut violating_aliases = Vec::new();
 
         // Resolve Dialect mode to the concrete normalization strategy at check time
@@ -160,7 +160,7 @@ struct Al009AutofixCandidate {
 }
 
 fn al009_autofix_candidates_for_context(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     aliases: &[Ident],
 ) -> Vec<Al009AutofixCandidate> {
     if aliases.is_empty() {
@@ -202,7 +202,7 @@ fn al009_autofix_candidates_for_context(
     candidates
 }
 
-fn statement_positioned_tokens(ctx: &LintContext) -> Vec<PositionedToken> {
+fn statement_positioned_tokens(ctx: &RuleContext) -> Vec<PositionedToken> {
     let from_document_tokens = ctx.with_document_tokens(|tokens| {
         if tokens.is_empty() {
             return None;
@@ -475,7 +475,7 @@ fn normalize_name_for_mode(name_ref: NameRef<'_>, mode: AliasCaseCheck) -> Strin
 }
 
 fn legacy_self_alias_candidates_for_context(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     alias_case_check: AliasCaseCheck,
     dialect_strategy: Option<NormalizationStrategy>,
 ) -> Vec<Al009AutofixCandidate> {
@@ -661,7 +661,6 @@ fn contains_assignment_alias_pattern(sql: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::linter::rule::with_active_dialect;
     use crate::parser::{parse_sql, parse_sql_with_dialect};
     use crate::types::{Dialect, IssueAutofixApplicability};
 
@@ -672,14 +671,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }
@@ -688,18 +680,12 @@ mod tests {
         let statements = parse_sql_with_dialect(sql, dialect).expect("parse");
         let rule = AliasingSelfAliasColumn::default();
         let mut issues = Vec::new();
-        with_active_dialect(dialect, || {
-            for (index, statement) in statements.iter().enumerate() {
-                issues.extend(rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                ));
-            }
-        });
+        for (index, statement) in statements.iter().enumerate() {
+            issues.extend(rule.check_with_context(
+                statement,
+                &RuleContext::new(sql, 0..sql.len(), index).with_dialect(dialect),
+            ));
+        }
         issues
     }
 
@@ -769,14 +755,8 @@ mod tests {
                 serde_json::json!({"alias_case_check": "case_sensitive"}),
             )]),
         });
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert!(issues.is_empty());
     }
 
@@ -792,14 +772,8 @@ mod tests {
                 serde_json::json!({"alias_case_check": "quoted_cs_naked_upper"}),
             )]),
         });
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
     }
 
@@ -815,14 +789,8 @@ mod tests {
                 serde_json::json!({"alias_case_check": "quoted_cs_naked_upper"}),
             )]),
         });
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert!(issues.is_empty());
     }
 
@@ -838,14 +806,8 @@ mod tests {
                 serde_json::json!({"alias_case_check": "quoted_cs_naked_lower"}),
             )]),
         });
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
     }
 
@@ -861,14 +823,8 @@ mod tests {
                 serde_json::json!({"alias_case_check": "quoted_cs_naked_lower"}),
             )]),
         });
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert!(issues.is_empty());
     }
 
@@ -949,16 +905,10 @@ mod tests {
         let sql = "select\n    this_alias_is_fine = col_a,\n    col_b = col_b,\n    COL_C AS COL_C,\n    Col_D = Col_D,\n    col_e col_e,\n    COL_F COL_F,\n    Col_G Col_G\nfrom foo";
         let statements = parse_sql("SELECT 1").expect("synthetic parse");
         let rule = AliasingSelfAliasColumn::default();
-        let issues = with_active_dialect(Dialect::Mssql, || {
-            rule.check(
-                &statements[0],
-                &LintContext {
-                    sql,
-                    statement_range: 0..sql.len(),
-                    statement_index: 0,
-                },
-            )
-        });
+        let issues = rule.check_with_context(
+            &statements[0],
+            &RuleContext::new(sql, 0..sql.len(), 0).with_dialect(Dialect::Mssql),
+        );
         assert_eq!(issues.len(), 1);
         let fixed = apply_issue_autofix(sql, &issues[0]).expect("apply autofix");
         assert_eq!(
@@ -972,16 +922,10 @@ mod tests {
         let sql = "SELECT `col``col`\nFROM clients as c";
         let statements = parse_sql("SELECT 1").expect("synthetic parse");
         let rule = AliasingSelfAliasColumn::default();
-        let issues = with_active_dialect(Dialect::Bigquery, || {
-            rule.check(
-                &statements[0],
-                &LintContext {
-                    sql,
-                    statement_range: 0..sql.len(),
-                    statement_index: 0,
-                },
-            )
-        });
+        let issues = rule.check_with_context(
+            &statements[0],
+            &RuleContext::new(sql, 0..sql.len(), 0).with_dialect(Dialect::Bigquery),
+        );
         assert_eq!(issues.len(), 1);
         let fixed = apply_issue_autofix(sql, &issues[0]).expect("apply autofix");
         assert_eq!(fixed, "SELECT `col`\nFROM clients as c");

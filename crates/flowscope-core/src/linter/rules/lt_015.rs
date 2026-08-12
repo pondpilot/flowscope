@@ -3,7 +3,7 @@
 //! SQLFluff LT15 parity (current scope): detect excessive blank lines.
 
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit, Span};
 use sqlparser::ast::Statement;
 use sqlparser::tokenizer::{
@@ -50,7 +50,7 @@ impl Default for LayoutNewlines {
     }
 }
 
-impl LintRule for LayoutNewlines {
+impl BuiltinLintRule for LayoutNewlines {
     fn code(&self) -> &'static str {
         issue_codes::LINT_LT_015
     }
@@ -63,7 +63,7 @@ impl LintRule for LayoutNewlines {
         "Too many consecutive blank lines."
     }
 
-    fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, _statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let (inside_range, statement_sql) = trimmed_statement_range_and_sql(ctx);
         let inside_tokens = tokenized_for_range(ctx, inside_range.clone());
         let effective_batch_limit = self
@@ -139,7 +139,7 @@ impl LintRule for LayoutNewlines {
     }
 }
 
-fn trimmed_statement_range_and_sql<'a>(ctx: &'a LintContext) -> (Range<usize>, &'a str) {
+fn trimmed_statement_range_and_sql<'a>(ctx: &'a RuleContext) -> (Range<usize>, &'a str) {
     if let Some(range) = trimmed_statement_range_from_tokens(ctx) {
         return (range.clone(), &ctx.sql[range]);
     }
@@ -176,7 +176,7 @@ fn trim_ascii_whitespace_bounds(sql: &str) -> (usize, usize) {
     (start, end)
 }
 
-fn trimmed_statement_range_from_tokens(ctx: &LintContext) -> Option<Range<usize>> {
+fn trimmed_statement_range_from_tokens(ctx: &RuleContext) -> Option<Range<usize>> {
     let statement_start = ctx.statement_range.start;
     let statement_end = ctx.statement_range.end;
 
@@ -479,7 +479,7 @@ fn tokenized(sql: &str, dialect: Dialect) -> Option<Vec<TokenWithSpan>> {
     tokenizer.tokenize_with_location().ok()
 }
 
-fn tokenized_for_range(ctx: &LintContext, range: Range<usize>) -> Option<Vec<TokenWithSpan>> {
+fn tokenized_for_range(ctx: &RuleContext, range: Range<usize>) -> Option<Vec<TokenWithSpan>> {
     if range.is_empty() {
         return Some(Vec::new());
     }
@@ -625,7 +625,6 @@ fn relative_location(
 mod tests {
     use super::*;
     use crate::linter::config::LintConfig;
-    use crate::linter::rule::with_active_dialect;
     use crate::parser::parse_sql;
     use crate::types::IssueAutofixApplicability;
 
@@ -653,13 +652,9 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
+                rule.check_with_context(
                     statement,
-                    &LintContext {
-                        sql,
-                        statement_range: ranges[index].clone(),
-                        statement_index: index,
-                    },
+                    &RuleContext::new(sql, ranges[index].clone(), index),
                 )
             })
             .collect()
@@ -687,16 +682,10 @@ mod tests {
         dialect: Dialect,
     ) -> Vec<Issue> {
         let placeholder = parse_sql("SELECT 1").expect("parse placeholder");
-        with_active_dialect(dialect, || {
-            rule.check(
-                &placeholder[0],
-                &LintContext {
-                    sql,
-                    statement_range: 0..sql.len(),
-                    statement_index: 0,
-                },
-            )
-        })
+        rule.check_with_context(
+            &placeholder[0],
+            &RuleContext::new(sql, 0..sql.len(), 0).with_dialect(dialect),
+        )
     }
 
     fn apply_issue_autofix(sql: &str, issue: &Issue) -> Option<String> {

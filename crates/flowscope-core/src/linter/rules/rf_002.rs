@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use regex::Regex;
 
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::parser::parse_sql_with_dialect;
 use crate::types::{issue_codes, Dialect, Issue};
 use sqlparser::ast::{
@@ -73,7 +73,7 @@ impl Default for ReferencesQualification {
     }
 }
 
-impl LintRule for ReferencesQualification {
+impl BuiltinLintRule for ReferencesQualification {
     fn code(&self) -> &'static str {
         issue_codes::LINT_RF_002
     }
@@ -86,7 +86,7 @@ impl LintRule for ReferencesQualification {
         "References should be qualified if select has more than one referenced table/view."
     }
 
-    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         if !self.force_enable {
             return Vec::new();
         }
@@ -1168,7 +1168,6 @@ fn is_date_part_identifier(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::linter::rule::with_active_dialect;
     use crate::parser::{parse_sql, parse_sql_with_dialect};
 
     fn run(sql: &str) -> Vec<Issue> {
@@ -1178,14 +1177,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }
@@ -1194,18 +1186,12 @@ mod tests {
         let statements = parse_sql_with_dialect(sql, dialect).expect("parse");
         let rule = ReferencesQualification::default();
         let mut issues = Vec::new();
-        with_active_dialect(dialect, || {
-            for (index, statement) in statements.iter().enumerate() {
-                issues.extend(rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                ));
-            }
-        });
+        for (index, statement) in statements.iter().enumerate() {
+            issues.extend(rule.check_with_context(
+                statement,
+                &RuleContext::new(sql, 0..sql.len(), index).with_dialect(dialect),
+            ));
+        }
         issues
     }
 
@@ -1221,18 +1207,12 @@ mod tests {
         };
         let rule = ReferencesQualification::from_config(&config);
         let mut issues = Vec::new();
-        with_active_dialect(dialect, || {
-            for (index, statement) in statements.iter().enumerate() {
-                issues.extend(rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                ));
-            }
-        });
+        for (index, statement) in statements.iter().enumerate() {
+            issues.extend(rule.check_with_context(
+                statement,
+                &RuleContext::new(sql, 0..sql.len(), index).with_dialect(dialect),
+            ));
+        }
         issues
     }
 
@@ -1279,14 +1259,8 @@ mod tests {
         let rule = ReferencesQualification::from_config(&config);
         let sql = "SELECT a, b FROM foo LEFT JOIN vee ON vee.a = foo.a";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert!(issues.is_empty());
     }
 

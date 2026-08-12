@@ -6,7 +6,7 @@
 use std::collections::HashSet;
 
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit};
 use regex::{Regex, RegexBuilder};
 use sqlparser::ast::Statement;
@@ -67,7 +67,7 @@ impl Default for ReferencesKeywords {
     }
 }
 
-impl LintRule for ReferencesKeywords {
+impl BuiltinLintRule for ReferencesKeywords {
     fn code(&self) -> &'static str {
         issue_codes::LINT_RF_004
     }
@@ -80,7 +80,7 @@ impl LintRule for ReferencesKeywords {
         "Keywords should not be used as identifiers."
     }
 
-    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         if !statement_contains_keyword_identifier(statement, self) {
             return Vec::new();
         }
@@ -463,14 +463,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }

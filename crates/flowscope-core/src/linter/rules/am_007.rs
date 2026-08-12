@@ -3,7 +3,7 @@
 //! SQLFluff AM07 parity: set-operation branches should resolve to the same
 //! number of output columns when wildcard expansion is deterministically known.
 
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Issue};
 use sqlparser::ast::{
     CreateView, Query, Select, SetExpr, Statement, TableFactor, Update, UpdateTableFromKind,
@@ -22,7 +22,7 @@ struct SetCountStats {
     fully_resolved: bool,
 }
 
-impl LintRule for AmbiguousSetColumns {
+impl BuiltinLintRule for AmbiguousSetColumns {
     fn code(&self) -> &'static str {
         issue_codes::LINT_AM_007
     }
@@ -35,7 +35,7 @@ impl LintRule for AmbiguousSetColumns {
         "Queries within set query produce different numbers of columns."
     }
 
-    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let mut violation_count = 0usize;
         lint_statement_set_ops(statement, &HashMap::new(), &mut violation_count);
 
@@ -192,14 +192,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }

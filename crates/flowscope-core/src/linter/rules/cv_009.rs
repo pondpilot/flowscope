@@ -5,7 +5,7 @@
 
 use crate::extractors::extract_tables;
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::linter::visit::visit_expressions;
 use crate::types::{issue_codes, Issue};
 use regex::{Regex, RegexBuilder};
@@ -60,7 +60,7 @@ impl Default for ConventionBlockedWords {
     }
 }
 
-impl LintRule for ConventionBlockedWords {
+impl BuiltinLintRule for ConventionBlockedWords {
     fn code(&self) -> &'static str {
         issue_codes::LINT_CV_009
     }
@@ -73,7 +73,7 @@ impl LintRule for ConventionBlockedWords {
         "Block a list of configurable words from being used."
     }
 
-    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let source_violation = if self.match_source && ctx.statement_index == 0 {
             let source = if self.ignore_templated_areas {
                 mask_templated_areas(ctx.sql)
@@ -288,14 +288,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }
@@ -351,14 +344,8 @@ mod tests {
         let rule = ConventionBlockedWords::from_config(&config);
         let sql = "SELECT foo, wip FROM t";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
     }
 
@@ -375,14 +362,8 @@ mod tests {
         let rule = ConventionBlockedWords::from_config(&config);
         let sql = "SELECT tmp_value FROM t";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
     }
 
@@ -399,14 +380,8 @@ mod tests {
         let rule = ConventionBlockedWords::from_config(&config);
         let sql = "SELECT wip_item FROM t";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
     }
 
@@ -423,14 +398,8 @@ mod tests {
         let rule = ConventionBlockedWords::from_config(&config);
         let sql = "SELECT 'TODO' AS note FROM t";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
     }
 
@@ -457,14 +426,8 @@ mod tests {
         let rule = ConventionBlockedWords::from_config(&config);
         let sql = "SELECT * FROM {{ ref('deprecated_table') }}";
         let synthetic = parse_sql("SELECT 1").expect("parse");
-        let issues = rule.check(
-            &synthetic[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&synthetic[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_CV_009);
     }
@@ -492,14 +455,8 @@ mod tests {
         let rule = ConventionBlockedWords::from_config(&config);
         let sql = "SELECT * FROM {{ ref('deprecated_table') }}";
         let synthetic = parse_sql("SELECT 1").expect("parse");
-        let issues = rule.check(
-            &synthetic[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&synthetic[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert!(issues.is_empty());
     }
 }

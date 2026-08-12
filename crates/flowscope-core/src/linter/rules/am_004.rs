@@ -3,7 +3,7 @@
 //! Flags queries whose output width is not deterministically known, usually due
 //! to unresolved wildcard projections (`*` / `alias.*`).
 
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Issue};
 use sqlparser::ast::{CreateView, Expr, SelectItem, SetExpr, Statement, Value};
 use std::collections::HashMap;
@@ -12,7 +12,7 @@ use super::column_count_helpers::{resolve_query_output_columns_strict, CteColumn
 
 pub struct AmbiguousColumnCount;
 
-impl LintRule for AmbiguousColumnCount {
+impl BuiltinLintRule for AmbiguousColumnCount {
     fn code(&self) -> &'static str {
         issue_codes::LINT_AM_004
     }
@@ -25,7 +25,7 @@ impl LintRule for AmbiguousColumnCount {
         "Query produces an unknown number of result columns."
     }
 
-    fn check(&self, stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, stmt: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let ast_unknown = statement_has_unknown_result_columns(stmt, &HashMap::new());
         let fallback_unknown = !ast_unknown
             && statement_has_unknown_result_columns_fallback(stmt, ctx.statement_sql());
@@ -137,14 +137,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }
@@ -298,14 +291,8 @@ mod tests {
         let sql = "with\nhubspot__contacts as (\n  select * from ANALYTICS.PUBLIC_intermediate.hubspot__contacts\n),\nfinal as (\n  select *\n  from\n    hubspot__contacts\n    where not coalesce(_fivetran_deleted, false)\n)\nselect * from final\n";
         let synthetic = parse_sql("SELECT 1").expect("parse");
         let rule = AmbiguousColumnCount;
-        let issues = rule.check(
-            &synthetic[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&synthetic[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_AM_004);
     }

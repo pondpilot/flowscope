@@ -5,7 +5,7 @@
 //! whitespace, and cast operators.
 
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit};
 use sqlparser::ast::Statement;
 use sqlparser::keywords::Keyword;
@@ -76,7 +76,7 @@ impl Default for LayoutSpacing {
     }
 }
 
-impl LintRule for LayoutSpacing {
+impl BuiltinLintRule for LayoutSpacing {
     fn code(&self) -> &'static str {
         issue_codes::LINT_LT_001
     }
@@ -89,7 +89,7 @@ impl LintRule for LayoutSpacing {
         "Inappropriate Spacing."
     }
 
-    fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, _statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let mut violations =
             spacing_violations(ctx, self.ignore_templated_areas, self.alignment_options());
         let has_remaining_non_whitespace = ctx.sql[ctx.statement_range.end..]
@@ -104,11 +104,7 @@ impl LintRule for LayoutSpacing {
             && contains_template_marker(ctx.sql)
             && (ctx.statement_range.start > 0 || ctx.statement_range.end < ctx.sql.len());
         if parser_fragment_fallback || template_fragment_fallback {
-            let full_ctx = LintContext {
-                sql: ctx.sql,
-                statement_range: 0..ctx.sql.len(),
-                statement_index: 0,
-            };
+            let full_ctx = ctx.statement_view(ctx.sql, 0..ctx.sql.len(), 0);
             violations.extend(spacing_violations(
                 &full_ctx,
                 self.ignore_templated_areas,
@@ -183,7 +179,7 @@ struct Lt01AlignmentOptions {
 }
 
 fn spacing_violations(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     ignore_templated_areas: bool,
     alignment: Lt01AlignmentOptions,
 ) -> Vec<Lt01Violation> {
@@ -1774,7 +1770,7 @@ fn tokenized(sql: &str, dialect: Dialect) -> Option<Vec<TokenWithSpan>> {
     tokenizer.tokenize_with_location().ok()
 }
 
-fn tokenized_for_context(ctx: &LintContext) -> Option<Vec<TokenWithSpan>> {
+fn tokenized_for_context(ctx: &RuleContext) -> Option<Vec<TokenWithSpan>> {
     let (statement_start_line, statement_start_column) =
         offset_to_line_col(ctx.sql, ctx.statement_range.start)?;
 
@@ -1965,7 +1961,6 @@ fn relative_location(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::linter::rule::with_active_dialect;
     use crate::parser::parse_sql;
     use crate::types::{Dialect, IssueAutofixApplicability};
 
@@ -1976,22 +1971,16 @@ mod tests {
     fn run_with_dialect(sql: &str, dialect: Dialect) -> Vec<Issue> {
         let statements = parse_sql(sql).expect("parse");
         let rule = LayoutSpacing::default();
-        with_active_dialect(dialect, || {
-            statements
-                .iter()
-                .enumerate()
-                .flat_map(|(index, statement)| {
-                    rule.check(
-                        statement,
-                        &LintContext {
-                            sql,
-                            statement_range: 0..sql.len(),
-                            statement_index: index,
-                        },
-                    )
-                })
-                .collect()
-        })
+        statements
+            .iter()
+            .enumerate()
+            .flat_map(|(index, statement)| {
+                rule.check_with_context(
+                    statement,
+                    &RuleContext::new(sql, 0..sql.len(), index).with_dialect(dialect),
+                )
+            })
+            .collect()
     }
 
     fn run_statementless_with_dialect(sql: &str, dialect: Dialect) -> Vec<Issue> {
@@ -2000,16 +1989,10 @@ mod tests {
 
     fn run_statementless_with_rule(sql: &str, dialect: Dialect, rule: LayoutSpacing) -> Vec<Issue> {
         let placeholder = parse_sql("SELECT 1").expect("parse placeholder");
-        with_active_dialect(dialect, || {
-            rule.check(
-                &placeholder[0],
-                &LintContext {
-                    sql,
-                    statement_range: 0..sql.len(),
-                    statement_index: 0,
-                },
-            )
-        })
+        rule.check_with_context(
+            &placeholder[0],
+            &RuleContext::new(sql, 0..sql.len(), 0).with_dialect(dialect),
+        )
     }
 
     fn apply_all_issue_autofixes(sql: &str, issues: &[Issue]) -> String {

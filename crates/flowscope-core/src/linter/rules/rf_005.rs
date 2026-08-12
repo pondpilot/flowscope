@@ -6,7 +6,7 @@
 use std::collections::HashSet;
 
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue};
 use regex::Regex;
 use sqlparser::ast::Statement;
@@ -68,7 +68,7 @@ impl Default for ReferencesSpecialChars {
     }
 }
 
-impl LintRule for ReferencesSpecialChars {
+impl BuiltinLintRule for ReferencesSpecialChars {
     fn code(&self) -> &'static str {
         issue_codes::LINT_RF_005
     }
@@ -81,7 +81,7 @@ impl LintRule for ReferencesSpecialChars {
         "Do not use special characters in identifiers."
     }
 
-    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let dialect = ctx.dialect();
         let has_special_chars = collect_identifier_candidates(statement)
             .into_iter()
@@ -318,7 +318,6 @@ fn normalize_token(token: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::linter::rule::with_active_dialect;
     use crate::parser::parse_sql;
     use crate::parser::parse_sql_with_dialect;
     use crate::types::Dialect;
@@ -334,14 +333,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }
@@ -350,18 +342,12 @@ mod tests {
         let statements = parse_sql_with_dialect(sql, dialect).expect("parse");
         let rule = ReferencesSpecialChars::default();
         let mut issues = Vec::new();
-        with_active_dialect(dialect, || {
-            for (index, statement) in statements.iter().enumerate() {
-                issues.extend(rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                ));
-            }
-        });
+        for (index, statement) in statements.iter().enumerate() {
+            issues.extend(rule.check_with_context(
+                statement,
+                &RuleContext::new(sql, 0..sql.len(), index).with_dialect(dialect),
+            ));
+        }
         issues
     }
 

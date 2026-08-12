@@ -3,7 +3,7 @@
 //! Table aliases should be unique within a query scope.
 
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Issue};
 use sqlparser::ast::{
     CreateView, Expr, FunctionArg, FunctionArgExpr, FunctionArguments, Query, Select, SetExpr,
@@ -65,7 +65,7 @@ impl Default for AliasingUniqueTable {
     }
 }
 
-impl LintRule for AliasingUniqueTable {
+impl BuiltinLintRule for AliasingUniqueTable {
     fn code(&self) -> &'static str {
         issue_codes::LINT_AL_004
     }
@@ -78,7 +78,7 @@ impl LintRule for AliasingUniqueTable {
         "Table aliases should be unique within each clause."
     }
 
-    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         if first_duplicate_table_alias_in_statement(statement, self.alias_case_check).is_none() {
             return Vec::new();
         }
@@ -664,14 +664,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }
@@ -770,14 +763,8 @@ mod tests {
                 serde_json::json!({"alias_case_check": "case_sensitive"}),
             )]),
         });
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert!(issues.is_empty());
     }
 
@@ -793,14 +780,8 @@ mod tests {
                 serde_json::json!({"alias_case_check": "case_sensitive"}),
             )]),
         });
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_AL_004);
     }
@@ -817,14 +798,8 @@ mod tests {
                 serde_json::json!({"alias_case_check": "quoted_cs_naked_upper"}),
             )]),
         });
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_AL_004);
     }
@@ -841,14 +816,8 @@ mod tests {
                 serde_json::json!({"alias_case_check": "quoted_cs_naked_upper"}),
             )]),
         });
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert!(issues.is_empty());
     }
 
@@ -864,14 +833,8 @@ mod tests {
                 serde_json::json!({"alias_case_check": "quoted_cs_naked_lower"}),
             )]),
         });
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_AL_004);
     }
@@ -888,14 +851,8 @@ mod tests {
                 serde_json::json!({"alias_case_check": "quoted_cs_naked_lower"}),
             )]),
         });
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert!(issues.is_empty());
     }
 }

@@ -14,8 +14,8 @@ pub(crate) mod visit;
 use config::LintConfig;
 use document::{LintDocument, LintStatement};
 use rule::{
-    with_active_dialect, with_active_document_tokens, with_active_is_templated, LintContext,
-    LintRule,
+    DocumentSource, LintContext, RegisteredRule, RuleContext, RuleExecutionContext, RuleQuality,
+    RuleScope, StatementSource,
 };
 use sqlparser::ast::Statement;
 use std::borrow::Cow;
@@ -23,12 +23,11 @@ use std::borrow::Cow;
 use crate::{
     parser::parse_sql,
     types::{Issue, LintConfidence, LintEngine, LintFallbackSource, Severity},
-    Dialect,
 };
 
 /// The SQL linter, holding a set of rules and configuration.
 pub struct Linter {
-    rules: Vec<Box<dyn LintRule>>,
+    rules: Vec<RegisteredRule>,
     config: LintConfig,
 }
 
@@ -36,7 +35,7 @@ impl Linter {
     /// Creates a new linter with the given configuration.
     pub fn new(config: LintConfig) -> Self {
         Self {
-            rules: rules::all_rules(&config),
+            rules: rules::registered_rules(&config),
             config,
         }
     }
@@ -52,218 +51,111 @@ impl Linter {
             return Vec::new();
         }
 
-        let is_templated = document.source_sql.is_some();
-        with_active_is_templated(is_templated, || {
-            with_active_document_tokens(&document.raw_tokens, || {
-                let mut issues = Vec::new();
+        let execution = RuleExecutionContext::new(
+            document.dialect,
+            &document.raw_tokens,
+            document.source_sql.is_some(),
+        );
+        self.check_document_with_execution(document, execution)
+    }
 
-                for engine in [
-                    LintEngine::Semantic,
-                    LintEngine::Lexical,
-                    LintEngine::Document,
-                ] {
-                    for rule in &self.rules {
-                        if !self.config.is_rule_enabled(rule.code())
-                            || rule_engine(rule.code()) != engine
-                            || !rule_supported_in_dialect(rule.code(), document.dialect)
-                        {
+    fn check_document_with_execution(
+        &self,
+        document: &LintDocument<'_>,
+        execution: RuleExecutionContext<'_>,
+    ) -> Vec<Issue> {
+        let synthetic_statement = parse_sql("SELECT 1")
+            .ok()
+            .and_then(|mut statements| statements.drain(..).next());
+        let mut issues = Vec::new();
+
+        for engine in [
+            LintEngine::Semantic,
+            LintEngine::Lexical,
+            LintEngine::Document,
+        ] {
+            for registered in &self.rules {
+                let descriptor = registered.descriptor;
+                let rule = registered.rule.as_ref();
+                if !self.config.is_rule_enabled(rule.code())
+                    || descriptor.engine != engine
+                    || !descriptor.dialects.supports(document.dialect)
+                {
+                    continue;
+                }
+
+                let (confidence, fallback) = lint_quality(descriptor.quality, engine, document);
+                match descriptor.scope {
+                    RuleScope::Document(source) => {
+                        let Some(synthetic_statement) = synthetic_statement.as_ref() else {
                             continue;
-                        }
-
-                        let (confidence, fallback) =
-                            lint_quality_for_rule(rule.code(), engine, document);
-
-                        if rule_uses_document_scope(rule.code()) {
-                            let Some(synthetic_statement) = parse_sql("SELECT 1")
-                                .ok()
-                                .and_then(|mut statements| statements.drain(..).next())
-                            else {
-                                continue;
-                            };
-
-                            let document_scope_sql =
-                                document_scope_sql_for_rule(&self.config, rule.code(), document);
-                            let ctx = LintContext {
-                                sql: document_scope_sql.as_ref(),
-                                statement_range: 0..document_scope_sql.len(),
-                                statement_index: 0,
-                            };
-
-                            with_active_dialect(document.dialect, || {
-                                for issue in rule.check(&synthetic_statement, &ctx) {
-                                    let mut issue = issue
-                                        .with_lint_engine(engine)
-                                        .with_lint_confidence(confidence);
-
-                                    if let Some(source) = fallback {
-                                        issue = issue.with_lint_fallback_source(source);
-                                    }
-
-                                    let sqlfluff_name = rule.sqlfluff_name();
-                                    if !sqlfluff_name.is_empty() {
-                                        issue = issue.with_sqlfluff_name(sqlfluff_name);
-                                    }
-
-                                    issues.push(issue);
-                                }
-                            });
-                            continue;
-                        }
-
+                        };
+                        let document_scope_sql = document_scope_sql(&self.config, source, document);
+                        let ctx = RuleContext::with_execution(
+                            document_scope_sql.as_ref(),
+                            0..document_scope_sql.len(),
+                            0,
+                            execution,
+                        );
+                        append_rule_issues(
+                            &mut issues,
+                            registered,
+                            synthetic_statement,
+                            &ctx,
+                            confidence,
+                            fallback,
+                        );
+                    }
+                    RuleScope::Statement(source) => {
                         if document.statements.is_empty() {
-                            if !rule_supports_statementless_fallback(rule.code()) {
+                            if !descriptor.statementless_fallback {
                                 continue;
                             }
-
-                            let Some(synthetic_statement) = parse_sql("SELECT 1")
-                                .ok()
-                                .and_then(|mut statements| statements.drain(..).next())
-                            else {
+                            let Some(synthetic_statement) = synthetic_statement.as_ref() else {
                                 continue;
                             };
-
-                            let ctx = LintContext {
-                                sql: document.sql,
-                                statement_range: 0..document.sql.len(),
-                                statement_index: 0,
-                            };
-
-                            with_active_dialect(document.dialect, || {
-                                for issue in rule.check(&synthetic_statement, &ctx) {
-                                    let mut issue = issue
-                                        .with_lint_engine(engine)
-                                        .with_lint_confidence(confidence);
-
-                                    if let Some(source) = fallback {
-                                        issue = issue.with_lint_fallback_source(source);
-                                    }
-
-                                    let sqlfluff_name = rule.sqlfluff_name();
-                                    if !sqlfluff_name.is_empty() {
-                                        issue = issue.with_sqlfluff_name(sqlfluff_name);
-                                    }
-
-                                    issues.push(issue);
-                                }
-                            });
+                            let ctx = RuleContext::with_execution(
+                                document.sql,
+                                0..document.sql.len(),
+                                0,
+                                execution,
+                            );
+                            append_rule_issues(
+                                &mut issues,
+                                registered,
+                                synthetic_statement,
+                                &ctx,
+                                confidence,
+                                fallback,
+                            );
                             continue;
                         }
 
                         for statement in &document.statements {
-                            let (ctx_sql, ctx_statement_range) = if matches!(
-                                rule.code(),
-                                crate::types::issue_codes::LINT_LT_002
-                                    | crate::types::issue_codes::LINT_LT_005
-                                    | crate::types::issue_codes::LINT_LT_004
-                                    | crate::types::issue_codes::LINT_LT_007
-                                    | crate::types::issue_codes::LINT_LT_012
-                                    | crate::types::issue_codes::LINT_LT_013
-                                    | crate::types::issue_codes::LINT_CV_009
-                                    | crate::types::issue_codes::LINT_CV_010
-                                    | crate::types::issue_codes::LINT_ST_004
-                            ) {
-                                if matches!(
-                                    rule.code(),
-                                    crate::types::issue_codes::LINT_LT_012
-                                        | crate::types::issue_codes::LINT_LT_013
-                                ) {
-                                    if let Some(source_sql) = document.source_sql {
-                                        (source_sql, 0..source_sql.len())
-                                    } else {
-                                        (document.sql, statement.statement_range.clone())
-                                    }
-                                } else {
-                                    match (
-                                        document.source_sql,
-                                        document
-                                            .source_statement_ranges
-                                            .get(statement.statement_index)
-                                            .and_then(|range| range.clone()),
-                                    ) {
-                                        (Some(source_sql), Some(source_statement_range)) => {
-                                            (source_sql, source_statement_range)
-                                        }
-                                        _ => (document.sql, statement.statement_range.clone()),
-                                    }
-                                }
-                            } else if rule.code() == crate::types::issue_codes::LINT_LT_001 {
-                                // LT01 needs trailing whitespace visible so it can
-                                // detect and fix trailing spaces/tabs on lines.
-                                // The normal statement range trims whitespace, so
-                                // extend it to include trailing whitespace up to
-                                // the next newline (inclusive).
-                                let lt01_ignore_templated = self
-                                    .config
-                                    .core_option_bool("ignore_templated_areas")
-                                    .unwrap_or(true);
-                                match (
-                                    document.source_sql,
-                                    document
-                                        .source_statement_ranges
-                                        .get(statement.statement_index)
-                                        .and_then(|range| range.clone()),
-                                ) {
-                                    (Some(source_sql), Some(source_statement_range))
-                                        if lt01_ignore_templated =>
-                                    {
-                                        let range = extend_range_with_trailing_whitespace(
-                                            source_sql,
-                                            &source_statement_range,
-                                            next_source_statement_start(
-                                                &document.source_statement_ranges,
-                                                statement.statement_index,
-                                            ),
-                                        );
-                                        (source_sql, range)
-                                    }
-                                    _ => {
-                                        let range = extend_range_with_trailing_whitespace(
-                                            document.sql,
-                                            &statement.statement_range,
-                                            next_statement_start(
-                                                &document.statements,
-                                                statement.statement_index,
-                                            ),
-                                        );
-                                        (document.sql, range)
-                                    }
-                                }
-                            } else {
-                                (document.sql, statement.statement_range.clone())
-                            };
-
-                            let ctx = LintContext {
-                                sql: ctx_sql,
-                                statement_range: ctx_statement_range,
-                                statement_index: statement.statement_index,
-                            };
-
-                            with_active_dialect(document.dialect, || {
-                                for issue in rule.check(statement.statement, &ctx) {
-                                    let mut issue = issue
-                                        .with_lint_engine(engine)
-                                        .with_lint_confidence(confidence);
-
-                                    if let Some(source) = fallback {
-                                        issue = issue.with_lint_fallback_source(source);
-                                    }
-
-                                    let sqlfluff_name = rule.sqlfluff_name();
-                                    if !sqlfluff_name.is_empty() {
-                                        issue = issue.with_sqlfluff_name(sqlfluff_name);
-                                    }
-
-                                    issues.push(issue);
-                                }
-                            });
+                            let (ctx_sql, ctx_statement_range) =
+                                statement_source_view(&self.config, source, document, statement);
+                            let ctx = RuleContext::with_execution(
+                                ctx_sql,
+                                ctx_statement_range,
+                                statement.statement_index,
+                                execution,
+                            );
+                            append_rule_issues(
+                                &mut issues,
+                                registered,
+                                statement.statement,
+                                &ctx,
+                                confidence,
+                                fallback,
+                            );
                         }
                     }
                 }
+            }
+        }
 
-                let issues = suppress_noqa_issues(issues, document);
-                normalize_issues(issues)
-            })
-        })
+        let issues = suppress_noqa_issues(issues, document);
+        normalize_issues(issues)
     }
 
     /// Checks a single statement against all enabled lint rules.
@@ -271,16 +163,107 @@ impl Linter {
     /// This adapter is kept for tests and rule-level helpers. Production paths
     /// should prefer `check_document()`.
     pub fn check_statement(&self, stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
+        let ctx = RuleContext::new(ctx.sql, ctx.statement_range.clone(), ctx.statement_index);
+        self.check_statement_with_context(stmt, &ctx)
+    }
+
+    /// Checks one statement while preserving explicit document execution metadata.
+    pub fn check_statement_with_context(&self, stmt: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let document = LintDocument::new(
             ctx.sql,
-            crate::Dialect::Generic,
+            ctx.dialect(),
             vec![LintStatement {
                 statement: stmt,
                 statement_index: ctx.statement_index,
                 statement_range: ctx.statement_range.clone(),
             }],
         );
-        self.check_document(&document)
+        self.check_document_with_execution(&document, ctx.execution())
+    }
+}
+
+fn append_rule_issues(
+    issues: &mut Vec<Issue>,
+    registered: &RegisteredRule,
+    statement: &Statement,
+    ctx: &RuleContext<'_>,
+    confidence: LintConfidence,
+    fallback: Option<LintFallbackSource>,
+) {
+    for issue in registered.rule.check_with_context(statement, ctx) {
+        let mut issue = issue
+            .with_lint_engine(registered.descriptor.engine)
+            .with_lint_confidence(confidence);
+
+        if let Some(source) = fallback {
+            issue = issue.with_lint_fallback_source(source);
+        }
+
+        let sqlfluff_name = registered.rule.sqlfluff_name();
+        if !sqlfluff_name.is_empty() {
+            issue = issue.with_sqlfluff_name(sqlfluff_name);
+        }
+
+        issues.push(issue);
+    }
+}
+
+fn statement_source_view<'a>(
+    config: &LintConfig,
+    source: StatementSource,
+    document: &'a LintDocument<'_>,
+    statement: &LintStatement<'_>,
+) -> (&'a str, std::ops::Range<usize>) {
+    match source {
+        StatementSource::Rendered => (document.sql, statement.statement_range.clone()),
+        StatementSource::MappedSource => match (
+            document.source_sql,
+            document
+                .source_statement_ranges
+                .get(statement.statement_index)
+                .and_then(|range| range.clone()),
+        ) {
+            (Some(source_sql), Some(source_statement_range)) => {
+                (source_sql, source_statement_range)
+            }
+            _ => (document.sql, statement.statement_range.clone()),
+        },
+        StatementSource::WholeSource => document.source_sql.map_or_else(
+            || (document.sql, statement.statement_range.clone()),
+            |source_sql| (source_sql, 0..source_sql.len()),
+        ),
+        StatementSource::TrailingWhitespace => {
+            let ignore_templated = config
+                .core_option_bool("ignore_templated_areas")
+                .unwrap_or(true);
+            match (
+                document.source_sql,
+                document
+                    .source_statement_ranges
+                    .get(statement.statement_index)
+                    .and_then(|range| range.clone()),
+            ) {
+                (Some(source_sql), Some(source_statement_range)) if ignore_templated => {
+                    let range = extend_range_with_trailing_whitespace(
+                        source_sql,
+                        &source_statement_range,
+                        next_source_statement_start(
+                            &document.source_statement_ranges,
+                            statement.statement_index,
+                        ),
+                    );
+                    (source_sql, range)
+                }
+                _ => {
+                    let range = extend_range_with_trailing_whitespace(
+                        document.sql,
+                        &statement.statement_range,
+                        next_statement_start(&document.statements, statement.statement_index),
+                    );
+                    (document.sql, range)
+                }
+            }
+        }
     }
 }
 
@@ -382,43 +365,8 @@ const fn severity_rank(severity: Severity) -> u8 {
     }
 }
 
-fn rule_engine(code: &str) -> LintEngine {
-    match code {
-        crate::types::issue_codes::LINT_LT_012
-        | crate::types::issue_codes::LINT_LT_013
-        | crate::types::issue_codes::LINT_LT_015
-        | crate::types::issue_codes::LINT_ST_012 => LintEngine::Document,
-        c if c.starts_with("LINT_CP_")
-            || c.starts_with("LINT_JJ_")
-            || c.starts_with("LINT_LT_")
-            || c.starts_with("LINT_TQ_") =>
-        {
-            LintEngine::Lexical
-        }
-        _ => LintEngine::Semantic,
-    }
-}
-
-fn rule_supported_in_dialect(code: &str, dialect: Dialect) -> bool {
-    match code {
-        crate::types::issue_codes::LINT_AM_007 => matches!(
-            dialect,
-            Dialect::Generic
-                | Dialect::Ansi
-                | Dialect::Bigquery
-                | Dialect::Clickhouse
-                | Dialect::Databricks
-                | Dialect::Hive
-                | Dialect::Mysql
-                | Dialect::Redshift
-                | Dialect::Snowflake
-        ),
-        _ => true,
-    }
-}
-
-fn lint_quality_for_rule(
-    code: &str,
+fn lint_quality(
+    quality: RuleQuality,
     engine: LintEngine,
     document: &LintDocument<'_>,
 ) -> (LintConfidence, Option<LintFallbackSource>) {
@@ -436,113 +384,23 @@ fn lint_quality_for_rule(
         );
     }
 
-    if ast_rule_code(code) {
+    if quality == RuleQuality::Ast {
         return (LintConfidence::High, None);
     }
 
     (LintConfidence::Low, Some(LintFallbackSource::HeuristicRule))
 }
 
-fn ast_rule_code(code: &str) -> bool {
-    matches!(
-        code,
-        crate::types::issue_codes::LINT_AL_003
-            | crate::types::issue_codes::LINT_AL_004
-            | crate::types::issue_codes::LINT_AL_005
-            | crate::types::issue_codes::LINT_AL_006
-            | crate::types::issue_codes::LINT_AL_007
-            | crate::types::issue_codes::LINT_AL_008
-            | crate::types::issue_codes::LINT_AL_009
-            | crate::types::issue_codes::LINT_AM_001
-            | crate::types::issue_codes::LINT_AM_002
-            | crate::types::issue_codes::LINT_AM_003
-            | crate::types::issue_codes::LINT_AM_004
-            | crate::types::issue_codes::LINT_AM_005
-            | crate::types::issue_codes::LINT_AM_006
-            | crate::types::issue_codes::LINT_AM_007
-            | crate::types::issue_codes::LINT_AM_008
-            | crate::types::issue_codes::LINT_CV_002
-            | crate::types::issue_codes::LINT_CV_004
-            | crate::types::issue_codes::LINT_CV_005
-            | crate::types::issue_codes::LINT_CV_008
-            | crate::types::issue_codes::LINT_CV_012
-            | crate::types::issue_codes::LINT_RF_001
-            | crate::types::issue_codes::LINT_RF_002
-            | crate::types::issue_codes::LINT_RF_003
-            | crate::types::issue_codes::LINT_ST_001
-            | crate::types::issue_codes::LINT_ST_002
-            | crate::types::issue_codes::LINT_ST_003
-            | crate::types::issue_codes::LINT_ST_004
-            | crate::types::issue_codes::LINT_ST_005
-            | crate::types::issue_codes::LINT_ST_006
-            | crate::types::issue_codes::LINT_ST_007
-            | crate::types::issue_codes::LINT_ST_008
-            | crate::types::issue_codes::LINT_ST_009
-            | crate::types::issue_codes::LINT_ST_010
-            | crate::types::issue_codes::LINT_ST_011
-    )
-}
-
-fn rule_uses_document_scope(code: &str) -> bool {
-    matches!(
-        code,
-        crate::types::issue_codes::LINT_CP_001
-            | crate::types::issue_codes::LINT_CP_003
-            | crate::types::issue_codes::LINT_CP_004
-            | crate::types::issue_codes::LINT_CP_005
-            | crate::types::issue_codes::LINT_JJ_001
-    )
-}
-
-fn rule_supports_statementless_fallback(code: &str) -> bool {
-    matches!(
-        code,
-        crate::types::issue_codes::LINT_LT_001
-            | crate::types::issue_codes::LINT_LT_002
-            | crate::types::issue_codes::LINT_LT_003
-            | crate::types::issue_codes::LINT_LT_005
-            | crate::types::issue_codes::LINT_LT_012
-            | crate::types::issue_codes::LINT_AL_007
-            | crate::types::issue_codes::LINT_AL_008
-            | crate::types::issue_codes::LINT_AM_004
-            | crate::types::issue_codes::LINT_CV_001
-            | crate::types::issue_codes::LINT_RF_006
-            | crate::types::issue_codes::LINT_ST_002
-            | crate::types::issue_codes::LINT_TQ_001
-            | crate::types::issue_codes::LINT_TQ_002
-            | crate::types::issue_codes::LINT_CP_001
-            | crate::types::issue_codes::LINT_CP_002
-            | crate::types::issue_codes::LINT_CP_003
-            | crate::types::issue_codes::LINT_CP_004
-            | crate::types::issue_codes::LINT_CP_005
-            | crate::types::issue_codes::LINT_ST_004
-    )
-}
-
-fn document_scope_sql_for_rule<'a>(
+fn document_scope_sql<'a>(
     config: &LintConfig,
-    code: &str,
+    source: DocumentSource,
     document: &LintDocument<'a>,
 ) -> Cow<'a, str> {
-    if !rule_uses_document_scope(code) {
-        return Cow::Borrowed(document.sql);
-    }
-
-    // JJ01 checks Jinja delimiter padding in the raw source, so it must
-    // always see the untemplated SQL when templating has been applied.
-    if code == crate::types::issue_codes::LINT_JJ_001 {
+    if source == DocumentSource::OriginalSource {
         if let Some(source_sql) = document.source_sql {
             return Cow::Borrowed(source_sql);
         }
         return Cow::Borrowed(document.sql);
-    }
-
-    // CP03 must apply patches against the original source text so fix spans
-    // remain valid when templated regions expand/contract during rendering.
-    if code == crate::types::issue_codes::LINT_CP_003 {
-        if let Some(source_sql) = document.source_sql {
-            return Cow::Borrowed(source_sql);
-        }
     }
 
     if !config
@@ -634,8 +492,28 @@ fn offset_to_line(sql: &str, offset: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_issues, strip_templated_areas};
-    use crate::types::{Issue, IssueAutofixApplicability, IssuePatchEdit, Span};
+    use super::{normalize_issues, strip_templated_areas, LintDocument, LintStatement, Linter};
+    use crate::linter::config::LintConfig;
+    use crate::linter::rule::RuleContext;
+    use crate::parser::parse_sql_with_dialect;
+    use crate::types::{
+        issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit, Span,
+    };
+
+    fn lint_parsed(sql: &str, dialect: Dialect) -> Vec<Issue> {
+        let statements = parse_sql_with_dialect(sql, dialect).expect("parse");
+        let lint_statements = statements
+            .iter()
+            .enumerate()
+            .map(|(statement_index, statement)| LintStatement {
+                statement,
+                statement_index,
+                statement_range: 0..sql.len(),
+            })
+            .collect();
+        let document = LintDocument::new(sql, dialect, lint_statements);
+        Linter::new(LintConfig::default()).check_document(&document)
+    }
 
     #[test]
     fn strip_templated_areas_preserves_lines_and_replaces_tag_content() {
@@ -680,5 +558,58 @@ mod tests {
 
         let normalized = normalize_issues(vec![issue.clone(), issue]);
         assert_eq!(normalized.len(), 1);
+    }
+
+    #[test]
+    fn scheduler_filters_rules_using_descriptor_dialect_support() {
+        let sql = "SELECT a FROM t UNION SELECT b, c FROM u";
+        let generic = lint_parsed(sql, Dialect::Generic);
+        let postgres = lint_parsed(sql, Dialect::Postgres);
+
+        assert!(generic
+            .iter()
+            .any(|issue| issue.code == issue_codes::LINT_AM_007));
+        assert!(!postgres
+            .iter()
+            .any(|issue| issue.code == issue_codes::LINT_AM_007));
+    }
+
+    #[test]
+    fn scheduler_honors_statementless_fallback_descriptor() {
+        let sql = "SELECT  1 UNION SELECT 2";
+        let document = LintDocument::new(sql, Dialect::Generic, Vec::new());
+        let issues = Linter::new(LintConfig::default()).check_document(&document);
+
+        assert!(issues
+            .iter()
+            .any(|issue| issue.code == issue_codes::LINT_LT_001));
+        assert!(!issues
+            .iter()
+            .any(|issue| issue.code == issue_codes::LINT_AM_002));
+    }
+
+    #[test]
+    fn statement_adapter_preserves_explicit_execution_context() {
+        let source_sql = "SELECT {{ \"greatest(a, b)\" }}, GREATEST(i, j)";
+        let rendered_sql = "SELECT greatest(a, b), GREATEST(i, j)";
+        let rendered = LintDocument::new(rendered_sql, Dialect::Ansi, Vec::new());
+        let statements = parse_sql_with_dialect("SELECT 1", Dialect::Ansi).expect("parse");
+        let config = LintConfig {
+            rule_configs: std::collections::BTreeMap::from([(
+                "core".to_string(),
+                serde_json::json!({"ignore_templated_areas": false}),
+            )]),
+            ..LintConfig::default()
+        };
+        let context = RuleContext::new(source_sql, 0..source_sql.len(), 0)
+            .with_dialect(Dialect::Ansi)
+            .with_tokens(&rendered.raw_tokens)
+            .with_templated(true);
+
+        let issues = Linter::new(config).check_statement_with_context(&statements[0], &context);
+
+        assert!(issues
+            .iter()
+            .any(|issue| issue.code == issue_codes::LINT_CP_003));
     }
 }

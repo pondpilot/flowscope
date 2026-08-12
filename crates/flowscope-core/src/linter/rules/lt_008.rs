@@ -4,7 +4,7 @@
 //! closing parenthesis and following query/CTE text.
 
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit};
 use sqlparser::ast::Statement;
 use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
@@ -54,7 +54,7 @@ impl Default for LayoutCteNewline {
     }
 }
 
-impl LintRule for LayoutCteNewline {
+impl BuiltinLintRule for LayoutCteNewline {
     fn code(&self) -> &'static str {
         issue_codes::LINT_LT_008
     }
@@ -67,7 +67,7 @@ impl LintRule for LayoutCteNewline {
         "Blank line expected but not found after CTE closing bracket."
     }
 
-    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         lt08_violation_spans(statement, ctx, self.comma_line_position)
             .into_iter()
             .map(|((start, end), fix_span)| {
@@ -105,7 +105,7 @@ type Lt08Violation = (Lt08Span, Option<Lt08AutofixSpan>);
 
 fn lt08_violation_spans(
     statement: &Statement,
-    ctx: &LintContext,
+    ctx: &RuleContext,
     comma_line_position: CommaLinePosition,
 ) -> Vec<Lt08Violation> {
     let Statement::Query(query) = statement else {
@@ -355,7 +355,7 @@ fn tokenize_with_offsets(sql: &str, dialect: Dialect) -> Option<Vec<LocatedToken
     Some(out)
 }
 
-fn tokenize_with_offsets_for_context(ctx: &LintContext) -> Option<Vec<LocatedToken>> {
+fn tokenize_with_offsets_for_context(ctx: &RuleContext) -> Option<Vec<LocatedToken>> {
     let tokens = ctx.with_document_tokens(|tokens| {
         if tokens.is_empty() {
             return None;
@@ -390,7 +390,7 @@ fn token_start_offset(sql: &str, token: &TokenWithSpan) -> Option<usize> {
     )
 }
 
-fn token_start_offset_for_context(ctx: &LintContext, token: &TokenWithSpan) -> Option<usize> {
+fn token_start_offset_for_context(ctx: &RuleContext, token: &TokenWithSpan) -> Option<usize> {
     if ctx.statement_range.start > 0 {
         if let Some(abs_start) = token_start_offset(ctx.sql, token) {
             if abs_start >= ctx.statement_range.start && abs_start < ctx.statement_range.end {
@@ -587,14 +587,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }
@@ -671,14 +664,7 @@ SELECT * FROM b");
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect::<Vec<_>>();
 

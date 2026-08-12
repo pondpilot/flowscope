@@ -4,7 +4,7 @@
 //! needed to disambiguate repeated references to the same table (self-joins).
 
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit, Span};
 use sqlparser::ast::{Ident, Select, Statement, TableFactor, TableWithJoins};
 use sqlparser::keywords::Keyword;
@@ -28,7 +28,7 @@ impl AliasingForbidSingleTable {
     }
 }
 
-impl LintRule for AliasingForbidSingleTable {
+impl BuiltinLintRule for AliasingForbidSingleTable {
     fn code(&self) -> &'static str {
         issue_codes::LINT_AL_007
     }
@@ -41,7 +41,7 @@ impl LintRule for AliasingForbidSingleTable {
         "Avoid table aliases in from clauses and join conditions."
     }
 
-    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         if !self.force_enable {
             return Vec::new();
         }
@@ -84,7 +84,7 @@ struct FallbackAliasCandidate {
 }
 
 fn fallback_single_from_alias_issue(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     tokens: Option<&[LocatedToken]>,
 ) -> Option<Issue> {
     if ctx.dialect() != Dialect::Mssql {
@@ -315,7 +315,7 @@ fn collect_alias_candidates_from_table_factor(
 fn build_autofix_edits(
     alias_info: &UnnecessaryAlias,
     all_aliases: &[UnnecessaryAlias],
-    ctx: &LintContext,
+    ctx: &RuleContext,
     tokens: Option<&[LocatedToken]>,
 ) -> Vec<IssuePatchEdit> {
     let Some(tokens) = tokens else {
@@ -512,7 +512,7 @@ fn tokenized(sql: &str, dialect: Dialect) -> Option<Vec<LocatedToken>> {
     Some(out)
 }
 
-fn tokenized_for_context(ctx: &LintContext) -> Option<Vec<LocatedToken>> {
+fn tokenized_for_context(ctx: &RuleContext) -> Option<Vec<LocatedToken>> {
     let statement_start = ctx.statement_range.start;
     ctx.with_document_tokens(|tokens| {
         if tokens.is_empty() {
@@ -599,7 +599,6 @@ fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::linter::rule::with_active_dialect;
     use crate::parser::parse_sql;
     use crate::types::Dialect;
 
@@ -610,14 +609,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }
@@ -633,16 +625,10 @@ mod tests {
             )]),
         };
         let rule = AliasingForbidSingleTable::from_config(&config);
-        with_active_dialect(Dialect::Mssql, || {
-            rule.check(
-                &synthetic[0],
-                &LintContext {
-                    sql,
-                    statement_range: 0..sql.len(),
-                    statement_index: 0,
-                },
-            )
-        })
+        rule.check_with_context(
+            &synthetic[0],
+            &RuleContext::new(sql, 0..sql.len(), 0).with_dialect(Dialect::Mssql),
+        )
     }
 
     fn apply_issue_autofix(sql: &str, issue: &Issue) -> Option<String> {
@@ -671,14 +657,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }
@@ -747,14 +726,8 @@ mod tests {
         let rule = AliasingForbidSingleTable::from_config(&config);
         let sql = "SELECT * FROM users u";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert!(issues.is_empty());
     }
 

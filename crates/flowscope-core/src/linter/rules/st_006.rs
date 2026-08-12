@@ -8,7 +8,7 @@
 //! CREATE TABLE AS, and SELECTs participating in UNION/set operations (where
 //! column position is semantically significant).
 
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit, Span};
 use sqlparser::ast::{
     CreateView, Expr, GroupByExpr, Query, Select, SelectItem, SetExpr, Statement, TableFactor,
@@ -19,7 +19,7 @@ use std::collections::{HashMap, HashSet};
 
 pub struct StructureColumnOrder;
 
-impl LintRule for StructureColumnOrder {
+impl BuiltinLintRule for StructureColumnOrder {
     fn code(&self) -> &'static str {
         issue_codes::LINT_ST_006
     }
@@ -32,7 +32,7 @@ impl LintRule for StructureColumnOrder {
         "Select wildcards then simple targets before calculations and aggregates."
     }
 
-    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let mut violations_info: Vec<ViolationInfo> = Vec::new();
         visit_order_safe_selects(statement, &mut |select| {
             if let Some(info) = check_select_order(select) {
@@ -526,7 +526,7 @@ struct ResolvedViolation {
 
 /// Resolve each violation to a token-stream span and, when safe, autofix edits.
 fn st006_resolve_violations(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     violations: &[ViolationInfo],
 ) -> Vec<ResolvedViolation> {
     let candidates = st006_autofix_candidates_for_context(ctx, violations);
@@ -569,7 +569,7 @@ fn st006_resolve_violations(
         .collect()
 }
 
-fn positioned_tokens_for_context(ctx: &LintContext) -> Vec<PositionedToken> {
+fn positioned_tokens_for_context(ctx: &RuleContext) -> Vec<PositionedToken> {
     let from_document_tokens = ctx.with_document_tokens(|tokens| {
         if tokens.is_empty() {
             return None;
@@ -613,7 +613,7 @@ fn positioned_tokens_for_context(ctx: &LintContext) -> Vec<PositionedToken> {
 }
 
 fn st006_autofix_candidates_for_context(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     violations: &[ViolationInfo],
 ) -> Vec<St006AutofixCandidate> {
     let tokens = positioned_tokens_for_context(ctx);
@@ -663,7 +663,7 @@ fn st006_autofix_candidates_for_context(
 
 /// Resolve violations to spans without autofix, using the same segment-matching
 /// logic as the autofix path but without requiring the reorder to succeed.
-fn st006_violation_spans(ctx: &LintContext, violations: &[ViolationInfo]) -> Vec<Span> {
+fn st006_violation_spans(ctx: &RuleContext, violations: &[ViolationInfo]) -> Vec<Span> {
     let tokens = positioned_tokens_for_context(ctx);
     let segments = select_projection_segments(&tokens);
 
@@ -1133,14 +1133,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }

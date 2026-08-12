@@ -6,7 +6,7 @@
 //! normalization for autofixes.
 
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit};
 use sqlparser::ast::Statement;
 use std::ops::Range;
@@ -74,7 +74,7 @@ impl Default for ConventionQuotedLiterals {
 // LintRule impl
 // ---------------------------------------------------------------------------
 
-impl LintRule for ConventionQuotedLiterals {
+impl BuiltinLintRule for ConventionQuotedLiterals {
     fn code(&self) -> &'static str {
         issue_codes::LINT_CV_010
     }
@@ -87,7 +87,7 @@ impl LintRule for ConventionQuotedLiterals {
         "Consistent usage of preferred quotes for quoted literals."
     }
 
-    fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, _statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let dialect = ctx.dialect();
         if !self.force_enable && !Self::is_double_quote_string_dialect(dialect) {
             return Vec::new();
@@ -688,28 +688,21 @@ fn has_unescaped_char(body: &str, ch: u8) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::linter::rule::with_active_dialect;
     use crate::parser::parse_sql;
 
     fn run_with_dialect(sql: &str, dialect: Dialect) -> Vec<Issue> {
         let statements = parse_sql(sql).expect("parse");
         let rule = ConventionQuotedLiterals::default();
-        with_active_dialect(dialect, || {
-            statements
-                .iter()
-                .enumerate()
-                .flat_map(|(index, statement)| {
-                    rule.check(
-                        statement,
-                        &LintContext {
-                            sql,
-                            statement_range: 0..sql.len(),
-                            statement_index: index,
-                        },
-                    )
-                })
-                .collect()
-        })
+        statements
+            .iter()
+            .enumerate()
+            .flat_map(|(index, statement)| {
+                rule.check_with_context(
+                    statement,
+                    &RuleContext::new(sql, 0..sql.len(), index).with_dialect(dialect),
+                )
+            })
+            .collect()
     }
 
     fn run(sql: &str) -> Vec<Issue> {
@@ -719,22 +712,16 @@ mod tests {
     fn run_with_config(sql: &str, dialect: Dialect, config: &LintConfig) -> Vec<Issue> {
         let statements = parse_sql(sql).expect("parse");
         let rule = ConventionQuotedLiterals::from_config(config);
-        with_active_dialect(dialect, || {
-            statements
-                .iter()
-                .enumerate()
-                .flat_map(|(index, statement)| {
-                    rule.check(
-                        statement,
-                        &LintContext {
-                            sql,
-                            statement_range: 0..sql.len(),
-                            statement_index: index,
-                        },
-                    )
-                })
-                .collect()
-        })
+        statements
+            .iter()
+            .enumerate()
+            .flat_map(|(index, statement)| {
+                rule.check_with_context(
+                    statement,
+                    &RuleContext::new(sql, 0..sql.len(), index).with_dialect(dialect),
+                )
+            })
+            .collect()
     }
 
     fn apply_issue_autofix(sql: &str, issue: &Issue) -> Option<String> {

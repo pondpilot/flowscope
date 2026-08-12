@@ -3,14 +3,14 @@
 //! A CTE (WITH clause) is defined but never referenced in the query body
 //! or subsequent CTEs. This is likely dead code.
 
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Issue};
 use sqlparser::ast::*;
 use std::collections::HashSet;
 
 pub struct UnusedCte;
 
-impl LintRule for UnusedCte {
+impl BuiltinLintRule for UnusedCte {
     fn code(&self) -> &'static str {
         issue_codes::LINT_ST_003
     }
@@ -23,7 +23,7 @@ impl LintRule for UnusedCte {
         "Query defines a CTE (common-table expression) but does not use it."
     }
 
-    fn check(&self, stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, stmt: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let query = match stmt {
             Statement::Query(q) => q,
             Statement::Insert(ins) => {
@@ -57,7 +57,7 @@ impl LintRule for UnusedCte {
 
 /// Checks a query for unused CTEs, including nested WITH clauses inside CTE
 /// bodies.
-fn check_query_unused_ctes(query: &Query, ctx: &LintContext, issues: &mut Vec<Issue>) {
+fn check_query_unused_ctes(query: &Query, ctx: &RuleContext, issues: &mut Vec<Issue>) {
     let with = match &query.with {
         Some(w) => w,
         None => {
@@ -122,7 +122,7 @@ fn check_query_unused_ctes(query: &Query, ctx: &LintContext, issues: &mut Vec<Is
 
 /// Walks a set expression looking for nested queries that might contain WITH
 /// clauses to check.
-fn check_set_expr_for_nested_ctes(expr: &SetExpr, ctx: &LintContext, issues: &mut Vec<Issue>) {
+fn check_set_expr_for_nested_ctes(expr: &SetExpr, ctx: &RuleContext, issues: &mut Vec<Issue>) {
     match expr {
         SetExpr::Select(select) => {
             for item in &select.from {
@@ -152,7 +152,7 @@ fn check_set_expr_for_nested_ctes(expr: &SetExpr, ctx: &LintContext, issues: &mu
 }
 
 /// Checks a DELETE statement for CTEs inside USING and FROM subqueries.
-fn check_delete_for_nested_ctes(delete: &Delete, ctx: &LintContext, issues: &mut Vec<Issue>) {
+fn check_delete_for_nested_ctes(delete: &Delete, ctx: &RuleContext, issues: &mut Vec<Issue>) {
     if let Some(using) = &delete.using {
         for twj in using {
             check_relation_for_nested_ctes(&twj.relation, ctx, issues);
@@ -174,7 +174,7 @@ fn check_delete_for_nested_ctes(delete: &Delete, ctx: &LintContext, issues: &mut
 
 fn check_relation_for_nested_ctes(
     relation: &TableFactor,
-    ctx: &LintContext,
+    ctx: &RuleContext,
     issues: &mut Vec<Issue>,
 ) {
     if let TableFactor::Derived { subquery, .. } = relation {
@@ -182,7 +182,7 @@ fn check_relation_for_nested_ctes(
     }
 }
 
-fn check_expr_for_nested_ctes(expr: &Expr, ctx: &LintContext, issues: &mut Vec<Issue>) {
+fn check_expr_for_nested_ctes(expr: &Expr, ctx: &RuleContext, issues: &mut Vec<Issue>) {
     match expr {
         Expr::Subquery(q) | Expr::Exists { subquery: q, .. } => {
             check_query_unused_ctes(q, ctx, issues);
@@ -474,11 +474,11 @@ fn collect_join_constraint_refs(join_operator: &JoinOperator, refs: &mut HashSet
     }
 }
 
-fn find_cte_name_span(name: &Ident, ctx: &LintContext) -> Option<crate::types::Span> {
+fn find_cte_name_span(name: &Ident, ctx: &RuleContext) -> Option<crate::types::Span> {
     ident_span_in_statement(name, ctx)
 }
 
-fn ident_span_in_statement(name: &Ident, ctx: &LintContext) -> Option<crate::types::Span> {
+fn ident_span_in_statement(name: &Ident, ctx: &RuleContext) -> Option<crate::types::Span> {
     use crate::analyzer::helpers::line_col_to_offset;
 
     let start = line_col_to_offset(
@@ -511,14 +511,10 @@ mod tests {
     fn check_sql(sql: &str) -> Vec<Issue> {
         let stmts = parse_sql(sql).unwrap();
         let rule = UnusedCte;
-        let ctx = LintContext {
-            sql,
-            statement_range: 0..sql.len(),
-            statement_index: 0,
-        };
+        let ctx = RuleContext::new(sql, 0..sql.len(), 0);
         let mut issues = Vec::new();
         for stmt in &stmts {
-            issues.extend(rule.check(stmt, &ctx));
+            issues.extend(rule.check_with_context(stmt, &ctx));
         }
         issues
     }

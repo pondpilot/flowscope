@@ -3,7 +3,7 @@
 //! SQLFluff ST04 parity: flag `CASE ... ELSE CASE ... END END` patterns where
 //! the nested ELSE-case can be flattened into the outer CASE.
 
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::linter::visit;
 use crate::types::{issue_codes, Issue, IssueAutofixApplicability, IssuePatchEdit, Span};
 use sqlparser::ast::{Expr, Spanned, Statement};
@@ -11,7 +11,7 @@ use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
 
 pub struct FlattenableNestedCase;
 
-impl LintRule for FlattenableNestedCase {
+impl BuiltinLintRule for FlattenableNestedCase {
     fn code(&self) -> &'static str {
         issue_codes::LINT_ST_004
     }
@@ -24,7 +24,7 @@ impl LintRule for FlattenableNestedCase {
         "Nested 'CASE' statement in 'ELSE' clause could be flattened."
     }
 
-    fn check(&self, stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, stmt: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let mut issues = Vec::new();
 
         visit::visit_expressions(stmt, &mut |expr| {
@@ -147,7 +147,7 @@ fn is_synthetic_select_one(stmt: &Statement) -> bool {
 /// The transformation removes the ELSE...CASE...END wrapper and promotes the
 /// inner CASE's WHEN/ELSE clauses to the outer CASE, preserving comments.
 fn build_flatten_autofix(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     outer_expr: &Expr,
 ) -> Option<(Span, Vec<IssuePatchEdit>)> {
     let Expr::Case {
@@ -189,7 +189,7 @@ fn build_flatten_autofix(
     build_flatten_edit_from_positions(ctx, sql, &positioned, &flatten_info)
 }
 
-fn build_flatten_autofix_from_sql(ctx: &LintContext) -> Option<(Span, Vec<IssuePatchEdit>)> {
+fn build_flatten_autofix_from_sql(ctx: &RuleContext) -> Option<(Span, Vec<IssuePatchEdit>)> {
     let sql = ctx.statement_sql();
     let masked_sql = contains_template_tags(sql).then(|| mask_templated_areas(sql));
     let scan_sql = masked_sql.as_deref().unwrap_or(sql);
@@ -249,7 +249,7 @@ fn mask_non_newlines(segment: &str) -> String {
 }
 
 fn build_flatten_edit_from_positions(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     sql: &str,
     positioned: &[PositionedToken],
     flatten_info: &FlattenPositions,
@@ -619,7 +619,7 @@ struct PositionedToken {
     end: usize,
 }
 
-fn expr_statement_offsets(ctx: &LintContext, expr: &Expr) -> Option<(usize, usize)> {
+fn expr_statement_offsets(ctx: &RuleContext, expr: &Expr) -> Option<(usize, usize)> {
     if let Some((start, end)) = expr_span_offsets(ctx.statement_sql(), expr) {
         return Some((start, end));
     }
@@ -743,14 +743,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }

@@ -4,7 +4,7 @@
 //! and multi-target SELECT clauses, with wildcard-policy behavior.
 
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::linter::rules::semantic_helpers::visit_selects_in_statement;
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit};
 use sqlparser::ast::{SelectItem, Statement};
@@ -51,7 +51,7 @@ impl Default for LayoutSelectTargets {
     }
 }
 
-impl LintRule for LayoutSelectTargets {
+impl BuiltinLintRule for LayoutSelectTargets {
     fn code(&self) -> &'static str {
         issue_codes::LINT_LT_009
     }
@@ -64,7 +64,7 @@ impl LintRule for LayoutSelectTargets {
         "Select targets should be on a new line unless there is only one select target."
     }
 
-    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         lt09_violation_spans(statement, ctx, self.wildcard_policy)
             .into_iter()
             .map(|((start, end), fix_span)| {
@@ -111,7 +111,7 @@ type Lt09Violation = (Lt09Span, Option<Lt09AutofixEdits>);
 
 fn lt09_violation_spans(
     statement: &Statement,
-    ctx: &LintContext,
+    ctx: &RuleContext,
     wildcard_policy: WildcardPolicy,
 ) -> Vec<Lt09Violation> {
     let sql = ctx.statement_sql();
@@ -180,7 +180,7 @@ fn tokenized(sql: &str, dialect: Dialect) -> Option<Vec<TokenWithSpan>> {
     tokenizer.tokenize_with_location().ok()
 }
 
-fn tokenized_for_context(ctx: &LintContext) -> Option<Vec<TokenWithSpan>> {
+fn tokenized_for_context(ctx: &RuleContext) -> Option<Vec<TokenWithSpan>> {
     let (statement_start_line, statement_start_column) =
         offset_to_line_col(ctx.sql, ctx.statement_range.start)?;
 
@@ -982,14 +982,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }

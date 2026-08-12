@@ -3,7 +3,7 @@
 //! Avoid trailing comma before FROM.
 
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::linter::rules::semantic_helpers::visit_selects_in_statement;
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit};
 use sqlparser::ast::{GroupByExpr, Select, SelectItem, Spanned, Statement};
@@ -63,7 +63,7 @@ impl Default for ConventionSelectTrailingComma {
     }
 }
 
-impl LintRule for ConventionSelectTrailingComma {
+impl BuiltinLintRule for ConventionSelectTrailingComma {
     fn code(&self) -> &'static str {
         issue_codes::LINT_CV_003
     }
@@ -76,7 +76,7 @@ impl LintRule for ConventionSelectTrailingComma {
         "Trailing commas within select clause."
     }
 
-    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let tokens =
             tokenized_for_context(ctx).or_else(|| tokenized(ctx.statement_sql(), ctx.dialect()));
         let violations = select_clause_policy_violations(
@@ -361,7 +361,7 @@ fn tokenized(sql: &str, dialect: Dialect) -> Option<Vec<LocatedToken>> {
     Some(out)
 }
 
-fn tokenized_for_context(ctx: &LintContext) -> Option<Vec<LocatedToken>> {
+fn tokenized_for_context(ctx: &RuleContext) -> Option<Vec<LocatedToken>> {
     let statement_start = ctx.statement_range.start;
     let from_document = ctx.with_document_tokens(|tokens| {
         if tokens.is_empty() {
@@ -457,14 +457,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, stmt)| {
-                rule.check(
-                    stmt,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(stmt, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }

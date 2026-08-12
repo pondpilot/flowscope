@@ -3,7 +3,7 @@
 //! SQLFluff LT03 parity (current scope): flag trailing operators at end of line.
 
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit};
 use sqlparser::ast::Statement;
 use sqlparser::keywords::Keyword;
@@ -57,7 +57,7 @@ impl Default for LayoutOperators {
     }
 }
 
-impl LintRule for LayoutOperators {
+impl BuiltinLintRule for LayoutOperators {
     fn code(&self) -> &'static str {
         issue_codes::LINT_LT_003
     }
@@ -70,7 +70,7 @@ impl LintRule for LayoutOperators {
         "Operators should follow a standard for being before/after newlines."
     }
 
-    fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, _statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let violations = operator_layout_violations(ctx, self.line_position);
 
         violations
@@ -105,7 +105,7 @@ type Lt03AutofixEdit = (usize, usize, String);
 type Lt03Violation = (Lt03Span, Vec<Lt03AutofixEdit>);
 
 fn operator_layout_violations(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     line_position: OperatorLinePosition,
 ) -> Vec<Lt03Violation> {
     let tokens =
@@ -474,7 +474,7 @@ fn tokenized(sql: &str, dialect: Dialect) -> Option<Vec<TokenWithSpan>> {
     tokenizer.tokenize_with_location().ok()
 }
 
-fn tokenized_for_context(ctx: &LintContext) -> Option<Vec<TokenWithSpan>> {
+fn tokenized_for_context(ctx: &RuleContext) -> Option<Vec<TokenWithSpan>> {
     let (statement_start_line, statement_start_column) =
         offset_to_line_col(ctx.sql, ctx.statement_range.start)?;
 
@@ -705,14 +705,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }
@@ -920,14 +913,8 @@ mod tests {
         let sql = "{% macro binary_literal(expression) %}\n  X'{{ expression }}'\n{% endmacro %}\n\nselect\n    *\nfrom my_table\nwhere\n    a =\n        {{ binary_literal(\"0000\") }}\n";
         let synthetic = parse_sql("SELECT 1").expect("parse");
         let rule = LayoutOperators::default();
-        let issues = rule.check(
-            &synthetic[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&synthetic[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_LT_003);
     }

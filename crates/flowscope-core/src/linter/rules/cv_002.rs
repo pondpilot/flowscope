@@ -3,7 +3,7 @@
 //! SQLFluff CV02 parity: detect IFNULL/NVL function usage and recommend
 //! COALESCE for portability and consistency.
 
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::linter::visit;
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit};
 use sqlparser::ast::{Expr, Statement};
@@ -11,7 +11,7 @@ use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
 
 pub struct CoalesceConvention;
 
-impl LintRule for CoalesceConvention {
+impl BuiltinLintRule for CoalesceConvention {
     fn code(&self) -> &'static str {
         issue_codes::LINT_CV_002
     }
@@ -24,7 +24,7 @@ impl LintRule for CoalesceConvention {
         "Use 'COALESCE' instead of 'IFNULL' or 'NVL'."
     }
 
-    fn check(&self, stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, stmt: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let function_name_spans =
             tokenized_for_context(ctx).or_else(|| tokenized(ctx.statement_sql(), ctx.dialect()));
         let function_name_spans = function_name_spans
@@ -100,7 +100,7 @@ struct LocatedToken {
     end: usize,
 }
 
-fn tokenized_for_context(ctx: &LintContext) -> Option<Vec<LocatedToken>> {
+fn tokenized_for_context(ctx: &RuleContext) -> Option<Vec<LocatedToken>> {
     let tokens = ctx.with_document_tokens(|tokens| {
         if tokens.is_empty() {
             return None;
@@ -219,14 +219,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }

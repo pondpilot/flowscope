@@ -3,7 +3,7 @@
 //! In single-source queries, avoid mixing qualified and unqualified references.
 
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit, Span};
 use sqlparser::ast::{
     Expr, FunctionArg, FunctionArgExpr, FunctionArguments, Select, SelectItem, Spanned, Statement,
@@ -78,7 +78,7 @@ impl Default for ReferencesConsistent {
     }
 }
 
-impl LintRule for ReferencesConsistent {
+impl BuiltinLintRule for ReferencesConsistent {
     fn code(&self) -> &'static str {
         issue_codes::LINT_RF_003
     }
@@ -91,7 +91,7 @@ impl LintRule for ReferencesConsistent {
         "Column references should be qualified consistently in single table statements."
     }
 
-    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         if !self.force_enable {
             return Vec::new();
         }
@@ -263,7 +263,7 @@ impl LintRule for ReferencesConsistent {
 }
 
 fn ancestor_source_names_for_select(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     select: &Select,
     scopes: &[Rf003SelectScope],
 ) -> HashSet<String> {
@@ -304,7 +304,7 @@ enum Rf003ReferenceClass {
 
 fn rf003_autofix_edits_for_select(
     select: &Select,
-    ctx: &LintContext,
+    ctx: &RuleContext,
     target_style: Rf003AutofixTargetStyle,
     aliases: &HashSet<String>,
     local_sources: &HashSet<String>,
@@ -381,7 +381,7 @@ fn preferred_qualification_prefix(select: &Select) -> Option<String> {
 #[allow(clippy::too_many_arguments)]
 fn collect_rf003_autofix_edits_in_expr(
     expr: &Expr,
-    ctx: &LintContext,
+    ctx: &RuleContext,
     statement_sql: &str,
     target_style: Rf003AutofixTargetStyle,
     prefix: &str,
@@ -751,7 +751,7 @@ fn classify_rf003_reference(
     }
 }
 
-fn expr_statement_offsets(ctx: &LintContext, expr: &Expr) -> Option<(usize, usize)> {
+fn expr_statement_offsets(ctx: &RuleContext, expr: &Expr) -> Option<(usize, usize)> {
     // Statement ranges may intentionally trim leading comments/whitespace.
     // SQLParser spans are often absolute to the full document, so prefer
     // document-level conversion when the statement does not start at byte 0.
@@ -781,7 +781,7 @@ fn expr_statement_offsets(ctx: &LintContext, expr: &Expr) -> Option<(usize, usiz
     ))
 }
 
-fn select_statement_offsets(ctx: &LintContext, select: &Select) -> Option<(usize, usize)> {
+fn select_statement_offsets(ctx: &RuleContext, select: &Select) -> Option<(usize, usize)> {
     // Statement ranges may intentionally trim leading comments/whitespace.
     // SQLParser spans are often absolute to the full document, so prefer
     // document-level conversion when the statement does not start at byte 0.
@@ -1765,14 +1765,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }
@@ -1877,14 +1870,8 @@ mod tests {
         let rule = ReferencesConsistent::from_config(&config);
         let sql = "SELECT bar FROM my_tbl";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
     }
 
@@ -1901,14 +1888,8 @@ mod tests {
         let rule = ReferencesConsistent::from_config(&config);
         let sql = "SELECT my_tbl.bar, baz FROM my_tbl";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert!(issues.is_empty());
     }
 
@@ -1920,13 +1901,9 @@ mod tests {
         let statement_end = sql.len();
         let rule = ReferencesConsistent::default();
 
-        let issues = rule.check(
+        let issues = rule.check_with_context(
             &statements[0],
-            &LintContext {
-                sql,
-                statement_range: statement_start..statement_end,
-                statement_index: 0,
-            },
+            &RuleContext::new(sql, statement_start..statement_end, 0),
         );
 
         let fixed = apply_all_autofixes(sql, &issues);

@@ -4,7 +4,7 @@
 //! and prior relation on the right side (e.g. `o.user_id = u.id`).
 
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Issue, IssueAutofixApplicability, IssuePatchEdit, Span};
 use sqlparser::ast::{BinaryOperator, Expr, Spanned, Statement, TableFactor};
 
@@ -69,7 +69,7 @@ impl Default for StructureJoinConditionOrder {
     }
 }
 
-impl LintRule for StructureJoinConditionOrder {
+impl BuiltinLintRule for StructureJoinConditionOrder {
     fn code(&self) -> &'static str {
         issue_codes::LINT_ST_009
     }
@@ -82,7 +82,7 @@ impl LintRule for StructureJoinConditionOrder {
         "Joins should list the table referenced earlier/later first."
     }
 
-    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let mut issues = Vec::new();
 
         visit_selects_in_statement(statement, &mut |select| {
@@ -114,7 +114,7 @@ fn check_table_factor_joins(
     joins: &[sqlparser::ast::Join],
     seen_sources: &mut Vec<String>,
     preference: PreferredFirstTableInJoinClause,
-    ctx: &LintContext,
+    ctx: &RuleContext,
     issues: &mut Vec<Issue>,
 ) {
     let issues_before = issues.len();
@@ -221,7 +221,7 @@ fn collect_following_join_autofixes(
     joins: &[sqlparser::ast::Join],
     seen_sources: &[String],
     preference: PreferredFirstTableInJoinClause,
-    ctx: &LintContext,
+    ctx: &RuleContext,
 ) -> Vec<IssuePatchEdit> {
     let mut seen = seen_sources.to_vec();
     let mut edits = Vec::new();
@@ -332,7 +332,7 @@ fn has_join_pair(expr: &Expr, left_source_name: &str, right_source_name: &str) -
 /// Produce source-text-level edits that swap individual reversed comparison
 /// pairs while preserving original formatting, quoting, and keyword casing.
 fn join_condition_autofix_for_sources(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     on_expr: &Expr,
     current_source: &str,
     previous_sources: &[String],
@@ -529,7 +529,7 @@ fn flipped_comparison_operator(op: &BinaryOperator) -> BinaryOperator {
 /// pair. Each edit replaces `left op right` with `right flipped_op left`
 /// using the original source text for both operands.
 fn collect_reversed_pair_edits(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     expr: &Expr,
     current_source: &str,
     previous_source: &str,
@@ -664,7 +664,7 @@ fn flip_operator_text(gap: &str, op: &BinaryOperator) -> String {
     }
 }
 
-fn expr_statement_offsets(ctx: &LintContext, expr: &Expr) -> Option<(usize, usize)> {
+fn expr_statement_offsets(ctx: &RuleContext, expr: &Expr) -> Option<(usize, usize)> {
     // Statement ranges may intentionally trim leading comments/whitespace.
     // SQLParser span line/column coordinates are often absolute to the
     // original document, so prefer document-level offset conversion when the
@@ -775,14 +775,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }
@@ -862,14 +855,8 @@ mod tests {
         let rule = StructureJoinConditionOrder::from_config(&config);
         let sql = "select foo.a, bar.b from foo left join bar on foo.a = bar.a";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_ST_009);
     }

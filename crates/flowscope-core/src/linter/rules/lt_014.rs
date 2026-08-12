@@ -5,7 +5,7 @@
 //! Configs are per-clause-type via `layout.type.<clause_type>.keyword_line_position`.
 
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit};
 use sqlparser::ast::Statement;
 use sqlparser::keywords::Keyword;
@@ -150,7 +150,7 @@ impl LayoutKeywordNewline {
     }
 }
 
-impl LintRule for LayoutKeywordNewline {
+impl BuiltinLintRule for LayoutKeywordNewline {
     fn code(&self) -> &'static str {
         issue_codes::LINT_LT_014
     }
@@ -163,7 +163,7 @@ impl LintRule for LayoutKeywordNewline {
         "Keyword clauses should follow a standard for being before/after newlines."
     }
 
-    fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, _statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let tokens = tokenized_for_context(ctx);
         let sql = ctx.statement_sql();
 
@@ -221,7 +221,7 @@ struct KeywordOccurrence {
 
 fn check_with_configs(
     sql: &str,
-    ctx: &LintContext,
+    ctx: &RuleContext,
     configs: &ClauseConfigs,
     tokens: Option<&[TokenWithSpan]>,
 ) -> Vec<Issue> {
@@ -325,7 +325,7 @@ fn config_for_clause(
 
 fn build_autofix_edits(
     sql: &str,
-    ctx: &LintContext,
+    ctx: &RuleContext,
     occ: &KeywordOccurrence,
     position: KeywordLinePosition,
 ) -> Vec<IssuePatchEdit> {
@@ -963,7 +963,7 @@ fn tokenized(sql: &str, dialect: Dialect) -> Option<Vec<TokenWithSpan>> {
     tokenizer.tokenize_with_location().ok()
 }
 
-fn tokenized_for_context(ctx: &LintContext) -> Option<Vec<TokenWithSpan>> {
+fn tokenized_for_context(ctx: &RuleContext) -> Option<Vec<TokenWithSpan>> {
     let (statement_start_line, statement_start_column) =
         offset_to_line_col(ctx.sql, ctx.statement_range.start)?;
 
@@ -1145,14 +1145,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }

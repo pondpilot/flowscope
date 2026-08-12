@@ -2,13 +2,13 @@
 //!
 //! SQLFluff LT13 parity (current scope): avoid leading blank lines.
 
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Issue, IssueAutofixApplicability, IssuePatchEdit, Span};
 use sqlparser::ast::Statement;
 
 pub struct LayoutStartOfFile;
 
-impl LintRule for LayoutStartOfFile {
+impl BuiltinLintRule for LayoutStartOfFile {
     fn code(&self) -> &'static str {
         issue_codes::LINT_LT_013
     }
@@ -21,7 +21,7 @@ impl LintRule for LayoutStartOfFile {
         "Files must not begin with newlines or whitespace."
     }
 
-    fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, _statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         if ctx.statement_index > 0 || !has_leading_blank_lines_for_context(ctx) {
             Vec::new()
         } else {
@@ -52,7 +52,7 @@ fn leading_blank_line_trim_end(sql: &str) -> Option<usize> {
     (first_non_ws > 0).then_some(first_non_ws)
 }
 
-fn has_leading_blank_lines_for_context(ctx: &LintContext) -> bool {
+fn has_leading_blank_lines_for_context(ctx: &RuleContext) -> bool {
     leading_blank_line_trim_end(ctx.sql).is_some()
 }
 
@@ -69,14 +69,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }
@@ -88,14 +81,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }

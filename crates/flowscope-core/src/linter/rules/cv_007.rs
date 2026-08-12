@@ -3,13 +3,13 @@
 //! SQLFluff CV07 parity (current scope): avoid wrapping an entire statement in
 //! unnecessary outer brackets.
 
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Issue, IssueAutofixApplicability, IssuePatchEdit};
 use sqlparser::ast::{SetExpr, Statement};
 
 pub struct ConventionStatementBrackets;
 
-impl LintRule for ConventionStatementBrackets {
+impl BuiltinLintRule for ConventionStatementBrackets {
     fn code(&self) -> &'static str {
         issue_codes::LINT_CV_007
     }
@@ -22,7 +22,7 @@ impl LintRule for ConventionStatementBrackets {
         "Top-level statements should not be wrapped in brackets."
     }
 
-    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let bracket_depth = wrapper_bracket_depth(statement);
         if bracket_depth > 0 {
             let mut issue = Issue::info(
@@ -114,14 +114,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }

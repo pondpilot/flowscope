@@ -3,7 +3,7 @@
 //! SQLFluff LT05 parity (current scope): flag overflow beyond 80 columns.
 
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit, Span};
 use sqlparser::ast::Statement;
 use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
@@ -66,7 +66,7 @@ impl Default for LayoutLongLines {
     }
 }
 
-impl LintRule for LayoutLongLines {
+impl BuiltinLintRule for LayoutLongLines {
     fn code(&self) -> &'static str {
         issue_codes::LINT_LT_005
     }
@@ -79,7 +79,7 @@ impl LintRule for LayoutLongLines {
         "Line is too long."
     }
 
-    fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, _statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let Some(max_line_length) = self.max_line_length else {
             return Vec::new();
         };
@@ -125,7 +125,7 @@ impl LintRule for LayoutLongLines {
 }
 
 fn long_line_overflow_spans_for_context(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     max_len: usize,
     ignore_comment_lines: bool,
     ignore_comment_clauses: bool,
@@ -1067,7 +1067,7 @@ fn tokenize_with_offsets(sql: &str, dialect: Dialect) -> Option<Vec<LocatedToken
     Some(out)
 }
 
-fn tokenize_with_offsets_for_context(ctx: &LintContext) -> Option<Vec<LocatedToken>> {
+fn tokenize_with_offsets_for_context(ctx: &RuleContext) -> Option<Vec<LocatedToken>> {
     ctx.with_document_tokens(|tokens| {
         if tokens.is_empty() {
             return None;
@@ -1250,14 +1250,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }
@@ -1324,14 +1317,8 @@ mod tests {
         let rule = LayoutLongLines::from_config(&config);
         let sql = "SELECT this_line_is_long FROM t";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_LT_005);
     }
@@ -1461,14 +1448,8 @@ mod tests {
         let sql = "{{ config (schema='bronze', materialized='view', sort =['id','number'], dist = 'all', tags =['longlonglonglonglong']) }} \n\nselect 1\n";
         let synthetic = parse_sql("SELECT 1").expect("parse");
         let rule = LayoutLongLines::default();
-        let issues = rule.check(
-            &synthetic[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&synthetic[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert!(
             !issues.is_empty(),
             "expected LT05 to flag long templated config line in statementless mode"

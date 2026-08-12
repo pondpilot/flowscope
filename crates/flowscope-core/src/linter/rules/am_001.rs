@@ -3,7 +3,7 @@
 //! Using DISTINCT with GROUP BY is redundant because GROUP BY already
 //! collapses duplicate rows. The DISTINCT can be safely removed.
 
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit};
 use sqlparser::ast::*;
 use sqlparser::keywords::Keyword;
@@ -11,7 +11,7 @@ use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
 
 pub struct DistinctWithGroupBy;
 
-impl LintRule for DistinctWithGroupBy {
+impl BuiltinLintRule for DistinctWithGroupBy {
     fn code(&self) -> &'static str {
         issue_codes::LINT_AM_001
     }
@@ -24,7 +24,7 @@ impl LintRule for DistinctWithGroupBy {
         "Ambiguous use of 'DISTINCT' in a 'SELECT' statement with 'GROUP BY'."
     }
 
-    fn check(&self, stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, stmt: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let mut issues = Vec::new();
         check_statement(stmt, ctx, &mut issues);
 
@@ -45,7 +45,7 @@ impl LintRule for DistinctWithGroupBy {
     }
 }
 
-fn check_statement(stmt: &Statement, ctx: &LintContext, issues: &mut Vec<Issue>) {
+fn check_statement(stmt: &Statement, ctx: &RuleContext, issues: &mut Vec<Issue>) {
     match stmt {
         Statement::Query(q) => check_query(q, ctx, issues),
         Statement::Insert(ins) => {
@@ -63,7 +63,7 @@ fn check_statement(stmt: &Statement, ctx: &LintContext, issues: &mut Vec<Issue>)
     }
 }
 
-fn check_query(query: &Query, ctx: &LintContext, issues: &mut Vec<Issue>) {
+fn check_query(query: &Query, ctx: &RuleContext, issues: &mut Vec<Issue>) {
     if let Some(ref with) = query.with {
         for cte in &with.cte_tables {
             check_query(&cte.query, ctx, issues);
@@ -72,7 +72,7 @@ fn check_query(query: &Query, ctx: &LintContext, issues: &mut Vec<Issue>) {
     check_set_expr(&query.body, ctx, issues);
 }
 
-fn check_set_expr(body: &SetExpr, ctx: &LintContext, issues: &mut Vec<Issue>) {
+fn check_set_expr(body: &SetExpr, ctx: &RuleContext, issues: &mut Vec<Issue>) {
     match body {
         SetExpr::Select(select) => {
             let has_distinct = matches!(
@@ -111,7 +111,7 @@ fn check_set_expr(body: &SetExpr, ctx: &LintContext, issues: &mut Vec<Issue>) {
     }
 }
 
-fn check_table_factor(relation: &TableFactor, ctx: &LintContext, issues: &mut Vec<Issue>) {
+fn check_table_factor(relation: &TableFactor, ctx: &RuleContext, issues: &mut Vec<Issue>) {
     match relation {
         TableFactor::Derived { subquery, .. } => check_query(subquery, ctx, issues),
         TableFactor::NestedJoin {
@@ -315,14 +315,10 @@ mod tests {
     fn check_sql(sql: &str) -> Vec<Issue> {
         let stmts = parse_sql(sql).unwrap();
         let rule = DistinctWithGroupBy;
-        let ctx = LintContext {
-            sql,
-            statement_range: 0..sql.len(),
-            statement_index: 0,
-        };
+        let ctx = RuleContext::new(sql, 0..sql.len(), 0);
         let mut issues = Vec::new();
         for stmt in &stmts {
-            issues.extend(rule.check(stmt, &ctx));
+            issues.extend(rule.check_with_context(stmt, &ctx));
         }
         issues
     }

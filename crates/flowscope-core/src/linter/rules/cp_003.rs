@@ -6,7 +6,7 @@
 use std::collections::HashSet;
 
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit, Span};
 use regex::Regex;
 use sqlparser::ast::Statement;
@@ -53,7 +53,7 @@ impl Default for CapitalisationFunctions {
     }
 }
 
-impl LintRule for CapitalisationFunctions {
+impl BuiltinLintRule for CapitalisationFunctions {
     fn code(&self) -> &'static str {
         issue_codes::LINT_CP_003
     }
@@ -66,7 +66,7 @@ impl LintRule for CapitalisationFunctions {
         "Inconsistent capitalisation of function names."
     }
 
-    fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, _statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let functions = function_candidates_for_context(
             ctx,
             &self.ignore_words,
@@ -137,7 +137,7 @@ struct FunctionCandidate {
 }
 
 fn function_candidates_for_context(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     ignore_words: &HashSet<String>,
     ignore_words_regex: Option<&Regex>,
 ) -> Vec<FunctionCandidate> {
@@ -211,7 +211,7 @@ fn function_candidates(
 }
 
 fn function_autofix_edits(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     functions: &[FunctionCandidate],
     resolved_policy: CapitalisationPolicy,
 ) -> Vec<IssuePatchEdit> {
@@ -309,7 +309,7 @@ fn resolve_consistent_policy_from_values(values: &[String]) -> CapitalisationPol
 }
 
 fn rendered_function_values_for_context(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     ignore_words: &HashSet<String>,
     ignore_words_regex: Option<&Regex>,
 ) -> Option<Vec<String>> {
@@ -531,7 +531,6 @@ fn is_data_type_keyword(value: &str) -> bool {
 mod tests {
     use super::*;
     use crate::linter::config::LintConfig;
-    use crate::linter::rule::{with_active_document_tokens, with_active_is_templated};
     use crate::parser::parse_sql;
     use crate::types::IssueAutofixApplicability;
 
@@ -542,14 +541,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }
@@ -636,14 +628,8 @@ mod tests {
         let rule = CapitalisationFunctions::from_config(&config);
         let sql = "SELECT COUNT(x) FROM t";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
     }
 
@@ -660,14 +646,8 @@ mod tests {
         let rule = CapitalisationFunctions::from_config(&config);
         let sql = "SELECT count(x) FROM t";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
         let fixed = apply_issue_autofix(sql, &issues[0]).expect("apply autofix");
         assert_eq!(fixed, "SELECT COUNT(x) FROM t");
@@ -686,14 +666,8 @@ mod tests {
         let rule = CapitalisationFunctions::from_config(&config);
         let sql = "SELECT COUNT(x), SUM(y) FROM t";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         // Both COUNT and SUM violate camel → 2 violations.
         assert_eq!(issues.len(), 2);
         let fixed = apply_all_autofixes(sql, &issues);
@@ -713,14 +687,8 @@ mod tests {
         let rule = CapitalisationFunctions::from_config(&config);
         let sql = "SELECT current_timestamp, min(a) FROM t";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         // Both current_timestamp and min violate pascal → 2 violations.
         assert_eq!(issues.len(), 2);
         let fixed = apply_all_autofixes(sql, &issues);
@@ -740,14 +708,8 @@ mod tests {
         let rule = CapitalisationFunctions::from_config(&config);
         let sql = "SELECT Current_Timestamp, Min(a) FROM t";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         // Both Current_Timestamp and Min violate snake → 2 violations.
         assert_eq!(issues.len(), 2);
         let fixed = apply_all_autofixes(sql, &issues);
@@ -767,14 +729,8 @@ mod tests {
         let rule = CapitalisationFunctions::from_config(&config);
         let sql = "SELECT COUNT(*), count(x) FROM t";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert!(issues.is_empty());
     }
 
@@ -797,11 +753,7 @@ mod tests {
     #[test]
     fn consistent_policy_autofix_uses_source_order_even_when_candidates_are_unsorted() {
         let sql = "SELECT greatest(x), GREATEST(y) FROM t";
-        let ctx = LintContext {
-            sql,
-            statement_range: 0..sql.len(),
-            statement_index: 0,
-        };
+        let ctx = RuleContext::new(sql, 0..sql.len(), 0);
 
         let upper_start = sql.find("GREATEST").expect("uppercase function position");
         let lower_start = sql.find("greatest").expect("lowercase function position");
@@ -840,18 +792,12 @@ mod tests {
             )]),
         });
 
-        let issues = with_active_is_templated(true, || {
-            with_active_document_tokens(&rendered_tokens, || {
-                rule.check(
-                    &statements[0],
-                    &LintContext {
-                        sql: source_sql,
-                        statement_range: 0..source_sql.len(),
-                        statement_index: 0,
-                    },
-                )
-            })
-        });
+        let issues = rule.check_with_context(
+            &statements[0],
+            &RuleContext::new(source_sql, 0..source_sql.len(), 0)
+                .with_tokens(&rendered_tokens)
+                .with_templated(true),
+        );
 
         assert_eq!(issues.len(), 1);
         let autofix = issues[0]

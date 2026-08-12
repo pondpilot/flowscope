@@ -3,14 +3,14 @@
 //! SQLFluff JJ01 parity (current scope): detect inconsistent whitespace around
 //! Jinja delimiters.
 
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit};
 use sqlparser::ast::Statement;
 use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer};
 
 pub struct JinjaPadding;
 
-impl LintRule for JinjaPadding {
+impl BuiltinLintRule for JinjaPadding {
     fn code(&self) -> &'static str {
         issue_codes::LINT_JJ_001
     }
@@ -23,7 +23,7 @@ impl LintRule for JinjaPadding {
         "Jinja tags should have a single whitespace on either side."
     }
 
-    fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, _statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let Some((start, end)) = jinja_padding_violation_span(ctx) else {
             return Vec::new();
         };
@@ -52,7 +52,7 @@ impl LintRule for JinjaPadding {
     }
 }
 
-fn jinja_padding_violation_span(ctx: &LintContext) -> Option<(usize, usize)> {
+fn jinja_padding_violation_span(ctx: &RuleContext) -> Option<(usize, usize)> {
     let sql = ctx.statement_sql();
 
     // Token-based detection (works well when sqlparser can tokenize the input).
@@ -131,7 +131,7 @@ fn token_spans(sql: &str, dialect: Dialect) -> Option<Vec<TokenSpan>> {
     Some(out)
 }
 
-fn token_spans_for_context(ctx: &LintContext) -> Option<Vec<TokenSpan>> {
+fn token_spans_for_context(ctx: &RuleContext) -> Option<Vec<TokenSpan>> {
     let offset = ctx.statement_range.start;
     ctx.with_document_tokens(|tokens| {
         if tokens.is_empty() {
@@ -425,14 +425,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }
@@ -515,11 +508,7 @@ mod tests {
     }
 
     fn detect(sql: &str) -> Option<(usize, usize)> {
-        jinja_padding_violation_span(&LintContext {
-            sql,
-            statement_range: 0..sql.len(),
-            statement_index: 0,
-        })
+        jinja_padding_violation_span(&RuleContext::new(sql, 0..sql.len(), 0))
     }
 
     #[test]

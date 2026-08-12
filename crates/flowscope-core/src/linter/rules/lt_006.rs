@@ -3,7 +3,7 @@
 //! SQLFluff LT06 parity (current scope): flag function-like tokens separated
 //! from opening parenthesis.
 
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::linter::visit::visit_expressions;
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit};
 use sqlparser::ast::{Expr, Statement};
@@ -13,7 +13,7 @@ use std::collections::HashSet;
 
 pub struct LayoutFunctions;
 
-impl LintRule for LayoutFunctions {
+impl BuiltinLintRule for LayoutFunctions {
     fn code(&self) -> &'static str {
         issue_codes::LINT_LT_006
     }
@@ -26,7 +26,7 @@ impl LintRule for LayoutFunctions {
         "Function name not immediately followed by parenthesis."
     }
 
-    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let Some(issue_span) = function_spacing_issue_span(statement, ctx) else {
             return Vec::new();
         };
@@ -58,7 +58,7 @@ struct FunctionSpacingIssueSpan {
 
 fn function_spacing_issue_span(
     statement: &Statement,
-    ctx: &LintContext,
+    ctx: &RuleContext,
 ) -> Option<FunctionSpacingIssueSpan> {
     let sql = ctx.statement_sql();
     let tracked_function_names = tracked_function_names(statement);
@@ -138,7 +138,7 @@ fn tokenized(sql: &str, dialect: Dialect) -> Option<Vec<TokenWithSpan>> {
     tokenizer.tokenize_with_location().ok()
 }
 
-fn tokenized_for_context(ctx: &LintContext) -> Option<Vec<TokenWithSpan>> {
+fn tokenized_for_context(ctx: &RuleContext) -> Option<Vec<TokenWithSpan>> {
     let (statement_start_line, statement_start_column) =
         offset_to_line_col(ctx.sql, ctx.statement_range.start)?;
 
@@ -360,14 +360,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }

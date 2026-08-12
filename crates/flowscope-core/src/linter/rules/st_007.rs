@@ -3,14 +3,14 @@
 //! USING can hide which side a column originates from and may create ambiguity
 //! in complex joins. Prefer explicit ON conditions.
 
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Issue, IssueAutofixApplicability, IssuePatchEdit, Span};
 use sqlparser::ast::{Spanned, *};
 use sqlparser::tokenizer::{Span as SqlParserSpan, Token, TokenWithSpan, Tokenizer, Whitespace};
 
 pub struct AvoidUsingJoin;
 
-impl LintRule for AvoidUsingJoin {
+impl BuiltinLintRule for AvoidUsingJoin {
     fn code(&self) -> &'static str {
         issue_codes::LINT_ST_007
     }
@@ -23,14 +23,14 @@ impl LintRule for AvoidUsingJoin {
         "Prefer specifying join keys instead of using 'USING'."
     }
 
-    fn check(&self, stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, stmt: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let mut issues = Vec::new();
         check_statement(stmt, ctx, &mut issues);
         issues
     }
 }
 
-fn check_statement(stmt: &Statement, ctx: &LintContext, issues: &mut Vec<Issue>) {
+fn check_statement(stmt: &Statement, ctx: &RuleContext, issues: &mut Vec<Issue>) {
     match stmt {
         Statement::Query(q) => check_query(q, ctx, issues),
         Statement::Insert(ins) => {
@@ -48,7 +48,7 @@ fn check_statement(stmt: &Statement, ctx: &LintContext, issues: &mut Vec<Issue>)
     }
 }
 
-fn check_query(query: &Query, ctx: &LintContext, issues: &mut Vec<Issue>) {
+fn check_query(query: &Query, ctx: &RuleContext, issues: &mut Vec<Issue>) {
     if let Some(ref with) = query.with {
         for cte in &with.cte_tables {
             check_query(&cte.query, ctx, issues);
@@ -57,7 +57,7 @@ fn check_query(query: &Query, ctx: &LintContext, issues: &mut Vec<Issue>) {
     check_set_expr(&query.body, ctx, issues);
 }
 
-fn check_set_expr(body: &SetExpr, ctx: &LintContext, issues: &mut Vec<Issue>) {
+fn check_set_expr(body: &SetExpr, ctx: &RuleContext, issues: &mut Vec<Issue>) {
     match body {
         SetExpr::Select(select) => {
             for from_item in &select.from {
@@ -95,7 +95,7 @@ fn check_set_expr(body: &SetExpr, ctx: &LintContext, issues: &mut Vec<Issue>) {
     }
 }
 
-fn check_table_factor(relation: &TableFactor, ctx: &LintContext, issues: &mut Vec<Issue>) {
+fn check_table_factor(relation: &TableFactor, ctx: &RuleContext, issues: &mut Vec<Issue>) {
     match relation {
         TableFactor::Derived { subquery, .. } => check_query(subquery, ctx, issues),
         TableFactor::NestedJoin {
@@ -127,7 +127,7 @@ fn check_table_factor(relation: &TableFactor, ctx: &LintContext, issues: &mut Ve
 }
 
 fn using_join_issue(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     join_operator: &JoinOperator,
     left_ref: Option<&str>,
     right_ref: Option<&str>,
@@ -189,7 +189,7 @@ struct PositionedToken {
 }
 
 fn using_join_autofix(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     constraint: &JoinConstraint,
     columns: &[ObjectName],
     left_ref: Option<&str>,
@@ -251,7 +251,7 @@ fn using_columns_to_on_expr(
 }
 
 fn constraint_statement_offsets(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     constraint: &JoinConstraint,
 ) -> Option<(usize, usize)> {
     if let Some((start, end)) = sqlparser_span_offsets(ctx.statement_sql(), constraint.span()) {
@@ -269,7 +269,7 @@ fn constraint_statement_offsets(
 }
 
 fn locate_using_clause_span(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     constraint_start: usize,
     constraint_end: usize,
 ) -> Option<Span> {
@@ -363,7 +363,7 @@ fn table_factor_reference_name(relation: &TableFactor) -> Option<String> {
     }
 }
 
-fn positioned_statement_tokens(ctx: &LintContext) -> Option<Vec<PositionedToken>> {
+fn positioned_statement_tokens(ctx: &RuleContext) -> Option<Vec<PositionedToken>> {
     let from_document_tokens = ctx.with_document_tokens(|tokens| {
         if tokens.is_empty() {
             return None;
@@ -401,7 +401,7 @@ fn positioned_statement_tokens(ctx: &LintContext) -> Option<Vec<PositionedToken>
     Some(positioned)
 }
 
-fn span_contains_comment(ctx: &LintContext, span: Span) -> bool {
+fn span_contains_comment(ctx: &RuleContext, span: Span) -> bool {
     positioned_statement_tokens(ctx).is_some_and(|tokens| {
         tokens.iter().any(|token| {
             token.start >= span.start && token.end <= span.end && is_comment_token(&token.token)
@@ -503,14 +503,10 @@ mod tests {
     fn check_sql(sql: &str) -> Vec<Issue> {
         let stmts = parse_sql(sql).unwrap();
         let rule = AvoidUsingJoin;
-        let ctx = LintContext {
-            sql,
-            statement_range: 0..sql.len(),
-            statement_index: 0,
-        };
+        let ctx = RuleContext::new(sql, 0..sql.len(), 0);
         let mut issues = Vec::new();
         for stmt in &stmts {
-            issues.extend(rule.check(stmt, &ctx));
+            issues.extend(rule.check_with_context(stmt, &ctx));
         }
         issues
     }

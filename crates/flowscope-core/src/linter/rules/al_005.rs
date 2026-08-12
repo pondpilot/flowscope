@@ -4,7 +4,7 @@
 //! anywhere in the query. This may indicate dead code or a copy-paste error.
 
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit};
 use sqlparser::ast::*;
 use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
@@ -69,7 +69,7 @@ impl Default for UnusedTableAlias {
     }
 }
 
-impl LintRule for UnusedTableAlias {
+impl BuiltinLintRule for UnusedTableAlias {
     fn code(&self) -> &'static str {
         issue_codes::LINT_AL_005
     }
@@ -82,7 +82,7 @@ impl LintRule for UnusedTableAlias {
         "Tables should not be aliased if that alias is not used."
     }
 
-    fn check(&self, stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, stmt: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let mut issues = Vec::new();
         match stmt {
             Statement::Query(q) => check_query(q, self.alias_case_check, ctx, &mut issues),
@@ -128,7 +128,7 @@ impl LintRule for UnusedTableAlias {
 fn check_query(
     query: &Query,
     alias_case_check: AliasCaseCheck,
-    ctx: &LintContext,
+    ctx: &RuleContext,
     issues: &mut Vec<Issue>,
 ) {
     if let Some(ref with) = query.with {
@@ -151,7 +151,7 @@ fn check_query(
 fn check_set_expr(
     body: &SetExpr,
     alias_case_check: AliasCaseCheck,
-    ctx: &LintContext,
+    ctx: &RuleContext,
     issues: &mut Vec<Issue>,
 ) {
     match body {
@@ -171,7 +171,7 @@ fn check_select(
     select: &Select,
     order_by: Option<&OrderBy>,
     alias_case_check: AliasCaseCheck,
-    ctx: &LintContext,
+    ctx: &RuleContext,
     issues: &mut Vec<Issue>,
 ) {
     for from_item in &select.from {
@@ -225,7 +225,7 @@ fn check_select(
 fn check_delete(
     delete: &Delete,
     alias_case_check: AliasCaseCheck,
-    ctx: &LintContext,
+    ctx: &RuleContext,
     issues: &mut Vec<Issue>,
 ) {
     let mut aliases: HashMap<String, AliasRef> = HashMap::new();
@@ -1097,7 +1097,7 @@ fn join_constraint(op: &JoinOperator) -> Option<&Expr> {
 fn check_table_factor_subqueries(
     relation: &TableFactor,
     alias_case_check: AliasCaseCheck,
-    ctx: &LintContext,
+    ctx: &RuleContext,
     issues: &mut Vec<Issue>,
 ) {
     match relation {
@@ -1794,21 +1794,16 @@ fn legacy_is_ascii_ident_continue(byte: u8) -> bool {
 mod tests {
     use super::*;
     use crate::linter::config::LintConfig;
-    use crate::linter::rule::with_active_dialect;
     use crate::parser::{parse_sql, parse_sql_with_dialect};
     use crate::types::{Dialect, IssueAutofixApplicability};
 
     fn check_sql(sql: &str) -> Vec<Issue> {
         let stmts = parse_sql(sql).unwrap();
         let rule = UnusedTableAlias::default();
-        let ctx = LintContext {
-            sql,
-            statement_range: 0..sql.len(),
-            statement_index: 0,
-        };
+        let ctx = RuleContext::new(sql, 0..sql.len(), 0);
         let mut issues = Vec::new();
         for stmt in &stmts {
-            issues.extend(rule.check(stmt, &ctx));
+            issues.extend(rule.check_with_context(stmt, &ctx));
         }
         issues
     }
@@ -1827,17 +1822,11 @@ mod tests {
     fn check_sql_in_dialect(sql: &str, dialect: Dialect) -> Vec<Issue> {
         let stmts = parse_sql_with_dialect(sql, dialect).unwrap();
         let rule = UnusedTableAlias::default();
-        let ctx = LintContext {
-            sql,
-            statement_range: 0..sql.len(),
-            statement_index: 0,
-        };
+        let ctx = RuleContext::new(sql, 0..sql.len(), 0).with_dialect(dialect);
         let mut issues = Vec::new();
-        with_active_dialect(dialect, || {
-            for stmt in &stmts {
-                issues.extend(rule.check(stmt, &ctx));
-            }
-        });
+        for stmt in &stmts {
+            issues.extend(rule.check_with_context(stmt, &ctx));
+        }
         issues
     }
 
@@ -2078,14 +2067,7 @@ mod tests {
         let rule = UnusedTableAlias::from_config(&config);
         let sql = "SELECT zoo.id, b.id FROM users AS \"Zoo\" JOIN books b ON zoo.id = b.user_id";
         let stmts = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &stmts[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues = rule.check_with_context(&stmts[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
         assert!(issues[0].message.contains("Zoo"));
     }
@@ -2103,14 +2085,7 @@ mod tests {
         let rule = UnusedTableAlias::from_config(&config);
         let sql = "SELECT zoo.id, b.id FROM users AS \"Zoo\" JOIN books b ON zoo.id = b.user_id";
         let stmts = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &stmts[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues = rule.check_with_context(&stmts[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert!(issues.is_empty());
     }
 
@@ -2127,14 +2102,7 @@ mod tests {
         let rule = UnusedTableAlias::from_config(&config);
         let sql = "SELECT foo.id, b.id FROM users AS \"FOO\" JOIN books b ON foo.id = b.user_id";
         let stmts = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &stmts[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues = rule.check_with_context(&stmts[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert!(issues.is_empty());
     }
 
@@ -2151,14 +2119,7 @@ mod tests {
         let rule = UnusedTableAlias::from_config(&config);
         let sql = "SELECT FOO.id, b.id FROM users AS \"foo\" JOIN books b ON FOO.id = b.user_id";
         let stmts = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &stmts[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues = rule.check_with_context(&stmts[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert!(issues.is_empty());
     }
 

@@ -2,7 +2,7 @@
 //!
 //! `UNION` should be explicit (`UNION DISTINCT` or `UNION ALL`) to avoid ambiguous implicit behavior.
 
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit};
 use sqlparser::ast::*;
 use sqlparser::keywords::Keyword;
@@ -10,7 +10,7 @@ use sqlparser::tokenizer::{Location, Span, Token, TokenWithSpan, Tokenizer};
 
 pub struct BareUnion;
 
-impl LintRule for BareUnion {
+impl BuiltinLintRule for BareUnion {
     fn code(&self) -> &'static str {
         issue_codes::LINT_AM_002
     }
@@ -23,7 +23,7 @@ impl LintRule for BareUnion {
         "'UNION [DISTINCT|ALL]' is preferred over just 'UNION'."
     }
 
-    fn check(&self, stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, stmt: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let mut issues = Vec::new();
         let mut unions = union_keyword_ranges_for_context(ctx);
         match stmt {
@@ -47,7 +47,7 @@ impl LintRule for BareUnion {
     }
 }
 
-fn union_keyword_ranges_for_context(ctx: &LintContext) -> UnionKeywordRanges {
+fn union_keyword_ranges_for_context(ctx: &RuleContext) -> UnionKeywordRanges {
     let tokens = tokenized_for_context(ctx);
     union_keyword_ranges(ctx.statement_sql(), ctx.dialect(), tokens.as_deref())
 }
@@ -55,7 +55,7 @@ fn union_keyword_ranges_for_context(ctx: &LintContext) -> UnionKeywordRanges {
 fn check_query(
     query: &Query,
     unions: &mut UnionKeywordRanges,
-    ctx: &LintContext,
+    ctx: &RuleContext,
     issues: &mut Vec<Issue>,
 ) {
     if let Some(ref with) = query.with {
@@ -69,7 +69,7 @@ fn check_query(
 fn check_query_body(
     body: &SetExpr,
     unions: &mut UnionKeywordRanges,
-    ctx: &LintContext,
+    ctx: &RuleContext,
     issues: &mut Vec<Issue>,
 ) {
     match body {
@@ -183,7 +183,7 @@ fn tokenized(sql: &str, dialect: Dialect) -> Option<Vec<TokenWithSpan>> {
     tokenizer.tokenize_with_location().ok()
 }
 
-fn tokenized_for_context(ctx: &LintContext) -> Option<Vec<TokenWithSpan>> {
+fn tokenized_for_context(ctx: &RuleContext) -> Option<Vec<TokenWithSpan>> {
     let (statement_start_line, statement_start_column) =
         offset_to_line_col(ctx.sql, ctx.statement_range.start)?;
 
@@ -335,21 +335,16 @@ fn relative_location(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::linter::rule::with_active_dialect;
     use crate::parser::{parse_sql, parse_sql_with_dialect};
     use crate::types::IssueAutofixApplicability;
 
     fn check_sql(sql: &str) -> Vec<Issue> {
         let stmts = parse_sql(sql).unwrap();
         let rule = BareUnion;
-        let ctx = LintContext {
-            sql,
-            statement_range: 0..sql.len(),
-            statement_index: 0,
-        };
+        let ctx = RuleContext::new(sql, 0..sql.len(), 0);
         let mut issues = Vec::new();
         for stmt in &stmts {
-            issues.extend(rule.check(stmt, &ctx));
+            issues.extend(rule.check_with_context(stmt, &ctx));
         }
         issues
     }
@@ -358,18 +353,12 @@ mod tests {
         let stmts = parse_sql_with_dialect(sql, dialect).unwrap();
         let rule = BareUnion;
         let mut issues = Vec::new();
-        with_active_dialect(dialect, || {
-            for stmt in &stmts {
-                issues.extend(rule.check(
-                    stmt,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: 0,
-                    },
-                ));
-            }
-        });
+        for stmt in &stmts {
+            issues.extend(rule.check_with_context(
+                stmt,
+                &RuleContext::new(sql, 0..sql.len(), 0).with_dialect(dialect),
+            ));
+        }
         issues
     }
 

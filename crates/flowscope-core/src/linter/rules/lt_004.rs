@@ -4,7 +4,7 @@
 //! patterns.
 
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit};
 use sqlparser::ast::Statement;
 use sqlparser::tokenizer::{Location, Span, Token, TokenWithSpan, Tokenizer, Whitespace};
@@ -57,7 +57,7 @@ impl Default for LayoutCommas {
     }
 }
 
-impl LintRule for LayoutCommas {
+impl BuiltinLintRule for LayoutCommas {
     fn code(&self) -> &'static str {
         issue_codes::LINT_LT_004
     }
@@ -70,7 +70,7 @@ impl LintRule for LayoutCommas {
         "Leading/Trailing comma enforcement."
     }
 
-    fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, _statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let has_remaining_non_whitespace = ctx.sql[ctx.statement_range.end..]
             .chars()
             .any(|ch| !ch.is_whitespace());
@@ -80,11 +80,7 @@ impl LintRule for LayoutCommas {
             && has_remaining_non_whitespace;
 
         if parser_fragment_fallback {
-            let full_ctx = LintContext {
-                sql: ctx.sql,
-                statement_range: 0..ctx.sql.len(),
-                statement_index: ctx.statement_index,
-            };
+            let full_ctx = ctx.statement_view(ctx.sql, 0..ctx.sql.len(), ctx.statement_index);
             let full_violations = comma_spacing_violations(&full_ctx, self.line_position);
             if let Some(issue) = issue_from_violations(&full_ctx, &full_violations) {
                 return vec![issue];
@@ -102,7 +98,7 @@ type Lt04Span = (usize, usize);
 type Lt04AutofixEdit = (usize, usize, String);
 type Lt04Violation = (Lt04Span, Vec<Lt04AutofixEdit>);
 
-fn issue_from_violations(ctx: &LintContext, violations: &[Lt04Violation]) -> Option<Issue> {
+fn issue_from_violations(ctx: &RuleContext, violations: &[Lt04Violation]) -> Option<Issue> {
     if violations.is_empty() {
         return None;
     }
@@ -137,7 +133,7 @@ fn issue_from_violations(ctx: &LintContext, violations: &[Lt04Violation]) -> Opt
 }
 
 fn comma_spacing_violations(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     line_position: CommaLinePosition,
 ) -> Vec<Lt04Violation> {
     // Prefer direct tokenization of the statement slice. Document-token spans
@@ -553,7 +549,7 @@ fn tokenized(sql: &str, dialect: Dialect) -> Option<Vec<TokenWithSpan>> {
     tokenizer.tokenize_with_location().ok()
 }
 
-fn tokenized_for_context(ctx: &LintContext) -> Option<Vec<TokenWithSpan>> {
+fn tokenized_for_context(ctx: &RuleContext) -> Option<Vec<TokenWithSpan>> {
     let (statement_start_line, statement_start_column) =
         offset_to_line_col(ctx.sql, ctx.statement_range.start)?;
 
@@ -731,14 +727,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }
@@ -906,11 +895,7 @@ mod tests {
     #[test]
     fn leading_mode_templated_column_emits_line_move_edits() {
         let sql = "SELECT\n    c1,\n    {{ \"c2\" }} AS days_since\nFROM logs";
-        let ctx = LintContext {
-            sql,
-            statement_range: 0..sql.len(),
-            statement_index: 0,
-        };
+        let ctx = RuleContext::new(sql, 0..sql.len(), 0);
         let violations = comma_spacing_violations(&ctx, CommaLinePosition::Leading);
         assert_eq!(violations.len(), 1);
         assert!(
@@ -927,11 +912,7 @@ mod tests {
     #[test]
     fn trailing_mode_templated_column_emits_line_move_edits() {
         let sql = "SELECT\n    {{ \"c1\" }}\n    , c2 AS days_since\nFROM logs";
-        let ctx = LintContext {
-            sql,
-            statement_range: 0..sql.len(),
-            statement_index: 0,
-        };
+        let ctx = RuleContext::new(sql, 0..sql.len(), 0);
         let violations = comma_spacing_violations(&ctx, CommaLinePosition::Trailing);
         assert_eq!(violations.len(), 1);
         assert!(

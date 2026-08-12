@@ -5,7 +5,7 @@
 use std::collections::HashSet;
 
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit};
 use regex::Regex;
 use sqlparser::ast::Statement;
@@ -46,7 +46,7 @@ impl Default for CapitalisationKeywords {
     }
 }
 
-impl LintRule for CapitalisationKeywords {
+impl BuiltinLintRule for CapitalisationKeywords {
     fn code(&self) -> &'static str {
         issue_codes::LINT_CP_001
     }
@@ -59,7 +59,7 @@ impl LintRule for CapitalisationKeywords {
         "Inconsistent capitalisation of keywords."
     }
 
-    fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, _statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let keywords =
             keyword_tokens_for_context(ctx, &self.ignore_words, self.ignore_words_regex.as_ref());
         let keyword_values = keywords
@@ -93,7 +93,7 @@ struct KeywordCandidate {
 }
 
 fn keyword_tokens_for_context(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     ignore_words: &HashSet<String>,
     ignore_words_regex: Option<&Regex>,
 ) -> Vec<KeywordCandidate> {
@@ -219,7 +219,7 @@ fn keyword_tokens(
 }
 
 fn keyword_autofix_edits(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     keywords: &[KeywordCandidate],
     policy: CapitalisationPolicy,
 ) -> Vec<IssuePatchEdit> {
@@ -569,14 +569,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }
@@ -634,14 +627,8 @@ mod tests {
         let rule = CapitalisationKeywords::from_config(&config);
         let sql = "select a from t";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
     }
 
@@ -658,14 +645,8 @@ mod tests {
         let rule = CapitalisationKeywords::from_config(&config);
         let sql = "select a from t";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
         let fixed = apply_issue_autofix(sql, &issues[0]).expect("apply autofix");
         assert_eq!(fixed, "SELECT a FROM t");
@@ -684,14 +665,8 @@ mod tests {
         let rule = CapitalisationKeywords::from_config(&config);
         let sql = "SELECT a FROM t";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
         assert!(
             issues[0].autofix.is_none(),
@@ -712,14 +687,8 @@ mod tests {
         let rule = CapitalisationKeywords::from_config(&config);
         let sql = "SELECT a from t";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert!(issues.is_empty());
     }
 
@@ -736,14 +705,8 @@ mod tests {
         let rule = CapitalisationKeywords::from_config(&config);
         let sql = "SELECT a from t";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert!(issues.is_empty());
     }
 }

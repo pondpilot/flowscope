@@ -3,7 +3,7 @@
 //! SQLFluff LT10 parity (current scope): detect multiline SELECT modifiers in
 //! inconsistent positions.
 
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit};
 use sqlparser::ast::Statement;
 use sqlparser::keywords::Keyword;
@@ -17,7 +17,7 @@ type SimpleCollapseSpans = Vec<(usize, usize)>;
 type CommentAwareEdits = Vec<(usize, usize, String)>;
 type Lt010ViolationResult = (bool, SimpleCollapseSpans, CommentAwareEdits);
 
-impl LintRule for LayoutSelectModifiers {
+impl BuiltinLintRule for LayoutSelectModifiers {
     fn code(&self) -> &'static str {
         issue_codes::LINT_LT_010
     }
@@ -30,7 +30,7 @@ impl LintRule for LayoutSelectModifiers {
         "'SELECT' modifiers (e.g. 'DISTINCT') must be on the same line as 'SELECT'."
     }
 
-    fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, _statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let (has_violation, fixable_spans, comment_aware_edits) =
             select_modifier_violations_and_fixable_spans(ctx);
         if has_violation {
@@ -78,7 +78,7 @@ impl LintRule for LayoutSelectModifiers {
 /// Returns (has_violation, simple_collapse_spans, comment_aware_edits).
 /// `simple_collapse_spans` are (start, end) ranges to replace with " ".
 /// `comment_aware_edits` are (start, end, replacement) triples for surgical edits.
-fn select_modifier_violations_and_fixable_spans(ctx: &LintContext) -> Lt010ViolationResult {
+fn select_modifier_violations_and_fixable_spans(ctx: &RuleContext) -> Lt010ViolationResult {
     let tokens =
         tokenized_for_context(ctx).or_else(|| tokenized(ctx.statement_sql(), ctx.dialect()));
     let Some(tokens) = tokens else {
@@ -190,7 +190,7 @@ fn tokenized(sql: &str, dialect: Dialect) -> Option<Vec<TokenWithSpan>> {
     tokenizer.tokenize_with_location().ok()
 }
 
-fn tokenized_for_context(ctx: &LintContext) -> Option<Vec<TokenWithSpan>> {
+fn tokenized_for_context(ctx: &RuleContext) -> Option<Vec<TokenWithSpan>> {
     let (statement_start_line, statement_start_column) =
         offset_to_line_col(ctx.sql, ctx.statement_range.start)?;
 
@@ -417,14 +417,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }

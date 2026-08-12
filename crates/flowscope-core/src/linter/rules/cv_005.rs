@@ -3,14 +3,14 @@
 //! Comparisons like `col = NULL` or `col <> NULL` are not valid null checks in SQL.
 //! Use `IS NULL` / `IS NOT NULL` instead.
 
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::linter::visit;
 use crate::types::{issue_codes, Issue, IssueAutofixApplicability, IssuePatchEdit};
 use sqlparser::ast::{Spanned, *};
 
 pub struct NullComparison;
 
-impl LintRule for NullComparison {
+impl BuiltinLintRule for NullComparison {
     fn code(&self) -> &'static str {
         issue_codes::LINT_CV_005
     }
@@ -23,7 +23,7 @@ impl LintRule for NullComparison {
         "Comparisons with NULL should use \"IS\" or \"IS NOT\"."
     }
 
-    fn check(&self, stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, stmt: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let mut issues = Vec::new();
         visit::visit_expressions(stmt, &mut |expr| {
             let Expr::BinaryOp { left, op, right } = expr else {
@@ -84,7 +84,7 @@ enum KeywordCase {
 }
 
 /// Detect whether the `NULL` keyword in the original SQL is uppercase or lowercase.
-fn detect_null_case(ctx: &LintContext, expr: &Expr) -> KeywordCase {
+fn detect_null_case(ctx: &RuleContext, expr: &Expr) -> KeywordCase {
     if let Some((start, end)) = expr_statement_offsets(ctx, expr) {
         let fragment = &ctx.statement_sql()[start..end];
         // Look for the literal "null" (case-insensitive) in the expression text.
@@ -120,7 +120,7 @@ fn non_null_operand<'a>(left: &'a Expr, right: &'a Expr) -> Option<&'a Expr> {
     }
 }
 
-fn expr_statement_offsets(ctx: &LintContext, expr: &Expr) -> Option<(usize, usize)> {
+fn expr_statement_offsets(ctx: &RuleContext, expr: &Expr) -> Option<(usize, usize)> {
     if let Some((start, end)) = expr_span_offsets(ctx.statement_sql(), expr) {
         return Some((start, end));
     }
@@ -201,14 +201,10 @@ mod tests {
     fn check_sql(sql: &str) -> Vec<Issue> {
         let stmts = parse_sql(sql).unwrap();
         let rule = NullComparison;
-        let ctx = LintContext {
-            sql,
-            statement_range: 0..sql.len(),
-            statement_index: 0,
-        };
+        let ctx = RuleContext::new(sql, 0..sql.len(), 0);
         let mut issues = Vec::new();
         for stmt in &stmts {
-            issues.extend(rule.check(stmt, &ctx));
+            issues.extend(rule.check_with_context(stmt, &ctx));
         }
         issues
     }

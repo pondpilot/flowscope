@@ -5,7 +5,7 @@
 //! an explicit alias for clarity and portability.
 
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Issue};
 use sqlparser::ast::*;
 
@@ -29,7 +29,7 @@ impl Default for ImplicitAlias {
     }
 }
 
-impl LintRule for ImplicitAlias {
+impl BuiltinLintRule for ImplicitAlias {
     fn code(&self) -> &'static str {
         issue_codes::LINT_AL_003
     }
@@ -42,7 +42,7 @@ impl LintRule for ImplicitAlias {
         "Column expression without alias. Use explicit `AS` clause."
     }
 
-    fn check(&self, stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, stmt: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let mut issues = Vec::new();
         check_statement(stmt, ctx, self.allow_scalar, &mut issues);
         issues
@@ -51,7 +51,7 @@ impl LintRule for ImplicitAlias {
 
 fn check_statement(
     stmt: &Statement,
-    ctx: &LintContext,
+    ctx: &RuleContext,
     allow_scalar: bool,
     issues: &mut Vec<Issue>,
 ) {
@@ -76,7 +76,7 @@ fn check_statement(
 
 fn check_query(
     query: &Query,
-    ctx: &LintContext,
+    ctx: &RuleContext,
     allow_scalar: bool,
     issues: &mut Vec<Issue>,
     has_cte_column_list: bool,
@@ -95,7 +95,7 @@ fn check_query(
 
 fn check_set_expr(
     body: &SetExpr,
-    ctx: &LintContext,
+    ctx: &RuleContext,
     allow_scalar: bool,
     issues: &mut Vec<Issue>,
     has_cte_column_list: bool,
@@ -212,14 +212,10 @@ mod tests {
 
     fn check_sql_with_rule(sql: &str, rule: ImplicitAlias) -> Vec<Issue> {
         let stmts = parse_sql(sql).unwrap();
-        let ctx = LintContext {
-            sql,
-            statement_range: 0..sql.len(),
-            statement_index: 0,
-        };
+        let ctx = RuleContext::new(sql, 0..sql.len(), 0);
         let mut issues = Vec::new();
         for stmt in &stmts {
-            issues.extend(rule.check(stmt, &ctx));
+            issues.extend(rule.check_with_context(stmt, &ctx));
         }
         issues
     }

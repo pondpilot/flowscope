@@ -2,7 +2,7 @@
 //!
 //! Detect redundant constant expressions in predicates.
 
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Issue};
 use sqlparser::ast::{BinaryOperator, Expr, Merge, Statement, Update};
 
@@ -10,7 +10,7 @@ use super::semantic_helpers::{visit_select_expressions, visit_selects_in_stateme
 
 pub struct StructureConstantExpression;
 
-impl LintRule for StructureConstantExpression {
+impl BuiltinLintRule for StructureConstantExpression {
     fn code(&self) -> &'static str {
         issue_codes::LINT_ST_010
     }
@@ -23,7 +23,7 @@ impl LintRule for StructureConstantExpression {
         "Redundant constant expression."
     }
 
-    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let mut violation_count = statement_constant_predicate_count(statement);
 
         visit_selects_in_statement(statement, &mut |select| {
@@ -265,14 +265,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }

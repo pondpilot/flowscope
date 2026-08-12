@@ -2,7 +2,7 @@
 //!
 //! SQLFluff AM03 parity: if any ORDER BY item specifies ASC/DESC, all should.
 
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit, Span};
 use sqlparser::ast::{
     CreateView, Expr, FunctionArg, FunctionArgExpr, FunctionArguments, OrderByKind, Query, Select,
@@ -15,7 +15,7 @@ use super::semantic_helpers::join_on_expr;
 
 pub struct AmbiguousOrderBy;
 
-impl LintRule for AmbiguousOrderBy {
+impl BuiltinLintRule for AmbiguousOrderBy {
     fn code(&self) -> &'static str {
         issue_codes::LINT_AM_003
     }
@@ -28,7 +28,7 @@ impl LintRule for AmbiguousOrderBy {
         "Ambiguous ordering directions for columns in order by clause."
     }
 
-    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let mut violation_count = 0usize;
         check_statement(statement, &mut violation_count);
         let clause_autofixes = am003_clause_autofixes(ctx.statement_sql(), ctx.dialect());
@@ -586,14 +586,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }

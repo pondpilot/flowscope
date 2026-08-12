@@ -3,7 +3,7 @@
 //! SQLFluff TQ03 parity (current scope): detect empty batches between repeated
 //! `GO` separators.
 
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit};
 use sqlparser::ast::Statement;
 use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
@@ -11,7 +11,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 pub struct TsqlEmptyBatch;
 
-impl LintRule for TsqlEmptyBatch {
+impl BuiltinLintRule for TsqlEmptyBatch {
     fn code(&self) -> &'static str {
         issue_codes::LINT_TQ_003
     }
@@ -24,7 +24,7 @@ impl LintRule for TsqlEmptyBatch {
         "Remove empty batches."
     }
 
-    fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, _statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         if ctx.dialect() != Dialect::Mssql {
             return Vec::new();
         }
@@ -258,44 +258,31 @@ fn match_ascii_keyword_at(bytes: &[u8], start: usize, keyword_upper: &[u8]) -> O
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::linter::rule::with_active_dialect;
     use crate::parser::parse_sql;
     use crate::types::IssueAutofixApplicability;
 
     fn run(sql: &str) -> Vec<Issue> {
         let statements = parse_sql(sql).expect("parse");
         let rule = TsqlEmptyBatch;
-        with_active_dialect(Dialect::Mssql, || {
-            statements
-                .iter()
-                .enumerate()
-                .flat_map(|(index, statement)| {
-                    rule.check(
-                        statement,
-                        &LintContext {
-                            sql,
-                            statement_range: 0..sql.len(),
-                            statement_index: index,
-                        },
-                    )
-                })
-                .collect()
-        })
+        statements
+            .iter()
+            .enumerate()
+            .flat_map(|(index, statement)| {
+                rule.check_with_context(
+                    statement,
+                    &RuleContext::new(sql, 0..sql.len(), index).with_dialect(Dialect::Mssql),
+                )
+            })
+            .collect()
     }
 
     fn run_for_statement_sql(sql: &str) -> Vec<Issue> {
         let statements = parse_sql("SELECT 1").expect("parse placeholder statement");
         let rule = TsqlEmptyBatch;
-        with_active_dialect(Dialect::Mssql, || {
-            rule.check(
-                &statements[0],
-                &LintContext {
-                    sql,
-                    statement_range: 0..sql.len(),
-                    statement_index: 0,
-                },
-            )
-        })
+        rule.check_with_context(
+            &statements[0],
+            &RuleContext::new(sql, 0..sql.len(), 0).with_dialect(Dialect::Mssql),
+        )
     }
 
     fn apply_issue_autofix(sql: &str, issue: &Issue) -> Option<String> {
@@ -381,16 +368,10 @@ mod tests {
         let statements = parse_sql("SELECT 1").expect("parse placeholder statement");
         let rule = TsqlEmptyBatch;
         let sql = "SELECT 1\nGO\nGO\n";
-        let issues = with_active_dialect(Dialect::Postgres, || {
-            rule.check(
-                &statements[0],
-                &LintContext {
-                    sql,
-                    statement_range: 0..sql.len(),
-                    statement_index: 0,
-                },
-            )
-        });
+        let issues = rule.check_with_context(
+            &statements[0],
+            &RuleContext::new(sql, 0..sql.len(), 0).with_dialect(Dialect::Postgres),
+        );
         assert!(issues.is_empty());
     }
 }

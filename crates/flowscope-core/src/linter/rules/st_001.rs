@@ -4,7 +4,7 @@
 //! when no branch matches. The ELSE NULL can be removed.
 
 use crate::linter::helpers;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::linter::visit;
 use crate::types::{issue_codes, Issue, IssueAutofixApplicability, IssuePatchEdit, Span};
 use sqlparser::ast::*;
@@ -12,7 +12,7 @@ use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
 
 pub struct UnnecessaryElseNull;
 
-impl LintRule for UnnecessaryElseNull {
+impl BuiltinLintRule for UnnecessaryElseNull {
     fn code(&self) -> &'static str {
         issue_codes::LINT_ST_001
     }
@@ -25,7 +25,7 @@ impl LintRule for UnnecessaryElseNull {
         "Do not specify 'else null' in a case when statement (redundant)."
     }
 
-    fn check(&self, stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, stmt: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let mut violation_count = 0usize;
         visit::visit_expressions(stmt, &mut |expr| {
             if let Expr::Case {
@@ -82,7 +82,7 @@ struct CaseFrame {
     else_sig_pos: Option<usize>,
 }
 
-fn st001_else_null_candidates_for_context(ctx: &LintContext) -> Vec<St001AutofixCandidate> {
+fn st001_else_null_candidates_for_context(ctx: &RuleContext) -> Vec<St001AutofixCandidate> {
     let tokens = statement_positioned_tokens(ctx);
     if tokens.is_empty() {
         return Vec::new();
@@ -91,7 +91,7 @@ fn st001_else_null_candidates_for_context(ctx: &LintContext) -> Vec<St001Autofix
     st001_else_null_candidates_from_tokens(&tokens)
 }
 
-fn statement_positioned_tokens(ctx: &LintContext) -> Vec<PositionedToken> {
+fn statement_positioned_tokens(ctx: &RuleContext) -> Vec<PositionedToken> {
     let from_document_tokens = ctx.with_document_tokens(|tokens| {
         if tokens.is_empty() {
             return None;
@@ -296,14 +296,10 @@ mod tests {
     fn check_sql(sql: &str) -> Vec<Issue> {
         let stmts = parse_sql(sql).unwrap();
         let rule = UnnecessaryElseNull;
-        let ctx = LintContext {
-            sql,
-            statement_range: 0..sql.len(),
-            statement_index: 0,
-        };
+        let ctx = RuleContext::new(sql, 0..sql.len(), 0);
         let mut issues = Vec::new();
         for stmt in &stmts {
-            issues.extend(rule.check(stmt, &ctx));
+            issues.extend(rule.check_with_context(stmt, &ctx));
         }
         issues
     }

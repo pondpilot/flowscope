@@ -4,7 +4,7 @@
 //! but `COUNT(*)` is the standard convention and more clearly expresses intent.
 
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::linter::visit;
 use crate::types::{issue_codes, Issue, IssueAutofixApplicability, IssuePatchEdit};
 use sqlparser::ast::{Spanned, *};
@@ -88,7 +88,7 @@ impl Default for CountStyle {
     }
 }
 
-impl LintRule for CountStyle {
+impl BuiltinLintRule for CountStyle {
     fn code(&self) -> &'static str {
         issue_codes::LINT_CV_004
     }
@@ -101,7 +101,7 @@ impl LintRule for CountStyle {
         "Use consistent syntax to express \"count number of rows\"."
     }
 
-    fn check(&self, stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, stmt: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let tokens =
             tokenized_for_context(ctx).or_else(|| tokenized(ctx.statement_sql(), ctx.dialect()));
         let wildcard_spans = tokens
@@ -187,7 +187,7 @@ fn numeric_literal_matches(raw: &str, expected: u8) -> bool {
         .is_some_and(|value| value == expected as u64)
 }
 
-fn count_numeric_argument_span(ctx: &LintContext, func: &Function) -> Option<(usize, usize)> {
+fn count_numeric_argument_span(ctx: &RuleContext, func: &Function) -> Option<(usize, usize)> {
     let FunctionArguments::List(arg_list) = &func.args else {
         return None;
     };
@@ -381,7 +381,7 @@ fn tokenized(sql: &str, dialect: crate::types::Dialect) -> Option<Vec<LocatedTok
     Some(out)
 }
 
-fn tokenized_for_context(ctx: &LintContext) -> Option<Vec<LocatedToken>> {
+fn tokenized_for_context(ctx: &RuleContext) -> Option<Vec<LocatedToken>> {
     let statement_start = ctx.statement_range.start;
     let from_document = ctx.with_document_tokens(|tokens| {
         if tokens.is_empty() {
@@ -472,14 +472,10 @@ mod tests {
     fn check_sql(sql: &str) -> Vec<Issue> {
         let stmts = parse_sql(sql).unwrap();
         let rule = CountStyle::default();
-        let ctx = LintContext {
-            sql,
-            statement_range: 0..sql.len(),
-            statement_index: 0,
-        };
+        let ctx = RuleContext::new(sql, 0..sql.len(), 0);
         let mut issues = Vec::new();
         for stmt in &stmts {
-            issues.extend(rule.check(stmt, &ctx));
+            issues.extend(rule.check_with_context(stmt, &ctx));
         }
         issues
     }
@@ -595,14 +591,7 @@ mod tests {
         let rule = CountStyle::from_config(&config);
         let sql = "SELECT COUNT(*) FROM t";
         let stmts = parse_sql(sql).unwrap();
-        let issues = rule.check(
-            &stmts[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues = rule.check_with_context(&stmts[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
 
         let star_start = sql.find('*').expect("star argument");
@@ -622,14 +611,7 @@ mod tests {
         let rule = CountStyle::from_config(&config);
         let sql = "SELECT COUNT(1) FROM t";
         let stmts = parse_sql(sql).unwrap();
-        let issues = rule.check(
-            &stmts[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues = rule.check_with_context(&stmts[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
 
         let one_start = sql.find('1').expect("count literal");

@@ -3,7 +3,7 @@
 //! Enforce consistent semicolon termination within a SQL document.
 
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit, Span};
 use sqlparser::ast::Statement;
 use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
@@ -27,7 +27,7 @@ impl ConventionTerminator {
     }
 }
 
-impl LintRule for ConventionTerminator {
+impl BuiltinLintRule for ConventionTerminator {
     fn code(&self) -> &'static str {
         issue_codes::LINT_CV_006
     }
@@ -40,7 +40,7 @@ impl LintRule for ConventionTerminator {
         "Statements must end with a semi-colon."
     }
 
-    fn check(&self, _stmt: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, _stmt: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let tokens = tokenize_with_offsets_for_context(ctx);
         let trailing = trailing_info(ctx, tokens.as_deref());
         let has_terminal_semicolon = trailing.semicolon_offset.is_some();
@@ -99,7 +99,7 @@ impl LintRule for ConventionTerminator {
 impl ConventionTerminator {
     fn check_multiline_newline(
         &self,
-        ctx: &LintContext,
+        ctx: &RuleContext,
         trailing: &TrailingInfo,
         semicolon_offset: usize,
     ) -> Vec<Issue> {
@@ -178,7 +178,7 @@ impl ConventionTerminator {
 ///   - Exactly one newline
 ///   - Semicolon (optionally followed by spacing/comments on the same line)
 fn is_valid_multiline_newline_style(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     trailing: &TrailingInfo,
     semicolon_offset: usize,
 ) -> bool {
@@ -227,7 +227,7 @@ fn is_valid_multiline_newline_style(
 /// the semicolon. This is either the end of the statement range or the end
 /// of a trailing inline comment on the last line of the statement.
 fn find_last_content_end_before_semicolon(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     trailing: &TrailingInfo,
     semicolon_offset: usize,
 ) -> usize {
@@ -248,7 +248,7 @@ fn find_last_content_end_before_semicolon(
 /// ranges: (1) insert semicolon at the actual code end, (2) delete the
 /// misplaced semicolon. This way neither edit spans over a comment.
 fn build_default_mode_fix(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     trailing: &TrailingInfo,
     semicolon_offset: usize,
 ) -> Vec<IssuePatchEdit> {
@@ -310,7 +310,7 @@ fn build_default_mode_fix(
 /// ranges: (1) delete the old semicolon, (2) insert `\n;` at the anchor
 /// point (after inline comments, before standalone comments).
 fn build_multiline_newline_fix(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     trailing: &TrailingInfo,
     semicolon_offset: usize,
 ) -> Vec<IssuePatchEdit> {
@@ -447,7 +447,7 @@ fn build_multiline_newline_fix(
 /// Returns the byte offset immediately after the last non-comment,
 /// non-whitespace token that starts within the statement range. Falls back
 /// to `statement_range.end` when tokens are unavailable.
-fn actual_code_end(ctx: &LintContext) -> usize {
+fn actual_code_end(ctx: &RuleContext) -> usize {
     let tokens = tokenize_with_offsets_for_context(ctx);
     let Some(tokens) = tokens.as_deref() else {
         return ctx.statement_range.end;
@@ -466,7 +466,7 @@ fn actual_code_end(ctx: &LintContext) -> usize {
 /// Inserts the semicolon at the actual code end (before any trailing
 /// comments) so the edit does not overlap comment protected ranges.
 fn build_require_final_semicolon_edits(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     trailing: &TrailingInfo,
     multiline_newline: bool,
 ) -> Vec<IssuePatchEdit> {
@@ -511,7 +511,7 @@ fn build_require_final_semicolon_edits(
 
 /// Find the end of an inline comment on the last line of code within the
 /// statement range (where the parser included the comment in the range).
-fn find_inline_comment_in_statement(ctx: &LintContext) -> Option<usize> {
+fn find_inline_comment_in_statement(ctx: &RuleContext) -> Option<usize> {
     let tokens = tokenize_with_offsets_for_context(ctx)?;
     let code_end = tokens.iter().rfind(|t| {
         t.start >= ctx.statement_range.start
@@ -532,7 +532,7 @@ fn find_inline_comment_in_statement(ctx: &LintContext) -> Option<usize> {
 }
 
 /// Detect the indentation level of the first line of the statement.
-fn detect_statement_indent(ctx: &LintContext) -> String {
+fn detect_statement_indent(ctx: &RuleContext) -> String {
     let start = ctx.statement_range.start;
     // Walk backwards from statement start to find the beginning of the line
     let line_start = ctx.sql[..start].rfind('\n').map(|pos| pos + 1).unwrap_or(0);
@@ -545,7 +545,7 @@ fn detect_statement_indent(ctx: &LintContext) -> String {
 /// Get content after the semicolon (typically trailing comments/whitespace on the
 /// same line or rest of the source up to next statement).
 fn trailing_content_after_semicolon<'a>(
-    ctx: &'a LintContext<'a>,
+    ctx: &'a RuleContext<'a>,
     semicolon_offset: usize,
 ) -> &'a str {
     let after = semicolon_offset + 1;
@@ -578,7 +578,7 @@ struct CommentSpan {
 
 /// Analyze the trailing tokens after statement_range.end to collect
 /// information about semicolons, comments, and whitespace.
-fn trailing_info(ctx: &LintContext, tokens: Option<&[LocatedToken]>) -> TrailingInfo {
+fn trailing_info(ctx: &RuleContext, tokens: Option<&[LocatedToken]>) -> TrailingInfo {
     let Some(tokens) = tokens else {
         return TrailingInfo {
             semicolon_offset: None,
@@ -648,7 +648,7 @@ fn offset_to_line_number(sql: &str, offset: usize) -> usize {
         + 1
 }
 
-fn is_last_statement(ctx: &LintContext, tokens: Option<&[LocatedToken]>) -> bool {
+fn is_last_statement(ctx: &RuleContext, tokens: Option<&[LocatedToken]>) -> bool {
     let Some(tokens) = tokens else {
         return false;
     };
@@ -672,7 +672,7 @@ fn is_last_statement(ctx: &LintContext, tokens: Option<&[LocatedToken]>) -> bool
 /// statement range (e.g., `SELECT a\nFROM foo\n-- trailing`) where `-- trailing`
 /// is on a separate line from the actual code.
 fn has_standalone_comment_at_end_of_statement(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     tokens: Option<&[LocatedToken]>,
 ) -> bool {
     let Some(tokens) = tokens else {
@@ -730,7 +730,7 @@ struct LocatedToken {
     end_line: usize,
 }
 
-fn tokenize_with_offsets_for_context(ctx: &LintContext) -> Option<Vec<LocatedToken>> {
+fn tokenize_with_offsets_for_context(ctx: &RuleContext) -> Option<Vec<LocatedToken>> {
     let tokens = ctx.with_document_tokens(|tokens| {
         if tokens.is_empty() {
             return None;
@@ -902,7 +902,6 @@ fn line_col_to_offset(sql: &str, line: usize, column: usize) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::linter::rule::with_active_dialect;
     use crate::parser::parse_sql;
     use crate::types::IssueAutofixApplicability;
 
@@ -913,14 +912,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, stmt)| {
-                rule.check(
-                    stmt,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(stmt, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }
@@ -936,7 +928,7 @@ mod tests {
         Some(out)
     }
 
-    fn statement_is_multiline(ctx: &LintContext, tokens: Option<&[LocatedToken]>) -> bool {
+    fn statement_is_multiline(ctx: &RuleContext, tokens: Option<&[LocatedToken]>) -> bool {
         let Some(tokens) = tokens else {
             return count_line_breaks(ctx.statement_sql()) > 0;
         };
@@ -983,14 +975,7 @@ mod tests {
         let rule = ConventionTerminator::from_config(&config);
         let sql = "SELECT 1";
         let stmts = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &stmts[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues = rule.check_with_context(&stmts[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_CV_006);
         assert_eq!(
@@ -1030,14 +1015,8 @@ mod tests {
         let rule = ConventionTerminator::from_config(&config);
         let sql = "SELECT\n  1;";
         let stmts = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &stmts[0],
-            &LintContext {
-                sql,
-                statement_range: 0.."SELECT\n  1".len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&stmts[0], &RuleContext::new(sql, 0.."SELECT\n  1".len(), 0));
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_CV_006);
     }
@@ -1046,13 +1025,9 @@ mod tests {
     fn default_flags_space_before_semicolon() {
         let sql = "SELECT a FROM foo  ;";
         let stmts = parse_sql(sql).expect("parse");
-        let issues = ConventionTerminator::default().check(
+        let issues = ConventionTerminator::default().check_with_context(
             &stmts[0],
-            &LintContext {
-                sql,
-                statement_range: 0.."SELECT a FROM foo".len(),
-                statement_index: 0,
-            },
+            &RuleContext::new(sql, 0.."SELECT a FROM foo".len(), 0),
         );
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_CV_006);
@@ -1076,13 +1051,9 @@ mod tests {
         let rule = ConventionTerminator::from_config(&config);
         let sql = "SELECT a\nFROM foo\n\n;";
         let stmts = parse_sql(sql).expect("parse");
-        let issues = rule.check(
+        let issues = rule.check_with_context(
             &stmts[0],
-            &LintContext {
-                sql,
-                statement_range: 0.."SELECT a\nFROM foo".len(),
-                statement_index: 0,
-            },
+            &RuleContext::new(sql, 0.."SELECT a\nFROM foo".len(), 0),
         );
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_CV_006);
@@ -1101,13 +1072,9 @@ mod tests {
         let rule = ConventionTerminator::from_config(&config);
         let sql = "SELECT a\nFROM foo\n-- trailing\n;";
         let stmts = parse_sql(sql).expect("parse");
-        let issues = rule.check(
+        let issues = rule.check_with_context(
             &stmts[0],
-            &LintContext {
-                sql,
-                statement_range: 0.."SELECT a\nFROM foo".len(),
-                statement_index: 0,
-            },
+            &RuleContext::new(sql, 0.."SELECT a\nFROM foo".len(), 0),
         );
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_CV_006);
@@ -1126,13 +1093,9 @@ mod tests {
         let rule = ConventionTerminator::from_config(&config);
         let sql = "SELECT a\nFROM foo\n-- trailing\n;";
         let stmts = parse_sql(sql).expect("parse");
-        let issues = rule.check(
+        let issues = rule.check_with_context(
             &stmts[0],
-            &LintContext {
-                sql,
-                statement_range: 0.."SELECT a\nFROM foo\n-- trailing".len(),
-                statement_index: 0,
-            },
+            &RuleContext::new(sql, 0.."SELECT a\nFROM foo\n-- trailing".len(), 0),
         );
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_CV_006);
@@ -1151,16 +1114,10 @@ mod tests {
         let rule = ConventionTerminator::from_config(&config);
         let stmt = &parse_sql("SELECT 1").expect("parse")[0];
         let sql = "SELECT 1\nGO\n";
-        let issues = with_active_dialect(Dialect::Mssql, || {
-            rule.check(
-                stmt,
-                &LintContext {
-                    sql,
-                    statement_range: 0.."SELECT 1".len(),
-                    statement_index: 0,
-                },
-            )
-        });
+        let issues = rule.check_with_context(
+            stmt,
+            &RuleContext::new(sql, 0.."SELECT 1".len(), 0).with_dialect(Dialect::Mssql),
+        );
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_CV_006);
     }
@@ -1178,16 +1135,10 @@ mod tests {
         let rule = ConventionTerminator::from_config(&config);
         let stmt = &parse_sql("SELECT 1").expect("parse")[0];
         let sql = "SELECT 1\nGO\nSELECT 2;";
-        let issues = with_active_dialect(Dialect::Mssql, || {
-            rule.check(
-                stmt,
-                &LintContext {
-                    sql,
-                    statement_range: 0.."SELECT 1".len(),
-                    statement_index: 0,
-                },
-            )
-        });
+        let issues = rule.check_with_context(
+            stmt,
+            &RuleContext::new(sql, 0.."SELECT 1".len(), 0).with_dialect(Dialect::Mssql),
+        );
         assert!(issues.is_empty());
     }
 
@@ -1204,16 +1155,10 @@ mod tests {
         let rule = ConventionTerminator::from_config(&config);
         let stmt = &parse_sql("SELECT 1").expect("parse")[0];
         let sql = "SELECT 1\nGO -- not a standalone separator\n";
-        let issues = with_active_dialect(Dialect::Mssql, || {
-            rule.check(
-                stmt,
-                &LintContext {
-                    sql,
-                    statement_range: 0.."SELECT 1".len(),
-                    statement_index: 0,
-                },
-            )
-        });
+        let issues = rule.check_with_context(
+            stmt,
+            &RuleContext::new(sql, 0.."SELECT 1".len(), 0).with_dialect(Dialect::Mssql),
+        );
         assert!(issues.is_empty());
     }
 
@@ -1230,13 +1175,9 @@ mod tests {
         let rule = ConventionTerminator::from_config(&config);
         let sql = "SELECT 'line1\nline2';";
         let stmt = &parse_sql(sql).expect("parse")[0];
-        let issues = rule.check(
+        let issues = rule.check_with_context(
             stmt,
-            &LintContext {
-                sql,
-                statement_range: 0.."SELECT 'line1\nline2'".len(),
-                statement_index: 0,
-            },
+            &RuleContext::new(sql, 0.."SELECT 'line1\nline2'".len(), 0),
         );
         assert!(issues.is_empty());
     }
@@ -1244,11 +1185,7 @@ mod tests {
     #[test]
     fn statement_is_multiline_fallback_handles_crlf_line_breaks() {
         let sql = "SELECT\r\n  1";
-        let ctx = LintContext {
-            sql,
-            statement_range: 0..sql.len(),
-            statement_index: 0,
-        };
+        let ctx = RuleContext::new(sql, 0..sql.len(), 0);
         assert!(statement_is_multiline(&ctx, None));
     }
 
@@ -1267,14 +1204,7 @@ mod tests {
         let sql = "SELECT a\nFROM foo -- inline comment\n;";
         let stmts = parse_sql(sql).expect("parse");
         let stmt_range = 0.."SELECT a\nFROM foo".len();
-        let issues = rule.check(
-            &stmts[0],
-            &LintContext {
-                sql,
-                statement_range: stmt_range,
-                statement_index: 0,
-            },
-        );
+        let issues = rule.check_with_context(&stmts[0], &RuleContext::new(sql, stmt_range, 0));
         assert!(
             issues.is_empty(),
             "Should not flag: inline comment before newline+semicolon is valid in multiline_newline mode"
@@ -1286,13 +1216,9 @@ mod tests {
         // test_fail_newline_semi_colon_default
         let sql = "SELECT a FROM foo\n;";
         let stmts = parse_sql(sql).expect("parse");
-        let issues = ConventionTerminator::default().check(
+        let issues = ConventionTerminator::default().check_with_context(
             &stmts[0],
-            &LintContext {
-                sql,
-                statement_range: 0.."SELECT a FROM foo".len(),
-                statement_index: 0,
-            },
+            &RuleContext::new(sql, 0.."SELECT a FROM foo".len(), 0),
         );
         assert_eq!(issues.len(), 1);
         let fixed = apply_issue_autofix(sql, &issues[0]).expect("apply autofix");
@@ -1306,13 +1232,9 @@ mod tests {
         // The \n between comment and old ; stays (part of comment token).
         let sql = "SELECT a FROM foo -- inline comment\n;";
         let stmts = parse_sql(sql).expect("parse");
-        let issues = ConventionTerminator::default().check(
+        let issues = ConventionTerminator::default().check_with_context(
             &stmts[0],
-            &LintContext {
-                sql,
-                statement_range: 0.."SELECT a FROM foo".len(),
-                statement_index: 0,
-            },
+            &RuleContext::new(sql, 0.."SELECT a FROM foo".len(), 0),
         );
         assert_eq!(issues.len(), 1);
         let fixed = apply_issue_autofix(sql, &issues[0]).expect("apply autofix");
@@ -1333,13 +1255,9 @@ mod tests {
         let rule = ConventionTerminator::from_config(&config);
         let sql = "SELECT a FROM foo -- inline comment\n";
         let stmts = parse_sql(sql).expect("parse");
-        let issues = rule.check(
+        let issues = rule.check_with_context(
             &stmts[0],
-            &LintContext {
-                sql,
-                statement_range: 0.."SELECT a FROM foo".len(),
-                statement_index: 0,
-            },
+            &RuleContext::new(sql, 0.."SELECT a FROM foo".len(), 0),
         );
         assert_eq!(issues.len(), 1);
         let fixed = apply_issue_autofix(sql, &issues[0]).expect("apply autofix");
@@ -1360,13 +1278,9 @@ mod tests {
         let rule = ConventionTerminator::from_config(&config);
         let sql = "SELECT a\nFROM foo;";
         let stmts = parse_sql(sql).expect("parse");
-        let issues = rule.check(
+        let issues = rule.check_with_context(
             &stmts[0],
-            &LintContext {
-                sql,
-                statement_range: 0.."SELECT a\nFROM foo".len(),
-                statement_index: 0,
-            },
+            &RuleContext::new(sql, 0.."SELECT a\nFROM foo".len(), 0),
         );
         assert_eq!(issues.len(), 1);
         let fixed = apply_issue_autofix(sql, &issues[0]).expect("apply autofix");
@@ -1387,13 +1301,9 @@ mod tests {
         let rule = ConventionTerminator::from_config(&config);
         let sql = "SELECT a\nFROM foo\n";
         let stmts = parse_sql(sql).expect("parse");
-        let issues = rule.check(
+        let issues = rule.check_with_context(
             &stmts[0],
-            &LintContext {
-                sql,
-                statement_range: 0.."SELECT a\nFROM foo".len(),
-                statement_index: 0,
-            },
+            &RuleContext::new(sql, 0.."SELECT a\nFROM foo".len(), 0),
         );
         assert_eq!(issues.len(), 1);
         let fixed = apply_issue_autofix(sql, &issues[0]).expect("apply autofix");
@@ -1414,13 +1324,9 @@ mod tests {
         let rule = ConventionTerminator::from_config(&config);
         let sql = "SELECT a\nFROM foo -- inline comment\n";
         let stmts = parse_sql(sql).expect("parse");
-        let issues = rule.check(
+        let issues = rule.check_with_context(
             &stmts[0],
-            &LintContext {
-                sql,
-                statement_range: 0.."SELECT a\nFROM foo".len(),
-                statement_index: 0,
-            },
+            &RuleContext::new(sql, 0.."SELECT a\nFROM foo".len(), 0),
         );
         assert_eq!(issues.len(), 1);
         let fixed = apply_issue_autofix(sql, &issues[0]).expect("apply autofix");
@@ -1445,14 +1351,7 @@ mod tests {
         let sql = "SELECT foo\nFROM bar\n/* multiline\ncomment\n*/\n;\n";
         let stmt_range = 0.."SELECT foo\nFROM bar\n/* multiline\ncomment\n*/".len();
         let stmts = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &stmts[0],
-            &LintContext {
-                sql,
-                statement_range: stmt_range,
-                statement_index: 0,
-            },
-        );
+        let issues = rule.check_with_context(&stmts[0], &RuleContext::new(sql, stmt_range, 0));
         assert_eq!(issues.len(), 1);
         let fixed = apply_issue_autofix(sql, &issues[0]).expect("apply autofix");
         // Semicolon inserted before block comment. The old semicolon deletion
@@ -1479,14 +1378,7 @@ mod tests {
         let sql = "SELECT foo\nFROM bar /* multiline\ncomment\n*/\n;\n";
         let stmt_range = 0.."SELECT foo\nFROM bar /* multiline\ncomment\n*/".len();
         let stmts = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &stmts[0],
-            &LintContext {
-                sql,
-                statement_range: stmt_range,
-                statement_index: 0,
-            },
-        );
+        let issues = rule.check_with_context(&stmts[0], &RuleContext::new(sql, stmt_range, 0));
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_CV_006);
         let fixed = apply_issue_autofix(sql, &issues[0]).expect("apply autofix");
@@ -1510,13 +1402,9 @@ mod tests {
         let rule = ConventionTerminator::from_config(&config);
         let sql = "SELECT foo\nFROM bar; /* multiline\ncomment\n*/\n";
         let stmts = parse_sql(sql).expect("parse");
-        let issues = rule.check(
+        let issues = rule.check_with_context(
             &stmts[0],
-            &LintContext {
-                sql,
-                statement_range: 0.."SELECT foo\nFROM bar".len(),
-                statement_index: 0,
-            },
+            &RuleContext::new(sql, 0.."SELECT foo\nFROM bar".len(), 0),
         );
         assert_eq!(issues.len(), 1);
         let fixed = apply_issue_autofix(sql, &issues[0]).expect("apply autofix");

@@ -2,11 +2,10 @@
 //!
 //! Qualified column prefixes should resolve to known FROM/JOIN sources.
 
-use std::cell::Cell;
 use std::collections::HashSet;
 
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Issue};
 use sqlparser::ast::{
     AlterPolicy, AlterPolicyOperation, Assignment, AssignmentTarget, ConditionalStatements,
@@ -42,34 +41,7 @@ impl Default for ReferencesFrom {
     }
 }
 
-thread_local! {
-    static RF01_FORCE_ENABLE_EXPLICIT: Cell<bool> = const { Cell::new(false) };
-}
-
-fn with_rf01_force_enable_explicit<T>(explicit: bool, f: impl FnOnce() -> T) -> T {
-    RF01_FORCE_ENABLE_EXPLICIT.with(|active| {
-        struct Reset<'a> {
-            cell: &'a Cell<bool>,
-            previous: bool,
-        }
-
-        impl Drop for Reset<'_> {
-            fn drop(&mut self) {
-                self.cell.set(self.previous);
-            }
-        }
-
-        let reset = Reset {
-            cell: active,
-            previous: active.replace(explicit),
-        };
-        let result = f();
-        drop(reset);
-        result
-    })
-}
-
-impl LintRule for ReferencesFrom {
+impl BuiltinLintRule for ReferencesFrom {
     fn code(&self) -> &'static str {
         issue_codes::LINT_RF_001
     }
@@ -82,7 +54,7 @@ impl LintRule for ReferencesFrom {
         "References cannot reference objects not present in 'FROM' clause."
     }
 
-    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let effective_force_enable = if self.force_enable_configured {
             self.force_enable
         } else {
@@ -95,15 +67,12 @@ impl LintRule for ReferencesFrom {
             return Vec::new();
         }
 
-        let unresolved_count =
-            with_rf01_force_enable_explicit(self.force_enable_configured, || {
-                unresolved_references_in_statement(
-                    statement,
-                    &SourceRegistry::default(),
-                    ctx.dialect(),
-                    false,
-                )
-            });
+        let unresolved_count = unresolved_references_in_statement(
+            statement,
+            &SourceRegistry::with_force_enable_explicit(self.force_enable_configured),
+            ctx.dialect(),
+            false,
+        );
 
         (0..unresolved_count)
             .map(|_| {
@@ -121,9 +90,21 @@ impl LintRule for ReferencesFrom {
 struct SourceRegistry {
     exact: HashSet<String>,
     unqualified: HashSet<String>,
+    force_enable_explicit: bool,
 }
 
 impl SourceRegistry {
+    fn with_force_enable_explicit(force_enable_explicit: bool) -> Self {
+        Self {
+            force_enable_explicit,
+            ..Self::default()
+        }
+    }
+
+    fn isolated(&self) -> Self {
+        Self::with_force_enable_explicit(self.force_enable_explicit)
+    }
+
     fn register_alias(&mut self, alias: &str) {
         let clean = clean_identifier_component(alias);
         if clean.is_empty() {
@@ -652,7 +633,7 @@ fn unresolved_references_in_table_factor(
             } else {
                 unresolved_references_in_query(
                     subquery,
-                    &SourceRegistry::default(),
+                    &scope_sources.isolated(),
                     dialect,
                     in_trigger,
                 )
@@ -971,7 +952,7 @@ fn should_defer_struct_field_reference(
     qualifier_parts: &[String],
     scope_sources: &SourceRegistry,
 ) -> bool {
-    if RF01_FORCE_ENABLE_EXPLICIT.with(Cell::get) {
+    if scope_sources.force_enable_explicit {
         return false;
     }
 
@@ -1091,7 +1072,6 @@ fn clean_identifier_component(raw: &str) -> String {
 mod tests {
     use super::*;
     use crate::linter::config::LintConfig;
-    use crate::linter::rule::with_active_dialect;
     use crate::parser::parse_sql;
     use crate::parser::parse_sql_with_dialect;
     use crate::types::Dialect;
@@ -1103,14 +1083,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }
@@ -1119,18 +1092,12 @@ mod tests {
         let statements = parse_sql_with_dialect(sql, dialect).expect("parse");
         let rule = ReferencesFrom::default();
         let mut issues = Vec::new();
-        with_active_dialect(dialect, || {
-            for (index, statement) in statements.iter().enumerate() {
-                issues.extend(rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                ));
-            }
-        });
+        for (index, statement) in statements.iter().enumerate() {
+            issues.extend(rule.check_with_context(
+                statement,
+                &RuleContext::new(sql, 0..sql.len(), index).with_dialect(dialect),
+            ));
+        }
         issues
     }
 
@@ -1236,18 +1203,12 @@ mod tests {
         let sql = "SELECT tbl.a AS a_new, EXPLODE(tbl.b.c) AS a_b_new FROM test AS tbl";
         let statements = parse_sql_with_dialect(sql, Dialect::Databricks).expect("parse");
         let mut issues = Vec::new();
-        with_active_dialect(Dialect::Databricks, || {
-            for (index, statement) in statements.iter().enumerate() {
-                issues.extend(rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                ));
-            }
-        });
+        for (index, statement) in statements.iter().enumerate() {
+            issues.extend(rule.check_with_context(
+                statement,
+                &RuleContext::new(sql, 0..sql.len(), index).with_dialect(Dialect::Databricks),
+            ));
+        }
         assert_eq!(issues.len(), 1);
     }
 
@@ -1278,14 +1239,8 @@ SELECT cte.a FROM cte ORDER BY cte.a");
         let rule = ReferencesFrom::from_config(&config);
         let sql = "SELECT * FROM my_tbl WHERE foo.bar > 0";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert!(issues.is_empty());
     }
 }

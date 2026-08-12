@@ -3,7 +3,7 @@
 //! Plain `JOIN` clauses without ON/USING should use explicit join predicates,
 //! not implicit relationships hidden in WHERE.
 
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Issue, IssueAutofixApplicability, IssuePatchEdit, Span};
 use sqlparser::ast::{
     BinaryOperator, Expr, JoinConstraint, JoinOperator, Select, Spanned, Statement, TableFactor,
@@ -16,7 +16,7 @@ use super::semantic_helpers::{table_factor_reference_name, visit_selects_in_stat
 
 pub struct ConventionJoinCondition;
 
-impl LintRule for ConventionJoinCondition {
+impl BuiltinLintRule for ConventionJoinCondition {
     fn code(&self) -> &'static str {
         issue_codes::LINT_CV_012
     }
@@ -29,7 +29,7 @@ impl LintRule for ConventionJoinCondition {
         "Use `JOIN ... ON ...` instead of `WHERE ...` for join conditions."
     }
 
-    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let mut found_violation = false;
         let mut autofix_edits: Vec<IssuePatchEdit> = Vec::new();
 
@@ -74,7 +74,7 @@ struct Cv12JoinFixPlan {
     predicates: Vec<Expr>,
 }
 
-fn cv012_select_autofix_result(select: &Select, ctx: &LintContext) -> Cv12SelectFixResult {
+fn cv012_select_autofix_result(select: &Select, ctx: &RuleContext) -> Cv12SelectFixResult {
     let Some(where_expr) = &select.selection else {
         return Cv12SelectFixResult::default();
     };
@@ -548,7 +548,7 @@ fn expr_eq(a: &Expr, b: &Expr) -> bool {
 }
 
 fn locate_where_keyword_abs_start(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     select_abs_start: usize,
     where_expr_abs_start: usize,
 ) -> Option<usize> {
@@ -571,7 +571,7 @@ struct PositionedToken {
     end: usize,
 }
 
-fn positioned_statement_tokens(ctx: &LintContext) -> Option<Vec<PositionedToken>> {
+fn positioned_statement_tokens(ctx: &RuleContext) -> Option<Vec<PositionedToken>> {
     let from_document_tokens = ctx.with_document_tokens(|tokens| {
         if tokens.is_empty() {
             return None;
@@ -625,7 +625,7 @@ fn token_with_span_offsets(sql: &str, token: &TokenWithSpan) -> Option<(usize, u
 }
 
 fn sqlparser_span_statement_offsets(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     span: SqlParserSpan,
 ) -> Option<(usize, usize)> {
     if let Some((start, end)) = sqlparser_span_offsets(ctx.statement_sql(), span) {
@@ -641,7 +641,7 @@ fn sqlparser_span_statement_offsets(
     ))
 }
 
-fn sqlparser_span_abs_offsets(ctx: &LintContext, span: SqlParserSpan) -> Option<(usize, usize)> {
+fn sqlparser_span_abs_offsets(ctx: &RuleContext, span: SqlParserSpan) -> Option<(usize, usize)> {
     if let Some((start, end)) = sqlparser_span_offsets(ctx.statement_sql(), span) {
         return Some((
             ctx.statement_range.start + start,
@@ -719,14 +719,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }

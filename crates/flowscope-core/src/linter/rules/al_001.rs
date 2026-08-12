@@ -3,7 +3,7 @@
 //! SQLFluff parity: configurable table aliasing style (`explicit`/`implicit`).
 
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit, Span};
 use sqlparser::ast::{
     CreateView, Expr, FromTable, Ident, Merge, Query, SetExpr, Statement, TableFactor,
@@ -65,7 +65,7 @@ impl Default for AliasingTableStyle {
     }
 }
 
-impl LintRule for AliasingTableStyle {
+impl BuiltinLintRule for AliasingTableStyle {
     fn code(&self) -> &'static str {
         issue_codes::LINT_AL_001
     }
@@ -78,7 +78,7 @@ impl LintRule for AliasingTableStyle {
         "Implicit/explicit aliasing of table."
     }
 
-    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let mut issues = Vec::new();
         let tokens =
             tokenized_for_context(ctx).or_else(|| tokenized(ctx.statement_sql(), ctx.dialect()));
@@ -147,7 +147,7 @@ fn autofix_edits_for_occurrence(
 
 fn alias_occurrence_in_statement(
     alias: &Ident,
-    ctx: &LintContext,
+    ctx: &RuleContext,
     tokens: Option<&[LocatedToken]>,
 ) -> Option<AliasOccurrence> {
     let tokens = tokens?;
@@ -530,7 +530,7 @@ fn tokenized(sql: &str, dialect: Dialect) -> Option<Vec<LocatedToken>> {
     Some(out)
 }
 
-fn tokenized_for_context(ctx: &LintContext) -> Option<Vec<LocatedToken>> {
+fn tokenized_for_context(ctx: &RuleContext) -> Option<Vec<LocatedToken>> {
     let statement_start = ctx.statement_range.start;
     ctx.with_document_tokens(|tokens| {
         if tokens.is_empty() {
@@ -622,14 +622,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, stmt)| {
-                rule.check(
-                    stmt,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(stmt, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }
@@ -683,14 +676,8 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, stmt)| {
-                AliasingTableStyle::default().check(
-                    stmt,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                AliasingTableStyle::default()
+                    .check_with_context(stmt, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect::<Vec<_>>();
         assert_eq!(issues.len(), 2);

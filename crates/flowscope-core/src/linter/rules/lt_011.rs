@@ -4,7 +4,7 @@
 //! operators in multiline statements.
 
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit};
 use sqlparser::ast::Statement;
 use sqlparser::keywords::Keyword;
@@ -54,7 +54,7 @@ impl Default for LayoutSetOperators {
     }
 }
 
-impl LintRule for LayoutSetOperators {
+impl BuiltinLintRule for LayoutSetOperators {
     fn code(&self) -> &'static str {
         issue_codes::LINT_LT_011
     }
@@ -67,7 +67,7 @@ impl LintRule for LayoutSetOperators {
         "Set operators should be surrounded by newlines."
     }
 
-    fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, _statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let (has_violation, edit_spans) =
             set_operator_layout_violation_and_fixable_spans(ctx, self.line_position);
         if has_violation {
@@ -99,7 +99,7 @@ impl LintRule for LayoutSetOperators {
 }
 
 fn set_operator_layout_violation_and_fixable_spans(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     line_position: SetOperatorLinePosition,
 ) -> (bool, Vec<(usize, usize)>) {
     let tokens =
@@ -208,7 +208,7 @@ fn tokenized(sql: &str, dialect: Dialect) -> Option<Vec<TokenWithSpan>> {
     tokenizer.tokenize_with_location().ok()
 }
 
-fn tokenized_for_context(ctx: &LintContext) -> Option<Vec<TokenWithSpan>> {
+fn tokenized_for_context(ctx: &RuleContext) -> Option<Vec<TokenWithSpan>> {
     let (statement_start_line, statement_start_column) =
         offset_to_line_col(ctx.sql, ctx.statement_range.start)?;
 
@@ -414,14 +414,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }

@@ -4,7 +4,7 @@
 //! `!=` not-equal operators.
 
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::linter::visit::visit_expressions;
 use crate::types::{issue_codes, Issue, IssueAutofixApplicability, IssuePatchEdit};
 use sqlparser::ast::{BinaryOperator, Expr, Spanned, Statement};
@@ -90,7 +90,7 @@ impl Default for ConventionNotEqual {
     }
 }
 
-impl LintRule for ConventionNotEqual {
+impl BuiltinLintRule for ConventionNotEqual {
     fn code(&self) -> &'static str {
         issue_codes::LINT_CV_001
     }
@@ -103,7 +103,7 @@ impl LintRule for ConventionNotEqual {
         "Consistent usage of '!=' or '<>' for \"not equal to\" operator."
     }
 
-    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let tokens =
             tokenized_for_context(ctx).or_else(|| tokenized(ctx.statement_sql(), ctx.dialect()));
         let mut occurrences = statement_not_equal_occurrences_with_tokens(
@@ -407,7 +407,7 @@ fn tokenized(sql: &str, dialect: crate::types::Dialect) -> Option<Vec<LocatedTok
     Some(out)
 }
 
-fn tokenized_for_context(ctx: &LintContext) -> Option<Vec<LocatedToken>> {
+fn tokenized_for_context(ctx: &RuleContext) -> Option<Vec<LocatedToken>> {
     let statement_start = ctx.statement_range.start;
     let from_document = ctx.with_document_tokens(|tokens| {
         if tokens.is_empty() {
@@ -502,14 +502,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }
@@ -576,14 +569,8 @@ mod tests {
         let rule = ConventionNotEqual::from_config(&config);
         let sql = "SELECT * FROM t WHERE a <> b";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
         let angle_start = sql.find("<>").expect("angle operator");
         let issue_span = issues[0].span.expect("issue span");
@@ -610,14 +597,8 @@ mod tests {
         let rule = ConventionNotEqual::from_config(&config);
         let sql = "SELECT * FROM t WHERE a <> b AND c <> d";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
 
         let first_start = sql.find("<>").expect("first angle operator");
@@ -654,14 +635,8 @@ mod tests {
         let rule = ConventionNotEqual::from_config(&config);
         let sql = "SELECT * FROM t WHERE a != b";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
         let bang_start = sql.find("!=").expect("bang operator");
         let issue_span = issues[0].span.expect("issue span");
@@ -688,14 +663,8 @@ mod tests {
         let rule = ConventionNotEqual::from_config(&config);
         let sql = "SELECT * FROM X WHERE 1  <\n  -- some comment\n> 2\n";
         let statements = parse_sql("SELECT 1").expect("synthetic parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
         let autofix = issues[0].autofix.as_ref().expect("autofix metadata");
         assert_eq!(autofix.edits.len(), 2);
@@ -719,14 +688,8 @@ mod tests {
         let rule = ConventionNotEqual::from_config(&config);
         let sql = "SELECT * FROM X WHERE 1  !\n  -- some comment\n= 2\n";
         let statements = parse_sql("SELECT 1").expect("synthetic parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
         let autofix = issues[0].autofix.as_ref().expect("autofix metadata");
         assert_eq!(autofix.edits.len(), 2);

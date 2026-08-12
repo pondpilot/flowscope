@@ -3,13 +3,13 @@
 //! SQLFluff LT12 parity (current scope): SQL text should end with exactly one
 //! trailing newline.
 
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Issue, IssueAutofixApplicability, IssuePatchEdit, Span};
 use sqlparser::ast::Statement;
 
 pub struct LayoutEndOfFile;
 
-impl LintRule for LayoutEndOfFile {
+impl BuiltinLintRule for LayoutEndOfFile {
     fn code(&self) -> &'static str {
         issue_codes::LINT_LT_012
     }
@@ -22,7 +22,7 @@ impl LintRule for LayoutEndOfFile {
         "Files must end with a single trailing newline."
     }
 
-    fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, _statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let content_end = ctx
             .sql
             .trim_end_matches(|ch: char| ch.is_ascii_whitespace())
@@ -88,14 +88,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }
@@ -164,14 +157,8 @@ mod tests {
         let sql = "{{ '\\n\\n' }}";
         let synthetic = parse_sql("SELECT 1").expect("parse");
         let rule = LayoutEndOfFile;
-        let issues = rule.check(
-            &synthetic[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&synthetic[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_LT_012);
     }
@@ -181,14 +168,8 @@ mod tests {
         let sql = "select * from {{ 'trim_whitespace_table' -}}\n";
         let synthetic = parse_sql("SELECT 1").expect("parse");
         let rule = LayoutEndOfFile;
-        let issues = rule.check(
-            &synthetic[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&synthetic[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert!(issues.is_empty());
     }
 }

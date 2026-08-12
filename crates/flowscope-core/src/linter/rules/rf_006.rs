@@ -7,7 +7,7 @@ use std::collections::HashSet;
 
 use crate::generated::NormalizationStrategy;
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit};
 use regex::Regex;
 use sqlparser::ast::Statement;
@@ -92,7 +92,7 @@ impl ReferencesQuoting {
     }
 }
 
-impl LintRule for ReferencesQuoting {
+impl BuiltinLintRule for ReferencesQuoting {
     fn code(&self) -> &'static str {
         issue_codes::LINT_RF_006
     }
@@ -105,7 +105,7 @@ impl LintRule for ReferencesQuoting {
         "Unnecessary quoted identifier."
     }
 
-    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let dialect = ctx.dialect();
 
         let ast_has_violation = collect_identifier_candidates(statement)
@@ -563,7 +563,6 @@ fn is_keyword(token: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::linter::rule::with_active_dialect;
     use crate::parser::parse_sql;
     use crate::types::Dialect;
     use crate::types::IssueAutofixApplicability;
@@ -575,14 +574,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }
@@ -642,14 +634,8 @@ mod tests {
         let rule = ReferencesQuoting::from_config(&config);
         let sql = "SELECT \"good_name\" FROM \"t\"";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert!(issues.is_empty());
     }
 
@@ -666,14 +652,8 @@ mod tests {
         let rule = ReferencesQuoting::from_config(&config);
         let sql = "SELECT good_name FROM t";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
     }
 
@@ -690,14 +670,8 @@ mod tests {
         let rule = ReferencesQuoting::from_config(&config);
         let sql = "SELECT \"select\".id FROM users AS \"select\"";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert!(issues.is_empty());
     }
 
@@ -714,14 +688,8 @@ mod tests {
         let rule = ReferencesQuoting::from_config(&config);
         let sql = "SELECT \"good_name\" FROM t";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert!(issues.is_empty());
     }
 
@@ -738,14 +706,8 @@ mod tests {
         let rule = ReferencesQuoting::from_config(&config);
         let sql = "SELECT \"good_name\" FROM t";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert!(issues.is_empty());
     }
 
@@ -762,14 +724,8 @@ mod tests {
         let rule = ReferencesQuoting::from_config(&config);
         let sql = "SELECT \"good_name\" FROM t";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert!(issues.is_empty());
     }
 
@@ -791,16 +747,10 @@ mod tests {
         let statements = parse_sql("SELECT 1").expect("synthetic parse");
         let rule = ReferencesQuoting::default();
 
-        let issues = with_active_dialect(Dialect::Databricks, || {
-            rule.check(
-                &statements[0],
-                &LintContext {
-                    sql,
-                    statement_range: 0..sql.len(),
-                    statement_index: 0,
-                },
-            )
-        });
+        let issues = rule.check_with_context(
+            &statements[0],
+            &RuleContext::new(sql, 0..sql.len(), 0).with_dialect(Dialect::Databricks),
+        );
         assert_eq!(issues.len(), 1);
         let autofix = issues[0].autofix.as_ref().expect("autofix metadata");
         assert_eq!(autofix.applicability, IssueAutofixApplicability::Safe);

@@ -5,7 +5,7 @@
 //! preferred style.
 
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::linter::visit::visit_expressions;
 use crate::types::{issue_codes, Issue, IssueAutofixApplicability, IssuePatchEdit, Span};
 use sqlparser::ast::{CastKind, DataType, Expr, Spanned, Statement};
@@ -85,7 +85,7 @@ impl Default for ConventionCastingStyle {
     }
 }
 
-impl LintRule for ConventionCastingStyle {
+impl BuiltinLintRule for ConventionCastingStyle {
     fn code(&self) -> &'static str {
         issue_codes::LINT_CV_011
     }
@@ -98,7 +98,7 @@ impl LintRule for ConventionCastingStyle {
         "Enforce consistent type casting style."
     }
 
-    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let sql = ctx.sql;
         let casts = collect_cast_instances(statement, sql);
 
@@ -942,14 +942,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }
@@ -961,14 +954,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }
@@ -1035,14 +1021,8 @@ mod tests {
         let rule = ConventionCastingStyle::from_config(&config);
         let sql = "SELECT CAST(amount AS INT) FROM t";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
     }
 
@@ -1059,14 +1039,8 @@ mod tests {
         let rule = ConventionCastingStyle::from_config(&config);
         let sql = "SELECT amount::INT FROM t";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
     }
 

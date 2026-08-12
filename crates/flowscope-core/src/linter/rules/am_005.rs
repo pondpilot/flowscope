@@ -4,7 +4,7 @@
 //! `JOIN` for clearer intent.
 
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit, Span};
 use sqlparser::ast::{JoinOperator, Select, Statement};
 use sqlparser::keywords::Keyword;
@@ -54,7 +54,7 @@ impl Default for AmbiguousJoinStyle {
     }
 }
 
-impl LintRule for AmbiguousJoinStyle {
+impl BuiltinLintRule for AmbiguousJoinStyle {
     fn code(&self) -> &'static str {
         issue_codes::LINT_AM_005
     }
@@ -67,7 +67,7 @@ impl LintRule for AmbiguousJoinStyle {
         "Join clauses should be fully qualified."
     }
 
-    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let mut plain_join_count = 0usize;
 
         visit_selects_in_statement(statement, &mut |select| {
@@ -124,7 +124,7 @@ struct Am005AutofixCandidate {
 }
 
 fn am005_autofix_candidates_for_context(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     qualify_mode: FullyQualifyJoinTypes,
 ) -> Vec<Am005AutofixCandidate> {
     let from_document_tokens = ctx.with_document_tokens(|tokens| {
@@ -301,7 +301,7 @@ fn is_outer_join_side_keyword(token: &Token) -> bool {
         || token_word_equals(token, "FULL")
 }
 
-fn count_unqualified_outer_joins(statement: &Statement, ctx: &LintContext) -> usize {
+fn count_unqualified_outer_joins(statement: &Statement, ctx: &RuleContext) -> usize {
     count_unqualified_left_right_outer_joins(statement)
         + count_unqualified_full_outer_joins(statement, ctx)
 }
@@ -335,7 +335,7 @@ fn select_unqualified_left_right_outer_join_count(select: &Select) -> usize {
         .sum()
 }
 
-fn count_unqualified_full_outer_joins(statement: &Statement, ctx: &LintContext) -> usize {
+fn count_unqualified_full_outer_joins(statement: &Statement, ctx: &RuleContext) -> usize {
     let full_outer_join_count = count_full_outer_joins(statement);
     if full_outer_join_count == 0 {
         return 0;
@@ -369,7 +369,7 @@ fn count_explicit_full_outer_joins(sql: &str, dialect: Dialect) -> usize {
     count_explicit_full_outer_joins_from_tokens(&tokens)
 }
 
-fn count_explicit_full_outer_joins_for_context(ctx: &LintContext) -> usize {
+fn count_explicit_full_outer_joins_for_context(ctx: &RuleContext) -> usize {
     let from_document_tokens = ctx.with_document_tokens(|tokens| {
         if tokens.is_empty() {
             return None;
@@ -503,14 +503,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }
@@ -600,14 +593,8 @@ mod tests {
         let rule = AmbiguousJoinStyle::from_config(&config);
         let sql = "SELECT foo.a, bar.b FROM foo LEFT JOIN bar ON foo.id = bar.id";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
     }
 
@@ -624,14 +611,8 @@ mod tests {
         let rule = AmbiguousJoinStyle::from_config(&config);
         let sql = "SELECT foo.a, bar.b FROM foo LEFT OUTER JOIN bar ON foo.id = bar.id";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert!(issues.is_empty());
     }
 
@@ -648,14 +629,8 @@ mod tests {
         let rule = AmbiguousJoinStyle::from_config(&config);
         let sql = "SELECT foo.a, bar.b FROM foo RIGHT JOIN bar ON foo.id = bar.id";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
     }
 
@@ -672,14 +647,8 @@ mod tests {
         let rule = AmbiguousJoinStyle::from_config(&config);
         let sql = "SELECT foo.a, bar.b FROM foo RIGHT OUTER JOIN bar ON foo.id = bar.id";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert!(issues.is_empty());
     }
 
@@ -696,14 +665,8 @@ mod tests {
         let rule = AmbiguousJoinStyle::from_config(&config);
         let sql = "SELECT foo.a, bar.b FROM foo FULL JOIN bar ON foo.id = bar.id";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
     }
 
@@ -720,14 +683,8 @@ mod tests {
         let rule = AmbiguousJoinStyle::from_config(&config);
         let sql = "SELECT foo.a, bar.b FROM foo FULL OUTER JOIN bar ON foo.id = bar.id";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert!(issues.is_empty());
     }
 
@@ -744,14 +701,8 @@ mod tests {
         let rule = AmbiguousJoinStyle::from_config(&config);
         let sql = "SELECT * FROM a FULL JOIN b ON a.id = b.id FULL OUTER JOIN c ON b.id = c.id";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_AM_005);
     }
@@ -788,14 +739,8 @@ mod tests {
         let rule = AmbiguousJoinStyle::from_config(&config);
         let sql = "SELECT a FROM t FULL JOIN u ON t.id = u.id";
         let statements = parse_sql(sql).expect("parse");
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
         let autofix = issues[0]
             .autofix

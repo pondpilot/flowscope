@@ -17,7 +17,7 @@
 //! parity design doc.
 
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit, Span};
 use sqlparser::ast::Statement;
 use sqlparser::keywords::Keyword;
@@ -139,7 +139,7 @@ impl Default for LayoutIndent {
     }
 }
 
-impl LintRule for LayoutIndent {
+impl BuiltinLintRule for LayoutIndent {
     fn code(&self) -> &'static str {
         issue_codes::LINT_LT_002
     }
@@ -152,7 +152,7 @@ impl LintRule for LayoutIndent {
         "Incorrect Indentation."
     }
 
-    fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, _statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let statement_sql = ctx.statement_sql();
         let statement_lines: Vec<&str> = statement_sql.lines().collect();
         let template_only_lines = template_only_line_flags(&statement_lines);
@@ -2668,7 +2668,7 @@ fn paren_delta_simple(text: &str) -> isize {
 // Generic (dialect-agnostic) indentation detection and helpers
 // ---------------------------------------------------------------------------
 
-fn first_line_is_indented(ctx: &LintContext) -> bool {
+fn first_line_is_indented(ctx: &RuleContext) -> bool {
     let statement_start = ctx.statement_range.start;
     if statement_start == 0 {
         return false;
@@ -2681,7 +2681,7 @@ fn first_line_is_indented(ctx: &LintContext) -> bool {
     !leading.is_empty() && leading.chars().all(char::is_whitespace)
 }
 
-fn ignore_first_line_indent_for_fragmented_statement(ctx: &LintContext) -> bool {
+fn ignore_first_line_indent_for_fragmented_statement(ctx: &RuleContext) -> bool {
     if ctx.statement_index == 0 || ctx.statement_range.start == 0 {
         return false;
     }
@@ -2691,7 +2691,7 @@ fn ignore_first_line_indent_for_fragmented_statement(ctx: &LintContext) -> bool 
     matches!(prev_non_ws, Some(ch) if ch != ';')
 }
 
-fn first_line_is_template_fragment(ctx: &LintContext) -> bool {
+fn first_line_is_template_fragment(ctx: &RuleContext) -> bool {
     let statement_start = ctx.statement_range.start;
     if statement_start == 0 {
         return false;
@@ -2732,7 +2732,7 @@ fn first_line_is_template_fragment(ctx: &LintContext) -> bool {
 /// Returns autofix edits for structural indentation violations. When empty,
 /// no structural violation was found.
 fn structural_indent_edits(
-    ctx: &LintContext,
+    ctx: &RuleContext,
     indent_unit: usize,
     tab_space_size: usize,
     indent_style: IndentStyle,
@@ -3920,7 +3920,7 @@ fn is_comment_token(token: &Token) -> bool {
 
 /// Tokenize SQL for structural analysis. Falls back to statement-level
 /// tokenization when document tokens are not available.
-fn tokenize_for_structural_check(sql: &str, ctx: &LintContext) -> Option<Vec<StructuralToken>> {
+fn tokenize_for_structural_check(sql: &str, ctx: &RuleContext) -> Option<Vec<StructuralToken>> {
     // Fall back to statement-level tokenization (document tokens use
     // 1-indexed lines which makes correlation harder; local tokenization
     // gives 0-indexed consistency).
@@ -4092,7 +4092,7 @@ fn collapse_lt02_autofix_edits_by_start(edits: Vec<Lt02AutofixEdit>) -> Vec<Lt02
     by_start.into_values().collect()
 }
 
-fn line_indent_snapshots(ctx: &LintContext, tab_space_size: usize) -> Vec<LineIndentSnapshot> {
+fn line_indent_snapshots(ctx: &RuleContext, tab_space_size: usize) -> Vec<LineIndentSnapshot> {
     if let Some(tokens) = tokenize_with_offsets_for_context(ctx) {
         let statement_start_line = offset_to_line(ctx.sql, ctx.statement_range.start);
         let mut first_token_by_line: BTreeMap<usize, usize> = BTreeMap::new();
@@ -4178,7 +4178,7 @@ fn tokenize_with_locations(sql: &str, dialect: Dialect) -> Option<Vec<TokenWithS
     tokenizer.tokenize_with_location().ok()
 }
 
-fn tokenize_with_offsets_for_context(ctx: &LintContext) -> Option<Vec<LocatedToken>> {
+fn tokenize_with_offsets_for_context(ctx: &RuleContext) -> Option<Vec<LocatedToken>> {
     ctx.with_document_tokens(|tokens| {
         if tokens.is_empty() {
             return None;
@@ -4427,7 +4427,6 @@ fn offset_to_line(sql: &str, offset: usize) -> usize {
 mod tests {
     use super::*;
     use crate::linter::config::LintConfig;
-    use crate::linter::rule::with_active_dialect;
     use crate::parser::parse_sql;
     use crate::types::{Dialect, IssueAutofixApplicability};
 
@@ -4436,26 +4435,26 @@ mod tests {
     }
 
     fn run_with_config(sql: &str, config: LintConfig) -> Vec<Issue> {
+        run_with_config_in_dialect(sql, Dialect::Generic, config)
+    }
+
+    fn run_with_config_in_dialect(sql: &str, dialect: Dialect, config: LintConfig) -> Vec<Issue> {
         let statements = parse_sql(sql).expect("parse");
         let rule = LayoutIndent::from_config(&config);
         statements
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
+                rule.check_with_context(
                     statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
+                    &RuleContext::new(sql, 0..sql.len(), index).with_dialect(dialect),
                 )
             })
             .collect()
     }
 
     fn run_postgres(sql: &str) -> Vec<Issue> {
-        with_active_dialect(Dialect::Postgres, || run(sql))
+        run_with_config_in_dialect(sql, Dialect::Postgres, LintConfig::default())
     }
 
     fn apply_issue_autofix(sql: &str, issue: &Issue) -> Option<String> {
@@ -4620,14 +4619,8 @@ mod tests {
         let sql = "   SELECT 1";
         let statements = parse_sql(sql).expect("parse");
         let rule = LayoutIndent::default();
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 3..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 3..sql.len(), 0));
         assert_eq!(issues.len(), 1);
         assert!(
             issues[0].autofix.is_none(),
@@ -4639,11 +4632,11 @@ mod tests {
     fn fragmented_non_semicolon_statement_triggers_first_line_indent_guard() {
         let sql = "SELECT\n    a";
         assert!(
-            ignore_first_line_indent_for_fragmented_statement(&LintContext {
+            ignore_first_line_indent_for_fragmented_statement(&RuleContext::new(
                 sql,
-                statement_range: 7..sql.len(),
-                statement_index: 1,
-            }),
+                7..sql.len(),
+                1
+            )),
             "fragmented follow-on statement chunks should ignore first-line LT02"
         );
     }
@@ -4770,16 +4763,10 @@ mod tests {
         let first_statement = "IF (1 > 1)\n    PRINT 'A';";
         let placeholder = parse_sql("SELECT 1").expect("parse placeholder");
         let rule = LayoutIndent::default();
-        let issues = with_active_dialect(Dialect::Mssql, || {
-            rule.check(
-                &placeholder[0],
-                &LintContext {
-                    sql,
-                    statement_range: 0..first_statement.len(),
-                    statement_index: 0,
-                },
-            )
-        });
+        let issues = rule.check_with_context(
+            &placeholder[0],
+            &RuleContext::new(sql, 0..first_statement.len(), 0).with_dialect(Dialect::Mssql),
+        );
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].code, issue_codes::LINT_LT_002);
     }

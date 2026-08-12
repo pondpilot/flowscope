@@ -3,14 +3,14 @@
 //! SQLFluff ST12 parity (current scope): detect consecutive semicolons in the
 //! document text.
 
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit, Span};
 use sqlparser::ast::Statement;
 use sqlparser::tokenizer::{Token, TokenWithSpan, Tokenizer, Whitespace};
 
 pub struct StructureConsecutiveSemicolons;
 
-impl LintRule for StructureConsecutiveSemicolons {
+impl BuiltinLintRule for StructureConsecutiveSemicolons {
     fn code(&self) -> &'static str {
         issue_codes::LINT_ST_012
     }
@@ -23,7 +23,7 @@ impl LintRule for StructureConsecutiveSemicolons {
         "Consecutive semicolons detected."
     }
 
-    fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, _statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         if ctx.statement_index > 0 {
             Vec::new()
         } else {
@@ -130,7 +130,7 @@ fn tokenize_with_offsets(sql: &str, dialect: Dialect) -> Option<Vec<LocatedToken
     Some(out)
 }
 
-fn tokenize_with_offsets_for_context(ctx: &LintContext) -> Option<Vec<LocatedToken>> {
+fn tokenize_with_offsets_for_context(ctx: &RuleContext) -> Option<Vec<LocatedToken>> {
     let tokens = ctx.with_document_tokens(|tokens| {
         if tokens.is_empty() {
             return None;
@@ -211,7 +211,6 @@ fn token_with_span_offsets(sql: &str, token: &TokenWithSpan) -> Option<(usize, u
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::linter::rule::with_active_dialect;
     use crate::parser::{parse_sql, parse_sql_with_dialect};
     use crate::types::{Dialect, IssueAutofixApplicability};
 
@@ -222,14 +221,7 @@ mod tests {
             .iter()
             .enumerate()
             .flat_map(|(index, statement)| {
-                rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                )
+                rule.check_with_context(statement, &RuleContext::new(sql, 0..sql.len(), index))
             })
             .collect()
     }
@@ -239,18 +231,12 @@ mod tests {
         let rule = StructureConsecutiveSemicolons;
         let mut issues = Vec::new();
 
-        with_active_dialect(dialect, || {
-            for (index, statement) in statements.iter().enumerate() {
-                issues.extend(rule.check(
-                    statement,
-                    &LintContext {
-                        sql,
-                        statement_range: 0..sql.len(),
-                        statement_index: index,
-                    },
-                ));
-            }
-        });
+        for (index, statement) in statements.iter().enumerate() {
+            issues.extend(rule.check_with_context(
+                statement,
+                &RuleContext::new(sql, 0..sql.len(), index).with_dialect(dialect),
+            ));
+        }
 
         issues
     }

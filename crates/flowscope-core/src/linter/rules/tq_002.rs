@@ -3,13 +3,13 @@
 //! SQLFluff TQ02 parity: procedures with multiple statements should include a
 //! `BEGIN`/`END` block.
 
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit, Span};
 use sqlparser::ast::Statement;
 
 pub struct TsqlProcedureBeginEnd;
 
-impl LintRule for TsqlProcedureBeginEnd {
+impl BuiltinLintRule for TsqlProcedureBeginEnd {
     fn code(&self) -> &'static str {
         issue_codes::LINT_TQ_002
     }
@@ -22,7 +22,7 @@ impl LintRule for TsqlProcedureBeginEnd {
         "Procedure bodies with multiple statements should be wrapped in BEGIN/END."
     }
 
-    fn check(&self, _statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, _statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         if ctx.dialect() != Dialect::Mssql {
             return Vec::new();
         }
@@ -395,7 +395,6 @@ fn skip_ascii_whitespace(bytes: &[u8], mut index: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::linter::rule::with_active_dialect;
     use crate::parser::{parse_sql, parse_sql_with_dialect};
     use crate::types::IssueAutofixApplicability;
     use crate::Dialect;
@@ -403,37 +402,25 @@ mod tests {
     fn run(sql: &str) -> Vec<Issue> {
         let statements = parse_sql_with_dialect(sql, Dialect::Mssql).expect("parse");
         let rule = TsqlProcedureBeginEnd;
-        with_active_dialect(Dialect::Mssql, || {
-            statements
-                .iter()
-                .enumerate()
-                .flat_map(|(index, statement)| {
-                    rule.check(
-                        statement,
-                        &LintContext {
-                            sql,
-                            statement_range: 0..sql.len(),
-                            statement_index: index,
-                        },
-                    )
-                })
-                .collect()
-        })
+        statements
+            .iter()
+            .enumerate()
+            .flat_map(|(index, statement)| {
+                rule.check_with_context(
+                    statement,
+                    &RuleContext::new(sql, 0..sql.len(), index).with_dialect(Dialect::Mssql),
+                )
+            })
+            .collect()
     }
 
     fn run_statementless(sql: &str) -> Vec<Issue> {
         let synthetic = parse_sql("SELECT 1").expect("parse synthetic statement");
         let rule = TsqlProcedureBeginEnd;
-        with_active_dialect(Dialect::Mssql, || {
-            rule.check(
-                &synthetic[0],
-                &LintContext {
-                    sql,
-                    statement_range: 0..sql.len(),
-                    statement_index: 0,
-                },
-            )
-        })
+        rule.check_with_context(
+            &synthetic[0],
+            &RuleContext::new(sql, 0..sql.len(), 0).with_dialect(Dialect::Mssql),
+        )
     }
 
     fn apply_issue_autofix(sql: &str, issue: &Issue) -> Option<String> {

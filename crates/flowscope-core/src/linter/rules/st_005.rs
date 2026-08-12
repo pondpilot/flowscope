@@ -3,7 +3,7 @@
 //! SQLFluff ST05 parity: avoid subqueries in FROM/JOIN clauses; prefer CTEs.
 
 use crate::linter::config::LintConfig;
-use crate::linter::rule::{LintContext, LintRule};
+use crate::linter::rule::{BuiltinLintRule, RuleContext};
 use crate::parser::parse_sql_with_dialect;
 use crate::types::{issue_codes, Dialect, Issue, IssueAutofixApplicability, IssuePatchEdit};
 use sqlparser::ast::{Query, Select, SetExpr, Statement, TableFactor};
@@ -63,7 +63,7 @@ impl Default for StructureSubquery {
     }
 }
 
-impl LintRule for StructureSubquery {
+impl BuiltinLintRule for StructureSubquery {
     fn code(&self) -> &'static str {
         issue_codes::LINT_ST_005
     }
@@ -76,7 +76,7 @@ impl LintRule for StructureSubquery {
         "Join/From clauses should not contain subqueries. Use CTEs instead."
     }
 
-    fn check(&self, statement: &Statement, ctx: &LintContext) -> Vec<Issue> {
+    fn check_with_context(&self, statement: &Statement, ctx: &RuleContext) -> Vec<Issue> {
         let mut violations = 0usize;
 
         visit_selects_in_statement(statement, &mut |select| {
@@ -1631,7 +1631,7 @@ fn collect_source_names_from_table_factor(table_factor: &TableFactor, names: &mu
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::linter::{config::LintConfig, rule::LintContext, Linter};
+    use crate::linter::{config::LintConfig, rule::RuleContext, Linter};
     use crate::parse_sql;
     use crate::types::IssueAutofixApplicability;
 
@@ -1639,11 +1639,7 @@ mod tests {
         let statements = parse_sql(sql).expect("parse sql");
         let linter = Linter::new(LintConfig::default());
         let stmt = &statements[0];
-        let ctx = LintContext {
-            sql,
-            statement_range: 0..sql.len(),
-            statement_index: 0,
-        };
+        let ctx = RuleContext::new(sql, 0..sql.len(), 0);
         linter.check_statement(stmt, &ctx)
     }
 
@@ -1732,14 +1728,8 @@ mod tests {
                 serde_json::json!({"forbid_subquery_in": "join"}),
             )]),
         });
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert!(issues.is_empty());
     }
 
@@ -1755,14 +1745,8 @@ mod tests {
                 serde_json::json!({"forbid_subquery_in": "from"}),
             )]),
         });
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
         let autofix = issues[0].autofix.as_ref().expect("autofix metadata");
         assert_eq!(autofix.applicability, IssueAutofixApplicability::Unsafe);
@@ -1782,14 +1766,8 @@ mod tests {
                 serde_json::json!({"forbid_subquery_in": "from"}),
             )]),
         });
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert!(issues.is_empty());
     }
 
@@ -1805,14 +1783,8 @@ mod tests {
                 serde_json::json!({"forbid_subquery_in": "both"}),
             )]),
         });
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 1);
     }
 
@@ -1828,14 +1800,8 @@ mod tests {
                 serde_json::json!({"forbid_subquery_in": "both"}),
             )]),
         });
-        let issues = rule.check(
-            &statements[0],
-            &LintContext {
-                sql,
-                statement_range: 0..sql.len(),
-                statement_index: 0,
-            },
-        );
+        let issues =
+            rule.check_with_context(&statements[0], &RuleContext::new(sql, 0..sql.len(), 0));
         assert_eq!(issues.len(), 2);
     }
 
@@ -1851,12 +1817,8 @@ mod tests {
                 serde_json::json!({"forbid_subquery_in": forbid_in}),
             )]),
         });
-        let ctx = LintContext {
-            sql,
-            statement_range: 0..sql.len(),
-            statement_index: 0,
-        };
-        let issues = rule.check(&statements[0], &ctx);
+        let ctx = RuleContext::new(sql, 0..sql.len(), 0);
+        let issues = rule.check_with_context(&statements[0], &ctx);
         if issues.is_empty() {
             return None;
         }
