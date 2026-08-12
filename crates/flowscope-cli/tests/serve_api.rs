@@ -157,6 +157,82 @@ async fn analyze_with_join() {
     assert!(!json["statements"].as_array().unwrap().is_empty());
 }
 
+#[tokio::test]
+async fn analyze_enables_linting_for_file_payload_when_requested() {
+    let state = test_state(default_config(), vec![]);
+    let app = build_router(state, 3000);
+
+    let (status, json) = post_json(
+        &app,
+        "/api/analyze",
+        json!({
+            "sql": "",
+            "files": [{
+                "name": "query.sql",
+                "content": "SELECT 1 UNION SELECT 2"
+            }],
+            "enable_linting": true
+        }),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(json["issues"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|issue| issue["code"] == "LINT_AM_002"));
+}
+
+#[tokio::test]
+async fn analyze_keeps_linting_disabled_when_requested() {
+    let state = test_state(default_config(), vec![]);
+    let app = build_router(state, 3000);
+
+    let (status, json) = post_json(
+        &app,
+        "/api/analyze",
+        json!({
+            "sql": "SELECT 1 UNION SELECT 2",
+            "enable_linting": false
+        }),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(!json["issues"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|issue| issue["code"]
+            .as_str()
+            .is_some_and(|code| code.starts_with("LINT_"))));
+}
+
+#[tokio::test]
+async fn analyze_does_not_enable_linting_when_omitted() {
+    let state = test_state(default_config(), vec![]);
+    let app = build_router(state, 3000);
+
+    let (status, json) = post_json(
+        &app,
+        "/api/analyze",
+        json!({
+            "sql": "SELECT 1 UNION SELECT 2"
+        }),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(!json["issues"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|issue| issue["code"]
+            .as_str()
+            .is_some_and(|code| code.starts_with("LINT_"))));
+}
+
 // === Completion endpoint tests ===
 
 #[tokio::test]

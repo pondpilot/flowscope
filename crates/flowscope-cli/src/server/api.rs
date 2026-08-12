@@ -48,6 +48,8 @@ struct AnalyzeRequest {
     #[serde(default)]
     enable_column_lineage: Option<bool>,
     #[serde(default)]
+    enable_linting: Option<bool>,
+    #[serde(default)]
     template_mode: Option<String>,
 }
 
@@ -134,10 +136,19 @@ async fn analyze(
     let schema = state.schema.read().await.clone();
 
     // Build analysis options from request
-    let options = if payload.hide_ctes.is_some() || payload.enable_column_lineage.is_some() {
+    let options = if payload.hide_ctes.is_some()
+        || payload.enable_column_lineage.is_some()
+        || payload.enable_linting.is_some()
+    {
         Some(flowscope_core::AnalysisOptions {
             hide_ctes: payload.hide_ctes,
             enable_column_lineage: payload.enable_column_lineage,
+            lint: payload
+                .enable_linting
+                .map(|enabled| flowscope_core::LintConfig {
+                    enabled,
+                    ..Default::default()
+                }),
             ..Default::default()
         })
     } else {
