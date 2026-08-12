@@ -17,7 +17,7 @@ FlowScope code is released under Apache-2.0 unless stated otherwise. The `app/` 
 - `core-engine-spec.md`
   Behavior and responsibilities of the Rust analyzer.
 - `api-types.md`
-  API surface for the TS wrapper (mirrors `packages/core/src/types.ts`).
+  API surface and Rust-schema-to-TypeScript regeneration workflow.
 - `schema-handling-design.md`
   Schema metadata rules, implied schema capture, and resolution behavior.
 - `column_lineage.md`
@@ -52,7 +52,8 @@ FlowScope code is released under Apache-2.0 unless stated otherwise. The `app/` 
 ### Generated Artifacts
 
 - `api_schema.json`
-  JSON schema snapshot generated from Rust types.
+  JSON schema snapshot generated from authoritative Rust API types; it generates
+  `packages/core/src/generated/api-types.ts`.
 - `crates/flowscope-core/src/generated/`
   Rust code generated from `crates/flowscope-core/specs/dialect-semantics/` via `build.rs`.
 

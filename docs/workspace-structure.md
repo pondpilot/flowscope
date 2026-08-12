@@ -25,6 +25,8 @@ flowscope/
 ├── scripts/                      # Build + tooling scripts
 │   ├── build-rust.sh
 │   ├── update_api_schema.cjs
+│   ├── generate_ts_api_types.mjs
+│   ├── test_wasm_browser.mjs
 │   ├── generate_test_coverage.sh
 │   └── check_schema_sync.sh
 ├── justfile                      # Task runner entry point
@@ -45,6 +47,8 @@ The project uses `just` as the task runner. Key targets:
 - `just build-ts` (TypeScript packages)
 - `just dev` (demo app dev server)
 - `just test` (Rust + TS tests)
+- `just check-schema` (Rust snapshot + generated TS declarations + compatibility tests)
+- `just test-wasm-browser` (real built WASM in headless Chromium)
 
 See `justfile` for the full command list.
 
@@ -65,4 +69,5 @@ app/ and vscode/webview-ui
 ## Notes
 
 - The demo app has a Vitest suite. The VS Code webview currently defines no tests.
-- API schema snapshots live in `docs/api_schema.json` and are validated by `just check-schema`.
+- The Rust API snapshot lives in `docs/api_schema.json`; `just update-schema` also regenerates
+  `packages/core/src/generated/api-types.ts`, and `just check-schema` verifies both artifacts.

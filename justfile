@@ -299,11 +299,21 @@ lint: lint-rust lint-ts
 
 check-schema:
     cargo test -p flowscope-core --test schema_guard --locked
+    node ./scripts/generate_ts_api_types.mjs --check
     cd packages/core && yarn test schema-compat.test.ts --silent
 
-# Regenerate the API schema snapshot from Rust definitions
+# Regenerate the API schema snapshot and its TypeScript declarations
 update-schema:
     node ./scripts/update_api_schema.cjs
+    node ./scripts/generate_ts_api_types.mjs
+
+# Regenerate TypeScript API declarations from the committed Rust schema snapshot
+generate-ts-types:
+    node ./scripts/generate_ts_api_types.mjs
+
+# Build and exercise the real WASM module in headless Chromium
+test-wasm-browser: build-wasm-dev
+    node ./scripts/test_wasm_browser.mjs
 
 # Run Rust clippy
 lint-rust:

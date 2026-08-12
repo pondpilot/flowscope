@@ -2,9 +2,36 @@
 
 This document summarizes the public TypeScript API for `@pondpilot/flowscope-core`.
 
-**Source of truth:**
-- `packages/core/src/types.ts` (authoritative)
-- `docs/api_schema.json` (generated schema snapshot)
+## Sources and generation
+
+The Rust API structs are authoritative. `docs/api_schema.json` is their committed
+JSON Schema snapshot, and `packages/core/src/generated/api-types.ts` is generated
+from that snapshot. Do not edit either generated artifact by hand.
+
+`packages/core/src/types.ts` is the manual ergonomic layer. It adds browser/WASM
+encoding, completion and statement-splitting contracts, export options, runtime
+constants, and helpers without repeating the generated analysis models.
+
+Regenerate the Rust snapshot and TypeScript declarations together:
+
+```bash
+just update-schema
+```
+
+If the snapshot is already current, regenerate only TypeScript declarations with
+`just generate-ts-types`. Check committed artifacts and schema compatibility with:
+
+```bash
+just check-schema
+```
+
+The generated declaration check also runs as part of the core package typecheck.
+To build the actual browser WASM and exercise initialization plus analysis in
+headless Chromium, run:
+
+```bash
+just test-wasm-browser
+```
 
 ## Encoding
 
@@ -29,6 +56,8 @@ export interface AnalyzeRequest {
   sourceName?: string;
   options?: AnalysisOptions;
   schema?: SchemaMetadata;
+  encoding?: 'utf8' | 'utf16';
+  templateConfig?: TemplateConfig;
 }
 
 export interface AnalysisOptions {

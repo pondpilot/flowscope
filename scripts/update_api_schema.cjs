@@ -36,23 +36,33 @@ function runCargoSchemaTest() {
   return result.stdout ?? '';
 }
 
-const output = runCargoSchemaTest();
-const jsonStart = output.indexOf('{\n  "AnalyzeRequest"');
-const endMarkerIndex = output.indexOf('\ntest ', jsonStart);
+async function main() {
+  const output = runCargoSchemaTest();
+  const jsonStart = output.indexOf('{\n  "AnalyzeRequest"');
+  const endMarkerIndex = output.indexOf('\ntest ', jsonStart);
 
-if (jsonStart === -1 || endMarkerIndex === -1) {
-  console.error('Failed to locate schema JSON in cargo output. Output was:\n', output);
-  process.exit(1);
+  if (jsonStart === -1 || endMarkerIndex === -1) {
+    console.error('Failed to locate schema JSON in cargo output. Output was:\n', output);
+    process.exit(1);
+  }
+
+  const jsonText = output.slice(jsonStart, endMarkerIndex).trim();
+
+  try {
+    JSON.parse(jsonText);
+  } catch (error) {
+    console.error('Failed to parse schema JSON:', error);
+    process.exit(1);
+  }
+
+  const { format, resolveConfig } = await import('prettier');
+  const prettierConfig = (await resolveConfig(schemaPath)) ?? {};
+  const formatted = await format(jsonText, { ...prettierConfig, filepath: schemaPath });
+  writeFileSync(schemaPath, formatted, 'utf8');
+  console.log(`Updated ${path.relative(repoRoot, schemaPath)}`);
 }
 
-const jsonText = output.slice(jsonStart, endMarkerIndex).trim();
-
-try {
-  JSON.parse(jsonText);
-} catch (error) {
-  console.error('Failed to parse schema JSON:', error);
-  process.exit(1);
-}
-
-writeFileSync(schemaPath, `${jsonText}\n`, 'utf8');
-console.log(`Updated ${path.relative(repoRoot, schemaPath)}`);
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
