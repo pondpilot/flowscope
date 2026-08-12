@@ -71,17 +71,25 @@ test-integration-sqlite:
 test-integration-postgres: _postgres-start
     #!/usr/bin/env bash
     set -euo pipefail
+    trap 'just _postgres-stop' EXIT
 
-    # Wait for PostgreSQL to be ready
+    # Require consecutive successful queries so the entrypoint's temporary
+    # bootstrap server is not mistaken for the final PostgreSQL process.
     echo "Waiting for PostgreSQL to be ready..."
+    ready_checks=0
     for i in {1..30}; do
-        if docker exec flowscope-test-postgres pg_isready -U flowscope > /dev/null 2>&1; then
-            echo "PostgreSQL is ready"
-            break
+        if docker exec flowscope-test-postgres \
+            psql -U flowscope -d flowscope -c "SELECT 1" > /dev/null 2>&1; then
+            ready_checks=$((ready_checks + 1))
+            if [ "$ready_checks" -ge 3 ]; then
+                echo "PostgreSQL is ready"
+                break
+            fi
+        else
+            ready_checks=0
         fi
         if [ $i -eq 30 ]; then
             echo "PostgreSQL failed to start"
-            just _postgres-stop
             exit 1
         fi
         sleep 1
@@ -120,9 +128,6 @@ test-integration-postgres: _postgres-start
     TEST_POSTGRES_URL="postgres://flowscope:flowscope@127.0.0.1:${postgres_port}/flowscope" \
         cargo test -p flowscope-cli --features integration-tests --test integration postgres -- --test-threads=1
 
-    # Stop PostgreSQL
-    just _postgres-stop
-
 # Start PostgreSQL container for integration tests
 _postgres-start:
     #!/usr/bin/env bash
@@ -151,17 +156,23 @@ _postgres-stop:
 test-integration-mysql: _mysql-start
     #!/usr/bin/env bash
     set -euo pipefail
+    trap 'just _mysql-stop' EXIT
 
-    # Wait for MySQL to be ready (check with actual user connection, not just ping)
+    # Require consecutive successful user queries to avoid bootstrap races.
     echo "Waiting for MySQL to be ready..."
+    ready_checks=0
     for i in {1..60}; do
         if docker exec flowscope-test-mysql mysql -uflowscope -pflowscope -e "SELECT 1" > /dev/null 2>&1; then
-            echo "MySQL is ready"
-            break
+            ready_checks=$((ready_checks + 1))
+            if [ "$ready_checks" -ge 3 ]; then
+                echo "MySQL is ready"
+                break
+            fi
+        else
+            ready_checks=0
         fi
         if [ $i -eq 60 ]; then
             echo "MySQL failed to start"
-            just _mysql-stop
             exit 1
         fi
         sleep 1
@@ -201,9 +212,6 @@ test-integration-mysql: _mysql-start
     mysql_port="${TEST_MYSQL_PORT:-3307}"
     TEST_MYSQL_URL="mysql://flowscope:flowscope@127.0.0.1:${mysql_port}/flowscope" \
         cargo test -p flowscope-cli --features integration-tests --test integration mysql -- --test-threads=1
-
-    # Stop MySQL
-    just _mysql-stop
 
 # Start MySQL container for integration tests
 _mysql-start:
