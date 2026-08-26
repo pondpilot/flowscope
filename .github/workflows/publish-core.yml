@@ -147,3 +147,141 @@ jobs:
           fi
         env:
           NODE_AUTH_TOKEN: ''
+
+  build-cli-binaries:
+    name: Build CLI (${{ matrix.platform.name }})
+    runs-on: ${{ matrix.platform.runs-on }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - name: Linux x86_64
+            runs-on: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - name: Linux aarch64
+            runs-on: ubuntu-24.04
+            target: aarch64-unknown-linux-gnu
+          - name: macOS x86_64
+            runs-on: macos-15-intel
+            target: x86_64-apple-darwin
+          - name: macOS aarch64
+            runs-on: macos-15
+            target: aarch64-apple-darwin
+          - name: Windows x86_64
+            runs-on: windows-2022
+            target: x86_64-pc-windows-msvc
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve CLI version
+        id: cli_version
+        shell: bash
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import pathlib
+          import re
+
+          data = pathlib.Path('Cargo.toml').read_text()
+          match = re.search(r'^version\s*=\s*"([^"]+)"', data, re.MULTILINE)
+          if not match:
+              raise SystemExit('Could not find workspace version in Cargo.toml')
+          print(f"version={match.group(1)}")
+          PY
+
+      - name: Verify release tag
+        if: ${{ github.ref_type == 'tag' }}
+        shell: bash
+        env:
+          CLI_VERSION: ${{ steps.cli_version.outputs.version }}
+        run: |
+          set -euo pipefail
+          expected_tag="v${CLI_VERSION}"
+          if [[ "$GITHUB_REF_NAME" != "$expected_tag" ]]; then
+            echo "Release tag '$GITHUB_REF_NAME' does not match CLI version '$CLI_VERSION'."
+            exit 1
+          fi
+
+      - name: Build CLI binary
+        uses: houseabsolute/actions-rust-cross@v1
+        with:
+          command: build
+          target: ${{ matrix.platform.target }}
+          args: '--package flowscope-cli --locked --release'
+          strip: true
+
+      - name: Package CLI archive
+        uses: houseabsolute/actions-rust-release@v1
+        with:
+          executable-name: flowscope
+          target: ${{ matrix.platform.target }}
+          archive-name: flowscope-v${{ steps.cli_version.outputs.version }}-${{ matrix.platform.target }}
+          changes-file: ''
+          extra-files: README.md
+
+  publish-cli-binaries:
+    name: Publish CLI binaries
+    needs: build-cli-binaries
+    if: ${{ github.ref_type == 'tag' && (github.event_name == 'push' || inputs.dry_run != 'true') }}
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      attestations: write
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download packaged CLI assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: flowscope-v*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Generate aggregate SHA-256 checksums
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          mapfile -t archives < <(
+            find release-assets -maxdepth 1 -type f \
+              \( -name 'flowscope-*.tar.gz' -o -name 'flowscope-*.zip' \) \
+              -printf '%f\n' | sort
+          )
+          if [[ "${#archives[@]}" -ne 5 ]]; then
+            echo "Expected five CLI archives, found ${#archives[@]}."
+            printf '%s\n' "${archives[@]}"
+            exit 1
+          fi
+          (
+            cd release-assets
+            sha256sum "${archives[@]}" > "flowscope-${RELEASE_TAG}-SHA256SUMS"
+          )
+
+      - name: Upload aggregate checksum artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flowscope-${{ github.ref_name }}-SHA256SUMS
+          path: release-assets/flowscope-${{ github.ref_name }}-SHA256SUMS
+          if-no-files-found: error
+
+      - name: Attest CLI release assets
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: |
+            release-assets/*.tar.gz
+            release-assets/*.zip
+            release-assets/*.sha256
+            release-assets/*SHA256SUMS
+
+      - name: Publish CLI release
+        uses: houseabsolute/actions-rust-release/publish@v1
+        with:
+          executable-name: flowscope
+          artifact-regex: '\Aflowscope-v.*(\.tar\.gz|\.zip|-SHA256SUMS)\Z'
+          changes-file: ''
+          generate-release-notes: true
