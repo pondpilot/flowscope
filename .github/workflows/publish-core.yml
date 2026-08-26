@@ -21,6 +21,9 @@ env:
 jobs:
   publish-packages:
     name: Publish crates and core npm package
+    # Forks may use this workflow to test CLI release assets, but must never
+    # publish packages to the public registries.
+    if: ${{ github.repository == 'pondpilot/flowscope' }}
     runs-on: ubuntu-latest
     environment: prod
     env:
