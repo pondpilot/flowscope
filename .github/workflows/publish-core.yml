@@ -163,18 +163,28 @@ jobs:
           - name: Linux x86_64
             runs-on: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
+            native: false
+            package-target: x86_64-unknown-linux-gnu
           - name: Linux aarch64
-            runs-on: ubuntu-24.04
+            runs-on: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
+            native: true
+            package-target: ''
           - name: macOS x86_64
             runs-on: macos-15-intel
             target: x86_64-apple-darwin
+            native: false
+            package-target: x86_64-apple-darwin
           - name: macOS aarch64
             runs-on: macos-15
             target: aarch64-apple-darwin
+            native: false
+            package-target: aarch64-apple-darwin
           - name: Windows x86_64
             runs-on: windows-2022
             target: x86_64-pc-windows-msvc
+            native: false
+            package-target: x86_64-pc-windows-msvc
 
     steps:
       - uses: actions/checkout@v4
@@ -207,7 +217,8 @@ jobs:
             exit 1
           fi
 
-      - name: Build CLI binary
+      - name: Build CLI binary (cross)
+        if: ${{ !matrix.platform.native }}
         uses: houseabsolute/actions-rust-cross@v1
         with:
           command: build
@@ -215,11 +226,17 @@ jobs:
           args: '--package flowscope-cli --locked --release'
           strip: true
 
+      - name: Build CLI binary (native)
+        if: ${{ matrix.platform.native }}
+        run: |
+          cargo build -p flowscope-cli --release --locked
+          strip target/release/flowscope
+
       - name: Package CLI archive
         uses: houseabsolute/actions-rust-release@v1
         with:
           executable-name: flowscope
-          target: ${{ matrix.platform.target }}
+          target: ${{ matrix.platform.package-target }}
           archive-name: flowscope-v${{ steps.cli_version.outputs.version }}-${{ matrix.platform.target }}
           changes-file: ''
           extra-files: README.md
