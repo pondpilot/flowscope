@@ -151,9 +151,13 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ''
 
-  build-cli-binaries:
+  build-cli-linux-binaries:
     name: Build CLI (${{ matrix.platform.name }})
     runs-on: ${{ matrix.platform.runs-on }}
+    # Build against an older glibc so the published binaries run on common
+    # long-term-support distributions. The image supports both amd64 and arm64.
+    container:
+      image: rust:1.95-bullseye@sha256:28afaeb8445f2a2e7d878bd34ed39ba02bb517efb29986188cbd59b7cf4f2fdf
     permissions:
       contents: read
     strategy:
@@ -163,28 +167,75 @@ jobs:
           - name: Linux x86_64
             runs-on: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
-            native: false
-            package-target: x86_64-unknown-linux-gnu
           - name: Linux aarch64
             runs-on: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
-            native: true
-            package-target: ''
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve CLI version
+        id: cli_version
+        shell: bash
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import pathlib
+          import re
+
+          data = pathlib.Path('Cargo.toml').read_text()
+          match = re.search(r'^version\s*=\s*"([^"]+)"', data, re.MULTILINE)
+          if not match:
+              raise SystemExit('Could not find workspace version in Cargo.toml')
+          print(f"version={match.group(1)}")
+          PY
+
+      - name: Verify release tag
+        if: ${{ github.ref_type == 'tag' }}
+        shell: bash
+        env:
+          CLI_VERSION: ${{ steps.cli_version.outputs.version }}
+        run: |
+          set -euo pipefail
+          expected_tag="v${CLI_VERSION}"
+          if [[ "$GITHUB_REF_NAME" != "$expected_tag" ]]; then
+            echo "Release tag '$GITHUB_REF_NAME' does not match CLI version '$CLI_VERSION'."
+            exit 1
+          fi
+
+      - name: Build CLI binary
+        run: |
+          cargo build -p flowscope-cli --release --locked
+          strip target/release/flowscope
+
+      - name: Smoke test CLI on glibc 2.31
+        run: target/release/flowscope --version
+
+      - name: Package CLI archive
+        uses: houseabsolute/actions-rust-release@v1
+        with:
+          executable-name: flowscope
+          archive-name: flowscope-v${{ steps.cli_version.outputs.version }}-${{ matrix.platform.target }}
+          changes-file: ''
+          extra-files: README.md
+
+  build-cli-other-binaries:
+    name: Build CLI (${{ matrix.platform.name }})
+    runs-on: ${{ matrix.platform.runs-on }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
           - name: macOS x86_64
             runs-on: macos-15-intel
             target: x86_64-apple-darwin
-            native: false
-            package-target: x86_64-apple-darwin
           - name: macOS aarch64
             runs-on: macos-15
             target: aarch64-apple-darwin
-            native: false
-            package-target: aarch64-apple-darwin
           - name: Windows x86_64
             runs-on: windows-2022
             target: x86_64-pc-windows-msvc
-            native: false
-            package-target: x86_64-pc-windows-msvc
 
     steps:
       - uses: actions/checkout@v4
@@ -217,8 +268,7 @@ jobs:
             exit 1
           fi
 
-      - name: Build CLI binary (cross)
-        if: ${{ !matrix.platform.native }}
+      - name: Build CLI binary
         uses: houseabsolute/actions-rust-cross@v1
         with:
           command: build
@@ -226,25 +276,33 @@ jobs:
           args: '--package flowscope-cli --locked --release'
           strip: true
 
-      - name: Build CLI binary (native)
-        if: ${{ matrix.platform.native }}
-        run: |
-          cargo build -p flowscope-cli --release --locked
-          strip target/release/flowscope
-
       - name: Package CLI archive
         uses: houseabsolute/actions-rust-release@v1
         with:
           executable-name: flowscope
-          target: ${{ matrix.platform.package-target }}
+          target: ${{ matrix.platform.target }}
           archive-name: flowscope-v${{ steps.cli_version.outputs.version }}-${{ matrix.platform.target }}
           changes-file: ''
           extra-files: README.md
 
   publish-cli-binaries:
     name: Publish CLI binaries
-    needs: build-cli-binaries
-    if: ${{ github.ref_type == 'tag' && (github.event_name == 'push' || inputs.dry_run != 'true') }}
+    needs:
+      - publish-packages
+      - build-cli-linux-binaries
+      - build-cli-other-binaries
+    if: >-
+      ${{
+        always() &&
+        github.ref_type == 'tag' &&
+        (github.event_name == 'push' || inputs.dry_run != 'true') &&
+        needs['build-cli-linux-binaries'].result == 'success' &&
+        needs['build-cli-other-binaries'].result == 'success' &&
+        (
+          github.repository != 'pondpilot/flowscope' ||
+          needs['publish-packages'].result == 'success'
+        )
+      }}
     runs-on: ubuntu-24.04
     permissions:
       actions: read
