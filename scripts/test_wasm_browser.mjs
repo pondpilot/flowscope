@@ -43,6 +43,15 @@ const harness = `<!doctype html>
         .map((node) => node.label);
       const errors = result.issues.filter((issue) => issue.severity === 'error');
 
+      const mssqlRequest = {
+        sql: 'SELECT 1;\nGO\nSELECT 2;\nGO\n',
+        dialect: 'mssql',
+      };
+      const mssqlResult = JSON.parse(analyze_sql_json(JSON.stringify(mssqlRequest)));
+      const mssqlParseErrors = mssqlResult.issues.filter(
+        (issue) => issue.code === 'PARSE_ERROR'
+      );
+
       if (result.statements.length !== 1 || result.summary.statementCount !== 1) {
         throw new Error('Expected one analyzed statement');
       }
@@ -52,12 +61,18 @@ const harness = `<!doctype html>
       if (errors.length > 0) {
         throw new Error('Analysis returned errors: ' + JSON.stringify(errors));
       }
+      if (mssqlResult.statements.length !== 2 || mssqlParseErrors.length > 0) {
+        throw new Error(
+          'MSSQL GO batch analysis failed: ' + JSON.stringify(mssqlResult.issues)
+        );
+      }
 
       body.dataset.status = 'passed';
       body.textContent = JSON.stringify({
         version: get_version(),
         statementCount: result.summary.statementCount,
-        tableLabels
+        tableLabels,
+        mssqlStatementCount: mssqlResult.summary.statementCount,
       });
     } catch (error) {
       body.dataset.status = 'failed';

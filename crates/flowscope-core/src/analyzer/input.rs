@@ -653,13 +653,14 @@ fn split_ranges_on_mssql_go_separators(sql: &str, ranges: Vec<Range<usize>>) -> 
     for range in ranges {
         let mut cursor = range.start;
         for go_range in &go_line_ranges {
-            if go_range.start < range.start || go_range.end > range.end || go_range.start < cursor {
+            if go_range.end <= cursor || go_range.start >= range.end {
                 continue;
             }
-            if let Some(chunk) = trim_statement_range(sql, cursor, go_range.start) {
+            let separator_start = go_range.start.max(cursor);
+            if let Some(chunk) = trim_statement_range(sql, cursor, separator_start) {
                 out.push(chunk);
             }
-            cursor = go_range.end;
+            cursor = go_range.end.min(range.end);
         }
 
         if let Some(chunk) = trim_statement_range(sql, cursor, range.end) {
@@ -1213,6 +1214,31 @@ mod tests {
     }
 
     #[test]
+    fn mssql_statement_ranges_split_trailing_go_batch_separators() {
+        for sql in [
+            "SELECT 1;\nGO\nSELECT 2;\nGO\n",
+            "SELECT 1;\r\n  go  \r\nSELECT 2;\r\nGO\r\n",
+            "SELECT 1\nGO\nGO\nSELECT 2\nGO\n",
+        ] {
+            let ranges = compute_statement_ranges_for_dialect(sql, Dialect::Mssql);
+            assert_eq!(ranges.len(), 2, "unexpected ranges for {sql:?}");
+            assert_eq!(&sql[ranges[0].clone()], "SELECT 1");
+            assert_eq!(&sql[ranges[1].clone()], "SELECT 2");
+        }
+    }
+
+    #[test]
+    fn mssql_statement_ranges_ignore_go_inside_strings_comments_and_identifiers() {
+        let sql = "SELECT 'GO' AS literal;\nSELECT [GO] FROM [source];\n-- GO\n/* GO */\nGO\nSELECT 'inside\nGO\nstring' AS literal;";
+        let ranges = compute_statement_ranges_for_dialect(sql, Dialect::Mssql);
+
+        assert_eq!(ranges.len(), 3);
+        assert_eq!(&sql[ranges[0].clone()], "SELECT 'GO' AS literal");
+        assert_eq!(&sql[ranges[1].clone()], "SELECT [GO] FROM [source]");
+        assert!(sql[ranges[2].clone()].contains("inside\nGO\nstring"));
+    }
+
+    #[test]
     fn collect_statements_mssql_go_batch_without_final_semicolon_parses_statements() {
         let mut request = base_request();
         request.dialect = Dialect::Mssql;
@@ -1224,6 +1250,21 @@ mod tests {
             "MSSQL GO separators should not produce parse errors: {issues:?}"
         );
         assert_eq!(statements.len(), 2);
+    }
+
+    #[test]
+    fn collect_statements_mssql_go_batch_with_trailing_separator_has_no_parse_error() {
+        let mut request = base_request();
+        request.dialect = Dialect::Mssql;
+        request.sql = "SELECT 1;\nGO\nSELECT 2;\nGO\n".to_string();
+
+        let (statements, issues) = collect_statements(&request);
+
+        assert_eq!(statements.len(), 2);
+        assert!(
+            issues.is_empty(),
+            "MSSQL trailing GO should not produce parse errors: {issues:?}"
+        );
     }
 
     #[test]
