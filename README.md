@@ -41,7 +41,7 @@ When Librarian is used, its request includes the active SQL snippet, formatted l
 
 For scripting and CI/CD integration, install the CLI:
 
-Future [GitHub Releases](https://github.com/pondpilot/flowscope/releases) will include prebuilt
+[GitHub Releases](https://github.com/pondpilot/flowscope/releases) include prebuilt
 CLI archives for Linux (x86_64 and aarch64), macOS (Intel and Apple Silicon),
 and Windows (x86_64).
 Each archive has a SHA-256 checksum file. See the [CLI installation guide](crates/flowscope-cli/README.md#prebuilt-binaries)
