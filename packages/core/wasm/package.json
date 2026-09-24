@@ -5,7 +5,7 @@
     "PondPilot Team"
   ],
   "description": "WASM bindings for flowscope-core",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
