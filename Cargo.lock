@@ -964,7 +964,7 @@ dependencies = [
 
 [[package]]
 name = "flowscope-cli"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "anyhow",
  "axum",
@@ -998,7 +998,7 @@ dependencies = [
 
 [[package]]
 name = "flowscope-core"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "chrono",
  "indexmap",
@@ -1018,7 +1018,7 @@ dependencies = [
 
 [[package]]
 name = "flowscope-export"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "chrono",
  "csv",
@@ -1034,7 +1034,7 @@ dependencies = [
 
 [[package]]
 name = "flowscope-wasm"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "chrono",
  "console_error_panic_hook",

@@ -7,9 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
+## [0.9.1] - 2026-09-24
 
-- Kept `@pondpilot/flowscope-react` as a private monorepo workspace and removed it from the npm release pipeline
+### Fixed
+
+- Treated trailing and overlapping SQL Server `GO` separators as batch boundaries across core analysis, best-effort parsing, the CLI, and the WASM package ([#69](https://github.com/pondpilot/flowscope/pull/69)).
+- Kept `@pondpilot/flowscope-react` private and removed it from the npm publishing flow.
 
 ### Fixed
 
