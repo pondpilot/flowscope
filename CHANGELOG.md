@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Kept `@pondpilot/flowscope-react` as a private monorepo workspace and removed it from the npm release pipeline
 
+### Fixed
+
+#### Core Engine (flowscope-core)
+
+- **MSSQL `GO` batch separators** - treat standalone SQL Server batch separators as statement boundaries during analysis and statement splitting, including trailing separators and CRLF input.
+
 ## [0.9.0] - 2026-08-12
 
 ### Added
