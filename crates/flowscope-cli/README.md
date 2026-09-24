@@ -24,7 +24,43 @@ Command-line interface for the FlowScope SQL lineage analyzer.
 
 ## Installation
 
+### Prebuilt binaries
+
+For releases that include prebuilt binaries, download an archive from
+[GitHub Releases](https://github.com/pondpilot/flowscope/releases) for one of these targets:
+
+| System | Target | Archive |
+| --- | --- | --- |
+| Linux x86_64 | `x86_64-unknown-linux-gnu` | `.tar.gz` |
+| Linux aarch64 | `aarch64-unknown-linux-gnu` | `.tar.gz` |
+| macOS Intel | `x86_64-apple-darwin` | `.tar.gz` |
+| macOS Apple Silicon | `aarch64-apple-darwin` | `.tar.gz` |
+| Windows x86_64 | `x86_64-pc-windows-msvc` | `.zip` |
+
+Archive names follow `flowscope-v<version>-<target>.<extension>`. Download the matching
+`<archive>.sha256` file, then verify it before extracting the `flowscope` executable
+(`flowscope.exe` on Windows). On Linux, for example:
+
 ```bash
+TAG=vX.Y.Z # Replace with a release tag that includes binaries.
+ARCHIVE="flowscope-${TAG}-x86_64-unknown-linux-gnu.tar.gz"
+sha256sum --check "${ARCHIVE}.sha256"
+tar -xzf "$ARCHIVE"
+./flowscope --version
+```
+
+The release also includes a `flowscope-v<version>-SHA256SUMS` manifest for all five archives.
+Build provenance is available through [GitHub artifact attestations](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations)
+and can be verified with `gh attestation verify <archive> --repo pondpilot/flowscope`.
+Prebuilt binaries include the default CLI features. Build with the `serve` feature to run
+the bundled local web server. Linux binaries require glibc 2.31 or later.
+
+### Build from source
+
+```bash
+cargo install flowscope-cli
+
+# From a local checkout
 cargo install --path crates/flowscope-cli
 ```
 

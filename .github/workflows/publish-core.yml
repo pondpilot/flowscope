@@ -211,12 +211,14 @@ jobs:
         run: target/release/flowscope --version
 
       - name: Package CLI archive
-        uses: houseabsolute/actions-rust-release@v1
+        uses: houseabsolute/actions-rust-release@9e126fd5fc18f4cecf358b3909f3991ad59663dc # v1 branch, 2026-09-24
         with:
           executable-name: flowscope
           archive-name: flowscope-v${{ steps.cli_version.outputs.version }}-${{ matrix.platform.target }}
           changes-file: ''
-          extra-files: README.md
+          extra-files: |
+            README.md
+            LICENSE
 
   build-cli-other-binaries:
     name: Build CLI (${{ matrix.platform.name }})
@@ -269,21 +271,35 @@ jobs:
           fi
 
       - name: Build CLI binary
-        uses: houseabsolute/actions-rust-cross@v1
+        uses: houseabsolute/actions-rust-cross@85826e468eac832e251ac58f6191ba784db237c8 # v1 branch, 2026-09-24
         with:
           command: build
           target: ${{ matrix.platform.target }}
           args: '--package flowscope-cli --locked --release'
           strip: true
 
+      - name: Smoke test CLI
+        shell: bash
+        env:
+          TARGET: ${{ matrix.platform.target }}
+        run: |
+          set -euo pipefail
+          executable="target/${TARGET}/release/flowscope"
+          if [[ "$RUNNER_OS" == 'Windows' ]]; then
+            executable="${executable}.exe"
+          fi
+          "$executable" --version
+
       - name: Package CLI archive
-        uses: houseabsolute/actions-rust-release@v1
+        uses: houseabsolute/actions-rust-release@9e126fd5fc18f4cecf358b3909f3991ad59663dc # v1 branch, 2026-09-24
         with:
           executable-name: flowscope
           target: ${{ matrix.platform.target }}
           archive-name: flowscope-v${{ steps.cli_version.outputs.version }}-${{ matrix.platform.target }}
           changes-file: ''
-          extra-files: README.md
+          extra-files: |
+            README.md
+            LICENSE
 
   publish-cli-binaries:
     name: Publish CLI binaries
@@ -357,7 +373,7 @@ jobs:
             release-assets/*SHA256SUMS
 
       - name: Publish CLI release
-        uses: houseabsolute/actions-rust-release/publish@v1
+        uses: houseabsolute/actions-rust-release/publish@9e126fd5fc18f4cecf358b3909f3991ad59663dc # v1 branch, 2026-09-24
         with:
           executable-name: flowscope
           artifact-regex: '\Aflowscope-v.*(\.tar\.gz|\.zip|-SHA256SUMS)\Z'

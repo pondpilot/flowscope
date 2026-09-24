@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added prebuilt CLI release archives for five Linux, macOS, and Windows targets, with SHA-256 checksums and build provenance ([#65](https://github.com/pondpilot/flowscope/issues/65)).
+
 ## [0.9.1] - 2026-09-24
 
 ### Fixed
